@@ -212,6 +212,7 @@ function load_coordinate_data(fid, name; printout=false)
     L = load_variable(coord_group, "L")
     discretization = load_variable(coord_group, "discretization")
     fd_option = load_variable(coord_group, "fd_option")
+    cheb_option = load_variable(coord_group, "cheb_option")
     bc = load_variable(coord_group, "bc")
     element_spacing_option = load_variable(coord_group, "element_spacing_option")
 
@@ -228,7 +229,7 @@ function load_coordinate_data(fid, name; printout=false)
     end
     # Define input to create coordinate struct
     input = grid_input(name, ngrid, nelement_global, nelement_local, nrank, irank, L,
-                       discretization, fd_option, bc, advection_input("", 0.0, 0.0, 0.0),
+                       discretization, fd_option, cheb_option, bc, advection_input("", 0.0, 0.0, 0.0),
                        MPI.COMM_NULL, element_spacing_option)
 
     coord, spectral = define_coordinate(input)

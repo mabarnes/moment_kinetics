@@ -119,7 +119,7 @@ function define_coordinate(input, parallel_io::Bool=false)
     imin, imax, igrid_full = elemental_to_full_grid_map(input.ngrid, input.nelement_local)
     # initialise the data used to construct the grid
     # boundaries for each element
-    element_boundaries = set_element_boundaries(input.nelement_global, input.L, input.element_spacing_option)
+    element_boundaries = set_element_boundaries(input.nelement_global, input.L, input.element_spacing_option, input.name)
     # shift and scale factors for each local element
     element_scale, element_shift = set_element_scale_and_shift(input.nelement_global, input.nelement_local, input.irank, element_boundaries)
     # initialize the grid and the integration weights associated with the grid
@@ -188,8 +188,8 @@ function define_coordinate(input, parallel_io::Bool=false)
     return coord, spectral
 end
 
-function set_element_boundaries(nelement_global, L, element_spacing_option)
-    # set global element boundaries
+function set_element_boundaries(nelement_global, L, element_spacing_option, coord_name)
+    # set global element boundaries between [-L/2,L/2]
     element_boundaries = allocate_float(nelement_global+1)
     if element_spacing_option == "sqrt" && nelement_global > 3
         # number of boundaries of sqrt grid
@@ -217,6 +217,12 @@ function set_element_boundaries(nelement_global, L, element_spacing_option)
         end
     else 
         println("ERROR: element_spacing_option: ",element_spacing_option, " not supported")
+    end
+    if coord_name == "vperp"
+        #shift so that the range of element boundaries is [0,L]
+        for j in 1:nelement_global+1
+            element_boundaries[j] += L/2.0
+        end
     end
     return element_boundaries
 end
@@ -255,7 +261,6 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
         if name == "vperp"
             # initialize chebyshev grid defined on [-L/2,L/2]
             grid, wgts = scaled_chebyshev_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax)
-            grid .= grid .+ L/2.0 # shift to [0,L] appropriate to vperp variable
             wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
                                        # see note above on normalisation
         else
@@ -269,12 +274,12 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
         end
     elseif discretization == "gausslegendre_pseudospectral"
         if name == "vperp"
-            grid, wgts = scaled_gauss_legendre_radau_grid(ngrid, nelement_global, nelement_local, n_local, irank, L, imin, imax)
-            grid .= grid .+ L/2.0      # shift to [0,L] appropriate to vperp variable
+            # use a radau grid for the 1st element near the origin
+            grid, wgts = scaled_gauss_legendre_radau_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax, irank)
             wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
                                        # see note above on normalisation
         else
-            grid, wgts = scaled_gauss_legendre_lobatto_grid(ngrid, nelement_global, nelement_local, n_local, irank, L, imin, imax)
+            grid, wgts = scaled_gauss_legendre_lobatto_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax)
         end
     elseif discretization == "finite_difference"
         if name == "vperp"

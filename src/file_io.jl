@@ -521,6 +521,10 @@ function define_io_coordinate!(parent, coord, coord_name, description, parallel_
         write_single_value!(group, "fd_option", coord.fd_option; parallel_io=parallel_io,
                             description="type of finite difference for $coord_name, if used")
 
+        # write the finite-difference option for the coordinate
+        write_single_value!(group, "cheb_option", coord.fd_option; parallel_io=parallel_io,
+                            description="type of finite difference for $coord_name, if used")
+
         # write the boundary condition for the coordinate
         write_single_value!(group, "bc", coord.bc; parallel_io=parallel_io,
                             description="boundary condition for $coord_name")
@@ -800,7 +804,8 @@ function reopen_moments_io(file_info)
                                getvar("Ez"), getvar("density"), getvar("parallel_flow"),
                                getvar("parallel_pressure"), getvar("perpendicular_pressure"),
                                getvar("parallel_heat_flux"),
-                               getvar("thermal_speed"), getvar("density_neutral"),
+                               getvar("thermal_speed"), getvar("entropy_production"), 
+                               getvar("density_neutral"),
                                getvar("uz_neutral"), getvar("pz_neutral"),
                                getvar("qz_neutral"), getvar("thermal_speed_neutral"),
                                parallel_io)
@@ -885,8 +890,8 @@ function reopen_dfns_io(file_info)
                                      getvar("Ez"), getvar("density"),
                                      getvar("parallel_flow"), getvar("parallel_pressure"),
                                      getvar("perpendicular_pressure"),
-                                     getvar("parallel_heat_flux"),
-                                     getvar("thermal_speed"), getvar("density_neutral"),
+                                     getvar("parallel_heat_flux"), getvar("thermal_speed"),
+                                     getvar("entropy_production"), getvar("density_neutral"),
                                      getvar("uz_neutral"), getvar("pz_neutral"),
                                      getvar("qz_neutral"),
                                      getvar("thermal_speed_neutral"), parallel_io)

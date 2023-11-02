@@ -224,6 +224,9 @@ function chebyshev_derivative!(df, ff, chebyshev, coord)
         else #differentiate using the Lobatto scheme
             @views mul!(df[:,j],chebyshev.lobatto.Dmat[:,:],ff[imin:imax])
         end
+        for i ∈ 1:coord.ngrid
+            df[i,j] /= coord.element_scale[j]
+        end
         # calculate the Chebyshev derivative on each element
         @inbounds for j ∈ 2:nelement
             # imin is the minimum index on the full grid for this (jth) element
@@ -237,6 +240,9 @@ function chebyshev_derivative!(df, ff, chebyshev, coord)
             # imax is the maximum index on the full grid for this (jth) element
             imax = coord.imax[j]
             @views mul!(df[:,j],chebyshev.lobatto.Dmat[:,:],ff[imin:imax])
+            for i ∈ 1:coord.ngrid
+                df[i,j] /= coord.element_scale[j]
+            end
         end
     elseif coord.cheb_option == "FFT"   
         # note that one must multiply by  1/element_scale[j] get derivative
@@ -844,9 +850,6 @@ https://people.maths.ox.ac.uk/trefethen/pdetext.html
         for j in 1:n
             D[j,j] = -sum(D[j,:])
         end
-        
-        #multiply by scale factor for element length
-        D .= (2.0*float(nelement)/L).*D
     end
     function Djk(x::Array{Float64,1},j::Int64,k::Int64,c_j::Float64,c_k::Float64)
         return  (c_j/c_k)*((-1)^(k+j))/(x[j] - x[k])
@@ -871,9 +874,6 @@ https://people.maths.ox.ac.uk/trefethen/pdetext.html
             D[j,j] = 0.0
             D[j,j] = -sum(D[j,:])
         end
-        
-        #multiply by scale factor for element length
-        D .= (2.0*float(coord.nelement_global)/coord.L).*D
     end
 
 end

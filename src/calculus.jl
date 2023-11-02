@@ -44,7 +44,7 @@ function second_derivative!(d2f, f, coord, spectral::gausslegendre_info)
     # at element boundaries, use the average of the derivatives from neighboring elements.
     derivative_elements_to_full_grid!(coord.scratch, coord.scratch_2d, coord)
     # solve weak form problem M * d2f = K * f
-    gausslegendre_mass_matrix_solve!(d2f,coord.scratch,spectral)
+    gausslegendre_mass_matrix_solve!(d2f,coord.scratch,coord.name,spectral)
 end
 
 function laplacian_derivative!(d2f, f, coord, spectral::gausslegendre_info)
@@ -54,7 +54,7 @@ function laplacian_derivative!(d2f, f, coord, spectral::gausslegendre_info)
     # at element boundaries, use the average of the derivatives from neighboring elements.
     derivative_elements_to_full_grid!(coord.scratch, coord.scratch_2d, coord)
     # solve weak form problem M * d2f = K * f
-    gausslegendre_mass_matrix_solve!(d2f,coord.scratch,spectral)
+    gausslegendre_mass_matrix_solve!(d2f,coord.scratch,coord.name,spectral)
 end
 """
 Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'

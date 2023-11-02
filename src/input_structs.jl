@@ -322,6 +322,7 @@ mutable struct collisions_input
     # ion-ion self collision frequency with C[F_s,F_Ms'] operator
     nuii_pitch::mk_float
     # numerical conserving terms (for strong form Fokker-Planck operator only)
+    numerical_conserving_terms::String
 end
 
 """

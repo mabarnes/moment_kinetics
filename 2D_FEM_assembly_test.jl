@@ -1,3 +1,4 @@
+export run_assembly_test
 using Printf
 using Plots
 using LaTeXStrings
@@ -32,9 +33,7 @@ using moment_kinetics.fokker_planck_calculus: calculate_rosenbluth_potential_bou
 using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary_data
 
 
-if abspath(PROGRAM_FILE) == @__FILE__
-    using Pkg
-    Pkg.activate(".")
+
 
     
     function print_matrix(matrix,name::String,n::mk_int,m::mk_int)
@@ -164,43 +163,18 @@ if abspath(PROGRAM_FILE) == @__FILE__
         comm = MPI.COMM_NULL
         # create the 'input' struct containing input info needed to create a
         # coordinate
+        element_spacing_option = "uniform"
         vpa_input = grid_input("vpa", ngrid, nelement_global_vpa, nelement_local_vpa, 
-            nrank, irank, Lvpa, discretization, fd_option, cheb_option, bc, adv_input,comm)
+            nrank, irank, Lvpa, discretization, fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
         vperp_input = grid_input("vperp", ngrid, nelement_global_vperp, nelement_local_vperp, 
-            nrank, irank, Lvperp, discretization, fd_option, cheb_option, bc, adv_input,comm)
+            nrank, irank, Lvperp, discretization, fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
         # create the coordinate struct 'x'
         println("made inputs")
         println("vpa: ngrid: ",ngrid," nelement: ",nelement_local_vpa, " Lvpa: ",Lvpa)
         println("vperp: ngrid: ",ngrid," nelement: ",nelement_local_vperp, " Lvperp: ",Lvperp)
-        vpa = define_coordinate(vpa_input)
-        vperp = define_coordinate(vperp_input)
-        if vpa.discretization == "chebyshev_pseudospectral" && vpa.n > 1
-            # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
-            # and create the plans for the forward and backward fast Chebyshev transforms
-            vpa_spectral = setup_chebyshev_pseudospectral(vpa)
-            # obtain the local derivatives of the uniform vpa-grid with respect to the used vpa-grid
-            #chebyshev_derivative!(vpa.duniform_dgrid, vpa.uniform_grid, vpa_spectral, vpa)
-        elseif vpa.discretization == "gausslegendre_pseudospectral" && vpa.n > 1
-            vpa_spectral = setup_gausslegendre_pseudospectral(vpa)
-        else
-            # create dummy Bool variable to return in place of the above struct
-            vpa_spectral = false
-            #vpa.duniform_dgrid .= 1.0
-        end
-
-        if vperp.discretization == "chebyshev_pseudospectral" && vperp.n > 1
-            # create arrays needed for explicit Chebyshev pseudospectral treatment in vperp
-            # and create the plans for the forward and backward fast Chebyshev transforms
-            vperp_spectral = setup_chebyshev_pseudospectral(vperp)
-            # obtain the local derivatives of the uniform vperp-grid with respect to the used vperp-grid
-            #chebyshev_derivative!(vperp.duniform_dgrid, vperp.uniform_grid, vperp_spectral, vperp)
-        elseif vperp.discretization == "gausslegendre_pseudospectral" && vperp.n > 1
-            vperp_spectral = setup_gausslegendre_pseudospectral(vperp)
-        else
-            # create dummy Bool variable to return in place of the above struct
-            vperp_spectral = false
-            #vperp.duniform_dgrid .= 1.0
-        end
+        vpa, vpa_spectral = define_coordinate(vpa_input)
+        vperp, vperp_spectral = define_coordinate(vperp_input)
+        
         # Set up MPI
         if standalone
             initialize_comms!()
@@ -374,7 +348,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             C_M_num[ivpa,ivperp] = fkpl_arrays.CC[ivpa,ivperp]
             H_M_num[ivpa,ivperp] = fkpl_arrays.HH[ivpa,ivperp]
             dHdvpa_M_num[ivpa,ivperp] = fkpl_arrays.dHdvpa[ivpa,ivperp]
-            dGdvperp_M_num[ivpa,ivperp] = fkpl_arrays.dHdvperp[ivpa,ivperp]
+            dHdvperp_M_num[ivpa,ivperp] = fkpl_arrays.dHdvperp[ivpa,ivperp]
             dGdvperp_M_num[ivpa,ivperp] = fkpl_arrays.dGdvperp[ivpa,ivperp]
             d2Gdvperp2_M_num[ivpa,ivperp] = fkpl_arrays.d2Gdvperp2[ivpa,ivperp]
             d2Gdvpa2_M_num[ivpa,ivperp] = fkpl_arrays.d2Gdvpa2[ivpa,ivperp]
@@ -427,8 +401,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
         if test_self_operator
             delta_n = get_density(C_M_num, vpa, vperp)
             delta_upar = get_upar(C_M_num, vpa, vperp, dens)
-            delta_ppar = get_ppar(C_M_num, vpa, vperp, upar, msp)
-            delta_pperp = get_pperp(C_M_num, vpa, vperp, msp)
+            delta_ppar = msp*get_ppar(C_M_num, vpa, vperp, upar)
+            delta_pperp = msp*get_pperp(C_M_num, vpa, vperp)
             delta_pressure = get_pressure(delta_ppar,delta_pperp)
             @serial_region begin
                 println("delta_n: ", delta_n)
@@ -469,193 +443,202 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
     end
     
-    initialize_comms!()
-    ngrid = 5
-    plot_scan = true
-    plot_test_output = false
-    impose_zero_gradient_BC = false
-    test_parallelism = false
-    test_self_operator = true
-    test_dense_construction = false
-    #nelement_list = Int[8, 16, 32, 64, 128]
-    #nelement_list = Int[4, 8, 16, 32, 64]
-    #nelement_list = Int[2, 4, 8]
-    #nelement_list = Int[4, 8, 16, 32, 64]
-    #nelement_list = Int[2, 4, 8, 16, 32]
-    nelement_list = Int[2, 4, 8, 16]
-    #nelement_list = Int[100]
-    #nelement_list = Int[8]
-    nscan = size(nelement_list,1)
-    max_C_err = Array{mk_float,1}(undef,nscan)
-    max_H_err = Array{mk_float,1}(undef,nscan)
-    max_G_err = Array{mk_float,1}(undef,nscan)
-    max_dHdvpa_err = Array{mk_float,1}(undef,nscan)
-    max_dHdvperp_err = Array{mk_float,1}(undef,nscan)
-    max_d2Gdvperp2_err = Array{mk_float,1}(undef,nscan)
-    max_d2Gdvpa2_err = Array{mk_float,1}(undef,nscan)
-    max_d2Gdvperpdvpa_err = Array{mk_float,1}(undef,nscan)
-    max_dGdvperp_err = Array{mk_float,1}(undef,nscan)
-    L2_C_err = Array{mk_float,1}(undef,nscan)
-    L2_H_err = Array{mk_float,1}(undef,nscan)
-    L2_G_err = Array{mk_float,1}(undef,nscan)
-    L2_dHdvpa_err = Array{mk_float,1}(undef,nscan)
-    L2_dHdvperp_err = Array{mk_float,1}(undef,nscan)
-    L2_d2Gdvperp2_err = Array{mk_float,1}(undef,nscan)
-    L2_d2Gdvpa2_err = Array{mk_float,1}(undef,nscan)
-    L2_d2Gdvperpdvpa_err = Array{mk_float,1}(undef,nscan)
-    L2_dGdvperp_err = Array{mk_float,1}(undef,nscan)
-    #max_d2fsdvpa2_err = Array{mk_float,1}(undef,nscan)
-    #max_d2fsdvperp2_err = Array{mk_float,1}(undef,nscan)
-    n_err = Array{mk_float,1}(undef,nscan)
-    u_err = Array{mk_float,1}(undef,nscan)
-    p_err = Array{mk_float,1}(undef,nscan)
-    calculate_times = Array{mk_float,1}(undef,nscan)
-    init_times = Array{mk_float,1}(undef,nscan)
-    
-    expected = Array{mk_float,1}(undef,nscan)
-    expected_nelement_scaling!(expected,nelement_list,ngrid,nscan)
-    expected_integral = Array{mk_float,1}(undef,nscan)
-    expected_nelement_integral_scaling!(expected_integral,nelement_list,ngrid,nscan)
-    expected_label = L"(1/N_{el})^{n_g - 1}"
-    expected_integral_label = L"(1/N_{el})^{n_g +1}"
-    
-    expected_t_2 = Array{mk_float,1}(undef,nscan)
-    expected_t_3 = Array{mk_float,1}(undef,nscan)
-    expect_timing!(expected_t_2,nelement_list,nscan,2)
-    expect_timing!(expected_t_3,nelement_list,nscan,3)
-    expected_t_2_label = L"(N_{element})^2"
-    expected_t_3_label = L"(N_{element})^3"
-    
-    for iscan in 1:nscan
-        local nelement = nelement_list[iscan]
-        nelement_vpa = 2*nelement
-        nelement_vperp = nelement
-        fkerr, calculate_times[iscan], init_times[iscan] = test_weak_form_collisions(ngrid,nelement_vpa,nelement_vperp,
-        plot_test_output=plot_test_output,
-        impose_zero_gradient_BC=impose_zero_gradient_BC,
-        test_parallelism=test_parallelism,
-        test_self_operator=test_self_operator,
-        test_dense_construction=test_dense_construction,
-        standalone=false)
-        max_C_err[iscan], L2_C_err[iscan] = fkerr.C_M.max ,fkerr.C_M.L2
-        max_H_err[iscan], L2_H_err[iscan] = fkerr.H_M.max ,fkerr.H_M.L2
-        max_dHdvpa_err[iscan], L2_dHdvpa_err[iscan] = fkerr.dHdvpa_M.max ,fkerr.dHdvpa_M.L2
-        max_dHdvperp_err[iscan], L2_dHdvperp_err[iscan] = fkerr.dHdvperp_M.max ,fkerr.dHdvperp_M.L2
-        max_G_err[iscan], L2_G_err[iscan] = fkerr.G_M.max ,fkerr.G_M.L2
-        max_dGdvperp_err[iscan], L2_dGdvperp_err[iscan] = fkerr.dGdvperp_M.max ,fkerr.dGdvperp_M.L2
-        max_d2Gdvpa2_err[iscan], L2_d2Gdvpa2_err[iscan] = fkerr.d2Gdvpa2_M.max ,fkerr.d2Gdvpa2_M.L2
-        max_d2Gdvperpdvpa_err[iscan], L2_d2Gdvperpdvpa_err[iscan] = fkerr.d2Gdvperpdvpa_M.max ,fkerr.d2Gdvperpdvpa_M.L2
-        max_d2Gdvperp2_err[iscan], L2_d2Gdvperp2_err[iscan] = fkerr.d2Gdvperp2_M.max ,fkerr.d2Gdvperp2_M.L2
-        n_err[iscan] = abs(fkerr.moments.delta_density)
-        u_err[iscan] = abs(fkerr.moments.delta_upar)
-        p_err[iscan] = abs(fkerr.moments.delta_pressure)
-    end
-    if global_rank[]==0 && plot_scan
-        fontsize = 8
-        #ytick_sequence = Array([1.0e-13,1.0e-12,1.0e-11,1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
-        ytick_sequence = Array([1.0e-12,1.0e-11,1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1])
-        xlabel = L"N_{element}"
-        Clabel = L"\epsilon_{\infty}(C)"
-        Hlabel = L"\epsilon_{\infty}(H)"
-        Glabel = L"\epsilon_{\infty}(G)"
-        dHdvpalabel = L"\epsilon_{\infty}(dH/d v_{\|\|})"
-        dHdvperplabel = L"\epsilon_{\infty}(dH/d v_{\perp})"
-        d2Gdvperp2label = L"\epsilon_{\infty}(d^2G/d v_{\perp}^2)"
-        d2Gdvpa2label = L"\epsilon_{\infty}(d^2G/d v_{\|\|}^2)"
-        d2Gdvperpdvpalabel = L"\epsilon_{\infty}(d^2G/d v_{\perp} d v_{\|\|})"
-        dGdvperplabel = L"\epsilon_{\infty}(dG/d v_{\perp})"
+    function run_assembly_test(; ngrid=5)
+        initialize_comms!()
+        #ngrid = 5
+        plot_scan = true
+        plot_test_output = false
+        impose_zero_gradient_BC = false
+        test_parallelism = false
+        test_self_operator = true
+        test_dense_construction = false
+        #nelement_list = Int[8, 16, 32, 64, 128]
+        #nelement_list = Int[4, 8, 16, 32, 64]
+        #nelement_list = Int[2, 4, 8]
+        #nelement_list = Int[4, 8, 16, 32, 64]
+        #nelement_list = Int[2, 4, 8, 16, 32]
+        #nelement_list = Int[2, 4, 8, 16]
+        #nelement_list = Int[100]
+        nelement_list = Int[8]
+        nscan = size(nelement_list,1)
+        max_C_err = Array{mk_float,1}(undef,nscan)
+        max_H_err = Array{mk_float,1}(undef,nscan)
+        max_G_err = Array{mk_float,1}(undef,nscan)
+        max_dHdvpa_err = Array{mk_float,1}(undef,nscan)
+        max_dHdvperp_err = Array{mk_float,1}(undef,nscan)
+        max_d2Gdvperp2_err = Array{mk_float,1}(undef,nscan)
+        max_d2Gdvpa2_err = Array{mk_float,1}(undef,nscan)
+        max_d2Gdvperpdvpa_err = Array{mk_float,1}(undef,nscan)
+        max_dGdvperp_err = Array{mk_float,1}(undef,nscan)
+        L2_C_err = Array{mk_float,1}(undef,nscan)
+        L2_H_err = Array{mk_float,1}(undef,nscan)
+        L2_G_err = Array{mk_float,1}(undef,nscan)
+        L2_dHdvpa_err = Array{mk_float,1}(undef,nscan)
+        L2_dHdvperp_err = Array{mk_float,1}(undef,nscan)
+        L2_d2Gdvperp2_err = Array{mk_float,1}(undef,nscan)
+        L2_d2Gdvpa2_err = Array{mk_float,1}(undef,nscan)
+        L2_d2Gdvperpdvpa_err = Array{mk_float,1}(undef,nscan)
+        L2_dGdvperp_err = Array{mk_float,1}(undef,nscan)
+        #max_d2fsdvpa2_err = Array{mk_float,1}(undef,nscan)
+        #max_d2fsdvperp2_err = Array{mk_float,1}(undef,nscan)
+        n_err = Array{mk_float,1}(undef,nscan)
+        u_err = Array{mk_float,1}(undef,nscan)
+        p_err = Array{mk_float,1}(undef,nscan)
+        calculate_times = Array{mk_float,1}(undef,nscan)
+        init_times = Array{mk_float,1}(undef,nscan)
         
-        #println(max_G_err,max_H_err,max_dHdvpa_err,max_dHdvperp_err,max_d2Gdvperp2_err,max_d2Gdvpa2_err,max_d2Gdvperpdvpa_err,max_dGdvperp_err, expected, expected_integral)
-        plot(nelement_list, [max_C_err,max_H_err,max_G_err, expected, expected_integral],
-        xlabel=xlabel, label=[Clabel Hlabel Glabel expected_label expected_integral_label], ylabel="",
-         shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
-          xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
-          foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
-        outfile = "fkpl_C_G_H_max_test_ngrid_"*string(ngrid)*"_GLL.pdf"
-        savefig(outfile)
-        println(outfile)
-        println([max_C_err,max_H_err,max_G_err, expected, expected_integral])
+        expected = Array{mk_float,1}(undef,nscan)
+        expected_nelement_scaling!(expected,nelement_list,ngrid,nscan)
+        expected_integral = Array{mk_float,1}(undef,nscan)
+        expected_nelement_integral_scaling!(expected_integral,nelement_list,ngrid,nscan)
+        expected_label = L"(1/N_{el})^{n_g - 1}"
+        expected_integral_label = L"(1/N_{el})^{n_g +1}"
         
-        plot(nelement_list,  [max_dHdvpa_err, max_dHdvperp_err, max_d2Gdvperp2_err, max_d2Gdvpa2_err, max_d2Gdvperpdvpa_err, max_dGdvperp_err, expected,      expected_integral],
-        xlabel=xlabel, label=[dHdvpalabel     dHdvperplabel     d2Gdvperp2label     d2Gdvpa2label     d2Gdvperpdvpalabel     dGdvperplabel     expected_label expected_integral_label], ylabel="",
-         shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
-          xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
-          foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
-        outfile = "fkpl_coeffs_max_test_ngrid_"*string(ngrid)*"_GLL.pdf"
-        savefig(outfile)
-        println(outfile)
-        println([max_dHdvpa_err, max_dHdvperp_err, max_d2Gdvperp2_err, max_d2Gdvpa2_err, max_d2Gdvperpdvpa_err, max_dGdvperp_err, expected,      expected_integral])
+        expected_t_2 = Array{mk_float,1}(undef,nscan)
+        expected_t_3 = Array{mk_float,1}(undef,nscan)
+        expect_timing!(expected_t_2,nelement_list,nscan,2)
+        expect_timing!(expected_t_3,nelement_list,nscan,3)
+        expected_t_2_label = L"(N_{element})^2"
+        expected_t_3_label = L"(N_{element})^3"
         
-        
-        ClabelL2 = L"\epsilon_{L2}(C)"
-        HlabelL2 = L"\epsilon_{L2}(H)"
-        GlabelL2 = L"\epsilon_{L2}(G)"
-        dHdvpalabelL2 = L"\epsilon_{L2}(dH/d v_{\|\|})"
-        dHdvperplabelL2 = L"\epsilon_{L2}(dH/d v_{\perp})"
-        d2Gdvperp2labelL2 = L"\epsilon_{L2}(d^2G/d v_{\perp}^2)"
-        d2Gdvpa2labelL2 = L"\epsilon_{L2}(d^2G/d v_{\|\|}^2)"
-        d2GdvperpdvpalabelL2 = L"\epsilon_{L2}(d^2G/d v_{\perp} d v_{\|\|})"
-        dGdvperplabelL2 = L"\epsilon_{L2}(dG/d v_{\perp})"
-        
-        
-        plot(nelement_list, [L2_C_err,L2_H_err,L2_G_err, expected, expected_integral],
-        xlabel=xlabel, label=[ClabelL2 HlabelL2 GlabelL2 expected_label expected_integral_label], ylabel="",
-         shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
-          xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
-          foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
-        outfile = "fkpl_C_G_H_L2_test_ngrid_"*string(ngrid)*"_GLL.pdf"
-        savefig(outfile)
-        println(outfile)
-        println([L2_C_err,L2_H_err,L2_G_err, expected, expected_integral])
-        
-        plot(nelement_list,  [L2_dHdvpa_err, L2_dHdvperp_err, L2_d2Gdvperp2_err, L2_d2Gdvpa2_err, L2_d2Gdvperpdvpa_err, L2_dGdvperp_err,  expected,      expected_integral],
-        xlabel=xlabel, label=[dHdvpalabelL2  dHdvperplabelL2  d2Gdvperp2labelL2  d2Gdvpa2labelL2  d2GdvperpdvpalabelL2  dGdvperplabelL2   expected_label expected_integral_label], ylabel="",
-         shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
-          xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
-          foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
-        outfile = "fkpl_coeffs_L2_test_ngrid_"*string(ngrid)*"_GLL.pdf"
-        savefig(outfile)
-        println(outfile)
-        println([L2_dHdvpa_err, L2_dHdvperp_err, L2_d2Gdvperp2_err, L2_d2Gdvpa2_err, L2_d2Gdvperpdvpa_err, L2_dGdvperp_err,  expected,      expected_integral])
-        
-        nlabel = L"|\Delta n|"
-        ulabel = L"|\Delta u_{\|\|}|"
-        plabel = L"|\Delta p|"
-        
-        if test_self_operator
-            plot(nelement_list, [max_C_err, L2_C_err, n_err, u_err, p_err, expected, expected_integral],
-            xlabel=xlabel, label=[Clabel ClabelL2 nlabel ulabel plabel expected_label expected_integral_label], ylabel="",
+        for iscan in 1:nscan
+            local nelement = nelement_list[iscan]
+            nelement_vpa = 2*nelement
+            nelement_vperp = nelement
+            fkerr, calculate_times[iscan], init_times[iscan] = test_weak_form_collisions(ngrid,nelement_vpa,nelement_vperp,
+            plot_test_output=plot_test_output,
+            impose_zero_gradient_BC=impose_zero_gradient_BC,
+            test_parallelism=test_parallelism,
+            test_self_operator=test_self_operator,
+            test_dense_construction=test_dense_construction,
+            standalone=false)
+            max_C_err[iscan], L2_C_err[iscan] = fkerr.C_M.max ,fkerr.C_M.L2
+            max_H_err[iscan], L2_H_err[iscan] = fkerr.H_M.max ,fkerr.H_M.L2
+            max_dHdvpa_err[iscan], L2_dHdvpa_err[iscan] = fkerr.dHdvpa_M.max ,fkerr.dHdvpa_M.L2
+            max_dHdvperp_err[iscan], L2_dHdvperp_err[iscan] = fkerr.dHdvperp_M.max ,fkerr.dHdvperp_M.L2
+            max_G_err[iscan], L2_G_err[iscan] = fkerr.G_M.max ,fkerr.G_M.L2
+            max_dGdvperp_err[iscan], L2_dGdvperp_err[iscan] = fkerr.dGdvperp_M.max ,fkerr.dGdvperp_M.L2
+            max_d2Gdvpa2_err[iscan], L2_d2Gdvpa2_err[iscan] = fkerr.d2Gdvpa2_M.max ,fkerr.d2Gdvpa2_M.L2
+            max_d2Gdvperpdvpa_err[iscan], L2_d2Gdvperpdvpa_err[iscan] = fkerr.d2Gdvperpdvpa_M.max ,fkerr.d2Gdvperpdvpa_M.L2
+            max_d2Gdvperp2_err[iscan], L2_d2Gdvperp2_err[iscan] = fkerr.d2Gdvperp2_M.max ,fkerr.d2Gdvperp2_M.L2
+            n_err[iscan] = abs(fkerr.moments.delta_density)
+            u_err[iscan] = abs(fkerr.moments.delta_upar)
+            p_err[iscan] = abs(fkerr.moments.delta_pressure)
+        end
+        if global_rank[]==0 && plot_scan
+            fontsize = 8
+            #ytick_sequence = Array([1.0e-13,1.0e-12,1.0e-11,1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
+            ytick_sequence = Array([1.0e-12,1.0e-11,1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1])
+            xlabel = L"N_{element}"
+            Clabel = L"\epsilon_{\infty}(C)"
+            Hlabel = L"\epsilon_{\infty}(H)"
+            Glabel = L"\epsilon_{\infty}(G)"
+            dHdvpalabel = L"\epsilon_{\infty}(dH/d v_{\|\|})"
+            dHdvperplabel = L"\epsilon_{\infty}(dH/d v_{\perp})"
+            d2Gdvperp2label = L"\epsilon_{\infty}(d^2G/d v_{\perp}^2)"
+            d2Gdvpa2label = L"\epsilon_{\infty}(d^2G/d v_{\|\|}^2)"
+            d2Gdvperpdvpalabel = L"\epsilon_{\infty}(d^2G/d v_{\perp} d v_{\|\|})"
+            dGdvperplabel = L"\epsilon_{\infty}(dG/d v_{\perp})"
+            
+            #println(max_G_err,max_H_err,max_dHdvpa_err,max_dHdvperp_err,max_d2Gdvperp2_err,max_d2Gdvpa2_err,max_d2Gdvperpdvpa_err,max_dGdvperp_err, expected, expected_integral)
+            plot(nelement_list, [max_C_err,max_H_err,max_G_err, expected, expected_integral],
+            xlabel=xlabel, label=[Clabel Hlabel Glabel expected_label expected_integral_label], ylabel="",
              shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
               xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
               foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
-            outfile = "fkpl_conservation_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+            outfile = "fkpl_C_G_H_max_test_ngrid_"*string(ngrid)*"_GLL.pdf"
             savefig(outfile)
             println(outfile)
-            println([max_C_err, L2_C_err, n_err, u_err, p_err, expected, expected_integral])
-        else
-            plot(nelement_list, [max_C_err, L2_C_err, n_err, expected, expected_integral],
-            xlabel=xlabel, label=[Clabel ClabelL2 nlabel expected_label expected_integral_label], ylabel="",
+            println([max_C_err,max_H_err,max_G_err, expected, expected_integral])
+            
+            plot(nelement_list,  [max_dHdvpa_err, max_dHdvperp_err, max_d2Gdvperp2_err, max_d2Gdvpa2_err, max_d2Gdvperpdvpa_err, max_dGdvperp_err, expected,      expected_integral],
+            xlabel=xlabel, label=[dHdvpalabel     dHdvperplabel     d2Gdvperp2label     d2Gdvpa2label     d2Gdvperpdvpalabel     dGdvperplabel     expected_label expected_integral_label], ylabel="",
              shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
               xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
               foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
-            outfile = "fkpl_conservation_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+            outfile = "fkpl_coeffs_max_test_ngrid_"*string(ngrid)*"_GLL.pdf"
             savefig(outfile)
-            println(outfile)        
-            println([max_C_err, L2_C_err, n_err, expected, expected_integral])
+            println(outfile)
+            println([max_dHdvpa_err, max_dHdvperp_err, max_d2Gdvperp2_err, max_d2Gdvpa2_err, max_d2Gdvperpdvpa_err, max_dGdvperp_err, expected,      expected_integral])
+            
+            
+            ClabelL2 = L"\epsilon_{L2}(C)"
+            HlabelL2 = L"\epsilon_{L2}(H)"
+            GlabelL2 = L"\epsilon_{L2}(G)"
+            dHdvpalabelL2 = L"\epsilon_{L2}(dH/d v_{\|\|})"
+            dHdvperplabelL2 = L"\epsilon_{L2}(dH/d v_{\perp})"
+            d2Gdvperp2labelL2 = L"\epsilon_{L2}(d^2G/d v_{\perp}^2)"
+            d2Gdvpa2labelL2 = L"\epsilon_{L2}(d^2G/d v_{\|\|}^2)"
+            d2GdvperpdvpalabelL2 = L"\epsilon_{L2}(d^2G/d v_{\perp} d v_{\|\|})"
+            dGdvperplabelL2 = L"\epsilon_{L2}(dG/d v_{\perp})"
+            
+            
+            plot(nelement_list, [L2_C_err,L2_H_err,L2_G_err, expected, expected_integral],
+            xlabel=xlabel, label=[ClabelL2 HlabelL2 GlabelL2 expected_label expected_integral_label], ylabel="",
+             shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
+              xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
+              foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
+            outfile = "fkpl_C_G_H_L2_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+            savefig(outfile)
+            println(outfile)
+            println([L2_C_err,L2_H_err,L2_G_err, expected, expected_integral])
+            
+            plot(nelement_list,  [L2_dHdvpa_err, L2_dHdvperp_err, L2_d2Gdvperp2_err, L2_d2Gdvpa2_err, L2_d2Gdvperpdvpa_err, L2_dGdvperp_err,  expected,      expected_integral],
+            xlabel=xlabel, label=[dHdvpalabelL2  dHdvperplabelL2  d2Gdvperp2labelL2  d2Gdvpa2labelL2  d2GdvperpdvpalabelL2  dGdvperplabelL2   expected_label expected_integral_label], ylabel="",
+             shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
+              xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
+              foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
+            outfile = "fkpl_coeffs_L2_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+            savefig(outfile)
+            println(outfile)
+            println([L2_dHdvpa_err, L2_dHdvperp_err, L2_d2Gdvperp2_err, L2_d2Gdvpa2_err, L2_d2Gdvperpdvpa_err, L2_dGdvperp_err,  expected,      expected_integral])
+            
+            nlabel = L"|\Delta n|"
+            ulabel = L"|\Delta u_{\|\|}|"
+            plabel = L"|\Delta p|"
+            
+            if test_self_operator
+                plot(nelement_list, [max_C_err, L2_C_err, n_err, u_err, p_err, expected, expected_integral],
+                xlabel=xlabel, label=[Clabel ClabelL2 nlabel ulabel plabel expected_label expected_integral_label], ylabel="",
+                 shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
+                  xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
+                  foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
+                outfile = "fkpl_conservation_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+                savefig(outfile)
+                println(outfile)
+                println([max_C_err, L2_C_err, n_err, u_err, p_err, expected, expected_integral])
+            else
+                plot(nelement_list, [max_C_err, L2_C_err, n_err, expected, expected_integral],
+                xlabel=xlabel, label=[Clabel ClabelL2 nlabel expected_label expected_integral_label], ylabel="",
+                 shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
+                  xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
+                  foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
+                outfile = "fkpl_conservation_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+                savefig(outfile)
+                println(outfile)        
+                println([max_C_err, L2_C_err, n_err, expected, expected_integral])
+            end
+            
+            calculate_timeslabel = "time/step (ms)"
+            init_timeslabel = "time/init (ms)"
+            ytick_sequence_timing = Array([10^2,10^3,10^4,10^5,10^6])
+            plot(nelement_list, [calculate_times, init_times, expected_t_2, expected_t_3],
+            xlabel=xlabel, label=[calculate_timeslabel init_timeslabel expected_t_2_label expected_t_3_label], ylabel="",
+             shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), markersize = 5, linewidth=2, 
+              xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
+              foreground_color_legend = nothing, background_color_legend = nothing, legend=:topleft)
+            outfile = "fkpl_timing_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+            savefig(outfile)
+            println(outfile)
+            println([calculate_times, init_times, expected_t_2, expected_t_3])
         end
-        
-        calculate_timeslabel = "time/step (ms)"
-        init_timeslabel = "time/init (ms)"
-        ytick_sequence_timing = Array([10^2,10^3,10^4,10^5,10^6])
-        plot(nelement_list, [calculate_times, init_times, expected_t_2, expected_t_3],
-        xlabel=xlabel, label=[calculate_timeslabel init_timeslabel expected_t_2_label expected_t_3_label], ylabel="",
-         shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), markersize = 5, linewidth=2, 
-          xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
-          foreground_color_legend = nothing, background_color_legend = nothing, legend=:topleft)
-        outfile = "fkpl_timing_test_ngrid_"*string(ngrid)*"_GLL.pdf"
-        savefig(outfile)
-        println(outfile)
-        println([calculate_times, init_times, expected_t_2, expected_t_3])
+        finalize_comms!()
+    return nothing
     end
-    finalize_comms!()
+
+if abspath(PROGRAM_FILE) == @__FILE__
+    using Pkg
+    Pkg.activate(".")
+    
+    run_assembly_test()
 end

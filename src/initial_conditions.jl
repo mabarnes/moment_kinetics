@@ -1113,7 +1113,7 @@ enforce boundary conditions in vpa and z on the evolved pdf;
 also enforce boundary conditions in z on all separately evolved velocity space moments of the pdf
 """
 function enforce_boundary_conditions!(f, f_r_bc, density, upar, ppar, moments, vpa_bc,
-        z_bc, r_bc, vpa, vperp, z, r, vpa_spectral, vperp_spectrla, vpa_adv, z_adv, r_adv, composition, scratch_dummy,
+        z_bc, r_bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral, vpa_adv, z_adv, r_adv, composition, scratch_dummy,
         r_diffusion, vpa_diffusion)
     if vpa.n > 1
         begin_s_r_z_vperp_region()
@@ -1121,7 +1121,7 @@ function enforce_boundary_conditions!(f, f_r_bc, density, upar, ppar, moments, v
             # enforce the vpa BC
             # use that adv.speed independent of vpa 
             @views enforce_vpa_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc,
-                             vpa_adv[is].speed[:,ivperp,iz,ir], advance.vpa_diffusion,
+                             vpa_adv[is].speed[:,ivperp,iz,ir], vpa_diffusion,
                              vpa, vpa_spectral)
         end
     end
@@ -1327,7 +1327,7 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged,
             z_adv, z, vzeta, vr, vz, composition, geometry, 
             scratch_dummy.buffer_vzvrvzetarsn_1, scratch_dummy.buffer_vzvrvzetarsn_2,
             scratch_dummy.buffer_vzvrvzetarsn_3, scratch_dummy.buffer_vzvrvzetarsn_4,
-            scratch_dummy.buffer_vzvrvzetazrsn)
+            scratch_dummy.buffer_vzvrvzetazrsn_1)
     end
     if r.n > 1
         begin_sn_z_vzeta_vr_vz_region()

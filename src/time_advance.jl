@@ -43,7 +43,7 @@ using ..ionization: ionization_collisions_1V!, ionization_collisions_3V!, consta
 using ..krook_collisions: krook_collisions!
 using ..numerical_dissipation: vpa_boundary_buffer_decay!,
                                vpa_boundary_buffer_diffusion!, vpa_dissipation!,
-                               z_dissipation!, r_dissipation!,
+                               z_dissipation!, r_dissipation!, vperp_dissipation!
                                vz_dissipation_neutral!, z_dissipation_neutral!,
                                r_dissipation_neutral!,
                                vpa_boundary_force_decreasing!, force_minimum_pdf_value!,
@@ -197,7 +197,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     # if no splitting of operators, all terms advanced concurrently;
     # else, will advance one term at a time.
     advance = setup_advance_flags(moments, composition, t_input, collisions,
-                                  num_diss_params, manufactured_solns_input, rk_coefs, r,
+                                  num_diss_params, manufactured_solns_input, rk_coefs, r, z,
                                   vperp, vpa, vzeta, vr, vz)
 
     begin_serial_region()
@@ -215,7 +215,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     elseif advance.explicit_weakform_fp_collisions
         fp_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; precompute_weights=true)
     else
-        fp_arrays = init_fokker_planck_collisions(vpa,vperp,vpa_spectral,vperp_spectral; precompute_weights=false)
+        fp_arrays = init_fokker_planck_collisions(vpa,vperp; precompute_weights=false)
     end
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
@@ -432,7 +432,7 @@ if no splitting of operators, all terms advanced concurrently;
 else, will advance one term at a time.
 """
 function setup_advance_flags(moments, composition, t_input, collisions, num_diss_params,
-                             manufactured_solns_input, rk_coefs, r, vperp, vpa, vzeta, vr,
+                             manufactured_solns_input, rk_coefs, r, z, vperp, vpa, vzeta, vr,
                              vz)
     # default is not to concurrently advance different operators
     advance_vpa_advection = false
@@ -1295,14 +1295,14 @@ stages, if the quantities are evolved separately from the modified pdf;
 or update them by taking the appropriate velocity moment of the evolved pdf
 """
 function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr, vzeta,
-                    vpa, vperp, z, r, advect_objects, rk_coefs, istage, composition,
-                    geometry, num_diss_params, z_spectral, r_spectral, advance,
-                    scratch_dummy)
+                    vpa, vperp, z, r, spectral_objects, advect_objects, rk_coefs, istage, composition,
+                    geometry, num_diss_params, advance, scratch_dummy)
     begin_s_r_z_region()
 
     new_scratch = scratch[istage+1]
     old_scratch = scratch[istage]
 
+    z_spectral, r_spectral, vpa_spectral, vperp_spectral = spectral_objects.z_spectral, spectral_objects.r_spectral, spectral_objects.vpa_spectral, spectral_objects.vperp_spectral
     vpa_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
@@ -1590,10 +1590,9 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
             collisions, geometry, scratch_dummy, manufactured_source_list, 
             num_diss_params, advance, fp_arrays, istage)
         @views rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr,
-                          vzeta, vpa, vperp, z, r, advect_objects,
+                          vzeta, vpa, vperp, z, r, spectral_objects, advect_objects,
                           advance.rk_coefs[:,istage], istage, composition, geometry,
-                          num_diss_params, spectral_objects.z_spectral,
-                          spectral_objects.r_spectral, advance, scratch_dummy)
+                          num_diss_params, advance, scratch_dummy)
     end
 
     istage = n_rk_stages+1
