@@ -135,7 +135,10 @@ run Julia with). To do this (see [the HDF5.jl
 docs](https://juliaio.github.io/HDF5.jl/stable/#Using-custom-or-system-provided-HDF5-binaries))
 run (with the `moment_kinetics` project activated in Julia)
 ```
-julia> ENV["JULIA_HDF5_PATH"] = "/path/to/your/hdf5/directory"; using Pkg(); Pkg.build()
+using HDF5
+
+HDF5.API.set_libraries!("/path/to/your/hdf5/directory/libhdf5.so",
+                        "/path/to/your/hdf5/directory/libhdf5_hl.so")
 ```
 JTO also found that (on a Linux laptop) it was necessary to compile HDF5 from
 source. The system-provided, MPI-linked libhdf5 depended on libcurl, and Julia
