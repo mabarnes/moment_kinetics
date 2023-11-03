@@ -43,7 +43,7 @@ using ..ionization: ionization_collisions_1V!, ionization_collisions_3V!, consta
 using ..krook_collisions: krook_collisions!
 using ..numerical_dissipation: vpa_boundary_buffer_decay!,
                                vpa_boundary_buffer_diffusion!, vpa_dissipation!,
-                               z_dissipation!, r_dissipation!, vperp_dissipation!
+                               z_dissipation!, r_dissipation!, vperp_dissipation!,
                                vz_dissipation_neutral!, z_dissipation_neutral!,
                                r_dissipation_neutral!,
                                vpa_boundary_force_decreasing!, force_minimum_pdf_value!,

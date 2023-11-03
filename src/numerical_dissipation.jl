@@ -3,9 +3,11 @@
 module numerical_dissipation
 
 export setup_numerical_dissipation, vpa_boundary_buffer_decay!,
-       vpa_boundary_buffer_diffusion!, vpa_dissipation!, z_dissipation!,
-       r_dissipation!, force_minimum_pdf_value!, force_minimum_pdf_value_neutral!,
-       vperp_dissipation!
+       vpa_boundary_buffer_diffusion!, force_minimum_pdf_value!, force_minimum_pdf_value_neutral!,
+        vpa_dissipation!, vperp_dissipation!, 
+        z_dissipation!, r_dissipation!, 
+        vz_dissipation_neutral!, z_dissipation_neutral!,
+        r_dissipation_neutral! 
 
 using Base.Iterators: flatten
 

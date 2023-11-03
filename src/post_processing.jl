@@ -199,7 +199,7 @@ function construct_global_zr_coords(r_local, z_local)
     function make_global_input(coord_local)
         return grid_input(coord_local.name, coord_local.ngrid,
             coord_local.nelement_global, coord_local.nelement_global, 1, 0, coord_local.L,
-            coord_local.discretization, coord_local.fd_option, coord_local.bc,
+            coord_local.discretization, coord_local.fd_option, coord_local.cheb_option, coord_local.bc,
             coord_local.advection, MPI.COMM_NULL, coord_local.element_spacing_option)
     end
 
@@ -1038,6 +1038,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     perpendicular_pressure = perpendicular_pressure[1]
     parallel_heat_flux = parallel_heat_flux[1]
     thermal_speed = thermal_speed[1]
+    entropy_production = entropy_production[1]
     time = time[1]
     ntime = ntime[1]
     time_pdfs = time_pdfs[1]
@@ -1076,7 +1077,8 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
 
     if !is_1D1V
         # make plots and animations of the phi, Ez and Er
-        plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time,
+        plot_charged_moments_2D(density, parallel_flow, parallel_pressure, 
+                                perpendicular_pressure, thermal_speed, entropy_production, time,
                                 z_global.grid, r_global.grid, iz0, ir0, n_ion_species,
                                 itime_min, itime_max, nwrite_movie, run_name_label, pp)
         # make plots and animations of the phi, Ez and Er
@@ -1093,9 +1095,11 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
         if Maxwellian_diagnostic
             pressure = copy(parallel_pressure)
             @. pressure = (2.0*perpendicular_pressure + parallel_pressure)/3.0
-            plot_Maxwellian_diagnostic(ff[:,:,iz0,ir0,:,:], density[iz0,ir0,:,:],
-             parallel_flow[iz0,ir0,:,:], thermal_speed[iz0,ir0,:,:], vpa_local, vpa_local_wgts, 
-             vperp_local, vperp_local_wgts, time, iz0, ir0, run_name, n_ion_species)
+            ff = load_distributed_charged_pdf_slice(run_name, nblocks, 1:ntime, n_ion_species, r,
+                                                   z, vperp, vpa; iz=iz0, ir=ir0)
+            plot_Maxwellian_diagnostic(ff[:,:,:,:], density[iz0,ir0,:,:],
+             parallel_flow[iz0,ir0,:,:], thermal_speed[iz0,ir0,:,:], vpa.grid, vpa.wgts, 
+             vperp.grid, vperp.wgts, time, iz0, ir0, run_name_label, n_ion_species)
         end
         # make plots and animations of the neutral pdf
         if n_neutral_species > 0
@@ -3194,7 +3198,6 @@ function plot_charged_pdf(run_name, run_name_label, vpa, vperp, z, r, z_local, r
     ivperp0_string = string("_ivperp0", string(ivperp0))
     iz0_string = string("_iz0", string(iz0))
     ir0_string = string("_ir0", string(ir0))
-    nvperp = size(vperp,1)
     # create animations of the ion pdf
     if n_species > 1
         spec_string = [string("_", spec_type, "_spec", string(is)) for is ∈ 1:n_species]
@@ -3465,7 +3468,8 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
     println("done.")
 end
 
-function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, perpendicular_pressure, thermal_speed, 
+function plot_charged_moments_2D(density, parallel_flow, parallel_pressure,
+    perpendicular_pressure, thermal_speed, 
     entropy_production, time, z, r, iz0, ir0, n_ion_species,
     itime_min, itime_max, nwrite_movie, run_name, pp)
     nr = size(r,1)
