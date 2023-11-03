@@ -1,7 +1,7 @@
 module hermite_spline_interpolation
 
 using ..calculus: derivative!
-using ..moment_kinetics_structs: finite_difference_info
+using ..finite_differences: finite_difference_info
 import ..interpolation: interpolate_to_grid_1d!
 
 """

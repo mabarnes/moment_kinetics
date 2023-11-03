@@ -3,8 +3,14 @@
 module finite_differences
 
 using ..type_definitions: mk_float
-import ..calculus: elementwise_derivative!, elementwise_second_derivative!
-using ..moment_kinetics_structs: finite_difference_info
+import ..calculus: elementwise_derivative!, elementwise_second_derivative!,
+                   second_derivative!
+using ..moment_kinetics_structs: discretization_info
+
+"""
+Finite difference discretization
+"""
+struct finite_difference_info <: discretization_info end
 
 """
 """
@@ -57,6 +63,23 @@ stored in coord.scratch_2d.
 function elementwise_second_derivative!(coord, f, not_spectral::finite_difference_info)
     return second_derivative_finite_difference!(coord.scratch_2d, f, coord.cell_width,
         coord.bc, coord.igrid, coord.ielement)
+end
+
+function second_derivative!(df, f, Q, coord, spectral::finite_difference_info)
+    # Finite difference version must use an appropriate second derivative stencil, not
+    # apply the 1st derivative twice as for the spectral element method
+
+    if !all(Q .== 1.0)
+        error("Finite difference implementation of second derivative does not support "
+              * "Q!=1.")
+    end
+
+    # get the derivative at each grid point within each element and store in
+    # coord.scratch_2d
+    elementwise_second_derivative!(coord, f, spectral)
+    # map the derivative from the elem;ntal grid to the full grid;
+    # at element boundaries, use the average of the derivatives from neighboring elements.
+    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)
 end
 
 """

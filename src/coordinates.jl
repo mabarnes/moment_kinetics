@@ -10,10 +10,10 @@ using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_int
 using ..calculus: derivative!
 using ..chebyshev: scaled_chebyshev_grid, setup_chebyshev_pseudospectral
+using ..finite_differences: finite_difference_info
 using ..quadrature: composite_simpson_weights
 using ..input_structs: advection_input
-using ..moment_kinetics_structs: finite_difference_info, null_spatial_dimension_info,
-                                 null_velocity_dimension_info
+using ..moment_kinetics_structs: null_spatial_dimension_info, null_velocity_dimension_info
 
 using MPI
 
