@@ -131,6 +131,24 @@ particular time index to restart from, e.g.
 julia> run_moment_kinetics("input.toml", restart="runs/example/example.dfns.h5", restart_time_index=42)
 ```
 
+It is possible to restart a run from another output file with different
+resolution settings or different moment-kinetic options. This is done by
+interpolating variables from the old run onto the new grid.
+* When interpolating in spatial dimensions it is not recommended to change the
+  length of the domain.
+* For velocity space dimensions, changing the size of the domain should be OK.
+  Points outside the original domain will be filled with $\propto \exp(-v^2)$
+  decreasing values.
+* When changing from 1D (no $r$-dimension) to 2D (with $r$-dimension), the
+  interpolated values will be constant in $r$.
+* When changing from 1V to 2V or 3V, the interpolated values will be
+  proportional to $\exp(-v_j^2)$ in the new dimension(s).
+
+When running in parallel, both the old and the new grids must be compatible
+with the distributed-MPI parallelisation. When not using [Parallel I/O](@ref),
+the distributed-MPI domain decomposition must be identical in the old and new
+runs (as each block only reads from a single file).
+
 ## Post processing quickstart
 
 To make plots and calculate frequencies/growth rates, run
