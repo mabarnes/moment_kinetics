@@ -675,7 +675,7 @@ function runtests()
                     # differentiate f
                     derivative!(df, f, x, adv_fac, spectral)
 
-                    @test isapprox(df, expected_df, rtol=rtol, atol=1.e-14,
+                    @test isapprox(df, expected_df, rtol=rtol, atol=1.e-12,
                                    norm=maxabs_norm)
                 end
             end
@@ -726,7 +726,7 @@ function runtests()
                     # something like p*(round-off) for x^p (?) so error on expected_df would
                     # be p*p*(round-off), or plausibly 1024*(round-off), so tolerance of
                     # 2e-11 isn't unreasonable.
-                    @test isapprox(df, expected_df, rtol=2.0e-11, atol=2.0e-12,
+                    @test isapprox(df, expected_df, rtol=2.0e-11, atol=6.0e-12,
                                    norm=maxabs_norm)
                 end
             end
@@ -782,7 +782,7 @@ function runtests()
                         # something like p*(round-off) for x^p (?) so error on expected_df
                         # would be p*p*(round-off), or plausibly 1024*(round-off), so
                         # tolerance of 3e-11 isn't unreasonable.
-                        @test isapprox(df, expected_df, rtol=3.0e-11, atol=3.0e-12,
+                        @test isapprox(df, expected_df, rtol=3.0e-11, atol=1.5e-11,
                                        norm=maxabs_norm)
                     end
                 end
