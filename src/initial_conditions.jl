@@ -1218,9 +1218,10 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::St
     if z.nelement_global > z.nelement_local
         # reconcile internal element boundaries across processes
         # & enforce periodicity and external boundaries if needed
+        nz = z.n
         @loop_s_r_vperp_vpa is ir ivperp ivpa begin
-            end1[ivpa,ivperp,ir,is] = f[ivpa,ivperp,1,ir,is]
-            end2[ivpa,ivperp,ir,is] = f[ivpa,ivperp,nz,ir,is]
+            end1[ivpa,ivperp,ir,is] = pdf[ivpa,ivperp,1,ir,is]
+            end2[ivpa,ivperp,ir,is] = pdf[ivpa,ivperp,nz,ir,is]
         end
         # check on periodic bc happens inside this call below
         @views reconcile_element_boundaries_MPI!(pdf,
