@@ -145,8 +145,8 @@ function scaled_chebyshev_grid(ngrid, nelement_local, n,
     return grid, wgts
 end
 
-function scaled_chebyshev_radau_grid(ngrid, nelement_global, nelement_local, n,
-			irank, box_length, imin, imax)
+function scaled_chebyshev_radau_grid(ngrid, nelement_local, n,
+			element_scale, element_shift, imin, imax, irank)
     # initialize chebyshev grid defined on [1,-1]
     # with n grid points chosen to facilitate
     # the fast Chebyshev transform (aka the discrete cosine transform)
@@ -159,34 +159,30 @@ function scaled_chebyshev_radau_grid(ngrid, nelement_global, nelement_local, n,
     # setup the scale factor by which the Chebyshev grid on [-1,1]
     # is to be multiplied to account for the full domain [-L/2,L/2]
     # and the splitting into nelement elements with ngrid grid points
-    scale_factor = 0.5*box_length/float(nelement_global)
     if irank == 0 # use a Chebyshev-Gauss-Radau element for the lowest element on rank 0
-        shift = box_length*(0.5/float(nelement_global) - 0.5)
+        scale_factor = element_scale[1]
+        shift = element_shift[1]
         grid[imin[1]:imax[1]] .= (chebyshev_radau_grid[1:ngrid] * scale_factor) .+ shift
         # account for the fact that the minimum index needed for the chebyshev_grid
         # within each element changes from 1 to 2 in going from the first element
         # to the remaining elements
         k = 2
         @inbounds for j ∈ 2:nelement_local
-            #wgts[imin[j]:imax[j]] .= sqrt.(1.0 .- reverse(chebyshev_grid)[k:ngrid].^2) * scale_factor
-            # amount by which to shift the centre of this element from zero
-            iel_global = j + irank*nelement_local
-            shift = box_length*((float(iel_global)-0.5)/float(nelement_global) - 0.5)
+            scale_factor = element_scale[j]
+            shift = element_shift[j]
             # reverse the order of the original chebyshev_grid (ran from [1,-1])
             # and apply the scale factor and shift
             grid[imin[j]:imax[j]] .= (reverse(chebyshev_grid)[k:ngrid] * scale_factor) .+ shift
         end
-        wgts = clenshaw_curtis_radau_weights(ngrid, nelement_local, n, imin, imax, scale_factor)
+        wgts = clenshaw_curtis_radau_weights(ngrid, nelement_local, n, imin, imax, element_scale)
     else
         # account for the fact that the minimum index needed for the chebyshev_grid
         # within each element changes from 1 to 2 in going from the first element
         # to the remaining elements
         k = 1
         @inbounds for j ∈ 1:nelement_local
-            #wgts[imin[j]:imax[j]] .= sqrt.(1.0 .- reverse(chebyshev_grid)[k:ngrid].^2) * scale_factor
-            # amount by which to shift the centre of this element from zero
-            iel_global = j + irank*nelement_local
-            shift = box_length*((float(iel_global)-0.5)/float(nelement_global) - 0.5)
+            scale_factor = element_scale[j]
+            shift = element_shift[j]
             # reverse the order of the original chebyshev_grid (ran from [1,-1])
             # and apply the scale factor and shift
             grid[imin[j]:imax[j]] .= (reverse(chebyshev_grid)[k:ngrid] * scale_factor) .+ shift
@@ -194,7 +190,7 @@ function scaled_chebyshev_radau_grid(ngrid, nelement_global, nelement_local, n,
             # to avoid double-counting boundary element
             k = 2
         end
-        wgts = clenshaw_curtis_weights(ngrid, nelement_local, n, imin, imax, scale_factor)
+        wgts = clenshaw_curtis_weights(ngrid, nelement_local, n, imin, imax, element_scale)
     end
     return grid, wgts
 end
@@ -519,23 +515,23 @@ function clenshaw_curtis_weights(ngrid, nelement_local, n, imin, imax, element_s
     return wgts
 end
 
-function clenshaw_curtis_radau_weights(ngrid, nelement_local, n, imin, imax, scale_factor)
+function clenshaw_curtis_radau_weights(ngrid, nelement_local, n, imin, imax, element_scale)
     # create array containing the integration weights
     wgts = zeros(mk_float, n)
     # calculate the modified Chebshev moments of the first kind
     μ = chebyshevmoments(ngrid)
-    wgts_lobatto = clenshawcurtisweights(μ)*scale_factor
-    wgts_radau = chebyshev_radau_weights(μ, ngrid)*scale_factor 
+    wgts_lobatto = clenshawcurtisweights(μ)
+    wgts_radau = chebyshev_radau_weights(μ, ngrid)
     @inbounds begin
         # calculate the weights within a single element and
         # scale to account for modified domain (not [-1,1])
-        wgts[1:ngrid] .= wgts_radau[1:ngrid]
+        wgts[1:ngrid] .= wgts_radau[1:ngrid]*element_scale[1]
         if nelement_local > 1
             for j ∈ 2:nelement_local
                 # account for double-counting of points at inner element boundaries
-                wgts[imin[j]-1] += wgts_lobatto[1]
+                wgts[imin[j]-1] += wgts_lobatto[1]*element_scale[j]
                 # assign weights for interior of elements and one boundary point
-                wgts[imin[j]:imax[j]] .= wgts_lobatto[2:ngrid]
+                wgts[imin[j]:imax[j]] .= wgts_lobatto[2:ngrid]*element_scale[j]
             end
         end
     end
