@@ -1131,7 +1131,7 @@ end
                                   t_idx, z, r, n_ion_species)
             append_to_dynamic_var(io_moments.parallel_pressure, moments.charged.ppar.data,
                                   t_idx, z, r, n_ion_species)
-            append_to_dynamic_var(io_moments.perpendicular_pressure.data, moments.charged.pperp,
+            append_to_dynamic_var(io_moments.perpendicular_pressure, moments.charged.pperp.data,
                                   t_idx, z, r, n_ion_species)
             append_to_dynamic_var(io_moments.parallel_heat_flux,
                                   moments.charged.qpar.data, t_idx, z, r, n_ion_species)
