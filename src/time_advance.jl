@@ -206,6 +206,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     # distribution function which is then used to (possibly) re-calculate the moments
     # after which the initial values of moment derivatives are re-calculated.
     calculate_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, num_diss_params)
+    calculate_moment_derivatives_neutral!(moments, scratch[1], scratch_dummy, z,
+                                          z_spectral, num_diss_params)
 
     ##
     # Charged particle advection only
