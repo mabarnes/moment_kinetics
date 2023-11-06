@@ -293,8 +293,8 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     # MRH no vperp bc currently imposed so option below not used
     vperp.bc = get(scan_input, "vperp_bc", "periodic")
     # determine the discretization option for the vperp grid
-    # supported options are "finite_difference_vperp" "chebyshev_pseudospectral_vperp"
-    vperp.discretization = get(scan_input, "vperp_discretization", "chebyshev_pseudospectral_vperp")
+    # supported options are "finite_difference_vperp" "chebyshev_pseudospectral"
+    vperp.discretization = get(scan_input, "vperp_discretization", "chebyshev_pseudospectral")
     vperp.element_spacing_option = get(scan_input, "vperp_element_spacing_option", "uniform")
     
     # overwrite some default parameters related to the gyrophase grid

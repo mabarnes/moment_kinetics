@@ -18,8 +18,7 @@ const regression_rtol = 1.e-14
 const regression_range = 5:10
 
 # Create a temporary directory for test output
-test_output_directory = tempname()
-mkpath(test_output_directory)
+test_output_directory = get_MPI_tempdir()
 
 # default inputs for tests
 test_input_finite_difference = Dict("n_ion_species" => 1,

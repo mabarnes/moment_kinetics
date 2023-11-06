@@ -10,8 +10,10 @@ using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_int
 using ..calculus: derivative!
 using ..chebyshev: scaled_chebyshev_grid, setup_chebyshev_pseudospectral
+using ..finite_differences: finite_difference_info
 using ..quadrature: composite_simpson_weights
 using ..input_structs: advection_input
+using ..moment_kinetics_structs: null_spatial_dimension_info, null_velocity_dimension_info
 
 using MPI
 
@@ -161,7 +163,13 @@ function define_coordinate(input, parallel_io::Bool=false)
         scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
         local_io_range, global_io_range, element_scale, element_shift, input.element_spacing_option)
 
-    if input.discretization == "chebyshev_pseudospectral" && coord.n > 1
+    if coord.n == 1 && occursin("v", coord.name)
+        spectral = null_velocity_dimension_info()
+        coord.duniform_dgrid .= 1.0
+    elseif coord.n == 1
+        spectral = null_spatial_dimension_info()
+        coord.duniform_dgrid .= 1.0
+    elseif input.discretization == "chebyshev_pseudospectral"
         # create arrays needed for explicit Chebyshev pseudospectral treatment in this
         # coordinate and create the plans for the forward and backward fast Chebyshev
         # transforms
@@ -169,8 +177,9 @@ function define_coordinate(input, parallel_io::Bool=false)
         # obtain the local derivatives of the uniform grid with respect to the used grid
         derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
     else
-        # create dummy Bool variable to return in place of the above struct
-        spectral = false
+        # finite_difference_info is just a type so that derivative methods, etc., dispatch
+        # to the finite difference versions, it does not contain any information.
+        spectral = finite_difference_info()
         coord.duniform_dgrid .= 1.0
     end
 
