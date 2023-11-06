@@ -17,7 +17,7 @@ using FFTW
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_complex
 using ..clenshaw_curtis: clenshawcurtisweights
-import ..interpolation: interpolate_to_grid_1d
+import ..interpolation: interpolate_to_grid_1d!
 
 """
 """
@@ -400,12 +400,14 @@ coord : coordinate
     `coordinate` struct giving the coordinate along which f varies
 chebyshev : chebyshev_info
     struct containing information for Chebyshev transforms
+
+Note that this routine does not support Gauss-Chebyshev-Radau elements
 """
 function interpolate_to_grid_1d!(result, newgrid, f, coord, chebyshev::chebyshev_info)
     # define local variable nelement for convenience
     nelement = coord.nelement_local
     # check array bounds
-    @boundscheck nelement == size(chebyshev.f,2) || throw(BoundsError(chebyshev.f))
+    @boundscheck nelement == size(chebyshev.lobatto.f,2) || throw(BoundsError(chebyshev.lobatto.f))
 
     n_new = size(newgrid)[1]
     # Find which points belong to which element.
@@ -440,7 +442,7 @@ function interpolate_to_grid_1d!(result, newgrid, f, coord, chebyshev::chebyshev
         @views chebyshev_interpolate_single_element!(result[kmin:kmax],
                                                      newgrid[kmin:kmax],
                                                      f[imin:imax],
-                                                     imin, imax, coord, chebyshev)
+                                                     imin, imax, coord, chebyshev.lobatto)
     end
     @inbounds for j ∈ 2:nelement
         kmin = kstart[j]
@@ -451,7 +453,7 @@ function interpolate_to_grid_1d!(result, newgrid, f, coord, chebyshev::chebyshev
             @views chebyshev_interpolate_single_element!(result[kmin:kmax],
                                                          newgrid[kmin:kmax],
                                                          f[imin:imax],
-                                                         imin, imax, coord, chebyshev)
+                                                         imin, imax, coord, chebyshev.lobatto)
         end
     end
 
@@ -464,7 +466,7 @@ end
 
 """
 """
-function chebyshev_interpolate_single_element!(result, newgrid, f, imin, imax, coord, chebyshev)
+function chebyshev_interpolate_single_element!(result, newgrid, f, imin, imax, coord, chebyshev::chebyshev_base_info)
     # Temporary buffer to store Chebyshev coefficients
     cheby_f = chebyshev.df
 
@@ -475,7 +477,7 @@ function chebyshev_interpolate_single_element!(result, newgrid, f, imin, imax, c
     scale = 2.0 / (coord.grid[imax] - coord.grid[imin])
 
     # Get Chebyshev coefficients
-    chebyshev_forward_transform!(cheby_f, chebyshev.lobatto.fext, f, chebyshev.lobatto.forward, coord.ngrid)
+    chebyshev_forward_transform!(cheby_f, chebyshev.fext, f, chebyshev.forward, coord.ngrid)
 
     for i ∈ 1:length(newgrid)
         x = newgrid[i]
