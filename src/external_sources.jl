@@ -121,6 +121,12 @@ function setup_external_sources!(input_dict, r, z)
                     PI_density_target_rank = MPI.Allreduce(PI_density_target_rank, +,
                                                            comm_inter_block[])
                 end
+                if PI_density_target_rank == 0 && iblock_index[] == 0 &&
+                        (PI_density_target_ir === nothing ||
+                         PI_density_target_iz === nothing)
+                    error("No grid point with r=0 and z=0 was found for the "
+                          * "'density_midpoint' controller.")
+                end
             else
                 PI_density_target_rank = nothing
             end
