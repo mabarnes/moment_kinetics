@@ -36,11 +36,11 @@ using moment_kinetics.calculus: derivative!, second_derivative!, laplacian_deriv
         println("\n")
     end 
 
-    function gausslegendre_test()
+    function gausslegendre_test(; ngrid=17, nelement=4, L_in=6.0)
         
         # elemental grid tests 
-        ngrid = 17
-        nelement = 4
+        #ngrid = 17
+        #nelement = 4
         y_ngrid = ngrid #number of points per element 
         y_nelement_local = nelement # number of elements per rank
         y_nelement_global = y_nelement_local # total number of elements 
@@ -61,9 +61,9 @@ using moment_kinetics.calculus: derivative!, second_derivative!, laplacian_deriv
             println("$y_name test")
             println("")
             if y_name == "vperp"
-                y_L = 6.0 #physical box size in reference units 
+                y_L = L_in #physical box size in reference units 
             else 
-                y_L = 12.0
+                y_L = 2*L_in
             end
             y_input = grid_input(y_name, y_ngrid, y_nelement_global, y_nelement_local, 
                 nrank, irank, y_L, discretization, fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
