@@ -601,6 +601,9 @@ function external_neutral_source_controller!(fvec_in, neutral_moments,
         @boundscheck size(fvec_in.density_neutral, 3) == 1
         is = 1
 
+        # Warning: this target flux is only correct when the magnetic field is
+        # perpendicular to the targets. Would be better to define (somewhere) a function
+        # that calculates the 'target ion flux' for general conditions...
         # First get target_flux on rank-0 of each shared memory block
         @serial_region begin
             if z.irank == 0
