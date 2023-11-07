@@ -6,8 +6,8 @@ the Full-F Fokker-Planck Collision Operator
 module fokker_planck_test
 
 export Cflux_vpa_Maxwellian_inputs, Cflux_vperp_Maxwellian_inputs
-export d2Gdvpa2, dGdvperp, d2Gdvperpdvpa, d2Gdvperp2
-export dHdvpa, dHdvperp, Cssp_Maxwellian_inputs
+export d2Gdvpa2_Maxwellian, dGdvperp_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian
+export dHdvpa_Maxwellian, dHdvperp_Maxwellian, Cssp_Maxwellian_inputs
 export F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
 export d2Fdvpa2_Maxwellian, d2Fdvperpdvpa_Maxwellian, d2Fdvperp2_Maxwellian
 export H_Maxwellian, G_Maxwellian
@@ -85,7 +85,7 @@ function eta_func(upar::mk_float,vth::mk_float,
     return speed
 end
 
-function d2Gdvpa2(dens::mk_float,upar::mk_float,vth::mk_float,
+function d2Gdvpa2_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                             vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
     fac = dGdeta(eta) + ddGddeta(eta)*((vpa.grid[ivpa] - upar)^2)/(vth^2)
@@ -93,7 +93,7 @@ function d2Gdvpa2(dens::mk_float,upar::mk_float,vth::mk_float,
     return d2Gdvpa2_fac
 end
 
-function d2Gdvperpdvpa(dens::mk_float,upar::mk_float,vth::mk_float,
+function d2Gdvperpdvpa_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                             vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
     fac = ddGddeta(eta)*vperp.grid[ivperp]*(vpa.grid[ivpa] - upar)/(vth^2)
@@ -101,7 +101,7 @@ function d2Gdvperpdvpa(dens::mk_float,upar::mk_float,vth::mk_float,
     return d2Gdvperpdvpa_fac
 end
 
-function d2Gdvperp2(dens::mk_float,upar::mk_float,vth::mk_float,
+function d2Gdvperp2_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                             vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
     fac = dGdeta(eta) + ddGddeta(eta)*(vperp.grid[ivperp]^2)/(vth^2)
@@ -109,21 +109,21 @@ function d2Gdvperp2(dens::mk_float,upar::mk_float,vth::mk_float,
     return d2Gdvperp2_fac
 end
 
-function dGdvperp(dens::mk_float,upar::mk_float,vth::mk_float,
+function dGdvperp_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                             vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
     fac = dGdeta(eta)*vperp.grid[ivperp]*dens/(vth*eta)
     return fac 
 end
 
-function dHdvperp(dens::mk_float,upar::mk_float,vth::mk_float,
+function dHdvperp_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                             vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
     fac = dHdeta(eta)*vperp.grid[ivperp]*dens/(eta*vth^3)
     return fac 
 end
 
-function dHdvpa(dens::mk_float,upar::mk_float,vth::mk_float,
+function dHdvpa_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                             vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
     fac = dHdeta(eta)*(vpa.grid[ivpa]-upar)*dens/(eta*vth^3)
@@ -183,12 +183,12 @@ function Cssp_Maxwellian_inputs(denss::mk_float,upars::mk_float,vths::mk_float,m
     dFsdvpa = dFdvpa_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
     Fs = F_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
     
-    d2Gspdvpa2 = d2Gdvpa2(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
-    d2Gspdvperp2 = d2Gdvperp2(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
-    d2Gspdvperpdvpa = d2Gdvperpdvpa(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
-    dGspdvperp = dGdvperp(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
-    dHspdvperp = dHdvperp(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
-    dHspdvpa = dHdvpa(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
+    d2Gspdvpa2 = d2Gdvpa2_Maxwellian(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
+    d2Gspdvperp2 = d2Gdvperp2_Maxwellian(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
+    d2Gspdvperpdvpa = d2Gdvperpdvpa_Maxwellian(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
+    dGspdvperp = dGdvperp_Maxwellian(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
+    dHspdvperp = dHdvperp_Maxwellian(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
+    dHspdvpa = dHdvpa_Maxwellian(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
     Fsp = F_Maxwellian(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
     
     ( Cssp_Maxwellian = 

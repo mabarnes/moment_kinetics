@@ -40,7 +40,8 @@ using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_paralle
 using ..fokker_planck_calculus: calculate_YY_arrays
 using ..fokker_planck_calculus: calculate_rosenbluth_potential_boundary_data!
 using ..fokker_planck_calculus: enforce_zero_bc!, elliptic_solve!, ravel_c_to_vpavperp_parallel!
-using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_fluxes
+using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_fluxes, H_Maxwellian, dGdvperp_Maxwellian
+using ..fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian
 """
 allocate the required ancilliary arrays 
 """
@@ -218,7 +219,8 @@ Function for evaluating Css' = Css'[Fs,Fs']
 function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp,
                                              fkpl_arrays::fokkerplanck_weakform_arrays_struct,
                                              vperp, vpa, vperp_spectral, vpa_spectral;
-                                             test_assembly_serial=false,impose_zero_gradient_BC=false)
+                                             test_assembly_serial=false,impose_zero_gradient_BC=false,
+                                             use_Maxwellian_Rosenbluth_coefficients=false)
     @boundscheck vpa.n == size(ffsp_in,1) || throw(BoundsError(ffsp_in))
     @boundscheck vperp.n == size(ffsp_in,2) || throw(BoundsError(ffsp_in))
     @boundscheck vpa.n == size(ffs_in,1) || throw(BoundsError(ffs_in))
@@ -260,48 +262,67 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
     d2Gdvpa2 = fkpl_arrays.d2Gdvpa2
     d2Gdvperpdvpa = fkpl_arrays.d2Gdvperpdvpa
     
-    # the functions within this loop will call
-    # begin_vpa_region(), begin_vperp_region(), begin_vperp_vpa_region(), begin_serial_region() to synchronise the shared-memory arrays
-    # calculate the boundary data
-    calculate_rosenbluth_potential_boundary_data!(rpbd,bwgt,@view(ffsp_in[:,:,]),vpa,vperp,vpa_spectral,vperp_spectral)
-    # carry out the elliptic solves required
-    begin_vperp_vpa_region()
-    @loop_vperp_vpa ivperp ivpa begin
-        S_dummy[ivpa,ivperp] = -(4.0/sqrt(pi))*ffsp_in[ivpa,ivperp]
+    if use_Maxwellian_Rosenbluth_coefficients
+        begin_serial_region()
+        dens = get_density(ffsp_in,vpa,vperp)
+        upar = get_upar(ffsp_in, vpa, vperp, dens)
+        ppar = get_ppar(ffsp_in, vpa, vperp, upar)
+        pperp = get_pperp(ffsp_in, vpa, vperp)
+        pressure = get_pressure(ppar,pperp)
+        vth = sqrt(2.0*pressure/dens)
+        begin_vperp_vpa_region()
+        @loop_vperp_vpa ivperp ivpa begin
+            HH[ivpa,ivperp] = H_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            d2Gdvpa2[ivpa,ivperp] = d2Gdvpa2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            d2Gdvperp2[ivpa,ivperp] = d2Gdvperp2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            dGdvperp[ivpa,ivperp] = dGdvperp_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            d2Gdvperpdvpa[ivpa,ivperp] = d2Gdvperpdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            dHdvpa[ivpa,ivperp] = dHdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            dHdvperp[ivpa,ivperp] = dHdvperp_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+        end
+    else
+        # the functions within this loop will call
+        # begin_vpa_region(), begin_vperp_region(), begin_vperp_vpa_region(), begin_serial_region() to synchronise the shared-memory arrays
+        # calculate the boundary data
+        calculate_rosenbluth_potential_boundary_data!(rpbd,bwgt,@view(ffsp_in[:,:,]),vpa,vperp,vpa_spectral,vperp_spectral)
+        # carry out the elliptic solves required
+        begin_vperp_vpa_region()
+        @loop_vperp_vpa ivperp ivpa begin
+            S_dummy[ivpa,ivperp] = -(4.0/sqrt(pi))*ffsp_in[ivpa,ivperp]
+        end
+        elliptic_solve!(HH,S_dummy,rpbd.H_data,
+                    lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
+        elliptic_solve!(dHdvpa,S_dummy,rpbd.dHdvpa_data,
+                    lu_obj_LP,PPpar2D_sparse,rhsc,sc,vpa,vperp)
+        elliptic_solve!(dHdvperp,S_dummy,rpbd.dHdvperp_data,
+                    lu_obj_LV,PUperp2D_sparse,rhsc,sc,vpa,vperp)
+        
+        begin_vperp_vpa_region()
+        @loop_vperp_vpa ivperp ivpa begin
+            S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp]
+        
+        end
+        #elliptic_solve!(G_M_num,S_dummy,rpbd.G_data,
+        #            lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
+        elliptic_solve!(d2Gdvpa2,S_dummy,rpbd.d2Gdvpa2_data,
+                    lu_obj_LP,KKpar2D_sparse,rhsc,sc,vpa,vperp)
+        elliptic_solve!(dGdvperp,S_dummy,rpbd.dGdvperp_data,
+                    lu_obj_LV,PUperp2D_sparse,rhsc,sc,vpa,vperp)
+        elliptic_solve!(d2Gdvperpdvpa,S_dummy,rpbd.d2Gdvperpdvpa_data,
+                    lu_obj_LV,PPparPUperp2D_sparse,rhsc,sc,vpa,vperp)
+        
+        begin_vperp_vpa_region()
+        @loop_vperp_vpa ivperp ivpa begin
+            S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp] - d2Gdvpa2[ivpa,ivperp]
+            Q_dummy[ivpa,ivperp] = -dGdvperp[ivpa,ivperp]
+        end
+        # use the elliptic solve function to find
+        # d2Gdvperp2 = 2H - d2Gdvpa2 - (1/vperp)dGdvperp
+        # using a weak form
+        elliptic_solve!(d2Gdvperp2,S_dummy,Q_dummy,rpbd.d2Gdvperp2_data,
+                    lu_obj_MM,MM2D_sparse,MMparMNperp2D_sparse,
+                    rhsc,rhqc,sc,qc,vpa,vperp)
     end
-    elliptic_solve!(HH,S_dummy,rpbd.H_data,
-                lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
-    elliptic_solve!(dHdvpa,S_dummy,rpbd.dHdvpa_data,
-                lu_obj_LP,PPpar2D_sparse,rhsc,sc,vpa,vperp)
-    elliptic_solve!(dHdvperp,S_dummy,rpbd.dHdvperp_data,
-                lu_obj_LV,PUperp2D_sparse,rhsc,sc,vpa,vperp)
-    
-    begin_vperp_vpa_region()
-    @loop_vperp_vpa ivperp ivpa begin
-        S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp]
-    
-    end
-    #elliptic_solve!(G_M_num,S_dummy,rpbd.G_data,
-    #            lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
-    elliptic_solve!(d2Gdvpa2,S_dummy,rpbd.d2Gdvpa2_data,
-                lu_obj_LP,KKpar2D_sparse,rhsc,sc,vpa,vperp)
-    elliptic_solve!(dGdvperp,S_dummy,rpbd.dGdvperp_data,
-                lu_obj_LV,PUperp2D_sparse,rhsc,sc,vpa,vperp)
-    elliptic_solve!(d2Gdvperpdvpa,S_dummy,rpbd.d2Gdvperpdvpa_data,
-                lu_obj_LV,PPparPUperp2D_sparse,rhsc,sc,vpa,vperp)
-    
-    begin_vperp_vpa_region()
-    @loop_vperp_vpa ivperp ivpa begin
-        S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp] - d2Gdvpa2[ivpa,ivperp]
-        Q_dummy[ivpa,ivperp] = -dGdvperp[ivpa,ivperp]
-    end
-    # use the elliptic solve function to find
-    # d2Gdvperp2 = 2H - d2Gdvpa2 - (1/vperp)dGdvperp
-    # using a weak form
-    elliptic_solve!(d2Gdvperp2,S_dummy,Q_dummy,rpbd.d2Gdvperp2_data,
-                lu_obj_MM,MM2D_sparse,MMparMNperp2D_sparse,
-                rhsc,rhqc,sc,qc,vpa,vperp)
-    
     # assemble the RHS of the collision operator matrix eq
     if test_assembly_serial
         assemble_explicit_collision_operator_rhs_serial!(rhsc,@view(ffs_in[:,:,]),

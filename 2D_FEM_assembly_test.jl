@@ -23,8 +23,8 @@ using SparseArrays: sparse
 using LinearAlgebra: mul!, lu, cholesky
 
 using moment_kinetics.fokker_planck_test: F_Maxwellian, G_Maxwellian, H_Maxwellian
-using moment_kinetics.fokker_planck_test: d2Gdvpa2, d2Gdvperp2, d2Gdvperpdvpa, dGdvperp
-using moment_kinetics.fokker_planck_test: dHdvperp, dHdvpa
+using moment_kinetics.fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperp2_Maxwellian, d2Gdvperpdvpa_Maxwellian, dGdvperp_Maxwellian
+using moment_kinetics.fokker_planck_test: dHdvperp_Maxwellian, dHdvpa_Maxwellian
 using moment_kinetics.fokker_planck_test: Cssp_Maxwellian_inputs
 
 using moment_kinetics.fokker_planck_calculus: elliptic_solve!, ravel_c_to_vpavperp!, ravel_vpavperp_to_c!, ravel_c_to_vpavperp_parallel!
@@ -137,7 +137,8 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
     function test_weak_form_collisions(ngrid,nelement_vpa,nelement_vperp;
         Lvpa=12.0,Lvperp=6.0,plot_test_output=false,impose_zero_gradient_BC=false,
         test_parallelism=false,test_self_operator=true,
-        test_dense_construction=false,standalone=false)
+        test_dense_construction=false,standalone=false,
+        use_Maxwellian_Rosenbluth_coefficients=false)
         # define inputs needed for the test
         #plot_test_output = false#true
         #impose_zero_gradient_BC = false#true
@@ -315,12 +316,12 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
                 F_M[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
                 H_M_exact[ivpa,ivperp] = H_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
                 G_M_exact[ivpa,ivperp] = G_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-                d2Gdvpa2_M_exact[ivpa,ivperp] = d2Gdvpa2(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-                d2Gdvperp2_M_exact[ivpa,ivperp] = d2Gdvperp2(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-                dGdvperp_M_exact[ivpa,ivperp] = dGdvperp(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-                d2Gdvperpdvpa_M_exact[ivpa,ivperp] = d2Gdvperpdvpa(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-                dHdvpa_M_exact[ivpa,ivperp] = dHdvpa(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-                dHdvperp_M_exact[ivpa,ivperp] = dHdvperp(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                d2Gdvpa2_M_exact[ivpa,ivperp] = d2Gdvpa2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                d2Gdvperp2_M_exact[ivpa,ivperp] = d2Gdvperp2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                dGdvperp_M_exact[ivpa,ivperp] = dGdvperp_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                d2Gdvperpdvpa_M_exact[ivpa,ivperp] = d2Gdvperpdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                dHdvpa_M_exact[ivpa,ivperp] = dHdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                dHdvperp_M_exact[ivpa,ivperp] = dHdvperp_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
                 C_M_exact[ivpa,ivperp] = Cssp_Maxwellian_inputs(denss,upars,vths,ms,
                                                                 dens,upar,vth,msp,
                                                                 nussp,vpa,vperp,ivpa,ivperp)
@@ -340,7 +341,8 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
                                              fkpl_arrays,
                                              vperp, vpa, vperp_spectral, vpa_spectral,
                                              test_assembly_serial=test_parallelism,
-                                             impose_zero_gradient_BC=impose_zero_gradient_BC)
+                                             impose_zero_gradient_BC=impose_zero_gradient_BC,
+                                             use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients)
         # extract C[Fs,Fs'] result
         # and Rosenbluth potentials for testing
         begin_vperp_vpa_region()
@@ -364,8 +366,7 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
         elliptic_solve!(G_M_num,S_dummy,fkpl_arrays.rpbd.G_data,
                 fkpl_arrays.lu_obj_LP,fkpl_arrays.MM2D_sparse,fkpl_arrays.rhsc,
                 fkpl_arrays.sc,vpa,vperp)
-    
-        
+      
         init_time = Dates.value(finish_init_time - start_init_time)
         calculate_time = Dates.value(now() - finish_init_time)
         begin_serial_region()
@@ -374,8 +375,9 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
             println("finished C calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
             
             # test the boundary data calculation
-            test_rosenbluth_potential_boundary_data(fkpl_arrays.rpbd,rpbd_exact,vpa,vperp)
-            
+            if !use_Maxwellian_Rosenbluth_coefficients
+                test_rosenbluth_potential_boundary_data(fkpl_arrays.rpbd,rpbd_exact,vpa,vperp)
+            end
             fkerr.H_M.max, fkerr.H_M.L2 = print_test_data(H_M_exact,H_M_num,H_M_err,"H_M",vpa,vperp)
             fkerr.dHdvpa_M.max, fkerr.dHdvpa_M.L2 = print_test_data(dHdvpa_M_exact,dHdvpa_M_num,dHdvpa_M_err,"dHdvpa_M",vpa,vperp)
             fkerr.dHdvperp_M.max, fkerr.dHdvperp_M.L2 = print_test_data(dHdvperp_M_exact,dHdvperp_M_num,dHdvperp_M_err,"dHdvperp_M",vpa,vperp)
@@ -386,6 +388,13 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
             fkerr.d2Gdvperp2_M.max, fkerr.d2Gdvperp2_M.L2 = print_test_data(d2Gdvperp2_M_exact,d2Gdvperp2_M_num,d2Gdvperp2_M_err,"d2Gdvperp2_M",vpa,vperp)
             fkerr.C_M.max, fkerr.C_M.L2 = print_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp)
             
+            # calculate the entropy production
+            lnfC = fkpl_arrays.rhsvpavperp
+            @loop_vperp_vpa ivperp ivpa begin
+                lnfC[ivpa,ivperp] = Fs_M[ivpa,ivperp]*C_M_num[ivpa,ivperp]
+            end
+            dSdt = - get_density(lnfC,vpa,vperp)
+            println("dSdt: $dSdt should be >0.0")
             if plot_test_output
                 plot_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp)
                 plot_test_data(H_M_exact,H_M_num,H_M_err,"H_M",vpa,vperp)
@@ -443,12 +452,12 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
         end
     end
     
-    function run_assembly_test(; ngrid=5)
+    function run_assembly_test(; ngrid=5, nelement_list = [8], impose_zero_gradient_BC= false, plot_scan=true, plot_test_output = false, use_Maxwellian_Rosenbluth_coefficients=false)
         initialize_comms!()
         #ngrid = 5
-        plot_scan = true
-        plot_test_output = false
-        impose_zero_gradient_BC = false
+        #plot_scan = true
+        #plot_test_output = true#false
+        #impose_zero_gradient_BC = false
         test_parallelism = false
         test_self_operator = true
         test_dense_construction = false
@@ -459,7 +468,8 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
         #nelement_list = Int[2, 4, 8, 16, 32]
         #nelement_list = Int[2, 4, 8, 16]
         #nelement_list = Int[100]
-        nelement_list = Int[8]
+        #nelement_list = Int[8]
+        #nelement_list = Int[4]
         nscan = size(nelement_list,1)
         max_C_err = Array{mk_float,1}(undef,nscan)
         max_H_err = Array{mk_float,1}(undef,nscan)
@@ -511,6 +521,7 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
             test_parallelism=test_parallelism,
             test_self_operator=test_self_operator,
             test_dense_construction=test_dense_construction,
+            use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients,
             standalone=false)
             max_C_err[iscan], L2_C_err[iscan] = fkerr.C_M.max ,fkerr.C_M.L2
             max_H_err[iscan], L2_H_err[iscan] = fkerr.H_M.max ,fkerr.H_M.L2
