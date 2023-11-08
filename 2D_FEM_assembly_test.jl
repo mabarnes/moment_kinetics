@@ -138,7 +138,8 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
         Lvpa=12.0,Lvperp=6.0,plot_test_output=false,impose_zero_gradient_BC=false,
         test_parallelism=false,test_self_operator=true,
         test_dense_construction=false,standalone=false,
-        use_Maxwellian_Rosenbluth_coefficients=false)
+        use_Maxwellian_Rosenbluth_coefficients=false,
+        use_Maxwellian_field_particle_distribution=false)
         # define inputs needed for the test
         #plot_test_output = false#true
         #impose_zero_gradient_BC = false#true
@@ -342,7 +343,8 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
                                              vperp, vpa, vperp_spectral, vpa_spectral,
                                              test_assembly_serial=test_parallelism,
                                              impose_zero_gradient_BC=impose_zero_gradient_BC,
-                                             use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients)
+                                             use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients,
+                                             use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution)
         # extract C[Fs,Fs'] result
         # and Rosenbluth potentials for testing
         begin_vperp_vpa_region()
@@ -452,7 +454,12 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
         end
     end
     
-    function run_assembly_test(; ngrid=5, nelement_list = [8], impose_zero_gradient_BC= false, plot_scan=true, plot_test_output = false, use_Maxwellian_Rosenbluth_coefficients=false)
+    function run_assembly_test(; ngrid=5, nelement_list = [8],
+        impose_zero_gradient_BC= false,
+        plot_scan=true,
+        plot_test_output = false,
+        use_Maxwellian_Rosenbluth_coefficients=false,
+        use_Maxwellian_field_particle_distribution=false)
         initialize_comms!()
         #ngrid = 5
         #plot_scan = true
@@ -522,6 +529,7 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
             test_self_operator=test_self_operator,
             test_dense_construction=test_dense_construction,
             use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients,
+            use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution,
             standalone=false)
             max_C_err[iscan], L2_C_err[iscan] = fkerr.C_M.max ,fkerr.C_M.L2
             max_H_err[iscan], L2_H_err[iscan] = fkerr.H_M.max ,fkerr.H_M.L2

@@ -37,11 +37,13 @@ using ..fokker_planck_calculus: assemble_matrix_operators_dirichlet_bc_plus_vper
 using ..fokker_planck_calculus: assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient_sparse
 using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_serial!
 using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_parallel!
+using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!
 using ..fokker_planck_calculus: calculate_YY_arrays
 using ..fokker_planck_calculus: calculate_rosenbluth_potential_boundary_data!
 using ..fokker_planck_calculus: enforce_zero_bc!, elliptic_solve!, ravel_c_to_vpavperp_parallel!
 using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_fluxes, H_Maxwellian, dGdvperp_Maxwellian
 using ..fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian
+using ..fokker_planck_test: F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
 """
 allocate the required ancilliary arrays 
 """
@@ -144,12 +146,17 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
     d2Gdvpa2 = allocate_shared_float(nvpa,nvperp)
     d2Gdvperpdvpa = allocate_shared_float(nvpa,nvperp)
     
+    FF = allocate_shared_float(nvpa,nvperp)
+    dFdvpa = allocate_shared_float(nvpa,nvperp)
+    dFdvperp = allocate_shared_float(nvpa,nvperp)
+    
     fka = fokkerplanck_weakform_arrays_struct(bwgt,rpbd,MM2D_sparse,KKpar2D_sparse,KKperp2D_sparse,
                                            LP2D_sparse,LV2D_sparse,PUperp2D_sparse,PPparPUperp2D_sparse,
                                            PPpar2D_sparse,MMparMNperp2D_sparse,MM2DZG_sparse,
                                            lu_obj_MM,lu_obj_MMZG,lu_obj_LP,lu_obj_LV,
                                            YY_arrays, S_dummy, Q_dummy, rhsvpavperp, rhsc, rhqc, sc, qc,
-                                           CC, HH, dHdvpa, dHdvperp, dGdvperp, d2Gdvperp2, d2Gdvpa2, d2Gdvperpdvpa)
+                                           CC, HH, dHdvpa, dHdvperp, dGdvperp, d2Gdvperp2, d2Gdvpa2, d2Gdvperpdvpa,
+                                           FF, dFdvpa, dFdvperp)
     return fka
 end
 
@@ -220,7 +227,8 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
                                              fkpl_arrays::fokkerplanck_weakform_arrays_struct,
                                              vperp, vpa, vperp_spectral, vpa_spectral;
                                              test_assembly_serial=false,impose_zero_gradient_BC=false,
-                                             use_Maxwellian_Rosenbluth_coefficients=false)
+                                             use_Maxwellian_Rosenbluth_coefficients=false,
+                                             use_Maxwellian_field_particle_distribution=false)
     @boundscheck vpa.n == size(ffsp_in,1) || throw(BoundsError(ffsp_in))
     @boundscheck vperp.n == size(ffsp_in,2) || throw(BoundsError(ffsp_in))
     @boundscheck vpa.n == size(ffs_in,1) || throw(BoundsError(ffs_in))
@@ -261,6 +269,9 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
     d2Gdvperp2 = fkpl_arrays.d2Gdvperp2
     d2Gdvpa2 = fkpl_arrays.d2Gdvpa2
     d2Gdvperpdvpa = fkpl_arrays.d2Gdvperpdvpa
+    FF = fkpl_arrays.FF
+    dFdvpa = fkpl_arrays.dFdvpa
+    dFdvperp = fkpl_arrays.dFdvperp
     
     if use_Maxwellian_Rosenbluth_coefficients
         begin_serial_region()
@@ -284,7 +295,7 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
         # the functions within this loop will call
         # begin_vpa_region(), begin_vperp_region(), begin_vperp_vpa_region(), begin_serial_region() to synchronise the shared-memory arrays
         # calculate the boundary data
-        calculate_rosenbluth_potential_boundary_data!(rpbd,bwgt,@view(ffsp_in[:,:,]),vpa,vperp,vpa_spectral,vperp_spectral)
+        calculate_rosenbluth_potential_boundary_data!(rpbd,bwgt,@view(ffsp_in[:,:]),vpa,vperp,vpa_spectral,vperp_spectral)
         # carry out the elliptic solves required
         begin_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
@@ -324,13 +335,32 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
                     rhsc,rhqc,sc,qc,vpa,vperp)
     end
     # assemble the RHS of the collision operator matrix eq
-    if test_assembly_serial
-        assemble_explicit_collision_operator_rhs_serial!(rhsc,@view(ffs_in[:,:,]),
+    if use_Maxwellian_field_particle_distribution
+        begin_serial_region()
+        dens = get_density(ffs_in,vpa,vperp)
+        upar = get_upar(ffs_in, vpa, vperp, dens)
+        ppar = get_ppar(ffs_in, vpa, vperp, upar)
+        pperp = get_pperp(ffs_in, vpa, vperp)
+        pressure = get_pressure(ppar,pperp)
+        vth = sqrt(2.0*pressure/dens)
+        begin_vperp_vpa_region()
+        @loop_vperp_vpa ivperp ivpa begin
+            FF[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            dFdvpa[ivpa,ivperp] = dFdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            dFdvperp[ivpa,ivperp] = dFdvperp_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+        end
+        assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!(rhsc,rhsvpavperp,
+          FF,dFdvpa,dFdvperp,
+          d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,
+          dHdvpa,dHdvperp,ms,msp,nussp,
+          vpa,vperp,YY_arrays)
+    elseif test_assembly_serial
+        assemble_explicit_collision_operator_rhs_serial!(rhsc,@view(ffs_in[:,:]),
           d2Gdvpa,d2Gdvperpdvpa,d2Gdvperp2,
           dHdvpa,dHdvperp,ms,msp,nussp,
           vpa,vperp,YY_arrays)
     else
-        assemble_explicit_collision_operator_rhs_parallel!(rhsc,rhsvpavperp,@view(ffs_in[:,:,]),
+        assemble_explicit_collision_operator_rhs_parallel!(rhsc,rhsvpavperp,@view(ffs_in[:,:]),
           d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,
           dHdvpa,dHdvperp,ms,msp,nussp,
           vpa,vperp,YY_arrays)
