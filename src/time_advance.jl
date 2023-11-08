@@ -55,6 +55,7 @@ using ..energy_equation: energy_equation!, neutral_energy_equation!
 using ..em_fields: setup_em_fields, update_phi!
 using ..fokker_planck: init_fokker_planck_collisions_weak_form, init_fokker_planck_collisions, explicit_fokker_planck_collisions!
 using ..fokker_planck: explicit_fokker_planck_collisions_weak_form!, explicit_fokker_planck_collisions_Maxwellian_coefficients!
+using ..fokker_planck: explicit_fokker_planck_collisions_weak_form_opt!
 using ..manufactured_solns: manufactured_sources
 using ..advection: advection_info
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
@@ -148,6 +149,10 @@ struct scratch_dummy_arrays
     # needs to be shared memory
     buffer_vzvrvzetazrsn_1::MPISharedArray{mk_float,6}
     buffer_vzvrvzetazrsn_2::MPISharedArray{mk_float,6}
+    
+    buffer_vpavperp_1::MPISharedArray{mk_float,2}
+    buffer_vpavperp_2::MPISharedArray{mk_float,2}
+    buffer_vpavperp_3::MPISharedArray{mk_float,2}
 
 end 
 
@@ -673,7 +678,11 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
 
     buffer_vzvrvzetazrsn_1 = allocate_shared_float(nvz,nvr,nvzeta,nz,nr,nspecies_neutral)
     buffer_vzvrvzetazrsn_2 = allocate_shared_float(nvz,nvr,nvzeta,nz,nr,nspecies_neutral)
-
+    
+    buffer_vpavperp_1 = allocate_shared_float(nvpa,nvperp)
+    buffer_vpavperp_2 = allocate_shared_float(nvpa,nvperp)
+    buffer_vpavperp_3 = allocate_shared_float(nvpa,nvperp)
+    
     return scratch_dummy_arrays(dummy_s,dummy_sr,dummy_vpavperp,dummy_zrs,dummy_zrsn,
         buffer_z_1,buffer_z_2,buffer_z_3,buffer_z_4,
         buffer_r_1,buffer_r_2,buffer_r_3,buffer_r_4,
@@ -687,7 +696,8 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
         buffer_vpavperpzrs_1,buffer_vpavperpzrs_2,buffer_vpavperpzrs_3,buffer_vpavperpzrs_4,buffer_vpavperpzrs_5,buffer_vpavperpzrs_6,
         buffer_vzvrvzetazsn_1,buffer_vzvrvzetazsn_2,buffer_vzvrvzetazsn_3,buffer_vzvrvzetazsn_4,buffer_vzvrvzetazsn_5,buffer_vzvrvzetazsn_6,
         buffer_vzvrvzetarsn_1,buffer_vzvrvzetarsn_2,buffer_vzvrvzetarsn_3,buffer_vzvrvzetarsn_4,buffer_vzvrvzetarsn_5,buffer_vzvrvzetarsn_6,
-        buffer_vzvrvzetazrsn_1, buffer_vzvrvzetazrsn_2)
+        buffer_vzvrvzetazrsn_1, buffer_vzvrvzetazrsn_2,
+        buffer_vpavperp_1,buffer_vpavperp_2,buffer_vpavperp_3)
 
 end
 
@@ -1807,8 +1817,11 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     if advance.explicit_weakform_fp_collisions
         update_entropy_diagnostic = (istage == 1)
         explicit_fokker_planck_collisions_weak_form!(fvec_out.pdf,fvec_in.pdf,moments.charged.dSdt,composition,collisions,dt,
-                                             fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,
+                                             fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,scratch_dummy,
                                              diagnose_entropy_production = update_entropy_diagnostic)
+        #explicit_fokker_planck_collisions_weak_form_opt!(fvec_out.pdf,fvec_in.pdf,moments.charged.dSdt,composition,collisions,dt,
+        #                                     fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,scratch_dummy,
+        #                                     diagnose_entropy_production = update_entropy_diagnostic)
     end
     if advance.explicit_fp_F_FM_collisions
         explicit_fokker_planck_collisions_Maxwellian_coefficients!(fvec_out.pdf, fvec_in.pdf, 
