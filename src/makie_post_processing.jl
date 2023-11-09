@@ -73,7 +73,7 @@ const input_dict_dfns = OrderedDict{String,Any}()
 const em_variables = ("phi", "Er", "Ez")
 const ion_moment_variables = ("density", "parallel_flow", "parallel_pressure",
                               "thermal_speed", "temperature", "parallel_heat_flux",
-                              "collision_frequency")
+                              "collision_frequency", "sound_speed", "mach_number")
 const neutral_moment_variables = ("density_neutral", "uz_neutral", "pz_neutral",
                                   "thermal_speed_neutral", "temperature_neutral",
                                   "qz_neutral")
@@ -1250,6 +1250,20 @@ function get_variable(run_info, variable_name; kwargs...)
     elseif variable_name == "temperature_neutral"
         vth = postproc_load_variable(run_info, "thermal_speed_neutral")
         variable = vth.^2
+    elseif variable_name == "sound_speed"
+        T_e = run_info.composition.T_e
+        T_i = get_variable(run_info, "temperature"; kwargs...)
+
+        # Adiabatic index. Not too clear what value should be (see e.g. [Riemann 1991,
+        # below eq. (39)], or discussion of Bohm criterion in Stangeby's book.
+        gamma = 3.0
+
+        # Factor of 0.5 needed because temperatures are normalised to mi*cref^2, not Tref
+        variable = @. sqrt(0.5*(T_e + gamma*T_i))
+    elseif variable_name == "mach_number"
+        upar = get_variable(run_info, "parallel_flow"; kwargs...)
+        cs = get_variable(run_info, "sound_speed"; kwargs...)
+        variable = upar ./ cs
     else
         variable = postproc_load_variable(run_info, variable_name)
     end
