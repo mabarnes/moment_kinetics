@@ -254,6 +254,7 @@ function explicit_fokker_planck_collisions_weak_form_opt!(pdf_out,pdf_in,dSdt,co
     Css = scratch_dummy.buffer_vpavperp_1
     delta_Fs = scratch_dummy.buffer_vpavperp_2
     Fs_M = scratch_dummy.buffer_vpavperp_3
+    dummy_vpavperp = scratch_dummy.dummy_vpavperp
     # N.B. parallelisation is only over vpa vperp
     # ensure s, r, z are local before initiating the s, r, z loop
     begin_vperp_vpa_region()
@@ -273,13 +274,15 @@ function explicit_fokker_planck_collisions_weak_form_opt!(pdf_out,pdf_in,dSdt,co
         # begin_vpa_region(), begin_vperp_region(), begin_vperp_vpa_region(), begin_serial_region() to synchronise the shared-memory arrays
         # first argument is Fs, and second argument is Fs' in C[Fs,Fs'] 
         fokker_planck_collision_operator_weak_form!(delta_Fs,delta_Fs,ms,msp,nussp,
-                                             fkpl_arrays,vperp,vpa,vperp_spectral,vpa_spectral)        
+                                             fkpl_arrays,vperp,vpa,vperp_spectral,vpa_spectral,
+                                             impose_zero_gradient_BC=true)        
         begin_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
             Css[ivpa,ivperp] = fkpl_arrays.CC[ivpa,ivperp]
         end
         fokker_planck_collision_operator_weak_form!(@view(pdf_in[:,:,iz,ir,is]),delta_Fs,ms,msp,nussp,
                                              fkpl_arrays,vperp,vpa,vperp_spectral,vpa_spectral,
+                                             impose_zero_gradient_BC=true,
                                              use_Maxwellian_Rosenbluth_coefficients=false,
                                              use_Maxwellian_field_particle_distribution=true,
                                              skip_Rosenbluth_potential_calculation=true)        
@@ -289,6 +292,7 @@ function explicit_fokker_planck_collisions_weak_form_opt!(pdf_out,pdf_in,dSdt,co
         end
         fokker_planck_collision_operator_weak_form!(delta_Fs,@view(pdf_in[:,:,iz,ir,is]),ms,msp,nussp,
                                              fkpl_arrays,vperp,vpa,vperp_spectral,vpa_spectral,
+                                             impose_zero_gradient_BC=true,
                                              use_Maxwellian_Rosenbluth_coefficients=true,
                                              use_Maxwellian_field_particle_distribution=false)        
         # advance this part of s,r,z with the resulting C[Fs,Fs]
@@ -308,6 +312,52 @@ function explicit_fokker_planck_collisions_weak_form_opt!(pdf_out,pdf_in,dSdt,co
                 dSdt[iz,ir,is] = -get_density(lnfC,vpa,vperp)
             end
         end
+        if collisions.numerical_conserving_terms == "density+u||+T"
+            # use an ad-hoc numerical model to conserve density, upar, vth
+            # a different model is required for inter-species collisions
+            # simply conserving particle density may be more appropriate in the multi-species case
+            begin_serial_region()
+            n_in = dens
+            upar_in = upar
+            pressure_in = pressure
+            
+            n_out = get_density(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp)
+            upar_out = get_upar(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp, n_out)
+            ppar_out = get_ppar(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp, upar_out)
+            pperp_out = get_pperp(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp)
+            pressure_out = get_pressure(ppar_out,pperp_out)
+            qpar_out = get_qpar(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp, upar_out, dummy_vpavperp)
+            rmom_out = get_rmom(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp, upar_out, dummy_vpavperp)
+            
+            # form the appropriate matrix coefficients
+            b0, b1, b2 = n_in, n_in*(upar_in - upar_out), (3.0)*(pressure_in) + n_in*(upar_in - upar_out)^2
+            A00, A02, A11, A12, A22 = n_out, (3.0)*(pressure_out), ppar_out, qpar_out, rmom_out
+            
+            # obtain the coefficients for the corrections 
+            (x0, x1, x2) = symmetric_matrix_inverse(A00,A02,A11,A12,A22,b0,b1,b2)
+            
+            # fill with the corrected pdf 
+            @loop_vperp_vpa ivperp ivpa begin
+                wpar = vpa.grid[ivpa] - upar_out
+                pdf_out[ivpa,ivperp,iz,ir,is] = (x0 + x1*wpar + x2*(vperp.grid[ivperp]^2 + wpar^2) )*pdf_out[ivpa,ivperp,iz,ir,is]
+            end
+        elseif collisions.numerical_conserving_terms == "density"
+            # get density moment of incoming and outgoing distribution functions
+            n_in = dens
+            
+            n_out = get_density(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp)
+            
+            # obtain the coefficient for the corrections 
+            x0 = n_in/n_out
+            
+            # update pdf_out with the corrections 
+            @loop_vperp_vpa ivperp ivpa begin
+                pdf_out[ivpa,ivperp,iz,ir,is] = x0*pdf_out[ivpa,ivperp,iz,ir,is]
+            end
+        elseif !(collisions.numerical_conserving_terms == "none")
+            println("ERROR: collisions.numerical_conserving_terms = ",collisions.numerical_conserving_terms," NOT SUPPORTED")
+        end
+        
     end
     return nothing
 end
