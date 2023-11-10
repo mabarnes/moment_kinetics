@@ -460,7 +460,8 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
         plot_scan=true,
         plot_test_output = false,
         use_Maxwellian_Rosenbluth_coefficients=false,
-        use_Maxwellian_field_particle_distribution=false)
+        use_Maxwellian_field_particle_distribution=false,
+        Lvpa = 12.0, Lvperp = 6.0)
         initialize_comms!()
         #ngrid = 5
         #plot_scan = true
@@ -531,7 +532,7 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
             test_dense_construction=test_dense_construction,
             use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients,
             use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution,
-            standalone=false)
+            standalone=false, Lvpa=Lvpa, Lvperp=Lvperp)
             max_C_err[iscan], L2_C_err[iscan] = fkerr.C_M.max ,fkerr.C_M.L2
             max_H_err[iscan], L2_H_err[iscan] = fkerr.H_M.max ,fkerr.H_M.L2
             max_dHdvpa_err[iscan], L2_dHdvpa_err[iscan] = fkerr.dHdvpa_M.max ,fkerr.dHdvpa_M.L2
