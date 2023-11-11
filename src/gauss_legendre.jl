@@ -343,11 +343,11 @@ function gausslegendre_mass_matrix_solve!(f,b,coord_name,spectral)
     if coord_name == "vperp"
         # enforce zero (value or gradient) boundary conditions
         #b[1] = 0.0 # uncomment if bc is imposed at vperp = 0 in mass matrix
-        b[end] = 0.0
+        #b[end] = 0.0
     else
         # enforce zero (value or gradient) boundary conditions
-        b[1] = 0.0
-        b[end] = 0.0
+        #b[1] = 0.0
+        #b[end] = 0.0
     end
     # invert mass matrix system
     y = spectral.mass_matrix_lu \ b
@@ -846,7 +846,7 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
     imin = coord.imin
     imax = coord.imax
     @. QQ_global = 0.0
-    mass_matrix = option == "M"
+    mass_matrix = (option == "M") && false
     if coord.name == "vperp"
         zero_bc_upper_boundary = true && mass_matrix
         zero_bc_lower_boundary = false && mass_matrix
