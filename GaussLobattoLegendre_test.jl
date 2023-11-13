@@ -147,8 +147,8 @@ using moment_kinetics.calculus: derivative!, second_derivative!, laplacian_deriv
             println("max(d2f_err) (double first derivative by interpolation): ",maximum(d2f_err))  
             if y.name == "vpa"
                 mul!(b,y_spectral.S_matrix,f_exact)
-                b[1] -= f_exact[1]
-                b[y.n] += f_exact[y.n]
+                #b[1] -= f_exact[1]
+                #b[y.n] += f_exact[y.n]
                 gausslegendre_mass_matrix_solve!(df_num,b,y.name,y_spectral)
                 @. df_err = df_num - df_exact
                 #println("df_num (weak form): ",df_num)
@@ -156,8 +156,8 @@ using moment_kinetics.calculus: derivative!, second_derivative!, laplacian_deriv
                 println("max(df_err) (weak form): ",maximum(df_err))
                 #second_derivative!(d2f_num, f_exact, y, y_spectral)
                 mul!(b,y_spectral.K_matrix,f_exact)
-                b[1] -= sum(y_spectral.lobatto.Dmat[1,:].*f_exact[1:y.ngrid])/y.element_scale[1]
-                b[y.n] += sum(y_spectral.lobatto.Dmat[y.ngrid,:].*f_exact[y.n+1-y.ngrid:y.n])/y.element_scale[y.nelement_local]
+                #b[1] -= sum(y_spectral.lobatto.Dmat[1,:].*f_exact[1:y.ngrid])/y.element_scale[1]
+                #b[y.n] += sum(y_spectral.lobatto.Dmat[y.ngrid,:].*f_exact[y.n+1-y.ngrid:y.n])/y.element_scale[y.nelement_local]
                 gausslegendre_mass_matrix_solve!(d2f_num,b,y.name,y_spectral)
                 @. d2f_err = abs(d2f_num - d2f_exact) #(0.5*y.L/y.nelement_global)*
                 #println(d2f_num)
@@ -170,7 +170,7 @@ using moment_kinetics.calculus: derivative!, second_derivative!, laplacian_deriv
             elseif y.name == "vperp"
                 #println("condition: ",cond(y_spectral.mass_matrix)) 
                 mul!(b,y_spectral.S_matrix,g_exact)
-                b[y.n] += y.grid[y.n]*g_exact[y.n]    
+                #b[y.n] += y.grid[y.n]*g_exact[y.n]    
                 gausslegendre_mass_matrix_solve!(divg_num,b,y.name,y_spectral)
                 @. divg_err = abs(divg_num - divg_exact)
                 #println("divg_b (weak form): ",b)
@@ -180,7 +180,7 @@ using moment_kinetics.calculus: derivative!, second_derivative!, laplacian_deriv
                 
                 #second_derivative!(d2f_num, f_exact, y, y_spectral)
                 mul!(b,y_spectral.K_matrix,f_exact)
-                b[y.n] += y.grid[y.n]*sum(y_spectral.lobatto.Dmat[y.ngrid,:].*f_exact[y.n+1-y.ngrid:y.n])/y.element_scale[y.nelement_local]
+                #b[y.n] += y.grid[y.n]*sum(y_spectral.lobatto.Dmat[y.ngrid,:].*f_exact[y.n+1-y.ngrid:y.n])/y.element_scale[y.nelement_local]
                 gausslegendre_mass_matrix_solve!(d2f_num,b,y.name,y_spectral)
                 @. d2f_err = abs(d2f_num - d2f_exact) #(0.5*y.L/y.nelement_global)*
                 #println(d2f_num)
@@ -192,7 +192,7 @@ using moment_kinetics.calculus: derivative!, second_derivative!, laplacian_deriv
                 savefig(outfile)
                  
                 mul!(b,y_spectral.L_matrix,h_exact)
-                b[y.n] += y.grid[y.n]*sum(y_spectral.lobatto.Dmat[y.ngrid,:].*h_exact[y.n+1-y.ngrid:y.n])/y.element_scale[y.nelement_local]
+                #b[y.n] += y.grid[y.n]*sum(y_spectral.lobatto.Dmat[y.ngrid,:].*h_exact[y.n+1-y.ngrid:y.n])/y.element_scale[y.nelement_local]
                 #laplacian_derivative!(laph_num, h_exact, y, y_spectral)
                 gausslegendre_mass_matrix_solve!(laph_num,b,y.name,y_spectral)
                 @. laph_err = abs(laph_num - laph_exact) #(0.5*y.L/y.nelement_global)*

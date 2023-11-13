@@ -39,9 +39,9 @@ using ..fokker_planck_calculus: assemble_matrix_operators_dirichlet_bc_plus_vper
 using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_serial!
 using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_parallel!
 using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!
-using ..fokker_planck_calculus: calculate_YY_arrays
+using ..fokker_planck_calculus: calculate_YY_arrays, enforce_vpavperp_BCs!
 using ..fokker_planck_calculus: calculate_rosenbluth_potential_boundary_data!
-using ..fokker_planck_calculus: enforce_zero_bc!, elliptic_solve!, ravel_c_to_vpavperp_parallel!
+using ..fokker_planck_calculus: enforce_zero_bc!, elliptic_solve!, algebraic_solve!, ravel_c_to_vpavperp_parallel!
 using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_fluxes, H_Maxwellian, dGdvperp_Maxwellian
 using ..fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian
 using ..fokker_planck_test: F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
@@ -200,6 +200,11 @@ function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,dSdt,compos
         # first argument is Fs, and second argument is Fs' in C[Fs,Fs'] 
         @views fokker_planck_collision_operator_weak_form!(pdf_in[:,:,iz,ir,is],pdf_in[:,:,iz,ir,is],ms,msp,nussp,
                                              fkpl_arrays,vperp,vpa,vperp_spectral,vpa_spectral)        
+        # enforce the boundary conditions on CC before it is used for timestepping
+        enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
+        # make ad-hoc conserving corrections
+        conserving_corrections!(fkpl_arrays.CC,pdf_in[:,:,iz,ir,is],vpa,vperp,scratch_dummy)
+        
         # advance this part of s,r,z with the resulting C[Fs,Fs]
         begin_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
@@ -474,7 +479,7 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
             # use the elliptic solve function to find
             # d2Gdvperp2 = 2H - d2Gdvpa2 - (1/vperp)dGdvperp
             # using a weak form
-            elliptic_solve!(d2Gdvperp2,S_dummy,Q_dummy,rpbd.d2Gdvperp2_data,
+            algebraic_solve!(d2Gdvperp2,S_dummy,Q_dummy,rpbd.d2Gdvperp2_data,
                         lu_obj_MM,MM2D_sparse,MMparMNperp2D_sparse,
                         rhsc,rhqc,sc,qc,vpa,vperp)
         end
@@ -518,7 +523,7 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
             # invert mass matrix and fill fc
             sc .= lu_obj_MMZG \ rhsc
         else
-            enforce_zero_bc!(rhsc,vpa,vperp)
+            #enforce_zero_bc!(rhsc,vpa,vperp)
             # invert mass matrix and fill fc
             sc .= lu_obj_MM \ rhsc
         end
@@ -848,6 +853,65 @@ function symmetric_matrix_inverse(A00,A02,A11,A12,A22,b0,b1,b2)
     #println("C00: ",C00," C02: ",C02," C11: ",C11," C12: ",C12," C22: ",C22)
     #println("x0: ",x0," x1: ",x1," x2: ",x2)
     return x0, x1, x2
+end
+
+# solves A x = b for a matrix of the form
+# A00  A01  A02
+# A01  A11  A12
+# A02  A12  A22
+# appropriate for the moment numerical conserving terms
+function symmetric_matrix_inverse(A00,A01,A02,A11,A12,A22,b0,b1,b2)
+    # matrix determinant
+    detA = A00*(A11*A22 - A12^2) - A01*(A01*A22 - A12*A02) + A02*(A01*A12 - A11*A02)
+    # cofactors C (also a symmetric matrix)
+    C00 = A11*A22 - A12^2
+    C01 = A12*A02 - A01*A22
+    C02 = A01*A12 -A11*A02
+    C11 = A00*A22 - A02^2
+    C12 = A01*A02 -A00*A12
+    C22 = A00*A11 - A01^2
+    x0 = ( C00*b0 + C01*b1 + C02*b2 )/detA
+    x1 = ( C01*b0 + C11*b1 + C12*b2 )/detA
+    x2 = ( C02*b0 + C12*b1 + C22*b2 )/detA
+    #println("b0: ",b0," b1: ",b1," b2: ",b2)
+    #println("A00: ",A00," A02: ",A02," A11: ",A11," A12: ",A12," A22: ",A22, " detA: ",detA)
+    #println("C00: ",C00," C02: ",C02," C11: ",C11," C12: ",C12," C22: ",C22)
+    #println("x0: ",x0," x1: ",x1," x2: ",x2)
+    return x0, x1, x2
+end
+
+function conserving_corrections!(CC,pdf_in,vpa,vperp,scratch_dummy)
+    # define a dummy array
+    dummy_vpavperp = scratch_dummy.dummy_vpavperp
+    # compute moments of the input pdf
+    dens =  get_density(@view(pdf_in[:,:]), vpa, vperp)
+    upar = get_upar(@view(pdf_in[:,:,]), vpa, vperp, dens)
+    ppar = get_ppar(@view(pdf_in[:,:,]), vpa, vperp, upar)
+    pperp = get_pperp(@view(pdf_in[:,:,]), vpa, vperp)
+    pressure = get_pressure(ppar,pperp)
+    qpar = get_qpar(@view(pdf_in[:,:,]), vpa, vperp, upar, dummy_vpavperp)
+    rmom = get_rmom(@view(pdf_in[:,:,]), vpa, vperp, upar, dummy_vpavperp)
+    
+    # compute moments of the numerical collision operator
+    dn = get_density(CC, vpa, vperp)
+    du = get_upar(CC, vpa, vperp, 1.0)
+    dppar = get_ppar(CC, vpa, vperp, upar)
+    dpperp = get_pperp(CC, vpa, vperp)
+    dp = get_pressure(dppar,dpperp)
+    
+    # form the appropriate matrix coefficients
+    b0, b1, b2 = dn, du - upar*dn, 3.0*dp
+    A00, A02, A11, A12, A22 = dens, 3.0*pressure, ppar, qpar, rmom
+    
+    # obtain the coefficients for the corrections 
+    (x0, x1, x2) = symmetric_matrix_inverse(A00,A02,A11,A12,A22,b0,b1,b2)
+    
+    # correct CC
+    begin_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        wpar = vpa.grid[ivpa] - upar
+        CC[ivpa,ivperp] -= (x0 + x1*wpar + x2*(vperp.grid[ivperp]^2 + wpar^2) )*pdf_in[ivpa,ivperp]
+    end
 end
 
 # applies the numerical conservation to pdf_out, the advanced distribution function

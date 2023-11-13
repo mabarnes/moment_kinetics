@@ -16,9 +16,10 @@ export assemble_explicit_collision_operator_rhs_parallel!
 export assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!
 export YY_collision_operator_arrays, calculate_YY_arrays
 export calculate_rosenbluth_potential_boundary_data!
-export elliptic_solve!
+export elliptic_solve!, algebraic_solve!
 export fokkerplanck_arrays_struct
 export fokkerplanck_weakform_arrays_struct
+export enforce_vpavperp_BCs!
 
 # testing
 export calculate_rosenbluth_potential_boundary_data_exact!
@@ -1602,6 +1603,7 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
     MRperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
     MMperp_p1 = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
     KKpar = Array{mk_float,2}(undef,ngrid_vpa,ngrid_vpa)
+    KKpar_no_BC_terms = Array{mk_float,2}(undef,ngrid_vpa,ngrid_vpa)
     KKperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
     KJperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
     LLperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
@@ -1621,7 +1623,7 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
         get_QQ_local!(MNperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"N")
         get_QQ_local!(KKperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"K")
         get_QQ_local!(KJperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"J")
-        get_QQ_local!(LLperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"L")
+        get_QQ_local!(LLperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"L_no_BC_terms")
         get_QQ_local!(PPperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"P")
         get_QQ_local!(PUperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"U")
         #print_matrix(MMperp,"MMperp",vperp.ngrid,vperp.ngrid)
@@ -1636,6 +1638,7 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
         for ielement_vpa in 1:nelement_vpa
             get_QQ_local!(MMpar,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"M")
             get_QQ_local!(KKpar,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"K")
+            get_QQ_local!(KKpar_no_BC_terms,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"K_no_BC_terms")
             get_QQ_local!(PPpar,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"P")
             #print_matrix(MMpar,"MMpar",vpa.ngrid,vpa.ngrid)
             #print_matrix(KKpar,"KKpar",vpa.ngrid,vpa.ngrid)
@@ -1665,64 +1668,68 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
 
                             if lower_boundary_row_vpa
                                 if ivpap_local == 1 && ivperp_local == ivperpp_local
-                                    assign_constructor_data!(MM2D,icsc,ic_global,icp_global,1.0)
+                                    #assign_constructor_data!(MM2D,icsc,ic_global,icp_global,1.0)
                                     assign_constructor_data!(LP2D,icsc,ic_global,icp_global,1.0)
                                     assign_constructor_data!(LV2D,icsc,ic_global,icp_global,1.0)
                                 else 
-                                    assign_constructor_data!(MM2D,icsc,ic_global,icp_global,0.0)
+                                    #assign_constructor_data!(MM2D,icsc,ic_global,icp_global,0.0)
                                     assign_constructor_data!(LP2D,icsc,ic_global,icp_global,0.0)
                                     assign_constructor_data!(LV2D,icsc,ic_global,icp_global,0.0)
                                 end
                             elseif upper_boundary_row_vpa
                                 if ivpap_local == vpa.ngrid && ivperp_local == ivperpp_local 
-                                    assign_constructor_data!(MM2D,icsc,ic_global,icp_global,1.0)
+                                    #assign_constructor_data!(MM2D,icsc,ic_global,icp_global,1.0)
                                     assign_constructor_data!(LP2D,icsc,ic_global,icp_global,1.0)
                                     assign_constructor_data!(LV2D,icsc,ic_global,icp_global,1.0)
                                 else 
-                                    assign_constructor_data!(MM2D,icsc,ic_global,icp_global,0.0)
+                                    #assign_constructor_data!(MM2D,icsc,ic_global,icp_global,0.0)
                                     assign_constructor_data!(LP2D,icsc,ic_global,icp_global,0.0)
                                     assign_constructor_data!(LV2D,icsc,ic_global,icp_global,0.0)
                                 end
                             elseif lower_boundary_row_vperp && impose_BC_at_zero_vperp
                                 if ivperpp_local == 1 && ivpa_local == ivpap_local
-                                    assign_constructor_data!(MM2D,icsc,ic_global,icp_global,1.0)
+                                    #assign_constructor_data!(MM2D,icsc,ic_global,icp_global,1.0)
                                     assign_constructor_data!(LP2D,icsc,ic_global,icp_global,1.0)
                                     assign_constructor_data!(LV2D,icsc,ic_global,icp_global,1.0)
                                 else 
-                                    assign_constructor_data!(MM2D,icsc,ic_global,icp_global,0.0)
+                                    #assign_constructor_data!(MM2D,icsc,ic_global,icp_global,0.0)
                                     assign_constructor_data!(LP2D,icsc,ic_global,icp_global,0.0)
                                     assign_constructor_data!(LV2D,icsc,ic_global,icp_global,0.0)
                                 end
                             elseif upper_boundary_row_vperp
                                 if ivperpp_local == vperp.ngrid && ivpa_local == ivpap_local
-                                    assign_constructor_data!(MM2D,icsc,ic_global,icp_global,1.0)
+                                    #assign_constructor_data!(MM2D,icsc,ic_global,icp_global,1.0)
                                     assign_constructor_data!(LP2D,icsc,ic_global,icp_global,1.0)
                                     assign_constructor_data!(LV2D,icsc,ic_global,icp_global,1.0)
                                 else 
-                                    assign_constructor_data!(MM2D,icsc,ic_global,icp_global,0.0)
+                                    #assign_constructor_data!(MM2D,icsc,ic_global,icp_global,0.0)
                                     assign_constructor_data!(LP2D,icsc,ic_global,icp_global,0.0)
                                     assign_constructor_data!(LV2D,icsc,ic_global,icp_global,0.0)
                                 end
                             else
                                 # assign mass matrix data
                                 #println("MM2D += ", MMpar[ivpa_local,ivpap_local]*MMperp[ivperp_local,ivperpp_local])
-                                assemble_constructor_data!(MM2D,icsc,ic_global,icp_global,
-                                            (MMpar[ivpa_local,ivpap_local]*
-                                             MMperp[ivperp_local,ivperpp_local]))
+                                #assemble_constructor_data!(MM2D,icsc,ic_global,icp_global,
+                                #            (MMpar[ivpa_local,ivpap_local]*
+                                #             MMperp[ivperp_local,ivperpp_local]))
                                 assemble_constructor_data!(LP2D,icsc,ic_global,icp_global,
-                                            (KKpar[ivpa_local,ivpap_local]*
+                                            (KKpar_no_BC_terms[ivpa_local,ivpap_local]*
                                              MMperp[ivperp_local,ivperpp_local] +
                                              MMpar[ivpa_local,ivpap_local]*
                                              LLperp[ivperp_local,ivperpp_local]))
                                 assemble_constructor_data!(LV2D,icsc,ic_global,icp_global,
-                                            (KKpar[ivpa_local,ivpap_local]*
+                                            (KKpar_no_BC_terms[ivpa_local,ivpap_local]*
                                              MRperp[ivperp_local,ivperpp_local] +
                                              MMpar[ivpa_local,ivpap_local]*
                                             (KJperp[ivperp_local,ivperpp_local] -
                                              PPperp[ivperp_local,ivperpp_local] - 
                                              MNperp[ivperp_local,ivperpp_local])))
                             end
-                            
+                            #assign mass matrix
+                            assemble_constructor_data!(MM2D,icsc,ic_global,icp_global,
+                                            (MMpar[ivpa_local,ivpap_local]*
+                                             MMperp[ivperp_local,ivperpp_local]))
+                                
                             # assign K matrices
                             assemble_constructor_data!(KKpar2D,icsc,ic_global,icp_global,
                                             (KKpar[ivpa_local,ivpap_local]*
@@ -2142,6 +2149,64 @@ function elliptic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_bounda
     begin_vperp_vpa_region()
     ravel_c_to_vpavperp_parallel!(field,sc_1,vpa.n)
     return nothing
+end
+
+# same as above but source is made of two different terms
+# with different weak matrices
+function algebraic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_boundary_data,
+            lu_object_lhs,matrix_rhs_1,matrix_rhs_2,rhsc_1,rhsc_2,sc_1,sc_2,vpa,vperp)
+    # get data into the compound index format
+    begin_vperp_vpa_region()
+    ravel_vpavperp_to_c_parallel!(sc_1,source_1,vpa.n)
+    ravel_vpavperp_to_c_parallel!(sc_2,source_2,vpa.n)
+    
+    # assemble the rhs of the weak system
+    begin_serial_region()
+    @serial_region begin
+        mul!(rhsc_1,matrix_rhs_1,sc_1)
+        mul!(rhsc_2,matrix_rhs_2,sc_2)
+    end
+    begin_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        ic = ic_func(ivpa,ivperp,vpa.n)
+        rhsc_1[ic] += rhsc_2[ic]
+    end
+    begin_serial_region()
+    @serial_region begin
+        # solve the linear system
+        sc_1 .= lu_object_lhs \ rhsc_1
+    end
+    # get data into the vpa vperp indices format
+    begin_vperp_vpa_region()
+    ravel_c_to_vpavperp_parallel!(field,sc_1,vpa.n)
+    return nothing
+end
+
+"""
+function to enforce boundary conditions on the collision operator
+result to be consistent with the boundary conditions imposed on the the pdf
+"""
+function enforce_vpavperp_BCs!(pdf,vpa,vperp,vpa_spectral,vperp_spectral)
+    nvpa = vpa.n
+    nvperp = vperp.n
+    ngrid_vperp = vperp.ngrid
+    D0 = vperp_spectral.radau.D0
+    # vpa boundary conditions
+    # zero at infinity
+    begin_vperp_region()
+    @loop_vperp ivperp begin
+        pdf[1,ivperp] = 0.0
+        pdf[nvpa,ivperp] = 0.0
+    end
+    # vperp boundary conditions
+    # zero boundary condition at infinity
+    # set regularity condition d F / d vperp = 0 at vperp = 0
+    # adjust F(vperp = 0) so that d F / d vperp = 0 at vperp = 0
+    begin_vpa_region()
+    @loop_vpa ivpa begin
+        pdf[ivpa,nvperp] = 0.0
+        pdf[ivpa,1,] = -sum(D0[2:ngrid_vperp].*pdf[ivpa,2:ngrid_vperp])/D0[1]
+    end
 end
 
 end

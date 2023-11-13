@@ -239,8 +239,8 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
             gc = lu_obj_MMZG \ dgc
         else
             # enforce zero bc  
-            enforce_zero_bc!(fc,vpa,vperp,impose_BC_at_zero_vperp=false)
-            enforce_zero_bc!(gc,vpa,vperp,impose_BC_at_zero_vperp=false)
+            #enforce_zero_bc!(fc,vpa,vperp,impose_BC_at_zero_vperp=false)
+            #enforce_zero_bc!(gc,vpa,vperp,impose_BC_at_zero_vperp=false)
             # invert mass matrix and fill fc
             fc = lu_obj_MM \ dfc
             gc = lu_obj_MM \ dgc
