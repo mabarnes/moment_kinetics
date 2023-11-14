@@ -461,15 +461,17 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
         plot_test_output = false,
         use_Maxwellian_Rosenbluth_coefficients=false,
         use_Maxwellian_field_particle_distribution=false,
+        test_dense_construction=false,
+        test_parallelism=false,
         Lvpa = 12.0, Lvperp = 6.0)
         initialize_comms!()
         #ngrid = 5
         #plot_scan = true
         #plot_test_output = true#false
         #impose_zero_gradient_BC = false
-        test_parallelism = false
+        #test_parallelism = false
         test_self_operator = true
-        test_dense_construction = false
+        #test_dense_construction = false
         #nelement_list = Int[8, 16, 32, 64, 128]
         #nelement_list = Int[4, 8, 16, 32, 64]
         #nelement_list = Int[2, 4, 8]
