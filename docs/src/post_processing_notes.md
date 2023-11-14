@@ -92,6 +92,4 @@ Note that `outfile` is required for animations.
 API
 ---
 
-```@autodocs
-Modules = [moment_kinetics.makie_post_processing]
-```
+See [makie\_post\_processing](@ref).

@@ -13,6 +13,8 @@ using moment_kinetics.load_data: open_readonly_output_file
 using moment_kinetics.load_data: load_fields_data, load_time_data
 using moment_kinetics.load_data: load_species_data, load_coordinate_data
 
+ionization_frequency = 0.688
+
 # Create a temporary directory for test output
 test_output_directory = get_MPI_tempdir()
 
@@ -91,7 +93,7 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "vpa_IC_temperature_amplitude1" => 0.0,
                                     "vpa_IC_temperature_phase1" => 0.0,
                                     "charge_exchange_frequency" => 0.0,
-                                    "ionization_frequency" => 0.688,
+                                    "ionization_frequency" => 0.0,
                                     "constant_ionization_rate" => true,
                                     "nstep" => 9000,
                                     "dt" => 0.0005,
@@ -110,13 +112,19 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "vpa_ngrid" => 200,
                                     "vpa_nelement" => 1,
                                     "vpa_L" => 8.0,
-                                    "vpa_bc" => "periodic",
+                                    "vpa_bc" => "zero",
                                     "vpa_discretization" => "finite_difference",
                                     "vz_ngrid" => 200,
                                     "vz_nelement" => 1,
                                     "vz_L" => 8.0,
-                                    "vz_bc" => "periodic",
-                                    "vz_discretization" => "finite_difference")
+                                    "vz_bc" => "zero",
+                                    "vz_discretization" => "finite_difference",
+                                    "ion_source" => Dict("active" => true,
+                                                         "source_strength" => ionization_frequency,
+                                                         "source_T" => 0.25,
+                                                         "z_profile" => "constant",
+                                                         "r_profile" => "constant"),
+                                   )
 
 test_input_chebyshev = merge(test_input_finite_difference,
                              Dict("run_name" => "chebyshev_pseudospectral",
@@ -129,6 +137,20 @@ test_input_chebyshev = merge(test_input_finite_difference,
                                   "vz_discretization" => "chebyshev_pseudospectral",
                                   "vz_ngrid" => 17,
                                   "vz_nelement" => 10))
+
+test_input_chebyshev_split1 = merge(test_input_chebyshev,
+                                    Dict("run_name" => "chebyshev_pseudospectral_split1",
+                                         "evolve_moments_density" => true,
+                                         "evolve_moments_conservation" => true))
+
+test_input_chebyshev_split2 = merge(test_input_chebyshev_split1,
+                                    Dict("run_name" => "chebyshev_pseudospectral_split2",
+                                         "evolve_moments_parallel_flow" => true,
+                                         "numerical_dissipation" => Dict("force_minimum_pdf_value" => 0.0)))
+
+test_input_chebyshev_split3 = merge(test_input_chebyshev_split2,
+                                    Dict("run_name" => "chebyshev_pseudospectral_split3",
+                                         "evolve_moments_parallel_pressure" => true))
 
 # Not actually used in the tests, but needed for first argument of run_moment_kinetics
 to = TimerOutput()
@@ -163,9 +185,9 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
     input["run_name"] = name
 
     # Suppress console output while running
-    phi = undef
-    analytic_phi = undef
-    z = undef
+    phi = nothing
+    analytic_phi = nothing
+    z = nothing
     quietoutput() do
         # run simulation
         run_moment_kinetics(to, input)
@@ -195,7 +217,7 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
 
             phi = phi_zrt[:,1,:]
             
-            analytic_phi = [findphi(zval, input["ionization_frequency"]) for zval ∈ z.grid]
+            analytic_phi = [findphi(zval, ionization_frequency) for zval ∈ z.grid]
         end
 
         # Analytic solution defines phi=0 at mid-point, so need to offset the code solution
@@ -226,7 +248,36 @@ function runtests()
                       -0.12410802135258239, -0.11657014257474364, -0.11761846656548933,
                       -0.11657014257474377, -0.12410802135258239, -0.1456009925497464,
                       -0.19789542580389616, -0.2930090318306262, -0.435951024297872,
-                      -0.66474820380475, -0.8270506701954171], 5.e-9, 1.e-15)
+                      -0.66474820380475, -0.8270506701954171], 5.0e-9, 1.e-15)
+        end
+        @testset "Chebyshev split 1" begin
+            run_test(test_input_chebyshev_split1, 3.e-2, 3.e-3,
+                     [-0.8089566414811241, -0.6619131770360419, -0.4308291908103036,
+                      -0.2958203456849356, -0.1934418964299151, -0.14925142403473443,
+                      -0.1197751269800481, -0.12060862943337616, -0.1134210587901286,
+                      -0.12060862943337315, -0.11977512698004258, -0.14925142403473443,
+                      -0.1934418964299073, -0.29582034568493026, -0.43082919081031584,
+                      -0.6619131770360454, -0.8089566414811092], 5.0e-9, 1.e-15)
+        end
+        @testset "Chebyshev split 2" begin
+            run_test(test_input_chebyshev_split2, 4.e-2, 3.e-3,
+                     [-0.782235614136118, -0.6326283459102813, -0.3904371921294129,
+                      -0.2608763603062158, -0.16526267868436909, -0.11064467678165119,
+                      -0.08500523595307348, -0.07891517979585916, -0.0749662287596728,
+                      -0.07891517979568231, -0.08500523595075139, -0.11064467678548737,
+                      -0.1652626786833772, -0.26087636031024986, -0.3904371921199402,
+                      -0.6326283459130052, -0.7822356141643002], 5.0e-9, 1.e-15)
+        end
+        # The 'split 3' test is pretty badly resolved, but don't want to increase
+        # run-time!
+        @testset "Chebyshev split 3" begin
+            run_test(test_input_chebyshev_split3, 2.1e-1, 3.e-3,
+                     [-0.5535421015240105, -0.502816770781802, -0.3755477646148533,
+                      -0.24212761527100635, -0.15737450156025806, -0.11242832417550296,
+                      -0.09168434722655881, -0.08653015173768085, -0.0858195594227437,
+                      -0.08653015173768933, -0.09168434722650211, -0.11242832417546023,
+                      -0.15737450156026872, -0.24212761527101284, -0.3755477646149367,
+                      -0.5028167707818142, -0.5535421015238932], 5.0e-9, 1.e-15)
         end
     end
 end

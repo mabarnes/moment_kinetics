@@ -21,6 +21,7 @@ using ..bgk: init_bgk_pdf!
 using ..communication
 using ..calculus: reconcile_element_boundaries_MPI!
 using ..coordinates: coordinate
+using ..external_sources
 using ..interpolation: interpolate_to_grid_1d!
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf
@@ -82,7 +83,8 @@ end
 Creates the structs for the pdf and the velocity-space moments
 """
 function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
-                                  evolve_moments, collisions, numerical_dissipation)
+                                  evolve_moments, collisions, external_source_settings,
+                                  numerical_dissipation)
     pdf = create_pdf(composition, r, z, vperp, vpa, vzeta, vr, vz)
 
     # create the 'moments' struct that contains various v-space moments and other
@@ -92,10 +94,12 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
     # and so are included in the same struct
     charged = create_moments_charged(z.n, r.n, composition.n_ion_species,
         evolve_moments.density, evolve_moments.parallel_flow,
-        evolve_moments.parallel_pressure, numerical_dissipation)
+        evolve_moments.parallel_pressure, external_source_settings.ion,
+        numerical_dissipation)
     neutral = create_moments_neutral(z.n, r.n, composition.n_neutral_species,
         evolve_moments.density, evolve_moments.parallel_flow,
-        evolve_moments.parallel_pressure, numerical_dissipation)
+        evolve_moments.parallel_pressure, external_source_settings.neutral,
+        numerical_dissipation)
 
     if abs(collisions.ionization) > 0.0 || z.bc == "wall"
         # if ionization collisions are included or wall BCs are enforced, then particle
@@ -140,7 +144,7 @@ with a self-consistent initial condition
 function init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
                                composition, r, z, vperp, vpa, vzeta, vr, vz,
                                vpa_spectral, vz_spectral, species,
-                               manufactured_solns_input)
+                               external_source_settings, manufactured_solns_input)
     if manufactured_solns_input.use_for_init
         init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z,
                                              r, composition.n_ion_species,
@@ -190,6 +194,11 @@ function init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
                      moments.charged.dens, moments.charged.upar, moments.charged.vth,
                      pdf.charged.norm, vpa, vperp, z, r, composition,
                      moments.evolve_density, moments.evolve_upar, moments.evolve_ppar)
+
+        initialize_external_source_amplitude!(moments, external_source_settings, vperp,
+                                              vzeta, vr, n_neutral_species)
+        initialize_external_source_controller_integral!(moments, external_source_settings,
+                                                        n_neutral_species)
 
         if n_neutral_species > 0
             update_neutral_qz!(moments.neutral.qz, moments.neutral.qz_updated,
@@ -600,7 +609,7 @@ function init_charged_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                     #
                     # Implemented by multiplying by a smooth 'notch' function
                     # notch(v,u0,width) = 1 - exp(-(v-u0)^2/width)
-                    width = 0.1
+                    width = 0.1 * vth[iz]
                     inverse_width = 1.0 / width
 
                     @. pdf[:,ivperp,iz] *= 1.0 - exp(-vpa.grid^2*inverse_width)
@@ -684,6 +693,11 @@ end
 function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, composition,
         vz, vr, vzeta, z, vz_spectral, density, uz, pz, vth, v_norm_fac, evolve_density,
         evolve_upar, evolve_ppar, wall_flux_0, wall_flux_L)
+
+    # Reduce the ion flux by `recycling_fraction` to account for ions absorbed by the
+    # wall.
+    wall_flux_0 *= composition.recycling_fraction
+    wall_flux_L *= composition.recycling_fraction
 
     #if spec.vz_IC.initialization_option == "gaussian"
     # For now, continue to use 'vpa' initialization options for neutral species
@@ -1425,8 +1439,8 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
                 @views enforce_neutral_wall_bc!(
                     pdf[:,:,:,:,ir,isn], z, vzeta, vr, vz, pz[:,ir,isn], uz[:,ir,isn],
                     density[:,ir,isn], ion_flux_0, ion_flux_L, boundary_distributions,
-                    vtfac, moments.evolve_ppar, moments.evolve_upar,
-                    moments.evolve_density, zero)
+                    vtfac, composition.recycling_fraction, moments.evolve_ppar,
+                    moments.evolve_upar, moments.evolve_density, zero)
             end
         end
     end
@@ -1599,8 +1613,15 @@ enforce the wall boundary condition on neutrals;
 i.e., the incoming flux of neutrals equals the sum of the ion/neutral outgoing fluxes
 """
 function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_flux_0,
-                                  wall_flux_L, boundary_distributions, vtfac, evolve_ppar,
-                                  evolve_upar, evolve_density, zero)
+                                  wall_flux_L, boundary_distributions, vtfac,
+                                  recycling_fraction, evolve_ppar, evolve_upar,
+                                  evolve_density, zero)
+
+    # Reduce the ion flux by `recycling_fraction` to account for ions absorbed by the
+    # wall.
+    wall_flux_0 *= recycling_fraction
+    wall_flux_L *= recycling_fraction
+
     if !evolve_density && !evolve_upar
         knudsen_cosine = boundary_distributions.knudsen
 
@@ -1651,8 +1672,9 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
 
             # Calculate normalisation factors N_in for the incoming and N_out for the
             # Knudsen parts of the distirbution so that ∫dvpa F = 1 and ∫dvpa vpa F = uz
-            # Note wall_flux_0 is the ion flux into the wall, and the neutral flux should
-            # be out of the wall (i.e. uz>0) so n*uz = |n*uz| = wall_flux_0
+            # Note wall_flux_0 is the ion flux into the wall (reduced by the recycling
+            # fraction), and the neutral flux should be out of the wall (i.e. uz>0) so
+            # n*uz = |n*uz| = wall_flux_0
             # ⇒ N_in*pdf_integral_0 + N_out*knudsen_integral_0 = 1
             #   N_in*pdf_integral_1 + N_out*knudsen_integral_1 = uz
             uz = wall_flux_0 / density[1]
@@ -1682,8 +1704,9 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
 
             # Calculate normalisation factors N_in for the incoming and N_out for the
             # Knudsen parts of the distirbution so that ∫dvpa F = 1 and ∫dvpa vpa F = uz
-            # Note wall_flux_L is the ion flux into the wall, and the neutral flux should
-            # be out of the wall (i.e. uz<0) so -n*uz = |n*uz| = wall_flux_L
+            # Note wall_flux_L is the ion flux into the wall (reduced by the recycling
+            # fraction), and the neutral flux should be out of the wall (i.e. uz<0) so
+            # -n*uz = |n*uz| = wall_flux_L
             # ⇒ N_in*pdf_integral_0 + N_out*knudsen_integral_0 = 1
             #   N_in*pdf_integral_1 + N_out*knudsen_integral_1 = uz
             uz = -wall_flux_L / density[end]

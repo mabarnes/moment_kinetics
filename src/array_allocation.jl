@@ -57,6 +57,10 @@ function allocate_shared_float(dims...)
         # Initialize as NaN to try and catch use of uninitialized values
         if block_rank[] == 0
             array .= NaN
+            @debug_track_initialized begin
+                # Track initialization as if the array was not initialized to NaN
+                array.is_initialized .= false
+            end
         end
         _block_synchronize()
     end
@@ -83,6 +87,10 @@ function allocate_shared_complex(dims...)
         # Initialize as NaN to try and catch use of uninitialized values
         if block_rank[] == 0
             array .= NaN
+            @debug_track_initialized begin
+                # Track initialization as if the array was not initialized to NaN
+                array.is_initialized .= false
+            end
         end
         _block_synchronize()
     end

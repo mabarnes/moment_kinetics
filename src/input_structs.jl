@@ -62,11 +62,13 @@ mutable struct advance_info
     ionization_collisions_1V::Bool
     ionization_source::Bool
     krook_collisions::Bool
+    external_source::Bool
     numerical_dissipation::Bool
     source_terms::Bool
     continuity::Bool
     force_balance::Bool
     energy::Bool
+    neutral_external_source::Bool
     neutral_source_terms::Bool
     neutral_continuity::Bool
     neutral_force_balance::Bool
@@ -267,6 +269,9 @@ mutable struct species_composition
     mn_over_mi::mk_float
     # ratio of the electron particle mass to the ion mass
     me_over_mi::mk_float
+    # The ion flux reaching the wall that is recycled as neutrals is reduced by
+    # `recycling_fraction` to account for ions absorbed by the wall.
+    recycling_fraction::mk_float
     # scratch buffer whose size is n_species
     scratch::Vector{mk_float}
 end

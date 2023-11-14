@@ -103,6 +103,10 @@ struct moments_charged_substruct
     dqpar_dz::Union{MPISharedArray{mk_float,3},Nothing}
     # this is the z-derivative of the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
     dvth_dz::Union{MPISharedArray{mk_float,3},Nothing}
+    # Spatially varying amplitude of the external source term
+    external_source_amplitude::MPISharedArray{mk_float,2}
+    # Integral term for the PID controller of the external source term
+    external_source_controller_integral::MPISharedArray{mk_float,2}
 end
 
 """
@@ -172,12 +176,16 @@ struct moments_neutral_substruct
     dvth_dz::Union{MPISharedArray{mk_float,3},Nothing}
     # this is the z-derivative of the heat flux along z
     dqz_dz::Union{MPISharedArray{mk_float,3},Nothing}
+    # Spatially varying amplitude of the external source term
+    external_source_amplitude::MPISharedArray{mk_float,2}
+    # Integral term for the PID controller of the external source term
+    external_source_controller_integral::MPISharedArray{mk_float,2}
 end
 
 """
 """
 function create_moments_charged(nz, nr, n_species, evolve_density, evolve_upar,
-                                evolve_ppar, numerical_dissipation)
+                                evolve_ppar, ion_source_settings, numerical_dissipation)
     # allocate array used for the particle density
     density = allocate_shared_float(nz, nr, n_species)
     # allocate array of Bools that indicate if the density is updated for each species
@@ -257,13 +265,31 @@ function create_moments_charged(nz, nr, n_species, evolve_density, evolve_upar,
         dqpar_dz = nothing
         dvth_dz = nothing
     end
-    
+
+    if ion_source_settings.active
+        external_source_amplitude = allocate_shared_float(nz, nr)
+        if ion_source_settings.PI_density_controller_I != 0.0 &&
+                ion_source_settings.PI_density_controller_type != ""
+            if ion_source_settings.PI_density_controller_type == "profile"
+                external_source_controller_integral = allocate_shared_float(nz, nr)
+            else
+                external_source_controller_integral = allocate_shared_float(1, 1)
+            end
+        else
+            external_source_controller_integral = allocate_shared_float(1, 1)
+        end
+    else
+        external_source_amplitude = allocate_shared_float(1, 1)
+        external_source_controller_integral = allocate_shared_float(1, 1)
+    end
+
     # return struct containing arrays needed to update moments
     return moments_charged_substruct(density, density_updated, parallel_flow,
         parallel_flow_updated, parallel_pressure, parallel_pressure_updated,perpendicular_pressure,
         parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, v_norm_fac,
         ddens_dz_upwind, d2dens_dz2, dupar_dz, dupar_dz_upwind, d2upar_dz2, dppar_dz,
-        dppar_dz_upwind, d2ppar_dz2, dqpar_dz, dvth_dz)
+        dppar_dz_upwind, d2ppar_dz2, dqpar_dz, dvth_dz, external_source_amplitude,
+        external_source_controller_integral)
 end
 
 # neutral particles have natural mean velocities 
@@ -272,7 +298,8 @@ end
 # therefore separate moments object for neutrals 
     
 function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
-                                evolve_ppar, numerical_dissipation)
+                                evolve_ppar, neutral_source_settings,
+                                numerical_dissipation)
     density = allocate_shared_float(nz, nr, n_species)
     density_updated = allocate_bool(n_species)
     density_updated .= false
@@ -354,11 +381,29 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
         dvth_dz = nothing
     end
 
+    if neutral_source_settings.active
+        external_source_amplitude = allocate_shared_float(nz, nr)
+        if neutral_source_settings.PI_density_controller_I != 0.0 &&
+                neutral_source_settings.PI_density_controller_type != ""
+            if neutral_source_settings.PI_density_controller_type == "profile"
+                external_source_controller_integral = allocate_shared_float(nz, nr)
+            else
+                external_source_controller_integral = allocate_shared_float(1, 1)
+            end
+        else
+            external_source_controller_integral = allocate_shared_float(1, 1)
+        end
+    else
+        external_source_amplitude = allocate_shared_float(1, 1)
+        external_source_controller_integral = allocate_shared_float(1, 1)
+    end
+
     # return struct containing arrays needed to update moments
     return moments_neutral_substruct(density, density_updated, uz, uz_updated, ur,
         ur_updated, uzeta, uzeta_updated, pz, pz_updated, pr, pr_updated, pzeta,
         pzeta_updated, ptot, qz, qz_updated, vth, v_norm_fac, ddens_dz_upwind, d2dens_dz2,
-        duz_dz, duz_dz_upwind, d2uz_dz2, dpz_dz, dpz_dz_upwind, d2pz_dz2, dqz_dz, dvth_dz)
+        duz_dz, duz_dz_upwind, d2uz_dz2, dpz_dz, dpz_dz_upwind, d2pz_dz2, dqz_dz, dvth_dz,
+        external_source_amplitude, external_source_controller_integral)
 end
 
 """

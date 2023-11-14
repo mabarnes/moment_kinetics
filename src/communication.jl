@@ -37,7 +37,7 @@ assign to this and not just copy a pointer into the `.val` member because otherw
 `MPI.Comm` object created by `MPI.Comm_split()` would be deleted, which probably makes
 MPI.jl delete the communicator.
 """
-const comm_block = Ref(MPI.Comm())
+const comm_block = Ref(MPI.COMM_NULL)
 
 """
 Communicator connecting the root processes of each shared memory block
@@ -47,7 +47,7 @@ assign to this and not just copy a pointer into the `.val` member because otherw
 `MPI.Comm` object created by `MPI.Comm_split()` would be deleted, which probably makes
 MPI.jl delete the communicator.
 """
-const comm_inter_block = Ref(MPI.Comm())
+const comm_inter_block = Ref(MPI.COMM_NULL)
 
 # Use Ref for these variables so that they can be made `const` (so have a definite
 # type), but contain a value assigned at run-time.
@@ -215,6 +215,7 @@ end
     """
     struct DebugMPISharedArray{T, N} <: AbstractArray{T, N}
         data::Array{T,N}
+        is_initialized::Array{Bool,N}
         is_read::Array{Bool,N}
         is_written::Array{Bool, N}
         creation_stack_trace::String
@@ -229,6 +230,8 @@ end
     # Constructors
     function DebugMPISharedArray(array::Array)
         dims = size(array)
+        is_initialized = Array{Bool}(undef, dims)
+        is_initialized .= false
         is_read = Array{Bool}(undef, dims)
         is_read .= false
         is_written = Array{Bool}(undef, dims)
@@ -244,20 +247,38 @@ end
             previous_is_read .= true
             previous_is_written = Array{Bool}(undef, dims)
             previous_is_written .= true
-            return DebugMPISharedArray(array, is_read, is_written, creation_stack_trace,
-                                       previous_is_read, previous_is_written)
+            return DebugMPISharedArray(array, is_initialized, is_read, is_written,
+                                       creation_stack_trace, previous_is_read,
+                                       previous_is_written)
         end
-        return DebugMPISharedArray(array, is_read, is_written, creation_stack_trace)
+        return DebugMPISharedArray(array, is_initialized, is_read, is_written,
+                                   creation_stack_trace)
     end
 
     # Define functions needed for AbstractArray interface
     # (https://docs.julialang.org/en/v1/manual/interfaces/#man-interface-array)
     Base.size(A::DebugMPISharedArray{T, N}) where {T, N} = size(A.data)
     function Base.getindex(A::DebugMPISharedArray{T, N}, I::Vararg{mk_int,N}) where {T, N}
+        @debug_track_initialized begin
+            if !all(A.is_initialized[I...])
+                if A.creation_stack_trace != ""
+                    error("Shared memory array read at $I before being initialized. "
+                          * "Array was created at:\n"
+                          * A.creation_stack_trace)
+                else
+                    error("Shared memory array read at $I before being initialized. "
+                          * "Enable `debug_track_array_allocate_location` to track where "
+                          * "array was created.")
+                end
+            end
+        end
         A.is_read[I...] = true
         return getindex(A.data, I...)
     end
     function Base.setindex!(A::DebugMPISharedArray{T, N}, v::T, I::Vararg{mk_int,N}) where {T, N}
+        @debug_track_initialized begin
+            A.is_initialized[I...] = true
+        end
         A.is_written[I...] = true
         return setindex!(A.data, v, I...)
     end

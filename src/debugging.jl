@@ -26,6 +26,9 @@ macronames = [
     ("debug_shared_array", 2,
      "Check for incorrect reads/writes to shared-memory arrays"),
 
+    ("debug_track_initialized", 3,
+     "Check that every array is initialized before being used."),
+
     ("debug_track_array_allocate_location", 3,
      "Record where every array was allocated."),
 
