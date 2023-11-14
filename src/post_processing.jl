@@ -123,7 +123,7 @@ function trygif(anim, outfile; kwargs...)
 end
 
 """
-Read data
+Read data which is a function of (z,r,t) or (z,r,species,t)
 
 run_names is a tuple. If it has more than one entry, this means that there are multiple
 restarts (which are sequential in time), so concatenate the data from each entry together.
@@ -167,7 +167,7 @@ function read_distributed_zr_data!(var::Array{mk_float,N}, var_name::String,
             local_tind_end = local_tind_start + ntime_local - 1
             global_tind_end = global_tind_start + length(offset:iskip:ntime_local) - 1
 
-            z_irank, r_irank = load_rank_data(fid)
+            z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid)
 
             # min index set to avoid double assignment of repeated points
             # 1 if irank = 0, 2 otherwise
@@ -184,6 +184,77 @@ function read_distributed_zr_data!(var::Array{mk_float,N}, var_name::String,
                     else
                         error("Unsupported number of dimensions: $N")
                     end
+                end
+            end
+            close(fid)
+        end
+        local_tind_start = local_tind_end + 1
+        global_tind_start = global_tind_end + 1
+    end
+end
+
+"""
+Read data which is a function of (r,t) or (r,species,t) and associated to one of the wall boundaries
+
+run_names is a tuple. If it has more than one entry, this means that there are multiple
+restarts (which are sequential in time), so concatenate the data from each entry together.
+"""
+function read_distributed_zwallr_data!(var::Array{mk_float,N}, var_name::String,
+   run_names::Tuple, file_key::String, nblocks::Tuple,
+   nr_local::mk_int,iskip::mk_int,wallopt::String) where N
+    # dimension of var is [z,r,species,t]
+
+    local_tind_start = 1
+    local_tind_end = -1
+    global_tind_start = 1
+    global_tind_end = -1
+    for (run_name, nb) in zip(run_names, nblocks)
+        for iblock in 0:nb-1
+            fid = open_readonly_output_file(run_name,file_key,iblock=iblock,printout=false)
+            z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid)
+            # determine if data is on this block
+            if (wallopt == "lower" && z_irank == 0) || (wallopt == "upper" && z_irank == z_nrank - 1)
+                group = get_group(fid, "dynamic_data")
+                var_local = load_variable(group, var_name)
+
+                ntime_local = size(var_local, N)
+
+                # offset is the amount we have to skip at the beginning of this restart to
+                # line up properly with having outputs every iskip since the beginning of the
+                # first restart.
+                # Note: use rem(x,y,RoundDown) here because this gives a result that's
+                # definitely between 0 and y, whereas rem(x,y) or mod(x,y) give negative
+                # results for negative x.
+                offset = rem(1 - (local_tind_start-1), iskip, RoundDown)
+                if offset == 0
+                    # Actually want offset in the range [1,iskip], so correct if rem()
+                    # returned 0
+                    offset = iskip
+                end
+                if local_tind_start > 1
+                    # The run being loaded is a restart (as local_tind_start=1 for the first
+                    # run), so skip the first point, as this is a duplicate of the last point
+                    # of the previous restart
+                    offset += 1
+                end
+
+                local_tind_end = local_tind_start + ntime_local - 1
+                global_tind_end = global_tind_start + length(offset:iskip:ntime_local) - 1
+
+            #z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid)
+            #if (wallopt == "lower" && z_irank == 0) || (wallopt == "upper" && z_irank == z_nrank - 1)
+                # min index set to avoid double assignment of repeated points
+                # 1 if irank = 0, 2 otherwise
+                imin_r = min(1,r_irank) + 1
+                for ir_local in imin_r:nr_local
+                        ir_global = iglobal_func(ir_local,r_irank,nr_local)
+                        if N == 3
+                            var[ir_global,:,global_tind_start:global_tind_end] .= var_local[ir_local,:,offset:iskip:end]
+                        elseif N == 2
+                            var[ir_global,global_tind_start:global_tind_end] .= var_local[ir_local,offset:iskip:end]
+                        else
+                            error("Unsupported number of dimensions: $N")
+                        end
                 end
             end
             close(fid)
@@ -226,7 +297,9 @@ function allocate_global_zr_charged_moments(nz_global,nr_global,n_ion_species,nt
     perpendicular_pressure = allocate_float(nz_global,nr_global,n_ion_species,ntime)
     parallel_heat_flux = allocate_float(nz_global,nr_global,n_ion_species,ntime)
     thermal_speed = allocate_float(nz_global,nr_global,n_ion_species,ntime)
-    return density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed
+    chodura_integral_lower = allocate_float(nr_global,n_ion_species,ntime)
+    chodura_integral_upper = allocate_float(nr_global,n_ion_species,ntime)
+    return density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed, chodura_integral_lower, chodura_integral_upper
 end
 
 function allocate_global_zr_charged_dfns(nvpa_global, nvperp_global, nz_global, nr_global,
@@ -489,7 +562,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                              Tuple(this_z.n_global for this_z ∈ z),
                                              Tuple(this_r.n_global for this_r ∈ r),
                                              ntime)
-    density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed =
+    density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed, chodura_integral_lower, chodura_integral_upper =
         get_tuple_of_return_values(allocate_global_zr_charged_moments,
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r),
@@ -544,6 +617,12 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                run_names, "moments", nblocks,
                                Tuple(this_z.n for this_z ∈ z),
                                Tuple(this_r.n for this_r ∈ r), iskip)
+    get_tuple_of_return_values(read_distributed_zwallr_data!, chodura_integral_lower, "chodura_integral_lower",
+                               run_names, "moments", nblocks,
+                               Tuple(this_r.n for this_r ∈ r), iskip, "lower")
+    get_tuple_of_return_values(read_distributed_zwallr_data!, chodura_integral_upper, "chodura_integral_upper",
+                               run_names, "moments", nblocks,
+                               Tuple(this_r.n for this_r ∈ r), iskip, "upper")
     # neutral particle moments
     if has_neutrals
         get_tuple_of_return_values(read_distributed_zr_data!, neutral_density,
@@ -599,7 +678,8 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r), ntime_pdfs)
     density_at_pdf_times, parallel_flow_at_pdf_times, parallel_pressure_at_pdf_times,
-    parallel_heat_flux_at_pdf_times, thermal_speed_at_pdf_times =
+    parallel_heat_flux_at_pdf_times, thermal_speed_at_pdf_times, chodura_integral_lower_at_pdf_times,
+    chodura_integral_upper_at_pdf_times =
         get_tuple_of_return_values(allocate_global_zr_charged_moments,
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r), n_ion_species,
@@ -646,6 +726,12 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                "thermal_speed", run_names, "dfns", nblocks,
                                Tuple(this_z.n for this_z ∈ z),
                                Tuple(this_r.n for this_r ∈ r), iskip_pdfs)
+    get_tuple_of_return_values(read_distributed_zwallr_data!, chodura_integral_lower_at_pdf_times, "chodura_integral_lower",
+                               run_names, "dfns", nblocks,
+                               Tuple(this_r.n for this_r ∈ r), iskip, "lower")
+    get_tuple_of_return_values(read_distributed_zwallr_data!, chodura_integral_upper_at_pdf_times, "chodura_integral_upper",
+                               run_names, "dfns", nblocks,
+                               Tuple(this_r.n for this_r ∈ r), iskip, "upper")
     # neutral particle moments
     if has_neutrals
         get_tuple_of_return_values(read_distributed_zr_data!,
@@ -1020,6 +1106,8 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     perpendicular_pressure = perpendicular_pressure[1]
     parallel_heat_flux = parallel_heat_flux[1]
     thermal_speed = thermal_speed[1]
+    chodura_integral_lower = chodura_integral_lower[1]
+    chodura_integral_upper = chodura_integral_upper[1]
     time = time[1]
     ntime = ntime[1]
     time_pdfs = time_pdfs[1]
@@ -1058,7 +1146,8 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
 
     if !is_1D1V
         # make plots and animations of the phi, Ez and Er
-        plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time,
+        plot_charged_moments_2D(density, parallel_flow, parallel_pressure, 
+                                chodura_integral_lower, chodura_integral_upper, time,
                                 z_global.grid, r_global.grid, iz0, ir0, n_ion_species,
                                 itime_min, itime_max, nwrite_movie, run_name_label, pp)
         # make plots and animations of the phi, Ez and Er
@@ -1265,7 +1354,8 @@ function calculate_differences(prefix...)
                                              Tuple(this_z.n_global for this_z ∈ z),
                                              Tuple(this_r.n_global for this_r ∈ r),
                                              ntime)
-    density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed =
+    density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed,
+    chodura_integral_lower, chodura_integral_upper =
         get_tuple_of_return_values(allocate_global_zr_charged_moments,
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r),
@@ -1369,7 +1459,8 @@ function calculate_differences(prefix...)
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r), ntime_pdfs)
     density_at_pdf_times, parallel_flow_at_pdf_times, parallel_pressure_at_pdf_times,
-    parallel_heat_flux_at_pdf_times, thermal_speed_at_pdf_times =
+    parallel_heat_flux_at_pdf_times, thermal_speed_at_pdf_times, chodura_integral_lower_at_pdf_times,
+    chodura_integral_upper_at_pdf_times =
         get_tuple_of_return_values(allocate_global_zr_charged_moments,
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r), n_ion_species,
@@ -2995,7 +3086,7 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     pdf_norm = zeros(mk_float,ntime)
     for iblock in 0:nblocks-1
         fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock, printout=false)
-        z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
+        z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid_pdfs,printout=false)
         pdf = load_pdf_data(fid_pdfs, printout=false)
         # local local grid data on iblock=0
         z_local, _ = load_coordinate_data(fid_pdfs, "z")
@@ -3020,10 +3111,10 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
 
     # plot distribution at lower wall boundary
     # find the number of ranks
-    z_nrank, r_nrank = get_nranks(run_name,nblocks,"dfns")
+    #z_nrank, r_nrank = get_nranks(run_name,nblocks,"dfns")
     for iblock in 0:nblocks-1
         fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock, printout=false)
-        z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
+        z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid_pdfs,printout=false)
         if (z_irank == 0 || z_irank == z_nrank - 1) && r_irank == 0
             pdf = load_pdf_data(fid_pdfs, printout=false)
             # local local grid data on iblock=0
@@ -3077,7 +3168,7 @@ function compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     pdf_norm = zeros(mk_float,ntime)
     for iblock in 0:nblocks-1
         fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock, printout=false)
-        z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
+        z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid_pdfs,printout=false)
         pdf = load_neutral_pdf_data(fid_pdfs, printout=false)
         # load local grid data
         z_local, _ = load_coordinate_data(fid_pdfs, "z", printout=false)
@@ -3365,6 +3456,11 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
         end
         outfile = string(run_name, "_phi"*description*"_vs_r_z.gif")
         trygif(anim, outfile, fps=5)
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views plot(r, phi[1,:,i], xlabel="r", ylabel=L"\widetilde{\phi}", ylims = (phimin,phimax))
+        end
+        outfile = string(run_name, "_phi(zwall-)_vs_r.gif")
+        trygif(anim, outfile, fps=5)
     elseif pp.animate_phi_vs_r_z && nr == 1 # make a gif animation of ϕ(z) at different times
         anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
             @views plot(z, phi[:,1,i], xlabel="z", ylabel=L"\widetilde{\phi}", ylims = (phimin,phimax))
@@ -3380,8 +3476,8 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
         trysavefig(outfile)
     end
     if pp.plot_wall_Ez_vs_r && nr > 1 # plot last timestep Ez[z_wall,r]
-        @views plot(r, Ez[end,:,end], xlabel=L"r/L_r", ylabel=L"E_z")
-        outfile = string(run_name, "_Ez"*description*"(r,z_wall)_vs_r.pdf")
+        @views plot(r, Ez[1,:,end], xlabel=L"r/L_r", ylabel=L"E_z")
+        outfile = string(run_name, "_Ez"*description*"(r,z_wall-)_vs_r.pdf")
         trysavefig(outfile)
     end
     if pp.animate_Ez_vs_r_z && nr > 1
@@ -3391,9 +3487,12 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
         end
         outfile = string(run_name, "_Ez"*description*"_vs_r_z.gif")
         trygif(anim, outfile, fps=5)
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views plot(r, Ez[1,:,i], xlabel="r", ylabel=L"\widetilde{E}_z", ylims = (Ezmin,Ezmax))
+        end
+        outfile = string(run_name, "_Ez(zwall-)_vs_r.gif")
+        trygif(anim, outfile, fps=5)
     elseif pp.animate_Ez_vs_r_z && nr == 1
-        Ezmin = minimum(Ez)
-        Ezmax = maximum(Ez)
         anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
             @views plot(z, Ez[:,1,i], xlabel="z", ylabel=L"\widetilde{E}_z", ylims = (Ezmin,Ezmax))
         end
@@ -3408,9 +3507,14 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
         trysavefig(outfile)
     end
     if pp.plot_wall_Er_vs_r && nr > 1 # plot last timestep Er[z_wall,r]
-        @views plot(r, Er[end,:,end], xlabel=L"r/L_r", ylabel=L"E_r")
-        outfile = string(run_name, "_Er"*description*"(r,z_wall)_vs_r.pdf")
+        @views plot(r, Er[1,:,end], xlabel=L"r/L_r", ylabel=L"E_r")
+        outfile = string(run_name, "_Er"*description*"(r,z_wall-)_vs_r.pdf")
         trysavefig(outfile)
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views plot(r, Er[1,:,i], xlabel="r", ylabel=L"\widetilde{E}_r", ylims = (Ermin,Ermax))
+        end
+        outfile = string(run_name, "_Er(zwall-)_vs_r.gif")
+        trygif(anim, outfile, fps=5)
     end
     if pp.animate_Er_vs_r_z && nr > 1
         # make a gif animation of ϕ(z) at different times
@@ -3423,7 +3527,8 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
     println("done.")
 end
 
-function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time, z, r, iz0, ir0, n_ion_species,
+function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, 
+    chodura_integral_lower, chodura_integral_upper, time, z, r, iz0, ir0, n_ion_species,
     itime_min, itime_max, nwrite_movie, run_name, pp)
     nr = size(r,1)
     print("Plotting charged moments data...")
@@ -3540,6 +3645,23 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
                     outfile = string(run_name, "_temperature"*description*"_vs_r_z.pdf")
                     trysavefig(outfile)
                 end
+        if pp.plot_chodura_integral
+            # plot the Chodura condition integrals calculated at run time 
+            @views plot(r, chodura_integral_lower[:,is,end], xlabel=L"r/L_r", ylabel="", label = "Chodura lower")
+            outfile = string(run_name, "_chodura_integral_lower"*description*"_vs_r.pdf")
+            trysavefig(outfile)
+            @views heatmap(time, r, chodura_integral_lower[:,is,:], xlabel=L"t", ylabel=L"r", c = :deep, interpolation = :cubic,
+                              windowsize = (360,240), margin = 15pt)
+            outfile = string(run_name, "_chodura_integral_lower"*description*"_vs_r_t.pdf")
+            trysavefig(outfile)
+            @views plot(r, chodura_integral_upper[:,is,end], xlabel=L"r/L_r", ylabel="", label = "Chodura upper")
+            outfile = string(run_name, "_chodura_integral_upper"*description*"_vs_r.pdf")
+            trysavefig(outfile)
+            @views heatmap(time, r, chodura_integral_upper[:,is,:], xlabel=L"t", ylabel=L"r", c = :deep, interpolation = :cubic,
+                              windowsize = (360,240), margin = 15pt)
+            outfile = string(run_name, "_chodura_integral_upper"*description*"_vs_r_t.pdf")
+            trysavefig(outfile)
+        end
 	end
     println("done.")
 end

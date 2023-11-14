@@ -23,6 +23,7 @@ export update_neutral_pz!
 export update_neutral_pr!
 export update_neutral_pzeta!
 export update_neutral_qz!
+export update_chodura!
 
 # for testing 
 export get_density
@@ -36,6 +37,7 @@ using ..array_allocation: allocate_shared_float, allocate_bool, allocate_float
 using ..calculus: integral
 using ..communication
 using ..derivatives: derivative_z!
+using ..derivatives: derivative_r!
 using ..looping
 
 #global tmpsum1 = 0.0
@@ -78,6 +80,9 @@ struct moments_charged_substruct
     qpar_updated::Vector{Bool}
     # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
     vth::MPISharedArray{mk_float,3}
+    # generalised Chodura integrals for the lower and upper plates
+    chodura_integral_lower::MPISharedArray{mk_float,2}
+    chodura_integral_upper::MPISharedArray{mk_float,2}
     # if evolve_ppar = true, then the velocity variable is (vpa - upa)/vth, which introduces
     # a factor of vth for each power of wpa in velocity space integrals.
     # v_norm_fac accounts for this: it is vth if using the above definition for the parallel velocity,
@@ -211,6 +216,8 @@ function create_moments_charged(nz, nr, n_species, evolve_density, evolve_upar,
     # allocate array of Bools that indicate if the parallel flow is updated for each species
     # allocate array used for the thermal speed
     thermal_speed = allocate_shared_float(nz, nr, n_species)
+    chodura_integral_lower = allocate_shared_float(nr, n_species)
+    chodura_integral_upper = allocate_shared_float(nr, n_species)
     if evolve_ppar
         v_norm_fac = thermal_speed
     else
@@ -286,7 +293,8 @@ function create_moments_charged(nz, nr, n_species, evolve_density, evolve_upar,
     # return struct containing arrays needed to update moments
     return moments_charged_substruct(density, density_updated, parallel_flow,
         parallel_flow_updated, parallel_pressure, parallel_pressure_updated,perpendicular_pressure,
-        parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, v_norm_fac,
+        parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, 
+        chodura_integral_lower, chodura_integral_upper, v_norm_fac,
         ddens_dz_upwind, d2dens_dz2, dupar_dz, dupar_dz_upwind, d2upar_dz2, dppar_dz,
         dppar_dz_upwind, d2ppar_dz2, dqpar_dz, dvth_dz, external_source_amplitude,
         external_source_controller_integral)
@@ -760,6 +768,92 @@ function update_qpar_species!(qpar, density, upar, vth, ff, vpa, vperp, z, r, ev
         end
     end
     return nothing
+end
+
+"""
+runtime diagnostic routine for computing the Chodura ratio
+in a single species plasma with Z = 1
+"""
+
+function update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
+    @boundscheck composition.n_ion_species == size(ff, 5) || throw(BoundsError(ff))
+    begin_s_z_vperp_vpa_region()
+    dffdr = scratch_dummy.buffer_vpavperpzrs_1
+    ff_dummy = scratch_dummy.buffer_vpavperpzrs_2
+    if r.n > 1
+    # first compute d f / d r using centred reconciliation and place in dummy array #1
+    derivative_r!(dffdr, ff[:,:,:,:,:],
+                  scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
+                  scratch_dummy.buffer_vpavperpzs_3,scratch_dummy.buffer_vpavperpzs_4,
+                  r_spectral,r)
+    else
+        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+            dffdr[ivpa,ivperp,iz,ir,is] = 0.0
+        end
+    end 
+    
+    del_vpa = minimum(vpa.grid[2:vpa.ngrid].-vpa.grid[1:vpa.ngrid-1])
+    begin_s_r_region()
+    if z.irank == 0
+        @loop_s_r is ir begin
+            @views moments.charged.chodura_integral_lower[ir,is] = update_chodura_integral_species!(ff[:,:,1,ir,is],dffdr[:,:,1,ir,is],
+            ff_dummy[:,:,1,ir,is],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[1,:,:,ir],moments.charged.dens[1,ir,is],del_vpa)
+        end
+    else # we do not save this Chodura integral to the output file
+        @loop_s_r is ir begin
+            moments.charged.chodura_integral_lower[ir,is] = 0.0
+        end
+    end
+    if z.irank == z.nrank - 1
+        @loop_s_r is ir begin
+            @views moments.charged.chodura_integral_upper[ir,is] = update_chodura_integral_species!(ff[:,:,end,ir,is],dffdr[:,:,end,ir,is],
+            ff_dummy[:,:,end,ir,is],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[end,:,:,ir],moments.charged.dens[end,ir,is],del_vpa)
+        end
+    else # we do not save this Chodura integral to the output file
+        @loop_s_r is ir begin
+            moments.charged.chodura_integral_upper[ir,is] =  0.0
+        end
+    end
+end
+"""
+
+compute the integral needed for the generalised Chodura condition
+
+ IChodura = (Z^2 vBohm^2 / cref^2) * int ( f bz^2 / vz^2 + dfdr*rhostar/vz )
+ vBohm = sqrt(Z Te/mi)
+ with Z = 1 and mref = mi
+ cref = sqrt(2Ti/mi)
+and normalise to the local ion density, appropriate to assessing the 
+Chodura condition 
+
+    IChodura <= (Te/e)d ne / dphi |(sheath entrance) = ni
+ to a single species plasma with Z = 1
+
+"""
+function update_chodura_integral_species!(ff,dffdr,ff_dummy,vpa,vperp,z,r,composition,geometry,vz,dens,del_vpa)
+    @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
+    @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck vpa.n == size(dffdr, 1) || throw(BoundsError(dffdr))
+    @boundscheck vperp.n == size(dffdr, 2) || throw(BoundsError(dffdr))
+    @boundscheck vpa.n == size(ff_dummy, 1) || throw(BoundsError(ff_dummy))
+    @boundscheck vperp.n == size(ff_dummy, 2) || throw(BoundsError(ff_dummy))
+    bzed = geometry.bzed
+    @loop_vperp_vpa ivperp ivpa begin
+        # avoid divide by zero by making sure 
+        # we are more than a vpa mimimum grid spacing away from 
+        # the vz(vpa,r) = 0 velocity boundary
+        if abs(vz[ivpa,ivperp]) > 0.5*del_vpa
+            ff_dummy[ivpa,ivperp] = (ff[ivpa,ivperp]*bzed^2/(vz[ivpa,ivperp]^2) + 
+                                geometry.rhostar*dffdr[ivpa,ivperp]/vz[ivpa,ivperp])
+        else
+            ff_dummy[ivpa,ivperp] = 0.0
+        end
+    end
+    chodura_integral = integrate_over_vspace(@view(ff_dummy[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+    # multiply by Te factor from vBohm and divide by the local ion density
+    chodura_integral *= 0.5*composition.T_e/dens
+    #println("chodura_integral: ",chodura_integral)
+    return chodura_integral
 end
 
 """

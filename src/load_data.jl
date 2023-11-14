@@ -379,12 +379,14 @@ function load_rank_data(fid; printout=false)
     coords = get_group(fid, "coords")
     z_irank = load_variable(get_group(coords, "z"), "irank")
     r_irank = load_variable(get_group(coords, "r"), "irank")
+    z_nrank = load_variable(get_group(coords, "z"), "nrank")
+    r_nrank = load_variable(get_group(coords, "r"), "nrank")
     
     if printout
         println("done.")
     end
 
-    return z_irank, r_irank
+    return z_irank, z_nrank, r_irank, r_nrank
 end
 
 """
@@ -680,6 +682,10 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
             moments.charged.qpar .= load_moment("parallel_heat_flux")
             moments.charged.qpar_updated .= true
             moments.charged.vth .= load_moment("thermal_speed")
+                moments.charged.chodura_integral_lower .= load_slice(dynamic, "chodura_integral_lower",
+                                                  r_range, :, time_index)
+                moments.charged.chodura_integral_upper .= load_slice(dynamic, "chodura_integral_upper",
+                                                  r_range, :, time_index)
 
             if "external_source_controller_integral" ∈ get_variable_keys(dynamic) &&
                     length(moments.charged.external_source_controller_integral) == 1
@@ -954,7 +960,18 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
             end
 
             pdf.charged.norm .= load_charged_pdf()
-
+                if z.irank == 0
+                    moments.charged.chodura_integral_lower .= load_slice(dynamic, "chodura_integral_lower", :, :,
+                                                  time_index)
+                else
+                    moments.charged.chodura_integral_lower .= 0.0
+                end
+                if z.irank == z.nrank - 1
+                    moments.charged.chodura_integral_upper .= load_slice(dynamic, "chodura_integral_upper", :, :,
+                                                  time_index)
+                else
+                    moments.charged.chodura_integral_upper .= 0.0
+                end
             boundary_distributions_io = get_group(fid, "boundary_distributions")
 
             function load_charged_boundary_pdf(var_name, ir)
@@ -1867,7 +1884,7 @@ function load_distributed_charged_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
         for iblock in 0:nb-1
             fid = open_readonly_output_file(run_name, "dfns", iblock=iblock, printout=false)
 
-            z_irank, r_irank = load_rank_data(fid)
+            z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid)
 
             # max index set to avoid double assignment of repeated points
             # nr/nz if irank = nrank-1, (nr-1)/(nz-1) otherwise
@@ -2082,7 +2099,7 @@ function load_distributed_neutral_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
         for iblock in 0:nb-1
             fid = open_readonly_output_file(run_name, "dfns", iblock=iblock, printout=false)
 
-            z_irank, r_irank = load_rank_data(fid)
+            z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid)
 
             # max index set to avoid double assignment of repeated points
             # nr/nz if irank = nrank-1, (nr-1)/(nz-1) otherwise

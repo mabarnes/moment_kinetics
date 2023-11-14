@@ -44,7 +44,7 @@ end
 structure containing the data/metadata needed for binary file i/o
 moments & fields only
 """
-struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Texti1, Texti2, Textn1, Textn2}
+struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower, Tchodura_upper, Texti1, Texti2, Textn1, Textn2}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the time variable
@@ -67,7 +67,10 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Texti1, Texti2, Textn1,
     parallel_heat_flux::Tmomi
     # handle for the charged species thermal speed
     thermal_speed::Tmomi
-
+    # handle for chodura diagnostic (lower)
+    chodura_integral_lower::Tchodura_lower
+    # handle for chodura diagnostic (upper)
+    chodura_integral_upper::Tchodura_upper
     # handle for the neutral species density
     density_neutral::Tmomn
     uz_neutral::Tmomn
@@ -623,7 +626,27 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                           parallel_io=parallel_io,
                                           description="charged species thermal speed",
                                           units="c_ref")
-
+        
+        if parallel_io || z.irank == 0
+            # io_chodura_lower is the handle for the ion thermal speed
+            io_chodura_lower = create_dynamic_variable!(dynamic, "chodura_integral_lower", mk_float, r;
+                                              n_ion_species=n_ion_species,
+                                              parallel_io=parallel_io,
+                                              description="Generalised Chodura integral lower sheath entrance",
+                                              units="c_ref")
+        else
+            io_chodura_lower = nothing
+        end
+        if parallel_io || z.irank == z.nrank - 1
+            # io_chodura_upper is the handle for the ion thermal speed
+            io_chodura_upper = create_dynamic_variable!(dynamic, "chodura_integral_upper", mk_float, r;
+                                              n_ion_species=n_ion_species,
+                                              parallel_io=parallel_io,
+                                              description="Generalised Chodura integral upper sheath entrance",
+                                              units="c_ref")
+        else
+            io_chodura_upper = nothing
+        end
         # io_density_neutral is the handle for the neutral particle density
         io_density_neutral = create_dynamic_variable!(dynamic, "density_neutral", mk_float, z, r;
                                                       n_neutral_species=n_neutral_species,
@@ -714,7 +737,7 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
         end
 
         return io_moments_info(fid, io_time, io_phi, io_Er, io_Ez, io_density, io_upar,
-                               io_ppar, io_pperp, io_qpar, io_vth, io_density_neutral, io_uz_neutral,
+                               io_ppar, io_pperp, io_qpar, io_vth, io_chodura_lower, io_chodura_upper, io_density_neutral, io_uz_neutral,
                                io_pz_neutral, io_qz_neutral, io_thermal_speed_neutral,
                                external_source_amplitude,
                                external_source_controller_integral,
@@ -860,7 +883,8 @@ function reopen_moments_io(file_info)
                                getvar("Ez"), getvar("density"), getvar("parallel_flow"),
                                getvar("parallel_pressure"), getvar("perpendicular_pressure"),
                                getvar("parallel_heat_flux"),
-                               getvar("thermal_speed"), getvar("density_neutral"),
+                               getvar("thermal_speed"), getvar("chodura_integral_lower"),
+                               getvar("chodura_integral_upper"), getvar("density_neutral"),
                                getvar("uz_neutral"), getvar("pz_neutral"),
                                getvar("qz_neutral"), getvar("thermal_speed_neutral"),
                                getvar("external_source_amplitude"),
@@ -951,7 +975,8 @@ function reopen_dfns_io(file_info)
                                      getvar("parallel_flow"), getvar("parallel_pressure"),
                                      getvar("perpendicular_pressure"),
                                      getvar("parallel_heat_flux"),
-                                     getvar("thermal_speed"), getvar("density_neutral"),
+                                     getvar("thermal_speed"), getvar("chodura_integral_lower"),
+                                     getvar("chodura_integral_upper"), getvar("density_neutral"),
                                      getvar("uz_neutral"), getvar("pz_neutral"),
                                      getvar("qz_neutral"),
                                      getvar("thermal_speed_neutral"),
@@ -1016,6 +1041,20 @@ function write_moments_data_to_binary(moments, fields, t, n_ion_species,
                               z, r, n_ion_species)
         append_to_dynamic_var(io_moments.thermal_speed, moments.charged.vth, t_idx, z, r,
                               n_ion_species)
+        if z.irank == 0 # lower wall 
+            append_to_dynamic_var(io_moments.chodura_integral_lower, moments.charged.chodura_integral_lower, t_idx, r,
+                              n_ion_species)
+        elseif io_moments.chodura_integral_lower !== nothing
+            append_to_dynamic_var(io_moments.chodura_integral_lower, moments.charged.chodura_integral_lower, t_idx, 0,
+                              n_ion_species)
+        end
+        if z.irank == z.nrank - 1 # upper wall
+            append_to_dynamic_var(io_moments.chodura_integral_upper, moments.charged.chodura_integral_upper, t_idx, r,
+                              n_ion_species)
+        elseif io_moments.chodura_integral_upper !== nothing
+            append_to_dynamic_var(io_moments.chodura_integral_upper, moments.charged.chodura_integral_upper, t_idx, 0,
+                              n_ion_species)
+        end
         if io_moments.external_source_amplitude !== nothing
             append_to_dynamic_var(io_moments.external_source_amplitude,
                                   moments.charged.external_source_amplitude, t_idx, z, r)
@@ -1137,6 +1176,10 @@ end
                                   moments.charged.qpar.data, t_idx, z, r, n_ion_species)
             append_to_dynamic_var(io_moments.thermal_speed, moments.charged.vth.data,
                                   t_idx, z, r, n_ion_species)
+            append_to_dynamic_var(io_moments.chodura_integral_lower, moments.charged.chodura_integral_lower.data,
+                                  t_idx, r, n_ion_species)
+            append_to_dynamic_var(io_moments.chodura_integral_upper, moments.charged.chodura_integral_upper.data,
+                                  t_idx, r, n_ion_species)
             if io_moments.external_source_amplitude !== nothing
                 append_to_dynamic_var(io_moments.external_source_amplitude,
                                       moments.charged.external_source_amplitude.data,

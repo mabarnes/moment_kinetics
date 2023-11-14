@@ -470,6 +470,8 @@ struct pp_input
     plot_parallel_temperature_vs_r_z::Bool
     # if animate_parallel_temperature_vs_r_z = true animate parallel_temperature vs r z
     animate_parallel_temperature_vs_r_z::Bool
+    # if plot_chodura_integral = true then plots of the in-simulation Chodura integrals are generated
+    plot_chodura_integral::Bool
     # if plot_wall_pdf = true then plot the ion distribution (vpa,vperp,z,r) in the element nearest the wall at the last timestep 
     plot_wall_pdf::Bool
     # run analysis for a 2D (in R-Z) linear mode?
