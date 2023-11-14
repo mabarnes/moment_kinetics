@@ -922,14 +922,14 @@ function get_QQ_local!(QQ::Array{mk_float,2},ielement,
             get_SS_local!(QQ,ielement,lobatto,radau,coord)
         elseif option == "K"
             get_KK_local!(QQ,ielement,lobatto,radau,coord)
-        elseif option == "K_no_BC_terms"
-            get_KK_local!(QQ,ielement,lobatto,radau,coord,explicit_BC_terms=false)
+        elseif option == "K_with_BC_terms"
+            get_KK_local!(QQ,ielement,lobatto,radau,coord,explicit_BC_terms=true)
         elseif option == "J"
             get_KJ_local!(QQ,ielement,lobatto,radau,coord)
         elseif option == "L"
             get_LL_local!(QQ,ielement,lobatto,radau,coord)
-        elseif option == "L_no_BC_terms"
-            get_LL_local!(QQ,ielement,lobatto,radau,coord,explicit_BC_terms=false)
+        elseif option == "L_with_BC_terms"
+            get_LL_local!(QQ,ielement,lobatto,radau,coord,explicit_BC_terms=true)
         end
         return nothing
 end
@@ -988,7 +988,7 @@ end
 function get_KK_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
-        coord;explicit_BC_terms=true)
+        coord;explicit_BC_terms=false)
         
         scale_factor = coord.element_scale[ielement]
         shift_factor = coord.element_shift[ielement]
@@ -1053,7 +1053,7 @@ end
 function get_LL_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
-        coord;explicit_BC_terms=true)
+        coord;explicit_BC_terms=false)
         
         scale_factor = coord.element_scale[ielement]
         shift_factor = coord.element_shift[ielement]

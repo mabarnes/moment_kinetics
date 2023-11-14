@@ -174,6 +174,8 @@ struct fokkerplanck_weakform_arrays_struct{N}
     MM2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
     KKpar2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
     KKperp2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    KKpar2D_with_BC_terms_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    KKperp2D_with_BC_terms_sparse::AbstractSparseArray{mk_float,mk_int,N}
     LP2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
     LV2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
     PUperp2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
@@ -1587,6 +1589,8 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
     MM2D = allocate_sparse_matrix_constructor(nsparse)
     KKpar2D = allocate_sparse_matrix_constructor(nsparse)
     KKperp2D = allocate_sparse_matrix_constructor(nsparse)
+    KKpar2D_with_BC_terms = allocate_sparse_matrix_constructor(nsparse)
+    KKperp2D_with_BC_terms = allocate_sparse_matrix_constructor(nsparse)
     PUperp2D = allocate_sparse_matrix_constructor(nsparse)
     PPparPUperp2D = allocate_sparse_matrix_constructor(nsparse)
     PPpar2D = allocate_sparse_matrix_constructor(nsparse)
@@ -1603,8 +1607,9 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
     MRperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
     MMperp_p1 = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
     KKpar = Array{mk_float,2}(undef,ngrid_vpa,ngrid_vpa)
-    KKpar_no_BC_terms = Array{mk_float,2}(undef,ngrid_vpa,ngrid_vpa)
+    KKpar_with_BC_terms = Array{mk_float,2}(undef,ngrid_vpa,ngrid_vpa)
     KKperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
+    KKperp_with_BC_terms = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
     KJperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
     LLperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
     PPperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
@@ -1622,8 +1627,9 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
         get_QQ_local!(MRperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"R")
         get_QQ_local!(MNperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"N")
         get_QQ_local!(KKperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"K")
+        get_QQ_local!(KKperp_with_BC_terms,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"K_with_BC_terms")
         get_QQ_local!(KJperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"J")
-        get_QQ_local!(LLperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"L_no_BC_terms")
+        get_QQ_local!(LLperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"L")
         get_QQ_local!(PPperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"P")
         get_QQ_local!(PUperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"U")
         #print_matrix(MMperp,"MMperp",vperp.ngrid,vperp.ngrid)
@@ -1637,8 +1643,8 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
         
         for ielement_vpa in 1:nelement_vpa
             get_QQ_local!(MMpar,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"M")
+            get_QQ_local!(KKpar_with_BC_terms,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"K_with_BC_terms")
             get_QQ_local!(KKpar,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"K")
-            get_QQ_local!(KKpar_no_BC_terms,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"K_no_BC_terms")
             get_QQ_local!(PPpar,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"P")
             #print_matrix(MMpar,"MMpar",vpa.ngrid,vpa.ngrid)
             #print_matrix(KKpar,"KKpar",vpa.ngrid,vpa.ngrid)
@@ -1713,12 +1719,12 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
                                 #            (MMpar[ivpa_local,ivpap_local]*
                                 #             MMperp[ivperp_local,ivperpp_local]))
                                 assemble_constructor_data!(LP2D,icsc,ic_global,icp_global,
-                                            (KKpar_no_BC_terms[ivpa_local,ivpap_local]*
+                                            (KKpar[ivpa_local,ivpap_local]*
                                              MMperp[ivperp_local,ivperpp_local] +
                                              MMpar[ivpa_local,ivpap_local]*
                                              LLperp[ivperp_local,ivperpp_local]))
                                 assemble_constructor_data!(LV2D,icsc,ic_global,icp_global,
-                                            (KKpar_no_BC_terms[ivpa_local,ivpap_local]*
+                                            (KKpar[ivpa_local,ivpap_local]*
                                              MRperp[ivperp_local,ivperpp_local] +
                                              MMpar[ivpa_local,ivpap_local]*
                                             (KJperp[ivperp_local,ivperpp_local] -
@@ -1730,13 +1736,21 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
                                             (MMpar[ivpa_local,ivpap_local]*
                                              MMperp[ivperp_local,ivperpp_local]))
                                 
-                            # assign K matrices
+                            # assign K matrices (no explicit boundary terms)
                             assemble_constructor_data!(KKpar2D,icsc,ic_global,icp_global,
                                             (KKpar[ivpa_local,ivpap_local]*
                                              MMperp[ivperp_local,ivperpp_local]))
                             assemble_constructor_data!(KKperp2D,icsc,ic_global,icp_global,
                                             (MMpar[ivpa_local,ivpap_local]*
                                              KKperp[ivperp_local,ivperpp_local]))
+                                             
+                            # assign K matrices (with explicit boundary terms from integration by parts)
+                            assemble_constructor_data!(KKpar2D_with_BC_terms,icsc,ic_global,icp_global,
+                                            (KKpar_with_BC_terms[ivpa_local,ivpap_local]*
+                                             MMperp[ivperp_local,ivperpp_local]))
+                            assemble_constructor_data!(KKperp2D_with_BC_terms,icsc,ic_global,icp_global,
+                                            (MMpar[ivpa_local,ivpap_local]*
+                                             KKperp_with_BC_terms[ivperp_local,ivperpp_local]))
                             # assign PU matrix
                             assemble_constructor_data!(PUperp2D,icsc,ic_global,icp_global,
                                             (MMpar[ivpa_local,ivpap_local]*
@@ -1760,6 +1774,8 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
     MM2D_sparse = create_sparse_matrix(MM2D)
     KKpar2D_sparse = create_sparse_matrix(KKpar2D)
     KKperp2D_sparse = create_sparse_matrix(KKperp2D)
+    KKpar2D_with_BC_terms_sparse = create_sparse_matrix(KKpar2D_with_BC_terms)
+    KKperp2D_with_BC_terms_sparse = create_sparse_matrix(KKperp2D_with_BC_terms)
     LP2D_sparse = create_sparse_matrix(LP2D)
     LV2D_sparse = create_sparse_matrix(LV2D)
     PUperp2D_sparse = create_sparse_matrix(PUperp2D)
@@ -1781,7 +1797,8 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
         # convert these matrices to sparse matrices
         #println("begin conversion to sparse matrices   ", Dates.format(now(), dateformat"H:MM:SS"))
     end
-    return MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, LP2D_sparse,
+    return MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, 
+           KKpar2D_with_BC_terms_sparse, KKperp2D_with_BC_terms_sparse, LP2D_sparse,
            LV2D_sparse, PUperp2D_sparse, PPparPUperp2D_sparse,
            PPpar2D_sparse, MMparMNperp2D_sparse
 end

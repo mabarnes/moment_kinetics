@@ -192,8 +192,8 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
         
         fkpl_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; 
                            precompute_weights=true, test_dense_matrix_construction=test_dense_construction)
-        KKpar2D_sparse = fkpl_arrays.KKpar2D_sparse
-        KKperp2D_sparse = fkpl_arrays.KKperp2D_sparse
+        KKpar2D_with_BC_terms_sparse = fkpl_arrays.KKpar2D_with_BC_terms_sparse
+        KKperp2D_with_BC_terms_sparse = fkpl_arrays.KKperp2D_with_BC_terms_sparse
         lu_obj_MM = fkpl_arrays.lu_obj_MM
         lu_obj_MMZG = fkpl_arrays.lu_obj_MMZG
         finish_init_time = now()
@@ -228,8 +228,8 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
         end
         #print_vector(fc,"fc",nc_global)
         # multiply by KKpar2D and fill dfc
-        mul!(dfc,KKpar2D_sparse,fc)
-        mul!(dgc,KKperp2D_sparse,fc)
+        mul!(dfc,KKpar2D_with_BC_terms_sparse,fc)
+        mul!(dgc,KKperp2D_with_BC_terms_sparse,fc)
         if impose_zero_gradient_BC
             # enforce zero bc  
             enforce_zero_bc!(fc,vpa,vperp,impose_BC_at_zero_vperp=true)

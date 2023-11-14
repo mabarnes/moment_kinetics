@@ -102,12 +102,12 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
     end
     rpbd = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
     if test_dense_matrix_construction
-        MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, LP2D_sparse, LV2D_sparse,
+        MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, KKpar2D_with_BC_terms_sparse, KKperp2D_with_BC_terms_sparse, LP2D_sparse, LV2D_sparse,
         PUperp2D_sparse, PPparPUperp2D_sparse, PPpar2D_sparse,
         MMparMNperp2D_sparse = assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spectral)
         MM2DZG_sparse = assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient(vpa,vperp,vpa_spectral,vperp_spectral)
     else
-        MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, LP2D_sparse, LV2D_sparse,
+        MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, KKpar2D_with_BC_terms_sparse, KKperp2D_with_BC_terms_sparse, LP2D_sparse, LV2D_sparse,
         PUperp2D_sparse, PPparPUperp2D_sparse, PPpar2D_sparse,
         MMparMNperp2D_sparse = assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vperp_spectral)
         MM2DZG_sparse = assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient_sparse(vpa,vperp,vpa_spectral,vperp_spectral)
@@ -152,6 +152,7 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
     dFdvperp = allocate_shared_float(nvpa,nvperp)
     
     fka = fokkerplanck_weakform_arrays_struct(bwgt,rpbd,MM2D_sparse,KKpar2D_sparse,KKperp2D_sparse,
+                                           KKpar2D_with_BC_terms_sparse,KKperp2D_with_BC_terms_sparse,
                                            LP2D_sparse,LV2D_sparse,PUperp2D_sparse,PPparPUperp2D_sparse,
                                            PPpar2D_sparse,MMparMNperp2D_sparse,MM2DZG_sparse,
                                            lu_obj_MM,lu_obj_MMZG,lu_obj_LP,lu_obj_LV,
