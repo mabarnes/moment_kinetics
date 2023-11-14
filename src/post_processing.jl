@@ -36,7 +36,6 @@ using ..array_allocation: allocate_float
 using ..coordinates: define_coordinate
 using ..file_io: open_ascii_output_file
 using ..type_definitions: mk_float, mk_int
-using ..initial_conditions: vpagrid_to_dzdt
 using ..load_data: open_readonly_output_file, get_group, load_input, load_time_data
 using ..load_data: get_nranks
 using ..load_data: load_fields_data, load_pdf_data
@@ -47,7 +46,8 @@ using ..load_data: load_variable
 using ..load_data: load_coordinate_data, load_block_data, load_rank_data,
                    load_species_data, load_mk_options
 using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data,
-                  check_Chodura_condition, analyze_2D_instability
+                  check_Chodura_condition, analyze_2D_instability,
+                  get_unnormalised_f_dzdt_1d, get_unnormalised_f_coords_2d
 using ..velocity_moments: integrate_over_vspace
 using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
 using ..moment_kinetics_input: mk_input, get
@@ -853,8 +853,12 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     if pp.diagnostics_chodura_t
         Chodura_ratio_lower, Chodura_ratio_upper =
             get_tuple_of_return_values(check_Chodura_condition, r, z, vperp, vpa,
-                                       density_at_pdf_times, composition, Er_at_pdf_times,
-                                       geometry, "wall", nblocks, run_names, nothing, ir0)
+                                       density_at_pdf_times, parallel_flow_at_pdf_times,
+                                       thermal_speed_at_pdf_times, composition,
+                                       Er_at_pdf_times, geometry, "wall", nblocks,
+                                       run_names, nothing, ir0,
+                                       evolve_density=evolve_density,
+                                       evolve_upar=evolve_upar, evolve_ppar=evolve_ppar)
 
         plot(legend=legend)
         for (t, cr, run_label) ∈ zip(time_pdfs, Chodura_ratio_lower, run_names)
@@ -875,9 +879,12 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     if pp.diagnostics_chodura_r
         Chodura_ratio_lower, Chodura_ratio_upper =
             get_tuple_of_return_values(check_Chodura_condition, r, z, vperp, vpa,
-                                       density_at_pdf_times, composition, Er_at_pdf_times,
-                                       geometry, "wall", nblocks, run_names, ntime_pdfs,
-                                       nothing)
+                                       density_at_pdf_times, parallel_flow_at_pdf_times,
+                                       thermal_speed_at_pdf_times, composition,
+                                       Er_at_pdf_times, geometry, "wall", nblocks,
+                                       run_names, ntime_pdfs, nothing,
+                                       evolve_density=evolve_density,
+                                       evolve_upar=evolve_upar, evolve_ppar=evolve_ppar)
 
         plot(legend=legend)
         for (this_r, cr, run_label) ∈ zip(r, Chodura_ratio_lower, run_names)
@@ -2840,70 +2847,6 @@ end
 function draw_v_parallel_zero!(z::AbstractVector, upar, vth, evolve_upar::Bool,
                                evolve_ppar::Bool)
     draw_v_parallel_zero!(Plots.CURRENT_PLOT, z, upar, vth, evolve_upar, evolve_ppar)
-end
-
-"""
-Get the unnormalised distribution function and unnormalised ('lab space') dzdt
-coordinate at a point in space.
-
-Inputs should depend only on vpa.
-"""
-function get_unnormalised_f_dzdt_1d(f, vpa_grid, density, upar, vth, evolve_density,
-                                    evolve_upar, evolve_ppar)
-
-    dzdt = vpagrid_to_dzdt(vpa_grid, vth, upar, evolve_ppar, evolve_upar)
-
-    f_unnorm = get_unnormalised_f_1d(f, density, vth, evolve_density, evolve_ppar)
-
-    return f_unnorm, dzdt
-end
-function get_unnormalised_f_1d(f, density, vth, evolve_density, evolve_ppar)
-    if evolve_ppar
-        f_unnorm = @. f * density / vth
-    elseif evolve_density
-        f_unnorm = @. f * density
-    else
-        f_unnorm = f
-    end
-    return f_unnorm
-end
-
-"""
-Get the unnormalised distribution function and unnormalised ('lab space') coordinates.
-
-Inputs should depend only on z and vpa.
-"""
-function get_unnormalised_f_coords_2d(f, z_grid, vpa_grid, density, upar, vth,
-                                      evolve_density, evolve_upar, evolve_ppar)
-
-    nvpa, nz = size(f)
-    z2d = zeros(nvpa, nz)
-    for iz ∈ 1:nz
-        z2d[:,iz] .= z_grid[iz]
-    end
-    dzdt2d = vpagrid_to_dzdt_2d(vpa_grid, vth, upar, evolve_ppar, evolve_upar)
-    f_unnorm = get_unnormalised_f_2d(f, density, vth, evolve_density, evolve_ppar)
-
-    return f_unnorm, z2d, dzdt2d
-end
-function vpagrid_to_dzdt_2d(vpa_grid, vth, upar, evolve_ppar, evolve_upar)
-    nvpa = length(vpa_grid)
-    nz = length(vth)
-    dzdt2d = zeros(nvpa, nz)
-    for iz ∈ 1:nz
-        @views dzdt2d[:,iz] .= vpagrid_to_dzdt(vpa_grid, vth[iz], upar[iz], evolve_ppar,
-                                               evolve_upar)
-    end
-    return dzdt2d
-end
-function get_unnormalised_f_2d(f, density, vth, evolve_density, evolve_ppar)
-    f_unnorm = similar(f)
-    nz = size(f, 2)
-    for iz ∈ 1:nz
-        @views f_unnorm[:,iz] .= get_unnormalised_f_1d(f[:,iz], density[iz], vth[iz],
-                                                       evolve_density, evolve_ppar)
-    end
-    return f_unnorm
 end
 
 """

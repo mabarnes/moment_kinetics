@@ -15,7 +15,9 @@ export makie_post_process, generate_example_input_file, get_variable,
        irregular_heatmap!, postproc_load_variable, positive_or_nan
 
 using ..analysis: analyze_fields_data, check_Chodura_condition, get_r_perturbation,
-                  get_Fourier_modes_2D, get_Fourier_modes_1D, steady_state_residuals
+                  get_Fourier_modes_2D, get_Fourier_modes_1D, steady_state_residuals,
+                  get_unnormalised_f_dzdt_1d, get_unnormalised_f_coords_2d,
+                  get_unnormalised_f_1d, vpagrid_to_dzdt_2d, get_unnormalised_f_2d
 using ..array_allocation: allocate_float
 using ..coordinates: define_coordinate
 using ..input_structs: grid_input, advection_input, set_defaults_and_check_top_level!,
@@ -30,10 +32,7 @@ using ..load_data: open_readonly_output_file, get_group, load_block_data,
                    load_species_data, load_time_data
 using ..initial_conditions: vpagrid_to_dzdt
 using ..post_processing: calculate_and_write_frequencies, construct_global_zr_coords,
-                         get_geometry_and_composition, get_unnormalised_f_dzdt_1d,
-                         get_unnormalised_f_coords_2d, get_unnormalised_f_1d,
-                         vpagrid_to_dzdt_2d, get_unnormalised_f_2d,
-                         read_distributed_zr_data!
+                         get_geometry_and_composition, read_distributed_zr_data!
 using ..type_definitions: mk_float, mk_int
 
 using Combinatorics
@@ -4799,14 +4798,19 @@ function Chodura_condition_plots(run_info; plot_prefix=nothing, axes=nothing)
 
     time = run_info.time
     density = postproc_load_variable(run_info, "density")
+    upar = postproc_load_variable(run_info, "parallel_flow")
+    vth = postproc_load_variable(run_info, "thermal_speed")
     Er = postproc_load_variable(run_info, "Er")
     f_lower = postproc_load_variable(run_info, "f", iz=1)
     f_upper = postproc_load_variable(run_info, "f", iz=run_info.z.n_global)
 
     Chodura_ratio_lower, Chodura_ratio_upper =
         check_Chodura_condition(run_info.r_local, run_info.z_local, run_info.vperp,
-                                run_info.vpa, density, run_info.composition, Er,
-                                run_info.geometry, run_info.z.bc, nothing;
+                                run_info.vpa, density, upar, vth, run_info.composition,
+                                Er, run_info.geometry, run_info.z.bc, nothing;
+                                evolve_density=run_info.evolve_density,
+                                evolve_upar=run_info.evolve_upar,
+                                evolve_ppar=run_info.evolve_ppar,
                                 f_lower=f_lower, f_upper=f_upper)
 
     if input.plot_vs_t
