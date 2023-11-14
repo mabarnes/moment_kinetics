@@ -1305,6 +1305,10 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
     KKpar2D .= 0.0
     KKperp2D = Array{mk_float,2}(undef,nc_global,nc_global)
     KKperp2D .= 0.0
+    KKpar2D_with_BC_terms = Array{mk_float,2}(undef,nc_global,nc_global)
+    KKpar2D_with_BC_terms .= 0.0
+    KKperp2D_with_BC_terms = Array{mk_float,2}(undef,nc_global,nc_global)
+    KKperp2D_with_BC_terms .= 0.0
     PUperp2D = Array{mk_float,2}(undef,nc_global,nc_global)
     PUperp2D .= 0.0
     PPparPUperp2D = Array{mk_float,2}(undef,nc_global,nc_global)
@@ -1329,6 +1333,8 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
     MMperp_p1 = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
     KKpar = Array{mk_float,2}(undef,vpa.ngrid,vpa.ngrid)
     KKperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
+    KKpar_with_BC_terms = Array{mk_float,2}(undef,vpa.ngrid,vpa.ngrid)
+    KKperp_with_BC_terms = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
     KJperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
     LLperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
     PPperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
@@ -1346,6 +1352,7 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
         get_QQ_local!(MRperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"R")
         get_QQ_local!(MNperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"N")
         get_QQ_local!(KKperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"K")
+        get_QQ_local!(KKperp_with_BC_terms,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"K_with_BC_terms")
         get_QQ_local!(KJperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"J")
         get_QQ_local!(LLperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"L")
         get_QQ_local!(PPperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"P")
@@ -1362,6 +1369,7 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
         for ielement_vpa in 1:vpa.nelement_local
             get_QQ_local!(MMpar,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"M")
             get_QQ_local!(KKpar,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"K")
+            get_QQ_local!(KKpar_with_BC_terms,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"K_with_BC_terms")
             get_QQ_local!(PPpar,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"P")
             #print_matrix(MMpar,"MMpar",vpa.ngrid,vpa.ngrid)
             #print_matrix(KKpar,"KKpar",vpa.ngrid,vpa.ngrid)
@@ -1386,49 +1394,38 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
 
                             if lower_boundary_row_vpa
                                 if ivpap_local == 1 && ivperp_local == ivperpp_local
-                                    MM2D[ic_global,icp_global] = 1.0
                                     LP2D[ic_global,icp_global] = 1.0
                                     LV2D[ic_global,icp_global] = 1.0
                                 else 
-                                    MM2D[ic_global,icp_global] = 0.0
                                     LP2D[ic_global,icp_global] = 0.0
                                     LV2D[ic_global,icp_global] = 0.0
                                 end
                             elseif upper_boundary_row_vpa
                                 if ivpap_local == vpa.ngrid && ivperp_local == ivperpp_local 
-                                    MM2D[ic_global,icp_global] = 1.0
                                     LP2D[ic_global,icp_global] = 1.0
                                     LV2D[ic_global,icp_global] = 1.0
                                 else 
-                                    MM2D[ic_global,icp_global] = 0.0
                                     LP2D[ic_global,icp_global] = 0.0
                                     LV2D[ic_global,icp_global] = 0.0
                                 end
                             elseif lower_boundary_row_vperp && impose_BC_at_zero_vperp
                                 if ivperpp_local == 1 && ivpa_local == ivpap_local
-                                    MM2D[ic_global,icp_global] = 1.0
                                     LP2D[ic_global,icp_global] = 1.0
                                     LV2D[ic_global,icp_global] = 1.0
                                 else 
-                                    MM2D[ic_global,icp_global] = 0.0
                                     LP2D[ic_global,icp_global] = 0.0
                                     LV2D[ic_global,icp_global] = 0.0
                                 end
                             elseif upper_boundary_row_vperp
                                 if ivperpp_local == vperp.ngrid && ivpa_local == ivpap_local
-                                    MM2D[ic_global,icp_global] = 1.0
                                     LP2D[ic_global,icp_global] = 1.0
                                     LV2D[ic_global,icp_global] = 1.0
                                 else 
-                                    MM2D[ic_global,icp_global] = 0.0
                                     LP2D[ic_global,icp_global] = 0.0
                                     LV2D[ic_global,icp_global] = 0.0
                                 end
                             else
-                                # assign mass matrix data
-                                #println("MM2D += ", MMpar[ivpa_local,ivpap_local]*MMperp[ivperp_local,ivperpp_local])
-                                MM2D[ic_global,icp_global] += MMpar[ivpa_local,ivpap_local]*
-                                                                MMperp[ivperp_local,ivperpp_local]
+                                # assign Laplacian and modified Laplacian matrix data
                                 LP2D[ic_global,icp_global] += (KKpar[ivpa_local,ivpap_local]*
                                                                 MMperp[ivperp_local,ivperpp_local] +
                                                                MMpar[ivpa_local,ivpap_local]*
@@ -1440,12 +1437,20 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
                                                                  PPperp[ivperp_local,ivperpp_local] - 
                                                                  MNperp[ivperp_local,ivperpp_local]))
                             end
+                            # assign mass matrix data
+                            MM2D[ic_global,icp_global] += MMpar[ivpa_local,ivpap_local]*
+                                                                MMperp[ivperp_local,ivperpp_local]
                             
                             # assign K matrices
                             KKpar2D[ic_global,icp_global] += KKpar[ivpa_local,ivpap_local]*
                                                             MMperp[ivperp_local,ivperpp_local]
                             KKperp2D[ic_global,icp_global] += MMpar[ivpa_local,ivpap_local]*
                                                             KKperp[ivperp_local,ivperpp_local]
+                            # assign K matrices with explicit boundary terms from integration by parts
+                            KKpar2D_with_BC_terms[ic_global,icp_global] += KKpar_with_BC_terms[ivpa_local,ivpap_local]*
+                                                            MMperp[ivperp_local,ivperpp_local]
+                            KKperp2D_with_BC_terms[ic_global,icp_global] += MMpar[ivpa_local,ivpap_local]*
+                                                            KKperp_with_BC_terms[ivperp_local,ivperpp_local]
                             # assign PU matrix
                             PUperp2D[ic_global,icp_global] += MMpar[ivpa_local,ivpap_local]*
                                                             PUperp[ivperp_local,ivperpp_local]
@@ -1481,14 +1486,17 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
     MM2D_sparse = sparse(MM2D)
     KKpar2D_sparse = sparse(KKpar2D)
     KKperp2D_sparse = sparse(KKperp2D)
+    KKpar2D_with_BC_terms_sparse = sparse(KKpar2D_with_BC_terms)
+    KKperp2D_with_BC_terms_sparse = sparse(KKperp2D_with_BC_terms)
     LP2D_sparse = sparse(LP2D)
     LV2D_sparse = sparse(LV2D)
     PUperp2D_sparse = sparse(PUperp2D)
     PPparPUperp2D_sparse = sparse(PPparPUperp2D)
     PPpar2D_sparse = sparse(PPpar2D)
     MMparMNperp2D_sparse = sparse(MMparMNperp2D)
-    return MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, LP2D_sparse,
-           LV2D_sparse, PUperp2D_sparse, PPparPUperp2D_sparse,
+    return MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, 
+           KKpar2D_with_BC_terms_sparse, KKperp2D_with_BC_terms_sparse,
+           LP2D_sparse, LV2D_sparse, PUperp2D_sparse, PPparPUperp2D_sparse,
            PPpar2D_sparse, MMparMNperp2D_sparse
 end
 
