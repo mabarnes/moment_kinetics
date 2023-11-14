@@ -63,9 +63,9 @@ include("post_processing.jl")
 include("plot_MMS_sequence.jl")
 include("plot_sequence.jl")
 include("makie_post_processing.jl")
+include("utils.jl")
 include("time_advance.jl")
 
-include("utils.jl")
 using TimerOutputs
 using Dates
 using Glob
@@ -88,6 +88,7 @@ using .looping: debug_setup_loop_ranges_split_one_combination!
 using .moment_kinetics_input: mk_input, read_input_file, run_type, performance_test
 using .time_advance: setup_time_advance!, time_advance!
 using .type_definitions: mk_int
+using .utils: to_minutes
 
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
@@ -260,6 +261,8 @@ function setup_moment_kinetics(input_dict::Dict;
         debug_loop_type::Union{Nothing,NTuple{N,Symbol} where N}=nothing,
         debug_loop_parallel_dims::Union{Nothing,NTuple{N,Symbol} where N}=nothing)
 
+    setup_start_time = now()
+
     # Set up MPI
     initialize_comms!()
 
@@ -391,21 +394,26 @@ function setup_moment_kinetics(input_dict::Dict;
             r_spectral, composition, drive_input, moments, t_input, collisions, species,
             geometry, boundary_distributions, external_source_settings, num_diss_params,
             manufactured_solns_input, restarting)
+
+    # This is the closest we can get to the end time of the setup before writing it to the
+    # output file
+    setup_end_time = now()
+    time_for_setup = to_minutes(setup_end_time - setup_start_time)
     # setup i/o
     ascii_io, io_moments, io_dfns = setup_file_io(io_input, boundary_distributions, vz,
         vr, vzeta, vpa, vperp, z, r, composition, collisions, moments.evolve_density,
         moments.evolve_upar, moments.evolve_ppar, external_source_settings, input_dict,
-        restart_time_index, previous_runs_info)
+        restart_time_index, previous_runs_info, time_for_setup)
     # write initial data to ascii files
     write_data_to_ascii(moments, fields, vpa, vperp, z, r, code_time,
         composition.n_ion_species, composition.n_neutral_species, ascii_io)
     # write initial data to binary files
 
     write_moments_data_to_binary(moments, fields, code_time, composition.n_ion_species,
-        composition.n_neutral_species, io_moments, 1, r, z)
+        composition.n_neutral_species, io_moments, 1, 0.0, r, z)
     write_dfns_data_to_binary(pdf.charged.norm, pdf.neutral.norm, moments, fields,
          code_time, composition.n_ion_species, composition.n_neutral_species, io_dfns, 1,
-         r, z, vperp, vpa, vzeta, vr, vz)
+         0.0, r, z, vperp, vpa, vzeta, vr, vz)
 
     begin_s_r_z_vperp_region()
 
