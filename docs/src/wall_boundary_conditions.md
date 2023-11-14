@@ -163,15 +163,27 @@ f_n(r,z=-\frac{L_z}{2},v_\zeta,v_r,v_z>0) = \Gamma_\mathrm{lower}(r) f_{Kw}(v_\z
 ```
 and at the upper target
 ```math
-f_n(r,z=\frac{L_z}{2},v_\zeta,v_r,v_z<0) = \Gamma_\mathrm{upper}(r) f_{Kw}(v_\zeta,v_r,|v_z|)
+f_n(r,z=\frac{L_z}{2},v_\zeta,v_r,v_z<0) = \Gamma_\mathrm{upper}(r) f_{Kw}(v_\zeta,v_r,|v_z|).
 ```
-where $\Gamma_\mathrm{lower}(r)$ is the total flux (the flux of ions plus the
-flux of neutrals that hit the wall) to the lower target, and
-$\Gamma_\mathrm{upper}(r)$ is the total flux to the upper target.
+A 'recycling fraction' is included, defined so that a fraction $0 \leq
+R_\mathrm{recycle} \leq 1$ of the ions hitting the wall are recycled as
+neutrals, while the whole flux of neutrals hitting the wall is always recycled.
+(Recycling the 100% of the neutral flux means that the net flux of neutrals -
+hitting the wall plus recycled - is $R_\mathrm{recycle}$ times the ion flux,
+which makes applying boundary conditions in the moment-kinetic approach
+simpler, see the next section.) This results in
+```math
+\begin{align}
+  \Gamma_\mathrm{lower}(r) &= R_\mathrm{recycle} \frac{B_{z}}{B} 2\pi \int_{0}^{\infty} dv_{\perp} \int_{-\infty}^{0} dv_{\parallel}\, |v_{\parallel}| f_{i}(r,-L/2,v_{\perp},v_{\parallel}) \\
+                           &\quad + \int dv_{\zeta}\,dv_{r} \int_{-\infty}^{0} dv_{z}\, |v_{z}| f_{n}(r,-L/2,v_{\zeta},v_{r},v_{z}) \\
+  \Gamma_\mathrm{upper}(r) &= R_\mathrm{recycle} \frac{B_{z}}{B} 2\pi \int_{0}^{\infty} dv_{\perp} \int_{0}^{\infty} dv_{\parallel}\, |v_{\parallel}| f_{i}(r,L/2,v_{\perp},v_{\parallel}) \\
+                           &\quad + \int dv_{\zeta}\,dv_{r} \int_{0}^{\infty} dv_{z}\, |v_{z}| f_{n}(r,L/2,v_{\zeta},v_{r},v_{z})
+\end{align}
+```
 
 For 1D1V, we 'marginalise' -- i.e. integrate over $v_\perp$, assuming that
-$v_\parallel=v_z$ (i.e. the magnetic field is perpendicular to the wall) --
-(see Excalibur report TN-08) which gives
+$v_\parallel=v_z$ (i.e. the magnetic field is perpendicular to the wall so
+$B_{z}/B = 1$) -- (see Excalibur report TN-08) which gives
 ```math
 \begin{align}
   f_{Kw,1V}(v_\parallel) &= \int dv_\zeta dv_r f_{Kw}(v_\zeta,v_r,v_\parallel) = 2\pi \int dv_\perp\,v_\perp f_{Kw}(v_\perp,v_\parallel) \\
@@ -183,10 +195,10 @@ $v_\parallel=v_z$ (i.e. the magnetic field is perpendicular to the wall) --
 
 When using the moment kinetic approach, we first need to apply a boundary
 condition to the moments so that the net flux of neutrals leaving the wall
-matches the flux of ions reaching the wall
+matches the recycling fraction $R_\mathrm{recycle}$ times the flux of ions reaching the wall
 ```math
 \begin{align}
-  u_{\parallel,n}(z=\pm L/2) = -\frac{n_{i}(z=\pm L/2) u_{\parallel,i}(z=\pm L/2)}{n_{n}(z=\pm L/2)}.
+  u_{\parallel,n}(z=\pm L/2) = -R_\mathrm{recycle} \frac{n_{i}(z=\pm L/2) u_{\parallel,i}(z=\pm L/2)}{n_{n}(z=\pm L/2)}.
 \end{align}
 ```
 Having enforced the boundary condition on the flux, we need to impose that the
