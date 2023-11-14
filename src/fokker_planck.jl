@@ -204,7 +204,7 @@ function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,dSdt,compos
         # enforce the boundary conditions on CC before it is used for timestepping
         enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
         # make ad-hoc conserving corrections
-        conserving_corrections!(fkpl_arrays.CC,pdf_in[:,:,iz,ir,is],vpa,vperp,scratch_dummy)
+        conserving_corrections!(fkpl_arrays.CC,pdf_in[:,:,iz,ir,is],vpa,vperp,scratch_dummy.dummy_vpavperp)
         
         # advance this part of s,r,z with the resulting C[Fs,Fs]
         begin_vperp_vpa_region()
@@ -881,9 +881,7 @@ function symmetric_matrix_inverse(A00,A01,A02,A11,A12,A22,b0,b1,b2)
     return x0, x1, x2
 end
 
-function conserving_corrections!(CC,pdf_in,vpa,vperp,scratch_dummy)
-    # define a dummy array
-    dummy_vpavperp = scratch_dummy.dummy_vpavperp
+function conserving_corrections!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
     # compute moments of the input pdf
     dens =  get_density(@view(pdf_in[:,:]), vpa, vperp)
     upar = get_upar(@view(pdf_in[:,:,]), vpa, vperp, dens)

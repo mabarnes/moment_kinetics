@@ -14,6 +14,7 @@ using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions 
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form
 using moment_kinetics.fokker_planck: fokker_planck_collision_operator_weak_form!
+using moment_kinetics.fokker_planck: conserving_corrections!
 using moment_kinetics.calculus: derivative!
 using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
 using moment_kinetics.communication
@@ -30,8 +31,7 @@ using moment_kinetics.fokker_planck_test: Cssp_Maxwellian_inputs
 using moment_kinetics.fokker_planck_calculus: elliptic_solve!, ravel_c_to_vpavperp!, ravel_vpavperp_to_c!, ravel_c_to_vpavperp_parallel!
 using moment_kinetics.fokker_planck_calculus: enforce_zero_bc!, allocate_rosenbluth_potential_boundary_data
 using moment_kinetics.fokker_planck_calculus: calculate_rosenbluth_potential_boundary_data!, calculate_rosenbluth_potential_boundary_data_exact!
-using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary_data
-
+using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary_data, enforce_vpavperp_BCs!
 
 
 
@@ -139,7 +139,8 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
         test_parallelism=false,test_self_operator=true,
         test_dense_construction=false,standalone=false,
         use_Maxwellian_Rosenbluth_coefficients=false,
-        use_Maxwellian_field_particle_distribution=false)
+        use_Maxwellian_field_particle_distribution=false,
+        test_numerical_conserving_terms=false)
         # define inputs needed for the test
         #plot_test_output = false#true
         #impose_zero_gradient_BC = false#true
@@ -267,7 +268,7 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
             end
         end
         # test the Laplacian solve with a standard F_Maxwellian -> H_Maxwellian test
-        
+        dummy_vpavperp = Array{mk_float,2}(undef,vpa.n,vperp.n)
         Fs_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
         F_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
         C_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
@@ -345,6 +346,12 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
                                              impose_zero_gradient_BC=impose_zero_gradient_BC,
                                              use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients,
                                              use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution)
+        if test_numerical_conserving_terms && test_self_operator
+            # enforce the boundary conditions on CC before it is used for timestepping
+            enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
+            # make ad-hoc conserving corrections
+            conserving_corrections!(fkpl_arrays.CC,Fs_M,vpa,vperp,dummy_vpavperp)            
+        end
         # extract C[Fs,Fs'] result
         # and Rosenbluth potentials for testing
         begin_vperp_vpa_region()
@@ -463,6 +470,7 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
         use_Maxwellian_field_particle_distribution=false,
         test_dense_construction=false,
         test_parallelism=false,
+        test_numerical_conserving_terms=false,
         Lvpa = 12.0, Lvperp = 6.0)
         initialize_comms!()
         #ngrid = 5
@@ -534,6 +542,7 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
             test_dense_construction=test_dense_construction,
             use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients,
             use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution,
+            test_numerical_conserving_terms=test_numerical_conserving_terms,
             standalone=false, Lvpa=Lvpa, Lvperp=Lvperp)
             max_C_err[iscan], L2_C_err[iscan] = fkerr.C_M.max ,fkerr.C_M.L2
             max_H_err[iscan], L2_H_err[iscan] = fkerr.H_M.max ,fkerr.H_M.L2
