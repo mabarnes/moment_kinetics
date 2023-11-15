@@ -494,6 +494,7 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
                             rhsc,rhqc,sc,qc,vpa,vperp)
             else
                 # solve a weak-form PDE for d2Gdvperp2
+                begin_vperp_vpa_region()
                 @loop_vperp_vpa ivperp ivpa begin
                     S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp]
                     Q_dummy[ivpa,ivperp] = 2.0*d2Gdvpa2[ivpa,ivperp]
@@ -502,6 +503,7 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
                             lu_obj_LB,KPperp2D_sparse,MMparMNperp2D_sparse,
                             rhsc,rhqc,sc,qc,vpa,vperp)
             end
+            begin_serial_region()
         end
     end
     # assemble the RHS of the collision operator matrix eq
