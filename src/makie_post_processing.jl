@@ -248,7 +248,9 @@ function makie_post_process(run_dir::Union{String,Tuple},
         if length(run_info) == 1
             plot_prefix = run_info[1].run_prefix * "_"
         else
-            plot_prefix = joinpath("comparison_plots", "compare_")
+            comparison_plot_dir = "comparison_plots"
+            mkpath(comparison_plot_dir)
+            plot_prefix = joinpath(comparison_plot_dir, "compare_")
         end
     end
 
