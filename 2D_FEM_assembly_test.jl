@@ -142,7 +142,7 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
         use_Maxwellian_Rosenbluth_coefficients=false,
         use_Maxwellian_field_particle_distribution=false,
         test_numerical_conserving_terms=false,
-        algebraic_solve_for_d2Gdvperp2=true)
+        algebraic_solve_for_d2Gdvperp2=false)
         # define inputs needed for the test
         #plot_test_output = false#true
         #impose_zero_gradient_BC = false#true
@@ -475,7 +475,7 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
         test_dense_construction=false,
         test_parallelism=false,
         test_numerical_conserving_terms=false,
-        algebraic_solve_for_d2Gdvperp2=true,
+        algebraic_solve_for_d2Gdvperp2=false,
         Lvpa = 12.0, Lvperp = 6.0)
         initialize_comms!()
         #ngrid = 5

@@ -383,7 +383,7 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
                                              use_Maxwellian_Rosenbluth_coefficients=false,
                                              use_Maxwellian_field_particle_distribution=false,
                                              skip_Rosenbluth_potential_calculation=false,
-                                             algebraic_solve_for_d2Gdvperp2 = true)
+                                             algebraic_solve_for_d2Gdvperp2 = false)
     @boundscheck vpa.n == size(ffsp_in,1) || throw(BoundsError(ffsp_in))
     @boundscheck vperp.n == size(ffsp_in,2) || throw(BoundsError(ffsp_in))
     @boundscheck vpa.n == size(ffs_in,1) || throw(BoundsError(ffs_in))
