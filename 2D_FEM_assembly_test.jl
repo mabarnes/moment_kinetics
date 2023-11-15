@@ -136,7 +136,7 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
     
     
     function test_weak_form_collisions(ngrid,nelement_vpa,nelement_vperp;
-        Lvpa=12.0,Lvperp=6.0,plot_test_output=false,impose_zero_gradient_BC=false,
+        Lvpa=12.0,Lvperp=6.0,plot_test_output=false,
         test_parallelism=false,test_self_operator=true,
         test_dense_construction=false,standalone=false,
         use_Maxwellian_Rosenbluth_coefficients=false,
@@ -145,7 +145,6 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
         algebraic_solve_for_d2Gdvperp2=false)
         # define inputs needed for the test
         #plot_test_output = false#true
-        #impose_zero_gradient_BC = false#true
         #test_parallelism = false#true
         #test_self_operator = true
         #test_dense_construction = false#true
@@ -198,7 +197,6 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
         KKpar2D_with_BC_terms_sparse = fkpl_arrays.KKpar2D_with_BC_terms_sparse
         KKperp2D_with_BC_terms_sparse = fkpl_arrays.KKperp2D_with_BC_terms_sparse
         lu_obj_MM = fkpl_arrays.lu_obj_MM
-        lu_obj_MMZG = fkpl_arrays.lu_obj_MMZG
         finish_init_time = now()
         
         fvpavperp = Array{mk_float,2}(undef,vpa.n,vperp.n)
@@ -233,22 +231,9 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
         # multiply by KKpar2D and fill dfc
         mul!(dfc,KKpar2D_with_BC_terms_sparse,fc)
         mul!(dgc,KKperp2D_with_BC_terms_sparse,fc)
-        if impose_zero_gradient_BC
-            # enforce zero bc  
-            enforce_zero_bc!(fc,vpa,vperp,impose_BC_at_zero_vperp=true)
-            enforce_zero_bc!(gc,vpa,vperp,impose_BC_at_zero_vperp=true)
-            # invert mass matrix and fill fc
-            fc = lu_obj_MMZG \ dfc
-            gc = lu_obj_MMZG \ dgc
-        else
-            # enforce zero bc  
-            #enforce_zero_bc!(fc,vpa,vperp,impose_BC_at_zero_vperp=false)
-            #enforce_zero_bc!(gc,vpa,vperp,impose_BC_at_zero_vperp=false)
-            # invert mass matrix and fill fc
-            fc = lu_obj_MM \ dfc
-            gc = lu_obj_MM \ dgc
-        end
-        #fc = cholesky_obj \ dfc
+        # invert mass matrix and fill fc
+        fc = lu_obj_MM \ dfc
+        gc = lu_obj_MM \ dgc
         #print_vector(fc,"fc",nc_global)
         # unravel
         ravel_c_to_vpavperp!(d2fvpavperp_dvpa2_num,fc,nc_global,vpa.n)
@@ -346,7 +331,6 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
                                              fkpl_arrays,
                                              vperp, vpa, vperp_spectral, vpa_spectral,
                                              test_assembly_serial=test_parallelism,
-                                             impose_zero_gradient_BC=impose_zero_gradient_BC,
                                              use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients,
                                              use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution,
                                              algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2)
@@ -467,7 +451,6 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
     end
     
     function run_assembly_test(; ngrid=5, nelement_list = [8],
-        impose_zero_gradient_BC= false,
         plot_scan=true,
         plot_test_output = false,
         use_Maxwellian_Rosenbluth_coefficients=false,
@@ -481,7 +464,6 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
         #ngrid = 5
         #plot_scan = true
         #plot_test_output = true#false
-        #impose_zero_gradient_BC = false
         #test_parallelism = false
         test_self_operator = true
         #test_dense_construction = false
@@ -541,7 +523,6 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
             nelement_vperp = nelement
             fkerr, calculate_times[iscan], init_times[iscan] = test_weak_form_collisions(ngrid,nelement_vpa,nelement_vperp,
             plot_test_output=plot_test_output,
-            impose_zero_gradient_BC=impose_zero_gradient_BC,
             test_parallelism=test_parallelism,
             test_self_operator=test_self_operator,
             test_dense_construction=test_dense_construction,

@@ -34,8 +34,6 @@ using ..fokker_planck_calculus: allocate_rosenbluth_potential_boundary_data
 using ..fokker_planck_calculus: fokkerplanck_arrays_struct, fokkerplanck_weakform_arrays_struct
 using ..fokker_planck_calculus: assemble_matrix_operators_dirichlet_bc
 using ..fokker_planck_calculus: assemble_matrix_operators_dirichlet_bc_sparse
-using ..fokker_planck_calculus: assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient
-using ..fokker_planck_calculus: assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient_sparse
 using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_serial!
 using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_parallel!
 using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!
@@ -107,17 +105,14 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
         LP2D_sparse, LV2D_sparse, LB2D_sparse, KPperp2D_sparse,
         PUperp2D_sparse, PPparPUperp2D_sparse, PPpar2D_sparse,
         MMparMNperp2D_sparse = assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spectral)
-        MM2DZG_sparse = assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient(vpa,vperp,vpa_spectral,vperp_spectral)
     else
         MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse,
         KKpar2D_with_BC_terms_sparse, KKperp2D_with_BC_terms_sparse,
         LP2D_sparse, LV2D_sparse, LB2D_sparse, KPperp2D_sparse,
         PUperp2D_sparse, PPparPUperp2D_sparse, PPpar2D_sparse,
         MMparMNperp2D_sparse = assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vperp_spectral)
-        MM2DZG_sparse = assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient_sparse(vpa,vperp,vpa_spectral,vperp_spectral)
     end
     lu_obj_MM = lu(MM2D_sparse)
-    lu_obj_MMZG = lu(MM2DZG_sparse)
     lu_obj_LP = lu(LP2D_sparse)
     lu_obj_LV = lu(LV2D_sparse)
     lu_obj_LB = lu(LB2D_sparse)
@@ -159,8 +154,8 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
     fka = fokkerplanck_weakform_arrays_struct(bwgt,rpbd,MM2D_sparse,KKpar2D_sparse,KKperp2D_sparse,
                                            KKpar2D_with_BC_terms_sparse,KKperp2D_with_BC_terms_sparse,
                                            LP2D_sparse,LV2D_sparse,LB2D_sparse,PUperp2D_sparse,PPparPUperp2D_sparse,
-                                           PPpar2D_sparse,MMparMNperp2D_sparse,KPperp2D_sparse,MM2DZG_sparse,
-                                           lu_obj_MM,lu_obj_MMZG,lu_obj_LP,lu_obj_LV,lu_obj_LB,
+                                           PPpar2D_sparse,MMparMNperp2D_sparse,KPperp2D_sparse,
+                                           lu_obj_MM,lu_obj_LP,lu_obj_LV,lu_obj_LB,
                                            YY_arrays, S_dummy, Q_dummy, rhsvpavperp, rhsc, rhqc, sc, qc,
                                            CC, HH, dHdvpa, dHdvperp, dGdvperp, d2Gdvperp2, d2Gdvpa2, d2Gdvperpdvpa,
                                            FF, dFdvpa, dFdvperp)
@@ -379,7 +374,7 @@ Function for evaluating Css' = Css'[Fs,Fs']
 function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp,
                                              fkpl_arrays::fokkerplanck_weakform_arrays_struct,
                                              vperp, vpa, vperp_spectral, vpa_spectral;
-                                             test_assembly_serial=false,impose_zero_gradient_BC=false,
+                                             test_assembly_serial=false,
                                              use_Maxwellian_Rosenbluth_coefficients=false,
                                              use_Maxwellian_field_particle_distribution=false,
                                              skip_Rosenbluth_potential_calculation=false,
@@ -400,9 +395,7 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
     PPpar2D_sparse = fkpl_arrays.PPpar2D_sparse
     MMparMNperp2D_sparse = fkpl_arrays.MMparMNperp2D_sparse
     KPperp2D_sparse = fkpl_arrays.KPperp2D_sparse
-    MM2DZG_sparse = fkpl_arrays.MM2DZG_sparse
     lu_obj_MM = fkpl_arrays.lu_obj_MM
-    lu_obj_MMZG = fkpl_arrays.lu_obj_MMZG
     lu_obj_LP = fkpl_arrays.lu_obj_LP
     lu_obj_LV = fkpl_arrays.lu_obj_LV
     lu_obj_LB = fkpl_arrays.lu_obj_LB
@@ -540,15 +533,8 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
     # solve the collision operator matrix eq
     begin_serial_region()
     @serial_region begin
-        if impose_zero_gradient_BC
-            enforce_zero_bc!(rhsc,vpa,vperp,impose_BC_at_zero_vperp=true)
-            # invert mass matrix and fill fc
-            sc .= lu_obj_MMZG \ rhsc
-        else
-            #enforce_zero_bc!(rhsc,vpa,vperp)
-            # invert mass matrix and fill fc
-            sc .= lu_obj_MM \ rhsc
-        end
+        # invert mass matrix and fill fc
+        sc .= lu_obj_MM \ rhsc
     end
     ravel_c_to_vpavperp_parallel!(CC,sc,vpa.n)
     return nothing

@@ -8,9 +8,7 @@ the Full-F Fokker-Planck Collision Operator
 module fokker_planck_calculus
 
 export assemble_matrix_operators_dirichlet_bc
-export assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient
 export assemble_matrix_operators_dirichlet_bc_sparse
-export assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient_sparse
 export assemble_explicit_collision_operator_rhs_serial!
 export assemble_explicit_collision_operator_rhs_parallel!
 export assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!
@@ -184,10 +182,8 @@ struct fokkerplanck_weakform_arrays_struct{N}
     PPpar2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
     MMparMNperp2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
     KPperp2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
-    MM2DZG_sparse::AbstractSparseArray{mk_float,mk_int,N}
     # lu decomposition objects
     lu_obj_MM::SuiteSparse.UMFPACK.UmfpackLU{mk_float,mk_int}
-    lu_obj_MMZG::SuiteSparse.UMFPACK.UmfpackLU{mk_float,mk_int}
     lu_obj_LP::SuiteSparse.UMFPACK.UmfpackLU{mk_float,mk_int}
     lu_obj_LV::SuiteSparse.UMFPACK.UmfpackLU{mk_float,mk_int}
     lu_obj_LB::SuiteSparse.UMFPACK.UmfpackLU{mk_float,mk_int}
@@ -1341,7 +1337,6 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
     MMperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
     MNperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
     MRperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
-    MMperp_p1 = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
     KKpar = Array{mk_float,2}(undef,vpa.ngrid,vpa.ngrid)
     KKperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
     KKpar_with_BC_terms = Array{mk_float,2}(undef,vpa.ngrid,vpa.ngrid)
@@ -1532,89 +1527,6 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
            PPpar2D_sparse, MMparMNperp2D_sparse
 end
 
-function assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient(vpa,vperp,vpa_spectral,vperp_spectral)
-    nc_global = vpa.n*vperp.n
-    # Assemble a 2D mass matrix in the global compound coordinate
-    nc_global = vpa.n*vperp.n
-    MM2DZG = Array{mk_float,2}(undef,nc_global,nc_global)
-    MM2DZG .= 0.0
-    # local dummy arrays
-    MMpar = Array{mk_float,2}(undef,vpa.ngrid,vpa.ngrid)
-    MMperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
-        
-    @serial_region begin
-        if global_rank[] == 0
-            println("begin elliptic operator assignment (zero gradient at vperp = 0)  ", Dates.format(now(), dateformat"H:MM:SS"))
-        end
-    end
-    for ielement_vperp in 1:vperp.nelement_local
-        get_QQ_local!(MMperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"M")
-        for ielement_vpa in 1:vpa.nelement_local
-            get_QQ_local!(MMpar,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"M")
-            for ivperpp_local in 1:vperp.ngrid
-                for ivperp_local in 1:vperp.ngrid
-                    for ivpap_local in 1:vpa.ngrid
-                        for ivpa_local in 1:vpa.ngrid
-                            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-                            icp_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpap_local,ivperpp_local) #get_indices(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivpap_local,ivperp_local,ivperpp_local)
-                            # boundary condition possibilities
-                            lower_boundary_row_vpa = (ielement_vpa == 1 && ivpa_local == 1)
-                            upper_boundary_row_vpa = (ielement_vpa == vpa.nelement_local && ivpa_local == vpa.ngrid)
-                            lower_boundary_row_vperp = (ielement_vperp == 1 && ivperp_local == 1)
-                            upper_boundary_row_vperp = (ielement_vperp == vperp.nelement_local && ivperp_local == vperp.ngrid)
-                            
-
-                            if lower_boundary_row_vpa
-                                if ivpap_local == 1 && ivperp_local == ivperpp_local
-                                    MM2DZG[ic_global,icp_global] = 1.0
-                                else 
-                                    MM2DZG[ic_global,icp_global] = 0.0
-                                end
-                            elseif upper_boundary_row_vpa
-                                if ivpap_local == vpa.ngrid && ivperp_local == ivperpp_local 
-                                    MM2DZG[ic_global,icp_global] = 1.0
-                                else 
-                                    MM2DZG[ic_global,icp_global] = 0.0
-                                end
-                            elseif lower_boundary_row_vperp && !lower_boundary_row_vpa && !upper_boundary_row_vperp
-                                if ivpa_local == ivpap_local
-                                    MM2DZG[ic_global,icp_global] = vperp_spectral.radau.D0[ivperpp_local]
-                                else 
-                                    MM2DZG[ic_global,icp_global] = 0.0
-                                end
-                            elseif upper_boundary_row_vperp
-                                if ivperpp_local == vperp.ngrid && ivpa_local == ivpap_local
-                                    MM2DZG[ic_global,icp_global] = 1.0
-                                else 
-                                    MM2DZG[ic_global,icp_global] = 0.0
-                                end
-                            else
-                                # assign mass matrix data
-                                MM2DZG[ic_global,icp_global] += MMpar[ivpa_local,ivpap_local]*
-                                                                MMperp[ivperp_local,ivperpp_local]
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-    @serial_region begin
-        if global_rank[] == 0
-            println("finished elliptic operator assignment (zero gradient at vperp = 0)   ", Dates.format(now(), dateformat"H:MM:SS"))
-        end
-        if nc_global < 30
-            print_matrix(MM2DZG,"MM2DZG",nc_global,nc_global)
-        end
-        # convert these matrices to sparse matrices
-        if global_rank[] == 0
-            println("begin conversion to sparse matrices   ", Dates.format(now(), dateformat"H:MM:SS"))
-        end
-    end
-    MM2DZG_sparse = sparse(MM2DZG)
-    return MM2DZG_sparse
-end
-
 function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vperp_spectral)
     # Assemble a 2D mass matrix in the global compound coordinate
     nc_global = vpa.n*vperp.n
@@ -1648,7 +1560,6 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
     MMperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
     MNperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
     MRperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
-    MMperp_p1 = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
     KKpar = Array{mk_float,2}(undef,ngrid_vpa,ngrid_vpa)
     KKpar_with_BC_terms = Array{mk_float,2}(undef,ngrid_vpa,ngrid_vpa)
     KKperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
@@ -1717,58 +1628,46 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
 
                             if lower_boundary_row_vpa
                                 if ivpap_local == 1 && ivperp_local == ivperpp_local
-                                    #assign_constructor_data!(MM2D,icsc,ic_global,icp_global,1.0)
                                     assign_constructor_data!(LP2D,icsc,ic_global,icp_global,1.0)
                                     assign_constructor_data!(LV2D,icsc,ic_global,icp_global,1.0)
                                     assign_constructor_data!(LB2D,icsc,ic_global,icp_global,1.0)
                                 else 
-                                    #assign_constructor_data!(MM2D,icsc,ic_global,icp_global,0.0)
                                     assign_constructor_data!(LP2D,icsc,ic_global,icp_global,0.0)
                                     assign_constructor_data!(LV2D,icsc,ic_global,icp_global,0.0)
                                     assign_constructor_data!(LB2D,icsc,ic_global,icp_global,0.0)
                                 end
                             elseif upper_boundary_row_vpa
                                 if ivpap_local == vpa.ngrid && ivperp_local == ivperpp_local 
-                                    #assign_constructor_data!(MM2D,icsc,ic_global,icp_global,1.0)
                                     assign_constructor_data!(LP2D,icsc,ic_global,icp_global,1.0)
                                     assign_constructor_data!(LV2D,icsc,ic_global,icp_global,1.0)
                                     assign_constructor_data!(LB2D,icsc,ic_global,icp_global,1.0)
                                 else 
-                                    #assign_constructor_data!(MM2D,icsc,ic_global,icp_global,0.0)
                                     assign_constructor_data!(LP2D,icsc,ic_global,icp_global,0.0)
                                     assign_constructor_data!(LV2D,icsc,ic_global,icp_global,0.0)
                                     assign_constructor_data!(LB2D,icsc,ic_global,icp_global,0.0)
                                 end
                             elseif lower_boundary_row_vperp && impose_BC_at_zero_vperp
                                 if ivperpp_local == 1 && ivpa_local == ivpap_local
-                                    #assign_constructor_data!(MM2D,icsc,ic_global,icp_global,1.0)
                                     assign_constructor_data!(LP2D,icsc,ic_global,icp_global,1.0)
                                     assign_constructor_data!(LV2D,icsc,ic_global,icp_global,1.0)
                                     assign_constructor_data!(LB2D,icsc,ic_global,icp_global,1.0)
                                 else 
-                                    #assign_constructor_data!(MM2D,icsc,ic_global,icp_global,0.0)
                                     assign_constructor_data!(LP2D,icsc,ic_global,icp_global,0.0)
                                     assign_constructor_data!(LV2D,icsc,ic_global,icp_global,0.0)
                                     assign_constructor_data!(LB2D,icsc,ic_global,icp_global,0.0)
                                 end
                             elseif upper_boundary_row_vperp
                                 if ivperpp_local == vperp.ngrid && ivpa_local == ivpap_local
-                                    #assign_constructor_data!(MM2D,icsc,ic_global,icp_global,1.0)
                                     assign_constructor_data!(LP2D,icsc,ic_global,icp_global,1.0)
                                     assign_constructor_data!(LV2D,icsc,ic_global,icp_global,1.0)
                                     assign_constructor_data!(LB2D,icsc,ic_global,icp_global,1.0)
                                 else 
-                                    #assign_constructor_data!(MM2D,icsc,ic_global,icp_global,0.0)
                                     assign_constructor_data!(LP2D,icsc,ic_global,icp_global,0.0)
                                     assign_constructor_data!(LV2D,icsc,ic_global,icp_global,0.0)
                                     assign_constructor_data!(LB2D,icsc,ic_global,icp_global,0.0)
                                 end
                             else
-                                # assign mass matrix data
-                                #println("MM2D += ", MMpar[ivpa_local,ivpap_local]*MMperp[ivperp_local,ivperpp_local])
-                                #assemble_constructor_data!(MM2D,icsc,ic_global,icp_global,
-                                #            (MMpar[ivpa_local,ivpap_local]*
-                                #             MMperp[ivperp_local,ivperpp_local]))
+                                # assign Laplacian matrix data
                                 assemble_constructor_data!(LP2D,icsc,ic_global,icp_global,
                                             (KKpar[ivpa_local,ivpap_local]*
                                              MMperp[ivperp_local,ivperpp_local] +
@@ -1868,102 +1767,6 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
            KPperp2D_sparse, PUperp2D_sparse, PPparPUperp2D_sparse,
            PPpar2D_sparse, MMparMNperp2D_sparse
 end
-
-function assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient_sparse(vpa,vperp,vpa_spectral,vperp_spectral)
-    # Assemble a 2D mass matrix in the global compound coordinate
-    nc_global = vpa.n*vperp.n
-    ntot_vpa = (vpa.nelement_local - 1)*(vpa.ngrid^2 - 1) + vpa.ngrid^2
-    ntot_vperp = (vperp.nelement_local - 1)*(vperp.ngrid^2 - 1) + vperp.ngrid^2
-    nsparse = ntot_vpa*ntot_vperp
-    ngrid_vpa = vpa.ngrid
-    nelement_vpa = vpa.nelement_local
-    ngrid_vperp = vperp.ngrid
-    nelement_vperp = vperp.nelement_local
-    
-    MM2DZG = allocate_sparse_matrix_constructor(nsparse)
-    # local dummy arrays
-    MMpar = Array{mk_float,2}(undef,vpa.ngrid,vpa.ngrid)
-    MMperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
-        
-    @serial_region begin
-        if global_rank[] == 0
-            println("begin elliptic operator assignment (zero gradient at vperp = 0)  ", Dates.format(now(), dateformat"H:MM:SS"))
-        end
-    end
-    for ielement_vperp in 1:vperp.nelement_local
-        get_QQ_local!(MMperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"M")
-        for ielement_vpa in 1:vpa.nelement_local
-            get_QQ_local!(MMpar,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"M")
-            for ivperpp_local in 1:vperp.ngrid
-                for ivperp_local in 1:vperp.ngrid
-                    for ivpap_local in 1:vpa.ngrid
-                        for ivpa_local in 1:vpa.ngrid
-                            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-                            icp_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpap_local,ivperpp_local) #get_indices(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivpap_local,ivperp_local,ivperpp_local)
-                            icsc = icsc_func(ivpa_local,ivpap_local,ielement_vpa::mk_int,
-                                           ngrid_vpa,nelement_vpa,
-                                           ivperp_local,ivperpp_local,
-                                           ielement_vperp,
-                                           ngrid_vperp,nelement_vperp)
-                            # boundary condition possibilities
-                            lower_boundary_row_vpa = (ielement_vpa == 1 && ivpa_local == 1)
-                            upper_boundary_row_vpa = (ielement_vpa == vpa.nelement_local && ivpa_local == vpa.ngrid)
-                            lower_boundary_row_vperp = (ielement_vperp == 1 && ivperp_local == 1)
-                            upper_boundary_row_vperp = (ielement_vperp == vperp.nelement_local && ivperp_local == vperp.ngrid)
-                            
-
-                            if lower_boundary_row_vpa
-                                if ivpap_local == 1 && ivperp_local == ivperpp_local
-                                    assign_constructor_data!(MM2DZG,icsc,ic_global,icp_global,1.0)
-                                else 
-                                    assign_constructor_data!(MM2DZG,icsc,ic_global,icp_global,0.0)
-                                end
-                            elseif upper_boundary_row_vpa
-                                if ivpap_local == vpa.ngrid && ivperp_local == ivperpp_local 
-                                    assign_constructor_data!(MM2DZG,icsc,ic_global,icp_global,1.0)
-                                else 
-                                    assign_constructor_data!(MM2DZG,icsc,ic_global,icp_global,0.0)
-                                end
-                            elseif lower_boundary_row_vperp && !lower_boundary_row_vpa && !upper_boundary_row_vperp
-                                if ivpa_local == ivpap_local
-                                    assign_constructor_data!(MM2DZG,icsc,ic_global,icp_global,vperp_spectral.radau.D0[ivperpp_local])
-                                else 
-                                    assign_constructor_data!(MM2DZG,icsc,ic_global,icp_global,0.0)
-                                end
-                            elseif upper_boundary_row_vperp
-                                if ivperpp_local == vperp.ngrid && ivpa_local == ivpap_local
-                                    assign_constructor_data!(MM2DZG,icsc,ic_global,icp_global,1.0)
-                                else 
-                                    assign_constructor_data!(MM2DZG,icsc,ic_global,icp_global,0.0)
-                                end
-                            else
-                                # assign mass matrix data
-                                assemble_constructor_data!(MM2DZG,icsc,ic_global,icp_global,
-                                                            (MMpar[ivpa_local,ivpap_local]*
-                                                             MMperp[ivperp_local,ivperpp_local]))
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-    @serial_region begin
-        if global_rank[] == 0
-            println("finished elliptic operator assignment (zero gradient at vperp = 0)   ", Dates.format(now(), dateformat"H:MM:SS"))
-        end
-        #if nc_global < 30
-        #    print_matrix(MM2DZG,"MM2DZG",nc_global,nc_global)
-        #end
-        # convert these matrices to sparse matrices
-        if global_rank[] == 0
-            println("begin conversion to sparse matrices   ", Dates.format(now(), dateformat"H:MM:SS"))
-        end
-    end
-    MM2DZG_sparse = create_sparse_matrix(MM2DZG)
-    return MM2DZG_sparse
-end
-
 
 function calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
     YY0perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)

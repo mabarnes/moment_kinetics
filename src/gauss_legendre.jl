@@ -107,8 +107,8 @@ function setup_gausslegendre_pseudospectral(coord)
     
     setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M")
     setup_global_weak_form_matrix!(S_matrix, lobatto, radau, coord, "S")
-    setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K")
-    setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L")
+    setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms")
+    setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms")
     mass_matrix_lu = lu(sparse(mass_matrix))
     Qmat = allocate_float(coord.ngrid,coord.ngrid)
     return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),K_matrix,L_matrix,mass_matrix_lu,Qmat)
@@ -272,7 +272,7 @@ function gausslegendre_apply_Kmat!(df, ff, gausslegendre, coord)
     imin = coord.imin[j]-k
     # imax is the maximum index on the full grid for this (jth) element
     imax = coord.imax[j]        
-    get_KK_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord)
+    get_KK_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord,explicit_BC_terms=true)
     #println(gausslegendre.Qmat)
     @views mul!(df[:,j],gausslegendre.Qmat[:,:],ff[imin:imax])
     zero_gradient_bc_lower_boundary = false#true
@@ -288,7 +288,7 @@ function gausslegendre_apply_Kmat!(df, ff, gausslegendre, coord)
         # imax is the maximum index on the full grid for this (jth) element
         imax = coord.imax[j]
         #@views mul!(df[:,j],gausslegendre.lobatto.Kmat[:,:],ff[imin:imax])
-        get_KK_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord)
+        get_KK_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord,explicit_BC_terms=true)
         #println(gausslegendre.Qmat)
         @views mul!(df[:,j],gausslegendre.Qmat[:,:],ff[imin:imax])
     end
@@ -313,7 +313,7 @@ function gausslegendre_apply_Lmat!(df, ff, gausslegendre, coord)
     imin = coord.imin[j]-k
     # imax is the maximum index on the full grid for this (jth) element
     imax = coord.imax[j]        
-    get_LL_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord)
+    get_LL_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord,explicit_BC_terms=true)
     #println(gausslegendre.Qmat)
     @views mul!(df[:,j],gausslegendre.Qmat[:,:],ff[imin:imax])
     zero_gradient_bc_lower_boundary = false#true
@@ -329,7 +329,7 @@ function gausslegendre_apply_Lmat!(df, ff, gausslegendre, coord)
         # imax is the maximum index on the full grid for this (jth) element
         imax = coord.imax[j]
         #@views mul!(df[:,j],gausslegendre.lobatto.Kmat[:,:],ff[imin:imax])
-        get_LL_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord)
+        get_LL_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord,explicit_BC_terms=true)
         #println(gausslegendre.Qmat)
         @views mul!(df[:,j],gausslegendre.Qmat[:,:],ff[imin:imax])
     end
@@ -339,16 +339,7 @@ function gausslegendre_apply_Lmat!(df, ff, gausslegendre, coord)
     return nothing
 end
 
-function gausslegendre_mass_matrix_solve!(f,b,coord_name,spectral)
-    if coord_name == "vperp"
-        # enforce zero (value or gradient) boundary conditions
-        #b[1] = 0.0 # uncomment if bc is imposed at vperp = 0 in mass matrix
-        #b[end] = 0.0
-    else
-        # enforce zero (value or gradient) boundary conditions
-        #b[1] = 0.0
-        #b[end] = 0.0
-    end
+function gausslegendre_mass_matrix_solve!(f,b,spectral)
     # invert mass matrix system
     y = spectral.mass_matrix_lu \ b
     @. f = y
