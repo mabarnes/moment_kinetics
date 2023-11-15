@@ -989,14 +989,17 @@ end
 
 function assign_exact_boundary_data!(func_data::vpa_vperp_boundary_data,
                                         func_exact,vpa,vperp)
+    begin_serial_region()
     nvpa = vpa.n
     nvperp = vperp.n
-    for ivperp in 1:nvperp
-        func_data.lower_boundary_vpa[ivperp] = func_exact[1,ivperp]
-        func_data.upper_boundary_vpa[ivperp] = func_exact[nvpa,ivperp]
-    end
-    for ivpa in 1:nvpa
-        func_data.upper_boundary_vperp[ivpa] = func_exact[ivpa,nvperp]
+    @serial_region begin
+        for ivperp in 1:nvperp
+            func_data.lower_boundary_vpa[ivperp] = func_exact[1,ivperp]
+            func_data.upper_boundary_vpa[ivperp] = func_exact[nvpa,ivperp]
+        end
+        for ivpa in 1:nvpa
+            func_data.upper_boundary_vperp[ivpa] = func_exact[ivpa,nvperp]
+        end
     end
     return nothing
 end
