@@ -6,6 +6,7 @@ using MPI
 using Measures
 using Dates
 import moment_kinetics
+using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
@@ -272,35 +273,35 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
         dummy_vpavperp = Array{mk_float,2}(undef,vpa.n,vperp.n)
         Fs_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
         F_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        C_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+        C_M_num = allocate_shared_float(vpa.n,vperp.n)
         C_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
         C_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
         #dFdvpa_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
         #dFdvperp_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
         #d2Fdvperpdvpa_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
         H_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        H_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+        H_M_num = allocate_shared_float(vpa.n,vperp.n)
         H_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
         G_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        G_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+        G_M_num = allocate_shared_float(vpa.n,vperp.n)
         G_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
         d2Gdvpa2_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        d2Gdvpa2_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+        d2Gdvpa2_M_num = allocate_shared_float(vpa.n,vperp.n)
         d2Gdvpa2_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
         d2Gdvperp2_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        d2Gdvperp2_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+        d2Gdvperp2_M_num = allocate_shared_float(vpa.n,vperp.n)
         d2Gdvperp2_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
         dGdvperp_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        dGdvperp_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+        dGdvperp_M_num = allocate_shared_float(vpa.n,vperp.n)
         dGdvperp_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
         d2Gdvperpdvpa_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        d2Gdvperpdvpa_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+        d2Gdvperpdvpa_M_num = allocate_shared_float(vpa.n,vperp.n)
         d2Gdvperpdvpa_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
         dHdvpa_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        dHdvpa_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+        dHdvpa_M_num = allocate_shared_float(vpa.n,vperp.n)
         dHdvpa_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
         dHdvperp_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        dHdvperp_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+        dHdvperp_M_num = allocate_shared_float(vpa.n,vperp.n)
         dHdvperp_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
 
         if test_self_operator
