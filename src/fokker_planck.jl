@@ -102,12 +102,16 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
     end
     rpbd = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
     if test_dense_matrix_construction
-        MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, KKpar2D_with_BC_terms_sparse, KKperp2D_with_BC_terms_sparse, LP2D_sparse, LV2D_sparse,
+        MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, 
+        KKpar2D_with_BC_terms_sparse, KKperp2D_with_BC_terms_sparse,
+        LP2D_sparse, LV2D_sparse, LB2D_sparse, KPperp2D_sparse,
         PUperp2D_sparse, PPparPUperp2D_sparse, PPpar2D_sparse,
         MMparMNperp2D_sparse = assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spectral)
         MM2DZG_sparse = assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient(vpa,vperp,vpa_spectral,vperp_spectral)
     else
-        MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, KKpar2D_with_BC_terms_sparse, KKperp2D_with_BC_terms_sparse, LP2D_sparse, LV2D_sparse,
+        MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse,
+        KKpar2D_with_BC_terms_sparse, KKperp2D_with_BC_terms_sparse,
+        LP2D_sparse, LV2D_sparse, LB2D_sparse, KPperp2D_sparse,
         PUperp2D_sparse, PPparPUperp2D_sparse, PPpar2D_sparse,
         MMparMNperp2D_sparse = assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vperp_spectral)
         MM2DZG_sparse = assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient_sparse(vpa,vperp,vpa_spectral,vperp_spectral)
@@ -116,6 +120,7 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
     lu_obj_MMZG = lu(MM2DZG_sparse)
     lu_obj_LP = lu(LP2D_sparse)
     lu_obj_LV = lu(LV2D_sparse)
+    lu_obj_LB = lu(LB2D_sparse)
     @serial_region begin
         if global_rank[] == 0
             println("finished LU decomposition initialisation   ", Dates.format(now(), dateformat"H:MM:SS"))
@@ -153,9 +158,9 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
     
     fka = fokkerplanck_weakform_arrays_struct(bwgt,rpbd,MM2D_sparse,KKpar2D_sparse,KKperp2D_sparse,
                                            KKpar2D_with_BC_terms_sparse,KKperp2D_with_BC_terms_sparse,
-                                           LP2D_sparse,LV2D_sparse,PUperp2D_sparse,PPparPUperp2D_sparse,
-                                           PPpar2D_sparse,MMparMNperp2D_sparse,MM2DZG_sparse,
-                                           lu_obj_MM,lu_obj_MMZG,lu_obj_LP,lu_obj_LV,
+                                           LP2D_sparse,LV2D_sparse,LB2D_sparse,PUperp2D_sparse,PPparPUperp2D_sparse,
+                                           PPpar2D_sparse,MMparMNperp2D_sparse,KPperp2D_sparse,MM2DZG_sparse,
+                                           lu_obj_MM,lu_obj_MMZG,lu_obj_LP,lu_obj_LV,lu_obj_LB,
                                            YY_arrays, S_dummy, Q_dummy, rhsvpavperp, rhsc, rhqc, sc, qc,
                                            CC, HH, dHdvpa, dHdvperp, dGdvperp, d2Gdvperp2, d2Gdvpa2, d2Gdvperpdvpa,
                                            FF, dFdvpa, dFdvperp)
@@ -377,7 +382,8 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
                                              test_assembly_serial=false,impose_zero_gradient_BC=false,
                                              use_Maxwellian_Rosenbluth_coefficients=false,
                                              use_Maxwellian_field_particle_distribution=false,
-                                             skip_Rosenbluth_potential_calculation=false)
+                                             skip_Rosenbluth_potential_calculation=false,
+                                             algebraic_solve_for_d2Gdvperp2 = true)
     @boundscheck vpa.n == size(ffsp_in,1) || throw(BoundsError(ffsp_in))
     @boundscheck vperp.n == size(ffsp_in,2) || throw(BoundsError(ffsp_in))
     @boundscheck vpa.n == size(ffs_in,1) || throw(BoundsError(ffs_in))
@@ -393,11 +399,13 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
     PPparPUperp2D_sparse = fkpl_arrays.PPparPUperp2D_sparse
     PPpar2D_sparse = fkpl_arrays.PPpar2D_sparse
     MMparMNperp2D_sparse = fkpl_arrays.MMparMNperp2D_sparse
+    KPperp2D_sparse = fkpl_arrays.KPperp2D_sparse
     MM2DZG_sparse = fkpl_arrays.MM2DZG_sparse
     lu_obj_MM = fkpl_arrays.lu_obj_MM
     lu_obj_MMZG = fkpl_arrays.lu_obj_MMZG
     lu_obj_LP = fkpl_arrays.lu_obj_LP
     lu_obj_LV = fkpl_arrays.lu_obj_LV
+    lu_obj_LB = fkpl_arrays.lu_obj_LB
     
     S_dummy = fkpl_arrays.S_dummy
     Q_dummy = fkpl_arrays.Q_dummy
@@ -472,17 +480,28 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
             elliptic_solve!(d2Gdvperpdvpa,S_dummy,rpbd.d2Gdvperpdvpa_data,
                         lu_obj_LV,PPparPUperp2D_sparse,rhsc,sc,vpa,vperp)
             
-            begin_vperp_vpa_region()
-            @loop_vperp_vpa ivperp ivpa begin
-                S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp] - d2Gdvpa2[ivpa,ivperp]
-                Q_dummy[ivpa,ivperp] = -dGdvperp[ivpa,ivperp]
+            if algebraic_solve_for_d2Gdvperp2
+                begin_vperp_vpa_region()
+                @loop_vperp_vpa ivperp ivpa begin
+                    S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp] - d2Gdvpa2[ivpa,ivperp]
+                    Q_dummy[ivpa,ivperp] = -dGdvperp[ivpa,ivperp]
+                end
+                # use the algebraic solve function to find
+                # d2Gdvperp2 = 2H - d2Gdvpa2 - (1/vperp)dGdvperp
+                # using a weak form
+                algebraic_solve!(d2Gdvperp2,S_dummy,Q_dummy,rpbd.d2Gdvperp2_data,
+                            lu_obj_MM,MM2D_sparse,MMparMNperp2D_sparse,
+                            rhsc,rhqc,sc,qc,vpa,vperp)
+            else
+                # solve a weak-form PDE for d2Gdvperp2
+                @loop_vperp_vpa ivperp ivpa begin
+                    S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp]
+                    Q_dummy[ivpa,ivperp] = 2.0*d2Gdvpa2[ivpa,ivperp]
+                end
+                elliptic_solve!(d2Gdvperp2,S_dummy,Q_dummy,rpbd.d2Gdvperp2_data,
+                            lu_obj_LB,KPperp2D_sparse,MMparMNperp2D_sparse,
+                            rhsc,rhqc,sc,qc,vpa,vperp)
             end
-            # use the elliptic solve function to find
-            # d2Gdvperp2 = 2H - d2Gdvpa2 - (1/vperp)dGdvperp
-            # using a weak form
-            algebraic_solve!(d2Gdvperp2,S_dummy,Q_dummy,rpbd.d2Gdvperp2_data,
-                        lu_obj_MM,MM2D_sparse,MMparMNperp2D_sparse,
-                        rhsc,rhqc,sc,qc,vpa,vperp)
         end
     end
     # assemble the RHS of the collision operator matrix eq

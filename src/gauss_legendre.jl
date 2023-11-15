@@ -1033,8 +1033,7 @@ function get_KJ_local!(QQ,ielement,
         scale_factor = scale_factor_func(coord.L,coord.nelement_global)
         shift_factor = shift_factor_func(coord.L,coord.nelement_global,coord.nelement_local,coord.irank,ielement) + 0.5*coord.L
         if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
-            # extra scale and shift factors required because of vperp in integral
-            # P0 factors make this a d^2 / dvperp^2 rather than (1/vperp) d ( vperp d (.) / d vperp)
+            # extra scale and shift factors required because of vperp^2 in integral
             if ielement > 1 || coord.irank > 0 # lobatto points
                 @. QQ = (lobatto.K0*((shift_factor^2)/scale_factor) +
                          lobatto.K1*2.0*shift_factor +

@@ -140,7 +140,8 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
         test_dense_construction=false,standalone=false,
         use_Maxwellian_Rosenbluth_coefficients=false,
         use_Maxwellian_field_particle_distribution=false,
-        test_numerical_conserving_terms=false)
+        test_numerical_conserving_terms=false,
+        algebraic_solve_for_d2Gdvperp2=true)
         # define inputs needed for the test
         #plot_test_output = false#true
         #impose_zero_gradient_BC = false#true
@@ -345,7 +346,8 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
                                              test_assembly_serial=test_parallelism,
                                              impose_zero_gradient_BC=impose_zero_gradient_BC,
                                              use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients,
-                                             use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution)
+                                             use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution,
+                                             algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2)
         if test_numerical_conserving_terms && test_self_operator
             # enforce the boundary conditions on CC before it is used for timestepping
             enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
@@ -471,6 +473,7 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
         test_dense_construction=false,
         test_parallelism=false,
         test_numerical_conserving_terms=false,
+        algebraic_solve_for_d2Gdvperp2=true,
         Lvpa = 12.0, Lvperp = 6.0)
         initialize_comms!()
         #ngrid = 5
@@ -543,6 +546,7 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
             use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients,
             use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution,
             test_numerical_conserving_terms=test_numerical_conserving_terms,
+            algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2,
             standalone=false, Lvpa=Lvpa, Lvperp=Lvperp)
             max_C_err[iscan], L2_C_err[iscan] = fkerr.C_M.max ,fkerr.C_M.L2
             max_H_err[iscan], L2_H_err[iscan] = fkerr.H_M.max ,fkerr.H_M.L2
