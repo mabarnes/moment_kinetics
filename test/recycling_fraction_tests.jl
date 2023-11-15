@@ -8,7 +8,6 @@ include("setup.jl")
 
 using Base.Filesystem: tempname
 using MPI
-using TimerOutputs
 
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input

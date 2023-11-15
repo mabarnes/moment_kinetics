@@ -7,7 +7,6 @@ include("setup.jl")
 
 using Base.Filesystem: tempname
 using MPI
-using TimerOutputs
 
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input
@@ -139,9 +138,6 @@ cross_compare_phi = [-1.1689445031600723, -0.7419935821024918, -0.70289464898427
                      -0.6917192346866861, -0.7028946489842764, -0.7419935821024903,
                      -1.1689445031600707]
 
-# Not actually used in the tests, but needed for first argument of run_moment_kinetics
-to = TimerOutput()
-
 """
 Run a test for a single set of parameters
 """
@@ -174,7 +170,7 @@ function run_test(test_input, expected_phi, tolerance; args...)
     phi = undef
     quietoutput() do
         # run simulation
-        run_moment_kinetics(to, input)
+        run_moment_kinetics(input)
     end
 
     if global_rank[] == 0

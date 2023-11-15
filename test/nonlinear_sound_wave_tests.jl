@@ -3,7 +3,6 @@ module NonlinearSoundWaveTests
 include("setup.jl")
 
 using Base.Filesystem: tempname
-using TimerOutputs
 
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input
@@ -22,9 +21,6 @@ const regression_rtol = 2.e-8
 test_output_directory = get_MPI_tempdir()
 
 include("nonlinear_sound_wave_inputs_and_expected_data.jl")
-
-# Not actually used in the tests, but needed for first argument of run_moment_kinetics
-to = TimerOutput()
 
 """
 Run a sound-wave test for a single set of parameters
@@ -61,7 +57,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
     # Suppress console output while running
     quietoutput() do
         # run simulation
-        run_moment_kinetics(to, input)
+        run_moment_kinetics(input)
     end
 
     phi = nothing
