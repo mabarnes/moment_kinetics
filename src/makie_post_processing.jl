@@ -188,13 +188,17 @@ function makie_post_process(run_dir::Union{String,Tuple},
     itime_min_dfns = get(new_input_dict, "itime_min_dfns", 1)
     itime_max_dfns = get(new_input_dict, "itime_max_dfns", 0)
     itime_skip_dfns = get(new_input_dict, "itime_skip_dfns", 1)
-    run_info_moments = Tuple(get_run_info(p, i, itime_min=itime_min, itime_max=itime_max,
-                                          itime_skip=itime_skip)
-                             for (p,i) in zip(run_dir, restart_index))
-    run_info_dfns = Tuple(get_run_info(p, i, itime_min=itime_min_dfns,
-                                       itime_max=itime_max_dfns,
-                                       itime_skip=itime_skip_dfns, dfns=true)
-                          for (p,i) in zip(run_dir, restart_index))
+    run_info_moments = get_run_info(zip(run_dir, restart_index)..., itime_min=itime_min,
+                                    itime_max=itime_max, itime_skip=itime_skip)
+    if !isa(run_info_moments, Tuple)
+        run_info_moments = (run_info_moments,)
+    end
+    run_info_dfns = get_run_info(zip(run_dir, restart_index)..., itime_min=itime_min_dfns,
+                                 itime_max=itime_max_dfns, itime_skip=itime_skip_dfns,
+                                 dfns=true)
+    if !isa(run_info_dfns, Tuple)
+        run_info_dfns = (run_info_dfns,)
+    end
 
     if all(ri === nothing for ri in (run_info_moments..., run_info_dfns...))
         error("No output files found for either moments or dfns in $run_dir")
@@ -698,20 +702,28 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
 end
 
 """
-    get_run_info(run_dir, restart_index=nothing; itime_min=1, itime_max=0,
-                 itime_skip=1, dfns=false)
+    get_run_info(run_dir...; itime_min=1, itime_max=0,
+                 itime_skip=1, dfns=false, do_setup=true, setup_input_file=nothing)
+    get_run_info((run_dir, restart_index)...; itime_min=1, itime_max=0,
+                 itime_skip=1, dfns=false, do_setup=true, setup_input_file=nothing)
 
 Get file handles and other info for a single run
 
 `run_dir` is the directory to read output from.
 
+`restart_index` can be given by passing a Tuple, e.g. `("runs/example", 42)` as the
+positional argument. It specifies which restart to read if there are multiple restarts. If
+no `restart_index` is given or if `nothing` is passed, read all restarts and concatenate
+them. An integer value reads the restart with that index - `-1` indicates the latest
+restart (which does not have an index).
+
+Several runs can be loaded at the same time by passing multiple positional arguments. Each
+argument can be a String `run_dir` giving a directory to read output from or a Tuple
+`(run_dir, restart_index)` giving both a directory and a restart index (it is allowed to
+mix Strings and Tuples in a call).
+
 By default load data from moments files, pass `dfns=true` to load from distribution
 functions files.
-
-`restart_index` specifies which restart to read if there are multiple restarts. The
-default (`nothing`) reads all restarts and concatenates them. An integer value reads the
-restart with that index - `-1` indicates the latest restart (which does not have an
-index).
 
 The `itime_min`, `itime_max` and `itime_skip` options can be used to select only a slice
 of time points when loading data. In `makie_post_process` these options are read from the
@@ -720,18 +732,45 @@ can be passed to [`setup_makie_post_processing_input!`](@ref), to be used for de
 the remaining options. If either `itime_min` or `itime_max` are ≤0, their values are used
 as offsets from the final time index of the run.
 """
-function get_run_info(run_dir, restart_index=nothing; itime_min=1, itime_max=0,
-                      itime_skip=1, dfns=false)
-    if !isdir(run_dir)
-        error("$run_dir is not a directory")
+function get_run_info(run_dir::Union{AbstractString,Tuple{AbstractString,Union{Int,Nothing}}}...;
+                      itime_min=1, itime_max=0, itime_skip=1, dfns=false, do_setup=true,
+                      setup_input_file=nothing)
+    if length(run_dir) == 0
+        error("No run_dir passed")
+    end
+    if length(run_dir) > 1
+        run_info = Tuple(get_run_info(r; itime_min=itime_min, itime_max=itime_max,
+                                      itime_skip=itime_skip, dfns=dfns, do_setup=false)
+                         for r ∈ run_dir)
+        return run_info
+    end
+
+    this_run_dir = run_dir[1]
+    if isa(this_run_dir, Tuple)
+        if length(this_run_dir) != 2
+            error("When a Tuple is passed for run_dir, expect it to have length 2. Got "
+                  * "$this_run_dir")
+        end
+        this_run_dir, restart_index = this_run_dir
+    else
+        restart_index = nothing
+    end
+
+    if !isa(this_run_dir, AbstractString) || !isa(restart_index, Union{Int,Nothing})
+        error("Expected all `run_dir` arguments to be `String` or `(String, Int)` or "
+              * "`(String, Nothing)`. Got $run_dir")
+    end
+
+    if !isdir(this_run_dir)
+        error("$this_run_dir is not a directory")
     end
 
     # Normalise by removing any trailing slash - with a slash basename() would return an
     # empty string
-    run_dir = rstrip(run_dir, '/')
+    this_run_dir = rstrip(this_run_dir, '/')
 
-    run_name = basename(run_dir)
-    base_prefix = joinpath(run_dir, run_name)
+    run_name = basename(this_run_dir)
+    base_prefix = joinpath(this_run_dir, run_name)
     if restart_index === nothing
         # Find output files from all restarts in the directory
         counter = 1
