@@ -189,13 +189,14 @@ function makie_post_process(run_dir::Union{String,Tuple},
     itime_max_dfns = get(new_input_dict, "itime_max_dfns", 0)
     itime_skip_dfns = get(new_input_dict, "itime_skip_dfns", 1)
     run_info_moments = get_run_info(zip(run_dir, restart_index)..., itime_min=itime_min,
-                                    itime_max=itime_max, itime_skip=itime_skip)
+                                    itime_max=itime_max, itime_skip=itime_skip,
+                                    do_setup=false)
     if !isa(run_info_moments, Tuple)
         run_info_moments = (run_info_moments,)
     end
     run_info_dfns = get_run_info(zip(run_dir, restart_index)..., itime_min=itime_min_dfns,
                                  itime_max=itime_max_dfns, itime_skip=itime_skip_dfns,
-                                 dfns=true)
+                                 dfns=true, do_setup=false)
     if !isa(run_info_dfns, Tuple)
         run_info_dfns = (run_info_dfns,)
     end
@@ -416,6 +417,8 @@ function generate_example_input_Dict()
 end
 
 """
+    setup_makie_post_processing_input!(input_file::Union{AbstractString,Nothing}=nothing;
+                                       run_info_moments=nothing, run_info_dfns=nothing)
     setup_makie_post_processing_input!(new_input_dict::AbstractDict{String,Any};
                                        run_info_moments=nothing,
                                        run_info_dfns=nothing)
@@ -430,13 +433,18 @@ The `run_info` that you are using (as returned by [`get_run_info`](@ref)) should
 to `run_info_moments` (if it contains only the moments), or `run_info_dfns` (if it also
 contains the distributions functions), or both (if you have loaded both sets of output).
 This allows default values to be set based on the grid sizes and number of time points
-read from the output files.
+read from the output files. Note that `setup_makie_post_processing_input!()` is called by
+default at the end of `get_run_info()`, for conveinence in interactive use.
 """
 function setup_makie_post_processing_input! end
 
-function setup_makie_post_processing_input!(input_file::String=default_input_file_name;
-                                            run_info_moments=nothing,
-                                            run_info_dfns=nothing)
+function setup_makie_post_processing_input!(
+        input_file::Union{AbstractString,Nothing}=nothing; run_info_moments=nothing,
+        run_info_dfns=nothing)
+
+    if input_file === nothing
+        input_file = default_input_file_name
+    end
 
     if isfile(input_file)
         new_input_dict = TOML.parsefile(input_file)
@@ -731,6 +739,12 @@ input (if they are set) before `get_run_info()` is called, so that the `run_info
 can be passed to [`setup_makie_post_processing_input!`](@ref), to be used for defaults for
 the remaining options. If either `itime_min` or `itime_max` are ≤0, their values are used
 as offsets from the final time index of the run.
+
+By default `setup_makie_post_processing_input!()` is called at the end of
+`get_run_info()`, for convenience when working interactively. Pass `do_setup=false` to
+disable this. A post-processing input file can be passed to `setup_input_file` that will
+be passed to `setup_makie_post_processing_input!()`  if you do not want to use the default
+input file.
 """
 function get_run_info(run_dir::Union{AbstractString,Tuple{AbstractString,Union{Int,Nothing}}}...;
                       itime_min=1, itime_max=0, itime_skip=1, dfns=false, do_setup=true,
@@ -742,6 +756,15 @@ function get_run_info(run_dir::Union{AbstractString,Tuple{AbstractString,Union{I
         run_info = Tuple(get_run_info(r; itime_min=itime_min, itime_max=itime_max,
                                       itime_skip=itime_skip, dfns=dfns, do_setup=false)
                          for r ∈ run_dir)
+        if do_setup
+            if dfns
+                setup_makie_post_processing_input!(setup_input_file;
+                                                   run_info_dfns=run_info)
+            else
+                setup_makie_post_processing_input!(setup_input_file;
+                                                   run_info_moments=run_info)
+            end
+        end
         return run_info
     end
 
@@ -889,39 +912,51 @@ function get_run_info(run_dir::Union{AbstractString,Tuple{AbstractString,Union{I
     end
 
     if dfns
-        return (run_name=run_name, run_prefix=base_prefix, parallel_io=parallel_io,
-                ext=ext, nblocks=nblocks, files=files, input=input,
-                n_ion_species=n_ion_species, n_neutral_species=n_neutral_species,
-                evolve_moments=evolve_moments, composition=composition, species=species,
-                collisions=collisions, geometry=geometry, drive_input=drive_input,
-                num_diss_params=num_diss_params, evolve_density=evolve_density,
-                evolve_upar=evolve_upar, evolve_ppar=evolve_ppar,
-                manufactured_solns_input=manufactured_solns_input, nt=nt,
-                nt_unskipped=nt_unskipped, restarts_nt=restarts_nt, itime_min=itime_min,
-                itime_skip=itime_skip, itime_max=itime_max, time=time, r=r, z=z,
-                vperp=vperp, vpa=vpa, vzeta=vzeta, vr=vr, vz=vz, r_local=r_local,
-                z_local=z_local, r_spectral=r_spectral, z_spectral=z_spectral,
-                vperp_spectral=vperp_spectral, vpa_spectral=vpa_spectral,
-                vzeta_spectral=vzeta_spectral, vr_spectral=vr_spectral,
-                vz_spectral=vz_spectral, r_chunk_size=r_chunk_size,
-                z_chunk_size=z_chunk_size, vperp_chunk_size=vperp_chunk_size,
-                vpa_chunk_size=vpa_chunk_size, vzeta_chunk_size=vzeta_chunk_size,
-                vr_chunk_size=vr_chunk_size, vz_chunk_size=vz_chunk_size, dfns=dfns)
+        run_info = (run_name=run_name, run_prefix=base_prefix, parallel_io=parallel_io,
+                    ext=ext, nblocks=nblocks, files=files, input=input,
+                    n_ion_species=n_ion_species, n_neutral_species=n_neutral_species,
+                    evolve_moments=evolve_moments, composition=composition,
+                    species=species, collisions=collisions, geometry=geometry,
+                    drive_input=drive_input, num_diss_params=num_diss_params,
+                    evolve_density=evolve_density, evolve_upar=evolve_upar,
+                    evolve_ppar=evolve_ppar,
+                    manufactured_solns_input=manufactured_solns_input, nt=nt,
+                    nt_unskipped=nt_unskipped, restarts_nt=restarts_nt,
+                    itime_min=itime_min, itime_skip=itime_skip, itime_max=itime_max,
+                    time=time, r=r, z=z, vperp=vperp, vpa=vpa, vzeta=vzeta, vr=vr, vz=vz,
+                    r_local=r_local, z_local=z_local, r_spectral=r_spectral,
+                    z_spectral=z_spectral, vperp_spectral=vperp_spectral,
+                    vpa_spectral=vpa_spectral, vzeta_spectral=vzeta_spectral,
+                    vr_spectral=vr_spectral, vz_spectral=vz_spectral,
+                    r_chunk_size=r_chunk_size, z_chunk_size=z_chunk_size,
+                    vperp_chunk_size=vperp_chunk_size, vpa_chunk_size=vpa_chunk_size,
+                    vzeta_chunk_size=vzeta_chunk_size, vr_chunk_size=vr_chunk_size,
+                    vz_chunk_size=vz_chunk_size, dfns=dfns)
+        if do_setup
+            setup_makie_post_processing_input!(setup_input_file; run_info_dfns=run_info)
+        end
     else
-        return (run_name=run_name, run_prefix=base_prefix, parallel_io=parallel_io,
-                ext=ext, nblocks=nblocks, files=files, input=input,
-                n_ion_species=n_ion_species, n_neutral_species=n_neutral_species,
-                evolve_moments=evolve_moments, composition=composition, species=species,
-                collisions=collisions, geometry=geometry, drive_input=drive_input,
-                num_diss_params=num_diss_params, evolve_density=evolve_density,
-                evolve_upar=evolve_upar, evolve_ppar=evolve_ppar,
-                manufactured_solns_input=manufactured_solns_input, nt=nt,
-                nt_unskipped=nt_unskipped, restarts_nt=restarts_nt, itime_min=itime_min,
-                itime_skip=itime_skip, itime_max=itime_max, time=time, r=r, z=z,
-                r_local=r_local, z_local=z_local, r_spectral=r_spectral,
-                z_spectral=z_spectral, r_chunk_size=r_chunk_size,
-                z_chunk_size=z_chunk_size, dfns=dfns)
+        run_info = (run_name=run_name, run_prefix=base_prefix, parallel_io=parallel_io,
+                    ext=ext, nblocks=nblocks, files=files, input=input,
+                    n_ion_species=n_ion_species, n_neutral_species=n_neutral_species,
+                    evolve_moments=evolve_moments, composition=composition,
+                    species=species, collisions=collisions, geometry=geometry,
+                    drive_input=drive_input, num_diss_params=num_diss_params,
+                    evolve_density=evolve_density, evolve_upar=evolve_upar,
+                    evolve_ppar=evolve_ppar,
+                    manufactured_solns_input=manufactured_solns_input, nt=nt,
+                    nt_unskipped=nt_unskipped, restarts_nt=restarts_nt,
+                    itime_min=itime_min, itime_skip=itime_skip, itime_max=itime_max,
+                    time=time, r=r, z=z, r_local=r_local, z_local=z_local,
+                    r_spectral=r_spectral, z_spectral=z_spectral,
+                    r_chunk_size=r_chunk_size, z_chunk_size=z_chunk_size, dfns=dfns)
+        if do_setup
+            setup_makie_post_processing_input!(setup_input_file;
+                                               run_info_moments=run_info)
+        end
     end
+
+    return run_info
 end
 
 """
