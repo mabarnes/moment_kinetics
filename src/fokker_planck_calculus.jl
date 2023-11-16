@@ -1096,7 +1096,8 @@ function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
 end
 
 function calculate_rosenbluth_potential_boundary_data!(rpbd::rosenbluth_potential_boundary_data,
-    fkpl::Union{fokkerplanck_arrays_struct,fokkerplanck_boundary_data_arrays_struct},pdf,vpa,vperp,vpa_spectral,vperp_spectral)
+    fkpl::Union{fokkerplanck_arrays_struct,fokkerplanck_boundary_data_arrays_struct},pdf,vpa,vperp,vpa_spectral,vperp_spectral;
+    calculate_GG=false,calculate_dGdvperp=false)
     # get derivatives of pdf
     dfdvperp = fkpl.dfdvperp
     dfdvpa = fkpl.dfdvpa
@@ -1121,8 +1122,12 @@ function calculate_rosenbluth_potential_boundary_data!(rpbd::rosenbluth_potentia
     calculate_boundary_data!(rpbd.H_data,fkpl.H0_weights,pdf,vpa,vperp)
     calculate_boundary_data!(rpbd.dHdvpa_data,fkpl.H0_weights,dfdvpa,vpa,vperp)
     calculate_boundary_data!(rpbd.dHdvperp_data,fkpl.H1_weights,dfdvperp,vpa,vperp)
-    calculate_boundary_data!(rpbd.G_data,fkpl.G0_weights,pdf,vpa,vperp)
-    calculate_boundary_data!(rpbd.dGdvperp_data,fkpl.G1_weights,dfdvperp,vpa,vperp)
+    if calculate_GG
+        calculate_boundary_data!(rpbd.G_data,fkpl.G0_weights,pdf,vpa,vperp)
+    end
+    if calculate_dGdvperp
+        calculate_boundary_data!(rpbd.dGdvperp_data,fkpl.G1_weights,dfdvperp,vpa,vperp)
+    end
     calculate_boundary_data!(rpbd.d2Gdvperp2_data,fkpl.H2_weights,dfdvperp,vpa,vperp)
     calculate_boundary_data!(rpbd.d2Gdvperpdvpa_data,fkpl.G1_weights,d2fdvperpdvpa,vpa,vperp)
     calculate_boundary_data!(rpbd.d2Gdvpa2_data,fkpl.H3_weights,dfdvpa,vpa,vperp)
@@ -1136,16 +1141,16 @@ function test_rosenbluth_potential_boundary_data(rpbd::rosenbluth_potential_boun
     error_buffer_vpa = Array{mk_float,1}(undef,vpa.n)
     error_buffer_vperp_1 = Array{mk_float,1}(undef,vperp.n)
     error_buffer_vperp_2 = Array{mk_float,1}(undef,vperp.n)
-    test_boundary_data(rpbd.H_data,rpbd_exact.H_data,"H",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
-    test_boundary_data(rpbd.dHdvpa_data,rpbd_exact.dHdvpa_data,"dHdvpa",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
-    test_boundary_data(rpbd.dHdvperp_data,rpbd_exact.dHdvperp_data,"dHdvperp",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
-    test_boundary_data(rpbd.G_data,rpbd_exact.G_data,"G",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
-    test_boundary_data(rpbd.dGdvperp_data,rpbd_exact.dGdvperp_data,"dGdvperp",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
-    test_boundary_data(rpbd.d2Gdvperp2_data,rpbd_exact.d2Gdvperp2_data,"d2Gdvperp2",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
-    test_boundary_data(rpbd.d2Gdvperpdvpa_data,rpbd_exact.d2Gdvperpdvpa_data,"d2Gdvperpdvpa",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
-    test_boundary_data(rpbd.d2Gdvpa2_data,rpbd_exact.d2Gdvpa2_data,"d2Gdvpa2",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
+    max_H_err = test_boundary_data(rpbd.H_data,rpbd_exact.H_data,"H",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
+    max_dHdvpa_err = test_boundary_data(rpbd.dHdvpa_data,rpbd_exact.dHdvpa_data,"dHdvpa",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
+    max_dHdvperp_err = test_boundary_data(rpbd.dHdvperp_data,rpbd_exact.dHdvperp_data,"dHdvperp",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
+    max_G_err = test_boundary_data(rpbd.G_data,rpbd_exact.G_data,"G",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
+    max_dGdvperp_err = test_boundary_data(rpbd.dGdvperp_data,rpbd_exact.dGdvperp_data,"dGdvperp",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
+    max_d2Gdvperp2_err = test_boundary_data(rpbd.d2Gdvperp2_data,rpbd_exact.d2Gdvperp2_data,"d2Gdvperp2",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
+    max_d2Gdvperpdvpa_err = test_boundary_data(rpbd.d2Gdvperpdvpa_data,rpbd_exact.d2Gdvperpdvpa_data,"d2Gdvperpdvpa",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
+    max_d2Gdvpa2_err = test_boundary_data(rpbd.d2Gdvpa2_data,rpbd_exact.d2Gdvpa2_data,"d2Gdvpa2",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
 
-    return nothing
+    return max_H_err, max_dHdvpa_err, max_dHdvperp_err, max_G_err, max_dGdvperp_err, max_d2Gdvperp2_err, max_d2Gdvperpdvpa_err, max_d2Gdvpa2_err
 end
 
 function test_boundary_data(func,func_exact,func_name,vpa,vperp,buffer_vpa,buffer_vperp_1,buffer_vperp_2)
@@ -1158,16 +1163,15 @@ function test_boundary_data(func,func_exact,func_name,vpa,vperp,buffer_vpa,buffe
     for ivpa in 1:nvpa
         buffer_vpa = abs(func.upper_boundary_vperp[ivpa] - func_exact.upper_boundary_vperp[ivpa])
     end
-    @serial_region begin
-        max_lower_vpa_err = maximum(buffer_vperp_1)
-        max_upper_vpa_err = maximum(buffer_vperp_2)
-        max_upper_vperp_err = maximum(buffer_vpa)
-        println(string(func_name*" boundary data:"))
-        println("max(lower_vpa_err) = ",max_lower_vpa_err)
-        println("max(upper_vpa_err) = ",max_upper_vpa_err)
-        println("max(upper_vperp_err) = ",max_upper_vperp_err)
-    end
-    return nothing
+    max_lower_vpa_err = maximum(buffer_vperp_1)
+    max_upper_vpa_err = maximum(buffer_vperp_2)
+    max_upper_vperp_err = maximum(buffer_vpa)
+    println(string(func_name*" boundary data:"))
+    println("max(lower_vpa_err) = ",max_lower_vpa_err)
+    println("max(upper_vpa_err) = ",max_upper_vpa_err)
+    println("max(upper_vperp_err) = ",max_upper_vperp_err)
+    max_err = max(max_lower_vpa_err,max_upper_vpa_err,max_upper_vperp_err)
+    return max_err
 end
 
 function get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
@@ -2073,7 +2077,7 @@ end
 function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvperp,
              d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,ffsp_in,
              vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays;
-             algebraic_solve_for_d2Gdvperp2=false)
+             algebraic_solve_for_d2Gdvperp2=false,calculate_GG=false,calculate_dGdvperp=false)
     
     # extract the necessary precalculated and buffer arrays from fokkerplanck_arrays
     MM2D_sparse = fkpl_arrays.MM2D_sparse
@@ -2102,7 +2106,8 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
     qc = fkpl_arrays.qc
     
     # calculate the boundary data
-    calculate_rosenbluth_potential_boundary_data!(rpbd,bwgt,@view(ffsp_in[:,:]),vpa,vperp,vpa_spectral,vperp_spectral)
+    calculate_rosenbluth_potential_boundary_data!(rpbd,bwgt,@view(ffsp_in[:,:]),vpa,vperp,vpa_spectral,vperp_spectral,
+      calculate_GG=calculate_GG,calculate_dGdvperp=(calculate_dGdvperp||algebraic_solve_for_d2Gdvperp2))
     # carry out the elliptic solves required
     begin_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
@@ -2120,12 +2125,16 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
         S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp]
     
     end
-    elliptic_solve!(GG,S_dummy,rpbd.G_data,
-                lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
+    if calculate_GG
+        elliptic_solve!(GG,S_dummy,rpbd.G_data,
+                    lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
+    end
+    if calculate_dGdvperp || algebraic_solve_for_d2Gdvperp2
+        elliptic_solve!(dGdvperp,S_dummy,rpbd.dGdvperp_data,
+                    lu_obj_LV,PUperp2D_sparse,rhsc,sc,vpa,vperp)
+    end
     elliptic_solve!(d2Gdvpa2,S_dummy,rpbd.d2Gdvpa2_data,
                 lu_obj_LP,KKpar2D_sparse,rhsc,sc,vpa,vperp)
-    elliptic_solve!(dGdvperp,S_dummy,rpbd.dGdvperp_data,
-                lu_obj_LV,PUperp2D_sparse,rhsc,sc,vpa,vperp)
     elliptic_solve!(d2Gdvperpdvpa,S_dummy,rpbd.d2Gdvperpdvpa_data,
                 lu_obj_LV,PPparPUperp2D_sparse,rhsc,sc,vpa,vperp)
     

@@ -34,6 +34,7 @@ using moment_kinetics.fokker_planck_calculus: elliptic_solve!, ravel_c_to_vpavpe
 using moment_kinetics.fokker_planck_calculus: enforce_zero_bc!, allocate_rosenbluth_potential_boundary_data
 using moment_kinetics.fokker_planck_calculus: calculate_rosenbluth_potential_boundary_data!, calculate_rosenbluth_potential_boundary_data_exact!
 using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary_data, enforce_vpavperp_BCs!
+using moment_kinetics.fokker_planck_calculus: calculate_rosenbluth_potentials_via_elliptic_solve!
 
 
 
@@ -256,13 +257,19 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
                                              test_assembly_serial=test_parallelism,
                                              use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients,
                                              use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution,
-                                             algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2)
+                                             algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2,
+                                             calculate_GG = false, calculate_dGdvperp=false)
         if test_numerical_conserving_terms && test_self_operator
             # enforce the boundary conditions on CC before it is used for timestepping
             enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
             # make ad-hoc conserving corrections
             conserving_corrections!(fkpl_arrays.CC,Fs_M,vpa,vperp,dummy_vpavperp)            
         end
+        # calculate Rosenbluth potentials again as a standalone to G and dGdvperp
+        calculate_rosenbluth_potentials_via_elliptic_solve!(fkpl_arrays.GG,fkpl_arrays.HH,fkpl_arrays.dHdvpa,fkpl_arrays.dHdvperp,
+             fkpl_arrays.d2Gdvpa2,fkpl_arrays.dGdvperp,fkpl_arrays.d2Gdvperpdvpa,fkpl_arrays.d2Gdvperp2,F_M,
+             vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays;
+             algebraic_solve_for_d2Gdvperp2=false,calculate_GG=true,calculate_dGdvperp=true)
         # extract C[Fs,Fs'] result
         # and Rosenbluth potentials for testing
         begin_vperp_vpa_region()
@@ -287,7 +294,8 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
             
             # test the boundary data calculation
             if !use_Maxwellian_Rosenbluth_coefficients
-                test_rosenbluth_potential_boundary_data(fkpl_arrays.rpbd,rpbd_exact,vpa,vperp)
+                max_H_err, max_dHdvpa_err, max_dHdvperp_err, max_G_err, max_dGdvperp_err,
+                max_d2Gdvperp2_err, max_d2Gdvperpdvpa_err, max_d2Gdvpa2_err = test_rosenbluth_potential_boundary_data(fkpl_arrays.rpbd,rpbd_exact,vpa,vperp)
             end
             dummy_array = Array{mk_float,2}(undef,vpa.n,vperp.n)
             fkerr.H_M.max, fkerr.H_M.L2 = print_test_data(H_M_exact,H_M_num,H_M_err,"H_M",vpa,vperp,dummy_array)

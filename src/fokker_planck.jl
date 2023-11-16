@@ -237,7 +237,9 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
                                              test_assembly_serial=false,
                                              use_Maxwellian_Rosenbluth_coefficients=false,
                                              use_Maxwellian_field_particle_distribution=false,
-                                             algebraic_solve_for_d2Gdvperp2 = false)
+                                             algebraic_solve_for_d2Gdvperp2 = false,
+                                             calculate_GG=false,
+                                             calculate_dGdvperp=false)
     @boundscheck vpa.n == size(ffsp_in,1) || throw(BoundsError(ffsp_in))
     @boundscheck vperp.n == size(ffsp_in,2) || throw(BoundsError(ffsp_in))
     @boundscheck vpa.n == size(ffs_in,1) || throw(BoundsError(ffs_in))
@@ -287,7 +289,8 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
         calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvperp,
              d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,@view(ffsp_in[:,:]),
              vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays,
-             algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2)
+             algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2,
+             calculate_GG=calculate_GG,calculate_dGdvperp=calculate_dGdvperp)
     end
     # assemble the RHS of the collision operator matrix eq
     if use_Maxwellian_field_particle_distribution
