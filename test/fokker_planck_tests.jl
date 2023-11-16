@@ -342,16 +342,16 @@ function runtests()
                                                  use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution,
                                                  algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2,
                                                  calculate_GG = false, calculate_dGdvperp=false)
-                # extract C[Fs,Fs'] result
-                begin_vperp_vpa_region()
-                @loop_vperp_vpa ivperp ivpa begin
-                    C_M_num[ivpa,ivperp] = fkpl_arrays.CC[ivpa,ivperp]
-                end
                 if test_numerical_conserving_terms && test_self_operator
                     # enforce the boundary conditions on CC before it is used for timestepping
                     enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
                     # make ad-hoc conserving corrections
                     conserving_corrections!(fkpl_arrays.CC,Fs_M,vpa,vperp,dummy_array)            
+                end
+                # extract C[Fs,Fs'] result
+                begin_vperp_vpa_region()
+                @loop_vperp_vpa ivperp ivpa begin
+                    C_M_num[ivpa,ivperp] = fkpl_arrays.CC[ivpa,ivperp]
                 end
                 begin_serial_region()
                 @serial_region begin
@@ -371,7 +371,7 @@ function runtests()
                         lnfC[ivpa,ivperp] = Fs_M[ivpa,ivperp]*C_M_num[ivpa,ivperp]
                     end
                     dSdt = - get_density(lnfC,vpa,vperp)
-                    if test_self_operator
+                    if test_self_operator && !test_numerical_conserving_terms
                         if algebraic_solve_for_d2Gdvperp2
                             rtol, atol = 0.0, 1.0e-7
                         else
@@ -392,6 +392,26 @@ function runtests()
                         else
                             rtol, atol = 0.0, 1.0e-8
                         end
+                        @test isapprox(delta_pressure, rtol ; atol=atol)
+                        if print_to_screen
+                            println("dSdt: $dSdt should be >0.0")
+                            println("delta_n: ", delta_n)
+                            println("delta_upar: ", delta_upar)
+                            println("delta_pressure: ", delta_pressure)
+                        end
+                    elseif test_self_operator && test_numerical_conserving_terms
+                        rtol, atol = 0.0, 6.0e-7
+                        @test isapprox(dSdt, rtol ; atol=atol)
+                        delta_n = get_density(C_M_num, vpa, vperp)
+                        delta_upar = get_upar(C_M_num, vpa, vperp, dens)
+                        delta_ppar = msp*get_ppar(C_M_num, vpa, vperp, upar)
+                        delta_pperp = msp*get_pperp(C_M_num, vpa, vperp)
+                        delta_pressure = get_pressure(delta_ppar,delta_pperp)
+                        rtol, atol = 0.0, 1.0e-15
+                        @test isapprox(delta_n, rtol ; atol=atol)
+                        rtol, atol = 0.0, 1.0e-15
+                        @test isapprox(delta_upar, rtol ; atol=atol)
+                        rtol, atol = 0.0, 1.0e-15
                         @test isapprox(delta_pressure, rtol ; atol=atol)
                         if print_to_screen
                             println("dSdt: $dSdt should be >0.0")
