@@ -69,14 +69,25 @@ documentation.]
 We run the 'full-f' version from scratch, then restart the moment-kinetic
 version from that to save time.
 
+Note that the plots shown on the poster used a uniform element spacing, but the
+'split3' run does not quite converge to residuals less than 1e-3 with a uniform
+grid for the resolutions used here, due to some numerical noise in the elements
+next to the sheath edge boundaries (i.e. the first and last element in z).
+Using sqrt-scaled element sizes (`z_element_spacing_option = "sqrt"`) resolves
+the solution near the sheath entrances better, and in that case the 'split3'
+simulation does converge to residuals less than 1e-3, so this option is the one
+set now in all the `wall-bc/wall-bc_recyclefraction0.5*.toml` input files (as
+the 'split3' simulation needs to be restarted from a simulation that used the
+sqrt-spaced grid to avoid numerical instability).
+
 In the top-level `moment_kinetics` directory, run
 ```julia
 $ julia --project
 julia> using moment_kinetics
 julia> run_moment_kinetics("publication_inputs/2023_EFTC_jto-poster/wall-bc/wall-bc_recyclefraction0.5.toml")
-julia> run_moment_kinetics("publication_inputs/2023_EFTC_jto-poster/wall-bc/wall-bc_recyclefraction0.5_split1.toml"; restart="runs/wall-bc_recyclefraction0.5/")
-julia> run_moment_kinetics("publication_inputs/2023_EFTC_jto-poster/wall-bc/wall-bc_recyclefraction0.5_split2.toml"; restart="runs/wall-bc_recyclefraction0.5/")
-julia> run_moment_kinetics("publication_inputs/2023_EFTC_jto-poster/wall-bc/wall-bc_recyclefraction0.5_split3.toml"; restart="runs/wall-bc_recyclefraction0.5/")
+julia> run_moment_kinetics("publication_inputs/2023_EFTC_jto-poster/wall-bc/wall-bc_recyclefraction0.5_split1.toml"; restart="runs/wall-bc_recyclefraction0.5/wall-bc_recyclefraction0.5.dfns.h5")
+julia> run_moment_kinetics("publication_inputs/2023_EFTC_jto-poster/wall-bc/wall-bc_recyclefraction0.5_split2.toml"; restart="runs/wall-bc_recyclefraction0.5/wall-bc_recyclefraction0.5.dfns.h5")
+julia> run_moment_kinetics("publication_inputs/2023_EFTC_jto-poster/wall-bc/wall-bc_recyclefraction0.5_split3.toml"; restart="runs/wall-bc_recyclefraction0.5/wall-bc_recyclefraction0.5.dfns.h5")
 ```
 
 Plots

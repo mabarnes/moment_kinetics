@@ -61,6 +61,7 @@ z_nelement = 32
 z_nelement_local = 4
 z_bc = "wall"
 z_discretization = "chebyshev_pseudospectral"
+z_element_spacing_option = "sqrt"
 vpa_ngrid = 10
 vpa_nelement = 63
 vpa_L = 30.0
