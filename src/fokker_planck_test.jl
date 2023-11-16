@@ -300,7 +300,7 @@ function print_test_data(func_exact,func_num,func_err,func_name)
     return max_err
 end
 
-function print_test_data(func_exact,func_num,func_err,func_name,vpa,vperp,dummy)
+function print_test_data(func_exact,func_num,func_err,func_name,vpa,vperp,dummy;print_to_screen=true)
     @. func_err = abs(func_num - func_exact)
     max_err = maximum(func_err)
     @. dummy = func_err^2
@@ -310,7 +310,9 @@ function print_test_data(func_exact,func_num,func_err,func_name,vpa,vperp,dummy)
     @. dummy = 1.0
     denom = get_density(dummy,vpa,vperp)
     L2norm = sqrt(num/denom)
-    println("maximum("*func_name*"_err): ",max_err," L2("*func_name*"_err): ",L2norm)
+    if print_to_screen 
+        println("maximum("*func_name*"_err): ",max_err," L2("*func_name*"_err): ",L2norm)
+    end
     return max_err, L2norm
 end
 

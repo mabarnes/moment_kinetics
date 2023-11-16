@@ -245,12 +245,12 @@ end
 """
 function that precomputes the required integration weights
 """
-function init_Rosenbluth_potential_integration_weights!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,vperp,vpa)
+function init_Rosenbluth_potential_integration_weights!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,vperp,vpa;print_to_screen=true)
     
     x_vpa, w_vpa, x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre = setup_basic_quadratures(vpa,vperp)
     
     @serial_region begin
-        if global_rank[] == 0
+        if global_rank[] == 0 && print_to_screen
             println("beginning weights calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
     end
@@ -289,7 +289,7 @@ function init_Rosenbluth_potential_integration_weights!(G0_weights,G1_weights,H0
     
     
     @serial_region begin
-        if global_rank[] == 0
+        if global_rank[] == 0 && print_to_screen
             println("finished weights calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
     end
@@ -301,9 +301,9 @@ function for getting the basic quadratures used for the
 numerical integration of the Lagrange polynomials and the 
 Green's function.
 """
-function setup_basic_quadratures(vpa,vperp)
+function setup_basic_quadratures(vpa,vperp;print_to_screen=true)
     @serial_region begin
-        if global_rank[] == 0
+        if global_rank[] == 0 && print_to_screen
             println("setting up GL quadrature   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
     end
@@ -347,12 +347,12 @@ function that precomputes the required integration weights
 only along the velocity space boundaries
 """
 function init_Rosenbluth_potential_boundary_integration_weights!(G0_weights,
-      G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,vpa,vperp)
+      G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,vpa,vperp;print_to_screen=true)
     
-    x_vpa, w_vpa, x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre = setup_basic_quadratures(vpa,vperp)
+    x_vpa, w_vpa, x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre = setup_basic_quadratures(vpa,vperp,print_to_screen=print_to_screen)
     
     @serial_region begin
-        if global_rank[] == 0
+        if global_rank[] == 0 && print_to_screen
             println("beginning (boundary) weights calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
     end
@@ -464,8 +464,8 @@ function init_Rosenbluth_potential_boundary_integration_weights!(G0_weights,
     end
     # return the parallelisation status to serial
     begin_serial_region()
-    @serial_region begin
-        if global_rank[] == 0
+    @serial_region begin 
+        if global_rank[] == 0 && print_to_screen
             println("finished (boundary) weights calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
     end
@@ -1136,24 +1136,24 @@ function calculate_rosenbluth_potential_boundary_data!(rpbd::rosenbluth_potentia
 end
 
 function test_rosenbluth_potential_boundary_data(rpbd::rosenbluth_potential_boundary_data,
-    rpbd_exact::rosenbluth_potential_boundary_data,vpa,vperp)
+    rpbd_exact::rosenbluth_potential_boundary_data,vpa,vperp;print_to_screen=true)
     
     error_buffer_vpa = Array{mk_float,1}(undef,vpa.n)
     error_buffer_vperp_1 = Array{mk_float,1}(undef,vperp.n)
     error_buffer_vperp_2 = Array{mk_float,1}(undef,vperp.n)
-    max_H_err = test_boundary_data(rpbd.H_data,rpbd_exact.H_data,"H",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
-    max_dHdvpa_err = test_boundary_data(rpbd.dHdvpa_data,rpbd_exact.dHdvpa_data,"dHdvpa",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
-    max_dHdvperp_err = test_boundary_data(rpbd.dHdvperp_data,rpbd_exact.dHdvperp_data,"dHdvperp",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
-    max_G_err = test_boundary_data(rpbd.G_data,rpbd_exact.G_data,"G",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
-    max_dGdvperp_err = test_boundary_data(rpbd.dGdvperp_data,rpbd_exact.dGdvperp_data,"dGdvperp",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
-    max_d2Gdvperp2_err = test_boundary_data(rpbd.d2Gdvperp2_data,rpbd_exact.d2Gdvperp2_data,"d2Gdvperp2",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
-    max_d2Gdvperpdvpa_err = test_boundary_data(rpbd.d2Gdvperpdvpa_data,rpbd_exact.d2Gdvperpdvpa_data,"d2Gdvperpdvpa",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
-    max_d2Gdvpa2_err = test_boundary_data(rpbd.d2Gdvpa2_data,rpbd_exact.d2Gdvpa2_data,"d2Gdvpa2",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
+    max_H_err = test_boundary_data(rpbd.H_data,rpbd_exact.H_data,"H",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2,print_to_screen)  
+    max_dHdvpa_err = test_boundary_data(rpbd.dHdvpa_data,rpbd_exact.dHdvpa_data,"dHdvpa",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2,print_to_screen)  
+    max_dHdvperp_err = test_boundary_data(rpbd.dHdvperp_data,rpbd_exact.dHdvperp_data,"dHdvperp",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2,print_to_screen)  
+    max_G_err = test_boundary_data(rpbd.G_data,rpbd_exact.G_data,"G",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2,print_to_screen)  
+    max_dGdvperp_err = test_boundary_data(rpbd.dGdvperp_data,rpbd_exact.dGdvperp_data,"dGdvperp",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2,print_to_screen)  
+    max_d2Gdvperp2_err = test_boundary_data(rpbd.d2Gdvperp2_data,rpbd_exact.d2Gdvperp2_data,"d2Gdvperp2",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2,print_to_screen)  
+    max_d2Gdvperpdvpa_err = test_boundary_data(rpbd.d2Gdvperpdvpa_data,rpbd_exact.d2Gdvperpdvpa_data,"d2Gdvperpdvpa",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2,print_to_screen)  
+    max_d2Gdvpa2_err = test_boundary_data(rpbd.d2Gdvpa2_data,rpbd_exact.d2Gdvpa2_data,"d2Gdvpa2",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2,print_to_screen)  
 
     return max_H_err, max_dHdvpa_err, max_dHdvperp_err, max_G_err, max_dGdvperp_err, max_d2Gdvperp2_err, max_d2Gdvperpdvpa_err, max_d2Gdvpa2_err
 end
 
-function test_boundary_data(func,func_exact,func_name,vpa,vperp,buffer_vpa,buffer_vperp_1,buffer_vperp_2)
+function test_boundary_data(func,func_exact,func_name,vpa,vperp,buffer_vpa,buffer_vperp_1,buffer_vperp_2,print_to_screen)
     nvpa = vpa.n
     nvperp = vperp.n
     for ivperp in 1:nvperp
@@ -1166,10 +1166,12 @@ function test_boundary_data(func,func_exact,func_name,vpa,vperp,buffer_vpa,buffe
     max_lower_vpa_err = maximum(buffer_vperp_1)
     max_upper_vpa_err = maximum(buffer_vperp_2)
     max_upper_vperp_err = maximum(buffer_vpa)
-    println(string(func_name*" boundary data:"))
-    println("max(lower_vpa_err) = ",max_lower_vpa_err)
-    println("max(upper_vpa_err) = ",max_upper_vpa_err)
-    println("max(upper_vperp_err) = ",max_upper_vperp_err)
+    if print_to_screen
+        println(string(func_name*" boundary data:"))
+        println("max(lower_vpa_err) = ",max_lower_vpa_err)
+        println("max(upper_vpa_err) = ",max_upper_vpa_err)
+        println("max(upper_vperp_err) = ",max_upper_vperp_err)
+    end
     max_err = max(max_lower_vpa_err,max_upper_vpa_err,max_upper_vperp_err)
     return max_err
 end
@@ -1303,7 +1305,7 @@ function enforce_dirichlet_bc!(fc,vpa,vperp,f_bc::vpa_vperp_boundary_data)
     return nothing
 end
 
-function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spectral)
+function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spectral;print_to_screen=true)
     nc_global = vpa.n*vperp.n
     # Assemble a 2D mass matrix in the global compound coordinate
     nc_global = vpa.n*vperp.n
@@ -1355,7 +1357,7 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
         
     impose_BC_at_zero_vperp = false
     @serial_region begin
-        if global_rank[] == 0
+        if global_rank[] == 0 && print_to_screen
             println("begin elliptic operator assignment   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
     end
@@ -1498,7 +1500,7 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
         end
     end
     @serial_region begin
-        if global_rank[] == 0
+        if global_rank[] == 0 && print_to_screen
             println("finished elliptic operator assignment   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
         if nc_global < 60
@@ -1509,7 +1511,7 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
             #print_matrix(LV2D,"LV",nc_global,nc_global)
         end
         # convert these matrices to sparse matrices
-        if global_rank[] == 0
+        if global_rank[] == 0 && print_to_screen
             println("begin conversion to sparse matrices   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
     end
@@ -1533,7 +1535,7 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
            PPpar2D_sparse, MMparMNperp2D_sparse
 end
 
-function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vperp_spectral)
+function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vperp_spectral;print_to_screen=true)
     # Assemble a 2D mass matrix in the global compound coordinate
     nc_global = vpa.n*vperp.n
     ntot_vpa = (vpa.nelement_local - 1)*(vpa.ngrid^2 - 1) + vpa.ngrid^2
@@ -1578,7 +1580,7 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
         
     impose_BC_at_zero_vperp = false
     @serial_region begin
-        if global_rank[] == 0
+        if global_rank[] == 0 && print_to_screen
             println("begin elliptic operator assignment   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
     end
@@ -1753,7 +1755,7 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
     PPpar2D_sparse = create_sparse_matrix(PPpar2D)
     MMparMNperp2D_sparse = create_sparse_matrix(MMparMNperp2D)
     @serial_region begin
-        if global_rank[] == 0
+        if global_rank[] == 0 && print_to_screen
             println("finished elliptic operator constructor assignment   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
         if nc_global < 60
@@ -1764,8 +1766,6 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
         #    print_matrix(LP2D,"LP",nc_global,nc_global)
         #    print_matrix(LV2D,"LV",nc_global,nc_global)
         end
-        # convert these matrices to sparse matrices
-        #println("begin conversion to sparse matrices   ", Dates.format(now(), dateformat"H:MM:SS"))
     end
     return MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, 
            KKpar2D_with_BC_terms_sparse, KKperp2D_with_BC_terms_sparse, 

@@ -92,11 +92,11 @@ at the boundary and using an elliptic solve to obtain the potentials
 in the rest of the velocity space domain.
 """
 
-function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; precompute_weights=false, test_dense_matrix_construction=false)
+function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; precompute_weights=false, test_dense_matrix_construction=false, print_to_screen=true)
     bwgt = allocate_boundary_integration_weights(vpa,vperp)
     if vperp.n > 1 && precompute_weights
         @views init_Rosenbluth_potential_boundary_integration_weights!(bwgt.G0_weights, bwgt.G1_weights, bwgt.H0_weights, bwgt.H1_weights,
-                                        bwgt.H2_weights, bwgt.H3_weights, vpa, vperp)
+                                        bwgt.H2_weights, bwgt.H3_weights, vpa, vperp, print_to_screen=print_to_screen)
     end
     rpbd = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
     if test_dense_matrix_construction
@@ -104,27 +104,27 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
         KKpar2D_with_BC_terms_sparse, KKperp2D_with_BC_terms_sparse,
         LP2D_sparse, LV2D_sparse, LB2D_sparse, KPperp2D_sparse,
         PUperp2D_sparse, PPparPUperp2D_sparse, PPpar2D_sparse,
-        MMparMNperp2D_sparse = assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spectral)
+        MMparMNperp2D_sparse = assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spectral,print_to_screen=print_to_screen)
     else
         MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse,
         KKpar2D_with_BC_terms_sparse, KKperp2D_with_BC_terms_sparse,
         LP2D_sparse, LV2D_sparse, LB2D_sparse, KPperp2D_sparse,
         PUperp2D_sparse, PPparPUperp2D_sparse, PPpar2D_sparse,
-        MMparMNperp2D_sparse = assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vperp_spectral)
+        MMparMNperp2D_sparse = assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vperp_spectral,print_to_screen=print_to_screen)
     end
     lu_obj_MM = lu(MM2D_sparse)
     lu_obj_LP = lu(LP2D_sparse)
     lu_obj_LV = lu(LV2D_sparse)
     lu_obj_LB = lu(LB2D_sparse)
     @serial_region begin
-        if global_rank[] == 0
+        if global_rank[] == 0 && print_to_screen
             println("finished LU decomposition initialisation   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
     end
     
     YY_arrays = calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
     @serial_region begin
-        if global_rank[] == 0
+        if global_rank[] == 0 && print_to_screen
             println("finished YY array calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
     end
@@ -314,7 +314,7 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
           vpa,vperp,YY_arrays)
     elseif test_assembly_serial
         assemble_explicit_collision_operator_rhs_serial!(rhsc,@view(ffs_in[:,:]),
-          d2Gdvpa,d2Gdvperpdvpa,d2Gdvperp2,
+          d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,
           dHdvpa,dHdvperp,ms,msp,nussp,
           vpa,vperp,YY_arrays)
     else

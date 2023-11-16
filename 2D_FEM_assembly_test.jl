@@ -381,13 +381,14 @@ using moment_kinetics.fokker_planck_calculus: calculate_rosenbluth_potentials_vi
         test_parallelism=false,
         test_numerical_conserving_terms=false,
         algebraic_solve_for_d2Gdvperp2=false,
+        test_self_operator = true,
         Lvpa = 12.0, Lvperp = 6.0)
         initialize_comms!()
         #ngrid = 5
         #plot_scan = true
         #plot_test_output = true#false
         #test_parallelism = false
-        test_self_operator = true
+        #test_self_operator = true
         #test_dense_construction = false
         #nelement_list = Int[8, 16, 32, 64, 128]
         #nelement_list = Int[4, 8, 16, 32, 64]
