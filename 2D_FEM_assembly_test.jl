@@ -268,6 +268,7 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
         begin_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
             C_M_num[ivpa,ivperp] = fkpl_arrays.CC[ivpa,ivperp]
+            G_M_num[ivpa,ivperp] = fkpl_arrays.GG[ivpa,ivperp]
             H_M_num[ivpa,ivperp] = fkpl_arrays.HH[ivpa,ivperp]
             dHdvpa_M_num[ivpa,ivperp] = fkpl_arrays.dHdvpa[ivpa,ivperp]
             dHdvperp_M_num[ivpa,ivperp] = fkpl_arrays.dHdvperp[ivpa,ivperp]
@@ -277,16 +278,6 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
             d2Gdvperpdvpa_M_num[ivpa,ivperp] = fkpl_arrays.d2Gdvperpdvpa[ivpa,ivperp]
         end
         
-        S_dummy = fkpl_arrays.S_dummy
-        begin_vperp_vpa_region()
-        @loop_vperp_vpa ivperp ivpa begin
-            S_dummy[ivpa,ivperp] = 2.0*H_M_num[ivpa,ivperp]
-        end
-        # solve for G as an added test bonus
-        elliptic_solve!(G_M_num,S_dummy,fkpl_arrays.rpbd.G_data,
-                fkpl_arrays.lu_obj_LP,fkpl_arrays.MM2D_sparse,fkpl_arrays.rhsc,
-                fkpl_arrays.sc,vpa,vperp)
-      
         init_time = Dates.value(finish_init_time - start_init_time)
         calculate_time = Dates.value(now() - finish_init_time)
         begin_serial_region()

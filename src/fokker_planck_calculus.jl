@@ -201,6 +201,7 @@ struct fokkerplanck_weakform_arrays_struct{N}
     # dummy array for the result of the calculation
     CC::MPISharedArray{mk_float,2}
     # dummy arrays for storing Rosenbluth potentials
+    GG::MPISharedArray{mk_float,2}
     HH::MPISharedArray{mk_float,2}
     dHdvpa::MPISharedArray{mk_float,2}
     dHdvperp::MPISharedArray{mk_float,2}
@@ -2069,7 +2070,7 @@ function algebraic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_bound
     return nothing
 end
 
-function calculate_rosenbluth_potentials_via_elliptic_solve!(HH,dHdvpa,dHdvperp,
+function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvperp,
              d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,ffsp_in,
              vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays;
              algebraic_solve_for_d2Gdvperp2=false)
@@ -2119,8 +2120,8 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(HH,dHdvpa,dHdvperp,
         S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp]
     
     end
-    #elliptic_solve!(G_M_num,S_dummy,rpbd.G_data,
-    #            lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
+    elliptic_solve!(GG,S_dummy,rpbd.G_data,
+                lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
     elliptic_solve!(d2Gdvpa2,S_dummy,rpbd.d2Gdvpa2_data,
                 lu_obj_LP,KKpar2D_sparse,rhsc,sc,vpa,vperp)
     elliptic_solve!(dGdvperp,S_dummy,rpbd.dGdvperp_data,

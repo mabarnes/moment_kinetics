@@ -139,6 +139,7 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
     qc = allocate_shared_float(nc)
     
     CC = allocate_shared_float(nvpa,nvperp)
+    GG = allocate_shared_float(nvpa,nvperp)
     HH = allocate_shared_float(nvpa,nvperp)
     dHdvpa = allocate_shared_float(nvpa,nvperp)
     dHdvperp = allocate_shared_float(nvpa,nvperp)
@@ -157,7 +158,7 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
                                            PPpar2D_sparse,MMparMNperp2D_sparse,KPperp2D_sparse,
                                            lu_obj_MM,lu_obj_LP,lu_obj_LV,lu_obj_LB,
                                            YY_arrays, S_dummy, Q_dummy, rhsvpavperp, rhsc, rhqc, sc, qc,
-                                           CC, HH, dHdvpa, dHdvperp, dGdvperp, d2Gdvperp2, d2Gdvpa2, d2Gdvperpdvpa,
+                                           CC, GG, HH, dHdvpa, dHdvperp, dGdvperp, d2Gdvperp2, d2Gdvpa2, d2Gdvperpdvpa,
                                            FF, dFdvpa, dFdvperp)
     return fka
 end
@@ -241,6 +242,8 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
     @boundscheck vperp.n == size(ffsp_in,2) || throw(BoundsError(ffsp_in))
     @boundscheck vpa.n == size(ffs_in,1) || throw(BoundsError(ffs_in))
     @boundscheck vperp.n == size(ffs_in,2) || throw(BoundsError(ffs_in))
+    # the functions within this function will call
+    # begin_vpa_region(), begin_vperp_region(), begin_vperp_vpa_region(), begin_serial_region() to synchronise the shared-memory arrays
     
     # extract the necessary precalculated and buffer arrays from fokkerplanck_arrays
     rhsc = fkpl_arrays.rhsc
@@ -250,6 +253,7 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
     YY_arrays = fkpl_arrays.YY_arrays    
     
     CC = fkpl_arrays.CC
+    GG = fkpl_arrays.GG
     HH = fkpl_arrays.HH
     dHdvpa = fkpl_arrays.dHdvpa
     dHdvperp = fkpl_arrays.dHdvperp
@@ -280,9 +284,7 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
             dHdvperp[ivpa,ivperp] = dHdvperp_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
         end
     else
-        # the functions within this loop will call
-        # begin_vpa_region(), begin_vperp_region(), begin_vperp_vpa_region(), begin_serial_region() to synchronise the shared-memory arrays
-        calculate_rosenbluth_potentials_via_elliptic_solve!(HH,dHdvpa,dHdvperp,
+        calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvperp,
              d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,@view(ffsp_in[:,:]),
              vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays,
              algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2)
