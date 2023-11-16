@@ -39,6 +39,7 @@ using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_paralle
 using ..fokker_planck_calculus: calculate_YY_arrays, enforce_vpavperp_BCs!
 using ..fokker_planck_calculus: calculate_rosenbluth_potential_boundary_data!
 using ..fokker_planck_calculus: enforce_zero_bc!, elliptic_solve!, algebraic_solve!, ravel_c_to_vpavperp_parallel!
+using ..fokker_planck_calculus: calculate_rosenbluth_potentials_via_elliptic_solve!
 using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_fluxes, H_Maxwellian, dGdvperp_Maxwellian
 using ..fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian
 using ..fokker_planck_test: F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
@@ -242,31 +243,11 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
     @boundscheck vperp.n == size(ffs_in,2) || throw(BoundsError(ffs_in))
     
     # extract the necessary precalculated and buffer arrays from fokkerplanck_arrays
-    MM2D_sparse = fkpl_arrays.MM2D_sparse
-    KKpar2D_sparse = fkpl_arrays.KKpar2D_sparse
-    KKperp2D_sparse = fkpl_arrays.KKperp2D_sparse
-    LP2D_sparse = fkpl_arrays.LP2D_sparse
-    LV2D_sparse = fkpl_arrays.LV2D_sparse
-    PUperp2D_sparse = fkpl_arrays.PUperp2D_sparse
-    PPparPUperp2D_sparse = fkpl_arrays.PPparPUperp2D_sparse
-    PPpar2D_sparse = fkpl_arrays.PPpar2D_sparse
-    MMparMNperp2D_sparse = fkpl_arrays.MMparMNperp2D_sparse
-    KPperp2D_sparse = fkpl_arrays.KPperp2D_sparse
-    lu_obj_MM = fkpl_arrays.lu_obj_MM
-    lu_obj_LP = fkpl_arrays.lu_obj_LP
-    lu_obj_LV = fkpl_arrays.lu_obj_LV
-    lu_obj_LB = fkpl_arrays.lu_obj_LB
-    
-    S_dummy = fkpl_arrays.S_dummy
-    Q_dummy = fkpl_arrays.Q_dummy
     rhsc = fkpl_arrays.rhsc
-    rhqc = fkpl_arrays.rhqc
     sc = fkpl_arrays.sc
-    qc = fkpl_arrays.qc
     rhsvpavperp = fkpl_arrays.rhsvpavperp
+    lu_obj_MM = fkpl_arrays.lu_obj_MM
     YY_arrays = fkpl_arrays.YY_arrays    
-    bwgt = fkpl_arrays.bwgt
-    rpbd = fkpl_arrays.rpbd
     
     CC = fkpl_arrays.CC
     HH = fkpl_arrays.HH
@@ -282,10 +263,10 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
     
     if use_Maxwellian_Rosenbluth_coefficients
         begin_serial_region()
-        dens = get_density(ffsp_in,vpa,vperp)
-        upar = get_upar(ffsp_in, vpa, vperp, dens)
-        ppar = get_ppar(ffsp_in, vpa, vperp, upar)
-        pperp = get_pperp(ffsp_in, vpa, vperp)
+        dens = get_density(@view(ffsp_in[:,:]),vpa,vperp)
+        upar = get_upar(@view(ffsp_in[:,:]), vpa, vperp, dens)
+        ppar = get_ppar(@view(ffsp_in[:,:]), vpa, vperp, upar)
+        pperp = get_pperp(@view(ffsp_in[:,:]), vpa, vperp)
         pressure = get_pressure(ppar,pperp)
         vth = sqrt(2.0*pressure/dens)
         begin_vperp_vpa_region()
@@ -301,58 +282,10 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
     else
         # the functions within this loop will call
         # begin_vpa_region(), begin_vperp_region(), begin_vperp_vpa_region(), begin_serial_region() to synchronise the shared-memory arrays
-        # calculate the boundary data
-        calculate_rosenbluth_potential_boundary_data!(rpbd,bwgt,@view(ffsp_in[:,:]),vpa,vperp,vpa_spectral,vperp_spectral)
-        # carry out the elliptic solves required
-        begin_vperp_vpa_region()
-        @loop_vperp_vpa ivperp ivpa begin
-            S_dummy[ivpa,ivperp] = -(4.0/sqrt(pi))*ffsp_in[ivpa,ivperp]
-        end
-        elliptic_solve!(HH,S_dummy,rpbd.H_data,
-                    lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
-        elliptic_solve!(dHdvpa,S_dummy,rpbd.dHdvpa_data,
-                    lu_obj_LP,PPpar2D_sparse,rhsc,sc,vpa,vperp)
-        elliptic_solve!(dHdvperp,S_dummy,rpbd.dHdvperp_data,
-                    lu_obj_LV,PUperp2D_sparse,rhsc,sc,vpa,vperp)
-        
-        begin_vperp_vpa_region()
-        @loop_vperp_vpa ivperp ivpa begin
-            S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp]
-        
-        end
-        #elliptic_solve!(G_M_num,S_dummy,rpbd.G_data,
-        #            lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
-        elliptic_solve!(d2Gdvpa2,S_dummy,rpbd.d2Gdvpa2_data,
-                    lu_obj_LP,KKpar2D_sparse,rhsc,sc,vpa,vperp)
-        elliptic_solve!(dGdvperp,S_dummy,rpbd.dGdvperp_data,
-                    lu_obj_LV,PUperp2D_sparse,rhsc,sc,vpa,vperp)
-        elliptic_solve!(d2Gdvperpdvpa,S_dummy,rpbd.d2Gdvperpdvpa_data,
-                    lu_obj_LV,PPparPUperp2D_sparse,rhsc,sc,vpa,vperp)
-        
-        if algebraic_solve_for_d2Gdvperp2
-            begin_vperp_vpa_region()
-            @loop_vperp_vpa ivperp ivpa begin
-                S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp] - d2Gdvpa2[ivpa,ivperp]
-                Q_dummy[ivpa,ivperp] = -dGdvperp[ivpa,ivperp]
-            end
-            # use the algebraic solve function to find
-            # d2Gdvperp2 = 2H - d2Gdvpa2 - (1/vperp)dGdvperp
-            # using a weak form
-            algebraic_solve!(d2Gdvperp2,S_dummy,Q_dummy,rpbd.d2Gdvperp2_data,
-                        lu_obj_MM,MM2D_sparse,MMparMNperp2D_sparse,
-                        rhsc,rhqc,sc,qc,vpa,vperp)
-        else
-            # solve a weak-form PDE for d2Gdvperp2
-            begin_vperp_vpa_region()
-            @loop_vperp_vpa ivperp ivpa begin
-                S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp]
-                Q_dummy[ivpa,ivperp] = 2.0*d2Gdvpa2[ivpa,ivperp]
-            end
-            elliptic_solve!(d2Gdvperp2,S_dummy,Q_dummy,rpbd.d2Gdvperp2_data,
-                        lu_obj_LB,KPperp2D_sparse,MMparMNperp2D_sparse,
-                        rhsc,rhqc,sc,qc,vpa,vperp)
-        end
-        begin_serial_region()
+        calculate_rosenbluth_potentials_via_elliptic_solve!(HH,dHdvpa,dHdvperp,
+             d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,@view(ffsp_in[:,:]),
+             vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays,
+             algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2)
     end
     # assemble the RHS of the collision operator matrix eq
     if use_Maxwellian_field_particle_distribution
