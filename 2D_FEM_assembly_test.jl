@@ -28,6 +28,7 @@ using moment_kinetics.fokker_planck_test: F_Maxwellian, G_Maxwellian, H_Maxwelli
 using moment_kinetics.fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperp2_Maxwellian, d2Gdvperpdvpa_Maxwellian, dGdvperp_Maxwellian
 using moment_kinetics.fokker_planck_test: dHdvperp_Maxwellian, dHdvpa_Maxwellian
 using moment_kinetics.fokker_planck_test: Cssp_Maxwellian_inputs
+using moment_kinetics.fokker_planck_test: print_test_data, plot_test_data, fkpl_error_data, allocate_error_data
 
 using moment_kinetics.fokker_planck_calculus: elliptic_solve!, ravel_c_to_vpavperp!, ravel_vpavperp_to_c!, ravel_c_to_vpavperp_parallel!
 using moment_kinetics.fokker_planck_calculus: enforce_zero_bc!, allocate_rosenbluth_potential_boundary_data
@@ -57,84 +58,6 @@ using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary
         println("\n")
     end 
 
-    function plot_test_data(func_exact,func_num,func_err,func_name,vpa,vperp)
-        @views heatmap(vperp.grid, vpa.grid, func_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                    windowsize = (360,240), margin = 15pt)
-                    outfile = string(func_name*"_num.pdf")
-                    savefig(outfile)
-        @views heatmap(vperp.grid, vpa.grid, func_exact[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                    windowsize = (360,240), margin = 15pt)
-                    outfile = string(func_name*"_exact.pdf")
-                    savefig(outfile)
-        @views heatmap(vperp.grid, vpa.grid, func_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                    windowsize = (360,240), margin = 15pt)
-                    outfile = string(func_name*"_err.pdf")
-                    savefig(outfile)
-        return nothing
-    end
-
-    function print_test_data(func_exact,func_num,func_err,func_name)
-        @. func_err = abs(func_num - func_exact)
-        max_err = maximum(func_err)
-        println("maximum("*func_name*"_err): ",max_err)
-        return max_err
-    end
-    
-    function print_test_data(func_exact,func_num,func_err,func_name,vpa,vperp,dummy)
-        @. func_err = abs(func_num - func_exact)
-        max_err = maximum(func_err)
-        @. dummy = func_err^2
-        # compute the numerator
-        num = get_density(dummy,vpa,vperp)
-        # compute the denominator
-        @. dummy = 1.0
-        denom = get_density(dummy,vpa,vperp)
-        L2norm = sqrt(num/denom)
-        println("maximum("*func_name*"_err): ",max_err," L2("*func_name*"_err): ",L2norm)
-        return max_err, L2norm
-    end
-    
-    mutable struct error_data
-        max::mk_float
-        L2::mk_float
-    end
-    
-    mutable struct moments_error_data
-        delta_density::mk_float
-        delta_upar::mk_float
-        delta_pressure::mk_float
-    end
-    
-    struct fkpl_error_data
-        C_M::error_data
-        H_M::error_data
-        dHdvpa_M::error_data
-        dHdvperp_M::error_data
-        G_M::error_data
-        dGdvperp_M::error_data
-        d2Gdvpa2_M::error_data
-        d2Gdvperpdvpa_M::error_data
-        d2Gdvperp2_M::error_data
-        moments::moments_error_data
-    end
-    
-    function allocate_error_data()
-        C_M = error_data(0.0,0.0)
-        H_M = error_data(0.0,0.0)
-        dHdvpa_M = error_data(0.0,0.0)
-        dHdvperp_M = error_data(0.0,0.0)
-        G_M = error_data(0.0,0.0)
-        dGdvperp_M = error_data(0.0,0.0)
-        d2Gdvpa2_M = error_data(0.0,0.0)
-        d2Gdvperpdvpa_M = error_data(0.0,0.0)
-        d2Gdvperp2_M = error_data(0.0,0.0)
-        moments = moments_error_data(0.0,0.0,0.0)
-        return fkpl_error_data(C_M,H_M,dHdvpa_M,dHdvperp_M,
-            G_M,dGdvperp_M,d2Gdvpa2_M,d2Gdvperpdvpa_M,d2Gdvperp2_M,
-            moments)
-    end
-    
-    
     function test_weak_form_collisions(ngrid,nelement_vpa,nelement_vperp;
         Lvpa=12.0,Lvperp=6.0,plot_test_output=false,
         test_parallelism=false,test_self_operator=true,
