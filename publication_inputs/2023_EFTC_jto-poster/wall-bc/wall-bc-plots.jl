@@ -30,8 +30,8 @@ function main()
     #subtitles = (L"full-f$$", L"evolving-$n$", L"evolving-$n,u_\parallel$",
     #             L"evolving-$n,u_\parallel,p_\parallel$")
 
-    run_info = Tuple(get_run_info(d; itime_min=-1) for d ∈ run_dirs)
-    run_info_dfns = Tuple(get_run_info(d; itime_min=-1, dfns=true) for d ∈ run_dirs)
+    run_info = Tuple(get_run_info(d; itime_min=-1, do_setup=false) for d ∈ run_dirs)
+    run_info_dfns = Tuple(get_run_info(d; itime_min=-1, dfns=true, do_setup=false) for d ∈ run_dirs)
     setup_makie_post_processing_input!(
         joinpath(output_dir, "post_processing_input_eftc2023.toml"),
         run_info_moments=run_info, run_info_dfns=run_info_dfns)
