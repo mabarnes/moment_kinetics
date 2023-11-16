@@ -18,11 +18,8 @@ julia> include("publication_inputs/2023_EFTC_jto-poster/sound-wave/run-all-scans
 Plots
 -----
 
-Note the steps here should be run after launching `julia` in the
-`<moment_kinetics>/publication_inputs/2023_EFTC_jto-poster` directory, not in
-the top level `moment_kinetics` directory (and not in the directory containing
-this README.md - this avoids some repeated precompilation when plotting the
-wall-bc runs).
+Note the steps here should be run after launching `julia` in the directory
+containing this README.md, not in the top level `moment_kinetics` directory.
 
 ### Setup
 
@@ -58,4 +55,36 @@ julia> include("sound-wave/post_process_scans.jl")
 julia> post_process_all_scans()
 julia> include("sound-wave/plot_dispersion_relation.jl")
 julia> make_plots()
+```
+
+Wall BC
+=======
+
+Runs
+----
+
+[You might want to use MPI to speed up the runs, see the main `moment_kinetics`
+documentation.]
+
+We run the 'full-f' version from scratch, then restart the moment-kinetic
+version from that to save time.
+
+In the top-level `moment_kinetics` directory, run
+```julia
+$ julia --project
+julia> using moment_kinetics
+julia> run_moment_kinetics("publication_inputs/2023_EFTC_jto-poster/wall-bc/wall-bc_recyclefraction0.5.toml")
+julia> run_moment_kinetics("publication_inputs/2023_EFTC_jto-poster/wall-bc/wall-bc_recyclefraction0.5_split1.toml"; restart="runs/wall-bc_recyclefraction0.5/")
+julia> run_moment_kinetics("publication_inputs/2023_EFTC_jto-poster/wall-bc/wall-bc_recyclefraction0.5_split2.toml"; restart="runs/wall-bc_recyclefraction0.5/")
+julia> run_moment_kinetics("publication_inputs/2023_EFTC_jto-poster/wall-bc/wall-bc_recyclefraction0.5_split3.toml"; restart="runs/wall-bc_recyclefraction0.5/")
+```
+
+Plots
+-----
+
+In the directory containing this README.md (after already doing the setup from
+the 'Sound wave' section) run
+```julia
+$ julia --project
+julia> include("wall-bc/wall-bc-plots.jl")
 ```
