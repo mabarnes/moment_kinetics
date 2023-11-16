@@ -55,7 +55,6 @@ using ..energy_equation: energy_equation!, neutral_energy_equation!
 using ..em_fields: setup_em_fields, update_phi!
 using ..fokker_planck: init_fokker_planck_collisions_weak_form, init_fokker_planck_collisions, explicit_fokker_planck_collisions!
 using ..fokker_planck: explicit_fokker_planck_collisions_weak_form!, explicit_fokker_planck_collisions_Maxwellian_coefficients!
-using ..fokker_planck: explicit_fokker_planck_collisions_weak_form_opt!
 using ..manufactured_solns: manufactured_sources
 using ..advection: advection_info
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
@@ -1819,9 +1818,6 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
         explicit_fokker_planck_collisions_weak_form!(fvec_out.pdf,fvec_in.pdf,moments.charged.dSdt,composition,collisions,dt,
                                              fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,scratch_dummy,
                                              diagnose_entropy_production = update_entropy_diagnostic)
-        #explicit_fokker_planck_collisions_weak_form_opt!(fvec_out.pdf,fvec_in.pdf,moments.charged.dSdt,composition,collisions,dt,
-        #                                     fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,scratch_dummy,
-        #                                     diagnose_entropy_production = update_entropy_diagnostic)
     end
     if advance.explicit_fp_F_FM_collisions
         explicit_fokker_planck_collisions_Maxwellian_coefficients!(fvec_out.pdf, fvec_in.pdf, 
