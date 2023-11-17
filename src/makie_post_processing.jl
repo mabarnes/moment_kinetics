@@ -420,7 +420,8 @@ end
 
 """
     setup_makie_post_processing_input!(input_file::Union{AbstractString,Nothing}=nothing;
-                                       run_info_moments=nothing, run_info_dfns=nothing)
+                                       run_info_moments=nothing, run_info_dfns=nothing,
+                                       allow_missing_input_file=false)
     setup_makie_post_processing_input!(new_input_dict::AbstractDict{String,Any};
                                        run_info_moments=nothing,
                                        run_info_dfns=nothing)
@@ -437,12 +438,15 @@ contains the distributions functions), or both (if you have loaded both sets of 
 This allows default values to be set based on the grid sizes and number of time points
 read from the output files. Note that `setup_makie_post_processing_input!()` is called by
 default at the end of `get_run_info()`, for conveinence in interactive use.
+
+By default an error is raised if `input_file` does not exist. To continue anyway, using
+default options, pass `allow_missing_input_file=true`.
 """
 function setup_makie_post_processing_input! end
 
 function setup_makie_post_processing_input!(
         input_file::Union{AbstractString,Nothing}=nothing; run_info_moments=nothing,
-        run_info_dfns=nothing)
+        run_info_dfns=nothing, allow_missing_input_file=false)
 
     if input_file === nothing
         input_file = default_input_file_name
@@ -450,6 +454,10 @@ function setup_makie_post_processing_input!(
 
     if isfile(input_file)
         new_input_dict = TOML.parsefile(input_file)
+    elseif allow_missing_input_file
+        println("Warning: $input_file does not exist, using default post-processing "
+                * "options")
+        new_input_dict = OrderedDict{String,Any}()
     else
         error("$input_file does not exist")
     end
@@ -760,11 +768,13 @@ function get_run_info(run_dir::Union{AbstractString,Tuple{AbstractString,Union{I
                          for r ∈ run_dir)
         if do_setup
             if dfns
-                setup_makie_post_processing_input!(setup_input_file;
-                                                   run_info_dfns=run_info)
+                setup_makie_post_processing_input!(
+                    setup_input_file; run_info_dfns=run_info,
+                    allow_missing_input_file=(setup_input_file === nothing))
             else
-                setup_makie_post_processing_input!(setup_input_file;
-                                                   run_info_moments=run_info)
+                setup_makie_post_processing_input!(
+                    setup_input_file; run_info_moments=run_info,
+                    allow_missing_input_file=(setup_input_file === nothing))
             end
         end
         return run_info
@@ -935,7 +945,9 @@ function get_run_info(run_dir::Union{AbstractString,Tuple{AbstractString,Union{I
                     vzeta_chunk_size=vzeta_chunk_size, vr_chunk_size=vr_chunk_size,
                     vz_chunk_size=vz_chunk_size, dfns=dfns)
         if do_setup
-            setup_makie_post_processing_input!(setup_input_file; run_info_dfns=run_info)
+            setup_makie_post_processing_input!(
+                setup_input_file; run_info_dfns=run_info,
+                allow_missing_input_file=(setup_input_file === nothing))
         end
     else
         run_info = (run_name=run_name, run_prefix=base_prefix, parallel_io=parallel_io,
@@ -953,8 +965,9 @@ function get_run_info(run_dir::Union{AbstractString,Tuple{AbstractString,Union{I
                     r_spectral=r_spectral, z_spectral=z_spectral,
                     r_chunk_size=r_chunk_size, z_chunk_size=z_chunk_size, dfns=dfns)
         if do_setup
-            setup_makie_post_processing_input!(setup_input_file;
-                                               run_info_moments=run_info)
+            setup_makie_post_processing_input!(
+                setup_input_file; run_info_moments=run_info,
+                allow_missing_input_file=(setup_input_file === nothing))
         end
     end
 
