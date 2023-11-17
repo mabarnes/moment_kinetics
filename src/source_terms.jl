@@ -23,8 +23,9 @@ function source_terms!(pdf_out, fvec_in, moments, vpa, z, r, dt, spectral, compo
             @views source_terms_evolve_ppar_no_collisions!(
                 pdf_out[:,:,:,:,is], fvec_in.pdf[:,:,:,:,is], fvec_in.density[:,:,is],
                 fvec_in.upar[:,:,is], fvec_in.ppar[:,:,is], moments.charged.vth[:,:,is],
-                moments.charged.qpar[:,:,is], moments, z, r, dt, spectral,
-                ion_source_settings)
+                moments.charged.qpar[:,:,is], moments.charged.ddens_dz[:,:,is],
+                moments.charged.dvth_dz[:,:,is], moments.charged.dqpar_dz[:,:,is],
+                moments, z, r, dt, spectral, ion_source_settings)
             if composition.n_neutral_species > 0
                 if abs(collisions.charge_exchange) > 0.0 || abs(collisions.ionization) > 0.0
                     @views source_terms_evolve_ppar_collisions!(
@@ -40,7 +41,9 @@ function source_terms!(pdf_out, fvec_in, moments, vpa, z, r, dt, spectral, compo
         @loop_s is begin
             @views source_terms_evolve_density!(
                 pdf_out[:,:,:,:,is], fvec_in.pdf[:,:,:,:,is], fvec_in.density[:,:,is],
-                fvec_in.upar[:,:,is], moments, z, r, dt, spectral, ion_source_settings)
+                fvec_in.upar[:,:,is], moments.charged.ddens_dz[:,:,is],
+                moments.charged.dupar_dz[:,:,is], moments, z, r, dt, spectral,
+                ion_source_settings)
         end
     end
     return nothing
@@ -48,18 +51,16 @@ end
 
 """
 """
-function source_terms_evolve_density!(pdf_out, pdf_in, dens, upar, moments, z, r, dt,
-                                      spectral, ion_source_settings)
+function source_terms_evolve_density!(pdf_out, pdf_in, dens, upar, ddens_dz, dupar_dz,
+                                      moments, z, r, dt, spectral, ion_source_settings)
     # update the density
     nvpa = size(pdf_out, 1)
-    @loop_r ir begin
-        # calculate d(n*upar)/dz
-        @views @. z.scratch = dens[:,ir]*upar[:,ir]
-        derivative!(z.scratch, z.scratch, z, spectral)
-        @views @. z.scratch *= dt/dens[:,ir]
-        #derivative!(z.scratch, z.scratch, z, -upar, spectral)
-        @loop_z_vperp_vpa iz ivperp ivpa begin
-            pdf_out[ivpa,ivperp,iz,ir] += pdf_in[ivpa,ivperp,iz,ir]*z.scratch[iz]
+    @loop_r_z ir iz begin
+        # calculate dt * d(n*upar)/dz / n
+        factor = dt * (dens[iz,ir] * dupar_dz[iz,ir] + upar[iz,ir] * ddens_dz[iz,ir]) /
+                 dens[iz,ir]
+        @loop_vperp_vpa ivperp ivpa begin
+            pdf_out[ivpa,ivperp,iz,ir] += pdf_in[ivpa,ivperp,iz,ir] * factor
         end
     end
 
@@ -81,25 +82,17 @@ update the evolved pdf to account for the collisionless source terms in the kine
 arising due to the re-normalization of the pdf as g = f * vth / n
 """
 function source_terms_evolve_ppar_no_collisions!(pdf_out, pdf_in, dens, upar, ppar, vth,
-                                                 qpar, moments, z, r, dt, spectral,
+                                                 qpar, ddens_dz, dvth_dz, dqpar_dz,
+                                                 moments, z, r, dt, spectral,
                                                  ion_source_settings)
     nvpa = size(pdf_out, 1)
-    @loop_r ir begin
-        # calculate dn/dz
-        derivative!(z.scratch, view(dens,:,ir), z, spectral)
-        # update the pdf to account for the density gradient contribution to the source
-        @views @. z.scratch *= upar[:,ir]/dens[:,ir]
-        # calculate dvth/dz
-        derivative!(z.scratch2, view(vth,:,ir), z, spectral)
-        # update the pdf to account for the -g*upar/vth * dvth/dz contribution to the source
-        @views @. z.scratch -= z.scratch2*upar[:,ir]/vth[:,ir]
-        # calculate dqpar/dz
-        derivative!(z.scratch2, view(qpar,:,ir), z, spectral)
-        # update the pdf to account for the parallel heat flux contribution to the source
-        @views @. z.scratch -= 0.5*z.scratch2/ppar[:,ir]
+    @loop_r_z ir iz begin
+        factor = dt * (ddens_dz[iz,ir] * upar[iz,ir] / dens[iz,ir] -
+                       dvth_dz[iz,ir] * upar[iz,ir] / vth[iz,ir] -
+                       0.5 * dqpar_dz[iz,ir] / ppar[iz,ir])
 
-        @loop_z_vperp_vpa iz ivperp ivpa begin
-            pdf_out[ivpa,ivperp,iz,ir] += dt*pdf_in[ivpa,ivperp,iz,ir]*z.scratch[iz]
+        @loop_vperp_vpa ivperp ivpa begin
+            pdf_out[ivpa,ivperp,iz,ir] += pdf_in[ivpa,ivperp,iz,ir] * factor
         end
     end
 
@@ -157,8 +150,9 @@ function source_terms_neutral!(pdf_out, fvec_in, moments, vpa, z, r, dt, spectra
                 pdf_out[:,:,:,:,:,isn], fvec_in.pdf_neutral[:,:,:,:,:,isn],
                 fvec_in.density_neutral[:,:,isn], fvec_in.uz_neutral[:,:,isn],
                 fvec_in.pz_neutral[:,:,isn], moments.neutral.vth[:,:,isn],
-                moments.neutral.qz[:,:,isn], moments, z, r, dt, spectral,
-                neutral_source_settings)
+                moments.neutral.qz[:,:,isn], moments.neutral.ddens_dz[:,:,isn],
+                moments.neutral.dvth_dz[:,:,isn], moments.neutral.dqz_dz[:,:,isn],
+                moments, z, r, dt, spectral, neutral_source_settings)
             if abs(collisions.charge_exchange) > 0.0 || abs(collisions.ionization) > 0.0
                 @views source_terms_evolve_ppar_collisions_neutral!(
                     pdf_out[:,:,:,:,:,isn], fvec_in.pdf_neutral[:,:,:,:,:,isn],
@@ -172,8 +166,9 @@ function source_terms_neutral!(pdf_out, fvec_in, moments, vpa, z, r, dt, spectra
         @loop_sn isn begin
             @views source_terms_evolve_density_neutral!(
                 pdf_out[:,:,:,:,:,isn], fvec_in.pdf_neutral[:,:,:,:,:,isn],
-                fvec_in.density_neutral[:,:,isn], fvec_in.uz_neutral[:,:,isn], moments, z,
-                r, dt, spectral, neutral_source_settings)
+                fvec_in.density_neutral[:,:,isn], fvec_in.uz_neutral[:,:,isn],
+                moments.neutral.ddens_dz[:,:,isn], moments.neutral.duz_dz[:,:,isn],
+                moments, z, r, dt, spectral, neutral_source_settings)
         end
     end
     return nothing
@@ -181,18 +176,17 @@ end
 
 """
 """
-function source_terms_evolve_density_neutral!(pdf_out, pdf_in, dens, upar, moments, z, r,
-                                              dt, spectral, neutral_source_settings)
+function source_terms_evolve_density_neutral!(pdf_out, pdf_in, dens, upar, ddens_dz,
+                                              dupar_dz, moments, z, r, dt, spectral,
+                                              neutral_source_settings)
     # update the density
     nvpa = size(pdf_out, 1)
-    @loop_r ir begin
-        # calculate d(n*upar)/dz
-        @views @. z.scratch = dens[:,ir]*upar[:,ir]
-        derivative!(z.scratch, z.scratch, z, spectral)
-        @views @. z.scratch *= dt/dens[:,ir]
-        #derivative!(z.scratch, z.scratch, z, -upar, spectral)
-        @loop_z_vzeta_vr_vz iz ivzeta ivr ivz begin
-            pdf_out[ivz,ivr,ivzeta,iz,ir] += pdf_in[ivz,ivr,ivzeta,iz,ir]*z.scratch[iz]
+    @loop_r_z ir iz begin
+        # calculate dt * d(n*upar)/dz / n
+        factor = dt * (dens[iz,ir] * dupar_dz[iz,ir] + upar[iz,ir] * ddens_dz[iz,ir]) /
+                 dens[iz,ir]
+        @loop_vzeta_vr_vz ivzeta ivr ivz begin
+            pdf_out[ivz,ivr,ivzeta,iz,ir] += pdf_in[ivz,ivr,ivzeta,iz,ir] * factor
         end
     end
 
@@ -214,26 +208,16 @@ update the evolved pdf to account for the collisionless source terms in the kine
 arising due to the re-normalization of the pdf as g = f * vth / n
 """
 function source_terms_evolve_ppar_no_collisions_neutral!(pdf_out, pdf_in, dens, upar,
-                                                         ppar, vth, qpar, moments, z, r,
+                                                         ppar, vth, qpar, ddens_dz,
+                                                         dvth_dz, dqpar_dz, moments, z, r,
                                                          dt, spectral,
                                                          neutral_source_settings)
     nvpa = size(pdf_out, 1)
-    @loop_r ir begin
-        # calculate dn/dz
-        derivative!(z.scratch, view(dens,:,ir), z, spectral)
-        # update the pdf to account for the density gradient contribution to the source
-        @views @. z.scratch *= upar[:,ir]/dens[:,ir]
-        # calculate dvth/dz
-        derivative!(z.scratch2, view(vth,:,ir), z, spectral)
-        # update the pdf to account for the -g*upar/vth * dvth/dz contribution to the source
-        @views @. z.scratch -= z.scratch2*upar[:,ir]/vth[:,ir]
-        # calculate dqpar/dz
-        derivative!(z.scratch2, view(qpar,:,ir), z, spectral)
-        # update the pdf to account for the parallel heat flux contribution to the source
-        @views @. z.scratch -= 0.5*z.scratch2/ppar[:,ir]
-
-        @loop_z_vzeta_vr_vz iz ivzeta ivr ivz begin
-            pdf_out[ivz,ivr,ivzeta,iz,ir] += dt*pdf_in[ivz,ivr,ivzeta,iz,ir]*z.scratch[iz]
+    @loop_r_z ir iz begin
+        factor = dt * (ddens_dz[iz,ir] * upar[iz,ir] / dens[iz,ir] - dvth_dz[iz,ir] *
+                       upar[iz,ir] / vth[iz,ir] - 0.5 * dqpar_dz[iz,ir] / ppar[iz,ir])
+        @loop_vzeta_vr_vz ivzeta ivr ivz begin
+            pdf_out[ivz,ivr,ivzeta,iz,ir] += pdf_in[ivz,ivr,ivzeta,iz,ir] * factor
         end
     end
 
