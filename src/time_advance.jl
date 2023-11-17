@@ -1658,11 +1658,11 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
     if advance.external_source
-        external_ion_source_controller!(fvec_in, moments.charged,
-                                    external_source_settings.ion, dt)
+        external_ion_source_controller!(fvec_in, moments, external_source_settings.ion,
+                                        dt)
     end
     if advance.neutral_external_source
-        external_neutral_source_controller!(fvec_in, moments.neutral,
+        external_neutral_source_controller!(fvec_in, moments,
                                             external_source_settings.neutral, r, z, dt)
     end
 
@@ -1798,7 +1798,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     if advance.force_balance
         # fvec_out.upar is over-written in force_balance! and contains the particle flux
         force_balance!(fvec_out.upar, fvec_out.density, fvec_in, moments, fields,
-                       collisions, dt, z_spectral, composition, geometry, num_diss_params)
+                       collisions, dt, z_spectral, composition, geometry,
+                       external_source_settings.ion, num_diss_params)
     end
     if advance.energy
         energy_equation!(fvec_out.ppar, fvec_in, moments, collisions, dt, z_spectral,
@@ -1820,7 +1821,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
         # fvec_out.upar is over-written in force_balance! and contains the particle flux
         neutral_force_balance!(fvec_out.uz_neutral, fvec_out.density_neutral, fvec_in,
                                moments, fields, collisions, dt, z_spectral, composition,
-                               geometry, num_diss_params)
+                               geometry, external_source_settings.neutral,
+                               num_diss_params)
     end
     if advance.neutral_energy
         neutral_energy_equation!(fvec_out.pz_neutral, fvec_in, moments, collisions, dt,

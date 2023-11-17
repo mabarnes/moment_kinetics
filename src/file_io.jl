@@ -44,7 +44,9 @@ end
 structure containing the data/metadata needed for binary file i/o
 moments & fields only
 """
-struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower, Tchodura_upper, Texti1, Texti2, Textn1, Textn2}
+struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower,
+                       Tchodura_upper, Texti1, Texti2, Texti3, Texti4,
+                       Texti5, Textn1, Textn2, Textn3, Textn4, Textn5}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the time variable
@@ -80,9 +82,15 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower, Tchodur
 
     # handles for external source variables
     external_source_amplitude::Texti1
-    external_source_controller_integral::Texti2
+    external_source_density_amplitude::Texti2
+    external_source_momentum_amplitude::Texti3
+    external_source_pressure_amplitude::Texti4
+    external_source_controller_integral::Texti5
     external_source_neutral_amplitude::Textn1
-    external_source_neutral_controller_integral::Textn2
+    external_source_neutral_density_amplitude::Textn2
+    external_source_neutral_momentum_amplitude::Textn3
+    external_source_neutral_pressure_amplitude::Textn4
+    external_source_neutral_controller_integral::Textn5
 
     # cumulative wall clock time taken by the run
     time_for_run
@@ -569,7 +577,8 @@ define dynamic (time-evolving) moment variables for writing to the hdf5 file
 """
 function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                           r::coordinate, z::coordinate, parallel_io,
-                                          external_source_settings)
+                                          external_source_settings, evolve_density,
+                                          evolve_upar, evolve_ppar)
     @serial_region begin
         dynamic = create_io_group(fid, "dynamic_data", description="time evolving variables")
 
@@ -695,9 +704,33 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                 dynamic, "external_source_amplitude", mk_float, z, r;
                 parallel_io=parallel_io, description="Amplitude of the external source for ions",
                 units="n_ref/c_ref^3*c_ref/L_ref")
+            if evolve_density
+                external_source_density_amplitude = create_dynamic_variable!(
+                    dynamic, "external_source_density_amplitude", mk_float, z, r;
+                    parallel_io=parallel_io, description="Amplitude of the external density source for ions",
+                    units="n_ref*c_ref/L_ref")
+            else
+                external_source_density_amplitude = nothing
+            end
+            if evolve_upar
+                external_source_momentum_amplitude = create_dynamic_variable!(
+                    dynamic, "external_source_momentum_amplitude", mk_float, z, r;
+                    parallel_io=parallel_io, description="Amplitude of the external momentum source for ions",
+                    units="m_ref*n_ref*c_ref*c_ref/L_ref")
+            else
+                external_source_momentum_amplitude = nothing
+            end
+            if evolve_ppar
+                external_source_pressure_amplitude = create_dynamic_variable!(
+                    dynamic, "external_source_pressure_amplitude", mk_float, z, r;
+                    parallel_io=parallel_io, description="Amplitude of the external pressure source for ions",
+                    units="m_ref*n_ref*c_ref^2*c_ref/L_ref")
+            else
+                external_source_pressure_amplitude = nothing
+            end
             if ion_source_settings.PI_density_controller_I != 0.0 &&
-                    ion_source_settings.PI_density_controller_type != ""
-                if ion_source_settings.PI_density_controller_type == "profile"
+                    ion_source_settings.source_type ∈ ("density_profile_control", "density_midpoint_control")
+                if ion_source_settings.source_type == "density_profile_control"
                     external_source_controller_integral = create_dynamic_variable!(
                         dynamic, "external_source_controller_integral", mk_float, z, r;
                         parallel_io=parallel_io,
@@ -713,6 +746,9 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
             end
         else
             external_source_amplitude = nothing
+            external_source_density_amplitude = nothing
+            external_source_momentum_amplitude = nothing
+            external_source_pressure_amplitude = nothing
             external_source_controller_integral = nothing
         end
 
@@ -722,9 +758,33 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                 dynamic, "external_source_neutral_amplitude", mk_float, z, r;
                 parallel_io=parallel_io, description="Amplitude of the external source for neutrals",
                 units="n_ref/c_ref^3*c_ref/L_ref")
+            if evolve_density
+                external_source_neutral_density_amplitude = create_dynamic_variable!(
+                    dynamic, "external_source_neutral_density_amplitude", mk_float, z, r;
+                    parallel_io=parallel_io, description="Amplitude of the external density source for neutrals",
+                    units="n_ref*c_ref/L_ref")
+            else
+                external_source_neutral_density_amplitude = nothing
+            end
+            if evolve_upar
+                external_source_neutral_momentum_amplitude = create_dynamic_variable!(
+                    dynamic, "external_source_neutral_momentum_amplitude", mk_float, z, r;
+                    parallel_io=parallel_io, description="Amplitude of the external momentum source for neutrals",
+                    units="m_ref*n_ref*c_ref*c_ref/L_ref")
+            else
+                external_source_neutral_momentum_amplitude = nothing
+            end
+            if evolve_ppar
+                external_source_neutral_pressure_amplitude = create_dynamic_variable!(
+                    dynamic, "external_source_neutral_pressure_amplitude", mk_float, z, r;
+                    parallel_io=parallel_io, description="Amplitude of the external pressure source for neutrals",
+                    units="m_ref*n_ref*c_ref^2*c_ref/L_ref")
+            else
+                external_source_neutral_pressure_amplitude = nothing
+            end
             if neutral_source_settings.PI_density_controller_I != 0.0 &&
-                    neutral_source_settings.PI_density_controller_type != ""
-                if neutral_source_settings.PI_density_controller_type == "profile"
+                    neutral_source_settings.source_type ∈ ("density_profile_control", "density_midpoint_control")
+                if neutral_source_settings.source_type == "density_profile_control"
                     external_source_neutral_controller_integral = create_dynamic_variable!(
                         dynamic, "external_source_neutral_controller_integral", mk_float, z, r;
                         parallel_io=parallel_io,
@@ -740,6 +800,9 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
             end
         else
             external_source_neutral_amplitude = nothing
+            external_source_neutral_density_amplitude = nothing
+            external_source_neutral_momentum_amplitude = nothing
+            external_source_neutral_pressure_amplitude = nothing
             external_source_neutral_controller_integral = nothing
         end
 
@@ -752,8 +815,14 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                io_ppar, io_pperp, io_qpar, io_vth, io_chodura_lower, io_chodura_upper, io_density_neutral, io_uz_neutral,
                                io_pz_neutral, io_qz_neutral, io_thermal_speed_neutral,
                                external_source_amplitude,
+                               external_source_density_amplitude,
+                               external_source_momentum_amplitude,
+                               external_source_pressure_amplitude,
                                external_source_controller_integral,
                                external_source_neutral_amplitude,
+                               external_source_neutral_density_amplitude,
+                               external_source_neutral_momentum_amplitude,
+                               external_source_neutral_pressure_amplitude,
                                external_source_neutral_controller_integral,
                                io_time_for_run, parallel_io)
     end
@@ -768,13 +837,16 @@ file
 """
 function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz,
                                        n_ion_species, n_neutral_species, parallel_io,
-                                       external_source_settings)
+                                       external_source_settings, evolve_density,
+                                       evolve_upar, evolve_ppar)
 
     @serial_region begin
         io_moments = define_dynamic_moment_variables!(fid, n_ion_species,
                                                       n_neutral_species, r, z,
                                                       parallel_io,
-                                                      external_source_settings)
+                                                      external_source_settings,
+                                                      evolve_density, evolve_upar,
+                                                      evolve_ppar)
 
         dynamic = get_group(fid, "dynamic_data")
 
@@ -864,7 +936,8 @@ function setup_moments_io(prefix, binary_format, r, z, composition, collisions,
         ### in a struct for later access ###
         io_moments = define_dynamic_moment_variables!(
             fid, composition.n_ion_species, composition.n_neutral_species, r, z,
-            parallel_io, external_source_settings)
+            parallel_io, external_source_settings, evolve_density, evolve_upar,
+            evolve_ppar)
 
         close(fid)
 
@@ -901,8 +974,14 @@ function reopen_moments_io(file_info)
                                getvar("uz_neutral"), getvar("pz_neutral"),
                                getvar("qz_neutral"), getvar("thermal_speed_neutral"),
                                getvar("external_source_amplitude"),
+                               getvar("external_source_density_amplitude"),
+                               getvar("external_source_momentum_amplitude"),
+                               getvar("external_source_pressure_amplitude"),
                                getvar("external_source_controller_integral"),
                                getvar("external_source_neutral_amplitude"),
+                               getvar("external_source_neutral_density_amplitude"),
+                               getvar("external_source_neutral_momentum_amplitude"),
+                               getvar("external_source_neutral_pressure_amplitude"),
                                getvar("external_source_neutral_controller_integral"),
                                getvar("time_for_run"), parallel_io)
     end
@@ -955,7 +1034,8 @@ function setup_dfns_io(prefix, binary_format, boundary_distributions, r, z, vper
         ### in a struct for later access ###
         io_dfns = define_dynamic_dfn_variables!(
             fid, r, z, vperp, vpa, vzeta, vr, vz, composition.n_ion_species,
-            composition.n_neutral_species, parallel_io, external_source_settings)
+            composition.n_neutral_species, parallel_io, external_source_settings,
+            evolve_density, evolve_upar, evolve_ppar)
 
         close(fid)
 
@@ -994,8 +1074,14 @@ function reopen_dfns_io(file_info)
                                      getvar("qz_neutral"),
                                      getvar("thermal_speed_neutral"),
                                      getvar("external_source_amplitude"),
+                                     getvar("external_source_density_amplitude"),
+                                     getvar("external_source_momentum_amplitude"),
+                                     getvar("external_source_pressure_amplitude"),
                                      getvar("external_source_controller_integral"),
                                      getvar("external_source_neutral_amplitude"),
+                                     getvar("external_source_neutral_density_amplitude"),
+                                     getvar("external_source_neutral_momentum_amplitude"),
+                                     getvar("external_source_neutral_pressure_amplitude"),
                                      getvar("external_source_neutral_controller_integral"),
                                      getvar("time_for_run"),
                                      parallel_io)
@@ -1081,6 +1167,21 @@ function write_moments_data_to_binary(moments, fields, t, n_ion_species,
             append_to_dynamic_var(io_moments.external_source_amplitude,
                                   moments.charged.external_source_amplitude, t_idx,
                                   parallel_io, z, r)
+            if moments.evolve_density
+                append_to_dynamic_var(io_moments.external_source_density_amplitude,
+                                      moments.charged.external_source_density_amplitude,
+                                      t_idx, parallel_io, z, r)
+            end
+            if moments.evolve_upar
+                append_to_dynamic_var(io_moments.external_source_momentum_amplitude,
+                                      moments.charged.external_source_momentum_amplitude,
+                                      t_idx, parallel_io, z, r)
+            end
+            if moments.evolve_ppar
+                append_to_dynamic_var(io_moments.external_source_pressure_amplitude,
+                                      moments.charged.external_source_pressure_amplitude,
+                                      t_idx, parallel_io, z, r)
+            end
         end
         if io_moments.external_source_controller_integral !== nothing
             if size(moments.charged.external_source_controller_integral) == (1,1)
@@ -1109,6 +1210,21 @@ function write_moments_data_to_binary(moments, fields, t, n_ion_species,
                 append_to_dynamic_var(io_moments.external_source_neutral_amplitude,
                                       moments.neutral.external_source_amplitude, t_idx,
                                       parallel_io, z, r)
+                if moments.evolve_density
+                    append_to_dynamic_var(io_moments.external_source_neutral_density_amplitude,
+                                          moments.charged.external_source_neutral_density_amplitude,
+                                          t_idx, parallel_io, z, r)
+                end
+                if moments.evolve_uparr
+                    append_to_dynamic_var(io_moments.external_source_neutral_momentum_amplitude,
+                                          moments.charged.external_source_neutral_momentum_amplitude,
+                                          t_idx, parallel_io, z, r)
+                end
+                if moments.evolve_ppar
+                    append_to_dynamic_var(io_moments.external_source_neutral_pressure_amplitude,
+                                          moments.charged.external_source_neutral_pressure_amplitude,
+                                          t_idx, parallel_io, z, r)
+                end
             end
             if io_moments.external_source_neutral_controller_integral !== nothing
                 if size(moments.neutral.external_source_neutral_controller_integral) == (1,1)
@@ -1510,6 +1626,7 @@ all the arrays have the same length, with an entry for each call to `debug_dump(
 function debug_dump end
 function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coordinate,
                     vperp::coordinate, z::coordinate, r::coordinate, t::mk_float;
+                    evolve_density, evolve_upar, evolve_ppar,
                     ff=nothing, dens=nothing, upar=nothing, ppar=nothing, pperp=nothing, qpar=nothing,
                     vth=nothing,
                     ff_neutral=nothing, dens_neutral=nothing, uz_neutral=nothing,
@@ -1551,10 +1668,13 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
             io_moments = define_dynamic_moment_variables!(fid, composition.n_ion_species,
                                                           composition.n_neutral_species,
                                                           r, z, false,
-                                                          external_source_settings)
+                                                          external_source_settings,
+                                                          evolve_density, evolve_upar,
+                                                          evolve_ppar)
             io_dfns = define_dynamic_dfn_variables!(
                 fid, r, z, vperp, vpa, vzeta, vr, vz, composition.n_ion_species,
-                composition.n_neutral_species, false, external_source_settings)
+                composition.n_neutral_species, false, external_source_settings,
+                evolve_density, evolve_upar, evolve_ppar)
 
             # create the "istage" variable, used to identify the rk stage where
             # `debug_dump()` was called
