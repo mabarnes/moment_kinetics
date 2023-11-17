@@ -139,7 +139,7 @@ function run_test(test_input, message, rtol, atol; tol_3V, kwargs...)
             # Read the output data
             path = joinpath(realpath(input["base_directory"]), name)
 
-            run_info = get_run_info(path, -1; dfns=true)
+            run_info = get_run_info((path, -1); dfns=true)
             time = run_info.time
             n_ion_species = run_info.n_ion_species
             n_neutral_species = run_info.n_neutral_species
