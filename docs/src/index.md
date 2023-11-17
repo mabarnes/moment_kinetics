@@ -13,6 +13,7 @@ Pages = ["getting_started.md",
          "moment_constraints_notes.md",
          "boundary_conditions_notes.md",
          "external_sources_notes.md",
+         "parameter_scans.md",
          "developing.md",
          "debugging-hints.md",
         ]

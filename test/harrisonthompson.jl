@@ -7,7 +7,6 @@ include("setup.jl")
 
 using Base.Filesystem: tempname
 using SpecialFunctions: dawson
-using TimerOutputs
 
 using moment_kinetics.load_data: open_readonly_output_file
 using moment_kinetics.load_data: load_fields_data, load_time_data
@@ -152,9 +151,6 @@ test_input_chebyshev_split3 = merge(test_input_chebyshev_split2,
                                     Dict("run_name" => "chebyshev_pseudospectral_split3",
                                          "evolve_moments_parallel_pressure" => true))
 
-# Not actually used in the tests, but needed for first argument of run_moment_kinetics
-to = TimerOutput()
-
 """
 Run a test for a single set of parameters
 """
@@ -190,7 +186,7 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
     z = nothing
     quietoutput() do
         # run simulation
-        run_moment_kinetics(to, input)
+        run_moment_kinetics(input)
     end
 
     if global_rank[] == 0
