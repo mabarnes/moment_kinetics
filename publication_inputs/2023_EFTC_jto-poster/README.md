@@ -1,3 +1,15 @@
+Introduction
+============
+
+The inputs and scripts in this directory were used to produce the figures for
+John Omotani's poster at EFTC 2023. This README explains how to reproduce the
+runs and plots. Note that the inputs in this directory are not tested
+automatically, so they may be broken by future updates to `moment_kinetics`.
+They were tested using the branch at
+[PR #147](https://github.com/mabarnes/moment_kinetics/pull/147), using
+julia-1.9.3 and the Manifest.toml file that was temporarily committed in
+344b559c2e79b6586e6fdb8016ee4863c672a3f4.
+
 Sound wave
 ==========
 
