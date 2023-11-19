@@ -34,15 +34,14 @@ jobs:
           pip3 install --user matplotlib
           julia --project -e 'using MPIPreferences; MPIPreferences.use_system_binary()'
           julia --project -e 'using Pkg; Pkg.build("MPI"; verbose=true)'
-          julia -O3 --check-bounds=no precompile.jl --debug 1
           # Need to use openmpi so that the following arguments work:
           # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
           #   than physical cores).
           # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
           #   terrible performance when oversubscribing.
-          mpiexec -np 3 --mca rmaps_base_oversubscribe 1 julia --project=@. -Jmoment_kinetics.so -O3 --check-bounds=no test/runtests.jl --debug 1
-          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project=@. -Jmoment_kinetics.so -O3 --check-bounds=no test/runtests.jl --debug 1
-          mpiexec -np 2 --mca rmaps_base_oversubscribe 1 julia --project=@. -Jmoment_kinetics.so -O3 --check-bounds=no test/runtests.jl --debug 1 --long
+          mpiexec -np 3 --mca rmaps_base_oversubscribe 1 julia --project=@. -O3 --check-bounds=no test/runtests.jl --debug 1
+          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project=@. -O3 --check-bounds=no test/runtests.jl --debug 1
+          mpiexec -np 2 --mca rmaps_base_oversubscribe 1 julia --project=@. -O3 --check-bounds=no test/runtests.jl --debug 1 --long
           # Note: MPI.jl's default implementation is mpich, which has a similar option
           # `--with-device=ch3:sock`, but that needs to be set when compiling mpich.
         shell: bash
