@@ -19,13 +19,14 @@ using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_
 using moment_kinetics.makie_post_processing: get_run_info, postproc_load_variable
 using moment_kinetics.type_definitions: mk_float
 
-# Create a temporary directory for test output
-test_output_directory = get_MPI_tempdir()
+# test_output_directory is not used for this test, but needed for
+# `nonlinear_sound_wave_inputs_and_expected_data.jl` (in this test the value set using it
+# is overwritten later).
+test_output_directory = ""
 
 include("nonlinear_sound_wave_inputs_and_expected_data.jl")
 
 base_input = copy(test_input_chebyshev)
-base_input["base_directory"] = test_output_directory
 base_input["nstep"] = 50
 base_input["nwrite"] = 50
 base_input["nwrite_dfns"] = 50
@@ -69,7 +70,7 @@ restart_test_input_chebyshev_split_3_moments =
 Run a sound-wave test for a single set of parameters
 """
 # Note 'name' should not be shared by any two tests in this file
-function run_test(test_input, message, rtol, atol; tol_3V, kwargs...)
+function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
     # by passing keyword arguments to run_test, kwargs becomes a Tuple of Pairs which can be used to
     # update the default inputs
 
@@ -106,13 +107,13 @@ function run_test(test_input, message, rtol, atol; tol_3V, kwargs...)
     quietoutput() do
         # run simulation
         if parallel_io
-            restart_filename = joinpath(base_input["base_directory"],
-                                        base_input["run_name"],
-                                        base_input["run_name"] * ".dfns.h5")
+            restart_filename = joinpath(base["base_directory"],
+                                        base["run_name"],
+                                        base["run_name"] * ".dfns.h5")
         else
-            restart_filename = joinpath(base_input["base_directory"],
-                                        base_input["run_name"],
-                                        base_input["run_name"] * ".dfns.0.h5")
+            restart_filename = joinpath(base["base_directory"],
+                                        base["run_name"],
+                                        base["run_name"] * ".dfns.0.h5")
         end
         run_moment_kinetics(input; restart=restart_filename)
     end
@@ -298,6 +299,9 @@ function runtests()
                                   (base_input_evolve_density, "split 1"),
                                   (base_input_evolve_upar, "split 2"),
                                   (base_input_evolve_ppar, "split 3"))
+
+            base["base_directory"] = get_MPI_tempdir()
+
             # Base run, from which tests are restarted
             # Suppress console output while running
             quietoutput() do
@@ -312,27 +316,31 @@ function runtests()
                 # simulation) don't test upar. upar and uz end up with large 'errors'
                 # (~50%), and it is not clear why, but ignore this so test can pass.
                 this_input = deepcopy(restart_test_input_chebyshev)
+                this_input["base_directory"] = base["base_directory"]
                 this_input["output"]["parallel_io"] = parallel_io
-                run_test(this_input, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
+                run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
             end
             if include_moment_kinetic
                 message = "restart split 1 from $base_label$label"
                 @testset "$message" begin
                     this_input = deepcopy(restart_test_input_chebyshev_split_1_moment)
+                    this_input["base_directory"] = base["base_directory"]
                     this_input["output"]["parallel_io"] = parallel_io
-                    run_test(this_input, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
+                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
                 end
                 message = "restart split 2 from $base_label$label"
                 @testset "$message" begin
                     this_input = deepcopy(restart_test_input_chebyshev_split_2_moments)
+                    this_input["base_directory"] = base["base_directory"]
                     this_input["output"]["parallel_io"] = parallel_io
-                    run_test(this_input, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
+                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
                 end
                 message = "restart split 3 from $base_label$label"
                 @testset "$message" begin
                     this_input = deepcopy(restart_test_input_chebyshev_split_3_moments)
+                    this_input["base_directory"] = base["base_directory"]
                     this_input["output"]["parallel_io"] = parallel_io
-                    run_test(this_input, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
+                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
                 end
             end
         end
