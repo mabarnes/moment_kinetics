@@ -339,6 +339,11 @@ function runtests()
                     run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
                 end
             end
+
+            if global_rank[] == 0
+                # Delete output directory to avoid using too much disk space
+                rm(realpath(test_output_directory); recursive=true)
+            end
         end
     end
 

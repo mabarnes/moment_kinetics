@@ -318,6 +318,11 @@ function runtests()
             run_test(test_input_chebyshev_split_3_moments, 1.e-3, 1.e-15)
         end
     end
+
+    if global_rank[] == 0
+        # Delete output directory to avoid using too much disk space
+        rm(realpath(test_output_directory); recursive=true)
+    end
 end
 
 end # NonlinearSoundWaveTests

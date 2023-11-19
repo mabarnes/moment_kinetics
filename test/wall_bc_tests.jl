@@ -270,6 +270,11 @@ function runtests()
                      2.e-3)
         end
     end
+
+    if global_rank[] == 0
+        # Delete output directory to avoid using too much disk space
+        rm(realpath(test_output_directory); recursive=true)
+    end
 end
 
 end # WallBC
