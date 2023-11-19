@@ -686,10 +686,14 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
             moments.charged.qpar .= load_moment("parallel_heat_flux")
             moments.charged.qpar_updated .= true
             moments.charged.vth .= load_moment("thermal_speed")
+            if parallel_io || z.irank == 0
                 moments.charged.chodura_integral_lower .= load_slice(dynamic, "chodura_integral_lower",
-                                                  r_range, :, time_index)
+                                                                     r_range, :, time_index)
+            end
+            if parallel_io || z.irank == z.nrank - 1
                 moments.charged.chodura_integral_upper .= load_slice(dynamic, "chodura_integral_upper",
-                                                  r_range, :, time_index)
+                                                                     r_range, :, time_index)
+            end
 
             if "external_source_controller_integral" ∈ get_variable_keys(dynamic) &&
                     length(moments.charged.external_source_controller_integral) == 1
