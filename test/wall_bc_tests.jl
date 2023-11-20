@@ -16,15 +16,11 @@ using moment_kinetics.load_data: load_fields_data,
                                  load_pdf_data, load_time_data,
                                  load_species_data
 
-# Create a temporary directory for test output
-test_output_directory = get_MPI_tempdir()
-
 # default inputs for tests
 test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "n_neutral_species" => 1,
                                     "boltzmann_electron_response" => true,
                                     "run_name" => "finite_difference",
-                                    "base_directory" => test_output_directory,
                                     "evolve_moments_density" => false,
                                     "evolve_moments_parallel_flow" => false,
                                     "evolve_moments_parallel_pressure" => false,
@@ -233,15 +229,19 @@ function run_test(test_input, expected_phi, tolerance; args...)
 end
 
 function runtests()
+    # Create a temporary directory for test output
+    test_output_directory = get_MPI_tempdir()
 
     @testset "Wall boundary conditions" verbose=use_verbose begin
         println("Wall boundary condition tests")
 
         @testset_skip "FD test case does not conserve density" "finite difference" begin
+            test_input_finite_difference["base_directory"] = test_output_directory
             run_test(test_input_finite_difference, nothing, 2.e-3)
         end
 
         @testset "Chebyshev uniform" begin
+            test_input_chebyshev["base_directory"] = test_output_directory
             run_test(test_input_chebyshev,
                      [-1.1689445031600718, -0.7479504438063098, -0.6947559936893813,
                       -0.6917252442591313, -0.7180152498764835, -0.9980114095597415],
@@ -249,6 +249,7 @@ function runtests()
         end
         
         @testset "Chebyshev sqrt grid odd" begin
+            test_input_chebyshev_sqrt_grid_odd["base_directory"] = test_output_directory
             run_test(test_input_chebyshev_sqrt_grid_odd,
                      [-1.2047298885671576, -0.9431378294506091, -0.8084332392927167,
                      -0.7812620422650213, -0.7233303514000929, -0.7003878610612269,
@@ -258,6 +259,7 @@ function runtests()
                      2.e-3)
         end
         @testset "Chebyshev sqrt grid even" begin
+            test_input_chebyshev_sqrt_grid_even["base_directory"] = test_output_directory
             run_test(test_input_chebyshev_sqrt_grid_even,
                      [-1.213617049279473, -1.0054529928344382, -0.871444761913497,
                      -0.836017699317097, -0.7552110924643832, -0.7264644073096705,
