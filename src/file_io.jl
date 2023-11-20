@@ -125,7 +125,7 @@ Test if the backend supports parallel I/O.
 
 `binary_format` should be one of the values of the `binary_format_type` enum
 """
-function io_has_parallel() end
+function io_has_parallel end
 
 """
 open the necessary output files
