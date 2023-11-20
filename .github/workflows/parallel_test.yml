@@ -1,7 +1,7 @@
 # Run tests in parallel to check for bugs that only show up on multiple processes
 name: Run tests in parallel
 
-on: [push, pull_request]
+on: [push, pull_request, workflow_dispatch]
 
 jobs:
   test:

@@ -1,7 +1,7 @@
 # Based on example from https://github.com/julia-actions/julia-runtest
 name: Debug checks for correctness
 
-on: [push, pull_request]
+on: [push, pull_request, workflow_dispatch]
 
 jobs:
   debug-checks:
