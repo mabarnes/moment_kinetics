@@ -772,4 +772,29 @@ function free_shared_arrays()
     return nothing
 end
 
+"""
+    timeout_mpi_barrier(timeout=5; comm=comm_world)
+
+Wait until all processes in `comm` have called this function. If all processes call the
+function before `timeout` seconds have passed, then return `true`, otherwise return
+`false`.
+"""
+function timeout_mpi_barrier(timeout=5; comm=comm_world)
+    req = MPI.Ibarrier(comm)
+
+    poll_interval = 0.1
+    n_poll = timeout / poll_interval
+
+    success = MPI.Test(req)
+    for i ∈ 1:n_poll
+        sleep(poll_interval)
+        success = MPI.Test(req)
+        if success
+            break
+        end
+    end
+
+    return success
+end
+
 end # communication

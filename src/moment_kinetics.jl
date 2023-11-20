@@ -122,7 +122,17 @@ function run_moment_kinetics(to::Union{TimerOutput,Nothing}, input_dict=Dict();
     catch e
         # Stop code from hanging when running on multiple processes if only one of them
         # throws an error
-        if global_size[] > 1
+        # It is nice to stop when possible without calling MPI.Abort(), which would kill
+        # Julia. We can do this if all processes threw an error (otherwise even if the
+        # non-error processes are interrupted manually MPI tends to get messed up) - if
+        # they did then all processes will call `timeout_mpi_barrier()` at approximately
+        # the same time, which will then return `true` (if any process does not call
+        # `timeout_mpi_barrier()` within 5 seconds of the first, it will return `false`).
+        # Even when running as a batch job, this is potentially nicer than calling
+        # MPI.Abort() immediately, because if some processes are writing output, then the
+        # timeout should probably give them time to finish and close the file(s). There
+        # may also be a better chance of sensible error messages being printed.
+        if global_size[] > 1 && !timeout_mpi_barrier()
             println("$(typeof(e)) on process $(global_rank[]):")
             showerror(stdout, e)
             display(stacktrace(catch_backtrace()))
