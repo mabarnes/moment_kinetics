@@ -1,7 +1,7 @@
 # Based on example from https://github.com/julia-actions/julia-runtest
 name: Check examples
 
-on: [push, pull_request]
+on: [push, pull_request, workflow_dispatch]
 
 jobs:
   examples:
@@ -10,11 +10,13 @@ jobs:
       matrix:
         os: [ubuntu-latest, macOS-latest]
       fail-fast: false
-    timeout-minutes: 25
+    timeout-minutes: 35
 
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
       - uses: julia-actions/setup-julia@v1
         with:
           version: '1.8'

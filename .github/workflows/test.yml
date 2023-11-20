@@ -1,7 +1,7 @@
 # Based on example from https://github.com/julia-actions/julia-runtest
 name: Run tests
 
-on: [push, pull_request]
+on: [push, pull_request, workflow_dispatch]
 
 jobs:
   test:
@@ -14,7 +14,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
       - uses: julia-actions/setup-julia@v1
         with:
           version: '1.8'

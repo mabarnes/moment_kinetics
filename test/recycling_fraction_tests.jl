@@ -17,15 +17,11 @@ using moment_kinetics.load_data: load_fields_data,
                                  load_pdf_data, load_time_data,
                                  load_species_data
 
-# Create a temporary directory for test output
-test_output_directory = get_MPI_tempdir()
-
 # default inputs for tests
 test_input = Dict("n_ion_species" => 1,
                   "n_neutral_species" => 1,
                   "boltzmann_electron_response" => true,
                   "run_name" => "full-f",
-                  "base_directory" => test_output_directory,
                   "evolve_moments_density" => false,
                   "evolve_moments_parallel_flow" => false,
                   "evolve_moments_parallel_pressure" => false,
@@ -184,11 +180,14 @@ function run_test(test_input, expected_phi; args...)
 end
 
 function runtests()
+    # Create a temporary directory for test output
+    test_output_directory = get_MPI_tempdir()
 
     @testset "Recycling fraction" verbose=use_verbose begin
         println("Recycling fraction tests")
 
         @testset "Full-f" begin
+            test_input["base_directory"] = test_output_directory
             run_test(test_input,
                      [-0.05499288668923642, -0.017610447066356092, -0.0014497230450292054,
                       0.0015713106015958053, 0.0021153221201727283, 0.00135154586425295,
@@ -200,6 +199,7 @@ function runtests()
                       -0.048688980279053266])
         end
         @testset "Split 1" begin
+            test_input_split1["base_directory"] = test_output_directory
             run_test(test_input_split1,
                      [-0.054793853738618496, -0.017535475032013862,
                       -0.0014718402826481662, 0.0016368065803215382, 0.002097475822421603,
@@ -212,6 +212,7 @@ function runtests()
                       -0.0484483682752969])
         end
         @testset "Split 2" begin
+            test_input_split2["base_directory"] = test_output_directory
             run_test(test_input_split2,
                      [-0.05555568198447252, -0.020145183717956348, 0.001182118478411508,
                       0.002193148323751635, 0.0019441188563940751, 0.0011789368818662881,
@@ -223,6 +224,7 @@ function runtests()
                       -0.05005526194222513])
         end
         @testset "Split 3" begin
+            test_input_split3["base_directory"] = test_output_directory
             run_test(test_input_split3,
                      [-0.036205375991650725, -0.030483334021285433, -0.028961568619094404,
                       -0.028550383934166465, -0.02551672335720456, -0.021976119708577647,
@@ -240,6 +242,11 @@ function runtests()
                       -0.026873219344096318, -0.028749404798656616, -0.029220744790456707,
                       -0.032303083015072])
         end
+    end
+
+    if global_rank[] == 0
+        # Delete output directory to avoid using too much disk space
+        rm(realpath(test_output_directory); recursive=true)
     end
 end
 

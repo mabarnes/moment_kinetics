@@ -17,9 +17,6 @@ using moment_kinetics.type_definitions: mk_float
 const analytical_rtol = 3.e-2
 const regression_rtol = 2.e-8
 
-# Create a temporary directory for test output
-test_output_directory = get_MPI_tempdir()
-
 include("nonlinear_sound_wave_inputs_and_expected_data.jl")
 
 """
@@ -278,37 +275,53 @@ end
 
 
 function runtests()
+    # Create a temporary directory for test output
+    test_output_directory = get_MPI_tempdir()
+
     @testset "nonlinear sound wave" verbose=use_verbose begin
         println("nonlinear sound wave tests")
 
         # finite difference
         @testset "FD base" begin
+            test_input_finite_difference["base_directory"] = test_output_directory
             run_test(test_input_finite_difference, 1.e-3, 1.e-11, 2.e-3)
         end
         @testset "FD split 1" begin
+            test_input_finite_difference_split_1_moment["base_directory"] = test_output_directory
             run_test(test_input_finite_difference_split_1_moment, 1.e-3, 1.e-11)
         end
         @testset "FD split 2" begin
+            test_input_finite_difference_split_2_moments["base_directory"] = test_output_directory
             run_test(test_input_finite_difference_split_2_moments, 1.e-3, 1.e-11)
         end
         @testset "FD split 3" begin
+            test_input_finite_difference_split_3_moments["base_directory"] = test_output_directory
             run_test(test_input_finite_difference_split_3_moments, 1.e-3, 1.e-11)
         end
 
         # Chebyshev pseudospectral
         # Benchmark data is taken from this run (Chebyshev with no splitting)
         @testset "Chebyshev base" begin
+            test_input_chebyshev["base_directory"] = test_output_directory
             run_test(test_input_chebyshev, 1.e-10, 3.e-16)
         end
         @testset "Chebyshev split 1" begin
+            test_input_chebyshev_split_1_moment["base_directory"] = test_output_directory
             run_test(test_input_chebyshev_split_1_moment, 1.e-3, 1.e-15)
         end
         @testset "Chebyshev split 2" begin
+            test_input_chebyshev_split_2_moments["base_directory"] = test_output_directory
             run_test(test_input_chebyshev_split_2_moments, 1.e-3, 1.e-15)
         end
         @testset "Chebyshev split 3" begin
+            test_input_chebyshev_split_3_moments["base_directory"] = test_output_directory
             run_test(test_input_chebyshev_split_3_moments, 1.e-3, 1.e-15)
         end
+    end
+
+    if global_rank[] == 0
+        # Delete output directory to avoid using too much disk space
+        rm(realpath(test_output_directory); recursive=true)
     end
 end
 

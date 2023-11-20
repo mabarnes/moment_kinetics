@@ -16,9 +16,6 @@ using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data
 using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
 using moment_kinetics.type_definitions: mk_float
 
-# Create a temporary directory for test output
-test_output_directory = get_MPI_tempdir()
-
 # Useful parameters
 const z_L = 1.0 # always 1 in normalized units?
 const vpa_L = 8.0
@@ -92,7 +89,6 @@ test_input_full_f = Dict("n_ion_species" => 1,
                          "n_neutral_species" => 1,
                          "boltzmann_electron_response" => true,
                          "run_name" => "full_f",
-                         "base_directory" => test_output_directory,
                          "evolve_moments_density" => false,
                          "evolve_moments_parallel_flow" => false,
                          "evolve_moments_parallel_pressure" => false,
@@ -414,22 +410,34 @@ end
 
 
 function runtests()
+    # Create a temporary directory for test output
+    test_output_directory = get_MPI_tempdir()
+
     @testset "Krook collisions" verbose=use_verbose begin
         println("Krook collisions tests")
 
         # Benchmark data is taken from this run (full-f with no splitting)
         @testset "full-f" begin
+            test_input_full_f["base_directory"] = test_output_directory
             run_test(test_input_full_f, 1.e-10, 3.e-16)
         end
         @testset "split 1" begin
+            test_input_split_1_moment["base_directory"] = test_output_directory
             run_test(test_input_split_1_moment, 1.e-3, 1.e-15)
         end
         @testset "split 2" begin
+            test_input_split_2_moments["base_directory"] = test_output_directory
             run_test(test_input_split_2_moments, 1.e-3, 1.e-15)
         end
         @testset "split 3" begin
+            test_input_split_3_moments["base_directory"] = test_output_directory
             run_test(test_input_split_3_moments, 1.e-3, 1.e-15)
         end
+    end
+
+    if global_rank[] == 0
+        # Delete output directory to avoid using too much disk space
+        rm(realpath(test_output_directory); recursive=true)
     end
 end
 

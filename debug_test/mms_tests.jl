@@ -5,7 +5,7 @@ module MMSDebug
 include("setup.jl")
 
 # Create a temporary directory for test output
-test_output_directory = tempname()
+test_output_directory = get_MPI_tempdir()
 mkpath(test_output_directory)
 
 
