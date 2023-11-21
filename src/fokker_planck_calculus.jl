@@ -2188,7 +2188,7 @@ function enforce_vpavperp_BCs!(pdf,vpa,vperp,vpa_spectral,vperp_spectral)
     begin_vpa_region()
     @loop_vpa ivpa begin
         pdf[ivpa,nvperp] = 0.0
-        pdf[ivpa,1,] = -sum(D0[2:ngrid_vperp].*pdf[ivpa,2:ngrid_vperp])/D0[1]
+        pdf[ivpa,1] = -sum(D0[2:ngrid_vperp].*pdf[ivpa,2:ngrid_vperp])/D0[1]
     end
 end
 

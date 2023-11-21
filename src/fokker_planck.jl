@@ -682,14 +682,15 @@ function symmetric_matrix_inverse(A00,A01,A02,A11,A12,A22,b0,b1,b2)
 end
 
 function conserving_corrections!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
+    begin_serial_region()
     # compute moments of the input pdf
     dens =  get_density(@view(pdf_in[:,:]), vpa, vperp)
-    upar = get_upar(@view(pdf_in[:,:,]), vpa, vperp, dens)
-    ppar = get_ppar(@view(pdf_in[:,:,]), vpa, vperp, upar)
-    pperp = get_pperp(@view(pdf_in[:,:,]), vpa, vperp)
+    upar = get_upar(@view(pdf_in[:,:]), vpa, vperp, dens)
+    ppar = get_ppar(@view(pdf_in[:,:]), vpa, vperp, upar)
+    pperp = get_pperp(@view(pdf_in[:,:]), vpa, vperp)
     pressure = get_pressure(ppar,pperp)
-    qpar = get_qpar(@view(pdf_in[:,:,]), vpa, vperp, upar, dummy_vpavperp)
-    rmom = get_rmom(@view(pdf_in[:,:,]), vpa, vperp, upar, dummy_vpavperp)
+    qpar = get_qpar(@view(pdf_in[:,:]), vpa, vperp, upar, dummy_vpavperp)
+    rmom = get_rmom(@view(pdf_in[:,:]), vpa, vperp, upar, dummy_vpavperp)
     
     # compute moments of the numerical collision operator
     dn = get_density(CC, vpa, vperp)

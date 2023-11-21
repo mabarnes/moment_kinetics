@@ -886,18 +886,22 @@ function get_qpar_1V(ff, vpa, vperp, upar)
 end
 
 function get_qpar(ff, vpa, vperp, upar, dummy_vpavperp)
-    @loop_vperp_vpa ivperp ivpa begin
-        wpar = vpa.grid[ivpa]-upar
-        dummy_vpavperp[ivpa,ivperp] = ff[ivpa,ivperp]*wpar*( wpar^2 + vperp.grid[ivperp]^2)
+    for ivperp in 1:vperp.n 
+        for ivpa in 1:vpa.n
+            wpar = vpa.grid[ivpa]-upar
+            dummy_vpavperp[ivpa,ivperp] = ff[ivpa,ivperp]*wpar*( wpar^2 + vperp.grid[ivperp]^2)
+        end
     end
     return integrate_over_vspace(@view(dummy_vpavperp[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
 end
 
 # generalised moment useful for computing numerical conserving terms in the collision operator
 function get_rmom(ff, vpa, vperp, upar, dummy_vpavperp)
-    @loop_vperp_vpa ivperp ivpa begin
-        wpar = vpa.grid[ivpa]-upar
-        dummy_vpavperp[ivpa,ivperp] = ff[ivpa,ivperp]*( wpar^2 + vperp.grid[ivperp]^2)^2
+    for ivperp in 1:vperp.n 
+        for ivpa in 1:vpa.n
+            wpar = vpa.grid[ivpa]-upar
+            dummy_vpavperp[ivpa,ivperp] = ff[ivpa,ivperp]*( wpar^2 + vperp.grid[ivperp]^2)^2
+        end
     end
     return integrate_over_vspace(@view(dummy_vpavperp[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
 end
