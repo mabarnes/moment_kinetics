@@ -59,6 +59,8 @@ To run julia with optimization, type
 ```
 $ julia -O3 --project run_moment_kinetics.jl input.toml
 ```
+Note that the middle character in `-O3` is a capital letter 'O', not a zero.
+
 Options are specified in a TOML file, e.g. `input.toml` here. The defaults are
 specified in `moment_kinetics_input.jl`.
 * To run in parallel, just put `mpirun -np <n>` in front of the call you would
