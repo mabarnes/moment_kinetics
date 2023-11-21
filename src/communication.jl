@@ -357,9 +357,9 @@ function allocate_shared(T, dims)
 
     if br == 0
         # Allocate points on rank-0 for simplicity
-        n_local = n
+        dims_local = dims
     else
-        n_local = 0
+        dims_local = Tuple(0 for _ ∈ dims)
     end
 
     @debug_shared_array_allocate begin
@@ -385,25 +385,17 @@ function allocate_shared(T, dims)
         end
     end
 
-    win, ptr = MPI.Win_allocate_shared(T, n_local, comm_block[])
+    win, array_temp = MPI.Win_allocate_shared(Array{T}, dims_local, comm_block[])
 
-    # Array is allocated contiguously, but `ptr` points to the 'locally owned' part.
-    # We want to use as a shared array, so want to wrap the entire shared array.
-    # Get start pointer of array from rank-0 process. Cannot use ptr, as this
-    # is null when n_local=0.
-    _, _, base_ptr = MPI.Win_shared_query(win, 0)
-    base_ptr = Ptr{T}(base_ptr)
-
-    if base_ptr == Ptr{Nothing}(0)
-        error("Got null pointer when trying to allocate shared array")
-    end
+    # Array is allocated contiguously, but `array_temp` contains only the 'locally owned'
+    # part.  We want to use as a shared array, so want to wrap the entire shared array.
+    # Get array from rank-0 process, which 'owns' the whole array.
+    array = MPI.Win_shared_query(Array{T}, dims, win; rank=0)
 
     # Don't think `win::MPI.Win` knows about the type of the pointer (its concrete type
     # is something like `MPI.Win(Ptr{Nothing} @0x00000000033affd0)`), so it's fine to
     # put them all in the same global_Win_store - this won't introduce type instability
     push!(global_Win_store, win)
-
-    array = unsafe_wrap(Array, base_ptr, dims)
 
     @debug_shared_array begin
         # If @debug_shared_array is active, create DebugMPISharedArray instead of Array

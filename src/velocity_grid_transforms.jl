@@ -38,7 +38,7 @@ function vzvrvzeta_to_vpavperp_species!(f_out,f_in,vz,vr,vzeta,vpa,vperp,gyropha
     @boundscheck vpa.n == size(f_out, 1) || throw(BoundsError(f_out))
     @boundscheck vperp.n == size(f_out, 2) || throw(BoundsError(f_out))
 
-    pdf_interp = LinearInterpolation((vz.grid,vr.grid,vzeta.grid),f_in,extrapolation_bc = 0.0)
+    pdf_interp = linear_interpolation((vz.grid,vr.grid,vzeta.grid),f_in,extrapolation_bc = 0.0)
     # pdf_interp( vz_val, vr_val, vzeta_val) is interpolated value of f_in
     # extrapolation_bc = 0.0 makes pdf_interp = 0.0 for |vx| > vx.L/2 (x = z,r,zeta)
     
@@ -92,7 +92,7 @@ function vpavperp_to_vzvrvzeta_species!(f_out,f_in,vz,vr,vzeta,vpa,vperp,geometr
     @boundscheck vpa.n == size(f_in, 1) || throw(BoundsError(f_in))
     @boundscheck vperp.n == size(f_in, 2) || throw(BoundsError(f_in))
 
-    pdf_interp = LinearInterpolation((vpa.grid,vperp.grid),f_in,extrapolation_bc = 0.0)
+    pdf_interp = linear_interpolation((vpa.grid,vperp.grid),f_in,extrapolation_bc = 0.0)
     # pdf_interp( vz_val, vr_val, vzeta_val) is interpolated value of f_in
     # extrapolation_bc = 0.0 makes pdf_interp = 0.0 for |vpa| > vpa.L/2 and vperp > vperp.L
     
