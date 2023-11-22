@@ -7,7 +7,6 @@ include("setup.jl")
 
 using Base.Filesystem: tempname
 using MPI
-using TimerOutputs
 
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input
@@ -17,16 +16,11 @@ using moment_kinetics.load_data: load_fields_data,
                                  load_pdf_data, load_time_data,
                                  load_species_data
 
-# Create a temporary directory for test output
-test_output_directory = tempname()
-mkpath(test_output_directory)
-
 # default inputs for tests
 test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "n_neutral_species" => 1,
                                     "boltzmann_electron_response" => true,
                                     "run_name" => "finite_difference",
-                                    "base_directory" => test_output_directory,
                                     "evolve_moments_density" => false,
                                     "evolve_moments_parallel_flow" => false,
                                     "evolve_moments_parallel_pressure" => false,
@@ -140,9 +134,6 @@ cross_compare_phi = [-1.1689445031600723, -0.7419935821024918, -0.70289464898427
                      -0.6917192346866861, -0.7028946489842764, -0.7419935821024903,
                      -1.1689445031600707]
 
-# Not actually used in the tests, but needed for first argument of run_moment_kinetics
-to = TimerOutput()
-
 """
 Run a test for a single set of parameters
 """
@@ -175,7 +166,7 @@ function run_test(test_input, expected_phi, tolerance; args...)
     phi = undef
     quietoutput() do
         # run simulation
-        run_moment_kinetics(to, input)
+        run_moment_kinetics(input)
     end
 
     if global_rank[] == 0
@@ -239,15 +230,19 @@ function run_test(test_input, expected_phi, tolerance; args...)
 end
 
 function runtests()
+    # Create a temporary directory for test output
+    test_output_directory = get_MPI_tempdir()
 
     @testset "Wall boundary conditions" verbose=use_verbose begin
         println("Wall boundary condition tests")
 
         @testset_skip "FD test case does not conserve density" "finite difference" begin
+            test_input_finite_difference["base_directory"] = test_output_directory
             run_test(test_input_finite_difference, nothing, 2.e-3)
         end
 
         @testset "Chebyshev uniform" begin
+            test_input_chebyshev["base_directory"] = test_output_directory
             run_test(test_input_chebyshev,
                      [-1.1689445031600718, -0.7479504438063098, -0.6947559936893813,
                       -0.6917252442591313, -0.7180152498764835, -0.9980114095597415],
@@ -255,6 +250,7 @@ function runtests()
         end
         
         @testset "Chebyshev sqrt grid odd" begin
+            test_input_chebyshev_sqrt_grid_odd["base_directory"] = test_output_directory
             run_test(test_input_chebyshev_sqrt_grid_odd,
                      [-1.2047298885671576, -0.9431378294506091, -0.8084332392927167,
                      -0.7812620422650213, -0.7233303514000929, -0.7003878610612269,
@@ -264,6 +260,7 @@ function runtests()
                      2.e-3)
         end
         @testset "Chebyshev sqrt grid even" begin
+            test_input_chebyshev_sqrt_grid_even["base_directory"] = test_output_directory
             run_test(test_input_chebyshev_sqrt_grid_even,
                      [-1.213617049279473, -1.0054529928344382, -0.871444761913497,
                      -0.836017699317097, -0.7552110924643832, -0.7264644073096705,
@@ -273,6 +270,11 @@ function runtests()
                      -1.0054529928344376, -1.2136170492794727],
                      2.e-3)
         end
+    end
+
+    if global_rank[] == 0
+        # Delete output directory to avoid using too much disk space
+        rm(realpath(test_output_directory); recursive=true)
     end
 end
 

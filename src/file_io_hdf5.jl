@@ -76,11 +76,15 @@ end
 function write_single_value!(file_or_group::HDF5.H5DataStore, name,
                              data::Union{Number, AbstractString, AbstractArray{T,N}},
                              coords...; parallel_io, n_ion_species=nothing,
-                             n_neutral_species=nothing, description=nothing) where {T,N}
+                             n_neutral_species=nothing, description=nothing,
+                             units=nothing) where {T,N}
     if isa(data, Union{Number, AbstractString})
         file_or_group[name] = data
         if description !== nothing
             add_attribute!(file_or_group[name], "description", description)
+        end
+        if units !== nothing
+            add_attribute!(file_or_group[name], "units", units)
         end
         return nothing
     end
@@ -261,6 +265,7 @@ end
 
 function append_to_dynamic_var(io_var::HDF5.Dataset,
                                data::Union{Number,AbstractArray{T,N}}, t_idx,
+                               parallel_io::Bool,
                                coords::Union{coordinate,Integer}...) where {T,N}
     # Extend time dimension for this variable
     dims = size(io_var)
@@ -270,7 +275,13 @@ function append_to_dynamic_var(io_var::HDF5.Dataset,
     global_ranges = Tuple(isa(c, coordinate) ? c.global_io_range : 1:c for c ∈ coords)
 
     if isa(data, Number)
-        io_var[t_idx] = data
+        if !parallel_io || global_rank[] == 0
+            # A scalar value is required to be the same on all processes, so when using
+            # parallel I/O, only write from one process to avoid overwriting (which would
+            # mean processes having to wait, and make which process wrote the final value
+            # random).
+            io_var[t_idx] = data
+        end
     elseif N == 1
         io_var[global_ranges[1], t_idx] = @view data[local_ranges[1]]
     elseif N == 2

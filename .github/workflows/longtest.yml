@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - master
+  workflow_dispatch:
 
 jobs:
   test:
@@ -14,11 +15,13 @@ jobs:
       matrix:
         os: [ubuntu-latest, macOS-latest]
       fail-fast: false
-    timeout-minutes: 75
+    timeout-minutes: 90
 
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
       - uses: julia-actions/setup-julia@v1
         with:
           version: '1.8'
@@ -33,5 +36,5 @@ jobs:
         #
       - run: |
           pip3 install --user matplotlib
-          julia --check-bounds=yes --color=yes --depwarn=yes --inline=yes --project=@. -e 'import Pkg; Pkg.test(; coverage = :true, test_args=["--long"])'
+          julia --check-bounds=yes --color=yes --depwarn=yes --project=@. -e 'import Pkg; Pkg.test(; test_args=["--long"])'
         shell: bash

@@ -3,7 +3,6 @@ include("setup.jl")
 
 using Base.Filesystem: tempname
 using MPI
-using TimerOutputs
 
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input
@@ -166,9 +165,6 @@ test_input_gauss_legendre = Dict("run_name" => "gausslegendre_pseudospectral",
                               "nwrite_dfns" => 5000 )
 
 
-# Not actually used in the tests, but needed for first argument of run_moment_kinetics
-to = TimerOutput()
-
 """
 Run a sound-wave test for a single set of parameters
 """
@@ -205,7 +201,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
     # Suppress console output while running
     quietoutput() do
         # run simulation
-        run_moment_kinetics(to, input)
+        run_moment_kinetics(input)
     end
 
     phi = nothing

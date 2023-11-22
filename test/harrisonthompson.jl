@@ -7,15 +7,12 @@ include("setup.jl")
 
 using Base.Filesystem: tempname
 using SpecialFunctions: dawson
-using TimerOutputs
 
 using moment_kinetics.load_data: open_readonly_output_file
 using moment_kinetics.load_data: load_fields_data, load_time_data
 using moment_kinetics.load_data: load_species_data, load_coordinate_data
 
-# Create a temporary directory for test output
-test_output_directory = tempname()
-mkpath(test_output_directory)
+ionization_frequency = 0.688
 
 # Analytic solution given by implicit equation
 #   z = 1/2 ± 2/(π R_ion) * D(sqrt(-phi))
@@ -68,7 +65,6 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "n_neutral_species" => 0,
                                     "boltzmann_electron_response" => true,
                                     "run_name" => "finite_difference",
-                                    "base_directory" => test_output_directory,
                                     "evolve_moments_density" => false,
                                     "evolve_moments_parallel_flow" => false,
                                     "evolve_moments_parallel_pressure" => false,
@@ -92,7 +88,7 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "vpa_IC_temperature_amplitude1" => 0.0,
                                     "vpa_IC_temperature_phase1" => 0.0,
                                     "charge_exchange_frequency" => 0.0,
-                                    "ionization_frequency" => 0.688,
+                                    "ionization_frequency" => 0.0,
                                     "constant_ionization_rate" => true,
                                     "nstep" => 9000,
                                     "dt" => 0.0005,
@@ -111,13 +107,19 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "vpa_ngrid" => 200,
                                     "vpa_nelement" => 1,
                                     "vpa_L" => 8.0,
-                                    "vpa_bc" => "periodic",
+                                    "vpa_bc" => "zero",
                                     "vpa_discretization" => "finite_difference",
                                     "vz_ngrid" => 200,
                                     "vz_nelement" => 1,
                                     "vz_L" => 8.0,
-                                    "vz_bc" => "periodic",
-                                    "vz_discretization" => "finite_difference")
+                                    "vz_bc" => "zero",
+                                    "vz_discretization" => "finite_difference",
+                                    "ion_source" => Dict("active" => true,
+                                                         "source_strength" => ionization_frequency,
+                                                         "source_T" => 0.25,
+                                                         "z_profile" => "constant",
+                                                         "r_profile" => "constant"),
+                                   )
 
 test_input_chebyshev = merge(test_input_finite_difference,
                              Dict("run_name" => "chebyshev_pseudospectral",
@@ -131,8 +133,19 @@ test_input_chebyshev = merge(test_input_finite_difference,
                                   "vz_ngrid" => 17,
                                   "vz_nelement" => 10))
 
-# Not actually used in the tests, but needed for first argument of run_moment_kinetics
-to = TimerOutput()
+test_input_chebyshev_split1 = merge(test_input_chebyshev,
+                                    Dict("run_name" => "chebyshev_pseudospectral_split1",
+                                         "evolve_moments_density" => true,
+                                         "evolve_moments_conservation" => true))
+
+test_input_chebyshev_split2 = merge(test_input_chebyshev_split1,
+                                    Dict("run_name" => "chebyshev_pseudospectral_split2",
+                                         "evolve_moments_parallel_flow" => true,
+                                         "numerical_dissipation" => Dict("force_minimum_pdf_value" => 0.0)))
+
+test_input_chebyshev_split3 = merge(test_input_chebyshev_split2,
+                                    Dict("run_name" => "chebyshev_pseudospectral_split3",
+                                         "evolve_moments_parallel_pressure" => true))
 
 """
 Run a test for a single set of parameters
@@ -164,12 +177,12 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
     input["run_name"] = name
 
     # Suppress console output while running
-    phi = undef
-    analytic_phi = undef
-    z = undef
+    phi = nothing
+    analytic_phi = nothing
+    z = nothing
     quietoutput() do
         # run simulation
-        run_moment_kinetics(to, input)
+        run_moment_kinetics(input)
     end
 
     if global_rank[] == 0
@@ -196,7 +209,7 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
 
             phi = phi_zrt[:,1,:]
             
-            analytic_phi = [findphi(zval, input["ionization_frequency"]) for zval ∈ z.grid]
+            analytic_phi = [findphi(zval, ionization_frequency) for zval ∈ z.grid]
         end
 
         # Analytic solution defines phi=0 at mid-point, so need to offset the code solution
@@ -213,22 +226,64 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
 end
 
 function runtests()
+    # Create a temporary directory for test output
+    test_output_directory = get_MPI_tempdir()
+
     @testset "Harrison-Thompson" verbose=use_verbose begin
         println("Harrison-Thompson wall boundary condition tests")
 
         @testset_skip "FD version forms discontinuity in vpa at z=±L/2" "finite difference" begin
+            test_input_finite_difference["base_directory"] = test_output_directory
             run_test(test_input_finite_difference, 1.e-3, 1.e-4, zeros(100), 1.e-14, 1.e-15)
         end
 
         @testset "Chebyshev" begin
+            test_input_chebyshev["base_directory"] = test_output_directory
             run_test(test_input_chebyshev, 3.e-2, 3.e-3,
                      [-0.8270506701954182, -0.6647482038047513, -0.4359510242978734,
                       -0.2930090318306279, -0.19789542580389763, -0.14560099254974576,
                       -0.12410802135258239, -0.11657014257474364, -0.11761846656548933,
                       -0.11657014257474377, -0.12410802135258239, -0.1456009925497464,
                       -0.19789542580389616, -0.2930090318306262, -0.435951024297872,
-                      -0.66474820380475, -0.8270506701954171], 5.e-9, 1.e-15)
+                      -0.66474820380475, -0.8270506701954171], 5.0e-9, 1.e-15)
         end
+        @testset "Chebyshev split 1" begin
+            test_input_chebyshev_split1["base_directory"] = test_output_directory
+            run_test(test_input_chebyshev_split1, 3.e-2, 3.e-3,
+                     [-0.808956646073449, -0.6619131832543625, -0.4308291868843453,
+                      -0.295820339728472, -0.19344190006125275, -0.1492514208442407,
+                      -0.11977511930743077, -0.12060863604650167, -0.11342106824862994,
+                      -0.12060863604649866, -0.11977511930742626, -0.14925142084423915,
+                      -0.1934419000612479, -0.295820339728463, -0.4308291868843545,
+                      -0.6619131832543678, -0.808956646073442], 5.0e-9, 1.e-15)
+        end
+        @testset "Chebyshev split 2" begin
+            test_input_chebyshev_split2["base_directory"] = test_output_directory
+            run_test(test_input_chebyshev_split2, 5.e-2, 3.e-3,
+                     [-0.7667804422571606, -0.6128777083267765, -0.39031953439035494,
+                      -0.27326504140885904, -0.15311275955907663, -0.11567486122959246,
+                      -0.09226471519174786, -0.07477085120501512, -0.07206945428218994,
+                      -0.07477085120545898, -0.09226471518828984, -0.11567486123016281,
+                      -0.15311275955613904, -0.273265041412353, -0.3903195344134153,
+                      -0.612877708320375, -0.766780442235556], 5.0e-9, 1.e-15)
+        end
+        # The 'split 3' test is pretty badly resolved, but don't want to increase
+        # run-time!
+        @testset "Chebyshev split 3" begin
+            test_input_chebyshev_split3["base_directory"] = test_output_directory
+            run_test(test_input_chebyshev_split3, 2.1e-1, 3.e-3,
+                     [-0.5535421015240105, -0.502816770781802, -0.3755477646148533,
+                      -0.24212761527100635, -0.15737450156025806, -0.11242832417550296,
+                      -0.09168434722655881, -0.08653015173768085, -0.0858195594227437,
+                      -0.08653015173768933, -0.09168434722650211, -0.11242832417546023,
+                      -0.15737450156026872, -0.24212761527101284, -0.3755477646149367,
+                      -0.5028167707818142, -0.5535421015238932], 5.0e-9, 1.e-15)
+        end
+    end
+
+    if global_rank[] == 0
+        # Delete output directory to avoid using too much disk space
+        rm(realpath(test_output_directory); recursive=true)
     end
 end
 

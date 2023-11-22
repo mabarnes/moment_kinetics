@@ -167,7 +167,7 @@ function runtests()
             end
         end
 
-        @testset "finite_difference derivatives (4 argument), Neumann" verbose=false begin
+        @testset "finite_difference derivatives (4 argument)" verbose=false begin
             @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"),
                     nelement ∈ (1:5), ngrid ∈ (9:33)
 
@@ -215,7 +215,7 @@ function runtests()
             end
         end
 
-        @testset "finite_difference derivatives upwinding (5 argument), Neumann" verbose=false begin
+        @testset "finite_difference derivatives upwinding (5 argument)" verbose=false begin
             @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"),
                     (fd_option, rtol_prefactor) ∈ (("fourth_order_centered", 3.0),
                                                    ("second_order_centered", 3.0),
@@ -677,7 +677,7 @@ function runtests()
             end
         end
 
-        @testset "Chebyshev pseudospectral derivatives (4 argument), Neumann" verbose=false begin
+        @testset "Chebyshev pseudospectral derivatives (4 argument), polynomials" verbose=false begin
             @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"), element_spacing_option ∈ ("uniform", "sqrt"),
                     nelement ∈ (1:5), ngrid ∈ (3:33), cheb_option in ("FFT","matrix")
 
@@ -727,7 +727,7 @@ function runtests()
             end
         end
 
-        @testset "Chebyshev pseudospectral derivatives upwinding (5 argument), Neumann" verbose=false begin
+        @testset "Chebyshev pseudospectral derivatives upwinding (5 argument), polynomials" verbose=false begin
             @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"), element_spacing_option ∈ ("uniform", "sqrt"),
                     nelement ∈ (1:5), ngrid ∈ (3:33), cheb_option in ("FFT","matrix")
 

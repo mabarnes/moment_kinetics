@@ -10,6 +10,7 @@ using ..array_allocation: allocate_float
 using ..calculus: integral
 using ..communication
 using ..coordinates: coordinate
+using ..initial_conditions: vpagrid_to_dzdt
 using ..interpolation: interpolate_to_grid_1d
 using ..load_data: open_readonly_output_file, get_nranks, load_pdf_data, load_rank_data
 using ..load_data: load_distributed_charged_pdf_slice
@@ -97,11 +98,13 @@ Note that `integrate_over_vspace()` includes the 1/sqrt(pi) factor already.
 
 If `ir0` is passed, only load the data for as single r-point (to save memory).
 """
-function check_Chodura_condition(r, z, vperp, vpa, dens, composition, Er, geometry, z_bc,
-                                 nblocks, run_name=nothing,
+function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, composition, Er,
+                                 geometry, z_bc, nblocks, run_name=nothing,
                                  it0::Union{Nothing, mk_int}=nothing,
                                  ir0::Union{Nothing, mk_int}=nothing;
-                                 f_lower=nothing, f_upper=nothing)
+                                 f_lower=nothing, f_upper=nothing,
+                                 evolve_density=false, evolve_upar=false,
+                                 evolve_ppar=false)
 
     if z_bc != "wall"
         return nothing, nothing
@@ -153,8 +156,15 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, composition, Er, geomet
                           (size(f_upper, 1), size(f_upper, 2), 1, size(f_upper, 3),
                            size(f_upper, 4), size(f_upper, 5)))
     end
+
+    f_lower = @views get_unnormalised_f_1d(f_lower, dens[1,:,:,:], vth[1,:,:,:],
+                                           evolve_density, evolve_ppar)
+    f_upper = @views get_unnormalised_f_1d(f_upper, dens[end,:,:,:], vth[end,:,:,:],
+                                           evolve_density, evolve_ppar)
     for it ∈ 1:ntime, ir ∈ 1:nr
-        vpabar = @. vpa.grid - 0.5 * geometry.rhostar * Er[1,ir,it] / geometry.bzed
+        v_parallel = vpagrid_to_dzdt(vpa.grid, vth[1,ir,is,it], upar[1,ir,is,it],
+                                     evolve_ppar, evolve_upar)
+        vpabar = @. v_parallel - 0.5 * geometry.rhostar * Er[1,ir,it] / geometry.bzed
 
         # Get rid of a zero if it is there to avoid a blow up - f should be zero at that
         # point anyway
@@ -174,7 +184,9 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, composition, Er, geomet
 
         lower_result[ir,it] *= 0.5 * composition.T_e / dens[1,ir,is,it]
 
-        vpabar = @. vpa.grid - 0.5 * geometry.rhostar * Er[end,ir,it] / geometry.bzed
+        v_parallel = vpagrid_to_dzdt(vpa.grid, vth[end,ir,is,it], upar[end,ir,is,it],
+                                     evolve_ppar, evolve_upar)
+        vpabar = @. v_parallel - 0.5 * geometry.rhostar * Er[end,ir,it] / geometry.bzed
 
         # Get rid of a zero if it is there to avoid a blow up - f should be zero at that
         # point anyway
@@ -752,6 +764,70 @@ end
 function _steady_state_absolute_residual(variable, variable_at_previous_time, reshaped_dt)
     absolute_residual = @. abs((variable - variable_at_previous_time) / reshaped_dt)
     return absolute_residual
+end
+
+"""
+Get the unnormalised distribution function and unnormalised ('lab space') dzdt
+coordinate at a point in space.
+
+Inputs should depend only on vpa.
+"""
+function get_unnormalised_f_dzdt_1d(f, vpa_grid, density, upar, vth, evolve_density,
+                                    evolve_upar, evolve_ppar)
+
+    dzdt = vpagrid_to_dzdt(vpa_grid, vth, upar, evolve_ppar, evolve_upar)
+
+    f_unnorm = get_unnormalised_f_1d(f, density, vth, evolve_density, evolve_ppar)
+
+    return f_unnorm, dzdt
+end
+function get_unnormalised_f_1d(f, density, vth, evolve_density, evolve_ppar)
+    if evolve_ppar
+        f_unnorm = @. f * density / vth
+    elseif evolve_density
+        f_unnorm = @. f * density
+    else
+        f_unnorm = f
+    end
+    return f_unnorm
+end
+
+"""
+Get the unnormalised distribution function and unnormalised ('lab space') coordinates.
+
+Inputs should depend only on z and vpa.
+"""
+function get_unnormalised_f_coords_2d(f, z_grid, vpa_grid, density, upar, vth,
+                                      evolve_density, evolve_upar, evolve_ppar)
+
+    nvpa, nz = size(f)
+    z2d = zeros(nvpa, nz)
+    for iz ∈ 1:nz
+        z2d[:,iz] .= z_grid[iz]
+    end
+    dzdt2d = vpagrid_to_dzdt_2d(vpa_grid, vth, upar, evolve_ppar, evolve_upar)
+    f_unnorm = get_unnormalised_f_2d(f, density, vth, evolve_density, evolve_ppar)
+
+    return f_unnorm, z2d, dzdt2d
+end
+function vpagrid_to_dzdt_2d(vpa_grid, vth, upar, evolve_ppar, evolve_upar)
+    nvpa = length(vpa_grid)
+    nz = length(vth)
+    dzdt2d = zeros(nvpa, nz)
+    for iz ∈ 1:nz
+        @views dzdt2d[:,iz] .= vpagrid_to_dzdt(vpa_grid, vth[iz], upar[iz], evolve_ppar,
+                                               evolve_upar)
+    end
+    return dzdt2d
+end
+function get_unnormalised_f_2d(f, density, vth, evolve_density, evolve_ppar)
+    f_unnorm = similar(f)
+    nz = size(f, 2)
+    for iz ∈ 1:nz
+        @views f_unnorm[:,iz] .= get_unnormalised_f_1d(f[:,iz], density[iz], vth[iz],
+                                                       evolve_density, evolve_ppar)
+    end
+    return f_unnorm
 end
 
 end
