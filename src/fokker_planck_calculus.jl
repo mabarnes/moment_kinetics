@@ -1353,7 +1353,7 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
     LLperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
     PPperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
     PUperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
-    PPpar = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
+    PPpar = Array{mk_float,2}(undef,vpa.ngrid,vpa.ngrid)
         
     impose_BC_at_zero_vperp = false
     @serial_region begin
@@ -1576,7 +1576,7 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
     LLperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
     PPperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
     PUperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
-    PPpar = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
+    PPpar = Array{mk_float,2}(undef,ngrid_vpa,ngrid_vpa)
         
     impose_BC_at_zero_vperp = false
     @serial_region begin
