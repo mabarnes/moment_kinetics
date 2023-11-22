@@ -11,7 +11,7 @@ julia --project run_makie_post_processing.jl dir1 [dir2 [dir3 ...]]
 module makie_post_processing
 
 export makie_post_process, generate_example_input_file, get_variable,
-       setup_makie_post_processing_input!, get_run_info
+       setup_makie_post_processing_input!, get_run_info, close_run_info
 export animate_f_unnorm_vs_vpa, animate_f_unnorm_vs_vpa_z, get_1d_ax, get_2d_ax,
        irregular_heatmap, irregular_heatmap!, plot_f_unnorm_vs_vpa,
        plot_f_unnorm_vs_vpa_z, positive_or_nan, postproc_load_variable, positive_or_nan,
