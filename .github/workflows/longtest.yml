@@ -36,5 +36,5 @@ jobs:
         #
       - run: |
           pip3 install --user matplotlib
-          julia --check-bounds=yes --color=yes --depwarn=yes --inline=yes --project=@. -e 'import Pkg; Pkg.test(; coverage = :true, test_args=["--long"])'
+          julia --check-bounds=yes --color=yes --depwarn=yes --project=@. -e 'import Pkg; Pkg.test(; test_args=["--long"])'
         shell: bash
