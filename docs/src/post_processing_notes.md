@@ -39,6 +39,12 @@ To see all the options that can be set,
 be used to create an example file containing all the options with their default
 values. The options are all commented out when the file is created.
 
+!!! note "Viewing animations"
+    Animations are produced in `.gif` format. Most utilities just play gifs,
+    but provide no options to pause them, etc. One that provides a few more
+    features is [multigifview](https://github.com/johnomotani/multigifview)
+    (developed by @johnomotani).
+
 Interactive use
 ---------------
 
