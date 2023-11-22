@@ -4,6 +4,27 @@ The full documentation is online at [https://mabarnes.github.io/moment_kinetics]
 
 ## Setup
 
+First clone this git repository, e.g. (to clone it into a directory with the
+default name `moment_kinetics`)
+```bash
+$ git clone git@github.com:mabarnes/moment_kinetics
+```
+The command above assumes that you have an account on Github.com, and that
+account has ssh keys set up. If that is not the case you can clone using https
+instead
+```bash
+$ git clone https://github.com/mabarnes/moment_kinetics
+```
+When using https somethings (e.g. pushing to the remote repository) may require
+you to use 2-factor authentication, see
+https://docs.github.com/en/get-started/getting-started-with-git/about-remote-repositories#cloning-with-https-urls.
+
+!!! warning
+    Do not download the zip-file from the Github.com page. This gives you the
+    source code files but does not create a git repository. We get some version
+    information from git when running the code, so without the git repository
+    you will not be able to run a simulation.
+
 If you are working on a supported machine, use the `machines/machine_setup.sh`
 script, see [Setup for `moment_kinetics` on known clusters](@ref). Otherwise:
 
@@ -35,7 +56,7 @@ script, see [Setup for `moment_kinetics` on known clusters](@ref). Otherwise:
     ```
    this significantly decreases the load time but prevents code changes from taking effect when `moment_kinetics.so` is used without repeating the precompilation (to use this option, add an option `-Jmoment_kinetics.so` when starting julia).
 
-4) In the course of development, it is sometimes helpful to upgrade the Julia version. Upgrading the version of Julia or upgrading packages may require a fresh installation of `moment_kinetics`. To make a fresh install with the latest package versions it is necessary to remove (or rename) the `Manifest.jl` file in the main directory, and generate a new `Manifest.jl` with step 1) above. It can sometimes be necessary to remove or rename the `.julia/` folder in your root directory for this step to be successful.
+4) In the course of development, it is sometimes helpful to upgrade the Julia version. Upgrading the version of Julia or upgrading packages may require a fresh installation of `moment_kinetics`. To make a fresh install with the latest package versions it is necessary to remove (or rename) the `Manifest.jl` file in the main directory, and generate a new `Manifest.jl` with step 2) above. It can sometimes be necessary to remove or rename the `.julia/` folder in your root directory for this step to be successful.
 
 5) One may have to set an environment variable to avoid error messages from the Qt library. If you execute the command
     ```
@@ -59,6 +80,8 @@ To run julia with optimization, type
 ```
 $ julia -O3 --project run_moment_kinetics.jl input.toml
 ```
+Note that the middle character in `-O3` is a capital letter 'O', not a zero.
+
 Options are specified in a TOML file, e.g. `input.toml` here. The defaults are
 specified in `moment_kinetics_input.jl`.
 * To run in parallel, just put `mpirun -np <n>` in front of the call you would
