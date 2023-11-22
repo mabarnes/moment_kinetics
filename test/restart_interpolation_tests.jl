@@ -137,6 +137,16 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
             path = joinpath(realpath(input["base_directory"]), name)
 
             run_info = get_run_info((path, -1); dfns=true)
+            z = run_info.z
+            z_spectral = run_info.z_spectral
+            vpa = run_info.vpa
+            vpa_spectral = run_info.vpa_spectral
+            vzeta = run_info.vzeta
+            vzeta_spectral = run_info.vzeta_spectral
+            vr = run_info.vr
+            vr_spectral = run_info.vr_spectral
+            vz = run_info.vz
+            vz_spectral = run_info.vz_spectral
             time = run_info.time
             n_ion_species = run_info.n_ion_species
             n_neutral_species = run_info.n_neutral_species
@@ -151,20 +161,14 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
             ppar_neutral_zrst = postproc_load_variable(run_info, "pz_neutral")
             qpar_neutral_zrst = postproc_load_variable(run_info, "qz_neutral")
             v_t_neutral_zrst = postproc_load_variable(run_info, "thermal_speed_neutral")
-            f_neutral_vzvrvzetazrst   = postproc_load_variable(run_info, "f_neutral")
+            # Slice f_neutral while loading to save memory, and avoid termination of the
+            # 'long tests' CI job.
+            f_neutral_vzvrvzetazrst = postproc_load_variable(run_info, "f_neutral",
+                                                             ivzeta=(vzeta.n+1)÷2,
+                                                             ivr=(vr.n+1)÷2)
             phi_zrt = postproc_load_variable(run_info, "phi")
             Er_zrt = postproc_load_variable(run_info, "Er")
             Ez_zrt = postproc_load_variable(run_info, "Ez")
-            z = run_info.z
-            z_spectral = run_info.z_spectral
-            vpa = run_info.vpa
-            vpa_spectral = run_info.vpa_spectral
-            vzeta = run_info.vzeta
-            vzeta_spectral = run_info.vzeta_spectral
-            vr = run_info.vr
-            vr_spectral = run_info.vr_spectral
-            vz = run_info.vz
-            vz_spectral = run_info.vz_spectral
 
             close_run_info(run_info)
 
@@ -183,7 +187,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
             ppar_neutral = ppar_neutral_zrst[:,1,:,:]
             qpar_neutral = qpar_neutral_zrst[:,1,:,:]
             v_t_neutral = v_t_neutral_zrst[:,1,:,:]
-            f_neutral = f_neutral_vzvrvzetazrst[:,(vr.n+1)÷2,(vzeta.n+1)÷2,:,1,:,:]
+            f_neutral = f_neutral_vzvrvzetazrst[:,:,1,:,:]
 
             # Unnormalize f
             if input["evolve_moments_density"]
