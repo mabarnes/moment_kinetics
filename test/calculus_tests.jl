@@ -1334,6 +1334,114 @@ function runtests()
                                norm=maxabs_norm)
             end
         end
+        
+        @testset "GaussLegendre pseudospectral second derivatives (4 argument), periodic" verbose=false begin
+            @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
+                    (
+                     (1, 8, 2.e-2),
+                     (1, 9, 5.e-3),
+                     (1, 10, 3.e-3),
+                     (1, 11, 2.e-4),
+                     (1, 12, 2.e-5),
+                     (1, 13, 4.e-6),
+                     (1, 14, 4.e-7),
+                     (1, 15, 1.e-7),
+                     (1, 16, 5.e-9),
+                     (1, 17, 1.e-9),
+                     
+                     (2, 4, 2.e-1),
+                     (2, 5, 5.e-2),
+                     (2, 6, 2.e-2),
+                     (2, 7, 2.e-3),
+                     (2, 8, 2.e-4),
+                     (2, 9, 2.e-5),
+                     (2, 10, 4.e-6),
+                     (2, 11, 2.e-7),
+                     (2, 12, 4.e-8),
+                     (2, 13, 8.e-10),
+                     (2, 14, 2.e-10),
+                     (2, 15, 4.e-13),
+                     (2, 16, 2.e-13),
+                     (2, 17, 2.e-13),
+                     
+                     (3, 5, 1.e-1),
+                     (3, 6, 2.e-2),
+                     (3, 7, 2.e-3),
+                     (3, 8, 2.e-4),
+                     (3, 9, 1.e-4),
+                     (3, 10, 4.e-6),
+                     (3, 11, 1.e-7),
+                     (3, 12, 8.e-9),
+                     (3, 13, 8.e-10),
+                     (3, 14, 3.e-10),
+                     (3, 15, 2.e-10),
+                     (3, 16, 2.e-10),
+                     (3, 17, 2.e-10),
+                     
+                     (4, 5, 5.e-2),
+                     (4, 6, 2.e-2),
+                     (4, 7, 2.e-3),
+                     (4, 8, 2.e-4),
+                     (4, 9, 1.e-4),
+                     (4, 10, 1.e-6),
+                     (4, 11, 8.e-9),
+                     (4, 12, 8.e-10),
+                     (4, 13, 8.e-10),
+                     (4, 14, 8.e-10),
+                     (4, 15, 8.e-10),
+                     (4, 16, 8.e-10),
+                     (4, 17, 8.e-10),
+                     
+                     (5, 5, 4.e-2),
+                     (5, 6, 8.e-3),
+                     (5, 7, 5.e-4),
+                     (5, 8, 5.e-5),
+                     (5, 9, 8.e-7),
+                     (5, 10, 5.e-8),
+                     (5, 11, 8.e-10),
+                     (5, 12, 4.e-10),
+                     (5, 13, 2.e-10),
+                     (5, 14, 2.e-10),
+                     (5, 15, 8.e-10),
+                     (5, 16, 8.e-10),
+                     (5, 17, 8.e-10),
+                     )
+
+                # define inputs needed for the test
+                L = 6.0
+                bc = "periodic"
+                # fd_option and adv_input not actually used so given values unimportant
+                fd_option = ""
+                adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                cheb_option = ""
+                # create the 'input' struct containing input info needed to create a
+                # coordinate
+                nelement_local = nelement
+				nrank_per_block = 0 # dummy value
+				irank = 0 # dummy value
+				comm = MPI.COMM_NULL # dummy value
+                element_spacing_option = "uniform"
+				input = grid_input("coord", ngrid, nelement,
+                    nelement_local, nrank_per_block, irank, L,
+                    "gausslegendre_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
+                    element_spacing_option)
+                # create the coordinate struct 'x' and info for derivatives, etc.
+                x, spectral = define_coordinate(input,init_YY=false)
+
+                offset = randn(rng)
+                f = @. sinpi(2.0 * x.grid / L) + offset
+                expected_d2f = @. -4.0 * π^2 / L^2 * sinpi(2.0 * x.grid / L)
+
+                # create array for the derivative d2f/dx2
+                d2f = similar(f)
+
+                # differentiate f
+                second_derivative!(d2f, f, x, spectral)
+
+                @test isapprox(d2f, expected_d2f, rtol=rtol, atol=1.e-10,
+                               norm=maxabs_norm)
+            end
+        end
     end
 end
 
