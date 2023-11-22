@@ -9,7 +9,7 @@ Post processing functionality is provided by the
 processing, call
 [`moment_kinetics.makie_post_processing.makie_post_process`](@ref) e.g.
 ```julia
-julia> using moment_kinetics.makie_post_process
+julia> using moment_kinetics.makie_post_processing
 julia> makie_post_process("runs/example-run/")
 ```
 or
