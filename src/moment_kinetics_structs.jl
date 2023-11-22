@@ -4,7 +4,6 @@ cycles when they are used by several other modules.
 """
 module moment_kinetics_structs
 
-using FFTW
 using ..communication
 using ..type_definitions: mk_float
 
@@ -44,5 +43,28 @@ struct em_fields_struct
     # if true, force Er = 0 at wall plates
     force_Er_zero_at_wall::Bool
 end
+
+"""
+discretization_info for one dimension
+
+All the specific discretizations in moment_kinetics are subtypes of this type.
+"""
+abstract type discretization_info end
+
+"""
+discretization_info for a discretization that supports 'weak form' methods, for one
+dimension
+"""
+abstract type weak_discretization_info <: discretization_info end
+
+"""
+Type representing a spatial dimension with only one grid point
+"""
+struct null_spatial_dimension_info <: discretization_info end
+
+"""
+Type representing a velocity space dimension with only one grid point
+"""
+struct null_velocity_dimension_info <: discretization_info end
 
 end

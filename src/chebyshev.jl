@@ -9,17 +9,18 @@ export scaled_chebyshev_grid
 export scaled_chebyshev_radau_grid
 export chebyshev_spectral_derivative!
 export chebyshev_info
-export chebyshev_base_info
-export chebyshev_derivative!
 
 using LinearAlgebra: mul!
 using FFTW
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_complex
 using ..clenshaw_curtis: clenshawcurtisweights
+import ..calculus: elementwise_derivative!
 import ..interpolation: interpolate_to_grid_1d!
+using ..moment_kinetics_structs: discretization_info
 
 """
+Chebyshev pseudospectral discretization
 """
 struct chebyshev_base_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan}
     # fext is an array for storing f(z) on the extended domain needed
@@ -40,7 +41,7 @@ struct chebyshev_base_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs
     Dmat::Array{mk_float,2}
 end
 
-struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan}
+struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan} <: discretization_info
     lobatto::chebyshev_base_info{TForward, TBackward}
     radau::chebyshev_base_info{TForward, TBackward}
 end
@@ -196,9 +197,11 @@ function scaled_chebyshev_radau_grid(ngrid, nelement_local, n,
 end
 
 """
+    elementwise_derivative!(coord, ff, chebyshev::chebyshev_info)
+
 Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'.
 """
-function chebyshev_derivative!(df, ff, chebyshev, coord)
+function elementwise_derivative!(coord, ff, chebyshev::chebyshev_info)
     df = coord.scratch_2d
     # define local variable nelement for convenience
     nelement = coord.nelement_local
@@ -206,6 +209,8 @@ function chebyshev_derivative!(df, ff, chebyshev, coord)
     @boundscheck nelement == size(chebyshev.lobatto.f,2) || throw(BoundsError(chebyshev.lobatto.f))
     @boundscheck nelement == size(chebyshev.radau.f,2) || throw(BoundsError(chebyshev.radau.f))
     @boundscheck nelement == size(df,2) && coord.ngrid == size(df,1) || throw(BoundsError(df))
+    # note that one must multiply by a coordinate transform factor 1/element_scale[j]
+    # for each element j to get derivative on the extended grid
     
     if coord.cheb_option == "matrix"
         # variable k will be used to avoid double counting of overlapping point
@@ -297,6 +302,16 @@ function chebyshev_derivative!(df, ff, chebyshev, coord)
     return nothing
 end
 
+"""
+    elementwise_derivative!(coord, ff, adv_fac, spectral::chebyshev_info)
+
+Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'.
+
+Note: Chebyshev derivative does not make use of upwinding information within each element.
+"""
+function elementwise_derivative!(coord, ff, adv_fac, spectral::chebyshev_info)
+    return elementwise_derivative!(coord, ff, spectral)
+end
 
 """
 """
@@ -310,8 +325,6 @@ function chebyshev_derivative_single_element!(df, ff, cheby_f, cheby_df, cheby_f
     # inverse Chebyshev transform to get df/dcoord
     chebyshev_backward_transform!(df, cheby_fext, cheby_df, forward, coord.ngrid)
 end
-
-
 
 """
 Chebyshev transform f to get Chebyshev spectral coefficients

@@ -6,101 +6,180 @@ export derivative!, second_derivative!, laplacian_derivative!
 export reconcile_element_boundaries_MPI!
 export integral
 
-
-using ..chebyshev: chebyshev_info, chebyshev_derivative!
-using ..gauss_legendre: gausslegendre_info, gausslegendre_derivative!
-using ..gauss_legendre: gausslegendre_apply_Kmat!, gausslegendre_mass_matrix_solve!
-using ..gauss_legendre: gausslegendre_apply_Lmat!
-using ..finite_differences: derivative_finite_difference!
+using ..moment_kinetics_structs: discretization_info, null_spatial_dimension_info,
+                                 null_velocity_dimension_info, weak_discretization_info
 using ..type_definitions: mk_float, mk_int
-using MPI 
+using MPI
 using ..communication: block_rank
 using ..communication: _block_synchronize
 using ..looping
 
 """
-Use Gauss-Legendre differentiation matrices to take the first derivative 
+    elementwise_derivative!(coord, f, adv_fac, spectral)
+    elementwise_derivative!(coord, f, spectral)
+
+Generic function for element-by-element derivatives
+
+First signature, with `adv_fac`, calculates an upwind derivative, the second signature
+calculates a derivative without upwinding information.
+
+Result is stored in coord.scratch_2d.
 """
-function derivative!(df, f, coord, adv_fac, spectral::gausslegendre_info)
-    # get the derivative at each grid point within each element and store in df
-    gausslegendre_derivative!(coord.scratch_2d, f, spectral, coord)
+function elementwise_derivative! end
+
+"""
+    elementwise_second_derivative!(coord, f, spectral)
+
+Generic function for element-by-element second derivatives.
+
+Note: no upwinding versions of second deriatives.
+
+Result is stored in coord.scratch_2d.
+"""
+function elementwise_second_derivative! end
+
+"""
+    derivative!(df, f, coord, adv_fac, spectral)
+
+Upwinding derivative.
+"""
+function derivative!(df, f, coord, adv_fac, spectral::discretization_info)
+    # get the derivative at each grid point within each element and store in
+    # coord.scratch_2d
+    elementwise_derivative!(coord, f, adv_fac, spectral)
     # map the derivative from the elemental grid to the full grid;
     # at element boundaries, use the derivative from the upwind element.
     derivative_elements_to_full_grid!(df, coord.scratch_2d, coord, adv_fac)
 end
 
-function derivative!(df, f, coord, spectral::gausslegendre_info)
-    # get the derivative at each grid point within each element and store in df
-    gausslegendre_derivative!(coord.scratch_2d, f, spectral, coord)
+"""
+    derivative!(df, f, coord, spectral)
+
+Non-upwinding derivative.
+"""
+function derivative!(df, f, coord, spectral)
+    # get the derivative at each grid point within each element and store in
+    # coord.scratch_2d
+    elementwise_derivative!(coord, f, spectral)
     # map the derivative from the elemental grid to the full grid;
     # at element boundaries, use the average of the derivatives from neighboring elements.
     derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)
 end
 
-function second_derivative!(d2f, f, coord, spectral::gausslegendre_info)
+# Special versions for 'null' coordinates with only one point
+function derivative!(df, f, coord, spectral::Union{null_spatial_dimension_info,
+                                                   null_velocity_dimension_info})
+    df .= 0.0
+    return nothing
+end
+
+function second_derivative!(d2f, f, coord, spectral)
+    # computes d^2f / d(coord)^2
+    # For spectral element methods, calculate second derivative by applying first
+    # derivative twice, with special treatment for element boundaries
+
+    # First derivative
+    elementwise_derivative!(coord, f, spectral)
+    derivative_elements_to_full_grid!(coord.scratch3, coord.scratch_2d, coord)
+    # MPI reconcile code here if used with z or r coords
+
+    # Save elementwise first derivative result
+    coord.scratch2_2d .= coord.scratch_2d
+
+    # Second derivative for element interiors
+    elementwise_derivative!(coord, coord.scratch3, spectral)
+    derivative_elements_to_full_grid!(d2f, coord.scratch_2d, coord)
+    # MPI reconcile code here if used with z or r coords
+
+    # Add contribution to penalise discontinuous first derivatives at element
+    # boundaries. For smooth functions this would do nothing so should not affect
+    # convergence of the second derivative. Aims to stabilise numerical instability when
+    # spike develops at an element boundary. The coefficient is an arbitrary choice, it
+    # should probably be large enough for stability but as small as possible.
+    #
+    # Arbitrary numerical coefficient
+    C = 1.0
+    function penalise_discontinuous_first_derivative!(d2f, imin, imax, df)
+        # Left element boundary
+        d2f[imin] += C * df[1]
+
+        # Right element boundary
+        d2f[imax] -= C * df[end]
+
+        return nothing
+    end
+    @views penalise_discontinuous_first_derivative!(d2f, 1, coord.imax[1],
+                                                    coord.scratch2_2d[:,1])
+    for ielement ∈ 2:coord.nelement_local
+        @views penalise_discontinuous_first_derivative!(d2f, coord.imin[ielement]-1,
+                                                        coord.imax[ielement],
+                                                        coord.scratch2_2d[:,ielement])
+    end
+
+    if coord.bc ∈ ("wall", "zero", "both_zero")
+        # For stability don't contribute to evolution at boundaries, in case these
+        # points are not set by a boundary condition.
+        # Full grid may be across processes and bc only applied to extreme ends of the
+        # domain.
+        if coord.irank == 0
+            d2f[1] = 0.0
+        end
+        if coord.irank == coord.nrank - 1
+            d2f[end] = 0.0
+        end
+    elseif coord.bc == "periodic"
+        # Need to get first derivatives from opposite ends of grid
+        if coord.nelement_local != coord.nelement_global
+            error("Distributed memory MPI not yet supported here")
+        end
+        d2f[1] -= C * coord.scratch2_2d[end,end]
+        d2f[end] += C * coord.scratch2_2d[1,1]
+    else
+        error("Unsupported bc '$(coord.bc)'")
+    end
+    return nothing
+end
+
+"""
+    mass_matrix_solve!(f, b, spectral::weak_discretization_info)
+
+Solve
+```math
+M.f = b
+```
+for \$a\$, where \$M\$ is the mass matrix of a weak-form finite element method and \$b\$
+is an input.
+"""
+function mass_matrix_solve! end
+
+"""
+Apply 'K-matrix' as part of a weak-form second derivative
+"""
+function elementwise_apply_Kmat! end
+
+function second_derivative!(d2f, f, coord, spectral::weak_discretization_info)
     # get the derivative at each grid point within each element and store in df
-    gausslegendre_apply_Kmat!(coord.scratch_2d, f, spectral, coord)
+    elementwise_apply_Kmat!(coord, f, spectral)
     # map the derivative from the elemental grid to the full grid;
     # at element boundaries, use the average of the derivatives from neighboring elements.
     derivative_elements_to_full_grid!(coord.scratch, coord.scratch_2d, coord)
     # solve weak form problem M * d2f = K * f
-    gausslegendre_mass_matrix_solve!(d2f,coord.scratch,spectral)
+    mass_matrix_solve!(d2f, coord.scratch, spectral)
 end
 
-function laplacian_derivative!(d2f, f, coord, spectral::gausslegendre_info)
+"""
+Apply 'L-matrix' as part of a weak-form Laplacian derivative
+"""
+function elementwise_apply_Lmat! end
+
+function laplacian_derivative!(d2f, f, coord, spectral::weak_discretization_info)
     # get the derivative at each grid point within each element and store in df
-    gausslegendre_apply_Lmat!(coord.scratch_2d, f, spectral, coord)
+    elementwise_apply_Lmat!(coord, f, spectral)
     # map the derivative from the elemental grid to the full grid;
     # at element boundaries, use the average of the derivatives from neighboring elements.
     derivative_elements_to_full_grid!(coord.scratch, coord.scratch_2d, coord)
     # solve weak form problem M * d2f = K * f
-    gausslegendre_mass_matrix_solve!(d2f,coord.scratch,spectral)
-end
-"""
-Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
-"""
-function derivative!(df, f, coord, adv_fac, spectral::chebyshev_info)
-    # get the derivative at each grid point within each element and store in df
-    chebyshev_derivative!(coord.scratch_2d, f, spectral, coord)
-    # map the derivative from the elemental grid to the full grid;
-    # at element boundaries, use the derivative from the upwind element.
-    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord, adv_fac)
-end
-
-"""
-Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
-"""
-function derivative!(df, f, coord, spectral::chebyshev_info)
-    # get the derivative at each grid point within each element and store in df
-    chebyshev_derivative!(coord.scratch_2d, f, spectral, coord)
-    # map the derivative from the elemental grid to the full grid;
-    # at element boundaries, use the average of the derivatives from neighboring elements.
-    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)
-end
-
-"""
-calculate the derivative of f using finite differences, with particular scheme
-specified by coord.fd_option; stored in df
-"""
-function derivative!(df, f, coord, adv_fac, not_spectral::Bool)
-    # get the derivative at each grid point within each element and store in df
-    derivative_finite_difference!(coord.scratch_2d, f, coord.cell_width, adv_fac,
-        coord.bc, coord.fd_option, coord.igrid, coord.ielement)
-    # map the derivative from the elemental grid to the full grid;
-    # at element boundaries, use the derivative from the upwind element.
-    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord, adv_fac)
-end
-
-"""
-calculate the derivative of f using centered differences; stored in df
-"""
-function derivative!(df, f, coord, not_spectral::Bool)
-    # get the derivative at each grid point within each element and store in df
-    derivative_finite_difference!(coord.scratch_2d, f, coord.cell_width,
-        coord.bc, "fourth_order_centered", coord.igrid, coord.ielement)
-    # map the derivative from the elemental grid to the full grid;
-    # at element boundaries, use the average of the derivatives from neighboring elements.
-    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)
+    mass_matrix_solve!(d2f, coord.scratch, spectral)
 end
 
 """
@@ -233,7 +312,7 @@ function reconcile_element_boundaries_centered!(df1d, df2d, coord)
 		df1d[1] = 0.5*(df2d[1,1]+df2d[coord.ngrid,coord.nelement_local])
 		# consider right domain boundary
 		df1d[coord.n] = df1d[1]
-	else 
+	else
 	# put endpoints into 1D array to be reconciled
 	# across processes at a higher scope -> larger message sizes possible
 		df1d[1] = df2d[1,1]
@@ -253,8 +332,8 @@ end
 
 """
 extension of the above function to distributed memory MPI
-function allows for arbitray array sizes ONLY IF the 
-if statements doing the final endpoint assignments are 
+function allows for arbitray array sizes ONLY IF the
+if statements doing the final endpoint assignments are
 updated to include each physical dimension required
 in the main code
 """
@@ -300,22 +379,22 @@ function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
 	
     # synchronize buffers
     # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
-    # -- or from a @serial_region or from an if statment isolating a single rank on a block 
+    # -- or from a @serial_region or from an if statment isolating a single rank on a block
     _block_synchronize()
     #if block_rank[] == 0 # lead process on this shared-memory block
     @serial_region begin
 
         # now deal with endpoints that are stored across ranks
         comm = coord.comm
-        nrank = coord.nrank 
-        irank = coord.irank 
+        nrank = coord.nrank
+        irank = coord.irank
         #send_buffer = coord.send_buffer
         #receive_buffer = coord.receive_buffer
         # sending pattern is cyclic. First we send data form irank -> irank + 1
         # to fix the lower endpoints, then we send data from irank -> irank - 1
         # to fix upper endpoints. Special exception for the periodic points.
         # receive_buffer[1] is for data received, send_buffer[1] is data to be sent
-        
+
         # pass data from irank -> irank + 1, receive data from irank - 1
         idst = mod(irank+1,nrank) # destination rank for sent data
         isrc = mod(irank-1,nrank) # source rank for received data
@@ -323,7 +402,7 @@ function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
         rreq1 = MPI.Irecv!(receive_buffer1, comm; source=isrc, tag=1)
         sreq1 = MPI.Isend(dfdx_upper_endpoints, comm; dest=idst, tag=1)
         #print("$irank: Sending   $irank -> $idst = $dfdx_upper_endpoints\n")
-        
+
         # pass data from irank -> irank - 1, receive data from irank + 1
         idst = mod(irank-1,nrank) # destination rank for sent data
         isrc = mod(irank+1,nrank) # source rank for received data
@@ -348,7 +427,7 @@ function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
         end
         #now update the df1d array -- using a slice appropriate to the dimension reconciled
         assign_endpoint!(df1d,receive_buffer1,"lower",coord)
-        
+
         if irank == nrank-1
             if coord.bc == "periodic"
                 #update the extreme upper endpoint with data from irank = 0
@@ -361,7 +440,7 @@ function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
         end
         #now update the df1d array -- using a slice appropriate to the dimension reconciled
         assign_endpoint!(df1d,receive_buffer2,"upper",coord)
-        
+
     end
     # synchronize buffers
     _block_synchronize()
@@ -376,41 +455,40 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,Ndims},adv_fac::AbstractA
 		#sgn = -1 for send irank + 1 -> irank
 		#loop over all indices in array
 		for i in eachindex(buffer,adv_fac,endpoints)
-			if sgn*adv_fac[i] > 0.0 
-			# replace buffer value with endpoint value 
+			if sgn*adv_fac[i] > 0.0
+			# replace buffer value with endpoint value
 				buffer[i] = endpoints[i]
 			elseif sgn*adv_fac[i] < 0.0
 				#do nothing
-			else #average values 
+			else #average values
 				buffer[i] = 0.5*(buffer[i] + endpoints[i])
 			end
 		end
 		
 	end
 	
-function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims}, 
+function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
 	adv_fac_lower_endpoints::AbstractArray{mk_float,Mdims}, adv_fac_upper_endpoints::AbstractArray{mk_float,Mdims},
 	dfdx_lower_endpoints::AbstractArray{mk_float,Mdims}, dfdx_upper_endpoints::AbstractArray{mk_float,Mdims},
 	receive_buffer1::AbstractArray{mk_float,Mdims}, receive_buffer2::AbstractArray{mk_float,Mdims}, coord) where {Ndims,Mdims}
 	
     # synchronize buffers
     # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
-    # -- or from a @serial_region or from an if statment isolating a single rank on a block 
+    # -- or from a @serial_region or from an if statment isolating a single rank on a block
     _block_synchronize()
     #if block_rank[] == 0 # lead process on this shared-memory block
     @serial_region begin
-        
         # now deal with endpoints that are stored across ranks
         comm = coord.comm
-        nrank = coord.nrank 
-        irank = coord.irank 
+        nrank = coord.nrank
+        irank = coord.irank
         #send_buffer = coord.send_buffer
         #receive_buffer = coord.receive_buffer
         # sending pattern is cyclic. First we send data form irank -> irank + 1
         # to fix the lower endpoints, then we send data from irank -> irank - 1
         # to fix upper endpoints. Special exception for the periodic points.
         # receive_buffer[1] is for data received, send_buffer[1] is data to be sent
-        
+
         # send highest end point on THIS rank
         # pass data from irank -> irank + 1, receive data from irank - 1
         idst = mod(irank+1,nrank) # destination rank for sent data
@@ -419,7 +497,7 @@ function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
         rreq1 = MPI.Irecv!(receive_buffer1, comm; source=isrc, tag=1)
         sreq1 = MPI.Isend(dfdx_upper_endpoints, comm; dest=idst, tag=1)
         #print("$irank: Sending   $irank -> $idst = $dfdx_upper_endpoints\n")
-        
+
         # send lowest end point on THIS rank
         # pass data from irank -> irank - 1, receive data from irank + 1
         idst = mod(irank-1,nrank) # destination rank for sent data
@@ -437,7 +515,7 @@ function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
             if coord.bc == "periodic"
                 # depending on adv_fac, update the extreme lower endpoint with data from irank = nrank -1	
                 apply_adv_fac!(receive_buffer1,adv_fac_lower_endpoints,dfdx_lower_endpoints,1)
-            else # directly use value from Cheb at extreme lower point 
+            else # directly use value from Cheb at extreme lower point
                 receive_buffer1 .= dfdx_lower_endpoints
             end
         else # depending on adv_fac, update the lower endpoint with data from irank = nrank -1	
@@ -445,7 +523,7 @@ function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
         end
         #now update the df1d array -- using a slice appropriate to the dimension reconciled
         assign_endpoint!(df1d,receive_buffer1,"lower",coord)
-        
+
         if irank == nrank-1
             if coord.bc == "periodic"
                 # depending on adv_fac, update the extreme upper endpoint with data from irank = 0
@@ -463,75 +541,6 @@ function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
     # synchronize buffers
     _block_synchronize()
 end
-	
-function second_derivative!(d2f, f, coord, spectral::chebyshev_info)
-    # For spectral element methods, calculate second derivative by applying first
-    # derivative twice, with special treatment for element boundaries
-
-    # First derivative
-    chebyshev_derivative!(coord.scratch_2d, f, spectral, coord)
-    derivative_elements_to_full_grid!(coord.scratch2, coord.scratch_2d, coord)
-    # MPI reconcile code here if used with z or r coords
-    
-    # Save elementwise first derivative result
-    coord.scratch2_2d .= coord.scratch_2d
-
-    # Second derivative for element interiors
-    chebyshev_derivative!(coord.scratch_2d, coord.scratch2, spectral, coord)
-    derivative_elements_to_full_grid!(d2f, coord.scratch_2d, coord)
-    # MPI reconcile code here if used with z or r coords
-    
-    
-    # Add contribution to penalise discontinuous first derivatives at element
-    # boundaries. For smooth functions this would do nothing so should not affect
-    # convergence of the second derivative. Aims to stabilise numerical instability when
-    # spike develops at an element boundary. The coefficient is an arbitrary choice, it
-    # should probably be large enough for stability but as small as possible.
-    #
-    # Arbitrary numerical coefficient
-    C = 1.0
-    function penalise_discontinuous_first_derivative!(d2f, imin, imax, df)
-        # Left element boundary
-        d2f[imin] += C * df[1]
-
-        # Right element boundary
-        d2f[imax] -= C * df[end]
-
-        return nothing
-    end
-    @views penalise_discontinuous_first_derivative!(d2f, 1, coord.imax[1],
-                                                    coord.scratch2_2d[:,1])
-    for ielement ∈ 2:coord.nelement_local
-        @views penalise_discontinuous_first_derivative!(d2f, coord.imin[ielement]-1,
-                                                        coord.imax[ielement],
-                                                        coord.scratch2_2d[:,ielement])
-    end
-
-    if coord.bc ∈ ("wall", "zero")
-        # For stability don't contribute to evolution at boundaries, in case these
-        # points are not set by a boundary condition.    
-        # Full grid may be across processes and bc only applied to extreme ends of the
-        # domain.
-        if coord.irank == 0
-            d2f[1] = 0.0
-        end
-        if coord.irank == coord.nrank - 1
-            d2f[end] = 0.0
-        end
-    elseif coord.bc == "periodic"
-        # Need to get first derivatives from opposite ends of grid
-        if coord.nelement_local != coord.nelement_global
-            error("Distributed memory MPI not yet supported here")
-        end
-        d2f[1] -= C * coord.scratch2_2d[end,end]
-        d2f[end] += C * coord.scratch2_2d[1,1]
-    else
-        error("Unsupported bc '$coord.bc'")
-    end
-    return nothing
-end
-
-
 
 """
 Computes the integral of the integrand, using the input wgts
@@ -603,7 +612,7 @@ function integral(integrand, vx, px, wgtsx, vy, py, wgtsy)
     @boundscheck ny == length(vy) || throw(BoundsError(vy))
 #    @boundscheck ny == length(wgtsy) || throw(BoundsError(wtgsy))
 #    @boundscheck nx == length(wgtsx) || throw(BoundsError(wtgsx))
-   
+
     @inbounds for j ∈ 1:ny
         @inbounds for i ∈ 1:nx
             integral += integrand[i,j] * (vx[i] ^ px) * (vy[j] ^ py) * wgtsx[i] * wgtsy[j]
@@ -633,7 +642,7 @@ function integral(integrand, vx, px, wgtsx, vy, py, wgtsy, vz, pz, wgtsz)
     @boundscheck nx == length(vx) || throw(BoundsError(vx))
     @boundscheck ny == length(vy) || throw(BoundsError(vy))
     @boundscheck nz == length(vz) || throw(BoundsError(vz))
-   
+
     @inbounds for k ∈ 1:nz
         @inbounds for j ∈ 1:ny
             @inbounds for i ∈ 1:nx
