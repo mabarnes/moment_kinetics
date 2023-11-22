@@ -103,7 +103,7 @@ create arrays associated with a given coordinate,
 setup the coordinate grid, and populate the coordinate structure
 containing all of this information
 """
-function define_coordinate(input, parallel_io::Bool=false)
+function define_coordinate(input, parallel_io::Bool=false; init_YY::Bool=true)
     # total number of grid points is ngrid for the first element
     # plus ngrid-1 unique points for each additional element due
     # to the repetition of a point at the element boundary
@@ -176,7 +176,7 @@ function define_coordinate(input, parallel_io::Bool=false)
     elseif input.discretization == "gausslegendre_pseudospectral" && coord.n > 1
         # create arrays needed for explicit GaussLegendre pseudospectral treatment in this
         # coordinate and create the matrices for differentiation
-        spectral = setup_gausslegendre_pseudospectral(coord)
+        spectral = setup_gausslegendre_pseudospectral(coord,init_YY=init_YY)
         # obtain the local derivatives of the uniform grid with respect to the used grid
         derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
     else
