@@ -464,24 +464,20 @@ function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
     _block_synchronize()
 end
 	
-function second_derivative!(d2f, f, Q, coord, spectral)
-    # computes d / d coord ( Q . d f / d coord)
+function second_derivative!(d2f, f, coord, spectral::chebyshev_info)
     # For spectral element methods, calculate second derivative by applying first
     # derivative twice, with special treatment for element boundaries
 
     # First derivative
     chebyshev_derivative!(coord.scratch_2d, f, spectral, coord)
-    derivative_elements_to_full_grid!(coord.scratch3, coord.scratch_2d, coord)
+    derivative_elements_to_full_grid!(coord.scratch2, coord.scratch_2d, coord)
     # MPI reconcile code here if used with z or r coords
     
     # Save elementwise first derivative result
     coord.scratch2_2d .= coord.scratch_2d
 
-    #form Q . d f / d coord
-    coord.scratch3 .= Q .* coord.scratch3
-    
     # Second derivative for element interiors
-    chebyshev_derivative!(coord.scratch_2d, coord.scratch3, spectral, coord)
+    chebyshev_derivative!(coord.scratch_2d, coord.scratch2, spectral, coord)
     derivative_elements_to_full_grid!(d2f, coord.scratch_2d, coord)
     # MPI reconcile code here if used with z or r coords
     

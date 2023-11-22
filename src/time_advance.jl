@@ -245,7 +245,9 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
         # initialise the r advection speed
         begin_s_z_vperp_vpa_region()
         @loop_s is begin
-            @views update_speed_r!(r_advect[is], fields, vpa, vperp, z, r, geometry)
+            @views update_speed_r!(r_advect[is], moments.charged.upar[:,:,is],
+                                   moments.charged.vth[:,:,is], fields, moments.evolve_upar,
+                                   moments.evolve_ppar, vpa, vperp, z, r, geometry)
         end
         # enforce prescribed boundary condition in r on the distribution function f
     end

@@ -1327,8 +1327,7 @@ function runtests()
                 d2f = similar(f)
 
                 # differentiate f
-                x.scratch2 .= 1.0 # placeholder for Q in d / d x ( Q d f / d x)
-                second_derivative!(d2f, f, x.scratch2, x, spectral)
+                second_derivative!(d2f, f, x, spectral)
 
                 @test isapprox(d2f, expected_d2f, rtol=rtol, atol=1.e-10,
                                norm=maxabs_norm)
