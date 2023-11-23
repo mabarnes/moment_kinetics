@@ -486,8 +486,8 @@ function setup_advance_flags(moments, composition, t_input, collisions,
     vpa_diffusion = false
     vz_diffusion = false
     explicit_fp_collisions = false
-    explicit_weakform_fp_collisions = true
-    explicit_fp_F_FM_collisions = true
+    explicit_weakform_fp_collisions = false
+    explicit_fp_F_FM_collisions = false
     # all advance flags remain false if using operator-splitting
     # otherwise, check to see if the flags need to be set to true
     if !t_input.split_operators
