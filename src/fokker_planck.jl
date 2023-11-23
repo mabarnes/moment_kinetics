@@ -1,5 +1,27 @@
 """
 module for including the Full-F Fokker-Planck Collision Operator
+
+The functions in this module are split into two groups. 
+
+The first set of functions implement the weak-form
+Collision operator using the Rosenbluth-MacDonald-Judd
+formulation in a divergence form. The Green's functions
+for the Rosenbluth potentials are used to obtain the Rosenbluth
+potentials at the boundaries. To find the potentials
+everywhere else elliptic solves of the PDEs for the
+Rosenbluth potentials are performed with Dirichlet
+boundary conditions. These routines provide the default collision operator
+used in the code.
+
+The second set of functions implement the same operator using a "strong" form
+where the collision operator is fully expanded out, and repeated interpolation
+derivatives are used to calculate the terms in the operator arising from the 
+test particle distribution function. The Green's functions are used to obtain
+the Rosenbluth potentials everywhere. This second implementation shows worse
+numerical conservation properties than the first, and is significantly slower
+due to the use of the Green's functions for the whole of velocity space.
+For nowm, these functions are retained for development purposes.
+
 """
 module fokker_planck
 
@@ -43,6 +65,11 @@ using ..fokker_planck_calculus: calculate_rosenbluth_potentials_via_elliptic_sol
 using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_fluxes, H_Maxwellian, dGdvperp_Maxwellian
 using ..fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian
 using ..fokker_planck_test: F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
+
+########################################################
+# begin functions associated with the weak-form operator
+########################################################
+
 """
 allocate the required ancilliary arrays 
 """
@@ -332,6 +359,100 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
     ravel_c_to_vpavperp_parallel!(CC,sc,vpa.n)
     return nothing
 end
+
+# solves A x = b for a matrix of the form
+# A00  0    A02
+# 0    A11  A12
+# A02  A12  A22
+# appropriate for the moment numerical conserving terms
+function symmetric_matrix_inverse(A00,A02,A11,A12,A22,b0,b1,b2)
+    # matrix determinant
+    detA = A00*(A11*A22 - A12^2) - A11*A02^2
+    # cofactors C (also a symmetric matrix)
+    C00 = A11*A22 - A12^2
+    C01 = A12*A02
+    C02 = -A11*A02
+    C11 = A00*A22 - A02^2
+    C12 = -A00*A12
+    C22 = A00*A11
+    x0 = ( C00*b0 + C01*b1 + C02*b2 )/detA
+    x1 = ( C01*b0 + C11*b1 + C12*b2 )/detA
+    x2 = ( C02*b0 + C12*b1 + C22*b2 )/detA
+    #println("b0: ",b0," b1: ",b1," b2: ",b2)
+    #println("A00: ",A00," A02: ",A02," A11: ",A11," A12: ",A12," A22: ",A22, " detA: ",detA)
+    #println("C00: ",C00," C02: ",C02," C11: ",C11," C12: ",C12," C22: ",C22)
+    #println("x0: ",x0," x1: ",x1," x2: ",x2)
+    return x0, x1, x2
+end
+
+# solves A x = b for a matrix of the form
+# A00  A01  A02
+# A01  A11  A12
+# A02  A12  A22
+# appropriate for the moment numerical conserving terms
+function symmetric_matrix_inverse(A00,A01,A02,A11,A12,A22,b0,b1,b2)
+    # matrix determinant
+    detA = A00*(A11*A22 - A12^2) - A01*(A01*A22 - A12*A02) + A02*(A01*A12 - A11*A02)
+    # cofactors C (also a symmetric matrix)
+    C00 = A11*A22 - A12^2
+    C01 = A12*A02 - A01*A22
+    C02 = A01*A12 -A11*A02
+    C11 = A00*A22 - A02^2
+    C12 = A01*A02 -A00*A12
+    C22 = A00*A11 - A01^2
+    x0 = ( C00*b0 + C01*b1 + C02*b2 )/detA
+    x1 = ( C01*b0 + C11*b1 + C12*b2 )/detA
+    x2 = ( C02*b0 + C12*b1 + C22*b2 )/detA
+    #println("b0: ",b0," b1: ",b1," b2: ",b2)
+    #println("A00: ",A00," A02: ",A02," A11: ",A11," A12: ",A12," A22: ",A22, " detA: ",detA)
+    #println("C00: ",C00," C02: ",C02," C11: ",C11," C12: ",C12," C22: ",C22)
+    #println("x0: ",x0," x1: ",x1," x2: ",x2)
+    return x0, x1, x2
+end
+
+function conserving_corrections!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
+    begin_serial_region()
+    # compute moments of the input pdf
+    dens =  get_density(@view(pdf_in[:,:]), vpa, vperp)
+    upar = get_upar(@view(pdf_in[:,:]), vpa, vperp, dens)
+    ppar = get_ppar(@view(pdf_in[:,:]), vpa, vperp, upar)
+    pperp = get_pperp(@view(pdf_in[:,:]), vpa, vperp)
+    pressure = get_pressure(ppar,pperp)
+    qpar = get_qpar(@view(pdf_in[:,:]), vpa, vperp, upar, dummy_vpavperp)
+    rmom = get_rmom(@view(pdf_in[:,:]), vpa, vperp, upar, dummy_vpavperp)
+    
+    # compute moments of the numerical collision operator
+    dn = get_density(CC, vpa, vperp)
+    du = get_upar(CC, vpa, vperp, 1.0)
+    dppar = get_ppar(CC, vpa, vperp, upar)
+    dpperp = get_pperp(CC, vpa, vperp)
+    dp = get_pressure(dppar,dpperp)
+    
+    # form the appropriate matrix coefficients
+    b0, b1, b2 = dn, du - upar*dn, 3.0*dp
+    A00, A02, A11, A12, A22 = dens, 3.0*pressure, ppar, qpar, rmom
+    
+    # obtain the coefficients for the corrections 
+    (x0, x1, x2) = symmetric_matrix_inverse(A00,A02,A11,A12,A22,b0,b1,b2)
+    
+    # correct CC
+    begin_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        wpar = vpa.grid[ivpa] - upar
+        CC[ivpa,ivperp] -= (x0 + x1*wpar + x2*(vperp.grid[ivperp]^2 + wpar^2) )*pdf_in[ivpa,ivperp]
+    end
+end
+
+
+######################################################
+# end functions associated with the weak-form operator
+######################################################
+
+
+
+##########################################################
+# begin functions associated with the strong-form operator
+##########################################################
 
 """
 function that initialises the arrays needed for Fokker Planck collisions
@@ -631,89 +752,6 @@ function explicit_fokker_planck_collisions_Maxwellian_coefficients!(pdf_out,pdf_
     end
 end
 
-# solves A x = b for a matrix of the form
-# A00  0    A02
-# 0    A11  A12
-# A02  A12  A22
-# appropriate for the moment numerical conserving terms
-function symmetric_matrix_inverse(A00,A02,A11,A12,A22,b0,b1,b2)
-    # matrix determinant
-    detA = A00*(A11*A22 - A12^2) - A11*A02^2
-    # cofactors C (also a symmetric matrix)
-    C00 = A11*A22 - A12^2
-    C01 = A12*A02
-    C02 = -A11*A02
-    C11 = A00*A22 - A02^2
-    C12 = -A00*A12
-    C22 = A00*A11
-    x0 = ( C00*b0 + C01*b1 + C02*b2 )/detA
-    x1 = ( C01*b0 + C11*b1 + C12*b2 )/detA
-    x2 = ( C02*b0 + C12*b1 + C22*b2 )/detA
-    #println("b0: ",b0," b1: ",b1," b2: ",b2)
-    #println("A00: ",A00," A02: ",A02," A11: ",A11," A12: ",A12," A22: ",A22, " detA: ",detA)
-    #println("C00: ",C00," C02: ",C02," C11: ",C11," C12: ",C12," C22: ",C22)
-    #println("x0: ",x0," x1: ",x1," x2: ",x2)
-    return x0, x1, x2
-end
-
-# solves A x = b for a matrix of the form
-# A00  A01  A02
-# A01  A11  A12
-# A02  A12  A22
-# appropriate for the moment numerical conserving terms
-function symmetric_matrix_inverse(A00,A01,A02,A11,A12,A22,b0,b1,b2)
-    # matrix determinant
-    detA = A00*(A11*A22 - A12^2) - A01*(A01*A22 - A12*A02) + A02*(A01*A12 - A11*A02)
-    # cofactors C (also a symmetric matrix)
-    C00 = A11*A22 - A12^2
-    C01 = A12*A02 - A01*A22
-    C02 = A01*A12 -A11*A02
-    C11 = A00*A22 - A02^2
-    C12 = A01*A02 -A00*A12
-    C22 = A00*A11 - A01^2
-    x0 = ( C00*b0 + C01*b1 + C02*b2 )/detA
-    x1 = ( C01*b0 + C11*b1 + C12*b2 )/detA
-    x2 = ( C02*b0 + C12*b1 + C22*b2 )/detA
-    #println("b0: ",b0," b1: ",b1," b2: ",b2)
-    #println("A00: ",A00," A02: ",A02," A11: ",A11," A12: ",A12," A22: ",A22, " detA: ",detA)
-    #println("C00: ",C00," C02: ",C02," C11: ",C11," C12: ",C12," C22: ",C22)
-    #println("x0: ",x0," x1: ",x1," x2: ",x2)
-    return x0, x1, x2
-end
-
-function conserving_corrections!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
-    begin_serial_region()
-    # compute moments of the input pdf
-    dens =  get_density(@view(pdf_in[:,:]), vpa, vperp)
-    upar = get_upar(@view(pdf_in[:,:]), vpa, vperp, dens)
-    ppar = get_ppar(@view(pdf_in[:,:]), vpa, vperp, upar)
-    pperp = get_pperp(@view(pdf_in[:,:]), vpa, vperp)
-    pressure = get_pressure(ppar,pperp)
-    qpar = get_qpar(@view(pdf_in[:,:]), vpa, vperp, upar, dummy_vpavperp)
-    rmom = get_rmom(@view(pdf_in[:,:]), vpa, vperp, upar, dummy_vpavperp)
-    
-    # compute moments of the numerical collision operator
-    dn = get_density(CC, vpa, vperp)
-    du = get_upar(CC, vpa, vperp, 1.0)
-    dppar = get_ppar(CC, vpa, vperp, upar)
-    dpperp = get_pperp(CC, vpa, vperp)
-    dp = get_pressure(dppar,dpperp)
-    
-    # form the appropriate matrix coefficients
-    b0, b1, b2 = dn, du - upar*dn, 3.0*dp
-    A00, A02, A11, A12, A22 = dens, 3.0*pressure, ppar, qpar, rmom
-    
-    # obtain the coefficients for the corrections 
-    (x0, x1, x2) = symmetric_matrix_inverse(A00,A02,A11,A12,A22,b0,b1,b2)
-    
-    # correct CC
-    begin_vperp_vpa_region()
-    @loop_vperp_vpa ivperp ivpa begin
-        wpar = vpa.grid[ivpa] - upar
-        CC[ivpa,ivperp] -= (x0 + x1*wpar + x2*(vperp.grid[ivperp]^2 + wpar^2) )*pdf_in[ivpa,ivperp]
-    end
-end
-
 # applies the numerical conservation to pdf_out, the advanced distribution function
 # uses the low-level moment integration routines from velocity moments
 # conserves n, upar, total pressure of each species
@@ -832,4 +870,9 @@ function store_moments_in_buffer!(pdf_out,boundary_distributions,
     end
     return nothing
 end
+
+########################################################
+# end functions associated with the strong-form operator
+########################################################
+
 end
