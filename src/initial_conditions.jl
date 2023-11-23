@@ -1150,8 +1150,7 @@ function enforce_boundary_conditions!(f, f_r_bc, density, upar, ppar, moments, v
         @views enforce_z_boundary_condition!(f, density, upar, ppar, moments, z_bc, z_adv, z,
                                              vperp, vpa, composition,
                                              scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
-                                             scratch_dummy.buffer_vpavperprs_3, scratch_dummy.buffer_vpavperprs_4,
-                                             scratch_dummy.buffer_vpavperpzrs_1)
+                                             scratch_dummy.buffer_vpavperprs_3, scratch_dummy.buffer_vpavperprs_4)
                                               
     end
     if r.n > 1
@@ -1159,7 +1158,7 @@ function enforce_boundary_conditions!(f, f_r_bc, density, upar, ppar, moments, v
         @views enforce_r_boundary_condition!(f, f_r_bc, r_bc, r_adv, vpa, vperp, z, r, composition,
             scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
             scratch_dummy.buffer_vpavperpzs_3, scratch_dummy.buffer_vpavperpzs_4,
-            scratch_dummy.buffer_vpavperpzrs_1, r_diffusion)
+            r_diffusion)
     end
 end
 function enforce_boundary_conditions!(fvec_out::scratch_pdf, moments, f_r_bc, vpa_bc,
@@ -1175,9 +1174,9 @@ end
 enforce boundary conditions on f in r
 """
 function enforce_r_boundary_condition!(f::AbstractArray{mk_float,5}, f_r_bc, bc::String,
-        adv::T, vpa, vperp, z, r, composition, end1::AbstractArray{mk_float,4},
+        adv, vpa, vperp, z, r, composition, end1::AbstractArray{mk_float,4},
         end2::AbstractArray{mk_float,4}, buffer1::AbstractArray{mk_float,4},
-        buffer2::AbstractArray{mk_float,4}, buffer_dfn::AbstractArray{mk_float,5}, r_diffusion::Bool) where T
+        buffer2::AbstractArray{mk_float,4}, r_diffusion::Bool)
 
     nr = r.n
 
@@ -1227,7 +1226,7 @@ enforce boundary conditions on charged particle f in z
 function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::String, adv,
                                        z, vperp, vpa, composition, end1::AbstractArray{mk_float,4},
                                        end2::AbstractArray{mk_float,4}, buffer1::AbstractArray{mk_float,4},
-                                       buffer2::AbstractArray{mk_float,4}, buffer_dfn::AbstractArray{mk_float,5})
+                                       buffer2::AbstractArray{mk_float,4})
     # this block ensures periodic BC can be supported with distributed memory MPI
     if z.nelement_global > z.nelement_local
         # reconcile internal element boundaries across processes
@@ -1341,8 +1340,7 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged,
             pz_neutral, moments, density_ion, upar_ion, Er, boundary_distributions,
             z_adv, z, vzeta, vr, vz, composition, geometry, 
             scratch_dummy.buffer_vzvrvzetarsn_1, scratch_dummy.buffer_vzvrvzetarsn_2,
-            scratch_dummy.buffer_vzvrvzetarsn_3, scratch_dummy.buffer_vzvrvzetarsn_4,
-            scratch_dummy.buffer_vzvrvzetazrsn_1)
+            scratch_dummy.buffer_vzvrvzetarsn_3, scratch_dummy.buffer_vzvrvzetarsn_4)
     end
     if r.n > 1
         begin_sn_z_vzeta_vr_vz_region()
@@ -1350,15 +1348,15 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged,
                                     r_adv, vz, vr, vzeta, z, r, composition,
                                     scratch_dummy.buffer_vzvrvzetazsn_1, scratch_dummy.buffer_vzvrvzetazsn_2,
                                     scratch_dummy.buffer_vzvrvzetazsn_3, scratch_dummy.buffer_vzvrvzetazsn_4,
-                                    scratch_dummy.buffer_vzvrvzetazrsn_1, r_diffusion)
+                                    r_diffusion)
     end
 end
 
 function enforce_neutral_r_boundary_condition!(f::AbstractArray{mk_float,6},
-        f_r_bc::AbstractArray{mk_float,6}, adv::T, vz, vr, vzeta, z, r, composition,
+        f_r_bc::AbstractArray{mk_float,6}, adv, vz, vr, vzeta, z, r, composition,
         end1::AbstractArray{mk_float,5}, end2::AbstractArray{mk_float,5},
         buffer1::AbstractArray{mk_float,5}, buffer2::AbstractArray{mk_float,5},
-        buffer_dfn::AbstractArray{mk_float,6}, r_diffusion) where T #f_initial,
+        r_diffusion) #f_initial,
 
     bc = r.bc
     nr = r.n
@@ -1409,8 +1407,7 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
                                                upar_ion, Er, boundary_distributions, adv,
                                                z, vzeta, vr, vz, composition, geometry,
                                                end1::AbstractArray{mk_float,5}, end2::AbstractArray{mk_float,5},
-                                               buffer1::AbstractArray{mk_float,5}, buffer2::AbstractArray{mk_float,5},
-                                               buffer_dfn::AbstractArray{mk_float,6})
+                                               buffer1::AbstractArray{mk_float,5}, buffer2::AbstractArray{mk_float,5})
     
 
     if z.nelement_global > z.nelement_local
