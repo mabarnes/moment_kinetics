@@ -403,10 +403,10 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             enforce_neutral_boundary_conditions!(
                 pdf.neutral.norm, pdf.charged.norm, boundary_distributions,
                 moments.neutral.dens, moments.neutral.uz, moments.neutral.pz, moments,
-                moments.charged.dens, moments.charged.upar, fields.Er, neutral_r_advect,
-                neutral_z_advect, nothing, nothing, neutral_vz_advect, r, z, vzeta, vr,
-                vz, composition, geometry, scratch_dummy, advance.r_diffusion,
-                advance.vz_diffusion)
+                moments.charged.dens, moments.charged.upar, fields.Er, vzeta_spectral,
+                vr_spectral, vz_spectral, neutral_r_advect, neutral_z_advect, nothing,
+                nothing, neutral_vz_advect, r, z, vzeta, vr, vz, composition, geometry,
+                scratch_dummy, advance.r_diffusion, advance.vz_diffusion)
             begin_sn_r_z_region()
             @loop_sn_r_z isn ir iz begin
                 @views hard_force_moment_constraints_neutral!(
@@ -1359,6 +1359,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     old_scratch = scratch[istage]
 
     z_spectral, r_spectral, vpa_spectral, vperp_spectral = spectral_objects.z_spectral, spectral_objects.r_spectral, spectral_objects.vpa_spectral, spectral_objects.vperp_spectral
+    vzeta_spectral, vr_spectral, vz_spectral = spectral_objects.vzeta_spectral, spectral_objects.vr_spectral, spectral_objects.vz_spectral
     vpa_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
@@ -1456,9 +1457,10 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         enforce_neutral_boundary_conditions!(new_scratch.pdf_neutral, new_scratch.pdf,
             boundary_distributions, new_scratch.density_neutral, new_scratch.uz_neutral,
             new_scratch.pz_neutral, moments, new_scratch.density, new_scratch.upar,
-            fields.Er, neutral_r_advect, neutral_z_advect, nothing, nothing,
-            neutral_vz_advect, r, z, vzeta, vr, vz, composition, geometry, scratch_dummy,
-            advance.r_diffusion, advance.vz_diffusion)
+            fields.Er, vzeta_spectral, vr_spectral, vz_spectral, neutral_r_advect,
+            neutral_z_advect, nothing, nothing, neutral_vz_advect, r, z, vzeta, vr, vz,
+            composition, geometry, scratch_dummy, advance.r_diffusion,
+            advance.vz_diffusion)
 
         if moments.evolve_density && moments.enforce_conservation
             begin_sn_r_z_region()

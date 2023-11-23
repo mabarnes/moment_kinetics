@@ -1134,7 +1134,7 @@ function enforce_boundary_conditions!(f, f_r_bc, density, upar, ppar, moments, v
         @loop_s_r_z_vperp is ir iz ivperp begin
             # enforce the vpa BC
             # use that adv.speed independent of vpa 
-            @views enforce_vpa_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc,
+            @views enforce_v_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc,
                              vpa_adv[is].speed[:,ivperp,iz,ir], vpa_diffusion,
                              vpa, vpa_spectral)
         end
@@ -1297,8 +1297,9 @@ enforce boundary conditions on neutral particle distribution function
 """
 function enforce_neutral_boundary_conditions!(f_neutral, f_charged,
         boundary_distributions, density_neutral, uz_neutral, pz_neutral, moments,
-        density_ion, upar_ion, Er, r_adv, z_adv, vzeta_adv, vr_adv, vz_adv, r, z, vzeta,
-        vr, vz, composition, geometry, scratch_dummy, r_diffusion, vz_diffusion)
+        density_ion, upar_ion, Er, vzeta_spectral, vr_spectral, vz_spectral, r_adv, z_adv,
+        vzeta_adv, vr_adv, vz_adv, r, z, vzeta, vr, vz, composition, geometry,
+        scratch_dummy, r_diffusion, vz_diffusion)
 
     # without acceleration of neutrals bc on vz vr vzeta should not be required as no
     # advection or diffusion in these coordinates
@@ -1310,7 +1311,7 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged,
             @views enforce_v_boundary_condition_local!(f_neutral[ivz,ivr,:,iz,ir,isn],
                                                        vzeta.bc,
                                                        vzeta_adv[isn].speed[ivz,ivr,:,iz,ir],
-                                                       false)
+                                                       false, vzeta, vzeta_spectral)
         end
     end
     if vr_adv !== nothing && vr.n_global > 1 && vr.bc != "none"
@@ -1320,7 +1321,7 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged,
             @views enforce_v_boundary_condition_local!(f_neutral[ivz,:,ivzeta,iz,ir,isn],
                                                        vr.bc,
                                                        vr_adv[isn].speed[ivz,:,ivzeta,iz,ir],
-                                                       false)
+                                                       false, vr, vr_spectral)
         end
     end
     if vz_adv !== nothing && vz.n_global > 1 && vz.bc != "none"
@@ -1330,7 +1331,7 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged,
             @views enforce_v_boundary_condition_local!(f_neutral[:,ivr,ivzeta,iz,ir,isn],
                                                        vz.bc,
                                                        vz_adv[isn].speed[:,ivr,ivzeta,iz,ir],
-                                                       vz_diffusion)
+                                                       vz_diffusion, vz, vz_spectral)
         end
     end
     # f_initial contains the initial condition for enforcing a fixed-boundary-value condition
@@ -2133,7 +2134,7 @@ end
 
 """
 """
-function enforce_v_boundary_condition_local!(f, bc, speed, v_diffusion)
+function enforce_v_boundary_condition_local!(f, bc, speed, v_diffusion, v, v_spectral)
     if bc == "zero"
         if v_diffusion || speed[1] > 0.0
             # 'upwind' boundary
@@ -2146,43 +2147,25 @@ function enforce_v_boundary_condition_local!(f, bc, speed, v_diffusion)
     elseif bc == "both_zero"
         f[1] = 0.0
         f[end] = 0.0
-    elseif bc == "periodic"
-        f[1] = 0.5*(f[1]+f[end])
-        f[end] = f[1]
-    end
-end
-
-"""
-"""
-function enforce_vpa_boundary_condition_local!(f, bc, adv_speed, vpa_diffusion::Bool, vpa, vpa_spectral)
-    # define a zero that accounts for finite precision
-    zero = 1.0e-10
-    dvpadt = adv_speed[1] #use that dvpa/dt is indendent of vpa in the current model 
-    nvpa = size(f,1)
-    ngrid = vpa.ngrid
-    if bc == "zero"
-        if dvpadt > zero || vpa_diffusion
-            f[1] = 0.0 # -infty forced to zero
-        end
-        if dvpadt < zero || vpa_diffusion
-            f[end] = 0.0 # +infty forced to zero
-        end
     elseif bc == "zero_gradient"
-        D0 = vpa_spectral.lobatto.Dmat[1,:]
+        D0 = v_spectral.lobatto.Dmat[1,:]
         @loop_s_r_z_vperp is ir iz ivperp begin
             # adjust F(vpa = -L/2) so that d F / d vpa = 0 at vpa = -L/2
             f[1,ivperp,iz,ir,is] = -sum(D0[2:ngrid].*f[2:ngrid,ivperp,iz,ir,is])/D0[1]
         end
-        D0 = vpa_spectral.lobatto.Dmat[end,:]
+        D0 = v_spectral.lobatto.Dmat[end,:]
         @loop_s_r_z_vperp is ir iz ivperp begin
             # adjust F(vpa = L/2) so that d F / d vpa = 0 at vpa = L/2
             f[nvpa,ivperp,iz,ir,is] = -sum(D0[1:ngrid-1].*f[nvpa-ngrid+1:nvpa-1,ivperp,iz,ir,is])/D0[ngrid]
         end    
     elseif bc == "periodic"
-        f[1] = 0.5*(f[nvpa]+f[1])
-        f[nvpa] = f[1]
+        f[1] = 0.5*(f[1]+f[end])
+        f[end] = f[1]
+    else
+        error("Unsupported boundary condition option '$bc' for $(v.name)")
     end
 end
+
 """
 enforce zero boundary condition at vperp -> infinity
 """
@@ -2204,4 +2187,5 @@ function enforce_vperp_boundary_condition!(f,vperp,vperp_spectral)
         println("vperp bc not supported")
     end
 end
+
 end
