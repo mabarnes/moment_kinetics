@@ -8,7 +8,7 @@ export enforce_boundary_conditions!
 export enforce_neutral_boundary_conditions!
 
 # functional testing 
-export create_and_init_boundary_distributions
+export create_boundary_distributions
 export create_pdf
 
 # package
