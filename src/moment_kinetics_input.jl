@@ -182,8 +182,13 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
               * "krook_collisions_option=$(collisions.krook_collisions_option) passed")
     end
 
-    collisions.weakform_fokker_planck = get(scan_input, "weakform_fokker_planck", true)
     collisions.nuii = get(scan_input, "nuii", 0.0)
+    collisions.weakform_fokker_planck = get(scan_input, "weakform_fokker_planck", true)
+    if !collisions.weakform_fokker_planck
+        println("WARNING: you have used weakform_fokker_planck = false")
+        println("WARNING: you have selected a depreciated version of the ion-ion self collision operator")
+    end
+    # options below only used with collisions.weakform_fokker_planck = false
     collisions.nuii_pitch = get(scan_input, "nuii_pitch", 0.0)
     collisions.numerical_conserving_terms = get(scan_input, "numerical_conserving_terms", "density")
     
@@ -526,9 +531,9 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     end
 
     # check input to catch errors/unsupported options
-    check_input(io, output_dir, nstep, dt, r_immutable, z_immutable, vpa_immutable,
+    check_input(io, output_dir, nstep, dt, r_immutable, z_immutable, vpa_immutable, vperp_immutable,
                 composition, species_immutable, evolve_moments, num_diss_params,
-                save_inputs_to_txt)
+                save_inputs_to_txt, collisions)
 
     # return immutable structs for z, vpa, species and composition
     all_inputs = (io_immutable, evolve_moments, t_input, z, z_spectral, r, r_spectral,
@@ -1005,8 +1010,8 @@ end
 """
 check various input options to ensure they are all valid/consistent
 """
-function check_input(io, output_dir, nstep, dt, r, z, vpa, composition, species,
-                     evolve_moments, num_diss_params, save_inputs_to_txt)
+function check_input(io, output_dir, nstep, dt, r, z, vpa, vperp, composition, species,
+                     evolve_moments, num_diss_params, save_inputs_to_txt, collisions)
     # copy the input file to the output directory to be saved
     if save_inputs_to_txt && global_rank[] == 0
         cp(joinpath(@__DIR__, "moment_kinetics_input.jl"), joinpath(output_dir, "moment_kinetics_input.jl"), force=true)
@@ -1016,11 +1021,21 @@ function check_input(io, output_dir, nstep, dt, r, z, vpa, composition, species,
     check_coordinate_input(r, "r", io)
     check_coordinate_input(z, "z", io)
     check_coordinate_input(vpa, "vpa", io)
+    check_coordinate_input(vperp, "vperp", io)
     # if the parallel flow is evolved separately, then the density must also be evolved separately
     if evolve_moments.parallel_flow && !evolve_moments.density
         print(io,">evolve_moments.parallel_flow = true, but evolve_moments.density = false.")
         println(io, "this is not a supported option.  forcing evolve_moments.density = true.")
         evolve_moments.density = true
+    end
+    if collisions.nuii > 0.0
+    # check that the grids support the collision operator
+        print(io, "The self-collision operator is switched on \n nuii = $collisions.nuii \n")
+        if !(vpa.discretization == "gausslegendre_pseudospectral") || !(vperp.discretization == "gausslegendre_pseudospectral")
+            error("ERROR: you are using \n      vpa.discretization='"*vpa.discretization*
+              "' \n      vperp.discretization='"*vperp.discretization*"' \n      with the ion self-collision operator \n"*
+              "ERROR: you should use \n       vpa.discretization='gausslegendre_pseudospectral' \n       vperp.discretization='gausslegendre_pseudospectral'")
+        end
     end
 end
 
