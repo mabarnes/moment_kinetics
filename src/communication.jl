@@ -357,7 +357,7 @@ end
     """
     struct DebugMPISharedArray{T, N} <: AbstractArray{T, N}
         data::Array{T,N}
-        is_initialized::Array{Bool,N}
+        is_initialized::Array{mk_int,N}
         is_read::Array{Bool,N}
         is_written::Array{Bool, N}
         creation_stack_trace::String
@@ -372,8 +372,10 @@ end
     # Constructors
     function DebugMPISharedArray(array::Array)
         dims = size(array)
-        is_initialized = Array{Bool}(undef, dims)
-        is_initialized .= false
+        is_initialized = allocate_shared(mk_int, dims; maybe_debug=false)
+        if block_rank[] == 0
+            is_initialized .= 0
+        end
         is_read = Array{Bool}(undef, dims)
         is_read .= false
         is_written = Array{Bool}(undef, dims)
@@ -402,7 +404,7 @@ end
     Base.size(A::DebugMPISharedArray{T, N}) where {T, N} = size(A.data)
     function Base.getindex(A::DebugMPISharedArray{T, N}, I::Vararg{mk_int,N}) where {T, N}
         @debug_track_initialized begin
-            if !all(A.is_initialized[I...])
+            if !all(A.is_initialized[I...] .== 1)
                 if A.creation_stack_trace != ""
                     error("Shared memory array read at $I before being initialized. "
                           * "Array was created at:\n"
@@ -419,7 +421,7 @@ end
     end
     function Base.setindex!(A::DebugMPISharedArray{T, N}, v::T, I::Vararg{mk_int,N}) where {T, N}
         @debug_track_initialized begin
-            A.is_initialized[I...] = true
+            A.is_initialized[I...] = 1
         end
         A.is_written[I...] = true
         return setindex!(A.data, v, I...)
@@ -474,12 +476,16 @@ dims - mk_int or Tuple{mk_int}
     Dimensions of the array to be created. Dimensions passed define the size of the
     array which is being handled by the 'block' (rather than the global array, or a
     subset for a single process).
+maybe_debug - Bool
+    Can be set to `false` to force not creating a DebugMPISharedArray when debugging is
+    active. This avoids recursion when including a shared-memory array as a member of a
+    DebugMPISharedArray for debugging purposes.
 
 Returns
 -------
 Array{mk_float}
 """
-function allocate_shared(T, dims)
+function allocate_shared(T, dims; maybe_debug=true)
     br = block_rank[]
     bs = block_size[]
     n = prod(dims)
@@ -491,7 +497,9 @@ function allocate_shared(T, dims)
 
         @debug_shared_array begin
             # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
-            array = DebugMPISharedArray(array)
+            if maybe_debug
+                array = DebugMPISharedArray(array)
+            end
         end
 
         return array
@@ -541,9 +549,11 @@ function allocate_shared(T, dims)
 
     @debug_shared_array begin
         # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
-        debug_array = DebugMPISharedArray(array)
-        push!(global_debugmpisharedarray_store, debug_array)
-        return debug_array
+        if maybe_debug
+            debug_array = DebugMPISharedArray(array)
+            push!(global_debugmpisharedarray_store, debug_array)
+            return debug_array
+        end
     end
 
     return array
