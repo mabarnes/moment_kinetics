@@ -410,8 +410,7 @@ function test_strong_form_collision_operator(;ngrid=5,nelement_list=[2],plot_sca
     if size(nelement_list,1) == 1
         nelement = nelement_list[1]
         test_Lagrange_Rosenbluth_potentials(ngrid,nelement,standalone=true)
-    end
-    if test_Lagrange_integral_scan
+    else
         initialize_comms!()
         nscan = size(nelement_list,1)
         max_C_err = Array{mk_float,1}(undef,nscan)
