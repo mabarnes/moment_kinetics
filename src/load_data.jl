@@ -443,11 +443,13 @@ function load_charged_particle_moments_data(fid; printout=false, extended_moment
     # Read charged species thermal speed
     thermal_speed = load_variable(group, "thermal_speed")
 
-    # Read charged species perpendicular pressure
-    perpendicular_pressure = load_variable(group, "perpendicular_pressure")
+    if extended_moments
+        # Read charged species perpendicular pressure
+        perpendicular_pressure = load_variable(group, "perpendicular_pressure")
 
-    # Read charged species entropy_production
-    entropy_production = load_variable(group, "entropy_production")
+        # Read charged species entropy_production
+        entropy_production = load_variable(group, "entropy_production")
+    end
 
     if printout
         println("done.")
