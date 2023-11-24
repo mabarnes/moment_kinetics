@@ -289,9 +289,6 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     vpa.fd_option = get(scan_input, "vpa_finite_difference_option", "third_order_upwind")
     vpa.element_spacing_option = get(scan_input, "vpa_element_spacing_option", "uniform")
     
-    num_diss_params = setup_numerical_dissipation(
-        get(scan_input, "numerical_dissipation", Dict{String,Any}()), true)
-
     # overwrite some default parameters related to the vperp grid
     # ngrid is the number of grid points per element
     vperp.ngrid = get(scan_input, "vperp_ngrid", 1)
@@ -301,8 +298,9 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     vperp.nelement_local = vperp.nelement_global 
     # L is the box length in units of vthermal_species
     vperp.L = get(scan_input, "vperp_L", 8.0*sqrt(species.charged[1].initial_temperature))
-    # determine the boundary condition
-    vperp.bc = get(scan_input, "vperp_bc", collisions.nuii > 0.0 ? "zero" : "none")
+    # Note vperp.bc is set below, after numerical dissipation is initialized, so that it
+    # can use the numerical dissipation settings to set its default value.
+    #
     # determine the discretization option for the vperp grid
     # supported options are "finite_difference_vperp" "chebyshev_pseudospectral"
     vperp.discretization = get(scan_input, "vperp_discretization", "chebyshev_pseudospectral")
@@ -374,6 +372,13 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
              vzeta.nelement_global == 1 && vr.ngrid == vr.nelement_global == 1)
     num_diss_params = setup_numerical_dissipation(
         get(scan_input, "numerical_dissipation", Dict{String,Any}()), is_1V)
+
+    # vperp.bc is set here (a bit out of place) so that we can use
+    # num_diss_params.vperp_dissipation_coefficient to set the default.
+    vperp.bc = get(scan_input, "vperp_bc",
+                   (collisions.nuii > 0.0 ||
+                    num_diss_params.vperp_dissipation_coefficient > 0.0) ?
+                    "zero" : "none")
     
     #########################################################################
     ########## end user inputs. do not modify following code! ###############
@@ -533,10 +538,10 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         io = devnull
     end
 
-    # check input to catch errors/unsupported options
-    check_input(io, output_dir, nstep, dt, r_immutable, z_immutable, vpa_immutable, vperp_immutable,
-                composition, species_immutable, evolve_moments, num_diss_params,
-                save_inputs_to_txt, collisions)
+    # check input (and initialized coordinate structs) to catch errors/unsupported options
+    check_input(io, output_dir, nstep, dt, r, z, vpa, vperp, composition,
+                species_immutable, evolve_moments, num_diss_params, save_inputs_to_txt,
+                collisions)
 
     # return immutable structs for z, vpa, species and composition
     all_inputs = (io_immutable, evolve_moments, t_input, z, z_spectral, r, r_spectral,
@@ -1103,6 +1108,11 @@ function check_coordinate_input(coord, coord_name, io)
         println(io,">using ", coord.ngrid, " grid points per $coord_name element on ",
                 coord.nelement_global, " elements across the $coord_name domain [",
                 0.0, ",", coord.L, "].")
+
+        if vperp.bc != "zero" && vperp.n_global > 1
+            println("WARNING: regularity condition (df/dvperp=0 at vperp=0) not being "
+                    * "imposed. Collisions or vperp-diffusion will be unstable.")
+        end
     else
         println(io,">using ", coord.ngrid, " grid points per $coord_name element on ",
                 coord.nelement_global, " elements across the $coord_name domain [",
