@@ -58,7 +58,6 @@ vpa_discretization = "chebyshev_pseudospectral"
 vperp_ngrid = 1
 vperp_nelement = 1
 vperp_L = 6.0
-vperp_bc = "periodic"
 vperp_discretization = "chebyshev_pseudospectral"
 
 vz_ngrid = 17

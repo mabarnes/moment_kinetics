@@ -67,7 +67,6 @@ vpa_discretization = "gausslegendre_pseudospectral"
 vperp_ngrid = 3
 vperp_nelement = 3
 vperp_L = 3.0
-vperp_bc = "periodic"
 #vperp_discretization = "finite_difference"
 #vperp_discretization = "chebyshev_pseudospectral"
 vperp_discretization = "gausslegendre_pseudospectral"
