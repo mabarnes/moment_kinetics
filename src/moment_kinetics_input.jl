@@ -302,10 +302,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     # L is the box length in units of vthermal_species
     vperp.L = get(scan_input, "vperp_L", 8.0*sqrt(species.charged[1].initial_temperature))
     # determine the boundary condition
-    # only supported option at present is "zero" and "periodic"
-    # MRH probably need to add new bc option here
-    # MRH no vperp bc currently imposed so option below not used
-    vperp.bc = get(scan_input, "vperp_bc", "periodic")
+    vperp.bc = get(scan_input, "vperp_bc", collisions.nuii > 0.0 ? "zero" : "none")
     # determine the discretization option for the vperp grid
     # supported options are "finite_difference_vperp" "chebyshev_pseudospectral"
     vperp.discretization = get(scan_input, "vperp_discretization", "chebyshev_pseudospectral")
@@ -1085,7 +1082,6 @@ function check_coordinate_input(coord, coord_name, io)
         input_option_error("$coord_name.discretization", coord.discretization)
     end
     # boundary_option determines coord boundary condition
-    # supported options are "constant" and "periodic"
     if coord.bc == "constant"
         println(io,">$coord_name.bc = 'constant'.  enforcing constant incoming BC in $coord_name.")
     elseif coord.bc == "zero"
