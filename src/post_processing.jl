@@ -384,6 +384,7 @@ function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species
     use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
     # constant to be used to test nonzero Er in wall boundary condition
     Er_constant = get(scan_input, "Er_constant", 0.0)
+    recycling_fraction = get(scan_input, "recycling_fraction", 1.0)
     # constant to be used to control Ez divergences
     epsilon_offset = get(scan_input, "epsilon_offset", 0.001)
     # bool to control if dfni is a function of vpa or vpabar in MMS test
@@ -399,7 +400,7 @@ function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species
     me_over_mi = 1.0/1836.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
         electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, Er_constant,
-        mn_over_mi, me_over_mi, allocate_float(n_species))
+        mn_over_mi, me_over_mi, recycling_fraction, allocate_float(n_species))
     return geometry, composition
 
 end
@@ -696,8 +697,9 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r), ntime_pdfs)
     density_at_pdf_times, parallel_flow_at_pdf_times, parallel_pressure_at_pdf_times,
-    parallel_heat_flux_at_pdf_times, thermal_speed_at_pdf_times, chodura_integral_lower_at_pdf_times,
-    chodura_integral_upper_at_pdf_times =
+    perpendicular_pressure_at_pdf_timse, parallel_heat_flux_at_pdf_times,
+    thermal_speed_at_pdf_times, entropy_production_at_pdf_times,
+    chodura_integral_lower_at_pdf_times, chodura_integral_upper_at_pdf_times =
         get_tuple_of_return_values(allocate_global_zr_charged_moments,
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r), n_ion_species,
