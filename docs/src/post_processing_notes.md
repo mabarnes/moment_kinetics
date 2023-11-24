@@ -9,7 +9,7 @@ Post processing functionality is provided by the
 processing, call
 [`moment_kinetics.makie_post_processing.makie_post_process`](@ref) e.g.
 ```julia
-julia> using moment_kinetics.makie_post_process
+julia> using moment_kinetics.makie_post_processing
 julia> makie_post_process("runs/example-run/")
 ```
 or
@@ -38,6 +38,12 @@ To see all the options that can be set,
 [`moment_kinetics.makie_post_processing.generate_example_input_file`](@ref) can
 be used to create an example file containing all the options with their default
 values. The options are all commented out when the file is created.
+
+!!! note "Viewing animations"
+    Animations are produced in `.gif` format. Most utilities just play gifs,
+    but provide no options to pause them, etc. One that provides a few more
+    features is [multigifview](https://github.com/johnomotani/multigifview)
+    (developed by @johnomotani).
 
 Interactive use
 ---------------
