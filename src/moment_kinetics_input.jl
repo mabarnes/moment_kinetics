@@ -1109,7 +1109,7 @@ function check_coordinate_input(coord, coord_name, io)
                 coord.nelement_global, " elements across the $coord_name domain [",
                 0.0, ",", coord.L, "].")
 
-        if vperp.bc != "zero" && vperp.n_global > 1
+        if coord.bc != "zero" && coord.n_global > 1
             println("WARNING: regularity condition (df/dvperp=0 at vperp=0) not being "
                     * "imposed. Collisions or vperp-diffusion will be unstable.")
         end
