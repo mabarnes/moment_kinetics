@@ -216,6 +216,13 @@ function init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
         end
     end
 
+    # Zero-initialise the dSdt diagnostic to avoid writing uninitialised values, as the
+    # collision operator will not be calculated before the initial values are written to
+    # file.
+    @serial_region begin
+        moments.charged.dSdt .= 0.0
+    end
+
     init_boundary_distributions!(boundary_distributions, pdf, vz, vr, vzeta, vpa, vperp,
                                  z, r, composition)
 
