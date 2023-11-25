@@ -188,7 +188,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
 
     collisions.nuii = get(scan_input, "nuii", 0.0)
     collisions.weakform_fokker_planck = get(scan_input, "weakform_fokker_planck", true)
-    if !collisions.weakform_fokker_planck
+    if !collisions.weakform_fokker_planck && global_rank[] == 0
         println("WARNING: you have used weakform_fokker_planck = false")
         println("WARNING: you have selected a depreciated version of the ion-ion self collision operator")
     end
@@ -1109,7 +1109,7 @@ function check_coordinate_input(coord, coord_name, io)
                 coord.nelement_global, " elements across the $coord_name domain [",
                 0.0, ",", coord.L, "].")
 
-        if coord.bc != "zero" && coord.n_global > 1
+        if coord.bc != "zero" && coord.n_global > 1 && global_rank[] == 0
             println("WARNING: regularity condition (df/dvperp=0 at vperp=0) not being "
                     * "imposed. Collisions or vperp-diffusion will be unstable.")
         end
