@@ -29,8 +29,8 @@ test_input_full_f = Dict(
      "nuii" => 1.0,
      "r_bc" => "periodic",
      "r_discretization" => "chebyshev_pseudospectral",
-     "r_nelement" => 2,
-     "r_ngrid" => 3,
+     "r_nelement" => 1,
+     "r_ngrid" => 2,
      "rhostar" => 1.0,
      "split_operators" => false,
      "vpa_L" => 6.0,
@@ -58,8 +58,8 @@ test_input_full_f = Dict(
      "z_IC_upar_phase2" => 0.0,
      "z_bc" => "wall",
      "z_discretization" => "chebyshev_pseudospectral",
-     "z_nelement" => 2,
-     "z_ngrid" => 3,
+     "z_nelement" => 1,
+     "z_ngrid" => 2,
     )
 
 test_input_list = [
