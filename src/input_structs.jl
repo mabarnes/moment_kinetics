@@ -65,11 +65,13 @@ mutable struct advance_info
     explicit_fp_collisions::Bool
     explicit_weakform_fp_collisions::Bool
     explicit_fp_F_FM_collisions::Bool
+    external_source::Bool
     numerical_dissipation::Bool
     source_terms::Bool
     continuity::Bool
     force_balance::Bool
     energy::Bool
+    neutral_external_source::Bool
     neutral_source_terms::Bool
     neutral_continuity::Bool
     neutral_force_balance::Bool
@@ -274,6 +276,9 @@ mutable struct species_composition
     mn_over_mi::mk_float
     # ratio of the electron particle mass to the ion mass
     me_over_mi::mk_float
+    # The ion flux reaching the wall that is recycled as neutrals is reduced by
+    # `recycling_fraction` to account for ions absorbed by the wall.
+    recycling_fraction::mk_float
     # scratch buffer whose size is n_species
     scratch::Vector{mk_float}
 end
@@ -484,6 +489,8 @@ struct pp_input
     plot_parallel_temperature_vs_r_z::Bool
     # if animate_parallel_temperature_vs_r_z = true animate parallel_temperature vs r z
     animate_parallel_temperature_vs_r_z::Bool
+    # if plot_chodura_integral = true then plots of the in-simulation Chodura integrals are generated
+    plot_chodura_integral::Bool
     # if plot_wall_pdf = true then plot the ion distribution (vpa,vperp,z,r) in the element nearest the wall at the last timestep 
     plot_wall_pdf::Bool
     # run analysis for a 2D (in R-Z) linear mode?

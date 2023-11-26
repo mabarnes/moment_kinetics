@@ -197,26 +197,26 @@ function runtests()
             @test loop_ranges_store[()].z == 1:0
 
             @test loop_ranges_store[(:s,)].s == 1:0
-            @test loop_ranges_store[(:s,)].r == 1:0
-            @test loop_ranges_store[(:s,)].z == 1:0
+            @test loop_ranges_store[(:s,)].r == 1:3
+            @test loop_ranges_store[(:s,)].z == 1:4
 
-            @test loop_ranges_store[(:r,)].s == 1:0
+            @test loop_ranges_store[(:r,)].s == 1:2
             @test loop_ranges_store[(:r,)].r == 1:0
-            @test loop_ranges_store[(:r,)].z == 1:0
+            @test loop_ranges_store[(:r,)].z == 1:4
 
-            @test loop_ranges_store[(:z,)].s == 1:0
-            @test loop_ranges_store[(:z,)].r == 1:0
+            @test loop_ranges_store[(:z,)].s == 1:2
+            @test loop_ranges_store[(:z,)].r == 1:3
             @test loop_ranges_store[(:z,)].z == 1:0
 
             @test loop_ranges_store[(:s,:r)].s == 1:0
             @test loop_ranges_store[(:s,:r)].r == 1:0
-            @test loop_ranges_store[(:s,:r)].z == 1:0
+            @test loop_ranges_store[(:s,:r)].z == 1:4
 
             @test loop_ranges_store[(:s,:z)].s == 2:2
             @test loop_ranges_store[(:s,:z)].r == 1:3
             @test loop_ranges_store[(:s,:z)].z == 1:4
 
-            @test loop_ranges_store[(:r,:z)].s == 1:0
+            @test loop_ranges_store[(:r,:z)].s == 1:2
             @test loop_ranges_store[(:r,:z)].r == 1:0
             @test loop_ranges_store[(:r,:z)].z == 1:0
 
@@ -269,23 +269,23 @@ function runtests()
             @test loop_ranges_store[()].z == 1:0
 
             @test loop_ranges_store[(:s,)].s == 1:0
-            @test loop_ranges_store[(:s,)].r == 1:0
-            @test loop_ranges_store[(:s,)].z == 1:0
+            @test loop_ranges_store[(:s,)].r == 1:3
+            @test loop_ranges_store[(:s,)].z == 1:4
 
-            @test loop_ranges_store[(:r,)].s == 1:0
+            @test loop_ranges_store[(:r,)].s == 1:2
             @test loop_ranges_store[(:r,)].r == 1:0
-            @test loop_ranges_store[(:r,)].z == 1:0
+            @test loop_ranges_store[(:r,)].z == 1:4
 
-            @test loop_ranges_store[(:z,)].s == 1:0
-            @test loop_ranges_store[(:z,)].r == 1:0
+            @test loop_ranges_store[(:z,)].s == 1:2
+            @test loop_ranges_store[(:z,)].r == 1:3
             @test loop_ranges_store[(:z,)].z == 1:0
 
             @test loop_ranges_store[(:s,:r)].s == 1:0
             @test loop_ranges_store[(:s,:r)].r == 1:0
-            @test loop_ranges_store[(:s,:r)].z == 1:0
+            @test loop_ranges_store[(:s,:r)].z == 1:4
 
             @test loop_ranges_store[(:s,:z)].s == 1:0
-            @test loop_ranges_store[(:s,:z)].r == 1:0
+            @test loop_ranges_store[(:s,:z)].r == 1:3
             @test loop_ranges_store[(:s,:z)].z == 1:0
 
             @test loop_ranges_store[(:r,:z)].s == 1:2
@@ -305,23 +305,23 @@ function runtests()
             @test loop_ranges_store[()].z == 1:0
 
             @test loop_ranges_store[(:s,)].s == 1:0
-            @test loop_ranges_store[(:s,)].r == 1:0
-            @test loop_ranges_store[(:s,)].z == 1:0
+            @test loop_ranges_store[(:s,)].r == 1:3
+            @test loop_ranges_store[(:s,)].z == 1:4
 
-            @test loop_ranges_store[(:r,)].s == 1:0
+            @test loop_ranges_store[(:r,)].s == 1:2
             @test loop_ranges_store[(:r,)].r == 1:0
-            @test loop_ranges_store[(:r,)].z == 1:0
+            @test loop_ranges_store[(:r,)].z == 1:4
 
-            @test loop_ranges_store[(:z,)].s == 1:0
-            @test loop_ranges_store[(:z,)].r == 1:0
+            @test loop_ranges_store[(:z,)].s == 1:2
+            @test loop_ranges_store[(:z,)].r == 1:3
             @test loop_ranges_store[(:z,)].z == 1:0
 
             @test loop_ranges_store[(:s,:r)].s == 1:0
             @test loop_ranges_store[(:s,:r)].r == 1:0
-            @test loop_ranges_store[(:s,:r)].z == 1:0
+            @test loop_ranges_store[(:s,:r)].z == 1:4
 
             @test loop_ranges_store[(:s,:z)].s == 1:0
-            @test loop_ranges_store[(:s,:z)].r == 1:0
+            @test loop_ranges_store[(:s,:z)].r == 1:3
             @test loop_ranges_store[(:s,:z)].z == 1:0
 
             @test loop_ranges_store[(:r,:z)].s == 1:2
@@ -341,23 +341,23 @@ function runtests()
             @test loop_ranges_store[()].z == 1:0
 
             @test loop_ranges_store[(:s,)].s == 1:0
-            @test loop_ranges_store[(:s,)].r == 1:0
-            @test loop_ranges_store[(:s,)].z == 1:0
+            @test loop_ranges_store[(:s,)].r == 1:3
+            @test loop_ranges_store[(:s,)].z == 1:4
 
-            @test loop_ranges_store[(:r,)].s == 1:0
+            @test loop_ranges_store[(:r,)].s == 1:2
             @test loop_ranges_store[(:r,)].r == 1:0
-            @test loop_ranges_store[(:r,)].z == 1:0
+            @test loop_ranges_store[(:r,)].z == 1:4
 
-            @test loop_ranges_store[(:z,)].s == 1:0
-            @test loop_ranges_store[(:z,)].r == 1:0
+            @test loop_ranges_store[(:z,)].s == 1:2
+            @test loop_ranges_store[(:z,)].r == 1:3
             @test loop_ranges_store[(:z,)].z == 1:0
 
             @test loop_ranges_store[(:s,:r)].s == 1:0
             @test loop_ranges_store[(:s,:r)].r == 1:0
-            @test loop_ranges_store[(:s,:r)].z == 1:0
+            @test loop_ranges_store[(:s,:r)].z == 1:4
 
             @test loop_ranges_store[(:s,:z)].s == 1:0
-            @test loop_ranges_store[(:s,:z)].r == 1:0
+            @test loop_ranges_store[(:s,:z)].r == 1:3
             @test loop_ranges_store[(:s,:z)].z == 1:0
 
             @test loop_ranges_store[(:r,:z)].s == 1:2
@@ -377,26 +377,26 @@ function runtests()
             @test loop_ranges_store[()].z == 1:0
 
             @test loop_ranges_store[(:s,)].s == 1:0
-            @test loop_ranges_store[(:s,)].r == 1:0
-            @test loop_ranges_store[(:s,)].z == 1:0
+            @test loop_ranges_store[(:s,)].r == 1:3
+            @test loop_ranges_store[(:s,)].z == 1:4
 
-            @test loop_ranges_store[(:r,)].s == 1:0
+            @test loop_ranges_store[(:r,)].s == 1:2
             @test loop_ranges_store[(:r,)].r == 1:0
-            @test loop_ranges_store[(:r,)].z == 1:0
+            @test loop_ranges_store[(:r,)].z == 1:4
 
-            @test loop_ranges_store[(:z,)].s == 1:0
-            @test loop_ranges_store[(:z,)].r == 1:0
+            @test loop_ranges_store[(:z,)].s == 1:2
+            @test loop_ranges_store[(:z,)].r == 1:3
             @test loop_ranges_store[(:z,)].z == 1:0
 
             @test loop_ranges_store[(:s,:r)].s == 1:0
             @test loop_ranges_store[(:s,:r)].r == 1:0
-            @test loop_ranges_store[(:s,:r)].z == 1:0
+            @test loop_ranges_store[(:s,:r)].z == 1:4
 
             @test loop_ranges_store[(:s,:z)].s == 1:0
-            @test loop_ranges_store[(:s,:z)].r == 1:0
+            @test loop_ranges_store[(:s,:z)].r == 1:3
             @test loop_ranges_store[(:s,:z)].z == 1:0
 
-            @test loop_ranges_store[(:r,:z)].s == 1:0
+            @test loop_ranges_store[(:r,:z)].s == 1:2
             @test loop_ranges_store[(:r,:z)].r == 1:0
             @test loop_ranges_store[(:r,:z)].z == 1:0
 

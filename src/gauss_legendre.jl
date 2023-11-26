@@ -16,7 +16,6 @@ export scaled_gauss_legendre_radau_grid
 export gausslegendre_derivative!
 export gausslegendre_apply_Kmat!
 export gausslegendre_apply_Lmat!
-export gausslegendre_mass_matrix_solve!
 export setup_gausslegendre_pseudospectral
 export GaussLegendre_weak_product_matrix!
 export ielement_global_func
@@ -28,13 +27,16 @@ using LinearAlgebra: mul!, lu, LU
 using SparseArrays: sparse, AbstractSparseArray
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
+import ..calculus: elementwise_derivative!, elementwise_apply_Kmat!,
+                   elementwise_apply_Lmat!, mass_matrix_solve!
+using ..moment_kinetics_structs: weak_discretization_info
 
 
 """
 structs for passing around matrices for taking
 the derivatives on Gauss-Legendre points in 1D
 """
-struct gausslegendre_base_info{}
+struct gausslegendre_base_info
     # elementwise differentiation matrix (ngrid*ngrid)
     Dmat::Array{mk_float,2}
     # local mass matrix type 0
@@ -79,7 +81,7 @@ struct gausslegendre_base_info{}
     Y31::Array{mk_float,3}
 end
 
-struct gausslegendre_info{}
+struct gausslegendre_info <: weak_discretization_info
     lobatto::gausslegendre_base_info
     radau::gausslegendre_base_info
     # global (1D) mass matrix
@@ -221,10 +223,9 @@ function setup_gausslegendre_pseudospectral_radau(coord;init_YY=true)
     return gausslegendre_base_info(Dmat,M0,M1,M2,S0,S1,
             K0,K1,K2,P0,P1,P2,D0,Y00,Y01,Y10,Y11,Y20,Y21,Y30,Y31)
 end 
-"""
-function for taking the first derivative on Gauss-Legendre points
-"""
-function gausslegendre_derivative!(df, ff, gausslegendre, coord)
+
+function elementwise_derivative!(coord, ff, gausslegendre::gausslegendre_info)
+    df = coord.scratch_2d
     # define local variable nelement for convenience
     nelement = coord.nelement_local
     # check array bounds
@@ -261,10 +262,13 @@ function gausslegendre_derivative!(df, ff, gausslegendre, coord)
     return nothing
 end
 
-"""
-function for taking the weak-form second derivative on Gauss-Legendre points
-"""
-function gausslegendre_apply_Kmat!(df, ff, gausslegendre, coord)
+# Spectral element method does not use upwinding within an element
+function elementwise_derivative!(coord, ff, adv_fac, spectral::gausslegendre_info)
+    return elementwise_derivative!(coord, ff, spectral)
+end
+
+function elementwise_apply_Kmat!(coord, ff, gausslegendre::gausslegendre_info)
+    df = coord.scratch_2d
     # define local variable nelement for convenience
     nelement = coord.nelement_local
     # check array bounds
@@ -302,10 +306,8 @@ function gausslegendre_apply_Kmat!(df, ff, gausslegendre, coord)
     return nothing
 end
 
-"""
-function for taking the weak-form Laplacian derivative on Gauss-Legendre points
-"""
-function gausslegendre_apply_Lmat!(df, ff, gausslegendre, coord)
+function elementwise_apply_Lmat!(coord, ff, gausslegendre::gausslegendre_info)
+    df = coord.scratch_2d
     # define local variable nelement for convenience
     nelement = coord.nelement_local
     # check array bounds
@@ -343,7 +345,7 @@ function gausslegendre_apply_Lmat!(df, ff, gausslegendre, coord)
     return nothing
 end
 
-function gausslegendre_mass_matrix_solve!(f,b,spectral)
+function mass_matrix_solve!(f, b, spectral::gausslegendre_info)
     # invert mass matrix system
     y = spectral.mass_matrix_lu \ b
     @. f = y

@@ -19,11 +19,11 @@ include("moment_kinetics_structs.jl")
 include("looping.jl")
 include("array_allocation.jl")
 include("interpolation.jl")
+include("calculus.jl")
 include("clenshaw_curtis.jl")
 include("gauss_legendre.jl")
 include("chebyshev.jl")
 include("finite_differences.jl")
-include("calculus.jl")
 include("quadrature.jl")
 include("hermite_spline_interpolation.jl")
 include("derivatives.jl")
@@ -36,6 +36,7 @@ include("velocity_grid_transforms.jl")
 include("em_fields.jl")
 include("bgk.jl")
 include("manufactured_solns.jl") # MRH Here?
+include("external_sources.jl")
 include("initial_conditions.jl")
 include("moment_constraints.jl")
 include("fokker_planck_test.jl")
@@ -59,16 +60,16 @@ include("source_terms.jl")
 include("numerical_dissipation.jl")
 include("load_data.jl")
 include("moment_kinetics_input.jl")
-include("scan_input.jl")
+include("parameter_scans.jl")
 include("analysis.jl")
 include("post_processing_input.jl")
 include("post_processing.jl")
 include("plot_MMS_sequence.jl")
 include("plot_sequence.jl")
 include("makie_post_processing.jl")
+include("utils.jl")
 include("time_advance.jl")
 
-include("utils.jl")
 using TimerOutputs
 using Dates
 using Glob
@@ -80,6 +81,7 @@ using .command_line_options: get_options
 using .communication
 using .communication: _block_synchronize
 using .debugging
+using .external_sources
 using .input_structs
 using .initial_conditions: allocate_pdf_and_moments, init_pdf_and_moments!,
                            enforce_boundary_conditions!
@@ -87,17 +89,18 @@ using .load_data: reload_evolving_fields!
 using .looping
 using .moment_constraints: hard_force_moment_constraints!
 using .looping: debug_setup_loop_ranges_split_one_combination!
-using .moment_kinetics_input: mk_input, read_input_file, run_type, performance_test
+using .moment_kinetics_input: mk_input, read_input_file
 using .time_advance: setup_time_advance!, time_advance!
 using .type_definitions: mk_int
+using .utils: to_minutes
 
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
 """
 main function that contains all of the content of the program
 """
-function run_moment_kinetics(to::TimerOutput, input_dict=Dict(); restart=false,
-                             restart_time_index=-1)
+function run_moment_kinetics(to::Union{TimerOutput,Nothing}, input_dict=Dict();
+                             restart=false, restart_time_index=-1)
     mk_state = nothing
     try
         # set up all the structs, etc. needed for a run
@@ -105,17 +108,17 @@ function run_moment_kinetics(to::TimerOutput, input_dict=Dict(); restart=false,
                                          restart_time_index=restart_time_index)
 
         # solve the 1+1D kinetic equation to advance f in time by nstep time steps
-        if run_type == performance_test
-            @timeit to "time_advance" time_advance!(mk_state...)
-        else
+        if to === nothing
             time_advance!(mk_state...)
+        else
+            @timeit to "time_advance" time_advance!(mk_state...)
         end
 
         # clean up i/o and communications
         # last 3 elements of mk_state are ascii_io, io_moments, and io_dfns
         cleanup_moment_kinetics!(mk_state[end-2:end]...)
 
-        if block_rank[] == 0 && run_type == performance_test
+        if block_rank[] == 0 && to !== nothing
             # Print the timing information if this is a performance test
             display(to)
             println()
@@ -145,8 +148,8 @@ end
 """
 overload which takes a filename and loads input
 """
-function run_moment_kinetics(to::TimerOutput, input_filename::String; restart=false,
-                             restart_time_index=-1)
+function run_moment_kinetics(to::Union{TimerOutput,Nothing}, input_filename::String;
+                             restart=false, restart_time_index=-1)
     return run_moment_kinetics(to, read_input_file(input_filename); restart=restart,
                                restart_time_index=restart_time_index)
 end
@@ -155,7 +158,7 @@ end
 overload with no TimerOutput arguments
 """
 function run_moment_kinetics(input; restart=false, restart_time_index=-1)
-    return run_moment_kinetics(TimerOutput(), input; restart=restart,
+    return run_moment_kinetics(nothing, input; restart=restart,
                                restart_time_index=restart_time_index)
 end
 
@@ -257,10 +260,12 @@ reload data from time index given by `restart_time_index` for a restart.
 `debug_loop_type` and `debug_loop_parallel_dims` are used to force specific set ups for
 parallel loop ranges, and are only used by the tests in `debug_test/`.
 """
-function setup_moment_kinetics(input_dict::Dict;
+function setup_moment_kinetics(input_dict::AbstractDict;
         restart::Union{Bool,AbstractString}=false, restart_time_index::mk_int=-1,
         debug_loop_type::Union{Nothing,NTuple{N,Symbol} where N}=nothing,
         debug_loop_parallel_dims::Union{Nothing,NTuple{N,Symbol} where N}=nothing)
+
+    setup_start_time = now()
 
     # Set up MPI
     initialize_comms!()
@@ -276,7 +281,8 @@ function setup_moment_kinetics(input_dict::Dict;
     io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
         vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
         vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
-        drive_input, num_diss_params, manufactured_solns_input = input
+        drive_input, external_source_settings, num_diss_params,
+        manufactured_solns_input = input
 
     # Create loop range variables for shared-memory-parallel loops
     if debug_loop_type === nothing
@@ -301,7 +307,8 @@ function setup_moment_kinetics(input_dict::Dict;
     # Allocate arrays and create the pdf and moments structs
     pdf, moments, boundary_distributions =
         allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
-                                 evolve_moments, collisions, num_diss_params)
+                                 evolve_moments, collisions, external_source_settings,
+                                 num_diss_params)
 
     if restart === false
         restarting = false
@@ -310,7 +317,7 @@ function setup_moment_kinetics(input_dict::Dict;
         init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
                               composition, r, z, vperp, vpa, vzeta, vr, vz,
                               vpa_spectral, vz_spectral, species,
-                              manufactured_solns_input)
+                              external_source_settings, manufactured_solns_input)
         # initialize time variable
         code_time = 0.
         previous_runs_info = nothing
@@ -371,7 +378,14 @@ function setup_moment_kinetics(input_dict::Dict;
         code_time, previous_runs_info, restart_time_index =
             reload_evolving_fields!(pdf, moments, boundary_distributions,
                                     backup_prefix_iblock, restart_time_index,
-                                    composition, r, z, vpa, vperp, vzeta, vr, vz)
+                                    composition, geometry, r, z, vpa, vperp, vzeta, vr,
+                                    vz)
+
+        # Re-initialize the source amplitude here instead of loading it from the restart
+        # file so that we can change the settings between restarts.
+        initialize_external_source_amplitude!(moments, external_source_settings, vperp,
+                                              vzeta, vr, composition.n_neutral_species)
+
         _block_synchronize()
     end
     # create arrays and do other work needed to setup
@@ -382,31 +396,36 @@ function setup_moment_kinetics(input_dict::Dict;
         setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral,
             r_spectral, composition, drive_input, moments, t_input, collisions, species,
-            geometry, boundary_distributions, num_diss_params, manufactured_solns_input,
-            restarting)
+            geometry, boundary_distributions, external_source_settings, num_diss_params,
+            manufactured_solns_input, restarting)
+
+    # This is the closest we can get to the end time of the setup before writing it to the
+    # output file
+    setup_end_time = now()
+    time_for_setup = to_minutes(setup_end_time - setup_start_time)
     # setup i/o
     ascii_io, io_moments, io_dfns = setup_file_io(io_input, boundary_distributions, vz,
         vr, vzeta, vpa, vperp, z, r, composition, collisions, moments.evolve_density,
-        moments.evolve_upar, moments.evolve_ppar, input_dict, restart_time_index,
-        previous_runs_info)
+        moments.evolve_upar, moments.evolve_ppar, external_source_settings, input_dict,
+        restart_time_index, previous_runs_info, time_for_setup)
     # write initial data to ascii files
     write_data_to_ascii(moments, fields, vpa, vperp, z, r, code_time,
         composition.n_ion_species, composition.n_neutral_species, ascii_io)
     # write initial data to binary files
 
     write_moments_data_to_binary(moments, fields, code_time, composition.n_ion_species,
-        composition.n_neutral_species, io_moments, 1, r, z)
+        composition.n_neutral_species, io_moments, 1, 0.0, r, z)
     write_dfns_data_to_binary(pdf.charged.norm, pdf.neutral.norm, moments, fields,
          code_time, composition.n_ion_species, composition.n_neutral_species, io_dfns, 1,
-         r, z, vperp, vpa, vzeta, vr, vz)
+         0.0, r, z, vperp, vpa, vzeta, vr, vz)
 
     begin_s_r_z_vperp_region()
 
     return pdf, scratch, code_time, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
            composition, collisions, geometry, boundary_distributions,
-           num_diss_params, advance, fp_arrays, scratch_dummy, manufactured_source_list,
-           ascii_io, io_moments, io_dfns
+           external_source_settings, num_diss_params, advance, fp_arrays, scratch_dummy,
+           manufactured_source_list, ascii_io, io_moments, io_dfns
 end
 
 """

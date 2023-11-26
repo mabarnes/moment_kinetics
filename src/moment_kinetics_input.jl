@@ -11,6 +11,7 @@ using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 using ..communication
 using ..coordinates: define_coordinate
+using ..external_sources
 using ..file_io: io_has_parallel, input_option_error, open_ascii_output_file
 using ..krook_collisions: setup_krook_collisions
 using ..finite_differences: fd_check_option
@@ -20,9 +21,6 @@ using ..reference_parameters
 
 using MPI
 using TOML
-
-@enum RunType single performance_test scan
-const run_type = single
 
 """
 Read input from a TOML file
@@ -90,6 +88,12 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     composition.use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
     # constant to be used to test nonzero Er in wall boundary condition
     composition.Er_constant = get(scan_input, "Er_constant", 0.0)
+    # The ion flux reaching the wall that is recycled as neutrals is reduced by
+    # `recycling_fraction` to account for ions absorbed by the wall.
+    composition.recycling_fraction = get(scan_input, "recycling_fraction", 1.0)
+    if !(0.0 <= composition.recycling_fraction <= 1.0)
+        error("recycling_fraction must be between 0 and 1. Got $recycling_fraction.")
+    end
 
     # Reference parameters that define the conversion between physical quantities and
     # normalised values used in the code.
@@ -184,7 +188,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
 
     collisions.nuii = get(scan_input, "nuii", 0.0)
     collisions.weakform_fokker_planck = get(scan_input, "weakform_fokker_planck", true)
-    if !collisions.weakform_fokker_planck
+    if !collisions.weakform_fokker_planck && global_rank[] == 0
         println("WARNING: you have used weakform_fokker_planck = false")
         println("WARNING: you have selected a depreciated version of the ion-ion self collision operator")
     end
@@ -285,9 +289,6 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     vpa.fd_option = get(scan_input, "vpa_finite_difference_option", "third_order_upwind")
     vpa.element_spacing_option = get(scan_input, "vpa_element_spacing_option", "uniform")
     
-    num_diss_params = setup_numerical_dissipation(
-        get(scan_input, "numerical_dissipation", Dict{String,Any}()), true)
-
     # overwrite some default parameters related to the vperp grid
     # ngrid is the number of grid points per element
     vperp.ngrid = get(scan_input, "vperp_ngrid", 1)
@@ -297,14 +298,12 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     vperp.nelement_local = vperp.nelement_global 
     # L is the box length in units of vthermal_species
     vperp.L = get(scan_input, "vperp_L", 8.0*sqrt(species.charged[1].initial_temperature))
-    # determine the boundary condition
-    # only supported option at present is "zero" and "periodic"
-    # MRH probably need to add new bc option here
-    # MRH no vperp bc currently imposed so option below not used
-    vperp.bc = get(scan_input, "vperp_bc", "periodic")
+    # Note vperp.bc is set below, after numerical dissipation is initialized, so that it
+    # can use the numerical dissipation settings to set its default value.
+    #
     # determine the discretization option for the vperp grid
-    # supported options are "finite_difference_vperp" "chebyshev_pseudospectral_vperp"
-    vperp.discretization = get(scan_input, "vperp_discretization", "chebyshev_pseudospectral_vperp")
+    # supported options are "finite_difference_vperp" "chebyshev_pseudospectral"
+    vperp.discretization = get(scan_input, "vperp_discretization", "chebyshev_pseudospectral")
     vperp.element_spacing_option = get(scan_input, "vperp_element_spacing_option", "uniform")
     
     # overwrite some default parameters related to the gyrophase grid
@@ -373,6 +372,13 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
              vzeta.nelement_global == 1 && vr.ngrid == vr.nelement_global == 1)
     num_diss_params = setup_numerical_dissipation(
         get(scan_input, "numerical_dissipation", Dict{String,Any}()), is_1V)
+
+    # vperp.bc is set here (a bit out of place) so that we can use
+    # num_diss_params.vperp_dissipation_coefficient to set the default.
+    vperp.bc = get(scan_input, "vperp_bc",
+                   (collisions.nuii > 0.0 ||
+                    num_diss_params.vperp_dissipation_coefficient > 0.0) ?
+                    "zero" : "none")
     
     #########################################################################
     ########## end user inputs. do not modify following code! ###############
@@ -520,27 +526,29 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     # initialize vr grid and write grid point locations to file
     vzeta, vzeta_spectral = define_coordinate(vzeta_immutable, io_immutable.parallel_io)
 
+    external_source_settings = setup_external_sources!(scan_input, r, z)
+
     if global_rank[] == 0 && save_inputs_to_txt
         # Make file to log some information about inputs into.
         # check to see if output_dir exists in the current directory
         # if not, create it
-        isdir(output_dir) || mkdir(output_dir)
+        isdir(output_dir) || mkpath(output_dir)
         io = open_ascii_output_file(string(output_dir,"/",run_name), "input")
     else
         io = devnull
     end
 
-    # check input to catch errors/unsupported options
-    check_input(io, output_dir, nstep, dt, r_immutable, z_immutable, vpa_immutable, vperp_immutable,
-                composition, species_immutable, evolve_moments, num_diss_params,
-                save_inputs_to_txt, collisions)
+    # check input (and initialized coordinate structs) to catch errors/unsupported options
+    check_input(io, output_dir, nstep, dt, r, z, vpa, vperp, composition,
+                species_immutable, evolve_moments, num_diss_params, save_inputs_to_txt,
+                collisions)
 
     # return immutable structs for z, vpa, species and composition
     all_inputs = (io_immutable, evolve_moments, t_input, z, z_spectral, r, r_spectral,
                   vpa, vpa_spectral, vperp, vperp_spectral, gyrophase, gyrophase_spectral,
                   vz, vz_spectral, vr, vr_spectral, vzeta, vzeta_spectral, composition,
                   species_immutable, collisions, geometry, drive_immutable,
-                  num_diss_params, manufactured_solns_input)
+                  external_source_settings, num_diss_params, manufactured_solns_input)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
     close(io)
@@ -888,9 +896,12 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     mn_over_mi = 1.0
     # ratio of the electron particle mass to the ion particle mass
     me_over_mi = 1.0/1836.0
+    # The ion flux reaching the wall that is recycled as neutrals is reduced by
+    # `recycling_fraction` to account for ions absorbed by the wall.
+    recycling_fraction = 1.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
         electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, Er_constant,
-        mn_over_mi, me_over_mi, allocate_float(n_species))
+        mn_over_mi, me_over_mi, recycling_fraction, allocate_float(n_species))
     
     species_charged = Array{species_parameters_mutable,1}(undef,n_ion_species)
     species_neutral = Array{species_parameters_mutable,1}(undef,n_neutral_species)
@@ -1076,7 +1087,6 @@ function check_coordinate_input(coord, coord_name, io)
         input_option_error("$coord_name.discretization", coord.discretization)
     end
     # boundary_option determines coord boundary condition
-    # supported options are "constant" and "periodic"
     if coord.bc == "constant"
         println(io,">$coord_name.bc = 'constant'.  enforcing constant incoming BC in $coord_name.")
     elseif coord.bc == "zero"
@@ -1098,6 +1108,11 @@ function check_coordinate_input(coord, coord_name, io)
         println(io,">using ", coord.ngrid, " grid points per $coord_name element on ",
                 coord.nelement_global, " elements across the $coord_name domain [",
                 0.0, ",", coord.L, "].")
+
+        if coord.bc != "zero" && coord.n_global > 1 && global_rank[] == 0
+            println("WARNING: regularity condition (df/dvperp=0 at vperp=0) not being "
+                    * "imposed. Collisions or vperp-diffusion will be unstable.")
+        end
     else
         println(io,">using ", coord.ngrid, " grid points per $coord_name element on ",
                 coord.nelement_global, " elements across the $coord_name domain [",

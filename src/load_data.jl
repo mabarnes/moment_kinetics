@@ -18,6 +18,7 @@ using ..array_allocation: allocate_float
 using ..coordinates: coordinate, define_coordinate
 using ..file_io: get_group, get_subgroup_keys, get_variable_keys
 using ..input_structs: advection_input, grid_input
+using ..interpolation: interpolate_to_grid_1d!
 using ..looping
 using ..type_definitions: mk_int
 
@@ -172,12 +173,27 @@ function load_input(fid)
 end
 
 """
-Load data for a coordinate
+    load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=nothing)
+
+Load data for the coordinate `name` from a file-handle `fid`.
+
+Returns (`coord`, `spectral`, `chunk_size`). `coord` is a `coordinate` object. `spectral`
+is the object used to implement the discretization in this coordinate. `chunk_size` is the
+size of chunks in this coordinate that was used when writing to the output file.
+
+If `printout` is set to `true` a message will be printed when this function is called.
+
+If `irank` and `nrank` are passed, then the `coord` and `spectral` objects returned will
+be set up for the parallelisation specified by `irank` and `nrank`, rather than the one
+implied by the output file.
 """
-function load_coordinate_data(fid, name; printout=false)
+function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=nothing)
     if printout
         println("Loading $name coordinate data...")
     end
+
+    overview = get_group(fid, "overview")
+    parallel_io = load_variable(overview, "parallel_io")
 
     coord_group = get_group(get_group(fid, "coords"), name)
 
@@ -186,16 +202,46 @@ function load_coordinate_data(fid, name; printout=false)
     n_global = load_variable(coord_group, "n_global")
     grid = load_variable(coord_group, "grid")
     wgts = load_variable(coord_group, "wgts")
-    irank = load_variable(coord_group, "irank")
-    if "nrank" in keys(coord_group)
-        nrank = load_variable(coord_group, "nrank")
+
+    if n_global == 1 && ngrid == 1
+        nelement_global = 1
     else
-        # Workaround for older output files that did not save nrank
-        if name ∈ ("r", "z")
-            nrank = max(n_global - 1, 1) ÷ max(n_local - 1, 1)
+        nelement_global = (n_global-1) ÷ (ngrid-1)
+    end
+
+    if irank === nothing && nrank === nothing
+        irank = load_variable(coord_group, "irank")
+        if "nrank" in keys(coord_group)
+            nrank = load_variable(coord_group, "nrank")
         else
-            nrank = 1
+            # Workaround for older output files that did not save nrank
+            if name ∈ ("r", "z")
+                nrank = max(n_global - 1, 1) ÷ max(n_local - 1, 1)
+            else
+                nrank = 1
+            end
         end
+
+        if n_local == 1 && ngrid == 1
+            nelement_local = 1
+        else
+            nelement_local = (n_local-1) ÷ (ngrid-1)
+        end
+    else
+        # Want to create coordinate with a specific `nrank` and `irank`. Need to
+        # calculate `nelement_local` consistent with `nrank`, which might be different now
+        # than in the original simulation.
+        # Note `n_local` is only (possibly) used to calculate the `chunk_size`. It
+        # probably makes most sense for that to be the same as the original simulation, so
+        # do not recalculate `n_local` here.
+        irank === nothing && error("When `nrank` is passed, `irank` must also be passed")
+        nrank === nothing && error("When `irank` is passed, `nrank` must also be passed")
+
+        if nelement_global % nrank != 0
+            error("Can only load coordinate with new `nrank` that divides "
+                  * "nelement_global=$nelement_global exactly.")
+        end
+        nelement_local = nelement_global ÷ nrank
     end
     if "chunk_size" ∈ coord_group
         chunk_size = load_variable(coord_group, "chunk_size")
@@ -214,25 +260,17 @@ function load_coordinate_data(fid, name; printout=false)
     fd_option = load_variable(coord_group, "fd_option")
     cheb_option = load_variable(coord_group, "cheb_option")
     bc = load_variable(coord_group, "bc")
-    element_spacing_option = load_variable(coord_group, "element_spacing_option")
-
-    nelement_local = nothing
-    if n_local == 1 && ngrid == 1
-        nelement_local = 1
+    if "element_spacing_option" ∈ keys(coord_group)
+        element_spacing_option = load_variable(coord_group, "element_spacing_option")
     else
-        nelement_local = (n_local-1) ÷ (ngrid-1)
-    end
-    if n_global == 1 && ngrid == 1
-        nelement_global = 1
-    else
-        nelement_global = (n_global-1) ÷ (ngrid-1)
+        element_spacing_option = "uniform"
     end
     # Define input to create coordinate struct
     input = grid_input(name, ngrid, nelement_global, nelement_local, nrank, irank, L,
                        discretization, fd_option, cheb_option, bc, advection_input("", 0.0, 0.0, 0.0),
                        MPI.COMM_NULL, element_spacing_option)
 
-    coord, spectral = define_coordinate(input)
+    coord, spectral = define_coordinate(input, parallel_io)
 
     return coord, spectral, chunk_size
 end
@@ -346,12 +384,14 @@ function load_rank_data(fid; printout=false)
     coords = get_group(fid, "coords")
     z_irank = load_variable(get_group(coords, "z"), "irank")
     r_irank = load_variable(get_group(coords, "r"), "irank")
+    z_nrank = load_variable(get_group(coords, "z"), "nrank")
+    r_nrank = load_variable(get_group(coords, "r"), "nrank")
     
     if printout
         println("done.")
     end
 
-    return z_irank, r_irank
+    return z_irank, z_nrank, r_irank, r_nrank
 end
 
 """
@@ -403,11 +443,13 @@ function load_charged_particle_moments_data(fid; printout=false, extended_moment
     # Read charged species thermal speed
     thermal_speed = load_variable(group, "thermal_speed")
 
-    # Read charged species perpendicular pressure
-    perpendicular_pressure = load_variable(group, "perpendicular_pressure")
+    if extended_moments
+        # Read charged species perpendicular pressure
+        perpendicular_pressure = load_variable(group, "perpendicular_pressure")
 
-    # Read charged species entropy_production
-    entropy_production = load_variable(group, "entropy_production")
+        # Read charged species entropy_production
+        entropy_production = load_variable(group, "entropy_production")
+    end
 
     if printout
         println("done.")
@@ -489,7 +531,8 @@ end
 Reload pdf and moments from an existing output file.
 """
 function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_prefix_iblock,
-                                 time_index, composition, r, z, vpa, vperp, vzeta, vr, vz)
+                                 time_index, composition, geometry, r, z, vpa, vperp,
+                                 vzeta, vr, vz)
     code_time = 0.0
     previous_runs_info = nothing
     begin_serial_region()
@@ -503,180 +546,1291 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
             if time_index < 0
                 time_index, _, _ = load_time_data(fid)
             end
+            restart_evolve_density, restart_evolve_upar, restart_evolve_ppar =
+                load_mk_options(fid)
 
             previous_runs_info = load_run_info_history(fid)
 
+            restart_n_ion_species, restart_n_neutral_species = load_species_data(fid)
             if parallel_io
-                restart_n_ion_species, restart_n_neutral_species = load_species_data(fid)
-                restart_z, _, _ = load_coordinate_data(fid, "z")
-                restart_r, _, _ = load_coordinate_data(fid, "r")
-                restart_vperp, _, _ = load_coordinate_data(fid, "vperp")
-                restart_vpa, _, _ = load_coordinate_data(fid, "vpa")
-                restart_vzeta, _, _ = load_coordinate_data(fid, "vzeta")
-                restart_vr, _, _ = load_coordinate_data(fid, "vr")
-                restart_vz, _, _ = load_coordinate_data(fid, "vz")
-                if (restart_n_ion_species != composition.n_ion_species ||
-                    restart_n_neutral_species != composition.n_neutral_species ||
-                    restart_z.n != z.n_global || restart_r.n != r.n_global ||
-                    restart_vperp.n_global != vperp.n_global ||
-                    restart_vpa.n != vpa.n_global || restart_vzeta.n != vzeta.n_global ||
-                    restart_vr.n != vr.n_global || restart_vz.n != vz.n_global)
+                restart_z, restart_z_spectral, _ =
+                    load_coordinate_data(fid, "z"; irank=z.irank, nrank=z.nrank)
+                restart_r, restart_r_spectral, _ =
+                    load_coordinate_data(fid, "r"; irank=r.irank, nrank=r.nrank)
+                restart_vperp, restart_vperp_spectral, _ =
+                    load_coordinate_data(fid, "vperp"; irank=vperp.irank, nrank=vperp.nrank)
+                restart_vpa, restart_vpa_spectral, _ =
+                    load_coordinate_data(fid, "vpa"; irank=vpa.irank, nrank=vpa.nrank)
+                restart_vzeta, restart_vzeta_spectral, _ =
+                    load_coordinate_data(fid, "vzeta"; irank=vzeta.irank, nrank=vzeta.nrank)
+                restart_vr, restart_vr_spectral, _ =
+                    load_coordinate_data(fid, "vr"; irank=vr.irank, nrank=vr.nrank)
+                restart_vz, restart_vz_spectral, _ =
+                    load_coordinate_data(fid, "vz"; irank=vz.irank, nrank=vz.nrank)
+            else
+                restart_z, restart_z_spectral, _ = load_coordinate_data(fid, "z")
+                restart_r, restart_r_spectral, _ = load_coordinate_data(fid, "r")
+                restart_vperp, restart_vperp_spectral, _ =
+                    load_coordinate_data(fid, "vperp")
+                restart_vpa, restart_vpa_spectral, _ = load_coordinate_data(fid, "vpa")
+                restart_vzeta, restart_vzeta_spectral, _ =
+                    load_coordinate_data(fid, "vzeta")
+                restart_vr, restart_vr_spectral, _ = load_coordinate_data(fid, "vr")
+                restart_vz, restart_vz_spectral, _ = load_coordinate_data(fid, "vz")
 
-                    error("Dimensions of restart file and input do not match.\n" *
-                          "Restart file was n_ion_species=$restart_n_ion_species, " *
-                          "n_neutral_species=$restart_n_neutral_species, nr=$(restart_r.n), " *
-                          "nz=$(restart_z.n), nvperp=$(restart_vperp.n), nvpa=$(restart_vpa.n).\n" *
-                          "nvzeta=$(restart_vzeta.n), nvr=$(restart_vr.n), nvz=$(restart_vz.n)." *
-                          "Input file gave n_ion_species=$(composition.n_ion_species), " *
-                          "n_neutral_species=$(composition.n_neutral_species), nr=$(r.n), " *
-                          "nz=$(z.n), nvperp=$(vperp.n), nvpa=$(vpa.n), nvzeta=$(vzeta.n), " *
-                          "nvr=$(vr.n), nvz=$(vz.n).")
+                if restart_r.nrank != r.nrank
+                    error("Not using parallel I/O, and distributed MPI layout has "
+                          * "changed: now r.nrank=$(r.nrank), but we are trying to "
+                          * "restart from files ith restart_r.nrank=$(restart_r.nrank).")
                 end
+                if restart_z.nrank != z.nrank
+                    error("Not using parallel I/O, and distributed MPI layout has "
+                          * "changed: now z.nrank=$(z.nrank), but we are trying to "
+                          * "restart from files ith restart_z.nrank=$(restart_z.nrank).")
+                end
+                if restart_vperp.nrank != vperp.nrank
+                    error("Not using parallel I/O, and distributed MPI layout has "
+                          * "changed: now vperp.nrank=$(vperp.nrank), but we are trying to "
+                          * "restart from files ith restart_vperp.nrank=$(restart_vperp.nrank).")
+                end
+                if restart_vpa.nrank != vpa.nrank
+                    error("Not using parallel I/O, and distributed MPI layout has "
+                          * "changed: now vpa.nrank=$(vpa.nrank), but we are trying to "
+                          * "restart from files ith restart_vpa.nrank=$(restart_vpa.nrank).")
+                end
+                if restart_vzeta.nrank != vzeta.nrank
+                    error("Not using parallel I/O, and distributed MPI layout has "
+                          * "changed: now vzeta.nrank=$(vzeta.nrank), but we are trying to "
+                          * "restart from files ith restart_vzeta.nrank=$(restart_vzeta.nrank).")
+                end
+                if restart_vr.nrank != vr.nrank
+                    error("Not using parallel I/O, and distributed MPI layout has "
+                          * "changed: now vr.nrank=$(vr.nrank), but we are trying to "
+                          * "restart from files ith restart_vr.nrank=$(restart_vr.nrank).")
+                end
+                if restart_vz.nrank != vz.nrank
+                    error("Not using parallel I/O, and distributed MPI layout has "
+                          * "changed: now vz.nrank=$(vz.nrank), but we are trying to "
+                          * "restart from files ith restart_vz.nrank=$(restart_vz.nrank).")
+                end
+            end
 
-                code_time = load_slice(dynamic, "time", time_index)
+            # Test whether any interpolation is needed
+            interpolation_needed = Dict(
+                x.name => x.n != restart_x.n || !all(isapprox.(x.grid, restart_x.grid))
+                for (x, restart_x) ∈ ((z, restart_z), (r, restart_r),
+                                      (vperp, restart_vperp), (vpa, restart_vpa),
+                                      (vzeta, restart_vzeta), (vr, restart_vr),
+                                      (vz, restart_vz)))
 
+            neutral_1V = (vzeta.n_global == 1 && vr.n_global == 1)
+            restart_neutral_1V = (restart_vzeta.n_global == 1 && restart_vr.n_global == 1)
+            if geometry.bzeta != 0.0 && ((neutral1V && !restart_neutral_1V) ||
+                                         (!neutral1V && restart_neutral_1V))
+                # One but not the other of the run being restarted from and this run are
+                # 1V, but the interpolation below does not allow for vz and vpa being in
+                # different directions. Therefore interpolation between 1V and 3V cases
+                # only works (at the moment!) if bzeta=0.
+                error("Interpolation between 1V and 3V neutrals not yet supported when "
+                      * "bzeta!=0.")
+            end
+
+            code_time = load_slice(dynamic, "time", time_index)
+
+            if parallel_io
                 function get_range(coord)
                     if coord.irank == coord.nrank - 1
                         return coord.global_io_range
                     else
                         # Need to modify the range to load the end-point that is duplicated on
                         # the next process
-                        r = coord.global_io_range
-                        return r.start:(r.stop+1)
+                        this_range = coord.global_io_range
+                        return this_range.start:(this_range.stop+1)
                     end
                 end
-                r_range = get_range(r)
-                z_range = get_range(z)
-                vperp_range = get_range(vperp)
-                vpa_range = get_range(vpa)
-                vzeta_range = get_range(vzeta)
-                vr_range = get_range(vr)
-                vz_range = get_range(vz)
-
-                pdf.charged.norm .= load_slice(dynamic, "f", vpa_range, vperp_range,
-                                               z_range, r_range, :, time_index)
-                moments.charged.dens .= load_slice(dynamic, "density", z_range, r_range,
-                                                   :, time_index)
-                moments.charged.dens_updated .= true
-                moments.charged.upar .= load_slice(dynamic, "parallel_flow", z_range,
-                                                   r_range, :, time_index)
-                moments.charged.upar_updated .= true
-                moments.charged.ppar .= load_slice(dynamic, "parallel_pressure", z_range,
-                                                   r_range, :, time_index)
-                moments.charged.ppar_updated .= true
-                moments.charged.qpar .= load_slice(dynamic, "parallel_heat_flux", z_range,
-                                                   r_range, :, time_index)
-                moments.charged.qpar_updated .= true
-                moments.charged.vth .= load_slice(dynamic, "thermal_speed", z_range,
-                                                  r_range, :, time_index)
-
-                boundary_distributions_io = get_group(fid, "boundary_distributions")
-                boundary_distributions.pdf_rboundary_charged[:,:,:,1,:] .=
-                load_slice(boundary_distributions_io, "pdf_rboundary_charged_left",
-                           vpa_range, vperp_range, z_range, :)
-                boundary_distributions.pdf_rboundary_charged[:,:,:,2,:] .=
-                load_slice(boundary_distributions_io, "pdf_rboundary_charged_right",
-                           vpa_range, vperp_range, z_range, :)
-
-                if composition.n_neutral_species > 0
-                    pdf.neutral.norm .= load_slice(dynamic, "f_neutral", vz_range,
-                                                   vr_range, vzeta_range, z_range,
-                                                   r_range, :, time_index)
-                    moments.neutral.dens .= load_slice(dynamic, "density_neutral",
-                                                       z_range, r_range, :, time_index)
-                    moments.neutral.dens_updated .= true
-                    moments.neutral.uz .= load_slice(dynamic, "uz_neutral", z_range,
-                                                     r_range, :, time_index)
-                    moments.neutral.uz_updated .= true
-                    moments.neutral.pz .= load_slice(dynamic, "pz_neutral", z_range,
-                                                     r_range, :, time_index)
-                    moments.neutral.pz_updated .= true
-                    moments.neutral.qz .= load_slice(dynamic, "qz_neutral", z_range,
-                                                     r_range, :, time_index)
-                    moments.neutral.qz_updated .= true
-                    moments.neutral.vth .= load_slice(dynamic, "thermal_speed_neutral", z_range,
-                                                      r_range, :, time_index)
-
-                    boundary_distributions.pdf_rboundary_neutral[:,:,:,:,1,:] .=
-                    load_slice(boundary_distributions_io, "pdf_rboundary_neutral_left",
-                               vz_range, vr_range, vzeta_range, z_range, :)
-                    boundary_distributions.pdf_rboundary_neutral[:,:,:,:,2,:] .=
-                    load_slice(boundary_distributions_io, "pdf_rboundary_neutral_right",
-                               vz_range, vr_range, vzeta_range, z_range, :)
-                end
+                r_range = get_range(restart_r)
+                z_range = get_range(restart_z)
+                vperp_range = get_range(restart_vperp)
+                vpa_range = get_range(restart_vpa)
+                vzeta_range = get_range(restart_vzeta)
+                vr_range = get_range(restart_vr)
+                vz_range = get_range(restart_vz)
             else
-                restart_n_ion_species, restart_n_neutral_species = load_species_data(fid)
-                restart_z, _, _ = load_coordinate_data(fid, "z")
-                restart_r, _, _ = load_coordinate_data(fid, "r")
-                restart_vperp, _, _ = load_coordinate_data(fid, "vperp")
-                restart_vpa, _, _ = load_coordinate_data(fid, "vpa")
-                restart_vzeta, _, _ = load_coordinate_data(fid, "vzeta")
-                restart_vr, _, _ = load_coordinate_data(fid, "vr")
-                restart_vz, _, _ = load_coordinate_data(fid, "vz")
-                if (restart_n_ion_species != composition.n_ion_species ||
-                    restart_n_neutral_species != composition.n_neutral_species ||
-                    restart_z.n != z.n || restart_r.n != r.n || restart_vperp.n != vperp.n ||
-                    restart_vpa.n != vpa.n || restart_vzeta.n != vzeta.n ||
-                    restart_vr.n != vr.n || restart_vz.n != vz.n)
+                r_range = (:)
+                z_range = (:)
+                vperp_range = (:)
+                vpa_range = (:)
+                vzeta_range = (:)
+                vr_range = (:)
+                vz_range = (:)
+            end
 
-                    error("Dimensions of restart file and input do not match.\n" *
-                          "Restart file was n_ion_species=$restart_n_ion_species, " *
-                          "n_neutral_species=$restart_n_neutral_species, nr=$(restart_r.n), " *
-                          "nz=$(restart_z.n), nvperp=$(restart_vperp.n), nvpa=$(restart_vpa.n).\n" *
-                          "nvzeta=$(restart_vzeta.n), nvr=$(restart_vr.n), nvz=$(restart_vz.n)." *
-                          "Input file gave n_ion_species=$(composition.n_ion_species), " *
-                          "n_neutral_species=$(composition.n_neutral_species), nr=$(r.n), " *
-                          "nz=$(z.n), nvperp=$(vperp.n), nvpa=$(vpa.n), nvzeta=$(vzeta.n), " *
-                          "nvr=$(vr.n), nvz=$(vz.n).")
+            function load_moment(var_name)
+                moment = load_slice(dynamic, var_name, z_range, r_range, :, time_index)
+                orig_nz, orig_nr, nspecies = size(moment)
+                if interpolation_needed["r"]
+                    new_moment = allocate_float(orig_nz, r.n, nspecies)
+                    for is ∈ 1:nspecies, iz ∈ 1:orig_nz
+                        @views interpolate_to_grid_1d!(new_moment[iz,:,is], r.grid,
+                                                       moment[iz,:,is], restart_r,
+                                                       restart_r_spectral)
+                    end
+                    moment = new_moment
+                end
+                if interpolation_needed["z"]
+                    new_moment = allocate_float(z.n, r.n, nspecies)
+                    for is ∈ 1:nspecies, ir ∈ 1:r.n
+                        @views interpolate_to_grid_1d!(new_moment[:,ir,is], z.grid,
+                                                       moment[:,ir,is], restart_z,
+                                                       restart_z_spectral)
+                    end
+                    moment = new_moment
+                end
+                return moment
+            end
+
+            moments.charged.dens .= load_moment("density")
+            moments.charged.dens_updated .= true
+            moments.charged.upar .= load_moment("parallel_flow")
+            moments.charged.upar_updated .= true
+            moments.charged.ppar .= load_moment("parallel_pressure")
+            moments.charged.ppar_updated .= true
+            moments.charged.qpar .= load_moment("parallel_heat_flux")
+            moments.charged.qpar_updated .= true
+            moments.charged.vth .= load_moment("thermal_speed")
+            if parallel_io || z.irank == 0
+                moments.charged.chodura_integral_lower .= load_slice(dynamic, "chodura_integral_lower",
+                                                                     r_range, :, time_index)
+            end
+            if parallel_io || z.irank == z.nrank - 1
+                moments.charged.chodura_integral_upper .= load_slice(dynamic, "chodura_integral_upper",
+                                                                     r_range, :, time_index)
+            end
+
+            if "external_source_controller_integral" ∈ get_variable_keys(dynamic) &&
+                    length(moments.charged.external_source_controller_integral) == 1
+                moments.charged.external_source_controller_integral .=
+                    load_slice(dynamic, "external_source_controller_integral", time_index)
+            elseif length(moments.charged.external_source_controller_integral) > 1
+                moments.charged.external_source_controller_integral .=
+                    load_moment("external_source_controller_integral")
+            end
+
+            function load_charged_pdf()
+                this_pdf = load_slice(dynamic, "f", vpa_range, vperp_range, z_range,
+                                      r_range, :, time_index)
+                orig_nvpa, orig_nvperp, orig_nz, orig_nr, nspecies = size(this_pdf)
+                if interpolation_needed["r"]
+                    new_pdf = allocate_float(orig_nvpa, orig_nvperp, orig_nz, r.n, nspecies)
+                    for is ∈ 1:nspecies, iz ∈ 1:orig_nz, ivperp ∈ 1:orig_nvperp,
+                            ivpa ∈ 1:orig_nvpa
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[ivpa,ivperp,iz,:,is], r.grid,
+                            this_pdf[ivpa,ivperp,iz,:,is], restart_r,
+                            restart_r_spectral)
+                    end
+                    this_pdf = new_pdf
+                end
+                if interpolation_needed["z"]
+                    new_pdf = allocate_float(orig_nvpa, orig_nvperp, z.n, r.n, nspecies)
+                    for is ∈ 1:nspecies, ir ∈ 1:r.n, ivperp ∈ 1:orig_nvperp,
+                            ivpa ∈ 1:orig_nvpa
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[ivpa,ivperp,:,ir,is], z.grid,
+                            this_pdf[ivpa,ivperp,:,ir,is], restart_z,
+                            restart_z_spectral)
+                    end
+                    this_pdf = new_pdf
                 end
 
-                code_time = load_slice(dynamic, "time", time_index)
+                # Current moment-kinetic implementation is only 1V, so no need to handle a
+                # normalised vperp coordinate. This will need to change when 2V
+                # moment-kinetics is implemented.
+                if interpolation_needed["vperp"]
+                    new_pdf = allocate_float(orig_nvpa, vperp.n, z.n, r.n, nspecies)
+                    for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivpa ∈ 1:orig_nvpa
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[ivpa,:,iz,ir,is], vperp.grid,
+                            this_pdf[ivpa,:,iz,ir,is], restart_vperp,
+                            restart_vperp_spectral)
+                    end
+                    this_pdf = new_pdf
+                end
 
-                pdf.charged.norm .= load_slice(dynamic, "f", :, :, :, :, :, time_index)
-                moments.charged.dens .= load_slice(dynamic, "density", :, :, :,
-                                                   time_index)
-                moments.charged.dens_updated .= true
-                moments.charged.upar .= load_slice(dynamic, "parallel_flow", :, :, :,
-                                                   time_index)
-                moments.charged.upar_updated .= true
-                moments.charged.ppar .= load_slice(dynamic, "parallel_pressure", :, :, :,
-                                                   time_index)
-                moments.charged.ppar_updated .= true
-                moments.charged.qpar .= load_slice(dynamic, "parallel_heat_flux", :, :, :,
-                                                   time_index)
-                moments.charged.qpar_updated .= true
-                moments.charged.vth .= load_slice(dynamic, "thermal_speed", :, :, :,
+                if (
+                    (moments.evolve_density == restart_evolve_density &&
+                     moments.evolve_upar == restart_evolve_upar && moments.evolve_ppar ==
+                     restart_evolve_ppar)
+                    || (!moments.evolve_upar && !restart_evolve_upar &&
+                        !moments.evolve_ppar && !restart_evolve_ppar)
+                   )
+                    # No chages to velocity-space coordinates, so just interpolate from
+                    # one grid to the other
+                    if interpolation_needed["vpa"]
+                        new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
+                        for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivperp,iz,ir,is], vpa.grid,
+                                this_pdf[:,ivperp,iz,ir,is], restart_vpa,
+                                restart_vpa_spectral)
+                        end
+                        this_pdf = new_pdf
+                    end
+                elseif (!moments.evolve_upar && !moments.evolve_ppar &&
+                        restart_evolve_upar && !restart_evolve_ppar)
+                    # vpa = new_wpa = old_wpa + upar
+                    # => old_wpa = new_wpa - upar
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
+                    for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals = vpa.grid .- moments.charged.upar[iz,ir,is]
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,ir,is], restart_vpa,
+                            restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                elseif (!moments.evolve_upar && !moments.evolve_ppar &&
+                        !restart_evolve_upar && restart_evolve_ppar)
+                    # vpa = new_wpa = old_wpa*vth
+                    # => old_wpa = new_wpa/vth
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
+                    for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals = vpa.grid ./ moments.charged.vth[iz,ir,is]
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,ir,is], restart_vpa,
+                            restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                elseif (!moments.evolve_upar && !moments.evolve_ppar &&
+                        restart_evolve_upar && restart_evolve_ppar)
+                    # vpa = new_wpa = old_wpa*vth + upar
+                    # => old_wpa = (new_wpa - upar)/vth
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
+                    for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals =
+                            @. (vpa.grid - moments.charged.upar[iz,ir,is]) /
+                               moments.charged.vth[iz,ir,is]
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,ir,is], restart_vpa,
+                            restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                elseif (moments.evolve_upar && !moments.evolve_ppar &&
+                        !restart_evolve_upar && !restart_evolve_ppar)
+                    # vpa = new_wpa + upar = old_wpa
+                    # => old_wpa = new_wpa + upar
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
+                    for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals = vpa.grid .+ moments.charged.upar[iz,ir,is]
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,ir,is], restart_vpa,
+                            restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                elseif (moments.evolve_upar && !moments.evolve_ppar &&
+                        !restart_evolve_upar && restart_evolve_ppar)
+                    # vpa = new_wpa + upar = old_wpa*vth
+                    # => old_wpa = (new_wpa + upar)/vth
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
+                    for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals =
+                            @. (vpa.grid + moments.charged.upar[iz,ir,is]) /
+                               moments.charged.vth
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,ir,is], restart_vpa,
+                            restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                elseif (moments.evolve_upar && !moments.evolve_ppar &&
+                        restart_evolve_upar && restart_evolve_ppar)
+                    # vpa = new_wpa + upar = old_wpa*vth + upar
+                    # => old_wpa = new_wpa/vth
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
+                    for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals = vpa.grid ./ moments.charged.vth[iz,ir,is]
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,ir,is], restart_vpa,
+                            restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                elseif (!moments.evolve_upar && moments.evolve_ppar &&
+                        !restart_evolve_upar && !restart_evolve_ppar)
+                    # vpa = new_wpa*vth = old_wpa
+                    # => old_wpa = new_wpa*vth
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
+                    for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals = vpa.grid .* moments.charged.vth[iz,ir,is]
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,ir,is], restart_vpa,
+                            restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                elseif (!moments.evolve_upar && moments.evolve_ppar &&
+                        restart_evolve_upar && !restart_evolve_ppar)
+                    # vpa = new_wpa*vth = old_wpa + upar
+                    # => old_wpa = new_wpa*vth - upar/vth
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
+                    for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals = @. vpa.grid * moments.charged.vth[iz,ir,is] -
+                                              moments.charged.upar[iz,ir,is]
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,ir,is], restart_vpa,
+                            restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                elseif (!moments.evolve_upar && moments.evolve_ppar &&
+                        restart_evolve_upar && restart_evolve_ppar)
+                    # vpa = new_wpa*vth = old_wpa*vth + upar
+                    # => old_wpa = new_wpa - upar/vth
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
+                    for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals =
+                            @. vpa.grid -
+                               moments.charged.upar[iz,ir,is]/moments.charged.vth[iz,ir,is]
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,ir,is], restart_vpa,
+                            restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                elseif (moments.evolve_upar && moments.evolve_ppar &&
+                        !restart_evolve_upar && !restart_evolve_ppar)
+                    # vpa = new_wpa*vth + upar = old_wpa
+                    # => old_wpa = new_wpa*vth + upar
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
+                    for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals = @. vpa.grid * moments.charged.vth[iz,ir,is] +
+                                              moments.charged.upar[iz,ir,is]
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,ir,is], restart_vpa,
+                            restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                elseif (moments.evolve_upar && moments.evolve_ppar &&
+                        restart_evolve_upar && !restart_evolve_ppar)
+                    # vpa = new_wpa*vth + upar = old_wpa + upar
+                    # => old_wpa = new_wpa*vth
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
+                    for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals = vpa.grid .* moments.charged.vth[iz,ir,is]
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,ir,is], restart_vpa,
+                            restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                elseif (moments.evolve_upar && moments.evolve_ppar &&
+                        !restart_evolve_upar && restart_evolve_ppar)
+                    # vpa = new_wpa*vth + upar = old_wpa*vth
+                    # => old_wpa = new_wpa + upar/vth
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
+                    for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals =
+                            @. vpa.grid +
+                               moments.charged.upar[iz,ir,is] / moments.charged.vth[iz,ir,is]
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,ir,is], restart_vpa,
+                            restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                else
+                    # This should never happen, as all combinations of evolve_* options
+                    # should be handled above.
+                    error("Unsupported combination of moment-kinetic options:"
+                          * " evolve_density=", moments.evolve_density
+                          * " evolve_upar=", moments.evolve_upar
+                          * " evolve_ppar=", moments.evolve_ppar
+                          * " restart_evolve_density=", restart_evolve_density
+                          * " restart_evolve_upar=", restart_evolve_upar
+                          * " restart_evolve_ppar=", restart_evolve_ppar)
+                end
+                if moments.evolve_density && !restart_evolve_density
+                    # Need to normalise by density
+                    for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                        this_pdf[:,:,iz,ir,is] ./= moments.charged.dens[iz,ir,is]
+                    end
+                elseif !moments.evolve_density && restart_evolve_density
+                    # Need to unnormalise by density
+                    for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                        this_pdf[:,:,iz,ir,is] .*= moments.charged.dens[iz,ir,is]
+                    end
+                end
+                if moments.evolve_ppar && !restart_evolve_ppar
+                    # Need to normalise by vth
+                    for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                        this_pdf[:,:,iz,ir,is] .*= moments.charged.vth[iz,ir,is]
+                    end
+                elseif !moments.evolve_ppar && restart_evolve_ppar
+                    # Need to unnormalise by vth
+                    for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                        this_pdf[:,:,iz,ir,is] ./= moments.charged.vth[iz,ir,is]
+                    end
+                end
+
+                return this_pdf
+            end
+
+            pdf.charged.norm .= load_charged_pdf()
+                if z.irank == 0
+                    moments.charged.chodura_integral_lower .= load_slice(dynamic, "chodura_integral_lower", :, :,
                                                   time_index)
-
-                boundary_distributions_io = get_group(fid, "boundary_distributions")
-                boundary_distributions.pdf_rboundary_charged[:,:,:,1,:] .=
-                load_variable(boundary_distributions_io, "pdf_rboundary_charged_left")
-                boundary_distributions.pdf_rboundary_charged[:,:,:,2,:] .=
-                load_variable(boundary_distributions_io, "pdf_rboundary_charged_right")
-
-                if composition.n_neutral_species > 0
-                    pdf.neutral.norm .= load_slice(dynamic, "f_neutral", :, :, :, :, :, :,
-                                                   time_index)
-                    moments.neutral.dens .= load_slice(dynamic, "density_neutral", :, :,
-                                                       :, time_index)
-                    moments.neutral.dens_updated .= true
-                    moments.neutral.uz .= load_slice(dynamic, "uz_neutral", :, :, :,
-                                                     time_index)
-                    moments.neutral.uz_updated .= true
-                    moments.neutral.pz .= load_slice(dynamic, "pz_neutral", :, :, :,
-                                                     time_index)
-                    moments.neutral.pz_updated .= true
-                    moments.neutral.qz .= load_slice(dynamic, "qz_neutral", :, :, :,
-                                                     time_index)
-                    moments.neutral.qz_updated .= true
-                    moments.neutral.vth .= load_slice(dynamic, "thermal_speed", :, :, :,
-                                                      time_index)
-
-                    boundary_distributions.pdf_rboundary_neutral[:,:,:,:,1,:] .=
-                    load_variable(boundary_distributions_io, "pdf_rboundary_neutral_left")
-                    boundary_distributions.pdf_rboundary_neutral[:,:,:,:,2,:] .=
-                    load_variable(boundary_distributions_io, "pdf_rboundary_neutral_right")
+                else
+                    moments.charged.chodura_integral_lower .= 0.0
                 end
+                if z.irank == z.nrank - 1
+                    moments.charged.chodura_integral_upper .= load_slice(dynamic, "chodura_integral_upper", :, :,
+                                                  time_index)
+                else
+                    moments.charged.chodura_integral_upper .= 0.0
+                end
+            boundary_distributions_io = get_group(fid, "boundary_distributions")
+
+            function load_charged_boundary_pdf(var_name, ir)
+                this_pdf = load_slice(boundary_distributions_io, var_name, vpa_range,
+                                      vperp_range, z_range, :)
+                orig_nvpa, orig_nvperp, orig_nz, nspecies = size(this_pdf)
+                if interpolation_needed["z"]
+                    new_pdf = allocate_float(orig_nvpa, orig_nvperp, z.n, nspecies)
+                    for is ∈ 1:nspecies, ivperp ∈ 1:orig_nvperp,
+                            ivpa ∈ 1:orig_nvpa
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[ivpa,ivperp,:,is], z.grid,
+                            this_pdf[ivpa,ivperp,:,is], restart_z,
+                            restart_z_spectral)
+                    end
+                    this_pdf = new_pdf
+                end
+
+                # Current moment-kinetic implementation is only 1V, so no need to handle a
+                # normalised vperp coordinate. This will need to change when 2V
+                # moment-kinetics is implemented.
+                if interpolation_needed["vperp"]
+                    new_pdf = allocate_float(orig_nvpa, vperp.n, z.n, nspecies)
+                    for is ∈ 1:nspecies, iz ∈ 1:z.n, ivpa ∈ 1:orig_nvpa
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[ivpa,:,iz,is], vperp.grid,
+                            this_pdf[ivpa,:,iz,is], restart_vperp,
+                            restart_vperp_spectral)
+                    end
+                    this_pdf = new_pdf
+                end
+
+                if (
+                    (moments.evolve_density == restart_evolve_density &&
+                     moments.evolve_upar == restart_evolve_upar && moments.evolve_ppar ==
+                     restart_evolve_ppar)
+                    || (!moments.evolve_upar && !restart_evolve_upar &&
+                        !moments.evolve_ppar && !restart_evolve_ppar)
+                   )
+                    # No chages to velocity-space coordinates, so just interpolate from
+                    # one grid to the other
+                    if interpolation_needed["vpa"]
+                        new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
+                        for is ∈ 1:nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivperp,iz,is], vpa.grid,
+                                this_pdf[:,ivperp,iz,is], restart_vpa,
+                                restart_vpa_spectral)
+                        end
+                        this_pdf = new_pdf
+                    end
+                elseif (!moments.evolve_upar && !moments.evolve_ppar &&
+                        restart_evolve_upar && !restart_evolve_ppar)
+                    # vpa = new_wpa = old_wpa + upar
+                    # => old_wpa = new_wpa - upar
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
+                    for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals = vpa.grid .- moments.charged.upar[iz,ir,is]
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                elseif (!moments.evolve_upar && !moments.evolve_ppar &&
+                        !restart_evolve_upar && restart_evolve_ppar)
+                    # vpa = new_wpa = old_wpa*vth
+                    # => old_wpa = new_wpa/vth
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
+                    for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals = vpa.grid ./ moments.charged.vth[iz,ir,is]
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                elseif (!moments.evolve_upar && !moments.evolve_ppar &&
+                        restart_evolve_upar && restart_evolve_ppar)
+                    # vpa = new_wpa = old_wpa*vth + upar
+                    # => old_wpa = (new_wpa - upar)/vth
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
+                    for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals =
+                            @. (vpa.grid - moments.charged.upar[iz,ir,is]) /
+                               moments.charged.vth[iz,ir,is]
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                elseif (moments.evolve_upar && !moments.evolve_ppar &&
+                        !restart_evolve_upar && !restart_evolve_ppar)
+                    # vpa = new_wpa + upar = old_wpa
+                    # => old_wpa = new_wpa + upar
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
+                    for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals = vpa.grid .+ moments.charged.upar[iz,ir,is]
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                elseif (moments.evolve_upar && !moments.evolve_ppar &&
+                        !restart_evolve_upar && restart_evolve_ppar)
+                    # vpa = new_wpa + upar = old_wpa*vth
+                    # => old_wpa = (new_wpa + upar)/vth
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
+                    for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals =
+                            @. (vpa.grid + moments.charged.upar[iz,ir,is]) /
+                               moments.charged.vth
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                elseif (moments.evolve_upar && !moments.evolve_ppar &&
+                        restart_evolve_upar && restart_evolve_ppar)
+                    # vpa = new_wpa + upar = old_wpa*vth + upar
+                    # => old_wpa = new_wpa/vth
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
+                    for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals = vpa.grid ./ moments.charged.vth[iz,ir,is]
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                elseif (!moments.evolve_upar && moments.evolve_ppar &&
+                        !restart_evolve_upar && !restart_evolve_ppar)
+                    # vpa = new_wpa*vth = old_wpa
+                    # => old_wpa = new_wpa*vth
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
+                    for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals = vpa.grid .* moments.charged.vth[iz,ir,is]
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                elseif (!moments.evolve_upar && moments.evolve_ppar &&
+                        restart_evolve_upar && !restart_evolve_ppar)
+                    # vpa = new_wpa*vth = old_wpa + upar
+                    # => old_wpa = new_wpa*vth - upar/vth
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
+                    for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals = @. vpa.grid * moments.charged.vth[iz,ir,is] -
+                                              moments.charged.upar[iz,ir,is]
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                elseif (!moments.evolve_upar && moments.evolve_ppar &&
+                        restart_evolve_upar && restart_evolve_ppar)
+                    # vpa = new_wpa*vth = old_wpa*vth + upar
+                    # => old_wpa = new_wpa - upar/vth
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
+                    for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals =
+                            @. vpa.grid -
+                               moments.charged.upar[iz,ir,is]/moments.charged.vth[iz,ir,is]
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                elseif (moments.evolve_upar && moments.evolve_ppar &&
+                        !restart_evolve_upar && !restart_evolve_ppar)
+                    # vpa = new_wpa*vth + upar = old_wpa
+                    # => old_wpa = new_wpa*vth + upar
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
+                    for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals = @. vpa.grid * moments.charged.vth[iz,ir,is] +
+                                              moments.charged.upar[iz,ir,is]
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                elseif (moments.evolve_upar && moments.evolve_ppar &&
+                        restart_evolve_upar && !restart_evolve_ppar)
+                    # vpa = new_wpa*vth + upar = old_wpa + upar
+                    # => old_wpa = new_wpa*vth
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
+                    for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals = vpa.grid .* moments.charged.vth[iz,ir,is]
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                elseif (moments.evolve_upar && moments.evolve_ppar &&
+                        !restart_evolve_upar && restart_evolve_ppar)
+                    # vpa = new_wpa*vth + upar = old_wpa*vth
+                    # => old_wpa = new_wpa + upar/vth
+                    new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
+                    for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                        restart_vpa_vals =
+                            @. vpa.grid +
+                               moments.charged.upar[iz,ir,is] / moments.charged.vth[iz,ir,is]
+                        @views interpolate_to_grid_1d!(
+                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                    end
+                    this_pdf = new_pdf
+                else
+                    # This should never happen, as all combinations of evolve_* options
+                    # should be handled above.
+                    error("Unsupported combination of moment-kinetic options:"
+                          * " evolve_density=", moments.evolve_density
+                          * " evolve_upar=", moments.evolve_upar
+                          * " evolve_ppar=", moments.evolve_ppar
+                          * " restart_evolve_density=", restart_evolve_density
+                          * " restart_evolve_upar=", restart_evolve_upar
+                          * " restart_evolve_ppar=", restart_evolve_ppar)
+                end
+                if moments.evolve_density && !restart_evolve_density
+                    # Need to normalise by density
+                    for is ∈ nspecies, iz ∈ 1:z.n
+                        this_pdf[:,:,iz,is] ./= moments.charged.dens[iz,ir,is]
+                    end
+                elseif !moments.evolve_density && restart_evolve_density
+                    # Need to unnormalise by density
+                    for is ∈ nspecies, iz ∈ 1:z.n
+                        this_pdf[:,:,iz,is] .*= moments.charged.dens[iz,ir,is]
+                    end
+                end
+                if moments.evolve_ppar && !restart_evolve_ppar
+                    # Need to normalise by vth
+                    for is ∈ nspecies, iz ∈ 1:z.n
+                        this_pdf[:,:,iz,is] .*= moments.charged.vth[iz,ir,is]
+                    end
+                elseif !moments.evolve_ppar && restart_evolve_ppar
+                    # Need to unnormalise by vth
+                    for is ∈ nspecies, iz ∈ 1:z.n
+                        this_pdf[:,:,iz,is] ./= moments.charged.vth[iz,ir,is]
+                    end
+                end
+
+                return this_pdf
+            end
+
+            boundary_distributions.pdf_rboundary_charged[:,:,:,1,:] .=
+                load_charged_boundary_pdf("pdf_rboundary_charged_left", 1)
+            boundary_distributions.pdf_rboundary_charged[:,:,:,2,:] .=
+                load_charged_boundary_pdf("pdf_rboundary_charged_right", r.n)
+
+            if composition.n_neutral_species > 0
+                moments.neutral.dens .= load_moment("density_neutral")
+                moments.neutral.dens_updated .= true
+                moments.neutral.uz .= load_moment("uz_neutral")
+                moments.neutral.uz_updated .= true
+                moments.neutral.pz .= load_moment("pz_neutral")
+                moments.neutral.pz_updated .= true
+                moments.neutral.qz .= load_moment("qz_neutral")
+                moments.neutral.qz_updated .= true
+                moments.neutral.vth .= load_moment("thermal_speed_neutral")
+
+                if "external_source_neutral_controller_integral" ∈ get_variable_keys(dynamic) &&
+                        length(moments.neutral.external_source_controller_integral) == 1
+                    moments.neutral.external_source_controller_integral .=
+                        load_slice(dynamic,
+                                   "external_source_neutral_controller_integral",
+                                   time_index)
+                elseif length(moments.neutral.external_source_controller_integral) > 1
+                    moments.neutral.external_source_controller_integral .=
+                        load_moment("external_source_neutral_controller_integral")
+                end
+
+                function load_neutral_pdf()
+                    this_pdf = load_slice(dynamic, "f_neutral", vz_range, vr_range,
+                                          vzeta_range, z_range, r_range, :, time_index)
+                    orig_nvz, orig_nvr, orig_nvzeta, orig_nz, orig_nr, nspecies =
+                        size(this_pdf)
+                    if interpolation_needed["r"]
+                        new_pdf = allocate_float(orig_nvz, orig_nvr, orig_nvzeta, orig_nz,
+                                                 r.n, nspecies)
+                        for is ∈ 1:nspecies, iz ∈ 1:orig_nz, ivzeta ∈ 1:orig_nvzeta,
+                                ivr ∈ 1:orig_nvr, ivz ∈ 1:orig_nvz
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[ivz,ivr,ivzeta,iz,:,is], r.grid,
+                                this_pdf[ivz,ivr,ivzeta,iz,:,is], restart_r,
+                                restart_r_spectral)
+                        end
+                        this_pdf = new_pdf
+                    end
+                    if interpolation_needed["z"]
+                        new_pdf = allocate_float(orig_nvz, orig_nvr, orig_nvzeta, z.n,
+                                                 r.n, nspecies)
+                        for is ∈ 1:nspecies, ir ∈ 1:r.n, ivzeta ∈ 1:orig_nvzeta,
+                                ivr ∈ 1:orig_nvr, ivz ∈ 1:orig_nvz
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[ivz,ivr,ivzeta,:,ir,is], z.grid,
+                                this_pdf[ivz,ivr,ivzeta,:,ir,is], restart_z,
+                                restart_z_spectral)
+                        end
+                        this_pdf = new_pdf
+                    end
+
+                    # Current moment-kinetic implementation is only 1V, so no need
+                    # to handle normalised vzeta or vr coordinates. This will need
+                    # to change when/if 3V moment-kinetics is implemented.
+                    if interpolation_needed["vzeta"]
+                        new_pdf = allocate_float(orig_nvz, orig_nvr, vzeta.n, z.n, r.n,
+                                                 nspecies)
+                        for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:orig_nvr,
+                                ivz ∈ 1:orig_nvz
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[ivz,ivr,:,iz,ir,is], vzeta.grid,
+                                this_pdf[ivz,ivr,:,iz,ir,is], restart_vzeta,
+                                restart_vzeta_spectral)
+                        end
+                        this_pdf = new_pdf
+                    end
+                    if interpolation_needed["vr"]
+                        new_pdf = allocate_float(orig_nvz, vr.n, vzeta.n, z.n, r.n,
+                                                 nspecies)
+                        for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n,
+                                ivzeta ∈ 1:vzeta.n, ivz ∈ 1:orig_nvz
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[ivz,:,ivzeta,iz,ir,is], vr.grid,
+                                this_pdf[ivz,:,ivzeta,iz,ir,is], restart_vr,
+                                restart_vr_spectral)
+                        end
+                        this_pdf = new_pdf
+                    end
+
+                    if (
+                        (moments.evolve_density == restart_evolve_density &&
+                         moments.evolve_upar == restart_evolve_upar &&
+                         moments.evolve_ppar == restart_evolve_ppar)
+                        || (!moments.evolve_upar && !restart_evolve_upar &&
+                            !moments.evolve_ppar && !restart_evolve_ppar)
+                       )
+                        # No chages to velocity-space coordinates, so just interpolate from
+                        # one grid to the other
+                        if interpolation_needed["vz"]
+                            new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
+                            for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
+                                    ivzeta ∈ 1:vzeta.n
+                                @views interpolate_to_grid_1d!(
+                                    new_pdf[:,ivr,ivzeta,iz,ir,is], vz.grid,
+                                    this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
+                                    restart_vz_spectral)
+                            end
+                            this_pdf = new_pdf
+                        end
+                    elseif (!moments.evolve_upar && !moments.evolve_ppar &&
+                            restart_evolve_upar && !restart_evolve_ppar)
+                        # vpa = new_wpa = old_wpa + upar
+                        # => old_wpa = new_wpa - upar
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
+                        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivzeta ∈ 1:vzeta.n,
+                                ivr ∈ 1:vr.n
+                            restart_vz_vals = vz.grid .- moments.neutral.uz[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    elseif (!moments.evolve_upar && !moments.evolve_ppar &&
+                            !restart_evolve_upar && restart_evolve_ppar)
+                        # vpa = new_wpa = old_wpa*vth
+                        # => old_wpa = new_wpa/vth
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
+                        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
+                                ivzeta ∈ 1:vzeta.n
+                            restart_vz_vals = vz.grid ./ moments.neutral.vth[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    elseif (!moments.evolve_upar && !moments.evolve_ppar &&
+                            restart_evolve_upar && restart_evolve_ppar)
+                        # vpa = new_wpa = old_wpa*vth + upar
+                        # => old_wpa = (new_wpa - upar)/vth
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
+                        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
+                                ivzeta ∈ 1:vzeta.n
+                            restart_vz_vals =
+                                @. (vz.grid - moments.neutral.uz[iz,ir,is]) /
+                                   moments.neutral.vth[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    elseif (moments.evolve_upar && !moments.evolve_ppar &&
+                            !restart_evolve_upar && !restart_evolve_ppar)
+                        # vpa = new_wpa + upar = old_wpa
+                        # => old_wpa = new_wpa + upar
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
+                        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
+                                ivzeta ∈ 1:vzeta.n
+                            restart_vz_vals = vz.grid .+ moments.neutral.uz[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz, restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    elseif (moments.evolve_upar && !moments.evolve_ppar &&
+                            !restart_evolve_upar && restart_evolve_ppar)
+                        # vpa = new_wpa + upar = old_wpa*vth
+                        # => old_wpa = (new_wpa + upar)/vth
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
+                        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
+                                ivzeta ∈ 1:vzeta.n
+                            restart_vz_vals =
+                                @. (vz.grid + moments.neutral.uz[iz,ir,is]) /
+                                    moments.neutral.vth[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    elseif (moments.evolve_upar && !moments.evolve_ppar &&
+                            restart_evolve_upar && restart_evolve_ppar)
+                        # vpa = new_wpa + upar = old_wpa*vth + upar
+                        # => old_wpa = new_wpa/vth
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
+                        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
+                                ivzeta ∈ 1:vzeta.n
+                            restart_vz_vals = vz.grid ./ moments.neutral.vth[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    elseif (!moments.evolve_upar && moments.evolve_ppar &&
+                            !restart_evolve_upar && !restart_evolve_ppar)
+                        # vpa = new_wpa*vth = old_wpa
+                        # => old_wpa = new_wpa*vth
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
+                        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
+                                ivzeta ∈ 1:vzeta.n
+                            restart_vz_vals = vz.grid .* moments.neutral.vth[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    elseif (!moments.evolve_upar && moments.evolve_ppar &&
+                            restart_evolve_upar && !restart_evolve_ppar)
+                        # vpa = new_wpa*vth = old_wpa + upar
+                        # => old_wpa = new_wpa*vth - upar/vth
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
+                        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
+                                ivzeta ∈ 1:vzeta.n
+                            restart_vz_vals =
+                                @. vz.grid * moments.neutral.vth[iz,ir,is] -
+                                   moments.neutral.upar[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    elseif (!moments.evolve_upar && moments.evolve_ppar &&
+                            restart_evolve_upar && restart_evolve_ppar)
+                        # vpa = new_wpa*vth = old_wpa*vth + upar
+                        # => old_wpa = new_wpa - upar/vth
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
+                        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
+                                ivzeta ∈ 1:vzeta.n
+                            restart_vz_vals =
+                                @. vz.grid -
+                                   moments.neutral.uz[iz,ir,is]/moments.neutral.vth[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    elseif (moments.evolve_upar && moments.evolve_ppar &&
+                            !restart_evolve_upar && !restart_evolve_ppar)
+                        # vpa = new_wpa*vth + upar = old_wpa
+                        # => old_wpa = new_wpa*vth + upar
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
+                        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
+                                ivzeta ∈ 1:vzeta.n
+                            restart_vz_vals =
+                                @. vz.grid * moments.neutral.vth[iz,ir,is] +
+                                   moments.neutral.uz[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    elseif (moments.evolve_upar && moments.evolve_ppar &&
+                            restart_evolve_upar && !restart_evolve_ppar)
+                        # vpa = new_wpa*vth + upar = old_wpa + upar
+                        # => old_wpa = new_wpa*vth
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
+                        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
+                                ivzeta ∈ 1:vzeta.n
+                            restart_vz_vals = vz.grid .* moments.neutral.vth[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    elseif (moments.evolve_upar && moments.evolve_ppar &&
+                            !restart_evolve_upar && restart_evolve_ppar)
+                        # vpa = new_wpa*vth + upar = old_wpa*vth
+                        # => old_wpa = new_wpa + upar/vth
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
+                        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
+                                ivzeta ∈ 1:vzeta.n
+                            restart_vz_vals =
+                                @. vz.grid +
+                                   moments.neutral.uz[iz,ir,is]/moments.neutral.vth[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    else
+                        # This should never happen, as all combinations of evolve_* options
+                        # should be handled above.
+                        error("Unsupported combination of moment-kinetic options:"
+                              * " evolve_density=", moments.evolve_density
+                              * " evolve_upar=", moments.evolve_upar
+                              * " evolve_ppar=", moments.evolve_ppar
+                              * " restart_evolve_density=", restart_evolve_density
+                              * " restart_evolve_upar=", restart_evolve_upar
+                              * " restart_evolve_ppar=", restart_evolve_ppar)
+                    end
+                    if moments.evolve_density && !restart_evolve_density
+                        # Need to normalise by density
+                        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                            this_pdf[:,:,:,iz,ir,is] ./= moments.neutral.dens[iz,ir,is]
+                        end
+                    elseif !moments.evolve_density && restart_evolve_density
+                        # Need to unnormalise by density
+                        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                            this_pdf[:,:,:,iz,ir,is] .*= moments.neutral.dens[iz,ir,is]
+                        end
+                    end
+                    if moments.evolve_ppar && !restart_evolve_ppar
+                        # Need to normalise by vth
+                        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                            this_pdf[:,:,:,iz,ir,is] .*= moments.neutral.vth[iz,ir,is]
+                        end
+                    elseif !moments.evolve_ppar && restart_evolve_ppar
+                        # Need to unnormalise by vth
+                        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                            this_pdf[:,:,:,iz,ir,is] ./= moments.neutral.vth[iz,ir,is]
+                        end
+                    end
+
+                    return this_pdf
+                end
+
+                pdf.neutral.norm .= load_neutral_pdf()
+
+                function load_neutral_boundary_pdf(var_name, ir)
+                    this_pdf = load_slice(boundary_distributions_io, var_name, vz_range,
+                                          vr_range, vzeta_range, z_range, :)
+                    orig_nvz, orig_nvr, orig_nvzeta, orig_nz, nspecies = size(this_pdf)
+                    if interpolation_needed["z"]
+                        new_pdf = allocate_float(orig_nvz, orig_nvr, orig_nvzeta, z.n,
+                                                 nspecies)
+                        for is ∈ 1:nspecies, ivzeta ∈ 1:orig_nvzeta, ivr ∈ 1:orig_nvr,
+                                ivz ∈ 1:orig_nvz
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[ivz,ivr,ivzeta,:,is], z.grid,
+                                this_pdf[ivz,ivr,ivzeta,:,is], restart_z,
+                                restart_z_spectral)
+                        end
+                        this_pdf = new_pdf
+                    end
+
+                    # Current moment-kinetic implementation is only 1V, so no need
+                    # to handle normalised vzeta or vr coordinates. This will need
+                    # to change when/if 3V moment-kinetics is implemented.
+                    if interpolation_needed["vzeta"]
+                        new_pdf = allocate_float(orig_nvz, orig_nvr, vzeta.n, z.n,
+                                                 nspecies)
+                        for is ∈ 1:nspecies, iz ∈ 1:z.n, ivr ∈ 1:orig_nvr,
+                                ivz ∈ 1:orig_nvz
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[ivz,ivr,:,iz,is], vzeta.grid,
+                                this_pdf[ivz,ivr,:,iz,is], restart_vzeta,
+                                restart_vzeta_spectral)
+                        end
+                        this_pdf = new_pdf
+                    end
+                    if interpolation_needed["vr"]
+                        new_pdf = allocate_float(orig_nvz, vr.n, vzeta.n, z.n, nspecies)
+                        for is ∈ 1:nspecies, iz ∈ 1:z.n, ivzeta ∈ 1:vzeta.n,
+                                ivz ∈ 1:orig_nvz
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[ivz,:,ivzeta,iz,is], vr.grid,
+                                this_pdf[ivz,:,ivzeta,iz,is], restart_vr,
+                                restart_vr_spectral)
+                        end
+                        this_pdf = new_pdf
+                    end
+
+                    if (
+                        (moments.evolve_density == restart_evolve_density &&
+                         moments.evolve_upar == restart_evolve_upar && moments.evolve_ppar ==
+                         restart_evolve_ppar)
+                        || (!moments.evolve_upar && !restart_evolve_upar &&
+                            !moments.evolve_ppar && !restart_evolve_ppar)
+                       )
+                        # No chages to velocity-space coordinates, so just interpolate from
+                        # one grid to the other
+                        if interpolation_needed["vz"]
+                            new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, nspecies)
+                            for is ∈ 1:nspecies, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
+                                    ivzeta ∈ 1:vzeta.n
+                                @views interpolate_to_grid_1d!(
+                                    new_pdf[:,ivr,ivzeta,iz,is], vz.grid,
+                                    this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
+                                    restart_vz_spectral)
+                            end
+                            this_pdf = new_pdf
+                        end
+                    elseif (!moments.evolve_upar && !moments.evolve_ppar &&
+                            restart_evolve_upar && !restart_evolve_ppar)
+                        # vpa = new_wpa = old_wpa + upar
+                        # => old_wpa = new_wpa - upar
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, nspecies)
+                        for is ∈ nspecies, iz ∈ 1:z.n, ivzeta ∈ 1:vzeta.n, ivr ∈ 1:vr.n
+                            restart_vz_vals = vz.grid .- moments.neutral.uz[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    elseif (!moments.evolve_upar && !moments.evolve_ppar &&
+                            !restart_evolve_upar && restart_evolve_ppar)
+                        # vpa = new_wpa = old_wpa*vth
+                        # => old_wpa = new_wpa/vth
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, nspecies)
+                        for is ∈ nspecies, iz ∈ 1:z.n, ivr ∈ 1:vr.n, ivzeta ∈ 1:vzeta.n
+                            restart_vz_vals = vz.grid ./ moments.neutral.vth[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    elseif (!moments.evolve_upar && !moments.evolve_ppar &&
+                            restart_evolve_upar && restart_evolve_ppar)
+                        # vpa = new_wpa = old_wpa*vth + upar
+                        # => old_wpa = (new_wpa - upar)/vth
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, nspecies)
+                        for is ∈ nspecies, iz ∈ 1:z.n, ivr ∈ 1:vr.n, ivzeta ∈ 1:vzeta.n
+                            restart_vz_vals =
+                                @. (vz.grid - moments.neutral.uz[iz,ir,is]) /
+                                   moments.neutral.vth[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    elseif (moments.evolve_upar && !moments.evolve_ppar &&
+                            !restart_evolve_upar && !restart_evolve_ppar)
+                        # vpa = new_wpa + upar = old_wpa
+                        # => old_wpa = new_wpa + upar
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, nspecies)
+                        for is ∈ nspecies, iz ∈ 1:z.n, ivr ∈ 1:vr.n, ivzeta ∈ 1:vzeta.n
+                            restart_vz_vals = vz.grid .+
+                                              moments.neutral.uz[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    elseif (moments.evolve_upar && !moments.evolve_ppar &&
+                            !restart_evolve_upar && restart_evolve_ppar)
+                        # vpa = new_wpa + upar = old_wpa*vth
+                        # => old_wpa = (new_wpa + upar)/vth
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, nspecies)
+                        for is ∈ nspecies, iz ∈ 1:z.n, ivr ∈ 1:vr.n, ivzeta ∈ 1:vzeta.n
+                            restart_vz_vals =
+                                @. (vz.grid + moments.neutral.uz[iz,ir,is]) /
+                                   moments.neutral.vth
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    elseif (moments.evolve_upar && !moments.evolve_ppar &&
+                            restart_evolve_upar && restart_evolve_ppar)
+                        # vpa = new_wpa + upar = old_wpa*vth + upar
+                        # => old_wpa = new_wpa/vth
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, nspecies)
+                        for is ∈ nspecies, iz ∈ 1:z.n, ivr ∈ 1:vr.n, ivzeta ∈ 1:vzeta.n
+                            restart_vz_vals = vz.grid ./ moments.neutral.vth[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    elseif (!moments.evolve_upar && moments.evolve_ppar &&
+                            !restart_evolve_upar && !restart_evolve_ppar)
+                        # vpa = new_wpa*vth = old_wpa
+                        # => old_wpa = new_wpa*vth
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, nspecies)
+                        for is ∈ nspecies, iz ∈ 1:z.n, ivr ∈ 1:vr.n, ivzeta ∈ 1:vzeta.n
+                            restart_vz_vals = vz.grid .*
+                                              moments.neutral.vth[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    elseif (!moments.evolve_upar && moments.evolve_ppar &&
+                            restart_evolve_upar && !restart_evolve_ppar)
+                        # vpa = new_wpa*vth = old_wpa + upar
+                        # => old_wpa = new_wpa*vth - upar/vth
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, nspecies)
+                        for is ∈ nspecies, iz ∈ 1:z.n, ivr ∈ 1:vr.n, ivzeta ∈ 1:vzeta.n
+                            restart_vz_vals =
+                                @. vz.grid * moments.neutral.vth[iz,ir,is] -
+                                   moments.neutral.upar[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    elseif (!moments.evolve_upar && moments.evolve_ppar &&
+                            restart_evolve_upar && restart_evolve_ppar)
+                        # vpa = new_wpa*vth = old_wpa*vth + upar
+                        # => old_wpa = new_wpa - upar/vth
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, nspecies)
+                        for is ∈ nspecies, iz ∈ 1:z.n, ivr ∈ 1:vr.n, ivzeta ∈ 1:vzeta.n
+                            restart_vz_vals =
+                                @. vz.grid -
+                                   moments.neutral.uz[iz,ir,is]/moments.neutral.vth[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    elseif (moments.evolve_upar && moments.evolve_ppar &&
+                            !restart_evolve_upar && !restart_evolve_ppar)
+                        # vpa = new_wpa*vth + upar = old_wpa
+                        # => old_wpa = new_wpa*vth + upar
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, nspecies)
+                        for is ∈ nspecies, iz ∈ 1:z.n, ivr ∈ 1:vr.n, ivzeta ∈ 1:vzeta.n
+                            restart_vz_vals =
+                                @. vz.grid * moments.neutral.vth[iz,ir,is] +
+                                   moments.neutral.uz[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    elseif (moments.evolve_upar && moments.evolve_ppar &&
+                            restart_evolve_upar && !restart_evolve_ppar)
+                        # vpa = new_wpa*vth + upar = old_wpa + upar
+                        # => old_wpa = new_wpa*vth
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, nspecies)
+                        for is ∈ nspecies, iz ∈ 1:z.n, ivr ∈ 1:vr.n, ivzeta ∈ 1:vzeta.n
+                            restart_vz_vals = vz.grid .* moments.neutral.vth[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                        this_pdf = new_pdf
+                    elseif (moments.evolve_upar && moments.evolve_ppar &&
+                            !restart_evolve_upar && restart_evolve_ppar)
+                        # vpa = new_wpa*vth + upar = old_wpa*vth
+                        # => old_wpa = new_wpa + upar/vth
+                        new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, nspecies)
+                        for is ∈ nspecies, iz ∈ 1:z.n, ivr ∈ 1:vr.n, ivzeta ∈ 1:vzeta.n
+                            restart_vz_vals =
+                                @. vz.grid +
+                                   moments.neutral.uz[iz,ir,is]/moments.neutral.vth[iz,ir,is]
+                            @views interpolate_to_grid_1d!(
+                                new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
+                                this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
+                                restart_vz_spectral)
+                        end
+                    else
+                        # This should never happen, as all combinations of evolve_* options
+                        # should be handled above.
+                        error("Unsupported combination of moment-kinetic options:"
+                              * " evolve_density=", moments.evolve_density
+                              * " evolve_upar=", moments.evolve_upar
+                              * " evolve_ppar=", moments.evolve_ppar
+                              * " restart_evolve_density=", restart_evolve_density
+                              * " restart_evolve_upar=", restart_evolve_upar
+                              * " restart_evolve_ppar=", restart_evolve_ppar)
+                    end
+                    if moments.evolve_density && !restart_evolve_density
+                        # Need to normalise by density
+                        for is ∈ nspecies, iz ∈ 1:z.n
+                            this_pdf[:,:,:,iz,is] ./= moments.neutral.dens[iz,ir,is]
+                        end
+                    elseif !moments.evolve_density && restart_evolve_density
+                        # Need to unnormalise by density
+                        for is ∈ nspecies, iz ∈ 1:z.n
+                            this_pdf[:,:,:,iz,is] .*= moments.neutral.dens[iz,ir,is]
+                        end
+                    end
+                    if moments.evolve_ppar && !restart_evolve_ppar
+                        # Need to normalise by vth
+                        for is ∈ nspecies, iz ∈ 1:z.n
+                            this_pdf[:,:,:,iz,is] .*= moments.neutral.vth[iz,ir,is]
+                        end
+                    elseif !moments.evolve_ppar && restart_evolve_ppar
+                        # Need to unnormalise by vth
+                        for is ∈ nspecies, iz ∈ 1:z.n
+                            this_pdf[:,:,:,iz,is] ./= moments.neutral.vth[iz,ir,is]
+                        end
+                    end
+
+                    return this_pdf
+                end
+
+                boundary_distributions.pdf_rboundary_neutral[:,:,:,:,1,:] .=
+                    load_neutral_boundary_pdf("pdf_rboundary_neutral_left", 1)
+                boundary_distributions.pdf_rboundary_neutral[:,:,:,:,2,:] .=
+                    load_neutral_boundary_pdf("pdf_rboundary_neutral_right", r.n)
             end
         finally
             close(fid)
@@ -750,7 +1904,7 @@ function load_distributed_charged_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
         for iblock in 0:nb-1
             fid = open_readonly_output_file(run_name, "dfns", iblock=iblock, printout=false)
 
-            z_irank, r_irank = load_rank_data(fid)
+            z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid)
 
             # max index set to avoid double assignment of repeated points
             # nr/nz if irank = nrank-1, (nr-1)/(nz-1) otherwise
@@ -965,7 +2119,7 @@ function load_distributed_neutral_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
         for iblock in 0:nb-1
             fid = open_readonly_output_file(run_name, "dfns", iblock=iblock, printout=false)
 
-            z_irank, r_irank = load_rank_data(fid)
+            z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid)
 
             # max index set to avoid double assignment of repeated points
             # nr/nz if irank = nrank-1, (nr-1)/(nz-1) otherwise

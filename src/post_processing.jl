@@ -37,7 +37,6 @@ using ..array_allocation: allocate_float
 using ..coordinates: define_coordinate
 using ..file_io: open_ascii_output_file
 using ..type_definitions: mk_float, mk_int
-using ..initial_conditions: vpagrid_to_dzdt
 using ..load_data: open_readonly_output_file, get_group, load_input, load_time_data
 using ..load_data: get_nranks
 using ..load_data: load_fields_data, load_pdf_data
@@ -48,7 +47,8 @@ using ..load_data: load_variable
 using ..load_data: load_coordinate_data, load_block_data, load_rank_data,
                    load_species_data, load_mk_options
 using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data,
-                  check_Chodura_condition, analyze_2D_instability
+                  check_Chodura_condition, analyze_2D_instability,
+                  get_unnormalised_f_dzdt_1d, get_unnormalised_f_coords_2d
 using ..velocity_moments: integrate_over_vspace
 using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
 using ..moment_kinetics_input: mk_input, get
@@ -124,7 +124,7 @@ function trygif(anim, outfile; kwargs...)
 end
 
 """
-Read data
+Read data which is a function of (z,r,t) or (z,r,species,t)
 
 run_names is a tuple. If it has more than one entry, this means that there are multiple
 restarts (which are sequential in time), so concatenate the data from each entry together.
@@ -168,7 +168,7 @@ function read_distributed_zr_data!(var::Array{mk_float,N}, var_name::String,
             local_tind_end = local_tind_start + ntime_local - 1
             global_tind_end = global_tind_start + length(offset:iskip:ntime_local) - 1
 
-            z_irank, r_irank = load_rank_data(fid)
+            z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid)
 
             # min index set to avoid double assignment of repeated points
             # 1 if irank = 0, 2 otherwise
@@ -185,6 +185,77 @@ function read_distributed_zr_data!(var::Array{mk_float,N}, var_name::String,
                     else
                         error("Unsupported number of dimensions: $N")
                     end
+                end
+            end
+            close(fid)
+        end
+        local_tind_start = local_tind_end + 1
+        global_tind_start = global_tind_end + 1
+    end
+end
+
+"""
+Read data which is a function of (r,t) or (r,species,t) and associated to one of the wall boundaries
+
+run_names is a tuple. If it has more than one entry, this means that there are multiple
+restarts (which are sequential in time), so concatenate the data from each entry together.
+"""
+function read_distributed_zwallr_data!(var::Array{mk_float,N}, var_name::String,
+   run_names::Tuple, file_key::String, nblocks::Tuple,
+   nr_local::mk_int,iskip::mk_int,wallopt::String) where N
+    # dimension of var is [z,r,species,t]
+
+    local_tind_start = 1
+    local_tind_end = -1
+    global_tind_start = 1
+    global_tind_end = -1
+    for (run_name, nb) in zip(run_names, nblocks)
+        for iblock in 0:nb-1
+            fid = open_readonly_output_file(run_name,file_key,iblock=iblock,printout=false)
+            z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid)
+            # determine if data is on this block
+            if (wallopt == "lower" && z_irank == 0) || (wallopt == "upper" && z_irank == z_nrank - 1)
+                group = get_group(fid, "dynamic_data")
+                var_local = load_variable(group, var_name)
+
+                ntime_local = size(var_local, N)
+
+                # offset is the amount we have to skip at the beginning of this restart to
+                # line up properly with having outputs every iskip since the beginning of the
+                # first restart.
+                # Note: use rem(x,y,RoundDown) here because this gives a result that's
+                # definitely between 0 and y, whereas rem(x,y) or mod(x,y) give negative
+                # results for negative x.
+                offset = rem(1 - (local_tind_start-1), iskip, RoundDown)
+                if offset == 0
+                    # Actually want offset in the range [1,iskip], so correct if rem()
+                    # returned 0
+                    offset = iskip
+                end
+                if local_tind_start > 1
+                    # The run being loaded is a restart (as local_tind_start=1 for the first
+                    # run), so skip the first point, as this is a duplicate of the last point
+                    # of the previous restart
+                    offset += 1
+                end
+
+                local_tind_end = local_tind_start + ntime_local - 1
+                global_tind_end = global_tind_start + length(offset:iskip:ntime_local) - 1
+
+            #z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid)
+            #if (wallopt == "lower" && z_irank == 0) || (wallopt == "upper" && z_irank == z_nrank - 1)
+                # min index set to avoid double assignment of repeated points
+                # 1 if irank = 0, 2 otherwise
+                imin_r = min(1,r_irank) + 1
+                for ir_local in imin_r:nr_local
+                        ir_global = iglobal_func(ir_local,r_irank,nr_local)
+                        if N == 3
+                            var[ir_global,:,global_tind_start:global_tind_end] .= var_local[ir_local,:,offset:iskip:end]
+                        elseif N == 2
+                            var[ir_global,global_tind_start:global_tind_end] .= var_local[ir_local,offset:iskip:end]
+                        else
+                            error("Unsupported number of dimensions: $N")
+                        end
                 end
             end
             close(fid)
@@ -228,7 +299,9 @@ function allocate_global_zr_charged_moments(nz_global,nr_global,n_ion_species,nt
     parallel_heat_flux = allocate_float(nz_global,nr_global,n_ion_species,ntime)
     thermal_speed = allocate_float(nz_global,nr_global,n_ion_species,ntime)
     entropy_production = allocate_float(nz_global,nr_global,n_ion_species,ntime)
-    return density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed, entropy_production
+    chodura_integral_lower = allocate_float(nr_global,n_ion_species,ntime)
+    chodura_integral_upper = allocate_float(nr_global,n_ion_species,ntime)
+    return density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed, entropy_production, chodura_integral_lower, chodura_integral_upper
 end
 
 function allocate_global_zr_charged_dfns(nvpa_global, nvperp_global, nz_global, nr_global,
@@ -311,6 +384,7 @@ function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species
     use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
     # constant to be used to test nonzero Er in wall boundary condition
     Er_constant = get(scan_input, "Er_constant", 0.0)
+    recycling_fraction = get(scan_input, "recycling_fraction", 1.0)
     # constant to be used to control Ez divergences
     epsilon_offset = get(scan_input, "epsilon_offset", 0.001)
     # bool to control if dfni is a function of vpa or vpabar in MMS test
@@ -326,7 +400,7 @@ function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species
     me_over_mi = 1.0/1836.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
         electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, Er_constant,
-        mn_over_mi, me_over_mi, allocate_float(n_species))
+        mn_over_mi, me_over_mi, recycling_fraction, allocate_float(n_species))
     return geometry, composition
 
 end
@@ -503,7 +577,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                              Tuple(this_z.n_global for this_z ∈ z),
                                              Tuple(this_r.n_global for this_r ∈ r),
                                              ntime)
-    density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed, entropy_production =
+    density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed, entropy_production, chodura_integral_lower, chodura_integral_upper =
         get_tuple_of_return_values(allocate_global_zr_charged_moments,
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r),
@@ -562,6 +636,12 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                run_names, "moments", nblocks,
                                Tuple(this_z.n for this_z ∈ z),
                                Tuple(this_r.n for this_r ∈ r), iskip)
+    get_tuple_of_return_values(read_distributed_zwallr_data!, chodura_integral_lower, "chodura_integral_lower",
+                               run_names, "moments", nblocks,
+                               Tuple(this_r.n for this_r ∈ r), iskip, "lower")
+    get_tuple_of_return_values(read_distributed_zwallr_data!, chodura_integral_upper, "chodura_integral_upper",
+                               run_names, "moments", nblocks,
+                               Tuple(this_r.n for this_r ∈ r), iskip, "upper")
     # neutral particle moments
     if has_neutrals
         get_tuple_of_return_values(read_distributed_zr_data!, neutral_density,
@@ -617,7 +697,9 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r), ntime_pdfs)
     density_at_pdf_times, parallel_flow_at_pdf_times, parallel_pressure_at_pdf_times,
-    parallel_heat_flux_at_pdf_times, thermal_speed_at_pdf_times =
+    perpendicular_pressure_at_pdf_timse, parallel_heat_flux_at_pdf_times,
+    thermal_speed_at_pdf_times, entropy_production_at_pdf_times,
+    chodura_integral_lower_at_pdf_times, chodura_integral_upper_at_pdf_times =
         get_tuple_of_return_values(allocate_global_zr_charged_moments,
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r), n_ion_species,
@@ -664,6 +746,12 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                "thermal_speed", run_names, "dfns", nblocks,
                                Tuple(this_z.n for this_z ∈ z),
                                Tuple(this_r.n for this_r ∈ r), iskip_pdfs)
+    get_tuple_of_return_values(read_distributed_zwallr_data!, chodura_integral_lower_at_pdf_times, "chodura_integral_lower",
+                               run_names, "dfns", nblocks,
+                               Tuple(this_r.n for this_r ∈ r), iskip, "lower")
+    get_tuple_of_return_values(read_distributed_zwallr_data!, chodura_integral_upper_at_pdf_times, "chodura_integral_upper",
+                               run_names, "dfns", nblocks,
+                               Tuple(this_r.n for this_r ∈ r), iskip, "upper")
     # neutral particle moments
     if has_neutrals
         get_tuple_of_return_values(read_distributed_zr_data!,
@@ -785,8 +873,12 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     if pp.diagnostics_chodura_t
         Chodura_ratio_lower, Chodura_ratio_upper =
             get_tuple_of_return_values(check_Chodura_condition, r, z, vperp, vpa,
-                                       density_at_pdf_times, composition, Er_at_pdf_times,
-                                       geometry, "wall", nblocks, run_names, nothing, ir0)
+                                       density_at_pdf_times, parallel_flow_at_pdf_times,
+                                       thermal_speed_at_pdf_times, composition,
+                                       Er_at_pdf_times, geometry, "wall", nblocks,
+                                       run_names, nothing, ir0,
+                                       evolve_density=evolve_density,
+                                       evolve_upar=evolve_upar, evolve_ppar=evolve_ppar)
 
         plot(legend=legend)
         for (t, cr, run_label) ∈ zip(time_pdfs, Chodura_ratio_lower, run_names)
@@ -807,9 +899,12 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     if pp.diagnostics_chodura_r
         Chodura_ratio_lower, Chodura_ratio_upper =
             get_tuple_of_return_values(check_Chodura_condition, r, z, vperp, vpa,
-                                       density_at_pdf_times, composition, Er_at_pdf_times,
-                                       geometry, "wall", nblocks, run_names, ntime_pdfs,
-                                       nothing)
+                                       density_at_pdf_times, parallel_flow_at_pdf_times,
+                                       thermal_speed_at_pdf_times, composition,
+                                       Er_at_pdf_times, geometry, "wall", nblocks,
+                                       run_names, ntime_pdfs, nothing,
+                                       evolve_density=evolve_density,
+                                       evolve_upar=evolve_upar, evolve_ppar=evolve_ppar)
 
         plot(legend=legend)
         for (this_r, cr, run_label) ∈ zip(r, Chodura_ratio_lower, run_names)
@@ -1039,6 +1134,8 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     parallel_heat_flux = parallel_heat_flux[1]
     thermal_speed = thermal_speed[1]
     entropy_production = entropy_production[1]
+    chodura_integral_lower = chodura_integral_lower[1]
+    chodura_integral_upper = chodura_integral_upper[1]
     time = time[1]
     ntime = ntime[1]
     time_pdfs = time_pdfs[1]
@@ -1072,13 +1169,14 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
     io_input, evolve_moments, t_input, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
-        composition, species, collisions, geometry, drive_input, num_diss_params,
-        manufactured_solns_input = input
+        composition, species, collisions, geometry, drive_input, external_source_settings,
+        num_diss_params, manufactured_solns_input = input
 
     if !is_1D1V
         # make plots and animations of the phi, Ez and Er
         plot_charged_moments_2D(density, parallel_flow, parallel_pressure, 
-                                perpendicular_pressure, thermal_speed, entropy_production, time,
+                                perpendicular_pressure, thermal_speed, entropy_production,
+                                chodura_integral_lower, chodura_integral_upper, time,
                                 z_global.grid, r_global.grid, iz0, ir0, n_ion_species,
                                 itime_min, itime_max, nwrite_movie, run_name_label, pp)
         # make plots and animations of the phi, Ez and Er
@@ -1295,7 +1393,8 @@ function calculate_differences(prefix...)
                                              Tuple(this_z.n_global for this_z ∈ z),
                                              Tuple(this_r.n_global for this_r ∈ r),
                                              ntime)
-    density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed =
+    density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed,
+    chodura_integral_lower, chodura_integral_upper =
         get_tuple_of_return_values(allocate_global_zr_charged_moments,
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r),
@@ -1399,7 +1498,8 @@ function calculate_differences(prefix...)
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r), ntime_pdfs)
     density_at_pdf_times, parallel_flow_at_pdf_times, parallel_pressure_at_pdf_times,
-    parallel_heat_flux_at_pdf_times, thermal_speed_at_pdf_times =
+    parallel_heat_flux_at_pdf_times, thermal_speed_at_pdf_times, chodura_integral_lower_at_pdf_times,
+    chodura_integral_upper_at_pdf_times =
         get_tuple_of_return_values(allocate_global_zr_charged_moments,
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r), n_ion_species,
@@ -2782,70 +2882,6 @@ function draw_v_parallel_zero!(z::AbstractVector, upar, vth, evolve_upar::Bool,
 end
 
 """
-Get the unnormalised distribution function and unnormalised ('lab space') dzdt
-coordinate at a point in space.
-
-Inputs should depend only on vpa.
-"""
-function get_unnormalised_f_dzdt_1d(f, vpa_grid, density, upar, vth, evolve_density,
-                                    evolve_upar, evolve_ppar)
-
-    dzdt = vpagrid_to_dzdt(vpa_grid, vth, upar, evolve_ppar, evolve_upar)
-
-    f_unnorm = get_unnormalised_f_1d(f, density, vth, evolve_density, evolve_ppar)
-
-    return f_unnorm, dzdt
-end
-function get_unnormalised_f_1d(f, density, vth, evolve_density, evolve_ppar)
-    if evolve_ppar
-        f_unnorm = @. f * density / vth
-    elseif evolve_density
-        f_unnorm = @. f * density
-    else
-        f_unnorm = f
-    end
-    return f_unnorm
-end
-
-"""
-Get the unnormalised distribution function and unnormalised ('lab space') coordinates.
-
-Inputs should depend only on z and vpa.
-"""
-function get_unnormalised_f_coords_2d(f, z_grid, vpa_grid, density, upar, vth,
-                                      evolve_density, evolve_upar, evolve_ppar)
-
-    nvpa, nz = size(f)
-    z2d = zeros(nvpa, nz)
-    for iz ∈ 1:nz
-        z2d[:,iz] .= z_grid[iz]
-    end
-    dzdt2d = vpagrid_to_dzdt_2d(vpa_grid, vth, upar, evolve_ppar, evolve_upar)
-    f_unnorm = get_unnormalised_f_2d(f, density, vth, evolve_density, evolve_ppar)
-
-    return f_unnorm, z2d, dzdt2d
-end
-function vpagrid_to_dzdt_2d(vpa_grid, vth, upar, evolve_ppar, evolve_upar)
-    nvpa = length(vpa_grid)
-    nz = length(vth)
-    dzdt2d = zeros(nvpa, nz)
-    for iz ∈ 1:nz
-        @views dzdt2d[:,iz] .= vpagrid_to_dzdt(vpa_grid, vth[iz], upar[iz], evolve_ppar,
-                                               evolve_upar)
-    end
-    return dzdt2d
-end
-function get_unnormalised_f_2d(f, density, vth, evolve_density, evolve_ppar)
-    f_unnorm = similar(f)
-    nz = size(f, 2)
-    for iz ∈ 1:nz
-        @views f_unnorm[:,iz] .= get_unnormalised_f_1d(f[:,iz], density[iz], vth[iz],
-                                                       evolve_density, evolve_ppar)
-    end
-    return f_unnorm
-end
-
-"""
 Make a 2d plot of an unnormalised f on unnormalised coordinates, as returned from
 get_unnormalised_f_coords()
 
@@ -3025,7 +3061,7 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     pdf_norm = zeros(mk_float,ntime)
     for iblock in 0:nblocks-1
         fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock, printout=false)
-        z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
+        z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid_pdfs,printout=false)
         pdf = load_pdf_data(fid_pdfs, printout=false)
         # local local grid data on iblock=0
         z_local, _ = load_coordinate_data(fid_pdfs, "z")
@@ -3050,10 +3086,10 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
 
     # plot distribution at lower wall boundary
     # find the number of ranks
-    z_nrank, r_nrank = get_nranks(run_name,nblocks,"dfns")
+    #z_nrank, r_nrank = get_nranks(run_name,nblocks,"dfns")
     for iblock in 0:nblocks-1
         fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock, printout=false)
-        z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
+        z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid_pdfs,printout=false)
         if (z_irank == 0 || z_irank == z_nrank - 1) && r_irank == 0
             pdf = load_pdf_data(fid_pdfs, printout=false)
             # local local grid data on iblock=0
@@ -3107,7 +3143,7 @@ function compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     pdf_norm = zeros(mk_float,ntime)
     for iblock in 0:nblocks-1
         fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock, printout=false)
-        z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
+        z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid_pdfs,printout=false)
         pdf = load_neutral_pdf_data(fid_pdfs, printout=false)
         # load local grid data
         z_local, _ = load_coordinate_data(fid_pdfs, "z", printout=false)
@@ -3410,6 +3446,11 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
         end
         outfile = string(run_name, "_phi"*description*"_vs_r_z.gif")
         trygif(anim, outfile, fps=5)
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views plot(r, phi[1,:,i], xlabel="r", ylabel=L"\widetilde{\phi}", ylims = (phimin,phimax))
+        end
+        outfile = string(run_name, "_phi(zwall-)_vs_r.gif")
+        trygif(anim, outfile, fps=5)
     elseif pp.animate_phi_vs_r_z && nr == 1 # make a gif animation of ϕ(z) at different times
         anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
             @views plot(z, phi[:,1,i], xlabel="z", ylabel=L"\widetilde{\phi}", ylims = (phimin,phimax))
@@ -3425,8 +3466,8 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
         trysavefig(outfile)
     end
     if pp.plot_wall_Ez_vs_r && nr > 1 # plot last timestep Ez[z_wall,r]
-        @views plot(r, Ez[end,:,end], xlabel=L"r/L_r", ylabel=L"E_z")
-        outfile = string(run_name, "_Ez"*description*"(r,z_wall)_vs_r.pdf")
+        @views plot(r, Ez[1,:,end], xlabel=L"r/L_r", ylabel=L"E_z")
+        outfile = string(run_name, "_Ez"*description*"(r,z_wall-)_vs_r.pdf")
         trysavefig(outfile)
     end
     if pp.animate_Ez_vs_r_z && nr > 1
@@ -3436,9 +3477,12 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
         end
         outfile = string(run_name, "_Ez"*description*"_vs_r_z.gif")
         trygif(anim, outfile, fps=5)
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views plot(r, Ez[1,:,i], xlabel="r", ylabel=L"\widetilde{E}_z", ylims = (Ezmin,Ezmax))
+        end
+        outfile = string(run_name, "_Ez(zwall-)_vs_r.gif")
+        trygif(anim, outfile, fps=5)
     elseif pp.animate_Ez_vs_r_z && nr == 1
-        Ezmin = minimum(Ez)
-        Ezmax = maximum(Ez)
         anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
             @views plot(z, Ez[:,1,i], xlabel="z", ylabel=L"\widetilde{E}_z", ylims = (Ezmin,Ezmax))
         end
@@ -3453,9 +3497,14 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
         trysavefig(outfile)
     end
     if pp.plot_wall_Er_vs_r && nr > 1 # plot last timestep Er[z_wall,r]
-        @views plot(r, Er[end,:,end], xlabel=L"r/L_r", ylabel=L"E_r")
-        outfile = string(run_name, "_Er"*description*"(r,z_wall)_vs_r.pdf")
+        @views plot(r, Er[1,:,end], xlabel=L"r/L_r", ylabel=L"E_r")
+        outfile = string(run_name, "_Er"*description*"(r,z_wall-)_vs_r.pdf")
         trysavefig(outfile)
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views plot(r, Er[1,:,i], xlabel="r", ylabel=L"\widetilde{E}_r", ylims = (Ermin,Ermax))
+        end
+        outfile = string(run_name, "_Er(zwall-)_vs_r.gif")
+        trygif(anim, outfile, fps=5)
     end
     if pp.animate_Er_vs_r_z && nr > 1
         # make a gif animation of ϕ(z) at different times
@@ -3470,7 +3519,8 @@ end
 
 function plot_charged_moments_2D(density, parallel_flow, parallel_pressure,
     perpendicular_pressure, thermal_speed, 
-    entropy_production, time, z, r, iz0, ir0, n_ion_species,
+    entropy_production,chodura_integral_lower, chodura_integral_upper,
+    time, z, r, iz0, ir0, n_ion_species,
     itime_min, itime_max, nwrite_movie, run_name, pp)
     nr = size(r,1)
     ntime = size(time,1)
@@ -3605,19 +3655,19 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure,
         if pp.plot_ppar0_vs_t
             @views plot(time, parallel_pressure[iz0,ir0,is,:], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"p_{i\|\|}(t)", label = "")
 			outfile = string(run_name, "_parallel_pressure"*description*"(iz0,ir0)_vs_t.pdf")
-			savefig(outfile)
+			trysavefig(outfile)
             @views plot(time, parallel_pressure[iz0,ir0,is,:] .- parallel_pressure[iz0,ir0,is,1], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"p_{i\|\|}(t) - p_{i\|\|}(0)", label = "")
 			outfile = string(run_name, "_delta_parallel_pressure"*description*"(iz0,ir0)_vs_t.pdf")
-			savefig(outfile)
+			trysavefig(outfile)
         end
         # the perpendicular pressure
         if pp.plot_pperp0_vs_t
             @views plot(time, perpendicular_pressure[iz0,ir0,is,:], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"p_{i\perp}(t)", label = "")
 			outfile = string(run_name, "_perpendicular_pressure"*description*"(iz0,ir0)_vs_t.pdf")
-			savefig(outfile)
+			trysavefig(outfile)
             @views plot(time, perpendicular_pressure[iz0,ir0,is,:] .- perpendicular_pressure[iz0,ir0,is,1], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"p_{i\perp}(t) - p_{i\perp}(0)", label = "")
 			outfile = string(run_name, "_delta_perpendicular_pressure"*description*"(iz0,ir0)_vs_t.pdf")
-			savefig(outfile)
+			trysavefig(outfile)
         end
         # the total pressure
         if pp.plot_ppar0_vs_t && pp.plot_pperp0_vs_t
@@ -3626,25 +3676,25 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure,
             (2.0/3.0).*perpendicular_pressure[iz0,ir0,is,:] .+ (1.0/3.0).*parallel_pressure[iz0,ir0,is,:]],
             xlabel=L"t/ (L_{ref}/c_{ref})", ylabel="", label = [L"p_{i\|\|}(t)" L"p_{i\perp}(t)" L"p_{i}(t)"])
 			outfile = string(run_name, "_pressures"*description*"(iz0,ir0)_vs_t.pdf")
-			savefig(outfile)
+			trysavefig(outfile)
             @views plot([time, time, time] , 
             [parallel_pressure[iz0,ir0,is,:] .- parallel_pressure[iz0,ir0,is,1], perpendicular_pressure[iz0,ir0,is,:] .- perpendicular_pressure[iz0,ir0,is,1], 
             (2.0/3.0).*(perpendicular_pressure[iz0,ir0,is,:] .- perpendicular_pressure[iz0,ir0,is,1]).+
             (1.0/3.0).*(parallel_pressure[iz0,ir0,is,:] .- parallel_pressure[iz0,ir0,is,1])],
             xlabel=L"t/ (L_{ref}/c_{ref})", ylabel="", label = [L"p_{i\|\|}(t) - p_{i\|\|}(0)" L"p_{i\perp}(t) - p_{i\perp}(0)" L"p_{i}(t) - p_{i}(0)"])
 			outfile = string(run_name, "_delta_pressures"*description*"(iz0,ir0)_vs_t.pdf")
-			savefig(outfile)
+			trysavefig(outfile)
             @views plot([time] , 
             [(2.0/3.0).*perpendicular_pressure[iz0,ir0,is,:] .+ (1.0/3.0).*parallel_pressure[iz0,ir0,is,:]],
             xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"p_{i}(t)", label = "")
 			outfile = string(run_name, "_pressure"*description*"(iz0,ir0)_vs_t.pdf")
-			savefig(outfile)
+			trysavefig(outfile)
             @views plot([time] , 
             [(2.0/3.0).*(perpendicular_pressure[iz0,ir0,is,:] .- perpendicular_pressure[iz0,ir0,is,1]).+
             (1.0/3.0).*(parallel_pressure[iz0,ir0,is,:] .- parallel_pressure[iz0,ir0,is,1])],
             xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"p_{i}(t) - p_{i}(0)", label = "")
 			outfile = string(run_name, "_delta_pressure"*description*"(iz0,ir0)_vs_t.pdf")
-			savefig(outfile)
+			trysavefig(outfile)
         end
         # the thermal speed
         if pp.plot_vth0_vs_t
@@ -3653,15 +3703,32 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure,
 			savefig(outfile)
             @views plot(time, thermal_speed[iz0,ir0,is,:] .- thermal_speed[iz0,ir0,is,1], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"v_{i,th}(t) - v_{i,th}(0)", label = "")
 			outfile = string(run_name, "_delta_thermal_speed"*description*"(iz0,ir0)_vs_t.pdf")
-			savefig(outfile)
+			trysavefig(outfile)
         end
         # the entropy production
         if pp.plot_dSdt0_vs_t
             @views plot(time[2:ntime], entropy_production[iz0,ir0,is,2:ntime], xlabel=L"t/(L_{ref}/c_{ref})", ylabel=L"\dot{S}(t)", label = "")
 			outfile = string(run_name, "_entropy production"*description*"(iz0,ir0)_vs_t.pdf")
-			savefig(outfile)
+			trysavefig(outfile)
         end
-	end
+        if pp.plot_chodura_integral
+            # plot the Chodura condition integrals calculated at run time 
+            @views plot(r, chodura_integral_lower[:,is,end], xlabel=L"r/L_r", ylabel="", label = "Chodura lower")
+            outfile = string(run_name, "_chodura_integral_lower"*description*"_vs_r.pdf")
+            trysavefig(outfile)
+            @views heatmap(time, r, chodura_integral_lower[:,is,:], xlabel=L"t", ylabel=L"r", c = :deep, interpolation = :cubic,
+                              windowsize = (360,240), margin = 15pt)
+            outfile = string(run_name, "_chodura_integral_lower"*description*"_vs_r_t.pdf")
+            trysavefig(outfile)
+            @views plot(r, chodura_integral_upper[:,is,end], xlabel=L"r/L_r", ylabel="", label = "Chodura upper")
+            outfile = string(run_name, "_chodura_integral_upper"*description*"_vs_r.pdf")
+            trysavefig(outfile)
+            @views heatmap(time, r, chodura_integral_upper[:,is,:], xlabel=L"t", ylabel=L"r", c = :deep, interpolation = :cubic,
+                              windowsize = (360,240), margin = 15pt)
+            outfile = string(run_name, "_chodura_integral_upper"*description*"_vs_r_t.pdf")
+            trysavefig(outfile)
+        end
+    end
     println("done.")
 end
 

@@ -43,7 +43,7 @@ using LinearAlgebra: lu
 using ..initial_conditions: enforce_boundary_conditions!
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
-using ..communication: MPISharedArray, global_rank
+using ..communication: MPISharedArray, global_rank, _block_synchronize
 using ..velocity_moments: integrate_over_vspace
 using ..velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_qpar, get_pressure, get_rmom
 using ..calculus: derivative!, second_derivative!
@@ -250,6 +250,7 @@ function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,dSdt,compos
             @serial_region begin
                 dSdt[iz,ir,is] = -get_density(lnfC,vpa,vperp)
             end
+            begin_vperp_vpa_region()
         end
     end
     return nothing
@@ -312,6 +313,9 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
             dHdvpa[ivpa,ivperp] = dHdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             dHdvperp[ivpa,ivperp] = dHdvperp_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
         end
+        # Need to synchronize as these arrays may be read outside the locally-owned set of
+        # ivperp, ivpa indices in assemble_explicit_collision_operator_rhs_parallel!()
+        _block_synchronize()
     else
         calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvperp,
              d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,@view(ffsp_in[:,:]),
@@ -334,6 +338,10 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
             dFdvpa[ivpa,ivperp] = dFdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             dFdvperp[ivpa,ivperp] = dFdvperp_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
         end
+        # Need to synchronize as FF, dFdvpa, dFdvperp may be read outside the
+        # locally-owned set of ivperp, ivpa indices in
+        # assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!()
+        _block_synchronize()
         assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!(rhsc,rhsvpavperp,
           FF,dFdvpa,dFdvperp,
           d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,

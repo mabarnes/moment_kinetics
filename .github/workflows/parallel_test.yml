@@ -1,7 +1,7 @@
 # Run tests in parallel to check for bugs that only show up on multiple processes
 name: Run tests in parallel
 
-on: [push, pull_request]
+on: [push, pull_request, workflow_dispatch]
 
 jobs:
   test:
@@ -12,23 +12,20 @@ jobs:
         include:
           - julia_version: '1.8'
       fail-fast: false
-    timeout-minutes: 90
+    timeout-minutes: 120
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: mpi4py/setup-mpi@v1
         with:
           mpi: 'openmpi'
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.julia_version }}
           arch: x64
-      # Install a specific Plots.jl version, because the job hangs on macOS with
-      # Plots.jl@1.38.8
-      - name: Pin dependency versions
-        if: matrix.os == 'macOS-latest'
-        run: julia --project -e 'using Pkg; Pkg.add([PackageSpec(name="Plots", version="1.24.3")])'
       - uses: julia-actions/julia-buildpkg@v1
         env:
           # Use the system Python for PyCall - avoids library linking error on macOS
@@ -37,15 +34,14 @@ jobs:
           pip3 install --user matplotlib
           julia --project -e 'using MPIPreferences; MPIPreferences.use_system_binary()'
           julia --project -e 'using Pkg; Pkg.build("MPI"; verbose=true)'
-          julia -O3 --check-bounds=no precompile.jl --debug 1
           # Need to use openmpi so that the following arguments work:
           # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
           #   than physical cores).
           # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
           #   terrible performance when oversubscribing.
-          mpiexec -np 3 --mca rmaps_base_oversubscribe 1 julia --project=@. -Jmoment_kinetics.so -O3 --check-bounds=no test/runtests.jl --debug 1
-          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project=@. -Jmoment_kinetics.so -O3 --check-bounds=no test/runtests.jl --debug 1
-          mpiexec -np 2 --mca rmaps_base_oversubscribe 1 julia --project=@. -Jmoment_kinetics.so -O3 --check-bounds=no test/runtests.jl --debug 1 --long
+          mpiexec -np 3 --mca rmaps_base_oversubscribe 1 julia --project=@. -O3 --check-bounds=no test/runtests.jl --debug 1
+          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project=@. -O3 --check-bounds=no test/runtests.jl --debug 1
+          mpiexec -np 2 --mca rmaps_base_oversubscribe 1 julia --project=@. -O3 --check-bounds=no test/runtests.jl --debug 1 --long
           # Note: MPI.jl's default implementation is mpich, which has a similar option
           # `--with-device=ch3:sock`, but that needs to be set when compiling mpich.
         shell: bash

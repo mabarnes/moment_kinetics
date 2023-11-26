@@ -1758,14 +1758,14 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
         if global_rank[] == 0 && print_to_screen
             println("finished elliptic operator constructor assignment   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
-        if nc_global < 60
-            println("MM2D_sparse \n",MM2D_sparse)
-            print_matrix(Array(MM2D_sparse),"MM2D_sparse",nc_global,nc_global)
+        #if nc_global < 60
+        #    println("MM2D_sparse \n",MM2D_sparse)
+        #    print_matrix(Array(MM2D_sparse),"MM2D_sparse",nc_global,nc_global)
         #    print_matrix(KKpar2D,"KKpar2D",nc_global,nc_global)
         #    print_matrix(KKperp2D,"KKperp2D",nc_global,nc_global)
         #    print_matrix(LP2D,"LP",nc_global,nc_global)
         #    print_matrix(LV2D,"LV",nc_global,nc_global)
-        end
+        #end
     end
     return MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, 
            KKpar2D_with_BC_terms_sparse, KKperp2D_with_BC_terms_sparse, 
@@ -1804,56 +1804,59 @@ end
 function assemble_explicit_collision_operator_rhs_serial!(rhsc,pdfs,d2Gspdvpa2,d2Gspdvperpdvpa,
     d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp,
     vpa,vperp,YY_arrays::YY_collision_operator_arrays)
-    # assemble RHS of collision operator
-    @. rhsc = 0.0
-    
-    # loop over elements
-    for ielement_vperp in 1:vperp.nelement_local
-        YY0perp = YY_arrays.YY0perp[:,:,:,ielement_vperp]
-        YY1perp = YY_arrays.YY1perp[:,:,:,ielement_vperp]
-        YY2perp = YY_arrays.YY2perp[:,:,:,ielement_vperp]
-        YY3perp = YY_arrays.YY3perp[:,:,:,ielement_vperp]
+    begin_serial_region()
+    @serial_region begin
+        # assemble RHS of collision operator
+        @. rhsc = 0.0
         
-        for ielement_vpa in 1:vpa.nelement_local
-            YY0par = YY_arrays.YY0par[:,:,:,ielement_vpa]
-            YY1par = YY_arrays.YY1par[:,:,:,ielement_vpa]
-            YY2par = YY_arrays.YY2par[:,:,:,ielement_vpa]
-            YY3par = YY_arrays.YY3par[:,:,:,ielement_vpa]
+        # loop over elements
+        for ielement_vperp in 1:vperp.nelement_local
+            YY0perp = YY_arrays.YY0perp[:,:,:,ielement_vperp]
+            YY1perp = YY_arrays.YY1perp[:,:,:,ielement_vperp]
+            YY2perp = YY_arrays.YY2perp[:,:,:,ielement_vperp]
+            YY3perp = YY_arrays.YY3perp[:,:,:,ielement_vperp]
             
-            # loop over field positions in each element
-            for ivperp_local in 1:vperp.ngrid
-                for ivpa_local in 1:vpa.ngrid
-                    ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-                    # carry out the matrix sum on each 2D element
-                    for jvperpp_local in 1:vperp.ngrid
-                        jvperpp = vperp.igrid_full[jvperpp_local,ielement_vperp]
-                        for kvperpp_local in 1:vperp.ngrid
-                            kvperpp = vperp.igrid_full[kvperpp_local,ielement_vperp]
-                            for jvpap_local in 1:vpa.ngrid
-                                jvpap = vpa.igrid_full[jvpap_local,ielement_vpa]
-                                pdfjj = pdfs[jvpap,jvperpp]
-                                for kvpap_local in 1:vpa.ngrid
-                                    kvpap = vpa.igrid_full[kvpap_local,ielement_vpa]
-                                    # first three lines represent parallel flux terms
-                                    # second three lines represent perpendicular flux terms
-                                    rhsc[ic_global] += (YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY2par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvpa2[kvpap,kvperpp] +
-                                                        YY3perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperpdvpa[kvpap,kvperpp] - 
-                                                        2.0*(ms/msp)*YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*dHspdvpa[kvpap,kvperpp] +
-                                                        # end parallel flux, start of perpendicular flux
-                                                        YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY3par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperpdvpa[kvpap,kvperpp] + 
-                                                        YY2perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperp2[kvpap,kvperpp] - 
-                                                        2.0*(ms/msp)*YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*dHspdvperp[kvpap,kvperpp])
+            for ielement_vpa in 1:vpa.nelement_local
+                YY0par = YY_arrays.YY0par[:,:,:,ielement_vpa]
+                YY1par = YY_arrays.YY1par[:,:,:,ielement_vpa]
+                YY2par = YY_arrays.YY2par[:,:,:,ielement_vpa]
+                YY3par = YY_arrays.YY3par[:,:,:,ielement_vpa]
+                
+                # loop over field positions in each element
+                for ivperp_local in 1:vperp.ngrid
+                    for ivpa_local in 1:vpa.ngrid
+                        ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                        # carry out the matrix sum on each 2D element
+                        for jvperpp_local in 1:vperp.ngrid
+                            jvperpp = vperp.igrid_full[jvperpp_local,ielement_vperp]
+                            for kvperpp_local in 1:vperp.ngrid
+                                kvperpp = vperp.igrid_full[kvperpp_local,ielement_vperp]
+                                for jvpap_local in 1:vpa.ngrid
+                                    jvpap = vpa.igrid_full[jvpap_local,ielement_vpa]
+                                    pdfjj = pdfs[jvpap,jvperpp]
+                                    for kvpap_local in 1:vpa.ngrid
+                                        kvpap = vpa.igrid_full[kvpap_local,ielement_vpa]
+                                        # first three lines represent parallel flux terms
+                                        # second three lines represent perpendicular flux terms
+                                        rhsc[ic_global] += (YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY2par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvpa2[kvpap,kvperpp] +
+                                                            YY3perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperpdvpa[kvpap,kvperpp] - 
+                                                            2.0*(ms/msp)*YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*dHspdvpa[kvpap,kvperpp] +
+                                                            # end parallel flux, start of perpendicular flux
+                                                            YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY3par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperpdvpa[kvpap,kvperpp] + 
+                                                            YY2perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperp2[kvpap,kvperpp] - 
+                                                            2.0*(ms/msp)*YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*dHspdvperp[kvpap,kvperpp])
+                                    end
                                 end
                             end
                         end
                     end
-                end
-            end 
+                end 
+            end
         end
+        # correct for minus sign due to integration by parts
+        # and multiply by the normalised collision frequency
+        @. rhsc *= -nussp
     end
-    # correct for minus sign due to integration by parts
-    # and multiply by the normalised collision frequency
-    @. rhsc *= -nussp
     return nothing
 end
 

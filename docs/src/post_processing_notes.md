@@ -54,17 +54,15 @@ or to load from the distribution functions output file `.dfns.h5`
 ```julia
 julia> run_info_dfns = get_run_info("runs/example-run/"; dfns=true)
 ```
-You will usually want to set up the options (stored in
-[`moment_kinetics.makie_post_processing.input_dict`](@ref) and
-[`moment_kinetics.makie_post_processing.input_dict_dfns`](@ref)) with
-[`moment_kinetics.makie_post_processing.setup_makie_post_processing_input!()`](@ref)
-```
-julia> setup_makie_post_processing_input!("my_input.toml"; run_info_moments=run_info, run_info_dfns=run_info_dfns)
-```
-The `run_info_moments` and `run_info_dfns` arguments are used to set sensible
-defaults for various options - they are not required, and usually you will
-probably only pass one (`run_info_dfns` if you loaded distribution function
-output, and `run_info_moments` otherwise).
+Settings for post-processing are read from an input file, by default
+`post_processing_input.toml` (you can select a different one using the
+`setup_input_file` argument to `get_run_info()`). The relevant settings for
+interactive use are the default indices (`iz0`, `ivpa0`, etc.) that are used to
+select slices for 1D/2D plots and animations. The settings are read by
+`setup_makie_post_processing!()` which is called by default as part of
+`get_run_info()`. You might want to call it directly if you load both 'moments'
+and 'distribution functions' data, to get sensible settings for both at the
+same time.
 
 Then you can make 1d or 2d plots, e.g.
 ```julia
@@ -92,6 +90,4 @@ Note that `outfile` is required for animations.
 API
 ---
 
-```@autodocs
-Modules = [moment_kinetics.makie_post_processing]
-```
+See [makie\_post\_processing](@ref).

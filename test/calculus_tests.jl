@@ -9,7 +9,6 @@ using moment_kinetics.calculus: derivative!, second_derivative!, integral
 using MPI
 using Random
 
-#cheb_option_global = "FFT" # "matrix" #
 function runtests()
     @testset "calculus" verbose=use_verbose begin
         println("calculus tests")
@@ -33,7 +32,6 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                #cheb_option = cheb_option_global #"FFT"
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -106,7 +104,7 @@ function runtests()
                 expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L)
 
                 # differentiate f
-                derivative!(df, f, x, false)
+                derivative!(df, f, x, spectral)
 
                 rtol = 1.e2 / (nelement*(ngrid-1))^4
                 @test isapprox(df, expected_df, rtol=rtol, atol=1.e-15,
@@ -160,7 +158,7 @@ function runtests()
                     adv_fac .= advection
 
                     # differentiate f
-                    derivative!(df, f, x, adv_fac, false)
+                    derivative!(df, f, x, adv_fac, spectral)
 
                     rtol = 1.e2 / (nelement*(ngrid-1))^order
                     @test isapprox(df, expected_df, rtol=rtol, atol=1.e-15,
@@ -169,7 +167,7 @@ function runtests()
             end
         end
 
-        @testset "finite_difference derivatives (4 argument), Neumann" verbose=false begin
+        @testset "finite_difference derivatives (4 argument)" verbose=false begin
             @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"),
                     nelement ∈ (1:5), ngrid ∈ (9:33)
 
@@ -207,7 +205,7 @@ function runtests()
                 expected_df = @. -2.0 * π / L * sinpi(2.0 * x.grid / L)
 
                 # differentiate f
-                derivative!(df, f, x, false)
+                derivative!(df, f, x, spectral)
 
                 # Note: only get 1st order convergence at the boundary for an input
                 # function that has zero gradient at the boundary
@@ -217,7 +215,7 @@ function runtests()
             end
         end
 
-        @testset "finite_difference derivatives upwinding (5 argument), Neumann" verbose=false begin
+        @testset "finite_difference derivatives upwinding (5 argument)" verbose=false begin
             @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"),
                     (fd_option, rtol_prefactor) ∈ (("fourth_order_centered", 3.0),
                                                    ("second_order_centered", 3.0),
@@ -265,7 +263,7 @@ function runtests()
                     adv_fac .= advection
 
                     # differentiate f
-                    derivative!(df, f, x, adv_fac, false)
+                    derivative!(df, f, x, adv_fac, spectral)
 
                     # Note: only get 1st order convergence at the boundary for an input
                     # function that has zero gradient at the boundary
@@ -449,7 +447,6 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                #cheb_option = cheb_option_global #"FFT"
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -646,7 +643,6 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                #cheb_option = cheb_option_global #"FFT"
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -681,7 +677,7 @@ function runtests()
             end
         end
 
-        @testset "Chebyshev pseudospectral derivatives (4 argument), Neumann" verbose=false begin
+        @testset "Chebyshev pseudospectral derivatives (4 argument), polynomials" verbose=false begin
             @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"), element_spacing_option ∈ ("uniform", "sqrt"),
                     nelement ∈ (1:5), ngrid ∈ (3:33), cheb_option in ("FFT","matrix")
 
@@ -691,7 +687,6 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                #cheb_option = cheb_option_global #"FFT"
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -732,7 +727,7 @@ function runtests()
             end
         end
 
-        @testset "Chebyshev pseudospectral derivatives upwinding (5 argument), Neumann" verbose=false begin
+        @testset "Chebyshev pseudospectral derivatives upwinding (5 argument), polynomials" verbose=false begin
             @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"), element_spacing_option ∈ ("uniform", "sqrt"),
                     nelement ∈ (1:5), ngrid ∈ (3:33), cheb_option in ("FFT","matrix")
 
@@ -742,7 +737,6 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                #cheb_option = cheb_option_global #"FFT"
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -1304,7 +1298,6 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                #cheb_option = cheb_option_global #"FFT"
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement

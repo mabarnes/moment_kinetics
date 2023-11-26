@@ -3,7 +3,6 @@ module SoundWaveTests
 include("setup.jl")
 
 using Base.Filesystem: tempname
-using TimerOutputs
 #using Plots: plot, plot!, gui
 
 using moment_kinetics.array_allocation: allocate_float
@@ -17,16 +16,11 @@ const analytical_rtol = 3.e-2
 const regression_rtol = 1.e-14
 const regression_range = 5:10
 
-# Create a temporary directory for test output
-test_output_directory = tempname()
-mkpath(test_output_directory)
-
 # default inputs for tests
 test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "n_neutral_species" => 1,
                                     "boltzmann_electron_response" => true,
                                     "run_name" => "finite_difference",
-                                    "base_directory" => test_output_directory,
                                     "evolve_moments_density" => false,
                                     "evolve_moments_parallel_flow" => false,
                                     "evolve_moments_parallel_pressure" => false,
@@ -69,7 +63,6 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "vperp_ngrid" => 1,
                                     "vperp_nelement" => 1,
                                     "vperp_L" => 1.0,
-                                    "vperp_bc" => "periodic",
                                     "vperp_discretization" => "finite_difference",
                                     "vpa_ngrid" => 180,
                                     "vpa_nelement" => 1,
@@ -129,9 +122,6 @@ test_input_chebyshev_split_3_moments =
                "evolve_moments_parallel_pressure" => true))
 
 
-# Not actually used in the tests, but needed for first argument of run_moment_kinetics
-to = TimerOutput()
-
 """
 Run a sound-wave test for a single set of parameters
 """
@@ -166,7 +156,7 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
     phi = undef
     quietoutput() do
         # run simulation
-        run_moment_kinetics(to, input)
+        run_moment_kinetics(input)
     end
 
     if global_rank[] == 0
@@ -713,22 +703,44 @@ function run_test_set_chebyshev_split_3_moments()
 end
 
 function runtests()
+    # Create a temporary directory for test output
+    test_output_directory = get_MPI_tempdir()
+
     @testset "sound wave" verbose=use_verbose begin
         println("sound wave tests")
 
         @testset "finite difference" begin
+            test_input_finite_difference["base_directory"] = test_output_directory
             run_test_set_finite_difference()
+
+            test_input_finite_difference_split_1_moment["base_directory"] = test_output_directory
             @long run_test_set_finite_difference_split_1_moment()
+
+            test_input_finite_difference_split_2_moments["base_directory"] = test_output_directory
             @long run_test_set_finite_difference_split_2_moments()
+
+            test_input_finite_difference_split_3_moments["base_directory"] = test_output_directory
             run_test_set_finite_difference_split_3_moments()
         end
 
         @testset "Chebyshev" begin
+            test_input_chebyshev["base_directory"] = test_output_directory
             run_test_set_chebyshev()
+
+            test_input_chebyshev_split_1_moment["base_directory"] = test_output_directory
             run_test_set_chebyshev_split_1_moment()
+
+            test_input_chebyshev_split_2_moments["base_directory"] = test_output_directory
             run_test_set_chebyshev_split_2_moments()
+
+            test_input_chebyshev_split_3_moments["base_directory"] = test_output_directory
             run_test_set_chebyshev_split_3_moments()
         end
+    end
+
+    if global_rank[] == 0
+        # Delete output directory to avoid using too much disk space
+        rm(realpath(test_output_directory); recursive=true)
     end
 end
 
