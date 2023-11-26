@@ -223,7 +223,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     elseif advance.explicit_weakform_fp_collisions
         fp_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; precompute_weights=true)
     else
-        fp_arrays = init_fokker_planck_collisions(vpa,vperp; precompute_weights=false)
+        fp_arrays = nothing
     end
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
