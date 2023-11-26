@@ -30,7 +30,7 @@ test_input_full_f = Dict(
      "r_bc" => "periodic",
      "r_discretization" => "chebyshev_pseudospectral",
      "r_nelement" => 1,
-     "r_ngrid" => 2,
+     "r_ngrid" => 3,
      "rhostar" => 1.0,
      "split_operators" => false,
      "vpa_L" => 6.0,
@@ -59,7 +59,7 @@ test_input_full_f = Dict(
      "z_bc" => "wall",
      "z_discretization" => "chebyshev_pseudospectral",
      "z_nelement" => 1,
-     "z_ngrid" => 2,
+     "z_ngrid" => 3,
     )
 
 test_input_list = [
