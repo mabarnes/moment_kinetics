@@ -15,14 +15,14 @@ using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
 
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form, fokker_planck_collision_operator_weak_form!
-using moment_kinetics.fokker_planck: conserving_corrections!
+using moment_kinetics.fokker_planck: conserving_corrections!, init_fokker_planck_collisions
 using moment_kinetics.fokker_planck_test: print_test_data, plot_test_data, fkpl_error_data, allocate_error_data
 using moment_kinetics.fokker_planck_test: F_Maxwellian, G_Maxwellian, H_Maxwellian
 using moment_kinetics.fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperp2_Maxwellian, d2Gdvperpdvpa_Maxwellian, dGdvperp_Maxwellian
 using moment_kinetics.fokker_planck_test: dHdvperp_Maxwellian, dHdvpa_Maxwellian, Cssp_Maxwellian_inputs
 using moment_kinetics.fokker_planck_calculus: calculate_rosenbluth_potentials_via_elliptic_solve!, calculate_rosenbluth_potential_boundary_data_exact!
 using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary_data, allocate_rosenbluth_potential_boundary_data
-using moment_kinetics.fokker_planck_calculus: enforce_vpavperp_BCs!
+using moment_kinetics.fokker_planck_calculus: enforce_vpavperp_BCs!, calculate_rosenbluth_potentials_via_direct_integration!
 
 function create_grids(ngrid,nelement_vpa,nelement_vperp;
                       Lvpa=12.0,Lvperp=6.0)
@@ -31,7 +31,7 @@ function create_grids(ngrid,nelement_vpa,nelement_vperp;
         nelement_global_vpa = nelement_local_vpa # total number of elements 
         nelement_local_vperp = nelement_vperp # number of elements per rank
         nelement_global_vperp = nelement_local_vperp # total number of elements 
-        bc = "" #not required to take a particular value, not used 
+        bc = "zero" # used only in derivative! functions 
         # fd_option and adv_input not actually used so given values unimportant
         #discretization = "chebyshev_pseudospectral"
         discretization = "gausslegendre_pseudospectral"
@@ -145,7 +145,7 @@ function runtests()
             finalize_comms!()
         end
         
-        @testset " - test weak-form Rosenbluth potential calculation" begin
+        @testset " - test weak-form Rosenbluth potential calculation: elliptic solve" begin
             ngrid = 9
             nelement_vpa = 8
             nelement_vperp = 4
@@ -434,6 +434,109 @@ function runtests()
             end
             finalize_comms!()                                                                  
         end
+        
+        @testset " - test weak-form Rosenbluth potential calculation: direct integration" begin
+            ngrid = 5 # chosen for a quick test -- direct integration is slow!
+            nelement_vpa = 8
+            nelement_vperp = 4
+            vpa, vpa_spectral, vperp, vperp_spectral = create_grids(ngrid,nelement_vpa,nelement_vperp,
+                                                                        Lvpa=12.0,Lvperp=6.0)
+            begin_serial_region()
+            fkpl_arrays = init_fokker_planck_collisions(vperp,vpa,precompute_weights=true,print_to_screen=print_to_screen)
+            dummy_array = allocate_float(vpa.n,vperp.n)
+            F_M = allocate_float(vpa.n,vperp.n)
+            H_M_exact = allocate_float(vpa.n,vperp.n)
+            H_M_num = allocate_shared_float(vpa.n,vperp.n)
+            H_M_err = allocate_float(vpa.n,vperp.n)
+            G_M_exact = allocate_float(vpa.n,vperp.n)
+            G_M_num = allocate_shared_float(vpa.n,vperp.n)
+            G_M_err = allocate_float(vpa.n,vperp.n)
+            d2Gdvpa2_M_exact = allocate_float(vpa.n,vperp.n)
+            d2Gdvpa2_M_num = allocate_shared_float(vpa.n,vperp.n)
+            d2Gdvpa2_M_err = allocate_float(vpa.n,vperp.n)
+            d2Gdvperp2_M_exact = allocate_float(vpa.n,vperp.n)
+            d2Gdvperp2_M_num = allocate_shared_float(vpa.n,vperp.n)
+            d2Gdvperp2_M_err = allocate_float(vpa.n,vperp.n)
+            dGdvperp_M_exact = allocate_float(vpa.n,vperp.n)
+            dGdvperp_M_num = allocate_shared_float(vpa.n,vperp.n)
+            dGdvperp_M_err = allocate_float(vpa.n,vperp.n)
+            d2Gdvperpdvpa_M_exact = allocate_float(vpa.n,vperp.n)
+            d2Gdvperpdvpa_M_num = allocate_shared_float(vpa.n,vperp.n)
+            d2Gdvperpdvpa_M_err = allocate_float(vpa.n,vperp.n)
+            dHdvpa_M_exact = allocate_float(vpa.n,vperp.n)
+            dHdvpa_M_num = allocate_shared_float(vpa.n,vperp.n)
+            dHdvpa_M_err = allocate_float(vpa.n,vperp.n)
+            dHdvperp_M_exact = allocate_float(vpa.n,vperp.n)
+            dHdvperp_M_num = allocate_shared_float(vpa.n,vperp.n)
+            dHdvperp_M_err = allocate_float(vpa.n,vperp.n)
+
+            dens, upar, vth = 1.0, 1.0, 1.0
+            begin_serial_region()
+            for ivperp in 1:vperp.n
+                for ivpa in 1:vpa.n
+                    F_M[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                    H_M_exact[ivpa,ivperp] = H_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                    G_M_exact[ivpa,ivperp] = G_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                    d2Gdvpa2_M_exact[ivpa,ivperp] = d2Gdvpa2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                    d2Gdvperp2_M_exact[ivpa,ivperp] = d2Gdvperp2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                    dGdvperp_M_exact[ivpa,ivperp] = dGdvperp_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                    d2Gdvperpdvpa_M_exact[ivpa,ivperp] = d2Gdvperpdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                    dHdvpa_M_exact[ivpa,ivperp] = dHdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                    dHdvperp_M_exact[ivpa,ivperp] = dHdvperp_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                end
+            end
+            # calculate the potentials numerically
+            calculate_rosenbluth_potentials_via_direct_integration!(G_M_num,H_M_num,dHdvpa_M_num,dHdvperp_M_num,
+             d2Gdvpa2_M_num,dGdvperp_M_num,d2Gdvperpdvpa_M_num,d2Gdvperp2_M_num,F_M,
+             vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays)
+            begin_serial_region()
+            @serial_region begin
+                # test the integration
+                # to recalculate absolute tolerances atol, set print_to_screen = true
+                H_M_max, H_M_L2 = print_test_data(H_M_exact,H_M_num,H_M_err,"H_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
+                dHdvpa_M_max, dHdvpa_M_L2 = print_test_data(dHdvpa_M_exact,dHdvpa_M_num,dHdvpa_M_err,"dHdvpa_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
+                dHdvperp_M_max, dHdvperp_M_L2 = print_test_data(dHdvperp_M_exact,dHdvperp_M_num,dHdvperp_M_err,"dHdvperp_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
+                G_M_max, G_M_L2 = print_test_data(G_M_exact,G_M_num,G_M_err,"G_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
+                d2Gdvpa2_M_max, d2Gdvpa2_M_L2 = print_test_data(d2Gdvpa2_M_exact,d2Gdvpa2_M_num,d2Gdvpa2_M_err,"d2Gdvpa2_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
+                dGdvperp_M_max, dGdvperp_M_L2 = print_test_data(dGdvperp_M_exact,dGdvperp_M_num,dGdvperp_M_err,"dGdvperp_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
+                d2Gdvperpdvpa_M_max, d2Gdvperpdvpa_M_L2 = print_test_data(d2Gdvperpdvpa_M_exact,d2Gdvperpdvpa_M_num,d2Gdvperpdvpa_M_err,"d2Gdvperpdvpa_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
+                d2Gdvperp2_M_max, d2Gdvperp2_M_L2 = print_test_data(d2Gdvperp2_M_exact,d2Gdvperp2_M_num,d2Gdvperp2_M_err,"d2Gdvperp2_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
+                atol_max = 2.1e-4
+                atol_L2 = 6.5e-6
+                @test H_M_max < atol_max
+                @test H_M_L2 < atol_L2
+                atol_max = 1.5e-3
+                atol_L2 = 6.5e-5
+                @test dHdvpa_M_max < atol_max
+                @test dHdvpa_M_L2 < atol_L2
+                atol_max = 8.0e-4
+                atol_L2 = 4.0e-5
+                @test dHdvperp_M_max < atol_max
+                @test dHdvperp_M_L2 < atol_L2
+                atol_max = 1.1e-4
+                atol_L2 = 4.0e-5
+                @test G_M_max < atol_max
+                @test G_M_L2 < atol_L2
+                atol_max = 2.5e-4
+                atol_L2 = 1.2e-5
+                @test d2Gdvpa2_M_max < atol_max
+                @test d2Gdvpa2_M_L2 < atol_L2
+                atol_max = 9.0e-5
+                atol_L2 = 6.0e-5
+                @test dGdvperp_M_max < atol_max
+                @test dGdvperp_M_L2 < atol_L2
+                atol_max = 1.1e-4
+                atol_L2 = 9.0e-6
+                @test d2Gdvperpdvpa_M_max < atol_max
+                @test d2Gdvperpdvpa_M_L2 < atol_L2
+                atol_max = 2.0e-4
+                atol_L2 = 1.1e-5
+                @test d2Gdvperp2_M_max < atol_max
+                @test d2Gdvperp2_M_L2 < atol_L2
+            end
+            finalize_comms!()                                                                  
+        end
+        
         
     end
 end

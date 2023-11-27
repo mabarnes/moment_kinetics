@@ -247,7 +247,7 @@ function that precomputes the required integration weights
 """
 function init_Rosenbluth_potential_integration_weights!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,vperp,vpa;print_to_screen=true)
     
-    x_vpa, w_vpa, x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre = setup_basic_quadratures(vpa,vperp)
+    x_vpa, w_vpa, x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre = setup_basic_quadratures(vpa,vperp,print_to_screen=print_to_screen)
     
     @serial_region begin
         if global_rank[] == 0 && print_to_screen
@@ -2079,7 +2079,7 @@ end
 
 function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvperp,
              d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,ffsp_in,
-             vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays;
+             vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays::fokkerplanck_weakform_arrays_struct;
              algebraic_solve_for_d2Gdvperp2=false,calculate_GG=false,calculate_dGdvperp=false)
     
     # extract the necessary precalculated and buffer arrays from fokkerplanck_arrays
@@ -2165,6 +2165,87 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
                     rhsc,rhqc,sc,qc,vpa,vperp)
     end
     begin_serial_region()
+    return nothing
+end
+
+"""
+function to calculate Rosenbluth potentials by direct integration
+"""
+
+function calculate_rosenbluth_potentials_via_direct_integration!(GG,HH,dHdvpa,dHdvperp,
+             d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,ffsp_in,
+             vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays::fokkerplanck_arrays_struct)
+    dfdvpa = fkpl_arrays.dfdvpa
+    dfdvperp = fkpl_arrays.dfdvperp
+    d2fdvperpdvpa = fkpl_arrays.d2fdvperpdvpa
+    G0_weights = fkpl_arrays.G0_weights
+    G1_weights = fkpl_arrays.G1_weights
+    H0_weights = fkpl_arrays.H0_weights
+    H1_weights = fkpl_arrays.H1_weights
+    H2_weights = fkpl_arrays.H2_weights
+    H3_weights = fkpl_arrays.H3_weights
+    # first compute the derivatives of fs' (the integration weights assume d fs' dvpa and d fs' dvperp are known)
+    begin_vperp_region()
+    @loop_vperp ivperp begin
+        @views derivative!(vpa.scratch, ffsp_in[:,ivperp], vpa, vpa_spectral)
+        @. dfdvpa[:,ivperp] = vpa.scratch
+    end
+    begin_vpa_region()
+    @loop_vpa ivpa begin
+        @views derivative!(vperp.scratch, ffsp_in[ivpa,:], vperp, vperp_spectral)
+        @. dfdvperp[ivpa,:] = vperp.scratch
+        @views derivative!(vperp.scratch, dfdvpa[ivpa,:], vperp, vperp_spectral)
+        @. d2fdvperpdvpa[ivpa,:] = vperp.scratch
+    end
+    # with the integrands calculated, compute the integrals
+    calculate_rosenbluth_integrals!(GG,d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,
+                                        d2Gdvperp2,HH,dHdvpa,dHdvperp,
+                                        ffsp_in,dfdvpa,dfdvperp,d2fdvperpdvpa,
+                                        G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+                                        vpa.n,vperp.n)
+    return nothing           
+end
+
+
+"""
+Function to carry out the integration of the revelant
+distribution functions to form the required coefficients
+for the full-F operator. We assume that the weights are
+precalculated. The function takes as arguments the arrays
+of coefficients (which we fill), the required distributions,
+the precomputed weights, the indicies of the `field' velocities,
+and the sizes of the primed vpa and vperp coordinates arrays.
+"""
+function calculate_rosenbluth_integrals!(GG,d2Gspdvpa2,dGspdvperp,d2Gspdvperpdvpa,
+                                        d2Gspdvperp2,HH,dHspdvpa,dHspdvperp,
+                                        fsp,dfspdvpa,dfspdvperp,d2fspdvperpdvpa,
+                                        G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+                                        nvpa,nvperp)
+    begin_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        GG[ivpa,ivperp] = 0.0
+        d2Gspdvpa2[ivpa,ivperp] = 0.0
+        dGspdvperp[ivpa,ivperp] = 0.0
+        d2Gspdvperpdvpa[ivpa,ivperp] = 0.0
+        d2Gspdvperp2[ivpa,ivperp] = 0.0
+        HH[ivpa,ivperp] = 0.0
+        dHspdvpa[ivpa,ivperp] = 0.0
+        dHspdvperp[ivpa,ivperp] = 0.0
+        for ivperpp in 1:nvperp
+            for ivpap in 1:nvpa
+                GG[ivpa,ivperp] += G0_weights[ivpap,ivperpp,ivpa,ivperp]*fsp[ivpap,ivperpp]
+                #d2Gspdvpa2[ivpa,ivperp] += G0_weights[ivpap,ivperpp,ivpa,ivperp]*d2fspdvpa2[ivpap,ivperpp]
+                d2Gspdvpa2[ivpa,ivperp] += H3_weights[ivpap,ivperpp,ivpa,ivperp]*dfspdvpa[ivpap,ivperpp]
+                dGspdvperp[ivpa,ivperp] += G1_weights[ivpap,ivperpp,ivpa,ivperp]*dfspdvperp[ivpap,ivperpp]
+                d2Gspdvperpdvpa[ivpa,ivperp] += G1_weights[ivpap,ivperpp,ivpa,ivperp]*d2fspdvperpdvpa[ivpap,ivperpp]
+                #d2Gspdvperp2[ivpa,ivperp] += G2_weights[ivpap,ivperpp,ivpa,ivperp]*d2fspdvperp2[ivpap,ivperpp] + G3_weights[ivpap,ivperpp,ivpa,ivperp]*dfspdvperp[ivpap,ivperpp]
+                d2Gspdvperp2[ivpa,ivperp] += H2_weights[ivpap,ivperpp,ivpa,ivperp]*dfspdvperp[ivpap,ivperpp]
+                HH[ivpa,ivperp] += H0_weights[ivpap,ivperpp,ivpa,ivperp]*fsp[ivpap,ivperpp]
+                dHspdvpa[ivpa,ivperp] += H0_weights[ivpap,ivperpp,ivpa,ivperp]*dfspdvpa[ivpap,ivperpp]
+                dHspdvperp[ivpa,ivperp] += H1_weights[ivpap,ivperpp,ivpa,ivperp]*dfspdvperp[ivpap,ivperpp]
+            end
+        end
+    end
     return nothing
 end
 
