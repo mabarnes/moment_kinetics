@@ -71,48 +71,6 @@ using ..fokker_planck_test: F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
 ########################################################
 
 """
-allocate the required ancilliary arrays 
-"""
-
-function allocate_fokkerplanck_arrays(vperp,vpa)
-    nvpa = vpa.n
-    nvperp = vperp.n
-    
-    G0_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
-    G1_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
-    H0_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
-    H1_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
-    H2_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
-    H3_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
-    #Rosenbluth_G = allocate_float(nvpa,nvperp)
-    d2Gdvpa2 = allocate_shared_float(nvpa,nvperp)
-    d2Gdvperpdvpa = allocate_shared_float(nvpa,nvperp)
-    d2Gdvperp2 = allocate_shared_float(nvpa,nvperp)
-    dGdvperp = allocate_shared_float(nvpa,nvperp)
-    #Rosenbluth_H = allocate_float(nvpa,nvperp)
-    dHdvpa = allocate_shared_float(nvpa,nvperp)
-    dHdvperp = allocate_shared_float(nvpa,nvperp)
-    #Cflux_vpa = allocate_shared_float(nvpa,nvperp)
-    #Cflux_vperp = allocate_shared_float(nvpa,nvperp)
-    buffer_vpavperp_1 = allocate_float(nvpa,nvperp)
-    buffer_vpavperp_2 = allocate_float(nvpa,nvperp)
-    Cssp_result_vpavperp = allocate_shared_float(nvpa,nvperp)
-    dfdvpa = allocate_shared_float(nvpa,nvperp)
-    d2fdvpa2 = allocate_shared_float(nvpa,nvperp)
-    d2fdvperpdvpa = allocate_shared_float(nvpa,nvperp)
-    dfdvperp = allocate_shared_float(nvpa,nvperp)
-    d2fdvperp2 = allocate_shared_float(nvpa,nvperp)
-    
-    return fokkerplanck_arrays_struct(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
-                               d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,dGdvperp,
-                               dHdvpa,dHdvperp,buffer_vpavperp_1,buffer_vpavperp_2,
-                               Cssp_result_vpavperp, dfdvpa, d2fdvpa2,
-                               d2fdvperpdvpa, dfdvperp, d2fdvperp2)
-end
-
-
-
-"""
 function that initialises the arrays needed for Fokker Planck collisions
 using numerical integration to compute the Rosenbluth potentials only
 at the boundary and using an elliptic solve to obtain the potentials 
@@ -462,15 +420,56 @@ end
 # begin functions associated with the strong-form operator
 ##########################################################
 
+
+"""
+allocate the required ancilliary arrays 
+"""
+
+function allocate_fokkerplanck_arrays(vperp,vpa)
+    nvpa = vpa.n
+    nvperp = vperp.n
+    
+    G0_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
+    G1_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
+    H0_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
+    H1_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
+    H2_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
+    H3_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
+    #Rosenbluth_G = allocate_float(nvpa,nvperp)
+    d2Gdvpa2 = allocate_shared_float(nvpa,nvperp)
+    d2Gdvperpdvpa = allocate_shared_float(nvpa,nvperp)
+    d2Gdvperp2 = allocate_shared_float(nvpa,nvperp)
+    dGdvperp = allocate_shared_float(nvpa,nvperp)
+    #Rosenbluth_H = allocate_float(nvpa,nvperp)
+    dHdvpa = allocate_shared_float(nvpa,nvperp)
+    dHdvperp = allocate_shared_float(nvpa,nvperp)
+    #Cflux_vpa = allocate_shared_float(nvpa,nvperp)
+    #Cflux_vperp = allocate_shared_float(nvpa,nvperp)
+    buffer_vpavperp_1 = allocate_float(nvpa,nvperp)
+    buffer_vpavperp_2 = allocate_float(nvpa,nvperp)
+    Cssp_result_vpavperp = allocate_shared_float(nvpa,nvperp)
+    dfdvpa = allocate_shared_float(nvpa,nvperp)
+    d2fdvpa2 = allocate_shared_float(nvpa,nvperp)
+    d2fdvperpdvpa = allocate_shared_float(nvpa,nvperp)
+    dfdvperp = allocate_shared_float(nvpa,nvperp)
+    d2fdvperp2 = allocate_shared_float(nvpa,nvperp)
+    
+    return fokkerplanck_arrays_struct(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+                               d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,dGdvperp,
+                               dHdvpa,dHdvperp,buffer_vpavperp_1,buffer_vpavperp_2,
+                               Cssp_result_vpavperp, dfdvpa, d2fdvpa2,
+                               d2fdvperpdvpa, dfdvperp, d2fdvperp2)
+end
+
 """
 function that initialises the arrays needed for Fokker Planck collisions
 """
 
-function init_fokker_planck_collisions(vperp,vpa; precompute_weights=false)
+function init_fokker_planck_collisions(vperp,vpa; precompute_weights=false, print_to_screen=false)
     fka = allocate_fokkerplanck_arrays(vperp,vpa)
     if vperp.n > 1 && precompute_weights
         @views init_Rosenbluth_potential_integration_weights!(fka.G0_weights, fka.G1_weights, fka.H0_weights, fka.H1_weights,
-                                        fka.H2_weights, fka.H3_weights, vperp, vpa)
+                                        fka.H2_weights, fka.H3_weights, vperp, vpa, print_to_screen=print_to_screen)
     end
     return fka
 end
