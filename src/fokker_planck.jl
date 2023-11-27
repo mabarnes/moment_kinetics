@@ -439,12 +439,12 @@ function allocate_fokkerplanck_arrays(vperp,vpa)
     H1_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
     H2_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
     H3_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
-    #Rosenbluth_G = allocate_float(nvpa,nvperp)
+    GG = allocate_shared_float(nvpa,nvperp)
     d2Gdvpa2 = allocate_shared_float(nvpa,nvperp)
     d2Gdvperpdvpa = allocate_shared_float(nvpa,nvperp)
     d2Gdvperp2 = allocate_shared_float(nvpa,nvperp)
     dGdvperp = allocate_shared_float(nvpa,nvperp)
-    #Rosenbluth_H = allocate_float(nvpa,nvperp)
+    HH = allocate_shared_float(nvpa,nvperp)
     dHdvpa = allocate_shared_float(nvpa,nvperp)
     dHdvperp = allocate_shared_float(nvpa,nvperp)
     #Cflux_vpa = allocate_shared_float(nvpa,nvperp)
@@ -459,8 +459,8 @@ function allocate_fokkerplanck_arrays(vperp,vpa)
     d2fdvperp2 = allocate_shared_float(nvpa,nvperp)
     
     return fokkerplanck_arrays_struct(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
-                               d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,dGdvperp,
-                               dHdvpa,dHdvperp,buffer_vpavperp_1,buffer_vpavperp_2,
+                               GG,d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,dGdvperp,
+                               HH,dHdvpa,dHdvperp,buffer_vpavperp_1,buffer_vpavperp_2,
                                Cssp_result_vpavperp, dfdvpa, d2fdvpa2,
                                d2fdvperpdvpa, dfdvperp, d2fdvperp2)
 end

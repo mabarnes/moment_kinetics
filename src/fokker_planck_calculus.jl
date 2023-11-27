@@ -75,12 +75,12 @@ struct fokkerplanck_arrays_struct
     H1_weights::MPISharedArray{mk_float,4}
     H2_weights::MPISharedArray{mk_float,4}
     H3_weights::MPISharedArray{mk_float,4}
-    #Rosenbluth_G::Array{mk_float,2}
+    GG::MPISharedArray{mk_float,2}
     d2Gdvpa2::MPISharedArray{mk_float,2}
     d2Gdvperpdvpa::MPISharedArray{mk_float,2}
     d2Gdvperp2::MPISharedArray{mk_float,2}
     dGdvperp::MPISharedArray{mk_float,2}
-    #Rosenbluth_H::Array{mk_float,2}
+    HH::MPISharedArray{mk_float,2}
     dHdvpa::MPISharedArray{mk_float,2}
     dHdvperp::MPISharedArray{mk_float,2}
     #Cflux_vpa::MPISharedArray{mk_float,2}
