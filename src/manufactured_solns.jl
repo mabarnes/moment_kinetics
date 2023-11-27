@@ -526,7 +526,7 @@ using IfElse
                 pvth = 1
             end
             FMaxwellian = (densi/vthi^pvth)*exp( -( ( vpa-upari)^2 + vperp^2 )/vthi^2)
-            Si += - nu_krook*(FMaxwellian - dfni)
+            Si += - nuii_krook*(FMaxwellian - dfni)
         end
         include_num_diss_in_MMS = true
         if num_diss_params.vpa_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
@@ -541,23 +541,6 @@ using IfElse
         if num_diss_params.z_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
             Si += - num_diss_params.z_dissipation_coefficient*Dz(Dz(dfni))
         end
-        nu_krook = collisions.krook_collision_frequency_prefactor
-        if nu_krook > 0.0
-            Ti_over_Tref = vthi^2
-            if collisions.krook_collisions_option == "manual"
-                nuii_krook = nu_krook
-            else # default option
-                nuii_krook = nu_krook * densi * Ti_over_Tref^(-1.5)
-            end
-            if vperp_coord.n > 1
-                pvth  = 3
-            else 
-                pvth = 1
-            end
-            FMaxwellian = (densi/vthi^pvth)*exp( -( ( vpa-upari)^2 + vperp^2 )/vthi^2)
-            Si += -nuii_krook*(FMaxwellian - dfni)
-        end
-
 
         Source_i = expand_derivatives(Si)
         
