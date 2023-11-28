@@ -117,7 +117,7 @@ function runtests()
                 if print_to_screen 
                     println("max(ravel_err)",max_ravel_err)
                 end
-                @test isapprox(max_ravel_err, 1.0e-15 ; atol = 1.0e-15)
+                @test max_ravel_err < 1.0e-15
             end
             #print_vector(fc,"fc",nc_global)
             # multiply by KKpar2D and fill dfc
@@ -132,11 +132,11 @@ function runtests()
             ravel_c_to_vpavperp!(d2fvpavperp_dvperp2_num,gc,nc_global,vpa.n)
             @serial_region begin 
                 d2fvpavperp_dvpa2_max, d2fvpavperp_dvpa2_L2 = print_test_data(d2fvpavperp_dvpa2_exact,d2fvpavperp_dvpa2_num,d2fvpavperp_dvpa2_err,"d2fdvpa2",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
-                @test isapprox(d2fvpavperp_dvpa2_max, 1.0e-7 ; atol=1.0e-7)
-                @test isapprox(d2fvpavperp_dvpa2_L2, 1.0e-8 ; atol=1.0e-8)
+                @test d2fvpavperp_dvpa2_max < 1.0e-7
+                @test d2fvpavperp_dvpa2_L2 < 1.0e-8
                 d2fvpavperp_dvperp2_max, d2fvpavperp_dvperp2_L2 = print_test_data(d2fvpavperp_dvperp2_exact,d2fvpavperp_dvperp2_num,d2fvpavperp_dvperp2_err,"d2fdvperp2",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
-                @test isapprox(d2fvpavperp_dvperp2_max, 1.0e-7 ; atol=1.0e-7)
-                @test isapprox(d2fvpavperp_dvperp2_L2, 1.0e-8 ; atol=1.0e-8)
+                @test d2fvpavperp_dvperp2_max < 1.0e-7
+                @test d2fvpavperp_dvperp2_L2 < 1.0e-8
                 #if plot_test_output
                 #    plot_test_data(d2fvpavperp_dvpa2_exact,d2fvpavperp_dvpa2_num,d2fvpavperp_dvpa2_err,"d2fvpavperp_dvpa2",vpa,vperp)
                 #    plot_test_data(d2fvpavperp_dvperp2_exact,d2fvpavperp_dvperp2_num,d2fvpavperp_dvperp2_err,"d2fvpavperp_dvperp2",vpa,vperp)
@@ -228,22 +228,22 @@ function runtests()
                 max_dHdvperp_boundary_data_err, max_G_boundary_data_err,
                 max_dGdvperp_boundary_data_err, max_d2Gdvperp2_boundary_data_err, 
                 max_d2Gdvperpdvpa_boundary_data_err, max_d2Gdvpa2_boundary_data_err = test_rosenbluth_potential_boundary_data(fkpl_arrays.rpbd,rpbd_exact,vpa,vperp,print_to_screen=print_to_screen)
-                rtol_max, atol_max = 2.0e-13, 2.0e-13
-                @test isapprox(max_H_boundary_data_err, rtol_max ; atol=atol_max)
-                rtol_max, atol_max = 2.0e-12, 2.0e-12
-                @test isapprox(max_dHdvpa_boundary_data_err, rtol_max ; atol=atol_max)
-                rtol_max, atol_max = 3.0e-9, 3.0e-9
-                @test isapprox(max_dHdvperp_boundary_data_err, rtol_max ; atol=atol_max)
-                rtol_max, atol_max = 7.0e-12, 7.0e-12
-                @test isapprox(max_G_boundary_data_err, rtol_max ; atol=atol_max)
-                rtol_max, atol_max = 2.0e-7, 2.0e-7
-                @test isapprox(max_dGdvperp_boundary_data_err, rtol_max ; atol=atol_max)
-                rtol_max, atol_max = 2.0e-8, 2.0e-8
-                @test isapprox(max_d2Gdvperp2_boundary_data_err, rtol_max ; atol=atol_max)
-                rtol_max, atol_max = 2.0e-8, 2.0e-8
-                @test isapprox(max_d2Gdvperpdvpa_boundary_data_err, rtol_max ; atol=atol_max)
-                rtol_max, atol_max = 7.0e-12, 7.0e-12
-                @test isapprox(max_d2Gdvpa2_boundary_data_err, rtol_max ; atol=atol_max)
+                atol_max = 2.0e-13
+                @test max_H_boundary_data_err < atol_max
+                atol_max = 2.0e-12
+                @test max_dHdvpa_boundary_data_err < atol_max
+                atol_max = 3.0e-9
+                @test max_dHdvperp_boundary_data_err < atol_max
+                atol_max = 7.0e-12
+                @test max_G_boundary_data_err < atol_max
+                atol_max = 2.0e-7
+                @test max_dGdvperp_boundary_data_err < atol_max
+                atol_max = 2.0e-8
+                @test max_d2Gdvperp2_boundary_data_err < atol_max
+                atol_max = 2.0e-8
+                @test max_d2Gdvperpdvpa_boundary_data_err < atol_max
+                atol_max = 7.0e-12
+                @test max_d2Gdvpa2_boundary_data_err < atol_max
                 # test the elliptic solvers
                 H_M_max, H_M_L2 = print_test_data(H_M_exact,H_M_num,H_M_err,"H_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
                 dHdvpa_M_max, dHdvpa_M_L2 = print_test_data(dHdvpa_M_exact,dHdvpa_M_num,dHdvpa_M_err,"dHdvpa_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
@@ -253,38 +253,38 @@ function runtests()
                 dGdvperp_M_max, dGdvperp_M_L2 = print_test_data(dGdvperp_M_exact,dGdvperp_M_num,dGdvperp_M_err,"dGdvperp_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
                 d2Gdvperpdvpa_M_max, d2Gdvperpdvpa_M_L2 = print_test_data(d2Gdvperpdvpa_M_exact,d2Gdvperpdvpa_M_num,d2Gdvperpdvpa_M_err,"d2Gdvperpdvpa_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
                 d2Gdvperp2_M_max, d2Gdvperp2_M_L2 = print_test_data(d2Gdvperp2_M_exact,d2Gdvperp2_M_num,d2Gdvperp2_M_err,"d2Gdvperp2_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
-                rtol_max, atol_max = 2.0e-7, 2.0e-7
-                rtol_L2, atol_L2 = 5.0e-9, 5.0e-9
-                @test isapprox(H_M_max, rtol_max ; atol=atol_max)
-                @test isapprox(H_M_L2, rtol_L2 ; atol=atol_L2)
-                rtol_max, atol_max = 2.0e-6, 2.0e-6
-                rtol_L2, atol_L2 = 5.0e-8, 5.0e-8
-                @test isapprox(dHdvpa_M_max, rtol_max ; atol=atol_max)
-                @test isapprox(dHdvpa_M_L2, rtol_L2 ; atol=atol_L2)
-                rtol_max, atol_max = 2.0e-5, 2.0e-5
-                rtol_L2, atol_L2 = 1.0e-7, 1.0e-7
-                @test isapprox(dHdvperp_M_max, rtol_max ; atol=atol_max)
-                @test isapprox(dHdvperp_M_L2, rtol_L2 ; atol=atol_L2)
-                rtol_max, atol_max = 2.0e-8, 2.0e-8
-                rtol_L2, atol_L2 = 7.0e-10, 7.0e-10
-                @test isapprox(G_M_max, rtol_max ; atol=atol_max)
-                @test isapprox(G_M_L2, rtol_L2 ; atol=atol_L2)
-                rtol_max, atol_max = 2.0e-7, 2.0e-7
-                rtol_L2, atol_L2 = 4.0e-9, 4.0e-9
-                @test isapprox(d2Gdvpa2_M_max, rtol_max ; atol=atol_max)
-                @test isapprox(d2Gdvpa2_M_L2, rtol_L2 ; atol=atol_L2)
-                rtol_max, atol_max = 2.0e-6, 2.0e-6
-                rtol_L2, atol_L2 = 2.0e-7, 2.0e-7
-                @test isapprox(dGdvperp_M_max, rtol_max ; atol=atol_max)
-                @test isapprox(dGdvperp_M_L2, rtol_L2 ; atol=atol_L2)
-                rtol_max, atol_max = 2.0e-6, 2.0e-6
-                rtol_L2, atol_L2 = 2.0e-8, 2.0e-8
-                @test isapprox(d2Gdvperpdvpa_M_max, rtol_max ; atol=atol_max)
-                @test isapprox(d2Gdvperpdvpa_M_L2, rtol_L2 ; atol=atol_L2)
-                rtol_max, atol_max = 3.0e-7, 3.0e-7
-                rtol_L2, atol_L2 = 2.0e-8, 2.0e-8
-                @test isapprox(d2Gdvperp2_M_max, rtol_max ; atol=atol_max)
-                @test isapprox(d2Gdvperp2_M_L2, rtol_L2 ; atol=atol_L2)
+                atol_max = 2.0e-7
+                atol_L2 = 5.0e-9
+                @test H_M_max < atol_max
+                @test H_M_L2 < atol_L2
+                atol_max = 2.0e-6
+                atol_L2 = 5.0e-8
+                @test dHdvpa_M_max < atol_max
+                @test dHdvpa_M_L2 < atol_L2
+                atol_max = 2.0e-5
+                atol_L2 = 1.0e-7
+                @test dHdvperp_M_max < atol_max
+                @test dHdvperp_M_L2 < atol_L2
+                atol_max = 2.0e-8
+                atol_L2 = 7.0e-10
+                @test G_M_max < atol_max
+                @test G_M_L2 < atol_L2
+                atol_max = 2.0e-7
+                atol_L2 = 4.0e-9
+                @test d2Gdvpa2_M_max < atol_max
+                @test d2Gdvpa2_M_L2 < atol_L2
+                atol_max = 2.0e-6
+                atol_L2 = 2.0e-7
+                @test dGdvperp_M_max < atol_max
+                @test dGdvperp_M_L2 < atol_L2
+                atol_max = 2.0e-6
+                atol_L2 = 2.0e-8
+                @test d2Gdvperpdvpa_M_max < atol_max
+                @test d2Gdvperpdvpa_M_L2 < atol_L2
+                atol_max = 3.0e-7
+                atol_L2 = 2.0e-8
+                @test d2Gdvperp2_M_max < atol_max
+                @test d2Gdvperp2_M_L2 < atol_L2
             end
             finalize_comms!()                                                                  
         end
@@ -356,15 +356,24 @@ function runtests()
                 begin_serial_region()
                 @serial_region begin
                     C_M_max, C_M_L2 = print_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
-                    if test_self_operator
-                        rtol_max, atol_max = 6.0e-4, 6.0e-4
-                        rtol_L2, atol_L2 = 7.0e-6, 7.0e-6
+                    if test_self_operator && !test_numerical_conserving_terms && !use_Maxwellian_Rosenbluth_coefficients && !use_Maxwellian_field_particle_distribution
+                        atol_max = 6.0e-4
+                        atol_L2 = 7.0e-6
+                    elseif test_self_operator && test_numerical_conserving_terms && !use_Maxwellian_Rosenbluth_coefficients && !use_Maxwellian_field_particle_distribution
+                        atol_max = 7.0e-4
+                        atol_L2 = 7.0e-6
+                    elseif test_self_operator && !test_numerical_conserving_terms && use_Maxwellian_Rosenbluth_coefficients && !use_Maxwellian_field_particle_distribution
+                        atol_max = 8.0e-4
+                        atol_L2 = 8.1e-6
+                    elseif test_self_operator && !test_numerical_conserving_terms && !use_Maxwellian_Rosenbluth_coefficients && use_Maxwellian_field_particle_distribution
+                        atol_max = 1.1e-3
+                        atol_L2 = 9.0e-6
                     else
-                        rtol_max, atol_max = 7.0e-2, 7.0e-2
-                        rtol_L2, atol_L2 = 6.0e-4, 6.0e-4
+                        atol_max = 7.0e-2
+                        atol_L2 = 6.0e-4
                     end
-                    @test isapprox(C_M_max, rtol_max ; atol=atol_max)
-                    @test isapprox(C_M_L2, rtol_L2 ; atol=atol_L2)
+                    @test C_M_max < atol_max
+                    @test C_M_L2 < atol_L2
                     # calculate the entropy production
                     lnfC = fkpl_arrays.rhsvpavperp
                     @loop_vperp_vpa ivperp ivpa begin
