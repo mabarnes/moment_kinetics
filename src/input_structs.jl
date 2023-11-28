@@ -62,9 +62,7 @@ mutable struct advance_info
     ionization_collisions_1V::Bool
     ionization_source::Bool
     krook_collisions::Bool
-    explicit_fp_collisions::Bool
     explicit_weakform_fp_collisions::Bool
-    explicit_fp_F_FM_collisions::Bool
     external_source::Bool
     numerical_dissipation::Bool
     source_terms::Bool
@@ -320,14 +318,10 @@ mutable struct collisions_input
     krook_collision_frequency_prefactor::mk_float
     # Setting to switch between different options for Krook collision operator
     krook_collisions_option::String
-    # Fokker-Planck operator choice
-    weakform_fokker_planck::Bool
     # ion-ion self collision frequency
+    # nu_{ss'} = gamma_{ss'} n_{ref} / 2 (m_s)^2 (c_{ref})^3
+    # with gamma_ss' = 2 pi (Z_s Z_s')^2 e^4 ln \Lambda_{ss'} / (4 pi \epsilon_0)^2
     nuii::mk_float
-    # ion-ion self collision frequency with C[F_s,F_Ms'] operator
-    nuii_pitch::mk_float
-    # numerical conserving terms (for strong form Fokker-Planck operator only)
-    numerical_conserving_terms::String
 end
 
 """

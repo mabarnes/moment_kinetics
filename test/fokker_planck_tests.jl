@@ -15,7 +15,7 @@ using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
 
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form, fokker_planck_collision_operator_weak_form!
-using moment_kinetics.fokker_planck: conserving_corrections!, init_fokker_planck_collisions
+using moment_kinetics.fokker_planck: conserving_corrections!, init_fokker_planck_collisions_direct_integration
 using moment_kinetics.fokker_planck_test: print_test_data, plot_test_data, fkpl_error_data, allocate_error_data
 using moment_kinetics.fokker_planck_test: F_Maxwellian, G_Maxwellian, H_Maxwellian
 using moment_kinetics.fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperp2_Maxwellian, d2Gdvperpdvpa_Maxwellian, dGdvperp_Maxwellian
@@ -442,7 +442,7 @@ function runtests()
             vpa, vpa_spectral, vperp, vperp_spectral = create_grids(ngrid,nelement_vpa,nelement_vperp,
                                                                         Lvpa=12.0,Lvperp=6.0)
             begin_serial_region()
-            fkpl_arrays = init_fokker_planck_collisions(vperp,vpa,precompute_weights=true,print_to_screen=print_to_screen)
+            fkpl_arrays = init_fokker_planck_collisions_direct_integration(vperp,vpa,precompute_weights=true,print_to_screen=print_to_screen)
             dummy_array = allocate_float(vpa.n,vperp.n)
             F_M = allocate_float(vpa.n,vperp.n)
             H_M_exact = allocate_float(vpa.n,vperp.n)

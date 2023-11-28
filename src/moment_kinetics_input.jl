@@ -185,16 +185,8 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         error("Invalid option "
               * "krook_collisions_option=$(collisions.krook_collisions_option) passed")
     end
-
+    # set the Fokker-Planck collision frequency
     collisions.nuii = get(scan_input, "nuii", 0.0)
-    collisions.weakform_fokker_planck = get(scan_input, "weakform_fokker_planck", true)
-    if !collisions.weakform_fokker_planck && global_rank[] == 0
-        println("WARNING: you have used weakform_fokker_planck = false")
-        println("WARNING: you have selected a depreciated version of the ion-ion self collision operator")
-    end
-    # options below only used with collisions.weakform_fokker_planck = false
-    collisions.nuii_pitch = get(scan_input, "nuii_pitch", 0.0)
-    collisions.numerical_conserving_terms = get(scan_input, "numerical_conserving_terms", "density")
     
     # parameters related to the time stepping
     nstep = get(scan_input, "nstep", 5)
@@ -1000,13 +992,9 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     ionization = 0.0
     constant_ionization_rate = false
     krook_collision_frequency_prefactor = -1.0
-    weakform_fokker_planck = true
     nuii = 0.0
-    nuii_pitch = 0.0
-    numerical_conserving_terms = "density"
     collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate,
-                                  krook_collision_frequency_prefactor,"none", weakform_fokker_planck,
-                                  nuii, nuii_pitch, numerical_conserving_terms)
+                                  krook_collision_frequency_prefactor,"none", nuii)
     Bzed = 1.0 # magnetic field component along z
     Bmag = 1.0 # magnetic field strength
     bzed = 1.0 # component of b unit vector along z

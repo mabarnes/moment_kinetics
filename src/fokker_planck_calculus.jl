@@ -15,7 +15,7 @@ export assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!
 export YY_collision_operator_arrays, calculate_YY_arrays
 export calculate_rosenbluth_potential_boundary_data!
 export elliptic_solve!, algebraic_solve!
-export fokkerplanck_arrays_struct
+export fokkerplanck_arrays_direct_integration_struct
 export fokkerplanck_weakform_arrays_struct
 export enforce_vpavperp_BCs!
 export calculate_rosenbluth_potentials_via_elliptic_solve!
@@ -68,7 +68,7 @@ a struct of dummy arrays and precalculated coefficients
 for the strong-form Fokker-Planck collision operator 
 """
 
-struct fokkerplanck_arrays_struct
+struct fokkerplanck_arrays_direct_integration_struct
     G0_weights::MPISharedArray{mk_float,4}
     G1_weights::MPISharedArray{mk_float,4}
     H0_weights::MPISharedArray{mk_float,4}
@@ -1096,7 +1096,7 @@ function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
 end
 
 function calculate_rosenbluth_potential_boundary_data!(rpbd::rosenbluth_potential_boundary_data,
-    fkpl::Union{fokkerplanck_arrays_struct,fokkerplanck_boundary_data_arrays_struct},pdf,vpa,vperp,vpa_spectral,vperp_spectral;
+    fkpl::Union{fokkerplanck_arrays_direct_integration_struct,fokkerplanck_boundary_data_arrays_struct},pdf,vpa,vperp,vpa_spectral,vperp_spectral;
     calculate_GG=false,calculate_dGdvperp=false)
     # get derivatives of pdf
     dfdvperp = fkpl.dfdvperp
@@ -2174,7 +2174,7 @@ function to calculate Rosenbluth potentials by direct integration
 
 function calculate_rosenbluth_potentials_via_direct_integration!(GG,HH,dHdvpa,dHdvperp,
              d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,ffsp_in,
-             vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays::fokkerplanck_arrays_struct)
+             vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays::fokkerplanck_arrays_direct_integration_struct)
     dfdvpa = fkpl_arrays.dfdvpa
     dfdvperp = fkpl_arrays.dfdvperp
     d2fdvperpdvpa = fkpl_arrays.d2fdvperpdvpa

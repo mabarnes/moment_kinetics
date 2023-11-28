@@ -1,4 +1,4 @@
-export test_strong_form_collision_operator
+export test_rosenbluth_potentials_direct_integration
 
 using Printf
 using Plots
@@ -10,7 +10,7 @@ using Dates
 import moment_kinetics
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.fokker_planck: init_fokker_planck_collisions
+using moment_kinetics.fokker_planck: init_fokker_planck_collisions_direct_integration
 using moment_kinetics.fokker_planck_calculus: calculate_rosenbluth_potentials_via_direct_integration!
 using moment_kinetics.fokker_planck_test: d2Gdvpa2_Maxwellian, dGdvperp_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian
 using moment_kinetics.fokker_planck_test: dHdvpa_Maxwellian, dHdvperp_Maxwellian, H_Maxwellian, G_Maxwellian
@@ -180,7 +180,7 @@ function test_Lagrange_Rosenbluth_potentials(ngrid,nelement; standalone=true)
     end
     
     # initialise the weights
-    fokkerplanck_arrays = init_fokker_planck_collisions(vperp,vpa; precompute_weights=true)
+    fokkerplanck_arrays = init_fokker_planck_collisions_direct_integration(vperp,vpa; precompute_weights=true)
     fka = fokkerplanck_arrays
     # calculate the potentials by direct integration
     calculate_rosenbluth_potentials_via_direct_integration!(fka.GG,fka.HH,fka.dHdvpa,fka.dHdvperp,

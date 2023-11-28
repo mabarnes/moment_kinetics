@@ -55,8 +55,7 @@ using ..continuity: continuity_equation!, neutral_continuity_equation!
 using ..force_balance: force_balance!, neutral_force_balance!
 using ..energy_equation: energy_equation!, neutral_energy_equation!
 using ..em_fields: setup_em_fields, update_phi!
-using ..fokker_planck: init_fokker_planck_collisions_weak_form, init_fokker_planck_collisions, explicit_fokker_planck_collisions!
-using ..fokker_planck: explicit_fokker_planck_collisions_weak_form!, explicit_fokker_planck_collisions_Maxwellian_coefficients!
+using ..fokker_planck: init_fokker_planck_collisions_weak_form, explicit_fokker_planck_collisions_weak_form!
 using ..manufactured_solns: manufactured_sources
 using ..advection: advection_info
 using ..utils: to_minutes
@@ -128,11 +127,7 @@ struct scratch_dummy_arrays
     # needs to be shared memory
     buffer_vpavperpzrs_1::MPISharedArray{mk_float,5}
     buffer_vpavperpzrs_2::MPISharedArray{mk_float,5}
-    buffer_vpavperpzrs_3::MPISharedArray{mk_float,5}
-    buffer_vpavperpzrs_4::MPISharedArray{mk_float,5}
-    buffer_vpavperpzrs_5::MPISharedArray{mk_float,5}
-    buffer_vpavperpzrs_6::MPISharedArray{mk_float,5}
-
+    
     buffer_vzvrvzetazsn_1::MPISharedArray{mk_float,5}
     buffer_vzvrvzetazsn_2::MPISharedArray{mk_float,5}
     buffer_vzvrvzetazsn_3::MPISharedArray{mk_float,5}
@@ -218,9 +213,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     scratch_dummy = setup_dummy_and_buffer_arrays(r.n,z.n,vpa.n,vperp.n,vz.n,vr.n,vzeta.n,
                                    composition.n_ion_species,n_neutral_species_alloc)
     # create arrays for Fokker-Planck collisions 
-    if advance.explicit_fp_collisions
-        fp_arrays = init_fokker_planck_collisions(vperp,vpa; precompute_weights=true)
-    elseif advance.explicit_weakform_fp_collisions
+    if advance.explicit_weakform_fp_collisions
         fp_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; precompute_weights=true)
     else
         fp_arrays = nothing
@@ -485,9 +478,7 @@ function setup_advance_flags(moments, composition, t_input, collisions,
     r_diffusion = false
     vpa_diffusion = false
     vz_diffusion = false
-    explicit_fp_collisions = false
     explicit_weakform_fp_collisions = false
-    explicit_fp_F_FM_collisions = false
     # all advance flags remain false if using operator-splitting
     # otherwise, check to see if the flags need to be set to true
     if !t_input.split_operators
@@ -496,21 +487,9 @@ function setup_advance_flags(moments, composition, t_input, collisions,
         advance_z_advection = true && z.n > 1
         advance_r_advection = true && r.n > 1
         if collisions.nuii > 0.0 && vperp.n > 1
-            if collisions.weakform_fokker_planck
-                explicit_fp_collisions = false
-                explicit_weakform_fp_collisions = true
-            else
-                explicit_fp_collisions = true
-                explicit_weakform_fp_collisions = false
-            end
-        else 
-            explicit_fp_collisions = false    
+            explicit_weakform_fp_collisions = true
+        else
             explicit_weakform_fp_collisions = false    
-        end
-        if collisions.nuii_pitch > 0.0 && vperp.n > 1
-            explicit_fp_F_FM_collisions = true
-        else 
-            explicit_fp_F_FM_collisions = false    
         end
         # if neutrals present, check to see if different ion-neutral
         # collisions are enabled
@@ -600,7 +579,7 @@ function setup_advance_flags(moments, composition, t_input, collisions,
         # flag to determine if a d^2/dr^2 operator is present
         r_diffusion = (advance_numerical_dissipation && num_diss_params.r_dissipation_coefficient > 0.0)
         # flag to determine if a d^2/dvpa^2 operator is present
-        vpa_diffusion = ((advance_numerical_dissipation && num_diss_params.vpa_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions || explicit_fp_collisions || explicit_fp_F_FM_collisions)
+        vpa_diffusion = ((advance_numerical_dissipation && num_diss_params.vpa_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
         vz_diffusion = (advance_numerical_dissipation && num_diss_params.vz_dissipation_coefficient > 0.0)
     end
 
@@ -611,8 +590,7 @@ function setup_advance_flags(moments, composition, t_input, collisions,
                         advance_neutral_vz_advection, advance_cx, advance_cx_1V,
                         advance_ionization, advance_ionization_1V,
                         advance_ionization_source, advance_krook_collisions,
-                        explicit_fp_collisions, explicit_weakform_fp_collisions,
-                        explicit_fp_F_FM_collisions,
+                        explicit_weakform_fp_collisions,
                         advance_external_source, advance_numerical_dissipation,
                         advance_sources, advance_continuity, advance_force_balance,
                         advance_energy, advance_neutral_external_source,
@@ -681,11 +659,7 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
 
     buffer_vpavperpzrs_1 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
     buffer_vpavperpzrs_2 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
-    buffer_vpavperpzrs_3 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
-    buffer_vpavperpzrs_4 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
-    buffer_vpavperpzrs_5 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
-    buffer_vpavperpzrs_6 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
-
+    
     buffer_vzvrvzetazsn_1 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
     buffer_vzvrvzetazsn_2 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
     buffer_vzvrvzetazsn_3 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
@@ -717,7 +691,7 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
         buffer_zrs_1,buffer_zrs_2,buffer_zrs_3,
         buffer_vpavperpzs_1,buffer_vpavperpzs_2,buffer_vpavperpzs_3,buffer_vpavperpzs_4,buffer_vpavperpzs_5,buffer_vpavperpzs_6,
         buffer_vpavperprs_1,buffer_vpavperprs_2,buffer_vpavperprs_3,buffer_vpavperprs_4,buffer_vpavperprs_5,buffer_vpavperprs_6,
-        buffer_vpavperpzrs_1,buffer_vpavperpzrs_2,buffer_vpavperpzrs_3,buffer_vpavperpzrs_4,buffer_vpavperpzrs_5,buffer_vpavperpzrs_6,
+        buffer_vpavperpzrs_1,buffer_vpavperpzrs_2,
         buffer_vzvrvzetazsn_1,buffer_vzvrvzetazsn_2,buffer_vzvrvzetazsn_3,buffer_vzvrvzetazsn_4,buffer_vzvrvzetazsn_5,buffer_vzvrvzetazsn_6,
         buffer_vzvrvzetarsn_1,buffer_vzvrvzetarsn_2,buffer_vzvrvzetarsn_3,buffer_vzvrvzetarsn_4,buffer_vzvrvzetarsn_5,buffer_vzvrvzetarsn_6,
         buffer_vzvrvzetazrsn_1, buffer_vzvrvzetazrsn_2,
@@ -1874,26 +1848,12 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
         r_dissipation_neutral!(fvec_out.pdf_neutral, fvec_in.pdf_neutral, r, r_spectral,
                                dt, num_diss_params, scratch_dummy)
     end
-    
-    if advance.explicit_fp_collisions
-        update_entropy_diagnostic = (istage == 1)
-        explicit_fokker_planck_collisions!(fvec_out.pdf, fvec_in.pdf, moments.charged.dSdt, composition,collisions,dt,fp_arrays,
-                                             scratch_dummy, r, z, vperp, vpa, vperp_spectral, vpa_spectral, boundary_distributions, advance,
-                                             vpa_advect, z_advect, r_advect,
-                                             diagnose_entropy_production = update_entropy_diagnostic)
-        #println(moments.charged.dSdt)
-    end
+    # advance with the Fokker-Planck self-collision operator
     if advance.explicit_weakform_fp_collisions
         update_entropy_diagnostic = (istage == 1)
         explicit_fokker_planck_collisions_weak_form!(fvec_out.pdf,fvec_in.pdf,moments.charged.dSdt,composition,collisions,dt,
                                              fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,scratch_dummy,
                                              diagnose_entropy_production = update_entropy_diagnostic)
-    end
-    if advance.explicit_fp_F_FM_collisions
-        explicit_fokker_planck_collisions_Maxwellian_coefficients!(fvec_out.pdf, fvec_in.pdf, 
-                  fvec_in.density, fvec_in.upar, moments.charged.vth, 
-                  composition, collisions, dt, fp_arrays,
-                  scratch_dummy, r, z, vperp, vpa, vperp_spectral, vpa_spectral)
     end
     
     # End of advance for distribution function
