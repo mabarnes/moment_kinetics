@@ -2051,7 +2051,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
             # plot the time trace of n_s(z=z0)-density_fldline_avg
             plot(legend=legend)
             for (t, dupar, run_label) ∈ zip(time, delta_upar, run_name_labels)
-                @views plot!(t, abs.(du[iz0,is,:]), yaxis=:log, label=run_label)
+                @views plot!(t, abs.(dupar[iz0,is,:]), yaxis=:log, label=run_label)
             end
             outfile = string(prefix, "_$(label)_delta_upar0_vs_t_spec", spec_string, ".pdf")
             trysavefig(outfile)
