@@ -3710,6 +3710,9 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure,
             @views plot(time[2:ntime], entropy_production[iz0,ir0,is,2:ntime], xlabel=L"t/(L_{ref}/c_{ref})", ylabel=L"\dot{S}(t)", label = "")
 			outfile = string(run_name, "_entropy production"*description*"(iz0,ir0)_vs_t.pdf")
 			trysavefig(outfile)
+            @views plot(time[2:ntime], entropy_production[iz0,ir0,is,2:ntime], xlabel=L"t/(L_{ref}/c_{ref})", ylabel=L"\dot{S}(t)", label = "", yscale=:log10)
+			outfile = string(run_name, "_entropy production_log_scale"*description*"(iz0,ir0)_vs_t.pdf")
+			trysavefig(outfile)
         end
         if pp.plot_chodura_integral
             # plot the Chodura condition integrals calculated at run time 
@@ -3727,6 +3730,17 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure,
                               windowsize = (360,240), margin = 15pt)
             outfile = string(run_name, "_chodura_integral_upper"*description*"_vs_r_t.pdf")
             trysavefig(outfile)
+        end
+        if pp.plot_dens0_vs_t && pp.plot_ppar0_vs_t && pp.plot_pperp0_vs_t && pp.plot_upar0_vs_t
+            xlist = [time,time,time]
+            ylist = [ density[iz0,ir0,is,:] .- density[iz0,ir0,is,1], 
+                      parallel_flow[iz0,ir0,is,:] .- parallel_flow[iz0,ir0,is,1],
+                      (2.0/3.0).*(perpendicular_pressure[iz0,ir0,is,:] .- perpendicular_pressure[iz0,ir0,is,1]).+
+                      (1.0/3.0).*(parallel_pressure[iz0,ir0,is,:] .- parallel_pressure[iz0,ir0,is,1])]
+            ylabels = [L"n_i(t) - n_i(0)" L"u_{i\|\|}(t) - u_{i\|\|}(0)" L"p_{i}(t) - p_{i}(0)"]          
+            @views plot(xlist,ylist, xlabel=L"t/ (L_{ref}/c_{ref})", ylabel="", label = ylabels)
+			outfile = string(run_name, "_delta_moments"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
         end
     end
     println("done.")
