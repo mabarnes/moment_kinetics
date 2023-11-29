@@ -581,5 +581,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
     using Pkg
     Pkg.activate(".")
     
-    run_assembly_test()
+    run_assembly_test() # to ensure routines are compiled before plots are made
+    run_assembly_test(ngrid=3,nelement_list=[8,16,32,64,128],plot_scan=true)
+    run_assembly_test(ngrid=5,nelement_list=[4,8,16,32,64],plot_scan=true)
+    run_assembly_test(ngrid=7,nelement_list=[2,4,8,16,32],plot_scan=true)
+    run_assembly_test(ngrid=9,nelement_list=[2,4,8,16],plot_scan=true)
 end
