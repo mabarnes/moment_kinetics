@@ -205,7 +205,7 @@ using IfElse
     # ion mean parallel flow symbolic function 
     function upari_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr,manufactured_solns_input,species)
         if z_bc == "periodic"
-            upari = 0.0 #not supported
+            upari = 0.0
         elseif z_bc == "wall"
             densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
             Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr,manufactured_solns_input,species)
@@ -222,10 +222,11 @@ using IfElse
     
     # ion parallel pressure symbolic function 
     function ppari_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
-        # normalisation factor due to strange pressure normalisation convention in master
+        # normalisation factor due to pressure normalisation convention in master pref = nref mref cref^2
         norm_fac = 0.5
         if z_bc == "periodic"
-            ppari = 0.0 # not supported
+            densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
+            ppari = densi
         elseif z_bc == "wall"
             densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
             epsilon = manufactured_solns_input.epsilon_offset
