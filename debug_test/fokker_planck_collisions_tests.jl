@@ -1,6 +1,6 @@
 module FokkerPlanckCollisionsDebug
 
-# Debug test using wall boundary conditions.
+# Debug test using Fokker-Planck collision operator
 
 include("setup.jl")
 
