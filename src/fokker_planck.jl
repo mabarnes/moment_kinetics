@@ -36,7 +36,6 @@ using SpecialFunctions: ellipk, ellipe, erf
 using FastGaussQuadrature
 using Dates
 using LinearAlgebra: lu
-using ..initial_conditions: enforce_boundary_conditions!
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication: MPISharedArray, global_rank, _block_synchronize
