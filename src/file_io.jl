@@ -547,7 +547,6 @@ function define_io_coordinate!(parent, coord, coord_name, description, parallel_
         write_single_value!(group, "fd_option", coord.fd_option; parallel_io=parallel_io,
                             description="type of finite difference for $coord_name, if used")
 
-        # write the finite-difference option for the coordinate
         write_single_value!(group, "cheb_option", coord.cheb_option; parallel_io=parallel_io,
                             description="type of chebyshev differentiation used for $coord_name, if used")
 
