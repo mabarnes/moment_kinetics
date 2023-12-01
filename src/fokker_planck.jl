@@ -73,7 +73,6 @@ using numerical integration to compute the Rosenbluth potentials only
 at the boundary and using an elliptic solve to obtain the potentials 
 in the rest of the velocity space domain.
 """
-
 function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; precompute_weights=false, test_dense_matrix_construction=false, print_to_screen=true)
     bwgt = allocate_boundary_integration_weights(vpa,vperp)
     if vperp.n > 1 && precompute_weights
