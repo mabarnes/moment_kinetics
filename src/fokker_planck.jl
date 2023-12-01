@@ -41,7 +41,6 @@ using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication: MPISharedArray, global_rank, _block_synchronize
 using ..velocity_moments: integrate_over_vspace
 using ..velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_qpar, get_pressure, get_rmom
-using ..calculus: derivative!, second_derivative!
 using ..looping
 using ..fokker_planck_calculus: init_Rosenbluth_potential_integration_weights!
 using ..fokker_planck_calculus: init_Rosenbluth_potential_boundary_integration_weights!
