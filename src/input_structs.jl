@@ -327,18 +327,12 @@ end
 """
 """
 mutable struct geometry_input
-    # Bz/Bref
-    Bzed::mk_float
-    # Btot/Bref
-    Bmag::mk_float
-    # bz -- unit vector component in z direction
-    bzed::mk_float
-    # bz -- unit vector component in zeta direction
-    bzeta::mk_float
-    # Bzeta/Bref
-    Bzeta::mk_float
     # rhostar ion (ref)
     rhostar::mk_float #used to premultiply ExB drift terms
+    # magnetic geometry option
+    option::String
+    # pitch ( = Bzed/Bmag if geometry_option == "constant-helical")
+    pitch::mk_float    
 end
 
 @enum binary_format_type hdf5 netcdf

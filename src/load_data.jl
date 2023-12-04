@@ -625,7 +625,13 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
 
             neutral_1V = (vzeta.n_global == 1 && vr.n_global == 1)
             restart_neutral_1V = (restart_vzeta.n_global == 1 && restart_vr.n_global == 1)
-            if geometry.bzeta != 0.0 && ((neutral1V && !restart_neutral_1V) ||
+            geo_condition = false 
+            for ir in 1:r.n
+                for iz in 1:z.n 
+                    geo_condition = geo_condition || (geometry.bzeta[iz,ir] != 0.0)
+                end
+            end
+            if geo_condition && ((neutral1V && !restart_neutral_1V) ||
                                          (!neutral1V && restart_neutral_1V))
                 # One but not the other of the run being restarted from and this run are
                 # 1V, but the interpolation below does not allow for vz and vpa being in

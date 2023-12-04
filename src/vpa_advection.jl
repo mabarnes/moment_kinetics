@@ -85,7 +85,7 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, r, composi
         @inbounds @fastmath begin
             @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
                 # bzed = B_z/B
-                advect[is].speed[ivpa,ivperp,iz,ir] = 0.5*bzed*fields.Ez[iz,ir]
+                advect[is].speed[ivpa,ivperp,iz,ir] = 0.5*bzed[iz,ir]*fields.Ez[iz,ir]
             end
         end
     end

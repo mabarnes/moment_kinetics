@@ -1479,12 +1479,12 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
                 # Note, have already calculated moments of ion distribution function(s),
                 # so can use the moments here to get the flux
                 if z.irank == 0
-                    ion_flux_0 = -density_ion[1,ir,isn] * (upar_ion[1,ir,isn]*geometry.bzed - 0.5*geometry.rhostar*Er[1,ir])
+                    ion_flux_0 = -density_ion[1,ir,isn] * (upar_ion[1,ir,isn]*geometry.bzed[1,ir] - 0.5*geometry.rhostar*Er[1,ir])
                 else
                     ion_flux_0 = NaN
                 end
                 if z.irank == z.nrank - 1
-                    ion_flux_L = density_ion[end,ir,isn] * (upar_ion[end,ir,isn]*geometry.bzed - 0.5*geometry.rhostar*Er[end,ir])
+                    ion_flux_L = density_ion[end,ir,isn] * (upar_ion[end,ir,isn]*geometry.bzed[end,ir] - 0.5*geometry.rhostar*Er[end,ir])
                 else
                     ion_flux_L = NaN
                 end

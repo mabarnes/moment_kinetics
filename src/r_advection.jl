@@ -93,10 +93,11 @@ function update_speed_r!(advect, upar, vth, fields, evolve_upar, evolve_ppar, vp
         error("r_advection is not compatible with evolve_upar or evolve_ppar")
     end
     if r.advection.option == "default" && r.n > 1
+        Bmag = geometry.Bmag
         ExBfac = 0.5*geometry.rhostar
         @inbounds begin
             @loop_z_vperp_vpa iz ivperp ivpa begin
-                @views advect.speed[:,ivpa,ivperp,iz] .= ExBfac*fields.Ez[iz,:]
+                @views @. advect.speed[:,ivpa,ivperp,iz] = ExBfac*fields.Ez[iz,:]/Bmag[iz,:]
             end
         end
     elseif r.advection.option == "default" && r.n == 1
