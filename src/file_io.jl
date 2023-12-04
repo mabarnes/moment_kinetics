@@ -648,7 +648,7 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                           description="charged species thermal speed",
                                           units="c_ref")
 
-        # io_vth is the handle for the ion thermal speed
+        # io_dSdt is the handle for the entropy production (due to collisions)
         io_dSdt = create_dynamic_variable!(dynamic, "entropy_production", mk_float, z, r;
                                           n_ion_species=n_ion_species,
                                           parallel_io=parallel_io,
