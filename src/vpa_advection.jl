@@ -42,8 +42,9 @@ function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, comp
     @boundscheck composition.n_ion_species == size(advect,1) || throw(BoundsError(advect))
     @boundscheck vpa.n == size(advect[1].speed,1) || throw(BoundsError(speed))
     if vpa.advection.option == "default"
-        # dvpa/dt = Ze/m ⋅ E_parallel
-        update_speed_default!(advect, fields, fvec, moments, vpa, z, r, composition,
+        # dvpa/dt = Ze/m ⋅ E_parallel - (vperp^2/2B) bz dB/dz
+        # magnetic mirror term only supported for standard DK implementation
+        update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, composition,
                               collisions, ion_source_settings, t, geometry)
     elseif vpa.advection.option == "constant"
         begin_serial_region()
@@ -69,7 +70,7 @@ end
 
 """
 """
-function update_speed_default!(advect, fields, fvec, moments, vpa, z, r, composition,
+function update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, composition,
                                collisions, ion_source_settings, t, geometry)
     if moments.evolve_ppar && moments.evolve_upar
         update_speed_n_u_p_evolution!(advect, fvec, moments, vpa, z, r, composition,
@@ -82,10 +83,13 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, r, composi
                                     collisions, ion_source_settings)
     else
         bzed = geometry.bzed
+        dBdz = geometry.dBdz
+        Bmag = geometry.Bmag
         @inbounds @fastmath begin
             @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
                 # bzed = B_z/B
-                advect[is].speed[ivpa,ivperp,iz,ir] = 0.5*bzed[iz,ir]*fields.Ez[iz,ir]
+                advect[is].speed[ivpa,ivperp,iz,ir] = (0.5*bzed[iz,ir]*fields.Ez[iz,ir] - 
+                                                      (0.5*vperp.grid[ivperp]^2/Bmag[iz,ir])*bzed[iz,ir]*dBdz[iz,ir])
             end
         end
     end
