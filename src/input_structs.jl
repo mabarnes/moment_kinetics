@@ -51,6 +51,7 @@ end
 """
 mutable struct advance_info
     vpa_advection::Bool
+    vperp_advection::Bool
     z_advection::Bool
     r_advection::Bool
     neutral_z_advection::Bool

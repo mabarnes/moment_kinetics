@@ -290,11 +290,12 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     begin_serial_region()
     vperp_advect = setup_advection(n_ion_species, vperp, vpa, z, r)
     # initialise the vperp advection speed
+    # note that z_advect and r_advect are arguments of update_speed_vperp!
     if vperp.n > 1
         begin_serial_region()
         @serial_region begin
             for is ∈ 1:n_ion_species
-                @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r)
+                @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r, z_advect[is], r_advect[is], geometry)
             end
         end
     end
@@ -453,6 +454,7 @@ function setup_advance_flags(moments, composition, t_input, collisions,
                              vr, vz)
     # default is not to concurrently advance different operators
     advance_vpa_advection = false
+    advance_vperp_advection = false
     advance_z_advection = false
     advance_r_advection = false
     advance_cx_1V = false
@@ -484,6 +486,7 @@ function setup_advance_flags(moments, composition, t_input, collisions,
     if !t_input.split_operators
         # default for non-split operators is to include both vpa and z advection together
         advance_vpa_advection = true && vpa.n > 1 && z.n > 1
+        advance_vperp_advection = true && vperp.n > 1 && z.n > 1 && r.n > 1
         advance_z_advection = true && z.n > 1
         advance_r_advection = true && r.n > 1
         if collisions.nuii > 0.0 && vperp.n > 1
@@ -585,7 +588,7 @@ function setup_advance_flags(moments, composition, t_input, collisions,
 
     manufactured_solns_test = manufactured_solns_input.use_for_advance
 
-    return advance_info(advance_vpa_advection, advance_z_advection, advance_r_advection,
+    return advance_info(advance_vpa_advection, advance_vperp_advection, advance_z_advection, advance_r_advection,
                         advance_neutral_z_advection, advance_neutral_r_advection,
                         advance_neutral_vz_advection, advance_cx, advance_cx_1V,
                         advance_ionization, advance_ionization_1V,
@@ -1720,7 +1723,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
 
     vpa_spectral, vperp_spectral, r_spectral, z_spectral = spectral_objects.vpa_spectral, spectral_objects.vperp_spectral, spectral_objects.r_spectral, spectral_objects.z_spectral
     vz_spectral, vr_spectral, vzeta_spectral = spectral_objects.vz_spectral, spectral_objects.vr_spectral, spectral_objects.vzeta_spectral
-    vpa_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
+    vpa_advect, vperp_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.vperp_advect, advect_objects.r_advect, advect_objects.z_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
     if advance.external_source
@@ -1750,10 +1753,12 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
         r_advection!(fvec_out.pdf, fvec_in, moments, fields, r_advect, r, z, vperp, vpa,
                      dt, r_spectral, composition, geometry, scratch_dummy)
     end
-
-    #if advance.vperp_advection
-    # PLACEHOLDER
-    #end
+    # vperp_advection requires information about z and r advection
+    # so call vperp_advection! only after z and r advection routines
+    if advance.vperp_advection
+        vperp_advection!(fvec_out.pdf, fvec_in, vperp_advect, r, z, vperp, vpa,
+                      dt, vperp_spectral, composition, z_advect, r_advect, geometry)
+    end
 
     if advance.source_terms
         source_terms!(fvec_out.pdf, fvec_in, moments, vpa, z, r, dt, z_spectral,
