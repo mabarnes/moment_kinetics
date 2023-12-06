@@ -94,10 +94,14 @@ function update_speed_z!(advect, upar, vth, evolve_upar, evolve_ppar, fields, vp
         # bzed = B_z/B only used for z.advection.option == "default"
         bzed = geometry.bzed
         Bmag = geometry.Bmag
+        bzeta = geometry.bzeta
+        jacobian = geometry.jacobian
         ExBfac = -0.5*geometry.rhostar
+        geofac = z.scratch
         @inbounds begin
             @loop_r_vperp_vpa ir ivperp ivpa begin
-                @. @views advect.speed[:,ivpa,ivperp,ir] = vpa.grid[ivpa]*bzed[:,ir] + ExBfac*fields.Er[:,ir]/Bmag[:,ir]
+                @. geofac = bzeta[:,ir]*jacobian[:,ir]/Bmag[:,ir]
+                @. @views advect.speed[:,ivpa,ivperp,ir] = vpa.grid[ivpa]*bzed[:,ir] + ExBfac*geofac*fields.Er[:,ir]
             end
             if evolve_ppar
                 @loop_r_vperp_vpa ir ivperp ivpa begin

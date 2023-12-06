@@ -44,7 +44,8 @@ bzeta::Array{mk_float,2}
 dBdz::Array{mk_float,2}
 # d Bmag d r
 dBdr::Array{mk_float,2}
-
+# jacobian =  grad r x grad z . grad zeta
+jacobian::Array{mk_float,2}
 end
 
 """
@@ -63,6 +64,7 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
     bzeta = allocate_float(nz,nr)
     dBdr = allocate_float(nz,nr)
     dBdz = allocate_float(nz,nr)
+    jacobian = allocate_float(nz,nr)
     
     option = geometry_input_data.option
     rhostar = geometry_input_data.rhostar
@@ -77,6 +79,7 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
                 Bzeta[iz,ir] = Bmag[iz,ir]*bzeta[iz,ir]
                 dBdr[iz,ir] = 0.0
                 dBdz[iz,ir] = 0.0
+                jacobian[iz,ir] = 1.0
             end
         end
     else 
@@ -84,7 +87,7 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
     end
 
     geometry = geometric_coefficients(geometry_input_data, rhostar,
-               Bzed,Bzeta,Bmag,bzed,bzeta,dBdz,dBdr)
+               Bzed,Bzeta,Bmag,bzed,bzeta,dBdz,dBdr,jacobian)
     return geometry
 end
 

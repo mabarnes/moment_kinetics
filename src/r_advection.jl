@@ -95,9 +95,13 @@ function update_speed_r!(advect, upar, vth, fields, evolve_upar, evolve_ppar, vp
     if r.advection.option == "default" && r.n > 1
         Bmag = geometry.Bmag
         ExBfac = 0.5*geometry.rhostar
+        bzeta = geometry.bzeta
+        jacobian = geometry.jacobian
+        geofac = r.scratch
         @inbounds begin
             @loop_z_vperp_vpa iz ivperp ivpa begin
-                @views @. advect.speed[:,ivpa,ivperp,iz] = ExBfac*fields.Ez[iz,:]/Bmag[iz,:]
+                @. geofac = bzeta[iz,:]*jacobian[iz,:]/Bmag[iz,:]
+                @views @. advect.speed[:,ivpa,ivperp,iz] = ExBfac*geofac*fields.Ez[iz,:]
             end
         end
     elseif r.advection.option == "default" && r.n == 1
