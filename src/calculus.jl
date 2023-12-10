@@ -158,12 +158,15 @@ Apply 'K-matrix' as part of a weak-form second derivative
 function elementwise_apply_Kmat! end
 
 function second_derivative!(d2f, f, coord, spectral::weak_discretization_info)
-    # get the derivative at each grid point within each element and store in df
+    # obtain the RHS of numerical weak-form of the equation 
+    # g = d^2 f / d coord^2, which is 
+    # M * g = K * f, with M the mass matrix and K an appropriate stiffness matrix
+    # by multiplying by basis functions and integrating by parts    
     elementwise_apply_Kmat!(coord, f, spectral)
-    # map the derivative from the elemental grid to the full grid;
-    # at element boundaries, use the average of the derivatives from neighboring elements.
+    # map the RHS vector K * f from the elemental grid to the full grid;
+    # at element boundaries, use the average of K * f from neighboring elements.
     derivative_elements_to_full_grid!(coord.scratch, coord.scratch_2d, coord)
-    # solve weak form problem M * d2f = K * f
+    # solve weak form matrix problem M * g = K * f to obtain g = d^2 f / d coord^2
     mass_matrix_solve!(d2f, coord.scratch, spectral)
 end
 
@@ -173,12 +176,16 @@ Apply 'L-matrix' as part of a weak-form Laplacian derivative
 function elementwise_apply_Lmat! end
 
 function laplacian_derivative!(d2f, f, coord, spectral::weak_discretization_info)
-    # get the derivative at each grid point within each element and store in df
+    # for coord.name 'vperp' obtain the RHS of numerical weak-form of the equation 
+    # g = (1/coord) d/d coord ( coord  d f / d coord ), which is 
+    # M * g = K * f, with M the mass matrix, and K an appropriate stiffness matrix,
+    # by multiplying by basis functions and integrating by parts.
+    # for all other coord.name, do exactly the same as second_derivative! above.
     elementwise_apply_Lmat!(coord, f, spectral)
-    # map the derivative from the elemental grid to the full grid;
-    # at element boundaries, use the average of the derivatives from neighboring elements.
+    # map the RHS vector K * f from the elemental grid to the full grid;
+    # at element boundaries, use the average of K * f from neighboring elements.
     derivative_elements_to_full_grid!(coord.scratch, coord.scratch_2d, coord)
-    # solve weak form problem M * d2f = K * f
+    # solve weak form matrix problem M * g = K * f to obtain g = d^2 f / d coord^2
     mass_matrix_solve!(d2f, coord.scratch, spectral)
 end
 

@@ -39,6 +39,8 @@ struct chebyshev_base_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs
     backward::TBackward
     # elementwise differentiation matrix (ngrid*ngrid)
     Dmat::Array{mk_float,2}
+    # elementwise differentiation vector (ngrid) for the point x = -1
+    D0::Array{mk_float,1}
 end
 
 struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan} <: discretization_info
@@ -71,10 +73,12 @@ function setup_chebyshev_pseudospectral_lobatto(coord)
     backward_transform = plan_ifft!(fext, flags=FFTW.MEASURE)
     # create array for differentiation matrix 
     Dmat = allocate_float(coord.ngrid, coord.ngrid)
-    cheb_derivative_matrix_elementwise!(Dmat,coord.ngrid,coord.L,coord.nelement_global) 
+    cheb_derivative_matrix_elementwise!(Dmat,coord.ngrid)
+    D0 = allocate_float(coord.ngrid)
+    D0 .= Dmat[1,:]
     # return a structure containing the information needed to carry out
     # a 1D Chebyshev transform
-    return chebyshev_base_info(fext, fcheby, dcheby, forward_transform, backward_transform, Dmat)
+    return chebyshev_base_info(fext, fcheby, dcheby, forward_transform, backward_transform, Dmat, D0)
 end
 
 function setup_chebyshev_pseudospectral_radau(coord)
@@ -92,10 +96,12 @@ function setup_chebyshev_pseudospectral_radau(coord)
         backward_transform = plan_ifft!(fext, flags=FFTW.MEASURE)
         # create array for differentiation matrix 
         Dmat = allocate_float(coord.ngrid, coord.ngrid)
-        cheb_derivative_matrix_elementwise_FFT!(Dmat, coord, fcheby, dcheby, fext, forward_transform)
+        cheb_derivative_matrix_elementwise_radau_by_FFT!(Dmat, coord, fcheby, dcheby, fext, forward_transform)
+        D0 = allocate_float(coord.ngrid)
+        cheb_lower_endpoint_derivative_vector_elementwise_radau_by_FFT!(D0, coord, fcheby, dcheby, fext, forward_transform)
         # return a structure containing the information needed to carry out
         # a 1D Chebyshev transform
-        return chebyshev_base_info(fext, fcheby, dcheby, forward_transform, backward_transform, Dmat)
+        return chebyshev_base_info(fext, fcheby, dcheby, forward_transform, backward_transform, Dmat, D0)
 end
 
 """
@@ -780,6 +786,22 @@ function chebyshev_radau_forward_transform!(chebyf, fext, ff, transform, n)
         # inverse Chebyshev transform to get df/dcoord
         chebyshev_radau_backward_transform!(df, cheby_fext, cheby_df, forward, coord.ngrid)
     end
+    function chebyshev_radau_derivative_lower_endpoint(ff, cheby_f, cheby_df, cheby_fext, forward, coord)
+        # calculate the Chebyshev coefficients of the real-space function ff and return
+        # as cheby_f
+        chebyshev_radau_forward_transform!(cheby_f, cheby_fext, ff, forward, coord.ngrid)
+        # calculate the Chebyshev coefficients of the derivative of ff with respect to coord.grid
+        chebyshev_spectral_derivative!(cheby_df, cheby_f)
+        # form the derivative at x = - 1 using that T_n(-1) = (-1)^n
+        # and converting the normalisation factors to undo the normalisation in the FFT
+        # df = d0 + sum_n=1 (-1)^n d_n/2 with d_n the coeffs
+        # of the Cheb derivative in the Fourier representation
+        df = cheby_df[1]
+        for i in 2:coord.ngrid
+            df += ((-1)^(i-1))*0.5*cheby_df[i]
+        end
+        return df
+    end
 
 
 """
@@ -789,7 +811,7 @@ https://people.maths.ox.ac.uk/trefethen/8all.pdf
 full list of Chapters may be obtained here 
 https://people.maths.ox.ac.uk/trefethen/pdetext.html
 """
-    function cheb_derivative_matrix_elementwise!(D::Array{Float64,2},n::Int64,L::Float64,nelement::Int64) 
+    function cheb_derivative_matrix_elementwise!(D::Array{Float64,2},n::Int64)
         
         # define Gauss-Lobatto Chebyshev points in reversed order x_j = { -1, ... , 1}
         # consistent with use in elements of the grid
@@ -866,9 +888,11 @@ https://people.maths.ox.ac.uk/trefethen/pdetext.html
         return  (c_j/c_k)*((-1)^(k+j))/(x[j] - x[k])
     end
  """
- derivative matrix for Chebyshev grid using the FFT
+ Derivative matrix for Chebyshev-Radau grid using the FFT.
+ Note that a similar function could be constructed for the 
+ Chebyshev-Lobatto grid, if desired.
  """
-    function cheb_derivative_matrix_elementwise_FFT!(D::Array{Float64,2}, coord, f, df, fext, forward)
+    function cheb_derivative_matrix_elementwise_radau_by_FFT!(D::Array{Float64,2}, coord, f, df, fext, forward)
         ff_buffer = Array{Float64,1}(undef,coord.ngrid)
         df_buffer = Array{Float64,1}(undef,coord.ngrid)
         # use response matrix approach to calculate derivative matrix D 
@@ -885,6 +909,23 @@ https://people.maths.ox.ac.uk/trefethen/pdetext.html
             D[j,j] = 0.0
             D[j,j] = -sum(D[j,:])
         end
+    end
+    
+    function cheb_lower_endpoint_derivative_vector_elementwise_radau_by_FFT!(D::Array{Float64,1}, coord, f, df, fext, forward)
+        ff_buffer = Array{Float64,1}(undef,coord.ngrid)
+        df_buffer = Array{Float64,1}(undef,coord.ngrid)
+        # use response matrix approach to calculate derivative vector D 
+        for j in 1:coord.ngrid 
+            ff_buffer .= 0.0 
+            ff_buffer[j] = 1.0
+            @views df_buffer = chebyshev_radau_derivative_lower_endpoint(ff_buffer[:],
+                f[:,1], df, fext, forward, coord)
+            D[j] = df_buffer # assign appropriate value of derivative vector 
+        end
+        # correct diagonal elements to gurantee numerical stability
+        # gives D*[1.0, 1.0, ... 1.0] = [0.0, 0.0, ... 0.0]
+        D[1] = 0.0
+        D[1] = -sum(D[:])
     end
 
 end

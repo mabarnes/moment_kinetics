@@ -2185,7 +2185,7 @@ function enforce_vperp_boundary_condition!(f, bc, vperp, vperp_spectral)
             f[ivpa,nvperp,iz,ir,is] = 0.0
         end
         # set regularity condition d F / d vperp = 0 at vperp = 0
-        if vperp.discretization == "gausslegendre_pseudospectral"
+        if vperp.discretization == "gausslegendre_pseudospectral" || vperp.discretization == "chebyshev_pseudospectral"
             D0 = vperp_spectral.radau.D0
             @loop_s_r_z_vpa is ir iz ivpa begin
                 # adjust F(vperp = 0) so that d F / d vperp = 0 at vperp = 0
