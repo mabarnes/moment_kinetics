@@ -71,7 +71,7 @@ function setup_chebyshev_pseudospectral_lobatto(coord)
     backward_transform = plan_ifft!(fext, flags=FFTW.MEASURE)
     # create array for differentiation matrix 
     Dmat = allocate_float(coord.ngrid, coord.ngrid)
-    cheb_derivative_matrix_elementwise!(Dmat,coord.ngrid,coord.L,coord.nelement_global) 
+    cheb_derivative_matrix_elementwise!(Dmat,coord.ngrid)
     # return a structure containing the information needed to carry out
     # a 1D Chebyshev transform
     return chebyshev_base_info(fext, fcheby, dcheby, forward_transform, backward_transform, Dmat)
@@ -789,7 +789,7 @@ https://people.maths.ox.ac.uk/trefethen/8all.pdf
 full list of Chapters may be obtained here 
 https://people.maths.ox.ac.uk/trefethen/pdetext.html
 """
-    function cheb_derivative_matrix_elementwise!(D::Array{Float64,2},n::Int64,L::Float64,nelement::Int64) 
+    function cheb_derivative_matrix_elementwise!(D::Array{Float64,2},n::Int64)
         
         # define Gauss-Lobatto Chebyshev points in reversed order x_j = { -1, ... , 1}
         # consistent with use in elements of the grid
