@@ -2038,8 +2038,10 @@ function elliptic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_bounda
     return nothing
 end
 
-# same as above but source is made of two different terms
-# with different weak matrices
+# Same as elliptic_solve!() above but no Dirichlet boundary conditions are imposed,
+# because the function is only used where the lu_object_lhs is derived from a mass matrix.
+# The source is made of two different terms with different weak matrices
+# because of the form of the only algebraic equation that we consider.
 function algebraic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_boundary_data,
             lu_object_lhs,matrix_rhs_1,matrix_rhs_2,rhsc_1,rhsc_2,sc_1,sc_2,vpa,vperp)
     # get data into the compound index format
