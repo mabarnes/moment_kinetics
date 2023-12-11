@@ -145,7 +145,6 @@ end
 """
 Function for advancing with the explicit, weak-form, self-collision operator
 """
-
 function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,dSdt,composition,collisions,dt,
                                              fkpl_arrays::fokkerplanck_weakform_arrays_struct,
                                              r, z, vperp, vpa, vperp_spectral, vpa_spectral, scratch_dummy;
