@@ -466,7 +466,6 @@ of the direct integration method, the struct 'fka' created here does not contain
 all of the arrays necessary to compute the weak-form operator. This functionality
 could be ported if necessary.
 """
-
 function init_fokker_planck_collisions_direct_integration(vperp,vpa; precompute_weights=false, print_to_screen=false)
     fka = allocate_fokkerplanck_arrays_direct_integration(vperp,vpa)
     if vperp.n > 1 && precompute_weights
