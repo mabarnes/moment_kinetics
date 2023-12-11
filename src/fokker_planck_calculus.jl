@@ -1502,13 +1502,6 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
         if global_rank[] == 0 && print_to_screen
             println("finished elliptic operator assignment   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
-        if nc_global < 60
-            print_matrix(MM2D,"MM2D",nc_global,nc_global)
-            #print_matrix(KKpar2D,"KKpar2D",nc_global,nc_global)
-            #print_matrix(KKperp2D,"KKperp2D",nc_global,nc_global)
-            #print_matrix(LP2D,"LP",nc_global,nc_global)
-            #print_matrix(LV2D,"LV",nc_global,nc_global)
-        end
         # convert these matrices to sparse matrices
         if global_rank[] == 0 && print_to_screen
             println("begin conversion to sparse matrices   ", Dates.format(now(), dateformat"H:MM:SS"))
