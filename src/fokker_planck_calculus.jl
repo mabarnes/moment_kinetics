@@ -644,7 +644,7 @@ end
 # `ellipe(k) = \int^{\pi/2}\_0 \frac{1}{\sqrt{ 1 - m \sin^2(\theta)}} d \theta`
 
 function local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
-                            nquad_vpa,ielement_vpa,vpa_nodes,vpa, # info about primed vperp grids
+                            nquad_vpa,ielement_vpa,vpa_nodes,vpa, # info about primed vpa grids
                             nquad_vperp,ielement_vperp,vperp_nodes,vperp, # info about primed vperp grids
                             x_vpa, w_vpa, x_vperp, w_vperp, # points and weights for primed (source) grids
                             vpa_val, vperp_val) # values and indices for unprimed (field) grids
