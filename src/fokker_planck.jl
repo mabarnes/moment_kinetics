@@ -423,7 +423,6 @@ end
 """
 allocate the required ancilliary arrays 
 """
-
 function allocate_fokkerplanck_arrays_direct_integration(vperp,vpa)
     nvpa = vpa.n
     nvperp = vperp.n
