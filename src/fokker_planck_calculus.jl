@@ -843,6 +843,12 @@ function loop_over_vperp_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weigh
     return nothing
 end
 
+# The function loop_over_vperp_vpa_elements_no_divergences!() was for debugging.
+# By changing the source where loop_over_vperp_vpa_elements!() is called to
+# instead call this function we can verify that the Gauss-Legendre quadrature
+# is adequate for integrating a divergence-free integrand. This function should be 
+# kept until the problems with the pure integration method of computing the
+# Rosenbluth potentials are understood.
 function loop_over_vperp_vpa_elements_no_divergences!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                 vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                 vperp,ielement_vperp_low,ielement_vperp_hi, # info about primed vperp grids
