@@ -605,7 +605,6 @@ function get_scaled_x_w!(x_scaled, w_scaled, x_legendre, w_legendre, x_laguerre,
 end
 
 function get_scaled_x_w_no_divergences!(x_scaled, w_scaled, x_legendre, w_legendre, node_min, node_max)
-    zero = 1.0e-6 
     @. x_scaled = 0.0
     @. w_scaled = 0.0
     #println("coord: ",coord_val," node_max: ",node_max," node_min: ",node_min) 
