@@ -930,7 +930,7 @@ function icsc_func(ivpa_local::mk_int,ivpap_local::mk_int,
                    ielement_vperp::mk_int,
                    ngrid_vperp::mk_int,nelement_vperp::mk_int)
     ntot_vpa = (nelement_vpa - 1)*(ngrid_vpa^2 - 1) + ngrid_vpa^2
-    ntot_vperp = (nelement_vperp - 1)*(ngrid_vperp^2 - 1) + ngrid_vperp^2
+    #ntot_vperp = (nelement_vperp - 1)*(ngrid_vperp^2 - 1) + ngrid_vperp^2
     
     icsc_vpa = ((ivpap_local - 1) + (ivpa_local - 1)*ngrid_vpa +
                 (ielement_vpa - 1)*(ngrid_vpa^2 - 1))
