@@ -354,17 +354,14 @@ function z_dissipation!(f_out, f_in, z, z_spectral::T_spectral, dt,
                   scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
                   scratch_dummy.buffer_vpavperprs_3,scratch_dummy.buffer_vpavperprs_4,
                   z_spectral,z)
-    @loop_s_r_vperp_vpa is ir ivperp ivpa begin
-        @. scratch_dummy.buffer_vpavperpzrs_2[ivpa,ivperp,:,ir,is] =  scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,:,ir,is]
-    end
-    # compute d^2 f / d z^2 using centred reconciliation and place in dummy array #1
-    derivative_z!(scratch_dummy.buffer_vpavperpzrs_1, scratch_dummy.buffer_vpavperpzrs_2[:,:,:,:,:],
+    # compute d^2 f / d z^2 using centred reconciliation and place in dummy array #2
+    derivative_z!(scratch_dummy.buffer_vpavperpzrs_2, scratch_dummy.buffer_vpavperpzrs_1,
                   scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
                   scratch_dummy.buffer_vpavperprs_3,scratch_dummy.buffer_vpavperprs_4,
                   z_spectral,z)
     # advance f due to diffusion_coefficient * d^2 f / d z^2
     @loop_s_r_vperp_vpa is ir ivperp ivpa begin
-        @views @. f_out[ivpa,ivperp,:,ir,is] += dt * diffusion_coefficient * scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,:,ir,is]
+        @views @. f_out[ivpa,ivperp,:,ir,is] += dt * diffusion_coefficient * scratch_dummy.buffer_vpavperpzrs_2[ivpa,ivperp,:,ir,is]
     end
 
     return nothing
@@ -403,17 +400,14 @@ function r_dissipation!(f_out, f_in, r, r_spectral::T_spectral, dt,
                   scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
                   scratch_dummy.buffer_vpavperpzs_3,scratch_dummy.buffer_vpavperpzs_4,
                   r_spectral,r)
-    @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-        @. scratch_dummy.buffer_vpavperpzrs_2[ivpa,ivperp,iz,:,is] =  scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,iz,:,is]
-    end
-    # compute d^2 f / d r^2 using centred reconciliation and place in dummy array #1
-    derivative_r!(scratch_dummy.buffer_vpavperpzrs_1, scratch_dummy.buffer_vpavperpzrs_2[:,:,:,:,:],
+    # compute d^2 f / d r^2 using centred reconciliation and place in dummy array #2
+    derivative_r!(scratch_dummy.buffer_vpavperpzrs_2, scratch_dummy.buffer_vpavperpzrs_1,
                   scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
                   scratch_dummy.buffer_vpavperpzs_3,scratch_dummy.buffer_vpavperpzs_4,
                   r_spectral,r)
     # advance f due to diffusion_coefficient * d^2 f / d r^2
     @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-        @views @. f_out[ivpa,ivperp,iz,:,is] += dt * diffusion_coefficient * scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,iz,:,is]
+        @views @. f_out[ivpa,ivperp,iz,:,is] += dt * diffusion_coefficient * scratch_dummy.buffer_vpavperpzrs_2[ivpa,ivperp,iz,:,is]
     end
 
     return nothing
@@ -480,17 +474,14 @@ function z_dissipation_neutral!(f_out, f_in, z, z_spectral::T_spectral, dt,
                   scratch_dummy.buffer_vzvrvzetarsn_1, scratch_dummy.buffer_vzvrvzetarsn_2,
                   scratch_dummy.buffer_vzvrvzetarsn_3,scratch_dummy.buffer_vzvrvzetarsn_4,
                   z_spectral,z)
-    @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
-        @. scratch_dummy.buffer_vzvrvzetazrsn_2[ivz,ivr,ivzeta,:,ir,isn] =  scratch_dummy.buffer_vzvrvzetazrsn_1[ivz,ivr,ivzeta,:,ir,isn]
-    end
-    # compute d^2 f / d z^2 using centred reconciliation and place in dummy array #1
-    derivative_z!(scratch_dummy.buffer_vzvrvzetazrsn_1, scratch_dummy.buffer_vzvrvzetazrsn_2,
+    # compute d^2 f / d z^2 using centred reconciliation and place in dummy array #2
+    derivative_z!(scratch_dummy.buffer_vzvrvzetazrsn_2, scratch_dummy.buffer_vzvrvzetazrsn_1,
                   scratch_dummy.buffer_vzvrvzetarsn_1, scratch_dummy.buffer_vzvrvzetarsn_2,
                   scratch_dummy.buffer_vzvrvzetarsn_3,scratch_dummy.buffer_vzvrvzetarsn_4,
                   z_spectral,z)
     # advance f due to diffusion_coefficient * d^2 f/ d z^2
     @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
-        @views @. f_out[ivz,ivr,ivzeta,:,ir,isn] += dt * diffusion_coefficient * scratch_dummy.buffer_vzvrvzetazrsn_1[ivz,ivr,ivzeta,:,ir,isn]
+        @views @. f_out[ivz,ivr,ivzeta,:,ir,isn] += dt * diffusion_coefficient * scratch_dummy.buffer_vzvrvzetazrsn_2[ivz,ivr,ivzeta,:,ir,isn]
     end
 
     return nothing
@@ -529,18 +520,14 @@ function r_dissipation_neutral!(f_out, f_in, r, r_spectral::T_spectral, dt,
                   scratch_dummy.buffer_vzvrvzetazsn_1, scratch_dummy.buffer_vzvrvzetazsn_2,
                   scratch_dummy.buffer_vzvrvzetazsn_3,scratch_dummy.buffer_vzvrvzetazsn_4,
                   r_spectral,r)
-    # form Q d f / d r and place in dummy array #2
-    @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
-        @. scratch_dummy.buffer_vzvrvzetazrsn_2[ivz,ivr,ivzeta,iz,:,isn] =  scratch_dummy.buffer_vzvrvzetazrsn_1[ivz,ivr,ivzeta,iz,:,isn]
-    end
-    # compute d^2 f / d r^2  using centred reconciliation and place in dummy array #1
-    derivative_r!(scratch_dummy.buffer_vzvrvzetazrsn_1, scratch_dummy.buffer_vzvrvzetazrsn_2,
+    # compute d^2 f / d r^2  using centred reconciliation and place in dummy array #2
+    derivative_r!(scratch_dummy.buffer_vzvrvzetazrsn_2, scratch_dummy.buffer_vzvrvzetazrsn_1,
                   scratch_dummy.buffer_vzvrvzetazsn_1, scratch_dummy.buffer_vzvrvzetazsn_2,
                   scratch_dummy.buffer_vzvrvzetazsn_3,scratch_dummy.buffer_vzvrvzetazsn_4,
                   r_spectral,r)
     # advance f due to diffusion_coefficient * d / d r ( Q d f / d r )
     @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
-        @views @. f_out[ivz,ivr,ivzeta,iz,:,isn] += dt * diffusion_coefficient * scratch_dummy.buffer_vzvrvzetazrsn_1[ivz,ivr,ivzeta,iz,:,isn]
+        @views @. f_out[ivz,ivr,ivzeta,iz,:,isn] += dt * diffusion_coefficient * scratch_dummy.buffer_vzvrvzetazrsn_2[ivz,ivr,ivzeta,iz,:,isn]
     end
 
     return nothing
