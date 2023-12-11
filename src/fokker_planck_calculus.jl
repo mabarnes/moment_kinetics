@@ -513,7 +513,13 @@ function lagrange_poly(j,x_nodes,x)
     return poly
 end
 
-function get_scaled_x_w!(x_scaled, w_scaled, x_legendre, w_legendre, x_laguerre, w_laguerre, node_min, node_max, nodes, igrid_coord, coord_val)
+# Function to get the local integration grid and quadrature weights
+# to integrate a 1D element in the 2D representation of the 
+# velocity space distribution functions. This function assumes that
+# there is a divergence at the point coord_val, and splits the grid 
+# and integration weights appropriately, using Gauss-Laguerre points
+# near the divergence and Gauss-Legendre points away from the divergence. 
+function get_scaled_x_w_with_divergences!(x_scaled, w_scaled, x_legendre, w_legendre, x_laguerre, w_laguerre, node_min, node_max, nodes, igrid_coord, coord_val)
     #println("nodes ",nodes)
     zero = 1.0e-10 
     @. x_scaled = 0.0
@@ -603,7 +609,9 @@ function get_scaled_x_w!(x_scaled, w_scaled, x_legendre, w_legendre, x_laguerre,
     #println("w_scaled",w_scaled)
     return nquad_coord
 end
-
+# Function to get the local grid and integration weights assuming 
+# no divergences of the function on the 1D element. Gauss-Legendre
+# quadrature is used for the entire element.
 function get_scaled_x_w_no_divergences!(x_scaled, w_scaled, x_legendre, w_legendre, node_min, node_max)
     @. x_scaled = 0.0
     @. w_scaled = 0.0
@@ -743,14 +751,14 @@ function loop_over_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weights,H2_
                     x_vpa, w_vpa, x_vperp, w_vperp, 
                     vpa_val, vperp_val)
     end
-    nquad_vperp = get_scaled_x_w!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_nodes, igrid_vperp, vperp_val)
+    nquad_vperp = get_scaled_x_w_with_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_nodes, igrid_vperp, vperp_val)
     for ielement_vpap in ielement_vpa_low:ielement_vpa_hi
     #for ielement_vpap in 1:vpa.nelement_local
         # use general grid function that checks divergences
         vpa_nodes = get_nodes(vpa,ielement_vpap)
         vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
         #nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
-        nquad_vpa = get_scaled_x_w!(x_vpa, w_vpa, x_legendre, w_legendre, x_laguerre, w_laguerre, vpa_min, vpa_max, vpa_nodes, igrid_vpa, vpa_val)
+        nquad_vpa = get_scaled_x_w_with_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, x_laguerre, w_laguerre, vpa_min, vpa_max, vpa_nodes, igrid_vpa, vpa_val)
         @views local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                     nquad_vpa,ielement_vpap,vpa_nodes,vpa,
                     nquad_vperp,ielement_vperpp,vperp_nodes,vperp,
@@ -819,7 +827,7 @@ function loop_over_vperp_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weigh
         #vperp_max = vperp_nodes[end]
         #vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,vperp.nelement_local) 
         #nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
-        #nquad_vperp = get_scaled_x_w!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_nodes, igrid_vperp, vperp_val)
+        #nquad_vperp = get_scaled_x_w_with_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_nodes, igrid_vperp, vperp_val)
         @views loop_over_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                 vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                 vperp,ielement_vperpp, # info about primed vperp grids
