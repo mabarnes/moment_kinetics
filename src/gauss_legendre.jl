@@ -986,7 +986,7 @@ function get_KK_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
         coord;explicit_BC_terms=false)
-        
+        nelement = coord.nelement_local
         scale_factor = coord.element_scale[ielement]
         shift_factor = coord.element_shift[ielement]
         if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
@@ -995,16 +995,18 @@ function get_KK_local!(QQ,ielement,
             if ielement > 1 || coord.irank > 0 # lobatto points
                 @. QQ =  (shift_factor/scale_factor)*lobatto.K0 + lobatto.K1 - lobatto.P0
                 # boundary terms from integration by parts
-                if explicit_BC_terms  
+                if explicit_BC_terms && ielement == 1
                     imin = coord.imin[ielement] - 1
-                    imax = coord.imax[ielement]
                     @. QQ[1,:] -= coord.grid[imin]*lobatto.Dmat[1,:]/scale_factor
+                end
+                if explicit_BC_terms && ielement == nelement
+                    imax = coord.imax[ielement]
                     @. QQ[coord.ngrid,:] += coord.grid[imax]*lobatto.Dmat[coord.ngrid,:]/scale_factor  
                 end
             else # radau points 
                 @. QQ =  (shift_factor/scale_factor)*radau.K0 + radau.K1 - radau.P0
                 # boundary terms from integration by parts
-                if explicit_BC_terms  
+                if explicit_BC_terms && ielement == nelement  
                     imax = coord.imax[ielement]
                     @. QQ[coord.ngrid,:] += coord.grid[imax]*radau.Dmat[coord.ngrid,:]/scale_factor
                 end
@@ -1012,8 +1014,10 @@ function get_KK_local!(QQ,ielement,
         else # assume integrals of form int^infty_-infty (.) d vpa
             @. QQ = lobatto.K0/scale_factor
             # boundary terms from integration by parts
-            if explicit_BC_terms
+            if explicit_BC_terms && ielement == 1
                 @. QQ[1,:] -= lobatto.Dmat[1,:]/scale_factor
+            end
+            if explicit_BC_terms && ielement == nelement
                 @. QQ[coord.ngrid,:] += lobatto.Dmat[coord.ngrid,:]/scale_factor
             end
         end
@@ -1050,7 +1054,7 @@ function get_LL_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
         coord;explicit_BC_terms=false)
-        
+        nelement = coord.nelement_local
         scale_factor = coord.element_scale[ielement]
         shift_factor = coord.element_shift[ielement]
         if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
@@ -1059,16 +1063,18 @@ function get_LL_local!(QQ,ielement,
             if ielement > 1 || coord.irank > 0 # lobatto points
                 @. QQ =  (shift_factor/scale_factor)*lobatto.K0 + lobatto.K1
                 # boundary terms from integration by parts
-                if explicit_BC_terms  
+                if explicit_BC_terms && ielement == 1
                     imin = coord.imin[ielement] - 1
-                    imax = coord.imax[ielement]
                     @. QQ[1,:] -= coord.grid[imin]*lobatto.Dmat[1,:]/scale_factor
+                end
+                if explicit_BC_terms && ielement == nelement
+                    imax = coord.imax[ielement]
                     @. QQ[coord.ngrid,:] += coord.grid[imax]*lobatto.Dmat[coord.ngrid,:]/scale_factor
                 end
             else # radau points 
                 @. QQ =  (shift_factor/scale_factor)*radau.K0 + radau.K1
                 # boundary terms from integration by parts
-                if explicit_BC_terms  
+                if explicit_BC_terms && ielement == nelement
                     imax = coord.imax[ielement]
                     @. QQ[coord.ngrid,:] += coord.grid[imax]*radau.Dmat[coord.ngrid,:]/scale_factor
                 end
@@ -1076,8 +1082,10 @@ function get_LL_local!(QQ,ielement,
         else # d^2 (.) d vpa^2 -- assume integrals of form int^infty_-infty (.) d vpa
             @. QQ = lobatto.K0/scale_factor
             # boundary terms from integration by parts
-            if explicit_BC_terms 
+            if explicit_BC_terms && ielement == 1
                 @. QQ[1,:] -= lobatto.Dmat[1,:]/scale_factor
+            end
+            if explicit_BC_terms && ielement == nelement
                 @. QQ[coord.ngrid,:] += lobatto.Dmat[coord.ngrid,:]/scale_factor
             end
         end
