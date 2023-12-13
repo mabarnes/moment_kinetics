@@ -826,11 +826,26 @@ function scaled_gauss_legendre_radau_grid(ngrid, nelement_local, n_local, elemen
 end
 
 """
-function that assigns the local weak-form matrices to 
+A function that assigns the local weak-form matrices to 
 a global array QQ_global for later solving weak form of required
-1D equation
+1D equation. This function only supports fully local grids 
+that have coord.nelement_local = coord.nelement_global.
 
-option choosing type of matrix to be constructed -- "M" (mass matrix), "S" (derivative matrix)
+The 'option' variable is a flag for 
+choosing the type of matrix to be constructed. 
+Currently the function is set up to assemble the 
+elemental matrices without imposing boundary conditions on the 
+first and final rows of the matrix. This means that 
+the operators constructed from this function can only be used
+for differentiation, and not solving 1D ODEs. 
+The shared points in the element assembly are 
+averaged (instead of simply added) to be consistent with the 
+derivative_elements_to_full_grid!() function in calculus.jl,
+which is used to form the RHS of the equation
+
+ M * d2f = K * f 
+ 
+where M is the mass matrix and K is the stiffness matrix. 
 """
 function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
                                lobatto::gausslegendre_base_info,
@@ -843,55 +858,32 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
     imin = coord.imin
     imax = coord.imax
     @. QQ_global = 0.0
-    mass_matrix = (option == "M") && false
-    if coord.name == "vperp"
-        zero_bc_upper_boundary = true && mass_matrix
-        zero_bc_lower_boundary = false && mass_matrix
-        zero_gradient_bc_lower_boundary = false && mass_matrix
-    else 
-        zero_bc_upper_boundary = (coord.bc == "zero" || coord.bc == "zero_upper") && mass_matrix
-        zero_bc_lower_boundary = (coord.bc == "zero" || coord.bc == "zero_lower")  && mass_matrix
-        zero_gradient_bc_lower_boundary = false  && mass_matrix
-    end
+    
     # fill in first element 
     j = 1
     # N.B. QQ varies with ielement for vperp, but not vpa
+    # a radau element is used for the vperp grid (see get_QQ_local!())
     get_QQ_local!(QQ_j,j,lobatto,radau,coord,option)
-    
-    if zero_bc_lower_boundary #x.bc == "zero"
-        QQ_global[imin[j],imin[j]:imax[j]] .= 0.0
-        QQ_global[imin[j],imin[j]] = 1.0
-    elseif zero_gradient_bc_lower_boundary
-            QQ_global[imin[j],imin[j]:imax[j]] .= radau.D0[:]
-    else 
-        QQ_global[imin[j],imin[j]:imax[j]] .+= QQ_j[1,:]
-    end
+    QQ_global[imin[j],imin[j]:imax[j]] .+= QQ_j[1,:]
     for k in 2:imax[j]-imin[j] 
         QQ_global[k,imin[j]:imax[j]] .+= QQ_j[k,:]
     end
-    if zero_bc_upper_boundary && coord.nelement_local == 1
-        QQ_global[imax[j],imin[j]:imax[j]] .= 0.0
-        QQ_global[imax[j],imax[j]] = 1.0
-    elseif coord.nelement_local > 1 #x.bc == "zero"
+    if coord.nelement_local > 1
         QQ_global[imax[j],imin[j]:imax[j]] .+= QQ_j[ngrid,:]./2.0
     else
         QQ_global[imax[j],imin[j]:imax[j]] .+= QQ_j[ngrid,:]
-    end 
+    end
     # remaining elements recalling definitions of imax and imin
     for j in 2:coord.nelement_local
         get_QQ_local!(QQ_j,j,lobatto,radau,coord,option)
-        
-        #lower boundary condition on element
+        #lower boundary assembly on element
         QQ_global[imin[j]-1,imin[j]-1:imax[j]] .+= QQ_j[1,:]./2.0
         for k in 2:imax[j]-imin[j]+1 
             QQ_global[k+imin[j]-2,imin[j]-1:imax[j]] .+= QQ_j[k,:]
         end
-        # upper boundary condition on element 
-        if j == coord.nelement_local && !(zero_bc_upper_boundary)
+        # upper boundary assembly on element 
+        if j == coord.nelement_local
             QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]
-        elseif j == coord.nelement_local && zero_bc_upper_boundary
-            QQ_global[imax[j],imin[j]-1:imax[j]] .= 0.0 #contributions from this element/2
-            QQ_global[imax[j],imax[j]] = 1.0
         else 
             QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]./2.0
         end
