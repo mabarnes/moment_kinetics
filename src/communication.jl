@@ -298,7 +298,7 @@ function setup_distributed_memory_MPI_for_weights_precomputation(vpa_nelement_gl
     # construct a communicator for intra-block communication
     comm_block[] = MPI.Comm_split(comm_vpavperp,iblock,irank_block)
     
-    vpa_ngroup = vpa_nchunks
+    vpa_ngroup = vperp_nchunks
     vpa_nrank_per_group = vpa_nchunks
 	vpa_igroup = floor(mk_int,iblock/vpa_nchunks) # iblock(irank) - > vpa_igroup 
 	vpa_irank =  mod(iblock,vpa_nchunks) # iblock(irank) -> vpa_irank
