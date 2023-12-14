@@ -366,9 +366,17 @@ eval(quote
              loop_ranges_store[dims] = LoopRanges(;
                  parallel_dims=dims, rank0 = rank0, ranges...)
          else
-             # Use the same ranges as serial loops
+             # Loop over all indices for non-parallelised dimensions (dimensions not in
+             # `dims`), but only loop over parallel dimensions (dimensions in `dims`) on
+             # rank0.
+             this_ranges = Dict(d=>1:n for (d,n) in dim_sizes)
+             if !rank0
+                 for d ∈ dims
+                     this_ranges[d] = 1:0
+                 end
+             end
              loop_ranges_store[dims] = LoopRanges(;
-                 parallel_dims=dims, rank0 = rank0, serial_ranges...)
+                 parallel_dims=dims, rank0 = rank0, this_ranges...)
          end
      end
 

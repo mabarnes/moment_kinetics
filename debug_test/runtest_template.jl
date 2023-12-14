@@ -58,6 +58,12 @@ function runtests(; restart=false)
         n_factors = length(factor(Vector, global_size[]))
 
         for input ∈ test_input_list, debug_loop_type ∈ dimension_combinations_to_test
+            if :sn ∈ debug_loop_type && "n_neutral_species" ∈ keys(input) &&
+                    input["n_neutral_species"] <= 0
+                # Skip neutral dimension parallelisation options if the number of neutral
+                # species is zero, as these would just be equivalent to running in serial
+                continue
+            end
             ndims = length(debug_loop_type)
             for i ∈ 1:(ndims+n_factors-1)÷n_factors
                 debug_loop_parallel_dims =

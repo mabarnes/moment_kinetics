@@ -205,7 +205,7 @@ using IfElse
     # ion mean parallel flow symbolic function 
     function upari_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr,manufactured_solns_input,species)
         if z_bc == "periodic"
-            upari = 0.0 #not supported
+            upari = 0.0
         elseif z_bc == "wall"
             densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
             Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr,manufactured_solns_input,species)
@@ -222,10 +222,11 @@ using IfElse
     
     # ion parallel pressure symbolic function 
     function ppari_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
-        # normalisation factor due to strange pressure normalisation convention in master
+        # normalisation factor due to pressure normalisation convention in master pref = nref mref cref^2
         norm_fac = 0.5
         if z_bc == "periodic"
-            ppari = 0.0 # not supported
+            densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
+            ppari = densi
         elseif z_bc == "wall"
             densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
             epsilon = manufactured_solns_input.epsilon_offset
@@ -483,6 +484,7 @@ using IfElse
         Dz = Differential(z) 
         Dvpa = Differential(vpa) 
         Dvperp = Differential(vperp) 
+        Dvz = Differential(vz) 
         Dt = Differential(t) 
 
         # get geometric/composition data
@@ -511,17 +513,6 @@ using IfElse
         # the ion source to maintain the manufactured solution
         Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez*rfac ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
                + cx_frequency*( densn*dfni - densi*gav_dfnn )  - ionization_frequency*dense*gav_dfnn)
-
-        include_num_diss_in_MMS = true
-        if num_diss_params.vpa_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
-            Si += - num_diss_params.vpa_dissipation_coefficient*Dvpa(Dvpa(dfni))
-        end
-        if num_diss_params.r_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
-            Si += - rfac*num_diss_params.r_dissipation_coefficient*Dr(Dr(dfni))
-        end
-        if num_diss_params.z_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
-            Si += - num_diss_params.z_dissipation_coefficient*Dz(Dz(dfni))
-        end
         nu_krook = collisions.krook_collision_frequency_prefactor
         if nu_krook > 0.0
             Ti_over_Tref = vthi^2
@@ -536,14 +527,36 @@ using IfElse
                 pvth = 1
             end
             FMaxwellian = (densi/vthi^pvth)*exp( -( ( vpa-upari)^2 + vperp^2 )/vthi^2)
-            Si += -nuii_krook*(FMaxwellian - dfni)
+            Si += - nuii_krook*(FMaxwellian - dfni)
         end
-
+        include_num_diss_in_MMS = true
+        if num_diss_params.vpa_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Si += - num_diss_params.vpa_dissipation_coefficient*Dvpa(Dvpa(dfni))
+        end
+        if num_diss_params.vperp_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Si += - num_diss_params.vperp_dissipation_coefficient*Dvperp(Dvperp(dfni))
+        end
+        if num_diss_params.r_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Si += - rfac*num_diss_params.r_dissipation_coefficient*Dr(Dr(dfni))
+        end
+        if num_diss_params.z_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Si += - num_diss_params.z_dissipation_coefficient*Dz(Dz(dfni))
+        end
 
         Source_i = expand_derivatives(Si)
         
         # the neutral source to maintain the manufactured solution
         Sn = Dt(dfnn) + vz * Dz(dfnn) + rfac*vr * Dr(dfnn) + cx_frequency* (densi*dfnn - densn*vrvzvzeta_dfni) + ionization_frequency*dense*dfnn
+        if num_diss_params.vz_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Sn += - num_diss_params.vz_dissipation_coefficient*Dvz(Dvz(dfnn))
+        end
+        if num_diss_params.r_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Sn += - rfac*num_diss_params.r_dissipation_coefficient*Dr(Dr(dfnn))
+        end
+        if num_diss_params.z_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Sn += - num_diss_params.z_dissipation_coefficient*Dz(Dz(dfnn))
+        end
+        
         Source_n = expand_derivatives(Sn)
         
         Source_i_func = build_function(Source_i, vpa, vperp, z, r, t, expression=Val{false})

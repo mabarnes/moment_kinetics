@@ -905,7 +905,7 @@ function get_run_info(run_dir::Union{AbstractString,Tuple{AbstractString,Union{I
             dummy_adv_input = advection_input("default", 1.0, 0.0, 0.0)
             dummy_comm = MPI.COMM_NULL
             dummy_input = grid_input("dummy", 1, 1, 1, 1, 0, 1.0,
-                                     "chebyshev_pseudospectral", "", "periodic",
+                                     "chebyshev_pseudospectral", "", "", "periodic",
                                      dummy_adv_input, dummy_comm, "uniform")
             vzeta, vzeta_spectral = define_coordinate(dummy_input)
             vzeta_chunk_size = 1

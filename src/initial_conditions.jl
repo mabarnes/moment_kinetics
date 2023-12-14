@@ -4,13 +4,12 @@ module initial_conditions
 
 export allocate_pdf_and_moments
 export init_pdf_and_moments!
-export enforce_r_boundary_condition!
-export enforce_z_boundary_condition!
-export enforce_vpa_boundary_condition!
 export enforce_boundary_conditions!
 export enforce_neutral_boundary_conditions!
-export enforce_neutral_r_boundary_condition!
-export enforce_neutral_z_boundary_condition!
+
+# functional testing 
+export create_boundary_distributions
+export create_pdf
 
 # package
 using SpecialFunctions: erfc
@@ -215,6 +214,13 @@ function init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
             update_neutral_pzeta!(moments.neutral.pzeta, moments.neutral.pzeta_updated,
                                   pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
         end
+    end
+
+    # Zero-initialise the dSdt diagnostic to avoid writing uninitialised values, as the
+    # collision operator will not be calculated before the initial values are written to
+    # file.
+    @serial_region begin
+        moments.charged.dSdt .= 0.0
     end
 
     init_boundary_distributions!(boundary_distributions, pdf, vz, vr, vzeta, vpa, vperp,
@@ -1123,42 +1129,51 @@ function init_boundary_distributions!(boundary_distributions, pdf, vz, vr, vzeta
                          vpa, vperp, z, r, composition)
     return nothing
 end
-
 """
 enforce boundary conditions in vpa and z on the evolved pdf;
 also enforce boundary conditions in z on all separately evolved velocity space moments of the pdf
 """
 function enforce_boundary_conditions!(f, f_r_bc, density, upar, ppar, moments, vpa_bc,
-        z_bc, r_bc, vpa, vperp, z, r, vpa_adv, z_adv, r_adv, composition, scratch_dummy,
+        z_bc, r_bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral, vpa_adv, z_adv, r_adv, composition, scratch_dummy,
         r_diffusion, vpa_diffusion)
-
-    begin_s_r_z_vperp_region()
-    @loop_s_r_z_vperp is ir iz ivperp begin
-        # enforce the vpa BC
-        # use that adv.speed independent of vpa
-        @views enforce_v_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc,
-                                                   vpa_adv[is].speed[:,ivperp,iz,ir],
-                                                   vpa_diffusion)
+    if vpa.n > 1
+        begin_s_r_z_vperp_region()
+        @loop_s_r_z_vperp is ir iz ivperp begin
+            # enforce the vpa BC
+            # use that adv.speed independent of vpa 
+            @views enforce_v_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc,
+                             vpa_adv[is].speed[:,ivperp,iz,ir], vpa_diffusion,
+                             vpa, vpa_spectral)
+        end
     end
-    begin_s_r_vperp_vpa_region()
-    # enforce the z BC on the evolved velocity space moments of the pdf
-    @views enforce_z_boundary_condition_moments!(density, moments, z_bc)
-    @views enforce_z_boundary_condition!(f, density, upar, ppar, moments, z_bc, z_adv, z,
-                                         vperp, vpa, composition)
+    if vperp.n > 1
+        begin_s_r_z_vpa_region()
+        @views enforce_vperp_boundary_condition!(f, vperp.bc, vperp, vperp_spectral)
+    end
+    if z.n > 1
+        begin_s_r_vperp_vpa_region()
+        # enforce the z BC on the evolved velocity space moments of the pdf
+        @views enforce_z_boundary_condition_moments!(density, moments, z_bc)
+        @views enforce_z_boundary_condition!(f, density, upar, ppar, moments, z_bc, z_adv, z,
+                                             vperp, vpa, composition,
+                                             scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
+                                             scratch_dummy.buffer_vpavperprs_3, scratch_dummy.buffer_vpavperprs_4)
+                                              
+    end
     if r.n > 1
         begin_s_z_vperp_vpa_region()
         @views enforce_r_boundary_condition!(f, f_r_bc, r_bc, r_adv, vpa, vperp, z, r, composition,
             scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
             scratch_dummy.buffer_vpavperpzs_3, scratch_dummy.buffer_vpavperpzs_4,
-            scratch_dummy.buffer_vpavperpzrs_1, r_diffusion)
+            r_diffusion)
     end
 end
-
 function enforce_boundary_conditions!(fvec_out::scratch_pdf, moments, f_r_bc, vpa_bc,
-        z_bc, r_bc, vpa, vperp, z, r, vpa_adv, z_adv, r_adv, composition, scratch_dummy,
+        z_bc, r_bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral, vpa_adv, z_adv, r_adv, composition, scratch_dummy,
         r_diffusion, vpa_diffusion)
     enforce_boundary_conditions!(fvec_out.pdf, f_r_bc, fvec_out.density, fvec_out.upar,
-        fvec_out.ppar, moments, vpa_bc, z_bc, r_bc, vpa, vperp, z, r, vpa_adv, z_adv,
+        fvec_out.ppar, moments, vpa_bc, z_bc, r_bc, vpa, vperp, z, r, 
+        vpa_spectral, vperp_spectral, vpa_adv, z_adv,
         r_adv, composition, scratch_dummy, r_diffusion, vpa_diffusion)
 end
 
@@ -1166,9 +1181,9 @@ end
 enforce boundary conditions on f in r
 """
 function enforce_r_boundary_condition!(f::AbstractArray{mk_float,5}, f_r_bc, bc::String,
-        adv::T, vpa, vperp, z, r, composition, end1::AbstractArray{mk_float,4},
+        adv, vpa, vperp, z, r, composition, end1::AbstractArray{mk_float,4},
         end2::AbstractArray{mk_float,4}, buffer1::AbstractArray{mk_float,4},
-        buffer2::AbstractArray{mk_float,4}, buffer_dfn::AbstractArray{mk_float,5}, r_diffusion::Bool) where T
+        buffer2::AbstractArray{mk_float,4}, r_diffusion::Bool)
 
     nr = r.n
 
@@ -1216,11 +1231,26 @@ end
 enforce boundary conditions on charged particle f in z
 """
 function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::String, adv,
-                                       z, vperp, vpa, composition)
+                                       z, vperp, vpa, composition, end1::AbstractArray{mk_float,4},
+                                       end2::AbstractArray{mk_float,4}, buffer1::AbstractArray{mk_float,4},
+                                       buffer2::AbstractArray{mk_float,4})
+    # this block ensures periodic BC can be supported with distributed memory MPI
+    if z.nelement_global > z.nelement_local
+        # reconcile internal element boundaries across processes
+        # & enforce periodicity and external boundaries if needed
+        nz = z.n
+        @loop_s_r_vperp_vpa is ir ivperp ivpa begin
+            end1[ivpa,ivperp,ir,is] = pdf[ivpa,ivperp,1,ir,is]
+            end2[ivpa,ivperp,ir,is] = pdf[ivpa,ivperp,nz,ir,is]
+        end
+        # check on periodic bc happens inside this call below
+        @views reconcile_element_boundaries_MPI!(pdf,
+            end1, end2,	buffer1, buffer2, z)
+    end
     # define a zero that accounts for finite precision
     zero = 1.0e-14
     # 'constant' BC is time-independent f at upwind boundary
-    # and constant f beyond boundary
+    # and constant f beyond boundary 
     if bc == "constant"
         begin_s_r_vperp_vpa_region()
         density_offset = 1.0
@@ -1274,8 +1304,12 @@ enforce boundary conditions on neutral particle distribution function
 """
 function enforce_neutral_boundary_conditions!(f_neutral, f_charged,
         boundary_distributions, density_neutral, uz_neutral, pz_neutral, moments,
-        density_ion, upar_ion, Er, r_adv, z_adv, vzeta_adv, vr_adv, vz_adv, r, z, vzeta,
-        vr, vz, composition, geometry, scratch_dummy, r_diffusion, vz_diffusion)
+        density_ion, upar_ion, Er, vzeta_spectral, vr_spectral, vz_spectral, r_adv, z_adv,
+        vzeta_adv, vr_adv, vz_adv, r, z, vzeta, vr, vz, composition, geometry,
+        scratch_dummy, r_diffusion, vz_diffusion)
+
+    # without acceleration of neutrals bc on vz vr vzeta should not be required as no
+    # advection or diffusion in these coordinates
 
     if vzeta_adv !== nothing && vzeta.n_global > 1 && vzeta.bc != "none"
         begin_sn_r_z_vr_vz_region()
@@ -1284,7 +1318,7 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged,
             @views enforce_v_boundary_condition_local!(f_neutral[ivz,ivr,:,iz,ir,isn],
                                                        vzeta.bc,
                                                        vzeta_adv[isn].speed[ivz,ivr,:,iz,ir],
-                                                       false)
+                                                       false, vzeta, vzeta_spectral)
         end
     end
     if vr_adv !== nothing && vr.n_global > 1 && vr.bc != "none"
@@ -1294,7 +1328,7 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged,
             @views enforce_v_boundary_condition_local!(f_neutral[ivz,:,ivzeta,iz,ir,isn],
                                                        vr.bc,
                                                        vr_adv[isn].speed[ivz,:,ivzeta,iz,ir],
-                                                       false)
+                                                       false, vr, vr_spectral)
         end
     end
     if vz_adv !== nothing && vz.n_global > 1 && vz.bc != "none"
@@ -1304,30 +1338,33 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged,
             @views enforce_v_boundary_condition_local!(f_neutral[:,ivr,ivzeta,iz,ir,isn],
                                                        vz.bc,
                                                        vz_adv[isn].speed[:,ivr,ivzeta,iz,ir],
-                                                       vz_diffusion)
+                                                       vz_diffusion, vz, vz_spectral)
         end
     end
     # f_initial contains the initial condition for enforcing a fixed-boundary-value condition
-    # no bc on vz vr vzeta required as no advection in these coordinates
-    begin_sn_r_vzeta_vr_vz_region()
-    @views enforce_neutral_z_boundary_condition!(f_neutral, density_neutral, uz_neutral,
-        pz_neutral, moments, density_ion, upar_ion, Er, boundary_distributions,
-        z_adv, z, vzeta, vr, vz, composition, geometry)
+    if z.n > 1
+        begin_sn_r_vzeta_vr_vz_region()
+        @views enforce_neutral_z_boundary_condition!(f_neutral, density_neutral, uz_neutral,
+            pz_neutral, moments, density_ion, upar_ion, Er, boundary_distributions,
+            z_adv, z, vzeta, vr, vz, composition, geometry, 
+            scratch_dummy.buffer_vzvrvzetarsn_1, scratch_dummy.buffer_vzvrvzetarsn_2,
+            scratch_dummy.buffer_vzvrvzetarsn_3, scratch_dummy.buffer_vzvrvzetarsn_4)
+    end
     if r.n > 1
         begin_sn_z_vzeta_vr_vz_region()
         @views enforce_neutral_r_boundary_condition!(f_neutral, boundary_distributions.pdf_rboundary_neutral,
                                     r_adv, vz, vr, vzeta, z, r, composition,
                                     scratch_dummy.buffer_vzvrvzetazsn_1, scratch_dummy.buffer_vzvrvzetazsn_2,
                                     scratch_dummy.buffer_vzvrvzetazsn_3, scratch_dummy.buffer_vzvrvzetazsn_4,
-                                    scratch_dummy.buffer_vzvrvzetazrsn_1, r_diffusion)
+                                    r_diffusion)
     end
 end
 
 function enforce_neutral_r_boundary_condition!(f::AbstractArray{mk_float,6},
-        f_r_bc::AbstractArray{mk_float,6}, adv::T, vz, vr, vzeta, z, r, composition,
+        f_r_bc::AbstractArray{mk_float,6}, adv, vz, vr, vzeta, z, r, composition,
         end1::AbstractArray{mk_float,5}, end2::AbstractArray{mk_float,5},
         buffer1::AbstractArray{mk_float,5}, buffer2::AbstractArray{mk_float,5},
-        buffer_dfn::AbstractArray{mk_float,6}, r_diffusion) where T #f_initial,
+        r_diffusion) #f_initial,
 
     bc = r.bc
     nr = r.n
@@ -1376,7 +1413,24 @@ enforce boundary conditions on neutral particle f in z
 """
 function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, density_ion,
                                                upar_ion, Er, boundary_distributions, adv,
-                                               z, vzeta, vr, vz, composition, geometry)
+                                               z, vzeta, vr, vz, composition, geometry,
+                                               end1::AbstractArray{mk_float,5}, end2::AbstractArray{mk_float,5},
+                                               buffer1::AbstractArray{mk_float,5}, buffer2::AbstractArray{mk_float,5})
+    
+
+    if z.nelement_global > z.nelement_local
+        # reconcile internal element boundaries across processes
+        # & enforce periodicity and external boundaries if needed
+        nz = z.n
+        @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
+            end1[ivz,ivr,ivzeta,ir,isn] = pdf[ivz,ivr,ivzeta,1,ir,isn]
+            end2[ivz,ivr,ivzeta,ir,isn] = pdf[ivz,ivr,ivzeta,nz,ir,isn]
+        end
+        # check on periodic bc occurs within this call below
+        @views reconcile_element_boundaries_MPI!(pdf,
+            end1, end2,	buffer1, buffer2, z)
+    end
+
     zero = 1.0e-14
     # 'constant' BC is time-independent f at upwind boundary
     # and constant f beyond boundary
@@ -2084,24 +2138,10 @@ function enforce_z_boundary_condition_moments!(density, moments, bc::String)
     #    end
     #end
 end
-"""
-impose the prescribed vpa boundary condition on f
-at every z grid point
-"""
-function enforce_vpa_boundary_condition!(f, bc, src, v_diffusion)
-    nz = size(f,2)
-    nr = size(f,3)
-    for ir ∈ 1:nr
-        for iz ∈ 1:nz
-            enforce_v_boundary_condition_local!(view(f,:,iz,ir), bc, src.speed[:,iz,ir],
-                                                v_diffusion)
-        end
-    end
-end
 
 """
 """
-function enforce_v_boundary_condition_local!(f, bc, speed, v_diffusion)
+function enforce_v_boundary_condition_local!(f, bc, speed, v_diffusion, v, v_spectral)
     if bc == "zero"
         if v_diffusion || speed[1] > 0.0
             # 'upwind' boundary
@@ -2114,9 +2154,48 @@ function enforce_v_boundary_condition_local!(f, bc, speed, v_diffusion)
     elseif bc == "both_zero"
         f[1] = 0.0
         f[end] = 0.0
+    elseif bc == "zero_gradient"
+        D0 = v_spectral.lobatto.Dmat[1,:]
+        # adjust F(vpa = -L/2) so that d F / d vpa = 0 at vpa = -L/2
+        f[1] = -sum(D0[2:v.ngrid].*f[2:v.ngrid])/D0[1]
+
+        D0 = v_spectral.lobatto.Dmat[end,:]
+        # adjust F(vpa = L/2) so that d F / d vpa = 0 at vpa = L/2
+        f[end] = -sum(D0[1:ngrid-1].*f[end-v.ngrid+1:end-1])/D0[v.ngrid]
     elseif bc == "periodic"
         f[1] = 0.5*(f[1]+f[end])
         f[end] = f[1]
+    else
+        error("Unsupported boundary condition option '$bc' for $(v.name)")
+    end
+end
+
+"""
+enforce zero boundary condition at vperp -> infinity
+"""
+function enforce_vperp_boundary_condition!(f, bc, vperp, vperp_spectral)
+    if bc == "zero"
+        nvperp = vperp.n
+        ngrid = vperp.ngrid
+        # set zero boundary condition
+        @loop_s_r_z_vpa is ir iz ivpa begin
+            f[ivpa,nvperp,iz,ir,is] = 0.0
+        end
+        # set regularity condition d F / d vperp = 0 at vperp = 0
+        if vperp.discretization == "gausslegendre_pseudospectral" || vperp.discretization == "chebyshev_pseudospectral"
+            D0 = vperp_spectral.radau.D0
+            @loop_s_r_z_vpa is ir iz ivpa begin
+                # adjust F(vperp = 0) so that d F / d vperp = 0 at vperp = 0
+                f[ivpa,1,iz,ir,is] = -sum(D0[2:ngrid].*f[ivpa,2:ngrid,iz,ir,is])/D0[1]
+            end
+        else
+            println("vperp.bc=\"$bc\" not supported by discretization "
+                    * "$(vperp.discretization)")
+        end
+    elseif bc == "none"
+        # Do nothing
+    else
+        error("Unsupported boundary condition option '$bc' for vperp")
     end
 end
 

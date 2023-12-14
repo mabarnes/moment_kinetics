@@ -37,11 +37,12 @@ function runtests()
 			nrank_per_block = 0 # dummy value
 			irank = 0 # dummy value
 			comm = MPI.COMM_NULL # dummy value
+            cheb_option = "FFT"
             #element_spacing_option = "uniform"
-			input = grid_input("coord", ngrid, nelement,
-				nelement_local, nrank_per_block, irank, L,
-				discretization, fd_option, bc, adv_input, comm,
-                element_spacing_option)
+            input = grid_input("coord", ngrid, nelement,
+                                nelement_local, nrank_per_block, irank, L, 
+                                discretization, fd_option, cheb_option, bc, adv_input, comm,
+                                element_spacing_option)
             # create the coordinate struct 'z'
             z, spectral = define_coordinate(input)
 

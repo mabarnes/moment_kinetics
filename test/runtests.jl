@@ -15,6 +15,8 @@ function runtests()
         include(joinpath(@__DIR__, "harrisonthompson.jl"))
         include(joinpath(@__DIR__, "wall_bc_tests.jl"))
         include(joinpath(@__DIR__, "recycling_fraction_tests.jl"))
+        include(joinpath(@__DIR__, "fokker_planck_tests.jl"))
+        include(joinpath(@__DIR__, "fokker_planck_time_evolution_tests.jl"))
     end
 end
 

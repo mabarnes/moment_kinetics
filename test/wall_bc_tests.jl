@@ -207,13 +207,14 @@ function run_test(test_input, expected_phi, tolerance; args...)
         # create the 'input' struct containing input info needed to create a coordinate
         # adv_input not actually used in this test so given values unimportant
         adv_input = advection_input("default", 1.0, 0.0, 0.0)
+        cheb_option = "FFT"
 		nrank_per_block = 0 # dummy value
 		irank = 0 # dummy value
 		comm = MPI.COMM_NULL # dummy value
         element_spacing_option = "uniform"
         input = grid_input("coord", test_input["z_ngrid"], test_input["z_nelement"], 
-						   test_input["z_nelement"], nrank_per_block, irank, 1.0,
-                           test_input["z_discretization"], "", test_input["z_bc"],
+                           test_input["z_nelement"], nrank_per_block, irank, 1.0,
+                           test_input["z_discretization"], "", cheb_option, test_input["z_bc"],
                            adv_input, comm, test_input["z_element_spacing_option"])
         z, z_spectral = define_coordinate(input)
 

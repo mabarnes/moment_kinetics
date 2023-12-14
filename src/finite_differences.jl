@@ -65,14 +65,9 @@ function elementwise_second_derivative!(coord, f, not_spectral::finite_differenc
         coord.bc, coord.igrid, coord.ielement)
 end
 
-function second_derivative!(df, f, Q, coord, spectral::finite_difference_info)
+function second_derivative!(df, f, coord, spectral::finite_difference_info)
     # Finite difference version must use an appropriate second derivative stencil, not
     # apply the 1st derivative twice as for the spectral element method
-
-    if !all(Q .== 1.0)
-        error("Finite difference implementation of second derivative does not support "
-              * "Q!=1.")
-    end
 
     # get the derivative at each grid point within each element and store in
     # coord.scratch_2d

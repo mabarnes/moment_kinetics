@@ -185,7 +185,9 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         error("Invalid option "
               * "krook_collisions_option=$(collisions.krook_collisions_option) passed")
     end
-
+    # set the Fokker-Planck collision frequency
+    collisions.nuii = get(scan_input, "nuii", 0.0)
+    
     # parameters related to the time stepping
     nstep = get(scan_input, "nstep", 5)
     dt = get(scan_input, "dt", 0.00025/sqrt(species.charged[1].initial_temperature))
@@ -279,9 +281,6 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     vpa.fd_option = get(scan_input, "vpa_finite_difference_option", "third_order_upwind")
     vpa.element_spacing_option = get(scan_input, "vpa_element_spacing_option", "uniform")
     
-    num_diss_params = setup_numerical_dissipation(
-        get(scan_input, "numerical_dissipation", Dict{String,Any}()), true)
-
     # overwrite some default parameters related to the vperp grid
     # ngrid is the number of grid points per element
     vperp.ngrid = get(scan_input, "vperp_ngrid", 1)
@@ -291,11 +290,9 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     vperp.nelement_local = vperp.nelement_global 
     # L is the box length in units of vthermal_species
     vperp.L = get(scan_input, "vperp_L", 8.0*sqrt(species.charged[1].initial_temperature))
-    # determine the boundary condition
-    # only supported option at present is "zero" and "periodic"
-    # MRH probably need to add new bc option here
-    # MRH no vperp bc currently imposed so option below not used
-    vperp.bc = get(scan_input, "vperp_bc", "periodic")
+    # Note vperp.bc is set below, after numerical dissipation is initialized, so that it
+    # can use the numerical dissipation settings to set its default value.
+    #
     # determine the discretization option for the vperp grid
     # supported options are "finite_difference_vperp" "chebyshev_pseudospectral"
     vperp.discretization = get(scan_input, "vperp_discretization", "chebyshev_pseudospectral")
@@ -367,6 +364,13 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
              vzeta.nelement_global == 1 && vr.ngrid == vr.nelement_global == 1)
     num_diss_params = setup_numerical_dissipation(
         get(scan_input, "numerical_dissipation", Dict{String,Any}()), is_1V)
+
+    # vperp.bc is set here (a bit out of place) so that we can use
+    # num_diss_params.vperp_dissipation_coefficient to set the default.
+    vperp.bc = get(scan_input, "vperp_bc",
+                   (collisions.nuii > 0.0 ||
+                    num_diss_params.vperp_dissipation_coefficient > 0.0) ?
+                    "zero" : "none")
     
     #########################################################################
     ########## end user inputs. do not modify following code! ###############
@@ -398,37 +402,37 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
 	z_advection_immutable = advection_input(z.advection.option, z.advection.constant_speed,
         z.advection.frequency, z.advection.oscillation_amplitude)
     z_immutable = grid_input("z", z.ngrid, z.nelement_global, z.nelement_local, nrank_z, irank_z, z.L, 
-        z.discretization, z.fd_option, z.bc, z_advection_immutable, comm_sub_z, z.element_spacing_option)
+        z.discretization, z.fd_option, z.cheb_option, z.bc, z_advection_immutable, comm_sub_z, z.element_spacing_option)
     r_advection_immutable = advection_input(r.advection.option, r.advection.constant_speed,
         r.advection.frequency, r.advection.oscillation_amplitude)
     r_immutable = grid_input("r", r.ngrid, r.nelement_global, r.nelement_local, nrank_r, irank_r, r.L,
-        r.discretization, r.fd_option, r.bc, r_advection_immutable, comm_sub_r, r.element_spacing_option)
+        r.discretization, r.fd_option, r.cheb_option, r.bc, r_advection_immutable, comm_sub_r, r.element_spacing_option)
 	# for dimensions below which do not currently use distributed-memory MPI
 	# assign dummy values to nrank, irank and comm of coord struct
     vpa_advection_immutable = advection_input(vpa.advection.option, vpa.advection.constant_speed,
         vpa.advection.frequency, vpa.advection.oscillation_amplitude)
     vpa_immutable = grid_input("vpa", vpa.ngrid, vpa.nelement_global, vpa.nelement_local, 1, 0, vpa.L,
-        vpa.discretization, vpa.fd_option, vpa.bc, vpa_advection_immutable, MPI.COMM_NULL, vpa.element_spacing_option)
+        vpa.discretization, vpa.fd_option, vpa.cheb_option, vpa.bc, vpa_advection_immutable, MPI.COMM_NULL, vpa.element_spacing_option)
     vperp_advection_immutable = advection_input(vperp.advection.option, vperp.advection.constant_speed,
         vperp.advection.frequency, vperp.advection.oscillation_amplitude)
     vperp_immutable = grid_input("vperp", vperp.ngrid, vperp.nelement_global, vperp.nelement_local, 1, 0, vperp.L,
-        vperp.discretization, vperp.fd_option, vperp.bc, vperp_advection_immutable, MPI.COMM_NULL, vperp.element_spacing_option)
+        vperp.discretization, vperp.fd_option, vperp.cheb_option, vperp.bc, vperp_advection_immutable, MPI.COMM_NULL, vperp.element_spacing_option)
     gyrophase_advection_immutable = advection_input(gyrophase.advection.option, gyrophase.advection.constant_speed,
         gyrophase.advection.frequency, gyrophase.advection.oscillation_amplitude)
     gyrophase_immutable = grid_input("gyrophase", gyrophase.ngrid, gyrophase.nelement_global, gyrophase.nelement_local, 1, 0, gyrophase.L,
-        gyrophase.discretization, gyrophase.fd_option, gyrophase.bc, gyrophase_advection_immutable, MPI.COMM_NULL, gyrophase.element_spacing_option)
+        gyrophase.discretization, gyrophase.fd_option, gyrophase.cheb_option, gyrophase.bc, gyrophase_advection_immutable, MPI.COMM_NULL, gyrophase.element_spacing_option)
     vz_advection_immutable = advection_input(vz.advection.option, vz.advection.constant_speed,
         vz.advection.frequency, vz.advection.oscillation_amplitude)
     vz_immutable = grid_input("vz", vz.ngrid, vz.nelement_global, vz.nelement_local, 1, 0, vz.L,
-        vz.discretization, vz.fd_option, vz.bc, vz_advection_immutable, MPI.COMM_NULL, vz.element_spacing_option)
+        vz.discretization, vz.fd_option, vz.cheb_option, vz.bc, vz_advection_immutable, MPI.COMM_NULL, vz.element_spacing_option)
     vr_advection_immutable = advection_input(vr.advection.option, vr.advection.constant_speed,
         vr.advection.frequency, vr.advection.oscillation_amplitude)
     vr_immutable = grid_input("vr", vr.ngrid, vr.nelement_global, vr.nelement_local, 1, 0, vr.L,
-        vr.discretization, vr.fd_option, vr.bc, vr_advection_immutable, MPI.COMM_NULL, vr.element_spacing_option)
+        vr.discretization, vr.fd_option, vr.cheb_option, vr.bc, vr_advection_immutable, MPI.COMM_NULL, vr.element_spacing_option)
     vzeta_advection_immutable = advection_input(vzeta.advection.option, vzeta.advection.constant_speed,
         vzeta.advection.frequency, vzeta.advection.oscillation_amplitude)
     vzeta_immutable = grid_input("vzeta", vzeta.ngrid, vzeta.nelement_global, vzeta.nelement_local, 1, 0, vzeta.L,
-        vzeta.discretization, vzeta.fd_option, vzeta.bc, vzeta_advection_immutable, MPI.COMM_NULL, vzeta.element_spacing_option)
+        vzeta.discretization, vzeta.fd_option, vzeta.cheb_option, vzeta.bc, vzeta_advection_immutable, MPI.COMM_NULL, vzeta.element_spacing_option)
     
     species_charged_immutable = Array{species_parameters,1}(undef,n_ion_species)
     species_neutral_immutable = Array{species_parameters,1}(undef,n_neutral_species)
@@ -526,10 +530,10 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         io = devnull
     end
 
-    # check input to catch errors/unsupported options
-    check_input(io, output_dir, nstep, dt, r_immutable, z_immutable, vpa_immutable,
-                composition, species_immutable, evolve_moments, num_diss_params,
-                save_inputs_to_txt)
+    # check input (and initialized coordinate structs) to catch errors/unsupported options
+    check_input(io, output_dir, nstep, dt, r, z, vpa, vperp, composition,
+                species_immutable, evolve_moments, num_diss_params, save_inputs_to_txt,
+                collisions)
 
     # return immutable structs for z, vpa, species and composition
     all_inputs = (io_immutable, evolve_moments, t_input, z, z_spectral, r, r_spectral,
@@ -554,6 +558,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     conservation = true
     #advective_form = false
     evolve_moments = evolve_moments_options(evolve_density, evolve_parallel_flow, evolve_parallel_pressure, conservation)#advective_form)
+    # cheb option switch 
+    cheb_option = "FFT" # "matrix" # 
     #################### parameters related to the z grid ######################
     # ngrid_z is number of grid points per element
     ngrid_z = 100
@@ -577,6 +583,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     #finite_difference_option_z = "first_order_upwind"
     #finite_difference_option_z = "second_order_upwind"
     finite_difference_option_z = "third_order_upwind"
+    #cheb_option_z = "FFT" # "matrix"
+    cheb_option_z = cheb_option
     # determine the option used for the advection speed in z
     # supported options are "constant" and "oscillating",
     # in addition to the "default" option which uses dz/dt = vpa as the advection speed
@@ -593,7 +601,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     element_spacing_option_z = "uniform"
     # create a mutable structure containing the input info related to the z grid
     z = grid_input_mutable("z", ngrid_z, nelement_global_z, nelement_local_z, L_z,
-        discretization_option_z, finite_difference_option_z, boundary_option_z,
+        discretization_option_z, finite_difference_option_z, cheb_option_z,  boundary_option_z,
         advection_z, element_spacing_option_z)
     #################### parameters related to the r grid ######################
     # ngrid_r is number of grid points per element
@@ -618,6 +626,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     #finite_difference_option_r = "first_order_upwind"
     #finite_difference_option_r = "second_order_upwind"
     finite_difference_option_r = "third_order_upwind"
+    #cheb_option_r = "FFT" #"matrix"
+    cheb_option_r = cheb_option
     # determine the option used for the advection speed in r
     # supported options are "constant" and "oscillating",
     # in addition to the "default" option which uses dr/dt = vpa as the advection speed
@@ -634,7 +644,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     element_spacing_option_r = "uniform"
     # create a mutable structure containing the input info related to the r grid
     r = grid_input_mutable("r", ngrid_r, nelement_global_r, nelement_local_r, L_r,
-        discretization_option_r, finite_difference_option_r, boundary_option_r,
+        discretization_option_r, finite_difference_option_r, cheb_option_r, boundary_option_r,
         advection_r, element_spacing_option_r)
     ############################################################################
     ################### parameters related to the vpa grid #####################
@@ -657,6 +667,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     # supported options are "third_order_upwind", "second_order_upwind" and "first_order_upwind"
     #finite_difference_option_vpa = "second_order_upwind"
     finite_difference_option_vpa = "third_order_upwind"
+    #cheb_option_vpa = "FFT" # "matrix"
+    cheb_option_vpa = cheb_option
     # determine the option used for the advection speed in vpa
     # supported options are "constant" and "oscillating",
     # in addition to the "default" option which uses dvpa/dt = q*Ez/m as the advection speed
@@ -673,7 +685,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     element_spacing_option_vpa = "uniform"
     # create a mutable structure containing the input info related to the vpa grid
     vpa = grid_input_mutable("vpa", ngrid_vpa, nelement_vpa, nelement_vpa, L_vpa,
-        discretization_option_vpa, finite_difference_option_vpa, boundary_option_vpa,
+        discretization_option_vpa, finite_difference_option_vpa, cheb_option_vpa, boundary_option_vpa,
         advection_vpa, element_spacing_option_vpa)
     ############################################################################
     ################### parameters related to the vperp grid #####################
@@ -696,6 +708,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     # supported options are "third_order_upwind", "second_order_upwind" and "first_order_upwind"
     #finite_difference_option_vperp = "second_order_upwind"
     finite_difference_option_vperp = "third_order_upwind"
+    #cheb_option_vperp = "FFT" # "matrix"
+    cheb_option_vperp = cheb_option
     # determine the option used for the advection speed in vperp
     # supported options are "constant" and "oscillating",
     advection_option_vperp = "default"
@@ -711,7 +725,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     element_spacing_option_vperp = "uniform"
     # create a mutable structure containing the input info related to the vperp grid
     vperp = grid_input_mutable("vperp", ngrid_vperp, nelement_vperp, nelement_vperp, L_vperp,
-        discretization_option_vperp, finite_difference_option_vperp, boundary_option_vperp,
+        discretization_option_vperp, finite_difference_option_vperp, cheb_option_vperp, boundary_option_vperp,
         advection_vperp, element_spacing_option_vperp)
     ############################################################################
     ################### parameters related to the gyrophase grid #####################
@@ -726,6 +740,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     boundary_option_gyrophase = "periodic"
     discretization_option_gyrophase = "finite_difference"
     finite_difference_option_gyrophase = "third_order_upwind"
+    #cheb_option_gyrophase = "FFT" #"matrix"
+    cheb_option_gyrophase = cheb_option
     advection_option_gyrophase = "default"
     advection_speed_gyrophase = 0.0
     frequency_gyrophase = 1.0
@@ -735,7 +751,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     element_spacing_option_gyrophase = "uniform"
     # create a mutable structure containing the input info related to the gyrophase grid
     gyrophase = grid_input_mutable("gyrophase", ngrid_gyrophase, nelement_gyrophase, nelement_gyrophase, L_gyrophase,
-        discretization_option_gyrophase, finite_difference_option_gyrophase, boundary_option_gyrophase,
+        discretization_option_gyrophase, finite_difference_option_gyrophase, cheb_option_gyrophase, boundary_option_gyrophase,
         advection_gyrophase, element_spacing_option_gyrophase)
     ############################################################################
     ################### parameters related to the vr grid #####################
@@ -756,6 +772,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     # supported options are "third_order_upwind", "second_order_upwind" and "first_order_upwind"
     #finite_difference_option_vr = "second_order_upwind"
     finite_difference_option_vr = "third_order_upwind"
+    #cheb_option_vr = "FFT" # "matrix"
+    cheb_option_vr = cheb_option
     # determine the option used for the advection speed in vr
     # supported options are "constant" and "oscillating",
     advection_option_vr = "default"
@@ -771,7 +789,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     element_spacing_option_vr = "uniform"
     # create a mutable structure containing the input info related to the vr grid
     vr = grid_input_mutable("vr", ngrid_vr, nelement_vr, nelement_vr, L_vr,
-        discretization_option_vr, finite_difference_option_vr, boundary_option_vr,
+        discretization_option_vr, finite_difference_option_vr, cheb_option_vr, boundary_option_vr,
         advection_vr, element_spacing_option_vr)
     ############################################################################
     ################### parameters related to the vz grid #####################
@@ -792,6 +810,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     # supported options are "third_order_upwind", "second_order_upwind" and "first_order_upwind"
     #finite_difference_option_vz = "second_order_upwind"
     finite_difference_option_vz = "third_order_upwind"
+    #cheb_option_vz = "FFT" # "matrix"
+    cheb_option_vz = cheb_option
     # determine the option used for the advection speed in vz
     # supported options are "constant" and "oscillating",
     advection_option_vz = "default"
@@ -807,7 +827,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     element_spacing_option_vz = "uniform"
     # create a mutable structure containing the input info related to the vz grid
     vz = grid_input_mutable("vz", ngrid_vz, nelement_vz, nelement_vz, L_vz,
-        discretization_option_vz, finite_difference_option_vz, boundary_option_vz,
+        discretization_option_vz, finite_difference_option_vz, cheb_option_vz, boundary_option_vz,
         advection_vz, element_spacing_option_vz)
     ############################################################################
     ################### parameters related to the vzeta grid #####################
@@ -828,6 +848,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     # supported options are "third_order_upwind", "second_order_upwind" and "first_order_upwind"
     #finite_difference_option_vzeta = "second_order_upwind"
     finite_difference_option_vzeta = "third_order_upwind"
+    #cheb_option_vzeta = "FFT" # "matrix"
+    cheb_option_vzeta = cheb_option
     # determine the option used for the advection speed in vzeta
     # supported options are "constant" and "oscillating",
     advection_option_vzeta = "default"
@@ -843,7 +865,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     element_spacing_option_vzeta = "uniform"
     # create a mutable structure containing the input info related to the vzeta grid
     vzeta = grid_input_mutable("vzeta", ngrid_vzeta, nelement_vzeta, nelement_vzeta, L_vzeta,
-        discretization_option_vzeta, finite_difference_option_vzeta, boundary_option_vzeta,
+        discretization_option_vzeta, finite_difference_option_vzeta, cheb_option_vzeta, boundary_option_vzeta,
         advection_vzeta, element_spacing_option_vzeta)
     #############################################################################
     # define default values and create corresponding mutable structs holding
@@ -970,9 +992,9 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     ionization = 0.0
     constant_ionization_rate = false
     krook_collision_frequency_prefactor = -1.0
+    nuii = 0.0
     collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate,
-                                  krook_collision_frequency_prefactor,"none")
-
+                                  krook_collision_frequency_prefactor,"none", nuii)
     Bzed = 1.0 # magnetic field component along z
     Bmag = 1.0 # magnetic field strength
     bzed = 1.0 # component of b unit vector along z
@@ -987,8 +1009,8 @@ end
 """
 check various input options to ensure they are all valid/consistent
 """
-function check_input(io, output_dir, nstep, dt, r, z, vpa, composition, species,
-                     evolve_moments, num_diss_params, save_inputs_to_txt)
+function check_input(io, output_dir, nstep, dt, r, z, vpa, vperp, composition, species,
+                     evolve_moments, num_diss_params, save_inputs_to_txt, collisions)
     # copy the input file to the output directory to be saved
     if save_inputs_to_txt && global_rank[] == 0
         cp(joinpath(@__DIR__, "moment_kinetics_input.jl"), joinpath(output_dir, "moment_kinetics_input.jl"), force=true)
@@ -998,11 +1020,21 @@ function check_input(io, output_dir, nstep, dt, r, z, vpa, composition, species,
     check_coordinate_input(r, "r", io)
     check_coordinate_input(z, "z", io)
     check_coordinate_input(vpa, "vpa", io)
+    check_coordinate_input(vperp, "vperp", io)
     # if the parallel flow is evolved separately, then the density must also be evolved separately
     if evolve_moments.parallel_flow && !evolve_moments.density
         print(io,">evolve_moments.parallel_flow = true, but evolve_moments.density = false.")
         println(io, "this is not a supported option.  forcing evolve_moments.density = true.")
         evolve_moments.density = true
+    end
+    if collisions.nuii > 0.0
+    # check that the grids support the collision operator
+        print(io, "The self-collision operator is switched on \n nuii = $collisions.nuii \n")
+        if !(vpa.discretization == "gausslegendre_pseudospectral") || !(vperp.discretization == "gausslegendre_pseudospectral")
+            error("ERROR: you are using \n      vpa.discretization='"*vpa.discretization*
+              "' \n      vperp.discretization='"*vperp.discretization*"' \n      with the ion self-collision operator \n"*
+              "ERROR: you should use \n       vpa.discretization='gausslegendre_pseudospectral' \n       vperp.discretization='gausslegendre_pseudospectral'")
+        end
     end
 end
 
@@ -1031,6 +1063,9 @@ function check_coordinate_input(coord, coord_name, io)
     if coord.discretization == "chebyshev_pseudospectral"
         print(io,">$coord_name.discretization = 'chebyshev_pseudospectral'.  ")
         println(io,"using a Chebyshev pseudospectral method in $coord_name.")
+    elseif coord.discretization == "gausslegendre_pseudospectral"
+        print(io,">$coord_name.discretization = 'gausslegendre_pseudospectral'.  ")
+        println(io,"using a Gauss-Legendre-Lobatto pseudospectral method in $coord_name.")
     elseif coord.discretization == "finite_difference"
         println(io,">$coord_name.discretization = 'finite_difference', ",
             "and $coord_name.fd_option = ", coord.fd_option,
@@ -1040,11 +1075,12 @@ function check_coordinate_input(coord, coord_name, io)
         input_option_error("$coord_name.discretization", coord.discretization)
     end
     # boundary_option determines coord boundary condition
-    # supported options are "constant" and "periodic"
     if coord.bc == "constant"
         println(io,">$coord_name.bc = 'constant'.  enforcing constant incoming BC in $coord_name.")
     elseif coord.bc == "zero"
-        println(io,">$coord_name.bc = 'zero'.  enforcing zero incoming BC in $coord_name.")
+        println(io,">$coord_name.bc = 'zero'.  enforcing zero incoming BC in $coord_name. Enforcing zero at both boundaries if diffusion operator is present.")
+    elseif coord.bc == "zero_gradient"
+        println(io,">$coord_name.bc = 'zero_gradient'.  enforcing zero gradients at both limits of $coord_name domain.")
     elseif coord.bc == "both_zero"
         println(io,">$coord_name.bc = 'both_zero'.  enforcing zero BC in $coord_name.")
     elseif coord.bc == "periodic"
@@ -1056,9 +1092,20 @@ function check_coordinate_input(coord, coord_name, io)
     else
         input_option_error("$coord_name.bc", coord.bc)
     end
-    println(io,">using ", coord.ngrid, " grid points per $coord_name element on ",
-            coord.nelement_global, " elements across the $coord_name domain [",
-            -0.5*coord.L, ",", 0.5*coord.L, "].")
+    if coord.name == "vperp"
+        println(io,">using ", coord.ngrid, " grid points per $coord_name element on ",
+                coord.nelement_global, " elements across the $coord_name domain [",
+                0.0, ",", coord.L, "].")
+
+        if coord.bc != "zero" && coord.n_global > 1 && global_rank[] == 0
+            println("WARNING: regularity condition (df/dvperp=0 at vperp=0) not being "
+                    * "imposed. Collisions or vperp-diffusion will be unstable.")
+        end
+    else
+        println(io,">using ", coord.ngrid, " grid points per $coord_name element on ",
+                coord.nelement_global, " elements across the $coord_name domain [",
+                -0.5*coord.L, ",", 0.5*coord.L, "].")
+    end
 end
 
 """

@@ -52,6 +52,12 @@ All the specific discretizations in moment_kinetics are subtypes of this type.
 abstract type discretization_info end
 
 """
+discretization_info for a discretization that supports 'weak form' methods, for one
+dimension
+"""
+abstract type weak_discretization_info <: discretization_info end
+
+"""
 Type representing a spatial dimension with only one grid point
 """
 struct null_spatial_dimension_info <: discretization_info end

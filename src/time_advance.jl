@@ -4,6 +4,9 @@ module time_advance
 
 export setup_time_advance!
 export time_advance!
+export setup_dummy_and_buffer_arrays
+# functional testing
+export setup_runge_kutta_coefficients
 
 using MPI
 using ..type_definitions: mk_float
@@ -22,10 +25,8 @@ using ..velocity_moments: update_neutral_pzeta!, update_neutral_pz!, update_neut
 using ..velocity_moments: calculate_moment_derivatives!, calculate_moment_derivatives_neutral!
 using ..velocity_moments: update_chodura!
 using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
-using ..initial_conditions: enforce_z_boundary_condition!, enforce_boundary_conditions!
-using ..initial_conditions: enforce_vpa_boundary_condition!, enforce_r_boundary_condition!
+using ..initial_conditions: enforce_boundary_conditions!
 using ..initial_conditions: enforce_neutral_boundary_conditions!
-using ..initial_conditions: enforce_neutral_z_boundary_condition!, enforce_neutral_r_boundary_condition!
 using ..input_structs: advance_info, time_input
 using ..makie_post_processing: plot_1d, plot_2d, positive_or_nan
 using ..moment_constraints: hard_force_moment_constraints!,
@@ -44,7 +45,7 @@ using ..krook_collisions: krook_collisions!
 using ..external_sources
 using ..numerical_dissipation: vpa_boundary_buffer_decay!,
                                vpa_boundary_buffer_diffusion!, vpa_dissipation!,
-                               z_dissipation!, r_dissipation!,
+                               z_dissipation!, r_dissipation!, vperp_dissipation!,
                                vz_dissipation_neutral!, z_dissipation_neutral!,
                                r_dissipation_neutral!,
                                vpa_boundary_force_decreasing!, force_minimum_pdf_value!,
@@ -54,6 +55,7 @@ using ..continuity: continuity_equation!, neutral_continuity_equation!
 using ..force_balance: force_balance!, neutral_force_balance!
 using ..energy_equation: energy_equation!, neutral_energy_equation!
 using ..em_fields: setup_em_fields, update_phi!
+using ..fokker_planck: init_fokker_planck_collisions_weak_form, explicit_fokker_planck_collisions_weak_form!
 using ..manufactured_solns: manufactured_sources
 using ..advection: advection_info
 using ..utils: to_minutes
@@ -65,12 +67,22 @@ using ..analysis: steady_state_residuals
 #using ..post_processing: draw_v_parallel_zero!
 
 struct scratch_dummy_arrays
+    dummy_s::Array{mk_float,1}
     dummy_sr::Array{mk_float,2}
     dummy_vpavperp::Array{mk_float,2}
     dummy_zrs::MPISharedArray{mk_float,3}
     dummy_zrsn::MPISharedArray{mk_float,3}
 
     #buffer arrays for MPI 
+    buffer_z_1::MPISharedArray{mk_float,1}
+    buffer_z_2::MPISharedArray{mk_float,1}
+    buffer_z_3::MPISharedArray{mk_float,1}
+    buffer_z_4::MPISharedArray{mk_float,1}
+    buffer_r_1::MPISharedArray{mk_float,1}
+    buffer_r_2::MPISharedArray{mk_float,1}
+    buffer_r_3::MPISharedArray{mk_float,1}
+    buffer_r_4::MPISharedArray{mk_float,1}
+    
     buffer_zs_1::MPISharedArray{mk_float,2}
     buffer_zs_2::MPISharedArray{mk_float,2}
     buffer_zs_3::MPISharedArray{mk_float,2}
@@ -93,6 +105,10 @@ struct scratch_dummy_arrays
     buffer_rsn_5::MPISharedArray{mk_float,2}
     buffer_rsn_6::MPISharedArray{mk_float,2}
 
+    buffer_zrs_1::MPISharedArray{mk_float,3}
+    buffer_zrs_2::MPISharedArray{mk_float,3}
+    buffer_zrs_3::MPISharedArray{mk_float,3}
+    
     buffer_vpavperpzs_1::MPISharedArray{mk_float,4}
     buffer_vpavperpzs_2::MPISharedArray{mk_float,4}
     buffer_vpavperpzs_3::MPISharedArray{mk_float,4}
@@ -111,7 +127,7 @@ struct scratch_dummy_arrays
     # needs to be shared memory
     buffer_vpavperpzrs_1::MPISharedArray{mk_float,5}
     buffer_vpavperpzrs_2::MPISharedArray{mk_float,5}
-
+    
     buffer_vzvrvzetazsn_1::MPISharedArray{mk_float,5}
     buffer_vzvrvzetazsn_2::MPISharedArray{mk_float,5}
     buffer_vzvrvzetazsn_3::MPISharedArray{mk_float,5}
@@ -130,6 +146,10 @@ struct scratch_dummy_arrays
     # needs to be shared memory
     buffer_vzvrvzetazrsn_1::MPISharedArray{mk_float,6}
     buffer_vzvrvzetazrsn_2::MPISharedArray{mk_float,6}
+    
+    buffer_vpavperp_1::MPISharedArray{mk_float,2}
+    buffer_vpavperp_2::MPISharedArray{mk_float,2}
+    buffer_vpavperp_3::MPISharedArray{mk_float,2}
 
 end 
 
@@ -180,7 +200,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     # else, will advance one term at a time.
     advance = setup_advance_flags(moments, composition, t_input, collisions,
                                   external_source_settings, num_diss_params,
-                                  manufactured_solns_input, rk_coefs, r, vperp, vpa,
+                                  manufactured_solns_input, rk_coefs, r, z, vperp, vpa,
                                   vzeta, vr, vz)
 
     begin_serial_region()
@@ -192,6 +212,12 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     n_neutral_species_alloc = max(1,composition.n_neutral_species)
     scratch_dummy = setup_dummy_and_buffer_arrays(r.n,z.n,vpa.n,vperp.n,vz.n,vr.n,vzeta.n,
                                    composition.n_ion_species,n_neutral_species_alloc)
+    # create arrays for Fokker-Planck collisions 
+    if advance.explicit_weakform_fp_collisions
+        fp_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; precompute_weights=true)
+    else
+        fp_arrays = nothing
+    end
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
     fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency, drive_input.force_Er_zero_at_wall)
@@ -220,20 +246,33 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     # with advection in r
     begin_serial_region()
     r_advect = setup_advection(n_ion_species, r, vpa, vperp, z)
+    if r.n > 1
+        # initialise the r advection speed
+        begin_s_z_vperp_vpa_region()
+        @loop_s is begin
+            @views update_speed_r!(r_advect[is], moments.charged.upar[:,:,is],
+                                   moments.charged.vth[:,:,is], fields, moments.evolve_upar,
+                                   moments.evolve_ppar, vpa, vperp, z, r, geometry)
+        end
+        # enforce prescribed boundary condition in r on the distribution function f
+    end
 
     # create structure z_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in z
     begin_serial_region()
     z_advect = setup_advection(n_ion_species, z, vpa, vperp, r)
-    # initialise the z advection speed
-    begin_s_r_vperp_vpa_region()
-    @loop_s is begin
-        @views update_speed_z!(z_advect[is], moments.charged.upar[:,:,is],
-                               moments.charged.vth[:,:,is], moments.evolve_upar,
-                               moments.evolve_ppar, fields, vpa, vperp, z, r, 0.0,
-                               geometry)
+    if z.n > 1
+        # initialise the z advection speed
+        begin_s_r_vperp_vpa_region()
+        @loop_s is begin
+            @views update_speed_z!(z_advect[is], moments.charged.upar[:,:,is],
+                                   moments.charged.vth[:,:,is], moments.evolve_upar,
+                                   moments.evolve_ppar, fields, vpa, vperp, z, r, 0.0,
+                                   geometry)
+        end
     end
+    begin_serial_region()
 
     # create structure vpa_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
@@ -251,13 +290,15 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     begin_serial_region()
     vperp_advect = setup_advection(n_ion_species, vperp, vpa, z, r)
     # initialise the vperp advection speed
-    begin_serial_region()
-    @serial_region begin
-        for is ∈ 1:n_ion_species
-            @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r)
+    if vperp.n > 1
+        begin_serial_region()
+        @serial_region begin
+            for is ∈ 1:n_ion_species
+                @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r)
+            end
         end
     end
-
+    
     ##
     # Neutral particle advection
     ##
@@ -276,7 +317,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     # create structure neutral_z_advect for neutral particle advection
     begin_serial_region()
     neutral_z_advect = setup_advection(n_neutral_species_alloc, z, vz, vr, vzeta, r)
-    if n_neutral_species > 0
+    if n_neutral_species > 0 && z.n > 1
         # initialise the z advection speed
         begin_sn_r_vzeta_vr_vz_region()
         @loop_sn isn begin
@@ -308,14 +349,10 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     end
 
     ##
-    # construct named list of advect & spectral objects to compactify arguments
+    # construct advect & spectral objects to compactify arguments
     ##
 
-    #advect_objects = (vpa_advect = vpa_advect, vperp_advect = vperp_advect, z_advect = z_advect,
-    # r_advect = r_advect, neutral_z_advect = neutral_z_advect, neutral_r_advect = neutral_r_advect)
     advect_objects = advect_object_struct(vpa_advect, vperp_advect, z_advect, r_advect, neutral_z_advect, neutral_r_advect, neutral_vz_advect)
-    #spectral_objects = (vz_spectral = vz_spectral, vr_spectral = vr_spectral, vzeta_spectral = vzeta_spectral,
-    # vpa_spectral = vpa_spectral, vperp_spectral = vperp_spectral, z_spectral = z_spectral, r_spectral = r_spectral)
     spectral_objects = spectral_object_struct(vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral, r_spectral)
     if(advance.manufactured_solns_test)
         manufactured_source_list = manufactured_sources(manufactured_solns_input, r, z,
@@ -336,7 +373,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
         enforce_boundary_conditions!(
             pdf.charged.norm, boundary_distributions.pdf_rboundary_charged,
             moments.charged.dens, moments.charged.upar, moments.charged.ppar, moments,
-            vpa.bc, z.bc, r.bc, vpa, vperp, z, r, vpa_advect, z_advect, r_advect,
+            vpa.bc, z.bc, r.bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral,
+            vpa_advect, z_advect, r_advect,
             composition, scratch_dummy, advance.r_diffusion, advance.vpa_diffusion)
         # Ensure normalised pdf exactly obeys integral constraints if evolving moments
         begin_s_r_z_region()
@@ -358,10 +396,10 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             enforce_neutral_boundary_conditions!(
                 pdf.neutral.norm, pdf.charged.norm, boundary_distributions,
                 moments.neutral.dens, moments.neutral.uz, moments.neutral.pz, moments,
-                moments.charged.dens, moments.charged.upar, fields.Er, neutral_r_advect,
-                neutral_z_advect, nothing, nothing, neutral_vz_advect, r, z, vzeta, vr,
-                vz, composition, geometry, scratch_dummy, advance.r_diffusion,
-                advance.vz_diffusion)
+                moments.charged.dens, moments.charged.upar, fields.Er, vzeta_spectral,
+                vr_spectral, vz_spectral, neutral_r_advect, neutral_z_advect, nothing,
+                nothing, neutral_vz_advect, r, z, vzeta, vr, vz, composition, geometry,
+                scratch_dummy, advance.r_diffusion, advance.vz_diffusion)
             begin_sn_r_z_region()
             @loop_sn_r_z isn ir iz begin
                 @views hard_force_moment_constraints_neutral!(
@@ -400,7 +438,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     _block_synchronize()
 
     return moments, fields, spectral_objects, advect_objects,
-    scratch, advance, scratch_dummy, manufactured_source_list
+    scratch, advance, fp_arrays, scratch_dummy, manufactured_source_list
 end
 
 """
@@ -411,8 +449,8 @@ else, will advance one term at a time.
 """
 function setup_advance_flags(moments, composition, t_input, collisions,
                              external_source_settings, num_diss_params,
-                             manufactured_solns_input, rk_coefs, r, vperp, vpa, vzeta, vr,
-                             vz)
+                             manufactured_solns_input, rk_coefs, r, z, vperp, vpa, vzeta,
+                             vr, vz)
     # default is not to concurrently advance different operators
     advance_vpa_advection = false
     advance_z_advection = false
@@ -440,14 +478,18 @@ function setup_advance_flags(moments, composition, t_input, collisions,
     r_diffusion = false
     vpa_diffusion = false
     vz_diffusion = false
+    explicit_weakform_fp_collisions = false
     # all advance flags remain false if using operator-splitting
     # otherwise, check to see if the flags need to be set to true
     if !t_input.split_operators
         # default for non-split operators is to include both vpa and z advection together
-        advance_vpa_advection = true
-        advance_z_advection = true
-        if r.n > 1
-            advance_r_advection = true
+        advance_vpa_advection = true && vpa.n > 1 && z.n > 1
+        advance_z_advection = true && z.n > 1
+        advance_r_advection = true && r.n > 1
+        if collisions.nuii > 0.0 && vperp.n > 1
+            explicit_weakform_fp_collisions = true
+        else
+            explicit_weakform_fp_collisions = false    
         end
         # if neutrals present, check to see if different ion-neutral
         # collisions are enabled
@@ -537,7 +579,7 @@ function setup_advance_flags(moments, composition, t_input, collisions,
         # flag to determine if a d^2/dr^2 operator is present
         r_diffusion = (advance_numerical_dissipation && num_diss_params.r_dissipation_coefficient > 0.0)
         # flag to determine if a d^2/dvpa^2 operator is present
-        vpa_diffusion = (advance_numerical_dissipation && num_diss_params.vpa_dissipation_coefficient > 0.0)
+        vpa_diffusion = ((advance_numerical_dissipation && num_diss_params.vpa_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
         vz_diffusion = (advance_numerical_dissipation && num_diss_params.vz_dissipation_coefficient > 0.0)
     end
 
@@ -548,6 +590,7 @@ function setup_advance_flags(moments, composition, t_input, collisions,
                         advance_neutral_vz_advection, advance_cx, advance_cx_1V,
                         advance_ionization, advance_ionization_1V,
                         advance_ionization_source, advance_krook_collisions,
+                        explicit_weakform_fp_collisions,
                         advance_external_source, advance_numerical_dissipation,
                         advance_sources, advance_continuity, advance_force_balance,
                         advance_energy, advance_neutral_external_source,
@@ -558,12 +601,22 @@ end
 
 function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies_ion,nspecies_neutral)
 
+    dummy_s = allocate_float(nspecies_ion)
     dummy_sr = allocate_float(nr, nspecies_ion)
     dummy_zrs = allocate_shared_float(nz, nr, nspecies_ion)
     dummy_zrsn = allocate_shared_float(nz, nr, nspecies_neutral)
     dummy_vpavperp = allocate_float(nvpa, nvperp)
+    
+    buffer_z_1 = allocate_shared_float(nz)
+    buffer_z_2 = allocate_shared_float(nz)
+    buffer_z_3 = allocate_shared_float(nz)
+    buffer_z_4 = allocate_shared_float(nz)
+    
+    buffer_r_1 = allocate_shared_float(nr)
+    buffer_r_2 = allocate_shared_float(nr)
+    buffer_r_3 = allocate_shared_float(nr)
+    buffer_r_4 = allocate_shared_float(nr)
 
-    # should the arrays below be shared memory arrays? MRH
     buffer_zs_1 = allocate_shared_float(nz,nspecies_ion)
     buffer_zs_2 = allocate_shared_float(nz,nspecies_ion)
     buffer_zs_3 = allocate_shared_float(nz,nspecies_ion)
@@ -586,6 +639,10 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
     buffer_rsn_5 = allocate_shared_float(nr,nspecies_neutral)
     buffer_rsn_6 = allocate_shared_float(nr,nspecies_neutral)
 
+    buffer_zrs_1 = allocate_shared_float(nz,nr,nspecies_ion)
+    buffer_zrs_2 = allocate_shared_float(nz,nr,nspecies_ion)
+    buffer_zrs_3 = allocate_shared_float(nz,nr,nspecies_ion)
+    
     buffer_vpavperpzs_1 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
     buffer_vpavperpzs_2 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
     buffer_vpavperpzs_3 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
@@ -602,7 +659,7 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
 
     buffer_vpavperpzrs_1 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
     buffer_vpavperpzrs_2 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
-
+    
     buffer_vzvrvzetazsn_1 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
     buffer_vzvrvzetazsn_2 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
     buffer_vzvrvzetazsn_3 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
@@ -619,18 +676,26 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
 
     buffer_vzvrvzetazrsn_1 = allocate_shared_float(nvz,nvr,nvzeta,nz,nr,nspecies_neutral)
     buffer_vzvrvzetazrsn_2 = allocate_shared_float(nvz,nvr,nvzeta,nz,nr,nspecies_neutral)
-
-    return scratch_dummy_arrays(dummy_sr,dummy_vpavperp,dummy_zrs,dummy_zrsn,
+    
+    buffer_vpavperp_1 = allocate_shared_float(nvpa,nvperp)
+    buffer_vpavperp_2 = allocate_shared_float(nvpa,nvperp)
+    buffer_vpavperp_3 = allocate_shared_float(nvpa,nvperp)
+    
+    return scratch_dummy_arrays(dummy_s,dummy_sr,dummy_vpavperp,dummy_zrs,dummy_zrsn,
+        buffer_z_1,buffer_z_2,buffer_z_3,buffer_z_4,
+        buffer_r_1,buffer_r_2,buffer_r_3,buffer_r_4,
         buffer_zs_1,buffer_zs_2,buffer_zs_3,buffer_zs_4,
         buffer_zsn_1,buffer_zsn_2,buffer_zsn_3,buffer_zsn_4,
         buffer_rs_1,buffer_rs_2,buffer_rs_3,buffer_rs_4,buffer_rs_5,buffer_rs_6,
         buffer_rsn_1,buffer_rsn_2,buffer_rsn_3,buffer_rsn_4,buffer_rsn_5,buffer_rsn_6,
+        buffer_zrs_1,buffer_zrs_2,buffer_zrs_3,
         buffer_vpavperpzs_1,buffer_vpavperpzs_2,buffer_vpavperpzs_3,buffer_vpavperpzs_4,buffer_vpavperpzs_5,buffer_vpavperpzs_6,
         buffer_vpavperprs_1,buffer_vpavperprs_2,buffer_vpavperprs_3,buffer_vpavperprs_4,buffer_vpavperprs_5,buffer_vpavperprs_6,
         buffer_vpavperpzrs_1,buffer_vpavperpzrs_2,
         buffer_vzvrvzetazsn_1,buffer_vzvrvzetazsn_2,buffer_vzvrvzetazsn_3,buffer_vzvrvzetazsn_4,buffer_vzvrvzetazsn_5,buffer_vzvrvzetazsn_6,
         buffer_vzvrvzetarsn_1,buffer_vzvrvzetarsn_2,buffer_vzvrvzetarsn_3,buffer_vzvrvzetarsn_4,buffer_vzvrvzetarsn_5,buffer_vzvrvzetarsn_6,
-        buffer_vzvrvzetazrsn_1, buffer_vzvrvzetazrsn_2)
+        buffer_vzvrvzetazrsn_1, buffer_vzvrvzetazrsn_2,
+        buffer_vpavperp_1,buffer_vpavperp_2,buffer_vpavperp_3)
 
 end
 
@@ -752,8 +817,8 @@ time integrator can be used without severe CFL condition
 """
 function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
-           composition, collisions, geometry, boundary_distributions,
-           external_source_settings, num_diss_params, advance, scratch_dummy,
+           composition, collisions, geometry, boundary_distributions, 
+           external_source_settings, num_diss_params, advance, fp_arrays, scratch_dummy,
            manufactured_source_list, ascii_io, io_moments, io_dfns)
 
     @debug_detect_redundant_block_synchronize begin
@@ -796,7 +861,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
             time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
                 moments, fields, spectral_objects, advect_objects,
                 composition, collisions, geometry, boundary_distributions,
-                external_source_settings, num_diss_params, advance, scratch_dummy,
+                external_source_settings, num_diss_params, advance, fp_arrays,  scratch_dummy,
                 manufactured_source_list, i)
         end
         # update the time
@@ -1231,14 +1296,14 @@ end
 function time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
            composition, collisions, geometry, boundary_distributions,
-           external_source_settings, num_diss_params, advance, scratch_dummy,
+           external_source_settings, num_diss_params, advance, fp_arrays, scratch_dummy,
            manufactured_source_list, istep)
 
     if t_input.n_rk_stages > 1
         ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
             moments, fields, spectral_objects, advect_objects, composition, collisions,
             geometry, boundary_distributions, external_source_settings, num_diss_params,
-            advance, scratch_dummy, manufactured_source_list, istep)
+            advance, fp_arrays, scratch_dummy, manufactured_source_list, istep)
     else
         euler_time_advance!(scratch, scratch, pdf, fields, moments,
             advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t,
@@ -1260,23 +1325,23 @@ stages, if the quantities are evolved separately from the modified pdf;
 or update them by taking the appropriate velocity moment of the evolved pdf
 """
 function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr, vzeta,
-                    vpa, vperp, z, r, advect_objects, rk_coefs, istage, composition,
-                    geometry, num_diss_params, z_spectral, r_spectral, advance,
-                    scratch_dummy)
+                    vpa, vperp, z, r, spectral_objects, advect_objects, rk_coefs, istage, composition,
+                    geometry, num_diss_params, advance, scratch_dummy)
     begin_s_r_z_region()
 
     new_scratch = scratch[istage+1]
     old_scratch = scratch[istage]
 
+    z_spectral, r_spectral, vpa_spectral, vperp_spectral = spectral_objects.z_spectral, spectral_objects.r_spectral, spectral_objects.vpa_spectral, spectral_objects.vperp_spectral
+    vzeta_spectral, vr_spectral, vz_spectral = spectral_objects.vzeta_spectral, spectral_objects.vr_spectral, spectral_objects.vz_spectral
     vpa_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
     ##
     # update the charged particle distribution and moments
     ##
-    # MRH here we seem to have duplicate arrays for storing n, u||, p||, etc, but not for vth
-    # MRH 'scratch' is for the multiple stages of time advanced quantities, but 'moments' can be updated directly at each stage
-    # MRH in the standard drift-kinetic model. Consider taking moment quantities out of scratch for clarity.
+    # here we seem to have duplicate arrays for storing n, u||, p||, etc, but not for vth
+    # 'scratch' is for the multiple stages of time advanced quantities, but 'moments' can be updated directly at each stage
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         new_scratch.pdf[ivpa,ivperp,iz,ir,is] = rk_coefs[1]*pdf.charged.norm[ivpa,ivperp,iz,ir,is] + rk_coefs[2]*old_scratch.pdf[ivpa,ivperp,iz,ir,is] + rk_coefs[3]*new_scratch.pdf[ivpa,ivperp,iz,ir,is]
     end
@@ -1297,7 +1362,8 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     # NB: probably need to do the same for the evolved moments
     enforce_boundary_conditions!(new_scratch, moments,
         boundary_distributions.pdf_rboundary_charged, vpa.bc, z.bc, r.bc, vpa, vperp, z,
-        r, vpa_advect, z_advect, r_advect, composition, scratch_dummy,
+        r, vpa_spectral, vperp_spectral, 
+        vpa_advect, z_advect, r_advect, composition, scratch_dummy,
         advance.r_diffusion, advance.vpa_diffusion)
 
     if moments.evolve_density && moments.enforce_conservation
@@ -1365,9 +1431,10 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         enforce_neutral_boundary_conditions!(new_scratch.pdf_neutral, new_scratch.pdf,
             boundary_distributions, new_scratch.density_neutral, new_scratch.uz_neutral,
             new_scratch.pz_neutral, moments, new_scratch.density, new_scratch.upar,
-            fields.Er, neutral_r_advect, neutral_z_advect, nothing, nothing,
-            neutral_vz_advect, r, z, vzeta, vr, vz, composition, geometry, scratch_dummy,
-            advance.r_diffusion, advance.vz_diffusion)
+            fields.Er, vzeta_spectral, vr_spectral, vz_spectral, neutral_r_advect,
+            neutral_z_advect, nothing, nothing, neutral_vz_advect, r, z, vzeta, vr, vz,
+            composition, geometry, scratch_dummy, advance.r_diffusion,
+            advance.vz_diffusion)
 
         if moments.evolve_density && moments.enforce_conservation
             begin_sn_r_z_region()
@@ -1510,7 +1577,7 @@ end
 function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects, composition, collisions,
            geometry, boundary_distributions, external_source_settings, num_diss_params,
-           advance, scratch_dummy, manufactured_source_list, istep)
+           advance, fp_arrays, scratch_dummy, manufactured_source_list,  istep)
 
     begin_s_r_z_region()
 
@@ -1555,12 +1622,11 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
             advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t,
             t_input, spectral_objects, composition,
             collisions, geometry, scratch_dummy, manufactured_source_list,
-            external_source_settings, num_diss_params, advance, istage)
+            external_source_settings, num_diss_params, advance, fp_arrays, istage)
         @views rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr,
-                          vzeta, vpa, vperp, z, r, advect_objects,
+                          vzeta, vpa, vperp, z, r, spectral_objects, advect_objects,
                           advance.rk_coefs[:,istage], istage, composition, geometry,
-                          num_diss_params, spectral_objects.z_spectral,
-                          spectral_objects.r_spectral, advance, scratch_dummy)
+                          num_diss_params, advance, scratch_dummy)
     end
 
     istage = n_rk_stages+1
@@ -1642,7 +1708,7 @@ with fvec_in an input and fvec_out the output
 function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t, t_input,
     spectral_objects, composition, collisions, geometry, scratch_dummy,
-    manufactured_source_list, external_source_settings, num_diss_params, advance, istage)
+    manufactured_source_list, external_source_settings, num_diss_params, advance, fp_arrays, istage)
 
     # define some abbreviated variables for tidiness
     n_ion_species = composition.n_ion_species
@@ -1652,7 +1718,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     # only charged species have a force accelerating them in vpa;
     # however, neutral species do have non-zero d(wpa)/dt, so there is advection in wpa
 
-    vpa_spectral, r_spectral, z_spectral = spectral_objects.vpa_spectral, spectral_objects.r_spectral, spectral_objects.z_spectral
+    vpa_spectral, vperp_spectral, r_spectral, z_spectral = spectral_objects.vpa_spectral, spectral_objects.vperp_spectral, spectral_objects.r_spectral, spectral_objects.z_spectral
     vz_spectral, vr_spectral, vzeta_spectral = spectral_objects.vz_spectral, spectral_objects.vr_spectral, spectral_objects.vzeta_spectral
     vpa_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
@@ -1769,6 +1835,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     if advance.numerical_dissipation
         vpa_dissipation!(fvec_out.pdf, fvec_in.pdf, vpa, vpa_spectral, dt,
                          num_diss_params)
+        vperp_dissipation!(fvec_out.pdf, fvec_in.pdf, vperp, vperp_spectral, dt,
+                         num_diss_params)
         z_dissipation!(fvec_out.pdf, fvec_in.pdf, z, z_spectral, dt,
                        num_diss_params, scratch_dummy)
         r_dissipation!(fvec_out.pdf, fvec_in.pdf, r, r_spectral, dt,
@@ -1780,6 +1848,14 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
         r_dissipation_neutral!(fvec_out.pdf_neutral, fvec_in.pdf_neutral, r, r_spectral,
                                dt, num_diss_params, scratch_dummy)
     end
+    # advance with the Fokker-Planck self-collision operator
+    if advance.explicit_weakform_fp_collisions
+        update_entropy_diagnostic = (istage == 1)
+        explicit_fokker_planck_collisions_weak_form!(fvec_out.pdf,fvec_in.pdf,moments.charged.dSdt,composition,collisions,dt,
+                                             fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,scratch_dummy,
+                                             diagnose_entropy_production = update_entropy_diagnostic)
+    end
+    
     # End of advance for distribution function
 
     # Start advancing moments

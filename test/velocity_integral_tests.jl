@@ -26,6 +26,7 @@ function runtests()
         # fd_option and adv_input not actually used so given values unimportant
         discretization = "chebyshev_pseudospectral"
         fd_option = "fourth_order_centered"
+        cheb_option = "FFT"
         adv_input = advection_input("default", 1.0, 0.0, 0.0)
         nrank = 1
         irank = 0
@@ -33,15 +34,15 @@ function runtests()
         # create the 'input' struct containing input info needed to create a
         # coordinate
         vr_input = grid_input("vperp", 1, 1, 1, nrank, irank, 1.0, discretization,
-                              fd_option, bc, adv_input, comm, "uniform")
+                              fd_option, cheb_option, bc, adv_input, comm, "uniform")
         vz_input = grid_input("vpa", ngrid, nelement_global, nelement_local, nrank, irank,
-                              Lvpa, discretization, fd_option, bc, adv_input, comm,
+                              Lvpa, discretization, fd_option, cheb_option, bc, adv_input, comm,
                               "uniform")
         vpa_input = grid_input("vpa", ngrid, nelement_global, nelement_local, nrank,
-                               irank, Lvpa, discretization, fd_option, bc, adv_input,
+                               irank, Lvpa, discretization, fd_option, cheb_option, bc, adv_input,
                                comm, "uniform")
         vperp_input = grid_input("vperp", ngrid, nelement_global, nelement_local, nrank,
-                                 irank, Lvperp, discretization, fd_option, bc, adv_input,
+                                 irank, Lvperp, discretization, fd_option, cheb_option, bc, adv_input,
                                  comm, "uniform")
         # create the coordinate struct 'x'
         vpa, vpa_spectral = define_coordinate(vpa_input)

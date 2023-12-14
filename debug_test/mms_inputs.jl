@@ -58,7 +58,6 @@ test_input = Dict(
     "vperp_ngrid" => 3,
     "vperp_nelement" => 2,
     "vperp_L" => 6.0,
-    "vperp_bc" => "periodic",
     "vperp_discretization" => "chebyshev_pseudospectral",
     "vz_ngrid" => 3,
     "vz_nelement" => 2,
