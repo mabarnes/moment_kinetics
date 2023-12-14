@@ -333,7 +333,9 @@ mutable struct geometry_input
     # magnetic geometry option
     option::String
     # pitch ( = Bzed/Bmag if geometry_option == "constant-helical")
-    pitch::mk_float    
+    pitch::mk_float
+    # DeltaB ( = (Bzed(z=L/2) - Bzed(0))/Bref if geometry_option == "1D-mirror")
+    DeltaB::mk_float    
 end
 
 @enum binary_format_type hdf5 netcdf

@@ -68,7 +68,9 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
     
     option = geometry_input_data.option
     rhostar = geometry_input_data.rhostar
-    if option == "constant-helical"
+    if option == "constant-helical" || option == "default"
+        # \vec{B} = B ( bz \hat{z} + bzeta \hat{zeta} ) 
+        # with B a constant and \hat{z} x \hat{r} . \hat{zeta} = 1
         pitch = geometry_input_data.pitch
         for ir in 1:nr
             for iz in 1:nz
@@ -79,6 +81,31 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
                 Bzeta[iz,ir] = Bmag[iz,ir]*bzeta[iz,ir]
                 dBdr[iz,ir] = 0.0
                 dBdz[iz,ir] = 0.0
+                jacobian[iz,ir] = 1.0
+            end
+        end
+    elseif option == "1D-mirror"
+        # a 1D configuration for testing mirror and vperp physics 
+        # with \vec{B} = B(z) bz \hat{z} and
+        # with B = B(z) a specified function
+        if nr > 1
+            input_option_error("$option: You have specified nr > 1 -> set nr = 1", option)
+        end
+        DeltaB = geometry_input_data.DeltaB
+        for ir in 1:nr
+            for iz in 1:nz
+                bzed[iz,ir] = 1.0
+                bzeta[iz,ir] = 0.0
+                # B(z)/Bref = 1 + DeltaB*( 2(2z/L)^2 - (2z/L)^4)
+                # chosen so that
+                # B(z)/Bref = 1 + DeltaB at 2z/L = +- 1 
+                # d B(z)d z = 0 at 2z/L = +- 1 
+                zfac = 2.0*z.grid[iz]/z.L
+                Bmag[iz,ir] = 1.0 + DeltaB*( 2.0*zfac^2 - zfac^4)
+                Bzed[iz,ir] = Bmag[iz,ir]*bzed[iz,ir]
+                Bzeta[iz,ir] = Bmag[iz,ir]*bzeta[iz,ir]
+                dBdr[iz,ir] = 0.0
+                dBdz[iz,ir] = 4.0*DeltaB*zfac*(1.0 - zfac^2)
                 jacobian[iz,ir] = 1.0
             end
         end

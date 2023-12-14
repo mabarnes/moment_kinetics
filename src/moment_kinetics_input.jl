@@ -106,9 +106,10 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     #geometry.bzed = geometry.Bzed/geometry.Bmag
     #geometry.bzeta = sqrt(1.0 - geometry.bzed^2.0)
     #geometry.Bzeta = geometry.Bmag*geometry.bzeta
-    geometry_in.option = get(scan_input, "geometry_option", "constant-helical")
+    geometry_in.option = get(scan_input, "geometry_option", "constant-helical") #"1D-mirror"
     geometry_in.pitch = get(scan_input, "pitch", 1.0)
     geometry_in.rhostar = get(scan_input, "rhostar", get_default_rhostar(reference_params))
+    geometry_in.DeltaB = get(scan_input, "DeltaB", 1.0)
     #println("Info: Bzed is ",geometry.Bzed)
     #println("Info: Bmag is ",geometry.Bmag)
     #println("Info: rhostar is ",geometry.rhostar)
@@ -1003,7 +1004,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     rhostar = 0.0 #rhostar of ions for ExB drift
     option = "constant-helical"
     pitch = 1.0
-    geometry_in = geometry_input(rhostar,option,pitch)
+    DeltaB = 1.0
+    geometry_in = geometry_input(rhostar,option,pitch,DeltaB)
 
     return z, r, vpa, vperp, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions, geometry_in
 end
