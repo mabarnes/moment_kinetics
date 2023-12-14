@@ -6,6 +6,7 @@ export mk_input
 export performance_test
 #export advective_form
 export read_input_file
+export get_default_rhostar
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float

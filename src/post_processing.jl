@@ -51,9 +51,11 @@ using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data,
                   get_unnormalised_f_dzdt_1d, get_unnormalised_f_coords_2d
 using ..velocity_moments: integrate_over_vspace
 using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
-using ..moment_kinetics_input: mk_input, get
+using ..moment_kinetics_input: mk_input, get, get_default_rhostar
 using ..input_structs: geometry_input, grid_input, species_composition
 using ..input_structs: electron_physics_type, boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath
+using ..reference_parameters
+using ..geo: init_magnetic_geometry
 using TOML
 import Base: get
 
@@ -351,18 +353,18 @@ function get_coords_ngrid(scan_input)
     return z_ngrid, r_ngrid, vpa_ngrid, vperp_ngrid, vz_ngrid, vr_ngrid, vzeta_ngrid
 end
 
-function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
+function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species,z,r)
+    reference_params = setup_reference_parameters(scan_input)
     # set geometry_input
     # MRH need to get this in way that does not duplicate code
     # MRH from moment_kinetics_input.jl
-    Bzed = get(scan_input, "Bzed", 1.0)
-    Bmag = get(scan_input, "Bmag", 1.0)
-    bzed = Bzed/Bmag
-    bzeta = sqrt(1.0 - bzed^2.0)
-    Bzeta = Bmag*bzeta
-    rhostar = get(scan_input, "rhostar", 0.0)
-    geometry = geometry_input(Bzed,Bmag,bzed,bzeta,Bzeta,rhostar)
-
+    option = get(scan_input, "geometry_option", "constant-helical") #"1D-mirror"
+    pitch = get(scan_input, "pitch", 1.0)
+    rhostar = get(scan_input, "rhostar", get_default_rhostar(reference_params))
+    DeltaB = get(scan_input, "DeltaB", 1.0)
+    geo_in = geometry_input(rhostar,option,pitch,DeltaB)
+    geometry = init_magnetic_geometry(geo_in,z,r)
+    
     # set composition input
     # MRH need to get this in way that does not duplicate code
     # MRH from moment_kinetics_input.jl
@@ -786,7 +788,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
 
     geometry, composition =
         get_tuple_of_return_values(get_geometry_and_composition, scan_input,
-                                   n_ion_species, n_neutral_species)
+                                   n_ion_species, n_neutral_species, z, r)
 
     # initialise the post-processing input options
     nwrite_movie, itime_min, itime_max, nwrite_movie_pdfs, itime_min_pdfs, itime_max_pdfs,
