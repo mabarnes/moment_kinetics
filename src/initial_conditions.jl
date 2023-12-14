@@ -2156,15 +2156,12 @@ function enforce_v_boundary_condition_local!(f, bc, speed, v_diffusion, v, v_spe
         f[end] = 0.0
     elseif bc == "zero_gradient"
         D0 = v_spectral.lobatto.Dmat[1,:]
-        @loop_s_r_z_vperp is ir iz ivperp begin
-            # adjust F(vpa = -L/2) so that d F / d vpa = 0 at vpa = -L/2
-            f[1,ivperp,iz,ir,is] = -sum(D0[2:ngrid].*f[2:ngrid,ivperp,iz,ir,is])/D0[1]
-        end
+        # adjust F(vpa = -L/2) so that d F / d vpa = 0 at vpa = -L/2
+        f[1] = -sum(D0[2:v.ngrid].*f[2:v.ngrid])/D0[1]
+
         D0 = v_spectral.lobatto.Dmat[end,:]
-        @loop_s_r_z_vperp is ir iz ivperp begin
-            # adjust F(vpa = L/2) so that d F / d vpa = 0 at vpa = L/2
-            f[nvpa,ivperp,iz,ir,is] = -sum(D0[1:ngrid-1].*f[nvpa-ngrid+1:nvpa-1,ivperp,iz,ir,is])/D0[ngrid]
-        end    
+        # adjust F(vpa = L/2) so that d F / d vpa = 0 at vpa = L/2
+        f[end] = -sum(D0[1:ngrid-1].*f[end-v.ngrid+1:end-1])/D0[v.ngrid]
     elseif bc == "periodic"
         f[1] = 0.5*(f[1]+f[end])
         f[end] = f[1]

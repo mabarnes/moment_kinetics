@@ -243,7 +243,6 @@ taking floats as arguments. This function is designed to be used at the
 lowest level of a coordinate loop, with derivatives and integrals
 all previously calculated.
 """
-
 function Cssp_fully_expanded_form(nussp,ms,msp,
             d2fsdvpa2,d2fsdvperp2,d2fsdvperpdvpa,dfsdvpa,dfsdvperp,fs,
             d2Gspdvpa2,d2Gspdvperp2,d2Gspdvperpdvpa,dGspdvperp,

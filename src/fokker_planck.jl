@@ -145,7 +145,6 @@ end
 """
 Function for advancing with the explicit, weak-form, self-collision operator
 """
-
 function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,dSdt,composition,collisions,dt,
                                              fkpl_arrays::fokkerplanck_weakform_arrays_struct,
                                              r, z, vperp, vpa, vperp_spectral, vpa_spectral, scratch_dummy;
@@ -208,13 +207,19 @@ function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,dSdt,compos
     return nothing
 end
 
+
 """
-Function for evaluating Css' = Css'[Fs,Fs']
-The result is stored in the array fkpl_arrays.CC
+Function for evaluating \$C_{ss'} = C_{ss'}[F_s,F_{s'}]\$
+
+The result is stored in the array `fkpl_arrays.CC`.
+
+The normalised collision frequency is defined by
+```math
+\\nu_{ss'} = \\frac{\\gamma_{ss'} n_\\mathrm{ref}}{2 m_s^2 c_\\mathrm{ref}^3}
+```
+with \$\\gamma_{ss'} = 2 \\pi (Z_s Z_{s'})^2 e^4 \\ln \\Lambda_{ss'} / (4 \\pi
+\\epsilon_0)^2\$.
 """
-# the normalised collision frequency is defined by 
-# nu_{ss'} = gamma_{ss'} n_{ref} / 2 (m_s)^2 (c_{ref})^3
-# with gamma_ss' = 2 pi (Z_s Z_s')^2 e^4 ln \Lambda_{ss'} / (4 pi \epsilon_0)^2
 function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp,
                                              fkpl_arrays::fokkerplanck_weakform_arrays_struct,
                                              vperp, vpa, vperp_spectral, vpa_spectral;
@@ -424,7 +429,6 @@ end
 """
 allocate the required ancilliary arrays 
 """
-
 function allocate_fokkerplanck_arrays_direct_integration(vperp,vpa)
     nvpa = vpa.n
     nvperp = vperp.n
@@ -468,7 +472,6 @@ of the direct integration method, the struct 'fka' created here does not contain
 all of the arrays necessary to compute the weak-form operator. This functionality
 could be ported if necessary.
 """
-
 function init_fokker_planck_collisions_direct_integration(vperp,vpa; precompute_weights=false, print_to_screen=false)
     fka = allocate_fokkerplanck_arrays_direct_integration(vperp,vpa)
     if vperp.n > 1 && precompute_weights

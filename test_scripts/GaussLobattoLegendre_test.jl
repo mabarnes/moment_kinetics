@@ -14,6 +14,7 @@ using moment_kinetics.gauss_legendre
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.calculus: derivative!, second_derivative!, laplacian_derivative!
+using moment_kinetics.calculus: mass_matrix_solve!
 
 
     function print_matrix(matrix,name,n,m)
@@ -69,7 +70,7 @@ using moment_kinetics.calculus: derivative!, second_derivative!, laplacian_deriv
                 nrank, irank, y_L, discretization, fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
             
             # create the coordinate structs
-            y, y_spectral = define_coordinate(y_input)
+            y, y_spectral = define_coordinate(y_input,init_YY=false)
             #print_matrix(Mmat,"Mmat",y.n,y.n)
             #print_matrix(y_spectral.radau.M0,"local radau mass matrix M0",y.ngrid,y.ngrid)
             #print_matrix(y_spectral.radau.M1,"local radau mass matrix M1",y.ngrid,y.ngrid)
@@ -147,14 +148,14 @@ using moment_kinetics.calculus: derivative!, second_derivative!, laplacian_deriv
             println("max(d2f_err) (double first derivative by interpolation): ",maximum(d2f_err))  
             if y.name == "vpa"
                 mul!(b,y_spectral.S_matrix,f_exact)
-                gausslegendre_mass_matrix_solve!(df_num,b,y_spectral)
+                mass_matrix_solve!(df_num,b,y_spectral)
                 @. df_err = df_num - df_exact
                 #println("df_num (weak form): ",df_num)
                 #println("df_exact (weak form): ",df_exact)
                 println("max(df_err) (weak form): ",maximum(df_err))
                 second_derivative!(d2f_num, f_exact, y, y_spectral)
                 #mul!(b,y_spectral.K_matrix,f_exact)
-                #gausslegendre_mass_matrix_solve!(d2f_num,b,y_spectral)
+                #mass_matrix_solve!(d2f_num,b,y_spectral)
                 @. d2f_err = abs(d2f_num - d2f_exact) #(0.5*y.L/y.nelement_global)*
                 #println(d2f_num)
                 #println(d2f_exact)
@@ -166,7 +167,7 @@ using moment_kinetics.calculus: derivative!, second_derivative!, laplacian_deriv
             elseif y.name == "vperp"
                 #println("condition: ",cond(y_spectral.mass_matrix)) 
                 mul!(b,y_spectral.S_matrix,g_exact)
-                gausslegendre_mass_matrix_solve!(divg_num,b,y_spectral)
+                mass_matrix_solve!(divg_num,b,y_spectral)
                 @. divg_err = abs(divg_num - divg_exact)
                 #println("divg_b (weak form): ",b)
                 #println("divg_num (weak form): ",divg_num)
@@ -175,7 +176,7 @@ using moment_kinetics.calculus: derivative!, second_derivative!, laplacian_deriv
                 
                 second_derivative!(d2f_num, f_exact, y, y_spectral)
                 #mul!(b,y_spectral.K_matrix,f_exact)
-                #gausslegendre_mass_matrix_solve!(d2f_num,b,y_spectral)
+                #mass_matrix_solve!(d2f_num,b,y_spectral)
                 @. d2f_err = abs(d2f_num - d2f_exact) #(0.5*y.L/y.nelement_global)*
                 #println(d2f_num)
                 #println(d2f_exact)
@@ -187,7 +188,7 @@ using moment_kinetics.calculus: derivative!, second_derivative!, laplacian_deriv
                  
                 laplacian_derivative!(laph_num, h_exact, y, y_spectral)
                 #mul!(b,y_spectral.L_matrix,h_exact)
-                #gausslegendre_mass_matrix_solve!(laph_num,b,y_spectral)
+                #mass_matrix_solve!(laph_num,b,y_spectral)
                 @. laph_err = abs(laph_num - laph_exact) #(0.5*y.L/y.nelement_global)*
                 #println(b[1:10])
                 #println(laph_num)

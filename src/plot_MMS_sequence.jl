@@ -305,7 +305,6 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
     ylabel_phi = L"\varepsilon(\widetilde{\phi})"
     ylabel_Er = L"\varepsilon(\widetilde{E}_r)"
     ylabel_Ez = L"\varepsilon(\widetilde{E}_z)"
-    ylabel_Ez = L"\varepsilon(\widetilde{E}_z)"
     expected_label = L"(1/N_{el})^{n_g - 1}"
 	if scan_type == "vpa_nelement"
         xlabel = L"v_{||}"*" "*L"N_{element}"

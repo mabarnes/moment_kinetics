@@ -513,7 +513,13 @@ function lagrange_poly(j,x_nodes,x)
     return poly
 end
 
-function get_scaled_x_w!(x_scaled, w_scaled, x_legendre, w_legendre, x_laguerre, w_laguerre, node_min, node_max, nodes, igrid_coord, coord_val)
+# Function to get the local integration grid and quadrature weights
+# to integrate a 1D element in the 2D representation of the 
+# velocity space distribution functions. This function assumes that
+# there is a divergence at the point coord_val, and splits the grid 
+# and integration weights appropriately, using Gauss-Laguerre points
+# near the divergence and Gauss-Legendre points away from the divergence. 
+function get_scaled_x_w_with_divergences!(x_scaled, w_scaled, x_legendre, w_legendre, x_laguerre, w_laguerre, node_min, node_max, nodes, igrid_coord, coord_val)
     #println("nodes ",nodes)
     zero = 1.0e-10 
     @. x_scaled = 0.0
@@ -603,9 +609,10 @@ function get_scaled_x_w!(x_scaled, w_scaled, x_legendre, w_legendre, x_laguerre,
     #println("w_scaled",w_scaled)
     return nquad_coord
 end
-
+# Function to get the local grid and integration weights assuming 
+# no divergences of the function on the 1D element. Gauss-Legendre
+# quadrature is used for the entire element.
 function get_scaled_x_w_no_divergences!(x_scaled, w_scaled, x_legendre, w_legendre, node_min, node_max)
-    zero = 1.0e-6 
     @. x_scaled = 0.0
     @. w_scaled = 0.0
     #println("coord: ",coord_val," node_max: ",node_max," node_min: ",node_min) 
@@ -644,7 +651,7 @@ end
 # `ellipe(k) = \int^{\pi/2}\_0 \frac{1}{\sqrt{ 1 - m \sin^2(\theta)}} d \theta`
 
 function local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
-                            nquad_vpa,ielement_vpa,vpa_nodes,vpa, # info about primed vperp grids
+                            nquad_vpa,ielement_vpa,vpa_nodes,vpa, # info about primed vpa grids
                             nquad_vperp,ielement_vperp,vperp_nodes,vperp, # info about primed vperp grids
                             x_vpa, w_vpa, x_vperp, w_vperp, # points and weights for primed (source) grids
                             vpa_val, vperp_val) # values and indices for unprimed (field) grids
@@ -744,14 +751,14 @@ function loop_over_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weights,H2_
                     x_vpa, w_vpa, x_vperp, w_vperp, 
                     vpa_val, vperp_val)
     end
-    nquad_vperp = get_scaled_x_w!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_nodes, igrid_vperp, vperp_val)
+    nquad_vperp = get_scaled_x_w_with_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_nodes, igrid_vperp, vperp_val)
     for ielement_vpap in ielement_vpa_low:ielement_vpa_hi
     #for ielement_vpap in 1:vpa.nelement_local
         # use general grid function that checks divergences
         vpa_nodes = get_nodes(vpa,ielement_vpap)
         vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
         #nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
-        nquad_vpa = get_scaled_x_w!(x_vpa, w_vpa, x_legendre, w_legendre, x_laguerre, w_laguerre, vpa_min, vpa_max, vpa_nodes, igrid_vpa, vpa_val)
+        nquad_vpa = get_scaled_x_w_with_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, x_laguerre, w_laguerre, vpa_min, vpa_max, vpa_nodes, igrid_vpa, vpa_val)
         @views local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                     nquad_vpa,ielement_vpap,vpa_nodes,vpa,
                     nquad_vperp,ielement_vperpp,vperp_nodes,vperp,
@@ -820,7 +827,7 @@ function loop_over_vperp_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weigh
         #vperp_max = vperp_nodes[end]
         #vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,vperp.nelement_local) 
         #nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
-        #nquad_vperp = get_scaled_x_w!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_nodes, igrid_vperp, vperp_val)
+        #nquad_vperp = get_scaled_x_w_with_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_nodes, igrid_vperp, vperp_val)
         @views loop_over_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                 vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                 vperp,ielement_vperpp, # info about primed vperp grids
@@ -844,6 +851,12 @@ function loop_over_vperp_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weigh
     return nothing
 end
 
+# The function loop_over_vperp_vpa_elements_no_divergences!() was for debugging.
+# By changing the source where loop_over_vperp_vpa_elements!() is called to
+# instead call this function we can verify that the Gauss-Legendre quadrature
+# is adequate for integrating a divergence-free integrand. This function should be 
+# kept until the problems with the pure integration method of computing the
+# Rosenbluth potentials are understood.
 function loop_over_vperp_vpa_elements_no_divergences!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                 vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                 vperp,ielement_vperp_low,ielement_vperp_hi, # info about primed vperp grids
@@ -930,7 +943,7 @@ function icsc_func(ivpa_local::mk_int,ivpap_local::mk_int,
                    ielement_vperp::mk_int,
                    ngrid_vperp::mk_int,nelement_vperp::mk_int)
     ntot_vpa = (nelement_vpa - 1)*(ngrid_vpa^2 - 1) + ngrid_vpa^2
-    ntot_vperp = (nelement_vperp - 1)*(ngrid_vperp^2 - 1) + ngrid_vperp^2
+    #ntot_vperp = (nelement_vperp - 1)*(ngrid_vperp^2 - 1) + ngrid_vperp^2
     
     icsc_vpa = ((ivpap_local - 1) + (ivpa_local - 1)*ngrid_vpa +
                 (ielement_vpa - 1)*(ngrid_vpa^2 - 1))
@@ -1503,13 +1516,6 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
         if global_rank[] == 0 && print_to_screen
             println("finished elliptic operator assignment   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
-        if nc_global < 60
-            print_matrix(MM2D,"MM2D",nc_global,nc_global)
-            #print_matrix(KKpar2D,"KKpar2D",nc_global,nc_global)
-            #print_matrix(KKperp2D,"KKperp2D",nc_global,nc_global)
-            #print_matrix(LP2D,"LP",nc_global,nc_global)
-            #print_matrix(LV2D,"LV",nc_global,nc_global)
-        end
         # convert these matrices to sparse matrices
         if global_rank[] == 0 && print_to_screen
             println("begin conversion to sparse matrices   ", Dates.format(now(), dateformat"H:MM:SS"))
@@ -2046,8 +2052,10 @@ function elliptic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_bounda
     return nothing
 end
 
-# same as above but source is made of two different terms
-# with different weak matrices
+# Same as elliptic_solve!() above but no Dirichlet boundary conditions are imposed,
+# because the function is only used where the lu_object_lhs is derived from a mass matrix.
+# The source is made of two different terms with different weak matrices
+# because of the form of the only algebraic equation that we consider.
 function algebraic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_boundary_data,
             lu_object_lhs,matrix_rhs_1,matrix_rhs_2,rhsc_1,rhsc_2,sc_1,sc_2,vpa,vperp)
     # get data into the compound index format
