@@ -18,7 +18,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip3 install --user matplotlib
-          julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
+          julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.develop(PackageSpec(path=joinpath(pwd(), "makie_post_processing"))); Pkg.develop(PackageSpec(path=joinpath(pwd(), "plots_post_processing"))); Pkg.instantiate()'
       - name: Build and deploy
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Authenticate with GitHub Actions token

@@ -2,5 +2,5 @@
 =======================
 
 ```@autodocs
-Modules = [moment_kinetics.makie_post_processing]
+Modules = [makie_post_processing]
 ```

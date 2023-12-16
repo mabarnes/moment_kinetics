@@ -4,7 +4,7 @@ using moment_kinetics
 makedocs(
     sitename = "moment_kinetics",
     format = Documenter.HTML(prettyurls = get(ENV, "CI", nothing) == "true"),
-    modules = [moment_kinetics]
+    modules = [moment_kinetics, makie_post_processing, plots_post_processing]
 )
 
 if get(ENV, "CI", nothing) == "true"
