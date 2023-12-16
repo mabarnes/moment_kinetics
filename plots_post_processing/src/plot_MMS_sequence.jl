@@ -14,22 +14,22 @@ using SpecialFunctions: erfi
 using LaTeXStrings
 # modules
 using ..post_processing_input: pp
-using ..post_processing: compare_charged_pdf_symbolic_test, compare_fields_symbolic_test
-using ..post_processing: compare_moments_symbolic_test, compare_neutral_pdf_symbolic_test
-using ..post_processing: read_distributed_zr_data!, construct_global_zr_coords
-using ..post_processing: allocate_global_zr_neutral_moments, allocate_global_zr_charged_moments
-using ..post_processing: allocate_global_zr_fields, get_geometry_and_composition
-using ..post_processing: get_coords_nelement, get_coords_ngrid
-using ..array_allocation: allocate_float
-using ..type_definitions: mk_float, mk_int
-using ..load_data: open_readonly_output_file
-using ..load_data: load_fields_data, load_pdf_data
-using ..load_data: load_charged_particle_moments_data, load_neutral_particle_moments_data
-using ..load_data: load_neutral_pdf_data, load_time_data, load_species_data
-using ..load_data: load_block_data, load_coordinate_data, load_input
-using ..velocity_moments: integrate_over_vspace
-using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
-using ..moment_kinetics_input: mk_input, read_input_file
+using ..plots_post_processing: compare_charged_pdf_symbolic_test, compare_fields_symbolic_test
+using ..plots_post_processing: compare_moments_symbolic_test, compare_neutral_pdf_symbolic_test
+using ..plots_post_processing: read_distributed_zr_data!, construct_global_zr_coords
+using ..plots_post_processing: allocate_global_zr_neutral_moments, allocate_global_zr_charged_moments
+using ..plots_post_processing: allocate_global_zr_fields, get_geometry_and_composition
+using ..plots_post_processing: get_coords_nelement, get_coords_ngrid
+using moment_kinetics.array_allocation: allocate_float
+using moment_kinetics.type_definitions: mk_float, mk_int
+using moment_kinetics.load_data: open_readonly_output_file
+using moment_kinetics.load_data: load_fields_data, load_pdf_data
+using moment_kinetics.load_data: load_charged_particle_moments_data, load_neutral_particle_moments_data
+using moment_kinetics.load_data: load_neutral_pdf_data, load_time_data, load_species_data
+using moment_kinetics.load_data: load_block_data, load_coordinate_data, load_input
+using moment_kinetics.velocity_moments: integrate_over_vspace
+using moment_kinetics.manufactured_solns: manufactured_solutions, manufactured_electric_fields
+using moment_kinetics.moment_kinetics_input: mk_input, read_input_file
 
 import Base: get
 

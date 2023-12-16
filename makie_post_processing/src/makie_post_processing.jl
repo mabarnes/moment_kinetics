@@ -17,27 +17,34 @@ export animate_f_unnorm_vs_vpa, animate_f_unnorm_vs_vpa_z, get_1d_ax, get_2d_ax,
        plot_f_unnorm_vs_vpa_z, positive_or_nan, postproc_load_variable, positive_or_nan,
        put_legend_above, put_legend_below, put_legend_left, put_legend_right
 
-using ..analysis: analyze_fields_data, check_Chodura_condition, get_r_perturbation,
-                  get_Fourier_modes_2D, get_Fourier_modes_1D, steady_state_residuals,
-                  get_unnormalised_f_dzdt_1d, get_unnormalised_f_coords_2d,
-                  get_unnormalised_f_1d, vpagrid_to_dzdt_2d, get_unnormalised_f_2d
-using ..array_allocation: allocate_float
-using ..coordinates: define_coordinate
-using ..input_structs: grid_input, advection_input, set_defaults_and_check_top_level!,
-                       set_defaults_and_check_section!, Dict_to_NamedTuple
-using ..krook_collisions: get_collision_frequency
-using ..looping: all_dimensions, ion_dimensions, neutral_dimensions
-using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
-using ..moment_kinetics_input: mk_input
-using ..load_data: open_readonly_output_file, get_group, load_block_data,
-                   load_coordinate_data, load_distributed_charged_pdf_slice,
-                   load_distributed_neutral_pdf_slice, load_input, load_mk_options,
-                   load_species_data, load_time_data
-using ..initial_conditions: vpagrid_to_dzdt
-using ..post_processing: calculate_and_write_frequencies, construct_global_zr_coords,
-                         get_geometry_and_composition, read_distributed_zr_data!
-using ..type_definitions: mk_float, mk_int
-using ..velocity_moments: integrate_over_vspace, integrate_over_neutral_vspace
+include("shared_utils.jl")
+
+using moment_kinetics.analysis: analyze_fields_data, check_Chodura_condition,
+                                get_r_perturbation, get_Fourier_modes_2D,
+                                get_Fourier_modes_1D, steady_state_residuals,
+                                get_unnormalised_f_dzdt_1d, get_unnormalised_f_coords_2d,
+                                get_unnormalised_f_1d, vpagrid_to_dzdt_2d,
+                                get_unnormalised_f_2d
+using moment_kinetics.array_allocation: allocate_float
+using moment_kinetics.coordinates: define_coordinate
+using moment_kinetics.input_structs: grid_input, advection_input,
+                                     set_defaults_and_check_top_level!,
+                                     set_defaults_and_check_section!, Dict_to_NamedTuple
+using moment_kinetics.krook_collisions: get_collision_frequency
+using moment_kinetics.looping: all_dimensions, ion_dimensions, neutral_dimensions
+using moment_kinetics.manufactured_solns: manufactured_solutions,
+                                          manufactured_electric_fields
+using moment_kinetics.moment_kinetics_input: mk_input
+using moment_kinetics.load_data: open_readonly_output_file, get_group, load_block_data,
+                                 load_coordinate_data, load_distributed_charged_pdf_slice,
+                                 load_distributed_neutral_pdf_slice, load_input,
+                                 load_mk_options, load_species_data, load_time_data
+using moment_kinetics.initial_conditions: vpagrid_to_dzdt
+using .shared_utils: calculate_and_write_frequencies, construct_global_zr_coords,
+                     get_geometry_and_composition, read_distributed_zr_data!
+using moment_kinetics.type_definitions: mk_float, mk_int
+using moment_kinetics.velocity_moments: integrate_over_vspace,
+                                        integrate_over_neutral_vspace
 
 using Combinatorics
 using Glob

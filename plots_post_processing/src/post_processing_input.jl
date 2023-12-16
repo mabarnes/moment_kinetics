@@ -5,8 +5,8 @@ module post_processing_input
 export load_post_processing_options
 export pp
 
-using ..type_definitions: mk_int
-using ..input_structs: pp_input
+using moment_kinetics.type_definitions: mk_int
+using moment_kinetics.input_structs: pp_input
 
 # if calculate_frequencies = true, calculate and print the frequency and growth/decay
 # rate of phi, using values at iz = iz0
