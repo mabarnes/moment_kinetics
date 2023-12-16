@@ -407,12 +407,22 @@ for dims ∈ dimension_combinations
         function $nested_macro_body_name(body, it_vars...)
             ex = Expr(:escape, body)
             # Reverse it_vars so final iteration variable is the inner loop
-            for (it, range) ∈ zip(reverse(it_vars), reverse($range_exprs))
-                this_range = eval(range)
+            it_vars_vec = collect(reverse(it_vars))
+            for i ∈ 1:length(it_vars_vec)
+                rangei = Symbol(:range, i)
                 ex = quote
-                    for $(esc(it)) = $this_range
+                    for $(esc(it_vars_vec[i])) = $rangei
                         $ex
                     end
+                end
+            end
+            range_exprs_vec = collect(reverse($range_exprs))
+            for i ∈ 1:length(it_vars_vec)
+                rangei = Symbol(:range, i)
+                range_expr = eval(range_exprs_vec[i])
+                ex = quote
+                    $rangei = $range_expr
+                    $ex
                 end
             end
             return ex
