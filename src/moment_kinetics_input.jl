@@ -197,7 +197,6 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     # Heun's method, SSP RK3 and 4-stage SSP RK3)
     n_rk_stages = get(scan_input, "n_rk_stages", 4)
     split_operators = get(scan_input, "split_operators", false)
-    runtime_plots = get(scan_input, "runtime_plots", false)
     stopfile_name = joinpath(output_dir, "stop")
     steady_state_residual = get(scan_input, "steady_state_residual", false)
     converged_residual_value = get(scan_input, "converged_residual_value", -1.0)
@@ -394,8 +393,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     #nrank_z = 0
 
     t_input = time_input(nstep, dt, nwrite_moments, nwrite_dfns, n_rk_stages,
-                         split_operators, runtime_plots, steady_state_residual,
-                         converged_residual_value,
+                         split_operators, steady_state_residual, converged_residual_value,
                          manufactured_solns_input.use_for_advance, stopfile_name)
     # replace mutable structures with immutable ones to optimize performance
     # and avoid possible misunderstandings	

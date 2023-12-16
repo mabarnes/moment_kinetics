@@ -28,7 +28,6 @@ using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
 using ..initial_conditions: enforce_boundary_conditions!
 using ..initial_conditions: enforce_neutral_boundary_conditions!
 using ..input_structs: advance_info, time_input
-using ..makie_post_processing: plot_1d, plot_2d, positive_or_nan
 using ..moment_constraints: hard_force_moment_constraints!,
                             hard_force_moment_constraints_neutral!
 using ..advection: setup_advection
@@ -62,7 +61,6 @@ using ..utils: to_minutes
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
 using Dates
-using CairoMakie
 using ..analysis: steady_state_residuals
 #using ..post_processing: draw_v_parallel_zero!
 
@@ -983,102 +981,6 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                 end
             end
 
-            # Hack to save *.pdf of current pdf
-            if t_input.runtime_plots
-                if block_rank[] == 0
-                    fig = Figure()
-
-                    irow = 1
-                    title_layout = fig[irow,1] = GridLayout()
-                    Label(title_layout[1,1:2], string(t))
-
-                    ax_width = 400
-                    ax_height = 400
-
-                    irow += 1
-                    layout = fig[irow,1] = GridLayout()
-                    ax = Axis(layout[1,1], xlabel="vpa", ylabel="z", title="f", width=ax_width, height=ax_height)
-                    plot_2d(vpa.grid, z.grid, pdf.charged.norm[:,1,:,1,1]; ax=ax, colorbar_place=layout[1,2])
-                    if composition.n_neutral_species > 0
-                        ax = Axis(layout[1,3], xlabel="vz", ylabel="z", title="f_neutral", width=ax_width, height=ax_height)
-                        plot_2d(vz.grid, z.grid, pdf.neutral.norm[:,1,1,:,1,1]; ax=ax, colorbar_place=layout[1,4])
-                    end
-
-                    irow += 1
-                    layout = fig[irow,1] = GridLayout()
-                    ax = Axis(layout[1,1], xlabel="vpa", ylabel="z", title="f", width=ax_width, height=ax_height)
-                    plot_2d(vpa.grid, z.grid, pdf.charged.norm[:,1,:,1,1]; ax=ax,
-                            colorbar_place=layout[1,2], colorscale=log10,
-                            transform=x->positive_or_nan(x, epsilon=1.e-20))
-                    if composition.n_neutral_species > 0
-                        ax = Axis(layout[1,3], xlabel="vz", ylabel="z", title="f_neutral", width=ax_width, height=ax_height)
-                        plot_2d(vz.grid, z.grid, pdf.neutral.norm[:,1,1,:,1,1]; ax=ax,
-                                colorbar_place=layout[1,4], colorscale=log10,
-                                transform=x->positive_or_nan(x, epsilon=1.e-20))
-                    end
-
-                    irow += 1
-                    layout = fig[irow,1] = GridLayout()
-                    ax = Axis(layout[1,1], xlabel="vpa", ylabel="f0", width=ax_width, height=ax_height)
-                    plot_1d(vpa.grid, pdf.charged.norm[:,1,1,1,1]; ax=ax)
-                    if composition.n_neutral_species > 0
-                        ax = Axis(layout[1,2], xlabel="vz", ylabel="f0_neutral", width=ax_width, height=ax_height)
-                        plot_1d(vz.grid, pdf.neutral.norm[:,1,1,1,1,1]; ax=ax)
-                    end
-
-                    irow += 1
-                    layout = fig[irow,1] = GridLayout()
-                    ax = Axis(layout[1,1], xlabel="vpa", ylabel="fL", width=ax_width, height=ax_height)
-                    plot_1d(vpa.grid, pdf.charged.norm[:,1,end,1,1]; ax=ax)
-                    if composition.n_neutral_species > 0
-                        ax = Axis(layout[1,2], xlabel="vz", ylabel="fL_neutral", width=ax_width, height=ax_height)
-                        plot_1d(vz.grid, pdf.neutral.norm[:,1,1,end,1,1]; ax=ax)
-                    end
-
-                    irow += 1
-                    layout = fig[irow,1] = GridLayout()
-                    ax = Axis(layout[1,1], xlabel="z", ylabel="density", width=ax_width, height=ax_height)
-                    plot_1d(z.grid, moments.charged.dens[:,1,1]; ax=ax, label="ion")
-                    if composition.n_neutral_species > 0
-                        plot_1d(z.grid, moments.neutral.dens[:,1,1]; ax=ax, label="neutral")
-                    end
-                    #axislegend(ax)
-                    ax = Axis(layout[1,2], xlabel="z", ylabel="upar", width=ax_width, height=ax_height)
-                    plot_1d(z.grid, moments.charged.upar[:,1,1]; ax=ax, label="ion")
-                    if composition.n_neutral_species > 0
-                        plot_1d(z.grid, moments.neutral.uz[:,1,1]; ax=ax, label="neutral")
-                    end
-                    #axislegend(ax)
-
-                    irow += 1
-                    layout = fig[irow,1] = GridLayout()
-                    ax = Axis(layout[1,1], xlabel="z", ylabel="ppar", width=ax_width, height=ax_height)
-                    plot_1d(z.grid, moments.charged.ppar[:,1,1]; ax=ax, label="ion")
-                    if composition.n_neutral_species > 0
-                        plot_1d(z.grid, moments.neutral.pz[:,1,1]; ax=ax, label="neutral")
-                    end
-                    #axislegend(ax)
-                    ax = Axis(layout[1,2], xlabel="z", ylabel="vth", width=ax_width, height=ax_height)
-                    plot_1d(z.grid, moments.charged.vth[:,1,1]; ax=ax, label="ion")
-                    if composition.n_neutral_species > 0
-                        plot_1d(z.grid, moments.neutral.vth[:,1,1]; ax=ax, label="neutral")
-                    end
-                    #axislegend(ax)
-
-                    irow += 1
-                    layout = fig[irow,1] = GridLayout()
-                    ax = Axis(layout[1,1], xlabel="z", ylabel="qpar", width=ax_width, height=ax_height)
-                    plot_1d(z.grid, moments.charged.qpar[:,1,1]; ax=ax, label="ion")
-                    if composition.n_neutral_species > 0
-                        plot_1d(z.grid, moments.neutral.qz[:,1,1]; ax=ax, label="neutral")
-                    end
-                    #axislegend(ax)
-
-                    resize_to_layout!(fig)
-
-                    save("latest_plots$(iblock_index[]).png", fig)
-                end
-            end
             iwrite_moments += 1
             begin_s_r_z_vperp_region()
             @debug_detect_redundant_block_synchronize begin

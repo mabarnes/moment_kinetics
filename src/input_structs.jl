@@ -40,7 +40,6 @@ struct time_input
     nwrite_dfns::mk_int
     n_rk_stages::mk_int
     split_operators::Bool
-    runtime_plots::Bool
     steady_state_residual::Bool
     converged_residual_value::mk_float
     use_manufactured_solns_for_advance::Bool
