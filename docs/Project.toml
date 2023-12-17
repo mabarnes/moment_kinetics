@@ -1,6 +1,8 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+makie_post_processing = "14778871-8d0d-429c-ae6e-bde7d57d7f1e"
 moment_kinetics = "b5ff72cc-06fc-4161-ad14-dba1c22ed34e"
+plots_post_processing = "6f98f6d0-83ae-4c2a-9d92-db6b25a4b00d"
 
 [compat]
 Documenter = "0.27"

@@ -1,5 +1,5 @@
 using Documenter
-using moment_kinetics
+using moment_kinetics, makie_post_processing, plots_post_processing
 
 makedocs(
     sitename = "moment_kinetics",

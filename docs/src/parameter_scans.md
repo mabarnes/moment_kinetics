@@ -35,9 +35,9 @@ every input file contained in that directory.
 Post processing a scan
 ----------------------
 
-[`moment_kinetics.makie_post_processing.makie_post_process`](@ref) can be
-called for each run in a scan. For example to post process the scan in
-`runs/scan_example` from the REPL
+[`makie_post_processing.makie_post_process`](@ref) can be called for each run
+in a scan. For example to post process the scan in `runs/scan_example` from the
+REPL
 ```julia
 $ julia -p 8 --project -O3
 julia> include("post_process_parameter_scan.jl")

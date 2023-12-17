@@ -5,11 +5,10 @@ How to
 ------
 
 Post processing functionality is provided by the
-[`moment_kinetics.makie_post_processing`](@ref) module. To run the post
-processing, call
-[`moment_kinetics.makie_post_processing.makie_post_process`](@ref) e.g.
+[`makie_post_processing.makie_post_processing`](@ref) module. To run the post
+processing, call [`makie_post_processing.makie_post_process`](@ref) e.g.
 ```julia
-julia> using moment_kinetics.makie_post_processing
+julia> using makie_post_processing
 julia> makie_post_process("runs/example-run/")
 ```
 or
@@ -35,9 +34,9 @@ default they will all be read and plotted. A single restart can be started by
 passing the `restart_id` argument to `makie_post_process()`.
 
 To see all the options that can be set,
-[`moment_kinetics.makie_post_processing.generate_example_input_file`](@ref) can
-be used to create an example file containing all the options with their default
-values. The options are all commented out when the file is created.
+[`makie_post_processing.generate_example_input_file`](@ref) can be used to
+create an example file containing all the options with their default values.
+The options are all commented out when the file is created.
 
 !!! note "Viewing animations"
     Animations are produced in `.gif` format. Most utilities just play gifs,
@@ -48,12 +47,12 @@ values. The options are all commented out when the file is created.
 Interactive use
 ---------------
 
-The functions in [`moment_kinetics.makie_post_processing`](@ref) can be used
-interactively (or in standalone scripts). To do so, first get the 'info' for
-a run (file names, metadata, etc.) using
-[`moment_kinetics.makie_post_processing.get_run_info`](@ref)
+The functions in [`makie_post_processing.makie_post_processing`](@ref) can be
+used interactively (or in standalone scripts). To do so, first get the 'info'
+for a run (file names, metadata, etc.) using
+[`makie_post_processing.get_run_info`](@ref)
 ```julia
-julia> using moment_kinetics.makie_post_processing
+julia> using makie_post_processing
 julia> run_info = get_run_info("runs/example-run/")
 ```
 or to load from the distribution functions output file `.dfns.h5`
@@ -75,8 +74,8 @@ Then you can make 1d or 2d plots, e.g.
 julia> fig1 = plot_vs_z(run_info, "phi")
 julia> fig2 = plot_vs_r_t(run_info, "density"; outfile="density_vs_r_t.pdf")
 ```
-using [`moment_kinetics.makie_post_processing.plot_vs_t`](@ref), etc. for 1d
-and [`moment_kinetics.makie_post_processing.plot_vs_r_t`](@ref), etc. for 2d
+using [`makie_post_processing.plot_vs_t`](@ref), etc. for 1d and
+[`makie_post_processing.plot_vs_r_t`](@ref), etc. for 2d
 plots.
 The `outfile` argument can be used to save the plot.
 You can also change the default values used to select from the other dimensions
@@ -88,9 +87,9 @@ You can make animations in a similar way
 julia> fig1 = animate_vs_z(run_info, "phi"; outfile="phi_vs_z.gif", it=8:12, ir=1)
 julia> fig2 = animate_vs_z_r(run_info, "density"; outfile="density_vs_z_r.mp4")
 ```
-using [`moment_kinetics.makie_post_processing.animate_vs_r`](@ref), etc. for 1d
-and [`moment_kinetics.makie_post_processing.animate_vs_z_r`](@ref), etc.  for
-2d animations.
+using [`makie_post_processing.animate_vs_r`](@ref), etc. for 1d and
+[`makie_post_processing.animate_vs_z_r`](@ref), etc. for 2d
+animations.
 Note that `outfile` is required for animations.
 
 API

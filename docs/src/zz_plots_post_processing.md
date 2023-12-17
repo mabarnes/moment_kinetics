@@ -2,5 +2,5 @@
 =======================
 
 ```@autodocs
-Modules = [plots_post_processing, plots_post_processing.post_processing_input]
+Modules = [plots_post_processing, plots_post_processing.post_processing_input, plots_post_processing.shared_utils]
 ```
