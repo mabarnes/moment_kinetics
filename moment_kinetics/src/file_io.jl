@@ -217,22 +217,22 @@ end
 """
 Get a (sub-)group from a file or group
 """
-function get_group() end
+function get_group end
 
 """
 Test if a member of a (sub-)group is a group
 """
-function is_group() end
+function is_group end
 
 """
 Get names of all subgroups
 """
-function get_subgroup_keys() end
+function get_subgroup_keys end
 
 """
 Get names of all variables
 """
-function get_variable_keys() end
+function get_variable_keys end
 
 """
     write_single_value!(file_or_group, name, value; description=nothing, units=nothing)
@@ -240,7 +240,7 @@ function get_variable_keys() end
 Write a single variable to a file or group. If a description or units are passed, add as
 attributes of the variable.
 """
-function write_single_value!() end
+function write_single_value! end
 
 """
 write some overview information for the simulation to the binary file
@@ -613,7 +613,7 @@ array dimensions. The species dimension does not have a `coordinate`, so the num
 species is passed as `nspecies`. A description and/or units can be added with the keyword
 arguments.
 """
-function create_dynamic_variable!() end
+function create_dynamic_variable! end
 
 """
 define dynamic (time-evolving) moment variables for writing to the hdf5 file
@@ -922,7 +922,7 @@ end
 """
 Add an attribute to a file, group or variable
 """
-function add_attribute!() end
+function add_attribute! end
 
 """
 Low-level function to open a binary output file
@@ -1163,7 +1163,7 @@ used to get the ranges to write from/to (needed for parallel I/O) - the entries 
 `coords` tuple can be either `coordinate` instances or integers (for an integer `n` the
 range is `1:n`).
 """
-function append_to_dynamic_var() end
+function append_to_dynamic_var end
 
 @debug_shared_array begin
     function append_to_dynamic_var(data::DebugMPISharedArray, args...; kwargs...)
