@@ -291,7 +291,7 @@ function write_provenance_tracking_info!(fid, parallel_io, run_id, restart_time_
                             description="Total number of MPI ranks used for the run")
 
         # Get current git hash for code
-        project_dir = dirname(dirname(@__FILE__))
+        project_dir = dirname(dirname(dirname(@__FILE__)))
         repo = GitRepo(project_dir)
         git_commit_hash = string(LibGit2.GitHash(LibGit2.peel(LibGit2.GitCommit, LibGit2.head(repo))))
         if LibGit2.isdirty(repo)

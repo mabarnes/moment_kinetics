@@ -2,6 +2,7 @@
 performance-tests/config.toml
 Manifest.toml
 LocalPreferences.toml
+/Project.toml
 /julia.env
 bin
 machines/shared/compile_dependencies.sh
