@@ -14,19 +14,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
       - uses: julia-actions/setup-julia@v1
         with:
-          version: '1.8'
+          version: '1.9'
           arch: x64
-      - uses: julia-actions/julia-buildpkg@v1
-        env:
-          # Use the system Python for PyCall - avoids library linking error on macOS
-          PYTHON: "${{ env.pythonLocation }}/bin/python"
       - name: Test examples
         run: |
-          pip3 install --user matplotlib
+          touch Project.toml
+          julia -O3 --project -e 'import Pkg; Pkg.develop(path="moment_kinetics/"); Pkg.add("NCDatasets"); Pkg.precompile()'
           # Reduce nstep for each example to 10 to avoid the CI job taking too long
-          julia --project -O3 -e 'using moment_kinetics; for (root, dirs, files) in walkdir("examples") for file in files if endswith(file, ".toml") filename = joinpath(root, file); println(filename); input = moment_kinetics.moment_kinetics_input.read_input_file(filename); input["nstep"] = 10; run_moment_kinetics(input) end end end'
+          julia -O3 --project -e 'using moment_kinetics; for (root, dirs, files) in walkdir("examples") for file in files if endswith(file, ".toml") filename = joinpath(root, file); println(filename); input = moment_kinetics.moment_kinetics_input.read_input_file(filename); input["nstep"] = 10; run_moment_kinetics(input) end end end'

@@ -14,17 +14,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
       - uses: julia-actions/setup-julia@v1
         with:
-          version: '1.8'
+          version: '1.9'
           arch: x64
       - uses: julia-actions/julia-buildpkg@v1
-        env:
-          # Use the system Python for PyCall - avoids library linking error on macOS
-          PYTHON: "${{ env.pythonLocation }}/bin/python"
-      - run: |
-          pip3 install --user matplotlib
+        with:
+          project: 'moment_kinetics/'
       - uses: julia-actions/julia-runtest@v1
+        with:
+          project: 'moment_kinetics/'
