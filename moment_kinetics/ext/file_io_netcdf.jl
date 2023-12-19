@@ -1,4 +1,18 @@
-# No separate module defined here as this file is included within the file_io module
+# This extension provides an interface to the optional file_io_netcdf package, which
+# provides NetCDF I/O
+#
+# Note that if there are errors when precompiling an extension, they may not be shown by
+# default. To see the error, precompile by running
+# `using Pkg; Pkg.precompile(strict=true)`.
+module file_io_netcdf
+
+import moment_kinetics.file_io: io_has_parallel, open_output_file_implementation,
+                                create_io_group, get_group, is_group, get_subgroup_keys,
+                                get_variable_keys, add_attribute!, write_single_value!,
+                                create_dynamic_variable!, append_to_dynamic_var
+import moment_kinetics.load_data: open_file_to_read, load_variable, load_slice
+using moment_kinetics.coordinates: coordinate
+using moment_kinetics.input_structs: netcdf
 
 using NCDatasets
 
@@ -7,7 +21,8 @@ function io_has_parallel(::Val{netcdf})
     return false
 end
 
-function open_output_file_netcdf(prefix, parallel_io, io_comm, mode="c")
+function open_output_file_implementation(::Val{netcdf}, prefix, parallel_io, io_comm,
+                                         mode="c")
     parallel_io && error("NetCDF interface does not support parallel I/O")
 
     # the netcdf file will be given by output_dir/run_name with .cdf appended
@@ -238,3 +253,40 @@ function append_to_dynamic_var(io_var::NCDatasets.CFVariable,
 
     return nothing
 end
+
+function open_file_to_read(::Val{netcdf}, filename)
+    return NCDataset(filename, "r")
+end
+
+function load_variable(file_or_group::NCDataset, name::String)
+    # This overload deals with cases where fid is a NetCDF `Dataset` (which could be a
+    # file or a group).
+    try
+        if size(file_or_group[name].var) == ()
+            var = file_or_group[name].var[]
+        else
+            var = copy(file_or_group[name].var)
+        end
+        if isa(var, Char)
+            var = (var == Char(true))
+        end
+        return var
+    catch
+        println("An error occured while loading $name")
+        rethrow()
+    end
+end
+
+function load_slice(file_or_group::NCDataset, name::String, slices_or_indices...)
+    # This overload deals with cases where fid is a NetCDF `Dataset` (which could be a
+    # file or a group).
+    try
+        var = file_or_group[name].var[slices_or_indices...]
+        return var
+    catch
+        println("An error occured while loading $name")
+        rethrow()
+    end
+end
+
+end # file_io_netcdf

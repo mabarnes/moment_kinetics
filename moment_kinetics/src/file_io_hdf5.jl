@@ -7,7 +7,7 @@ function io_has_parallel(::Val{hdf5})
     return HDF5.has_parallel()
 end
 
-function open_output_file_hdf5(prefix, parallel_io, io_comm, mode="cw")
+function open_output_file_implementation(::Val{hdf5}, prefix, parallel_io, io_comm, mode="cw")
     # the hdf5 file will be given by output_dir/run_name with .h5 appended
     filename = string(prefix, ".h5")
     # create the new HDF5 file

@@ -341,7 +341,7 @@ mutable struct geometry_input
 end
 
 @enum binary_format_type hdf5 netcdf
-export hdf5, netcdf
+export binary_format_type, hdf5, netcdf
 
 """
 Settings and input for setting up file I/O

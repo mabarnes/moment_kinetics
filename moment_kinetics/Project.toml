@@ -20,7 +20,6 @@ LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
 MPIPreferences = "3da0fdf6-3ccc-4f1b-acd9-58baa6c99267"
 Measures = "442fdcdd-2543-5da2-b0f3-8c86c306513e"
-NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
 OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 Preferences = "21216c6a-2e73-6563-6e65-726566657250"
@@ -39,6 +38,12 @@ TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
+
+[weakdeps]
+NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
+
+[extensions]
+file_io_netcdf = "NCDatasets"
 
 [compat]
 HDF5_jll = "<1.14, >=1.15"

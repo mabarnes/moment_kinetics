@@ -16,15 +16,19 @@ export load_species_data
 
 using ..array_allocation: allocate_float
 using ..coordinates: coordinate, define_coordinate
-using ..file_io: get_group, get_subgroup_keys, get_variable_keys
-using ..input_structs: advection_input, grid_input
+using ..file_io: check_io_implementation, get_group, get_subgroup_keys, get_variable_keys
+using ..input_structs: advection_input, grid_input, hdf5, netcdf
 using ..interpolation: interpolate_to_grid_1d!
 using ..looping
 using ..type_definitions: mk_int
 
 using HDF5
 using MPI
-using NCDatasets
+
+function open_file_to_read end
+function open_file_to_read(::Val{hdf5}, filename)
+    return h5open(filename, "r")
+end
 
 """
 """
@@ -51,13 +55,16 @@ function open_readonly_output_file(run_name, ext; iblock=0, printout=false)
             print("Opening ", filename, " to read HDF5 data...")
         end
         # open the HDF5 file with given filename for reading
-        fid = h5open(filename, "r")
+        check_io_implementation(hdf5)
+        fid = open_file_to_read(Val(hdf5), filename)
     else
         if printout
             print("Opening ", filename, " to read NetCDF data...")
         end
+
         # open the netcdf file with given filename for reading
-        fid = NCDataset(filename, "r")
+        check_io_implementation(netcdf)
+        fid = open_file_to_read(Val(netcdf), filename)
     end
     if printout
         println("done.")
@@ -94,24 +101,6 @@ function load_variable(file_or_group::HDF5.H5DataStore, name::String)
         rethrow()
     end
 end
-function load_variable(file_or_group::NCDataset, name::String)
-    # This overload deals with cases where fid is a NetCDF `Dataset` (which could be a
-    # file or a group).
-    try
-        if size(file_or_group[name].var) == ()
-            var = file_or_group[name].var[]
-        else
-            var = copy(file_or_group[name].var)
-        end
-        if isa(var, Char)
-            var = (var == Char(true))
-        end
-        return var
-    catch
-        println("An error occured while loading $name")
-        rethrow()
-    end
-end
 
 """
 Load a slice of a single variable from a file
@@ -122,17 +111,6 @@ function load_slice(file_or_group::HDF5.H5DataStore, name::String, slices_or_ind
     # is the abstract super-type for both
     try
         return file_or_group[name][slices_or_indices...]
-    catch
-        println("An error occured while loading $name")
-        rethrow()
-    end
-end
-function load_slice(file_or_group::NCDataset, name::String, slices_or_indices...)
-    # This overload deals with cases where fid is a NetCDF `Dataset` (which could be a
-    # file or a group).
-    try
-        var = file_or_group[name].var[slices_or_indices...]
-        return var
     catch
         println("An error occured while loading $name")
         rethrow()

@@ -7,7 +7,6 @@ export get_group
 export open_output_file, open_ascii_output_file
 export setup_file_io, finish_file_io
 export write_data_to_ascii
-export write_data_to_netcdf, write_data_to_hdf5
 
 using ..communication
 using ..coordinates: coordinate
@@ -24,6 +23,16 @@ using UUIDs
 using TOML
 
 @debug_shared_array using ..communication: DebugMPISharedArray
+
+function __init__()
+    try
+        # Try to load the NCDatasets package.  If the package is not installed, then
+        # NetCDF I/O will not be available.
+        Base.require(Main, :NCDatasets)
+    catch
+        # Do nothing
+    end
+end
 
 """
 structure containing the various input/output streams
@@ -128,6 +137,35 @@ Test if the backend supports parallel I/O.
 `binary_format` should be one of the values of the `binary_format_type` enum
 """
 function io_has_parallel end
+
+function io_has_implementation(binary_format::binary_format_type)
+    if binary_format == hdf5
+        return true
+    elseif binary_format == netcdf
+        netcdf_ext = Base.get_extension(@__MODULE__, :file_io_netcdf)
+        return netcdf_ext !== nothing
+    else
+        error("Unrecognised binary format $binary_format")
+    end
+end
+
+"""
+    check_io_implementation(binary_format)
+
+Check that an implementation is available for `binary_format`, raising an error if not.
+"""
+function check_io_implementation(binary_format)
+    if !io_has_implementation(binary_format)
+        if binary_format == netcdf
+            error("NCDatasets is not installed, cannot use NetCDF I/O. Re-run "
+                  * "machines/machine-setup.sh and activate NetCDF, or install "
+                  * "NCDatasets.")
+        else
+            error("No implementation available for binary format $binary_format")
+        end
+    end
+    return nothing
+end
 
 """
 open the necessary output files
@@ -887,16 +925,21 @@ Add an attribute to a file, group or variable
 function add_attribute!() end
 
 """
+Low-level function to open a binary output file
+
+Each implementation (HDF5, NetCDF, etc.) defines a method of this function to open a file
+of the corresponding type.
+"""
+function open_output_file_implementation end
+
+"""
 Open an output file, selecting the backend based on io_option
 """
 function open_output_file(prefix, binary_format, parallel_io, io_comm)
-    if binary_format == hdf5
-        return open_output_file_hdf5(prefix, parallel_io, io_comm)
-    elseif binary_format == netcdf
-        return open_output_file_netcdf(prefix, parallel_io, io_comm)
-    else
-        error("Unsupported I/O format $binary_format")
-    end
+    check_io_implementation(binary_format)
+
+    return open_output_file_implementation(Val(binary_format), prefix, parallel_io,
+                                           io_comm)
 end
 
 """
@@ -905,9 +948,13 @@ Re-open an existing output file, selecting the backend based on io_option
 function reopen_output_file(filename, parallel_io, io_comm)
     prefix, format_string = splitext(filename)
     if format_string == ".h5"
-        return open_output_file_hdf5(prefix, parallel_io, io_comm, "r+")[1]
+        check_io_implementation(hdf5)
+        return open_output_file_implementation(Val(hdf5), prefix, parallel_io, io_comm,
+                                               "r+")[1]
     elseif format_string == ".cdf"
-        return open_output_file_netcdf(prefix, parallel_io, io_comm, "a")[1]
+        check_io_implementation(netcdf)
+        return open_output_file_implementation(Val(netcdf), prefix, parallel_io, io_comm,
+                                               "a")[1]
     else
         error("Unsupported I/O format $binary_format")
     end
@@ -1333,8 +1380,7 @@ function finish_file_io(ascii_io::Union{ascii_ios,Nothing},
     return nothing
 end
 
-# Include the possible implementations of binary I/O functions
-include("file_io_netcdf.jl")
+# Include the non-optional implementations of binary I/O functions
 include("file_io_hdf5.jl")
 
 """
