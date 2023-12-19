@@ -19,6 +19,7 @@ using ..type_definitions: mk_int
 using ..velocity_moments: integrate_over_vspace
 
 using FFTW
+using LsqFit
 using MPI
 using OrderedCollections
 using Statistics
@@ -828,6 +829,224 @@ function get_unnormalised_f_2d(f, density, vth, evolve_density, evolve_ppar)
                                                        evolve_density, evolve_ppar)
     end
     return f_unnorm
+end
+
+"""
+Calculate a moving average
+
+```
+result[i] = mean(v[i-n:i+n])
+```
+Except near the ends of the array where indices outside the range of v are skipped.
+"""
+function moving_average(v::AbstractVector, n::mk_int)
+    if length(v) < 2*n+1
+        error("Cannot take moving average with n=$n on vector of length=$(length(v))")
+    end
+    result = similar(v)
+    for i ∈ 1:n
+        result[i] = mean(v[begin:i+n])
+    end
+    for i ∈ n+1:length(v)-n-1
+        result[i] = mean(v[i-n:i+n])
+    end
+    for i ∈ length(v)-n:length(v)
+        result[i] = mean(v[i-n:end])
+    end
+    return result
+end
+
+"""
+Fit delta_phi to get the frequency and growth rate.
+
+Note, expect the input to be a standing wave (as simulations are initialised with just a
+density perturbation), so need to extract both frequency and growth rate from the
+time-variation of the amplitude.
+
+The function assumes that if the amplitude does not cross zero, then the mode is
+non-oscillatory and so fits just an exponential, not exp*cos. The simulation used as
+input should be long enough to contain at least ~1 period of oscillation if the mode is
+oscillatory or the fit will not work.
+
+Arguments
+---------
+z : Array{mk_float, 1}
+    1d array of the grid point positions
+t : Array{mk_float, 1}
+    1d array of the time points
+delta_phi : Array{mk_float, 2}
+    2d array of the values of delta_phi(z, t)
+
+Returns
+-------
+phi_fit_result struct whose fields are:
+    growth_rate : mk_float
+        Fitted growth rate of the mode
+    amplitude0 : mk_float
+        Fitted amplitude at t=0
+    frequency : mk_float
+        Fitted frequency of the mode
+    offset0 : mk_float
+        Fitted offset at t=0
+    amplitude_fit_error : mk_float
+        RMS error in fit to ln(amplitude) - i.e. ln(A)
+    offset_fit_error : mk_float
+        RMS error in fit to offset - i.e. δ
+    cosine_fit_error : mk_float
+        Maximum of the RMS errors of the cosine fits at each time point
+    amplitude : Array{mk_float, 1}
+        Values of amplitude from which growth_rate fit was calculated
+    offset : Array{mk_float, 1}
+        Values of offset from which frequency fit was calculated
+"""
+function fit_delta_phi_mode(t, z, delta_phi)
+    # First fit a cosine to each time slice
+    results = allocate_float(3, size(delta_phi)[2])
+    amplitude_guess = 1.0
+    offset_guess = 0.0
+    for (i, phi_z) in enumerate(eachcol(delta_phi))
+        results[:, i] .= fit_cosine(z, phi_z, amplitude_guess, offset_guess)
+        (amplitude_guess, offset_guess) = results[1:2, i]
+    end
+
+    amplitude = results[1, :]
+    offset = results[2, :]
+    cosine_fit_error = results[3, :]
+
+    L = z[end] - z[begin]
+
+    # Choose initial amplitude to be positive, for convenience.
+    if amplitude[1] < 0
+        # 'Wrong sign' of amplitude is equivalent to a phase shift by π
+        amplitude .*= -1.0
+        offset .+= L / 2.0
+    end
+
+    # model for linear fits
+    @. model(t, p) = p[1] * t + p[2]
+
+    # Fit offset vs. time
+    # Would give phase velocity for a travelling wave, but we expect either a standing
+    # wave or a zero-frequency decaying mode, so expect the time variation of the offset
+    # to be ≈0
+    offset_fit = curve_fit(model, t, offset, [1.0, 0.0])
+    doffsetdt = offset_fit.param[1]
+    offset0 = offset_fit.param[2]
+    offset_error = sqrt(mean(offset_fit.resid .^ 2))
+    offset_tol = 2.e-5
+    if abs(doffsetdt) > offset_tol
+        println("WARNING: d(offset)/dt=", doffsetdt, " is non-negligible (>", offset_tol,
+              ") but fit_delta_phi_mode expected either a standing wave or a ",
+              "zero-frequency decaying mode.")
+    end
+
+    growth_rate = 0.0
+    amplitude0 = 0.0
+    frequency = 0.0
+    phase = 0.0
+    fit_error = 0.0
+    if all(amplitude .> 0.0)
+        # No zero crossing, so assume the mode is non-oscillatory (i.e. purely
+        # growing/decaying).
+
+        # Fit ln(amplitude) vs. time so we don't give extra weight to early time points
+        amplitude_fit = curve_fit(model, t, log.(amplitude), [-1.0, 1.0])
+        growth_rate = amplitude_fit.param[1]
+        amplitude0 = exp(amplitude_fit.param[2])
+        fit_error = sqrt(mean(amplitude_fit.resid .^ 2))
+        frequency = 0.0
+        phase = 0.0
+    else
+        converged = false
+        maxiter = 100
+        for iter ∈ 1:maxiter
+            @views growth_rate_change, frequency, phase, fit_error =
+                fit_phi0_vs_time(exp.(-growth_rate*t) .* amplitude, t)
+            growth_rate += growth_rate_change
+            println("growth_rate: ", growth_rate, "  growth_rate_change/growth_rate: ", growth_rate_change/growth_rate, "  fit_error: ", fit_error)
+            if abs(growth_rate_change/growth_rate) < 1.0e-12 || fit_error < 1.0e-11
+                converged = true
+                break
+            end
+        end
+        if !converged
+            println("WARNING: Iteration to find growth rate failed to converge in ", maxiter, " iterations")
+        end
+        amplitude0 = amplitude[1] / cos(phase)
+    end
+
+    return (growth_rate=growth_rate, frequency=frequency, phase=phase,
+            amplitude0=amplitude0, offset0=offset0, amplitude_fit_error=fit_error,
+            offset_fit_error=offset_error, cosine_fit_error=maximum(cosine_fit_error),
+            amplitude=amplitude, offset=offset)
+end
+
+"""
+Fit a cosine to a 1d array
+
+Fit function is A*cos(2*π*n*(z + δ)/L)
+
+The domain z is taken to be periodic, with the first and last points identified, so
+L=z[end]-z[begin]
+
+Arguments
+---------
+z : Array
+    1d array with positions of the grid points - should have the same length as data
+data : Array
+    1d array of the data to be fit
+amplitude_guess : Float
+    Initial guess for the amplitude (the value from the previous time point might be a
+    good choice)
+offset_guess : Float
+    Initial guess for the offset (the value from the previous time point might be a good
+    choice)
+n : Int, default 1
+    The periodicity used for the fit
+
+Returns
+-------
+amplitude : Float
+    The amplitude A of the cosine fit
+offset : Float
+    The offset δ of the cosine fit
+error : Float
+    The RMS of the difference between data and the fit
+"""
+function fit_cosine(z, data, amplitude_guess, offset_guess, n=1)
+    # Length of domain
+    L = z[end] - z[begin]
+
+    @. model(z, p) = p[1] * cos(2*π*n*(z + p[2])/L)
+    fit = curve_fit(model, z, data, [amplitude_guess, offset_guess])
+
+    # calculate error
+    error = sqrt(mean(fit.resid .^ 2))
+
+    return fit.param[1], fit.param[2], error
+end
+
+function fit_phi0_vs_time(phi0, tmod)
+    # the model we are fitting to the data is given by the function 'model':
+    # assume phi(z0,t) = exp(γt)cos(ωt+φ) so that
+    # phi(z0,t)/phi(z0,t0) = exp((t-t₀)γ)*cos((t-t₀)*ω + phase)/cos(phase),
+    # where tmod = t-t0 and phase = ωt₀-φ
+    @. model(t, p) = exp(p[1]*t) * cos(p[2]*t + p[3]) / cos(p[3])
+    model_params = allocate_float(3)
+    model_params[1] = -0.1
+    model_params[2] = 8.6
+    model_params[3] = 0.0
+    @views fit = curve_fit(model, tmod, phi0/phi0[1], model_params)
+    # get the confidence interval at 10% level for each fit parameter
+    #se = standard_error(fit)
+    #standard_deviation = Array{Float64,1}
+    #@. standard_deviation = se * sqrt(size(tmod))
+
+    fitted_function = model(tmod, fit.param)
+    norm = moving_average(@.((abs(phi0/phi0[1]) + abs(fitted_function))^2), 1)
+    fit_error = sqrt(mean(@.((phi0/phi0[1] - fitted_function)^2 / norm)))
+
+    return fit.param[1], fit.param[2], fit.param[3], fit_error
 end
 
 end

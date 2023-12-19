@@ -3,6 +3,7 @@ module shared_utils
 export calculate_and_write_frequencies, construct_global_zr_coords,
        get_geometry_and_composition, read_distributed_zr_data!
 
+using moment_kinetics.analysis: fit_delta_phi_mode
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input
 using moment_kinetics.type_definitions: mk_float, mk_int

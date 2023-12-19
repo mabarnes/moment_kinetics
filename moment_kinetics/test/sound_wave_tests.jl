@@ -10,7 +10,7 @@ using moment_kinetics.load_data: open_readonly_output_file
 using moment_kinetics.load_data: load_fields_data, load_time_data
 using moment_kinetics.load_data: load_species_data, load_coordinate_data
 using moment_kinetics.analysis: analyze_fields_data
-using moment_kinetics.post_processing: fit_delta_phi_mode
+using moment_kinetics.analysis: fit_delta_phi_mode
 
 const analytical_rtol = 3.e-2
 const regression_rtol = 1.e-14
