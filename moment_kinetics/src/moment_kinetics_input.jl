@@ -219,6 +219,16 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         # manufactured_solns_section["use_for_init"] == true
         manufactured_solns_section["use_for_init"] = true
     end
+    if manufactured_solns_section["use_for_init"] || manufactured_solns_section["use_for_advance"]
+        manufactured_solutions_ext = Base.get_extension(@__MODULE__, :manufactured_solns_ext)
+        if manufactured_solutions_ext === nothing
+            # If Symbolics is not installed, then the extension manufactured_solns_ext
+            # will not be loaded, in which case we cannot use manufactured solutions.
+            error("Symbolics package is not installed, so manufactured solutions are not "
+                  * "available. Re-run machines/machine-setup.sh and activate "
+                  * "manufactured solutions, or install Symbolics.")
+        end
+    end
     if manufactured_solns_section["use_vpabar_in_mms_dfni"]
         manufactured_solns_section["alpha_switch"] = 1.0
     else
