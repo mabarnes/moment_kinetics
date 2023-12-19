@@ -40,7 +40,7 @@ using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.file_io: open_ascii_output_file
 using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.load_data: open_readonly_output_file, get_group, load_input,
-                                 load_time_data
+                                 load_time_data, construct_global_zr_coords
 using moment_kinetics.load_data: get_nranks
 using moment_kinetics.load_data: load_fields_data, load_pdf_data
 using moment_kinetics.load_data: load_charged_particle_moments_data,
@@ -48,7 +48,7 @@ using moment_kinetics.load_data: load_charged_particle_moments_data,
 using moment_kinetics.load_data: load_distributed_charged_pdf_slice,
                                  load_distributed_neutral_pdf_slice, iglobal_func
 using moment_kinetics.load_data: load_neutral_pdf_data
-using moment_kinetics.load_data: load_variable
+using moment_kinetics.load_data: load_variable, read_distributed_zr_data!
 using moment_kinetics.load_data: load_coordinate_data, load_block_data, load_rank_data,
                                  load_species_data, load_mk_options
 using moment_kinetics.analysis: analyze_fields_data, analyze_moments_data,
@@ -63,8 +63,7 @@ using moment_kinetics.input_structs: geometry_input, grid_input, species_composi
 using moment_kinetics.input_structs: electron_physics_type, boltzmann_electron_response,
                                      boltzmann_electron_response_with_simple_sheath
 using .post_processing_input: pp
-using .shared_utils: calculate_and_write_frequencies, construct_global_zr_coords,
-                     get_geometry_and_composition, read_distributed_zr_data!
+using .shared_utils: calculate_and_write_frequencies, get_geometry_and_composition
 using TOML
 import Base: get
 

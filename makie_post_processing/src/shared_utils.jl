@@ -1,11 +1,13 @@
 module shared_utils
 
-export calculate_and_write_frequencies, construct_global_zr_coords,
-       get_geometry_and_composition, read_distributed_zr_data!
+export calculate_and_write_frequencies, get_geometry_and_composition
 
 using moment_kinetics.analysis: fit_delta_phi_mode
+using moment_kinetics.array_allocation: allocate_float
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.input_structs: grid_input
+using moment_kinetics.input_structs: boltzmann_electron_response,
+                                     boltzmann_electron_response_with_simple_sheath,
+                                     grid_input, geometry_input, species_composition
 using moment_kinetics.type_definitions: mk_float, mk_int
 
 using MPI
@@ -55,23 +57,6 @@ function calculate_and_write_frequencies(run_name, ntime, time, z, itime_min, it
 
     end
     return frequency, growth_rate, shifted_time, fitted_delta_phi
-end
-
-"""
-"""
-function construct_global_zr_coords(r_local, z_local)
-
-    function make_global_input(coord_local)
-        return grid_input(coord_local.name, coord_local.ngrid,
-            coord_local.nelement_global, coord_local.nelement_global, 1, 0, coord_local.L,
-            coord_local.discretization, coord_local.fd_option, coord_local.cheb_option, coord_local.bc,
-            coord_local.advection, MPI.COMM_NULL, coord_local.element_spacing_option)
-    end
-
-    r_global, r_global_spectral = define_coordinate(make_global_input(r_local))
-    z_global, z_global_spectral = define_coordinate(make_global_input(z_local))
-
-    return r_global, r_global_spectral, z_global, z_global_spectral
 end
 
 """
@@ -128,77 +113,6 @@ function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species
         mn_over_mi, me_over_mi, recycling_fraction, allocate_float(n_species))
     return geometry, composition
 
-end
-
-"""
-Read data which is a function of (z,r,t) or (z,r,species,t)
-
-run_names is a tuple. If it has more than one entry, this means that there are multiple
-restarts (which are sequential in time), so concatenate the data from each entry together.
-"""
-function read_distributed_zr_data!(var::Array{mk_float,N}, var_name::String,
-   run_names::Tuple, file_key::String, nblocks::Tuple,
-   nz_local::mk_int,nr_local::mk_int,iskip::mk_int) where N
-    # dimension of var is [z,r,species,t]
-
-    local_tind_start = 1
-    local_tind_end = -1
-    global_tind_start = 1
-    global_tind_end = -1
-    for (run_name, nb) in zip(run_names, nblocks)
-        for iblock in 0:nb-1
-            fid = open_readonly_output_file(run_name,file_key,iblock=iblock,printout=false)
-            group = get_group(fid, "dynamic_data")
-            var_local = load_variable(group, var_name)
-
-            ntime_local = size(var_local, N)
-
-            # offset is the amount we have to skip at the beginning of this restart to
-            # line up properly with having outputs every iskip since the beginning of the
-            # first restart.
-            # Note: use rem(x,y,RoundDown) here because this gives a result that's
-            # definitely between 0 and y, whereas rem(x,y) or mod(x,y) give negative
-            # results for negative x.
-            offset = rem(1 - (local_tind_start-1), iskip, RoundDown)
-            if offset == 0
-                # Actually want offset in the range [1,iskip], so correct if rem()
-                # returned 0
-                offset = iskip
-            end
-            if local_tind_start > 1
-                # The run being loaded is a restart (as local_tind_start=1 for the first
-                # run), so skip the first point, as this is a duplicate of the last point
-                # of the previous restart
-                offset += 1
-            end
-
-            local_tind_end = local_tind_start + ntime_local - 1
-            global_tind_end = global_tind_start + length(offset:iskip:ntime_local) - 1
-
-            z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid)
-
-            # min index set to avoid double assignment of repeated points
-            # 1 if irank = 0, 2 otherwise
-            imin_r = min(1,r_irank) + 1
-            imin_z = min(1,z_irank) + 1
-            for ir_local in imin_r:nr_local
-                for iz_local in imin_z:nz_local
-                    ir_global = iglobal_func(ir_local,r_irank,nr_local)
-                    iz_global = iglobal_func(iz_local,z_irank,nz_local)
-                    if N == 4
-                        var[iz_global,ir_global,:,global_tind_start:global_tind_end] .= var_local[iz_local,ir_local,:,offset:iskip:end]
-                    elseif N == 3
-                        var[iz_global,ir_global,global_tind_start:global_tind_end] .= var_local[iz_local,ir_local,offset:iskip:end]
-                    else
-                        error("Unsupported number of dimensions: $N")
-                    end
-                end
-            end
-            close(fid)
-        end
-        local_tind_start = local_tind_end + 1
-        global_tind_start = global_tind_end + 1
-    end
 end
 
 end # shared_utils.jl

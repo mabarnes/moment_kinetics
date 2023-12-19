@@ -16,8 +16,8 @@ using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data
                                  load_neutral_particle_moments_data,
                                  load_neutral_pdf_data, load_time_data, load_species_data
 using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
-using moment_kinetics.makie_post_processing: get_run_info, close_run_info,
-                                             postproc_load_variable
+using moment_kinetics.load_data: get_run_info_no_setup, close_run_info,
+                                 postproc_load_variable
 using moment_kinetics.type_definitions: mk_float
 
 include("nonlinear_sound_wave_inputs_and_expected_data.jl")
@@ -136,7 +136,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
             # Read the output data
             path = joinpath(realpath(input["base_directory"]), name)
 
-            run_info = get_run_info((path, -1); dfns=true)
+            run_info = get_run_info_no_setup((path, -1); dfns=true)
             z = run_info.z
             z_spectral = run_info.z_spectral
             vpa = run_info.vpa

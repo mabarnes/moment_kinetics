@@ -11,7 +11,6 @@ using Statistics: mean
 using SpecialFunctions: erfi
 using LaTeXStrings
 # modules
-using ..plots_post_processing: read_distributed_zr_data!, construct_global_zr_coords
 using ..plots_post_processing: allocate_global_zr_neutral_moments, allocate_global_zr_charged_moments
 using ..plots_post_processing: allocate_global_zr_fields#, get_coords_nelement
 using moment_kinetics.array_allocation: allocate_float
@@ -20,6 +19,7 @@ using moment_kinetics.load_data: open_readonly_output_file
 using moment_kinetics.load_data: load_fields_data
 using moment_kinetics.load_data: load_time_data, load_species_data
 using moment_kinetics.load_data: load_block_data, load_coordinate_data
+using moment_kinetics.load_data: read_distributed_zr_data!, construct_global_zr_coords
 using moment_kinetics.moment_kinetics_input: mk_input, read_input_file
 
 function plot_sequence_fields_data(path_list)
