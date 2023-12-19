@@ -82,7 +82,7 @@ source_T = 2.0
 
 [neutral_source]
 active = true
-controller_type = "recycling"
+source_type = "recycling"
 recycling_controller_fraction = 0.25
 
 [numerical_dissipation]

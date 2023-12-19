@@ -1233,17 +1233,17 @@ function write_moments_data_to_binary(moments, fields, t, n_ion_species,
                                       parallel_io, z, r)
                 if moments.evolve_density
                     append_to_dynamic_var(io_moments.external_source_neutral_density_amplitude,
-                                          moments.charged.external_source_neutral_density_amplitude,
+                                          moments.neutral.external_source_density_amplitude,
                                           t_idx, parallel_io, z, r)
                 end
-                if moments.evolve_uparr
+                if moments.evolve_upar
                     append_to_dynamic_var(io_moments.external_source_neutral_momentum_amplitude,
-                                          moments.charged.external_source_neutral_momentum_amplitude,
+                                          moments.neutral.external_source_momentum_amplitude,
                                           t_idx, parallel_io, z, r)
                 end
                 if moments.evolve_ppar
                     append_to_dynamic_var(io_moments.external_source_neutral_pressure_amplitude,
-                                          moments.charged.external_source_neutral_pressure_amplitude,
+                                          moments.neutral.external_source_pressure_amplitude,
                                           t_idx, parallel_io, z, r)
                 end
             end
