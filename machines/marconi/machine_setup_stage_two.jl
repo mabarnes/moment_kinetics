@@ -15,8 +15,9 @@ artifact_dir = joinpath(repo_dir, "machines", "artifacts")
 ############
 
 println("\n** Setting up to use custom compiled HDF5\n")
-ENV["JULIA_HDF5_PATH"] = joinpath(artifact_dir, "hdf5-build/")
-Pkg.build()
+hdf5_dir = joinpath(artifact_dir, "hdf5-build/")
+using HDF5
+HDF5.API.set_libraries!(joinpath(hdf5_dir, "libhdf5.so"), joinpath(hdf5_dir, "libhdf5_hl.so"))
 
 
 # MPI setup

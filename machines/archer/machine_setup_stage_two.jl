@@ -12,8 +12,9 @@ Pkg.resolve()
 ############
 
 println("\n** Setting up to use system HDF5\n")
-ENV["JULIA_HDF5_PATH"] = ENV["HDF5_DIR"] # system hdf5
-Pkg.build()
+hdf5_dir = ENV["HDF5_DIR"] # system hdf5
+using HDF5
+HDF5.API.set_libraries!(joinpath(hdf5_dir, "libhdf5.so"), joinpath(hdf5_dir, "libhdf5_hl.so"))
 
 
 # MPI setup
