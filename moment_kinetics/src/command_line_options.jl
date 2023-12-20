@@ -33,6 +33,9 @@ const s = ArgParseSettings()
         arg_type = Int
         default = -1
     # Options for tests
+    "--force-optional-dependencies"
+        help = "Skip workarounds that allow tests to run without optional dependencies"
+        action = :store_true
     "--long"
         help = "Include more tests, increasing test run time."
         action = :store_true

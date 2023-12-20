@@ -21,6 +21,9 @@ jobs:
       - uses: julia-actions/julia-buildpkg@v1
         with:
           project: 'moment_kinetics/'
-      - uses: julia-actions/julia-runtest@v1
-        with:
-          project: 'moment_kinetics/'
+      # The following is copied and simplified from
+      # https://github.com/julia-actions/julia-runtest/blob/master/action.yml
+      # in order to pass customised arguments to `Pkg.test()`
+      - run: |
+          julia --check-bounds=yes --color=yes --depwarn=yes --project=moment_kinetics/ -e 'import Pkg; Pkg.test(; test_args=["--force-optional-dependencies"])'
+        shell: bash

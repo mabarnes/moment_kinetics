@@ -12,8 +12,8 @@ using moment_kinetics
 
 module MKTestUtilities
 
-export use_verbose, @long, quietoutput, get_MPI_tempdir, global_rank, maxabs_norm,
-       @testset_skip
+export use_verbose, force_optional_dependencies, @long, quietoutput, get_MPI_tempdir,
+       global_rank, maxabs_norm, @testset_skip
 
 using moment_kinetics.communication: comm_world, global_rank
 using moment_kinetics.command_line_options: get_options
@@ -21,6 +21,7 @@ using moment_kinetics.command_line_options: get_options
 using MPI
 
 const use_verbose = get_options()["verbose"]
+const force_optional_dependencies = get_options()["force-optional-dependencies"]
 
 
 # Convenience modifiers for test calls

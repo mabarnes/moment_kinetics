@@ -6,6 +6,8 @@ using Base.Filesystem: tempname
 #using Plots: plot, plot!, gui
 
 using moment_kinetics.array_allocation: allocate_float
+using moment_kinetics.input_structs: netcdf
+using moment_kinetics.file_io: io_has_implementation
 using moment_kinetics.load_data: open_readonly_output_file
 using moment_kinetics.load_data: load_fields_data, load_time_data
 using moment_kinetics.load_data: load_species_data, load_coordinate_data
@@ -15,6 +17,11 @@ using moment_kinetics.analysis: fit_delta_phi_mode
 const analytical_rtol = 3.e-2
 const regression_rtol = 1.e-14
 const regression_range = 5:10
+
+# Use "netcdf" to test the NetCDF I/O if it is available (or if we are forcing optional
+# dependencies to be used, e.g. for CI tests), otherwise fall back to "hdf5".
+const binary_format = (force_optional_dependencies || io_has_implementation(netcdf)) ?
+                      "netcdf" : "hdf5"
 
 # default inputs for tests
 test_input_finite_difference = Dict("n_ion_species" => 1,
@@ -74,7 +81,7 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "vz_L" => 8.0,
                                     "vz_bc" => "periodic",
                                     "vz_discretization" => "finite_difference",
-                                    "output" => Dict{String,Any}("binary_format" => "netcdf")
+                                    "output" => Dict{String,Any}("binary_format" => binary_format)
                                    )
 
 test_input_finite_difference_split_1_moment =
