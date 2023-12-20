@@ -46,12 +46,4 @@ JOBID=$(sbatch --parsable $JOBSCRIPT)
 echo "Precompile: $JOBID"
 echo "In the queue" > $PRECOMPILEDIR/slurm-$JOBID.out
 
-# Create a submission script for the post-processing precompilation
-POSTPROCESSINGJOBSCRIPT=${PRECOMPILEDIR}precompile-postprocessing.job
-sed -e "s|ACCOUNT|$ACCOUNT|" -e "s|PRECOMPILEDIR|$PRECOMPILEDIR|" machines/$MACHINE/jobscript-precompile-postprocessing.template > $POSTPROCESSINGJOBSCRIPT
-
-JOBID=$(sbatch --parsable $POSTPROCESSINGJOBSCRIPT)
-echo "Precompile postprocessing: $JOBID"
-echo "In the queue" > $PRECOMPILEDIR/slurm-$JOBID.out
-
 echo "Done"

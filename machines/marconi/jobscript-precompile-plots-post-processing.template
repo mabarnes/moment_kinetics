@@ -15,6 +15,6 @@ source julia.env
 
 echo "precompiling $(date)"
 
-bin/julia --project precompile-makie-post-processing.jl
+bin/julia --project=plots_post_processing/ precompile-plots-post-processing.jl
 
 echo "finished!"

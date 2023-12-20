@@ -16,6 +16,12 @@ default_settings["base"] = Dict("default_run_time"=>"24:00:00",
                                 "default_postproc_memory"=>"64G",
                                 "default_partition"=>"",
                                 "default_qos"=>"")
+# No batch system steup for "generic-pc"
+default_settings["generic-pc"] = merge(default_settings["base"],
+                                   Dict("default_run_time"=>"0:00:00",
+                                        "default_nodes"=>"0",
+                                        "default_postproc_time"=>"0:00:00",
+                                        "default_postproc_memory"=>"0"))
 default_settings["archer"] = merge(default_settings["base"],
                                    Dict("default_partition"=>"standard",
                                         "default_qos"=>"standard"))
@@ -62,8 +68,8 @@ Do setup for a known `machine`:
 `julia_directory` gives the location of the directory (usually called `.julia`) where
 Julia installs files, saves settings, etc. `julia_directory` must be passed if this
 directory should be in a non-default location (i.e. not `\$HOME/.julia/`). The value is
-used to set `JULIA_DEPOT_PATH` in the `julia.env` file, so that this setting is
-propagated to the environment on the compute nodes.
+used to set `JULIA_DEPOT_PATH` in the `julia.env` file or `bin/julia` script , so that
+this setting is propagated to the environment on the compute nodes.
 
 Usually it is necessary for Julia to be restarted after running this function to ensure
 the correct MPI is linked, etc. so the function will force Julia to exit. If for some
@@ -95,6 +101,8 @@ re-running this function (if you want to). The arguments are:
   change this to a free, low-priority queue if one is available.
 
 Currently supported machines:
+* `"generic-pc"` - A generic personal computer. Set up for interactive use, rather than
+    for submitting jobs to a batch queue.
 * `"archer"` - the UK supercomputer [ARCHER2](https://www.archer2.ac.uk/)
 * `"marconi"` - the EUROfusion supercomputer
     [Marconi](https://wiki.u-gov.it/confluence/display/SCAIUS/UG3.1%3A+MARCONI+UserGuide)
@@ -121,27 +129,66 @@ function machine_setup_moment_kinetics(machine::String,
     # Common operations that only depend on the name of `machine`
     #############################################################
 
-    println("\n** Creating `julia.env` for environment setup\n")
-    envname = joinpath(repo_dir, "julia.env")
-    # Read the template
-    template = read("machines/$machine/julia.env")
-    # Write julia.env, overwriting if it already exists
-    ispath(envname) && rm(envname)
-    open(envname, "w") do io
-        write(io, template)
-        if julia_directory != ""
-            println("\n** Setting JULIA_DEPOT_PATH=$julia_directory in `julia.env`\n")
-            println(io, "\nexport JULIA_DEPOT_PATH=$julia_directory")
+    if machine == "generic-pc"
+        batch_system = false
+    else
+        batch_system = true
+    end
+
+    if batch_system
+        # Only use julia.env for a batch system as for an interactive system there are no
+        # modules to set up and source'ing julia.env is mildly inconvenient.
+        println("\n** Creating `julia.env` for environment setup\n")
+        envname = joinpath(repo_dir, "julia.env")
+        # Read the template
+        template = read("machines/$machine/julia.env")
+        # Write julia.env, overwriting if it already exists
+        ispath(envname) && rm(envname)
+        open(envname, "w") do io
+            write(io, template)
+            if julia_directory != ""
+                println("\n** Setting JULIA_DEPOT_PATH=$julia_directory in `julia.env`\n")
+                println(io, "\nexport JULIA_DEPOT_PATH=$julia_directory")
+            end
         end
     end
 
-    # Make a local link to the Julia binary so scripts in the repo can find it
-    println("\n** Making a symlink to the julia executable at bin/julia\n")
     bindir = joinpath(repo_dir, "bin")
     mkpath(bindir)
     julia_executable_name = joinpath(bindir, "julia")
-    islink(julia_executable_name) && rm(julia_executable_name)
-    symlink(joinpath(Sys.BINDIR, "julia"), julia_executable_name)
+    if batch_system || julia_directory == ""
+        # Make a local link to the Julia binary so scripts in the repo can find it
+        println("\n** Making a symlink to the julia executable at bin/julia\n")
+        islink(julia_executable_name) && rm(julia_executable_name)
+        symlink(joinpath(Sys.BINDIR, "julia"), julia_executable_name)
+    else
+        # Make a script to run julia, including the JULIA_DEPOT_PATH so that we can avoid
+        # needing the julia.env setup
+        open(julia_executable_name, "w") do io
+            println(io, "#!/bin/bash")
+            println(io, "export JULIA_DEPOT_PATH=$julia_directory")
+            julia_path = joinpath(Sys.BINDIR, "julia")
+            println(io, "$julia_path \"\$@\"")
+        end
+        function make_executable!(file)
+            user_permissions = uperm(file)
+            group_permissions = gperm(file)
+            other_permissions = operm(file)
+
+            # Change each permissions field to be executable
+            user_permissions = user_permissions | 0x01
+            group_permissions = group_permissions | 0x01
+            other_permissions = other_permissions | 0x01
+
+            permissions = user_permissions * UInt16(0o100) +
+                          group_permissions * UInt16(0o10) +
+                          other_permissions * UInt16(0o1)
+            chmod(file, permissions)
+
+            return nothing
+        end
+        make_executable!(julia_executable_name)
+    end
 
     # Write these preferences into a [moment_kinetics] section in LocalPreferences.toml
     #
@@ -189,7 +236,13 @@ function machine_setup_moment_kinetics(machine::String,
     # non-empty `account` setting
     needs_account = false
 
-    if machine == "archer"
+    if machine == "generic-pc"
+        # For generic-pc, run compile_dependencies.sh script to optionally download and
+        # compile HDF5
+        needs_compile_dependencies = true
+
+        needs_second_stage = true
+    elseif machine == "archer"
         needs_account = true
         if julia_directory == ""
             error("On ARCHER2, the `julia_directory` setting is required, because the "
@@ -243,9 +296,9 @@ function machine_setup_moment_kinetics(machine::String,
         if interactive
             println()
             println("***********************************************************************")
-            println("To complete setup, first `source julia.env` (so that `JULIA_DEPOT_PATH`")
-            println("is set correctly, then start Julia again (you can now use ")
-            println("`bin/julia --project`) and to complete the setup run:")
+            println("To complete setup, first `source julia.env` if it exists (so that")
+            println("`JULIA_DEPOT_PATH` is set correctly), then start Julia again (you can")
+            println("now use `bin/julia --project`) and to complete the setup run:")
             println("    julia> include(\"$second_stage_relative_path\")")
             println("***********************************************************************")
         end

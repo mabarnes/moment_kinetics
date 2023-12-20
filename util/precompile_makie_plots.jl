@@ -2,7 +2,7 @@
 using Pkg
 Pkg.activate(".")
 
-using moment_kinetics
+using makie_post_processing
 
 # Create a temporary directory for test output
 test_output_directory = tempname()
@@ -59,5 +59,5 @@ for (k,v) ∈ precompile_postproc_options
     end
 end
 
-moment_kinetics.makie_post_processing.makie_post_process(
-    joinpath(test_output_directory, run_name), precompile_postproc_options)
+makie_post_processing.makie_post_process(joinpath(test_output_directory, run_name),
+                                         precompile_postproc_options)

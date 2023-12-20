@@ -1,11 +1,13 @@
 #!/bin/bash
 
-#SBATCH --mem=POSTPROCMEMORY
-#SBATCH --time=POSTPROCTIME
+#SBATCH --mem=64G
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --time=1:00:00
 #SBATCH --account=ACCOUNT
 #SBATCH --partition=serial
 #SBATCH --qos=serial
-#SBATCH --output=RUNDIRslurm-post-%j.out
+#SBATCH --output=PRECOMPILEDIRslurm-%j.out
 
 set -e
 
@@ -18,7 +20,8 @@ source julia.env
 # See https://docs.archer2.ac.uk/faq/upgrade-2023/
 export SRUN_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
 
-echo "post-processing (with original post_processing) RUNDIR $(date)"
-bin/julia -Jplots_postproc.so --project=plots_post_processing/ run_post_processing.jl RUNDIR
+echo "precompiling post-processing $(date)"
 
-echo "finished post-processing RUNDIR $(date)"
+bin/julia --project=plots_post_processing/ precompile-plots-post-processing.jl
+
+echo "finished!"
