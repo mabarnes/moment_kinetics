@@ -15,13 +15,16 @@ default_settings["base"] = Dict("default_run_time"=>"24:00:00",
                                 "default_postproc_time"=>"1:00:00",
                                 "default_postproc_memory"=>"64G",
                                 "default_partition"=>"",
-                                "default_qos"=>"")
+                                "default_qos"=>"",
+                                "use_makie"=>"1",
+                                "use_plots"=>"1")
 # No batch system steup for "generic-pc"
 default_settings["generic-pc"] = merge(default_settings["base"],
                                    Dict("default_run_time"=>"0:00:00",
                                         "default_nodes"=>"0",
                                         "default_postproc_time"=>"0:00:00",
-                                        "default_postproc_memory"=>"0"))
+                                        "default_postproc_memory"=>"0",
+                                        "use_makie"=>"0"))
 default_settings["archer"] = merge(default_settings["base"],
                                    Dict("default_partition"=>"standard",
                                         "default_qos"=>"standard"))
@@ -40,6 +43,8 @@ default_settings["marconi"] = merge(default_settings["base"],
                                   default_postproc_memory::String,
                                   default_partition::String;
                                   default_qos::String;
+                                  use_makie::String;
+                                  use_plots::String;
                                   no_force_exit::Bool=false,
                                   interactive::Bool=true)
 
@@ -99,6 +104,10 @@ re-running this function (if you want to). The arguments are:
   cluster's documentation for possible values. The default will be the standard queue,
   which charges towards the budget of your allocation. You might want, for example, to
   change this to a free, low-priority queue if one is available.
+* `use_makie` indicates whether makie_post_processing has been enabled ("0" means yes, "1"
+  means no).
+* `use_plots` indicates whether plots_post_processing has been enabled ("0" means yes, "1"
+  means no).
 
 Currently supported machines:
 * `"generic-pc"` - A generic personal computer. Set up for interactive use, rather than
@@ -120,7 +129,9 @@ function machine_setup_moment_kinetics(machine::String,
                                        default_postproc_time::String,
                                        default_postproc_memory::String,
                                        default_partition::String,
-                                       default_qos::String;
+                                       default_qos::String,
+                                       use_makie::String,
+                                       use_plots::String;
                                        no_force_exit::Bool=false,
                                        interactive::Bool=true)
 
@@ -204,8 +215,8 @@ function machine_setup_moment_kinetics(machine::String,
         local_preferences = Dict{String,Any}()
     end
     # Always overwrite any existing preferences, to get a fresh setup
-    mk_preferences = local_preferences["moment_kinetics"] = Dict{String,Any}()
-    mk_preferences["machine"] = machine
+    mk_preferences = local_preferences["moment_kinetics"] = Dict{String,String}()
+    mk_preferences["julia_directory"] = julia_directory
     mk_preferences["default_run_time"] = default_run_time
     mk_preferences["default_nodes"] = default_nodes
     mk_preferences["default_postproc_time"] = default_postproc_time
@@ -213,6 +224,8 @@ function machine_setup_moment_kinetics(machine::String,
     mk_preferences["default_partition"] = default_partition
     mk_preferences["default_qos"] = default_qos
     mk_preferences["account"] = account
+    mk_preferences["use_makie"] = use_makie
+    mk_preferences["use_plots"] = use_plots
     open(local_preferences_filename, "w") do io
         TOML.print(io, local_preferences, sorted=true)
     end
@@ -314,6 +327,7 @@ end
 end
 
 using .machine_setup
+using TOML
 
 if abspath(PROGRAM_FILE) == @__FILE__
     # Allow the command to be called as a script.
@@ -347,10 +361,36 @@ if abspath(PROGRAM_FILE) == @__FILE__
             exit(1)
         end
 
-        d = machine_setup.default_settings[machine]
+        d = deepcopy(machine_setup.default_settings[machine])
+        # default setting for "julia_directory" is the JULIA_DEPOT_PATH environment
+        # variable
+        d["julia_directory"] = get(ENV, "JULIA_DEPOT_PATH", "")
+        # No default for "account".
+        d["account"] = ""
+
+        # If settings have already been saved (i.e. machine_setup.sh has already been
+        # run), then use the previous settings as the default this time.
+        # Use TOML.parsefile() to read the existing preferences to avoid depending on the
+        # Preferences package at this point (because we might want to set
+        # JULIA_DEPOT_PATH, but not have set it yet).
+        if ispath("LocalPreferences.toml")
+            existing_settings = get(TOML.parsefile("LocalPreferences.toml"),
+                                    "moment_kinetics", Dict{String, String}())
+        else
+            existing_settings = Dict{String, String}()
+        end
+        for setting ∈ ("default_run_time", "default_nodes", "default_postproc_time",
+                       "default_postproc_memory", "default_partition",
+                       "default_partition", "account", "julia_directory", "use_makie",
+                       "use_plots")
+            d[setting] = get(existing_settings, setting, d[setting])
+        end
+
         println("\"", d["default_run_time"], "\" \"",d["default_nodes"], "\" \"",
                 d["default_postproc_time"], "\" \"", d["default_postproc_memory"],
-                "\" \"", d["default_partition"], "\" \"", d["default_qos"], "\"")
+                "\" \"", d["default_partition"], "\" \"", d["default_qos"], "\" \"",
+                d["account"], "\" \"", d["julia_directory"], "\" \"", d["use_makie"],
+                "\" \"", d["use_plots"], "\"")
         exit(0)
     end
 

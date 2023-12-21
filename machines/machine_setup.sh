@@ -32,15 +32,19 @@ touch Project.toml
 # [See https://stackoverflow.com/a/13400237]
 JULIA=${@:$OPTIND:1}
 
-# Apply heuristics to try and get a default value for MACHINE.
-# Note these are machine-specific guesses, and the tests may well be broken by
-# changes to machine configuration, etc.
-if ls /marconi > /dev/null 2>&1; then
-  DEFAULT_MACHINE=marconi
-elif module avail 2>&1 | grep -q epcc; then
-  DEFAULT_MACHINE=archer
+if [[ -f .this_machine_name.txt ]]; then
+  DEFAULT_MACHINE=$(cat .this_machine_name.txt)
 else
-  DEFAULT_MACHINE=generic-pc
+  # Apply heuristics to try and get a default value for MACHINE.
+  # Note these are machine-specific guesses, and the tests may well be broken by
+  # changes to machine configuration, etc.
+  if ls /marconi > /dev/null 2>&1; then
+    DEFAULT_MACHINE=marconi
+  elif module avail 2>&1 | grep -q epcc; then
+    DEFAULT_MACHINE=archer
+  else
+    DEFAULT_MACHINE=generic-pc
+  fi
 fi
 
 # Create directory to set up Python venv and download/compile dependencies in
@@ -182,44 +186,14 @@ done
 echo "Setting up for '$MACHINE'"
 echo
 
+# Save the machine name so we can use it as the default if we re-run
+# machine_setup.sh.
+echo $MACHINE > .this_machine_name.txt
+
 if [[ $MACHINE -eq "generic-pc" ]]; then
   BATCH_SYSTEM=1
 else
   BATCH_SYSTEM=0
-fi
-
-echo "Would you like to set up makie_post_processing? y/[n]"
-read -p "> " input
-echo
-while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
-  # $input must be empty, 'y' or 'n'. It is none of these, so ask for input
-  # again until we get a valid response.
-  echo
-  echo "$input is not a valid response: y/[n]"
-  read -p "> "  input
-  echo
-done
-if [[ $input == "y" ]]; then
-  USE_MAKIE_POSTPROC=0
-else
-  USE_MAKIE_POSTPROC=1
-fi
-
-echo "Would you like to set up plots_post_processing? y/[n]"
-read -p "> " input
-echo
-while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
-  # $input must be empty, 'y' or 'n'. It is none of these, so ask for input
-  # again until we get a valid response.
-  echo
-  echo "$input is not a valid response: y/[n]"
-  read -p "> "  input
-  echo
-done
-if [[ $input == "y" ]]; then
-  USE_PLOTS_POSTPROC=0
-else
-  USE_PLOTS_POSTPROC=1
 fi
 
 # Note that the $(eval echo <thing>)) is needed to remove quotes around
@@ -232,11 +206,90 @@ DEFAULT_POSTPROC_TIME=$(eval echo ${DEFAULTS[2]})
 DEFAULT_POSTPROC_MEMORY=$(eval echo ${DEFAULTS[3]})
 DEFAULT_PARTITION=$(eval echo ${DEFAULTS[4]})
 DEFAULT_QOS=$(eval echo ${DEFAULTS[5]})
+DEFAULT_ACCOUNT=$(eval echo ${DEFAULTS[6]})
+JULIA_DIRECTORY=$(eval echo ${DEFAULTS[7]})
+DEFAULT_USE_MAKIE_POSTPROC=$(eval echo ${DEFAULTS[8]})
+DEFAULT_USE_PLOTS_POSTPROC=$(eval echo ${DEFAULTS[9]})
+
+if [[ $DEFAULT_USE_MAKIE_POSTPROC -eq 0 ]]; then
+  echo "Would you like to set up makie_post_processing? [y]/n"
+  read -p "> " input
+  echo
+  while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
+    # $input must be empty, 'y' or 'n'. It is none of these, so ask for input
+    # again until we get a valid response.
+    echo
+    echo "$input is not a valid response: [y]/n"
+    read -p "> "  input
+    echo
+  done
+  if [[ $input == "n" ]]; then
+    USE_MAKIE_POSTPROC=1
+  else
+    USE_MAKIE_POSTPROC=0
+  fi
+else
+  echo "Would you like to set up makie_post_processing? y/[n]"
+  read -p "> " input
+  echo
+  while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
+    # $input must be empty, 'y' or 'n'. It is none of these, so ask for input
+    # again until we get a valid response.
+    echo
+    echo "$input is not a valid response: y/[n]"
+    read -p "> "  input
+    echo
+  done
+  if [[ $input == "y" ]]; then
+    USE_MAKIE_POSTPROC=0
+  else
+    USE_MAKIE_POSTPROC=1
+  fi
+fi
+
+if [[ $DEFAULT_USE_PLOTS_POSTPROC -eq 0 ]]; then
+  echo "Would you like to set up plots_post_processing? [y]/n"
+  read -p "> " input
+  echo
+  while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
+    # $input must be empty, 'y' or 'n'. It is none of these, so ask for input
+    # again until we get a valid response.
+    echo
+    echo "$input is not a valid response: [y]/n"
+    read -p "> "  input
+    echo
+  done
+  if [[ $input == "n" ]]; then
+    USE_PLOTS_POSTPROC=1
+  else
+    USE_PLOTS_POSTPROC=0
+  fi
+else
+  echo "Would you like to set up plots_post_processing? y/[n]"
+  read -p "> " input
+  echo
+  while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
+    # $input must be empty, 'y' or 'n'. It is none of these, so ask for input
+    # again until we get a valid response.
+    echo
+    echo "$input is not a valid response: y/[n]"
+    read -p "> "  input
+    echo
+  done
+  if [[ $input == "y" ]]; then
+    USE_PLOTS_POSTPROC=0
+  else
+    USE_PLOTS_POSTPROC=1
+  fi
+fi
 
 if [[ $BATCH_SYSTEM -eq 0 ]]; then
   # Get the account to submit jobs with
-  echo "Enter the account code used to submit jobs []:"
+  echo "Enter the account code used to submit jobs [$DEFAULT_ACCOUNT]:"
   read -p "> "  ACCOUNT
+  if [[ -z ACCOUNT ]]; then
+    ACCOUNT=$DEFAULT_ACCOUNT
+  fi
   echo
   echo "Account code used is $ACCOUNT"
   echo
@@ -247,8 +300,6 @@ fi
 # Get the location for the .julia directory, in case this has to have a
 # non-default value, e.g. because the user's home directory is not accessible
 # from compute nodes.
-# Use $JULIA_DEPOT_PATH as the default if it has already been set
-JULIA_DIRECTORY=$JULIA_DEPOT_PATH
 echo "It can be useful or necessary to set a non-default location for the "
 echo ".julia directory. Leave this empty if the default location is OK."
 echo "Enter a name for a subdirectory of the current directory, e.g. "
@@ -368,7 +419,7 @@ echo
 # command, because passing as a prefix does not work (sometimes??) within a
 # bash script (even though as far as JTO knows it should work).
 export JULIA_DEPOT_PATH=$JULIA_DIRECTORY
-$JULIA machines/shared/machine_setup.jl "$MACHINE" "$ACCOUNT" "$JULIA_DIRECTORY" "$DEFAULT_RUN_TIME" "$DEFAULT_NODES" "$DEFAULT_POSTPROC_TIME" "$DEFAULT_POSTPROC_MEMORY" "$DEFAULT_PARTITION" "$DEFAULT_QOS"
+$JULIA machines/shared/machine_setup.jl "$MACHINE" "$ACCOUNT" "$JULIA_DIRECTORY" "$DEFAULT_RUN_TIME" "$DEFAULT_NODES" "$DEFAULT_POSTPROC_TIME" "$DEFAULT_POSTPROC_MEMORY" "$DEFAULT_PARTITION" "$DEFAULT_QOS" "$USE_MAKIE_POSTPROC" "$USE_PLOTS_POSTPROC"
 
 if [ -f julia.env ]; then
   # Set up modules, JULIA_DEPOT_PATH, etc. to use for the rest of this script
