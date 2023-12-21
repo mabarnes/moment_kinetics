@@ -25,9 +25,9 @@ if [ -d hdf5-build ]; then
 fi
 
 if [ $BUILDHDF5 -eq 0 ]; then
-  HDF5=hdf5-1.14.1-2
+  HDF5=hdf5-1.14.3
   # Download and extract the source
-  wget -O ${HDF5}.tar.bz2 https://www.hdfgroup.org/package/hdf5-1-14-1-2-tar-bz2/?wpdmdl=17997
+  wget -O ${HDF5}.tar.bz2 https://www.hdfgroup.org/package/hdf5-1-14-3-tar-bz2/?wpdmdl=18469
   tar xjf ${HDF5}.tar.bz2
 
   cd $HDF5
