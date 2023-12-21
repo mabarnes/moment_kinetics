@@ -335,6 +335,28 @@ if [[ $BATCH_SYSTEM -eq 0 ]]; then
   echo
 fi
 
+if [[ $BATCH_SYSTEM -eq 0 ]]; then
+  echo "Do you want to submit a serial (or debug) job to precompile, creating the"
+  echo "moment_kinetics.so image (this is required in order to use the job submission"
+  echo "scripts and templates provided)? [y]/n:"
+  read -p "> "  input
+
+  while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
+    # $input must be empty, 'y' or 'n'. It is none of these, so ask for input
+    # again until we get a valid response.
+    echo
+    echo "$input is not a valid response: [y]/n"
+    read -p "> "  input
+  done
+  if [[ -z $input || $input == "y" ]]; then
+    SUBMIT_PRECOMPILATION=0
+  else
+    SUBMIT_PRECOMPILATION=1
+  fi
+else
+  SUBMIT_PRECOMPILATION=1
+fi
+
 # Now we have a 'julia' executable and the settings, can call a Julia script
 # (machines/shared/machine_setup.jl) to create LocalPreferences.toml,
 # julia.env, bin/julia, and some machine-specific symlinks.
@@ -441,30 +463,16 @@ if [[ $BATCH_SYSTEM -eq 0 ]]; then
   fi
 fi
 
-if [[ $BATCH_SYSTEM -eq 0 ]]; then
-  echo "Do you want to submit a serial (or debug) job to precompile, creating the"
-  echo "moment_kinetics.so image (this is required in order to use the job submission"
-  echo "scripts and templates provided)? [y]/n:"
-  read -p "> "  input
+if [[ $SUBMIT_PRECOMPILATION -eq 0 ]]; then
+  # This script launches a job that runs precompile.jl to create the
+  # moment_kinetics.so image.
+  ./precompile-submit.sh
 
-  while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
-    # $input must be empty, 'y' or 'n'. It is none of these, so ask for input
-    # again until we get a valid response.
-    echo
-    echo "$input is not a valid response: [y]/n"
-    read -p "> "  input
-  done
-  if [[ -z $input || $input == "y" ]]; then
-    # This script launches a job that runs precompile.jl to create the
-    # moment_kinetics.so image.
-    ./precompile-submit.sh
-
-    if [[ $USE_MAKIE_POSTPROC -eq 0 ]]; then
-      ./precompile-makie-post-processing-submit.sh
-    fi
-    if [[ $USE_PLOTS_POSTPROC -eq 0 ]]; then
-      ./precompile-plots-post-processing-submit.sh
-    fi
+  if [[ $USE_MAKIE_POSTPROC -eq 0 ]]; then
+    ./precompile-makie-post-processing-submit.sh
+  fi
+  if [[ $USE_PLOTS_POSTPROC -eq 0 ]]; then
+    ./precompile-plots-post-processing-submit.sh
   fi
 fi
 
