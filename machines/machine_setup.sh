@@ -429,6 +429,19 @@ else
 fi
 
 if [[ $BATCH_SYSTEM -eq 0 ]]; then
+  # Make symlinks to submission scripts
+  ln -s machines/shared/precompile-submit.sh
+  ln -s machines/shared/submit-run.sh
+  ln -s machines/shared/submit-restart.sh
+  if [[ $USE_MAKIE_POSTPROC -eq 0 ]]; then
+    ln -s machines/shared/precompile-makie-post-processing-submit.sh
+  fi
+  if [[ $USE_PLOTS_POSTPROC -eq 0 ]]; then
+    ln -s machines/shared/precompile-plots-post-processing-submit.sh
+  fi
+fi
+
+if [[ $BATCH_SYSTEM -eq 0 ]]; then
   echo "Do you want to submit a serial (or debug) job to precompile, creating the"
   echo "moment_kinetics.so image (this is required in order to use the job submission"
   echo "scripts and templates provided)? [y]/n:"

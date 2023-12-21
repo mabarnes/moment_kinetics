@@ -9,6 +9,11 @@ bin
 machines/shared/compile_dependencies.sh
 machines/shared/machine_setup_stage_two.jl
 machines/artifacts
+/precompile-makie-post-processing-submit.sh
+/precompile-plots-post-processing-submit.sh
+/precompile-submit.sh
+/submit-restart.sh
+/submit-run.sh
 moment_kinetics.so
 precompile-temp
 post_processing_input.toml
