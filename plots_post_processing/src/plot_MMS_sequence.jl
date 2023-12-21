@@ -8,7 +8,6 @@ export get_MMS_error_data
 using Plots
 using IJulia
 using LsqFit
-using NCDatasets
 using Statistics: mean
 using SpecialFunctions: erfi
 using LaTeXStrings

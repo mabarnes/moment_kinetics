@@ -6,7 +6,6 @@ module plot_sequence
 using Plots
 using IJulia
 using LsqFit
-using NCDatasets
 using Statistics: mean
 using SpecialFunctions: erfi
 using LaTeXStrings

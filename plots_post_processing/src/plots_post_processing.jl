@@ -26,7 +26,6 @@ using Plots
 using Glob
 using IJulia
 using LsqFit
-using NCDatasets
 using Statistics: mean
 using SpecialFunctions: erfi
 using LaTeXStrings
