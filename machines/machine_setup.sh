@@ -375,6 +375,19 @@ else
   ACCOUNT=""
 fi
 
+if [[ $BATCH_SYSTEM -eq 0 ]]; then
+  # Batch systems can (conveniently) use different optimization flags for
+  # running simulations and for post-processing.
+  OPTIMIZATION_FLAGS="-O3 --check-bounds=no"
+  POSTPROC_OPTIMIZATION_FLAGS="-O3"
+else
+  # On interactive systems which use the same project for running simulations
+  # and for post-processing, both should use the same optimization flags to
+  # avoid invalidating precompiled dependencies.
+  OPTIMIZATION_FLAGS="-O3"
+  POSTPROC_OPTIMIZATION_FLAGS=$OPTIMIZATION_FLAGS
+fi
+
 # Get the location for the .julia directory, in case this has to have a
 # non-default value, e.g. because the user's home directory is not accessible
 # from compute nodes.
@@ -538,7 +551,7 @@ fi
 # We want to always add a couple of dependencies that are required to run the
 # tests in the top-level environment by just 'include()'ing the test scripts.
 # We also run the 'stage two' setup now if it is required.
-SETUP_COMMAND="bin/julia --project -e 'import Pkg"
+SETUP_COMMAND="bin/julia --project $OPTIMIZATION_FLAGS -e 'import Pkg"
 if [[ $USE_NETCDF -eq 1 || $ENABLE_MMS -eq 1 ]]; then
   # Remove packages used by non-selected extensions in case they were installed previously
   if [[ $USE_NETCDF -eq 1 ]]; then
@@ -570,31 +583,31 @@ SETUP_COMMAND="$SETUP_COMMAND'" # Add the closing quote mark
 eval "$SETUP_COMMAND"
 
 # Add moment_kinetics package to the working project
-bin/julia --project -e 'import Pkg; Pkg.develop(path="moment_kinetics"); Pkg.precompile()'
+bin/julia --project $OPTIMIZATION_FLAGS -e 'import Pkg; Pkg.develop(path="moment_kinetics"); Pkg.precompile()'
 
 if [[ $USE_MAKIE_POSTPROC -eq 0 ]]; then
   echo "Setting up makie_post_processing"
   if [[ $BATCH_SYSTEM -eq 0 ]]; then
-    bin/julia --project=makie_post_processing/ -e 'import Pkg; Pkg.develop(path="moment_kinetics/"); Pkg.develop(path="makie_post_processing/makie_post_processing"); Pkg.precompile()'
+    bin/julia --project=makie_post_processing/ $POSTPROC_OPTIMIZATION_FLAGS -e 'import Pkg; Pkg.develop(path="moment_kinetics/"); Pkg.develop(path="makie_post_processing/makie_post_processing"); Pkg.precompile()'
   else
-    bin/julia --project -e 'import Pkg; Pkg.develop(path="makie_post_processing/makie_post_processing")'
+    bin/julia --project -e $OPTIMIZATION_FLAGS 'import Pkg; Pkg.develop(path="makie_post_processing/makie_post_processing")'
   fi
 else
   if [[ $BATCH_SYSTEM -eq 1 ]]; then
-    bin/julia --project -e 'import Pkg; try Pkg.rm("makie_post_processing") catch end'
+    bin/julia --project $OPTIMIZATION_FLAGS -e 'import Pkg; try Pkg.rm("makie_post_processing") catch end'
   fi
 fi
 
 if [[ $USE_PLOTS_POSTPROC -eq 0 ]]; then
   echo "Setting up plots_post_processing"
   if [[ $BATCH_SYSTEM -eq 0 ]]; then
-    bin/julia --project=plots_post_processing/ -e 'import Pkg; Pkg.develop(path="moment_kinetics/"); Pkg.develop(path="plots_post_processing/plots_post_processing"); Pkg.precompile()'
+    bin/julia --project=plots_post_processing/ $POSTPROC_OPTIMIZATION_FLAGS -e 'import Pkg; Pkg.develop(path="moment_kinetics/"); Pkg.develop(path="plots_post_processing/plots_post_processing"); Pkg.precompile()'
   else
-    bin/julia --project -e 'import Pkg; Pkg.develop(path="plots_post_processing/plots_post_processing")'
+    bin/julia --project $OPTIMIZATION_FLAGS -e 'import Pkg; Pkg.develop(path="plots_post_processing/plots_post_processing")'
   fi
 else
   if [[ $BATCH_SYSTEM -eq 1 ]]; then
-    bin/julia --project -e 'import Pkg; try Pkg.rm("plots_post_processing") catch end'
+    bin/julia --project $OPTIMIZATION_FLAGS -e 'import Pkg; try Pkg.rm("plots_post_processing") catch end'
   fi
 fi
 
