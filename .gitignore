@@ -3,6 +3,8 @@ performance-tests/config.toml
 Manifest.toml
 LocalPreferences.toml
 /Project.toml
+/makie_post_processing/Project.toml
+/plots_post_processing/Project.toml
 /julia.env
 /.julia
 bin

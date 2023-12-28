@@ -575,9 +575,9 @@ bin/julia --project -e 'import Pkg; Pkg.develop(path="moment_kinetics"); Pkg.pre
 if [[ $USE_MAKIE_POSTPROC -eq 0 ]]; then
   echo "Setting up makie_post_processing"
   if [[ $BATCH_SYSTEM -eq 0 ]]; then
-    bin/julia --project=makie_post_processing/ -e 'import Pkg; Pkg.develop(path="moment_kinetics/"); Pkg.precompile()'
+    bin/julia --project=makie_post_processing/ -e 'import Pkg; Pkg.develop(path="moment_kinetics/"); Pkg.develop(path="makie_post_processing/makie_post_processing"); Pkg.precompile()'
   else
-    bin/julia --project -e 'import Pkg; Pkg.develop(path="makie_post_processing")'
+    bin/julia --project -e 'import Pkg; Pkg.develop(path="makie_post_processing/makie_post_processing")'
   fi
 else
   if [[ $BATCH_SYSTEM -eq 1 ]]; then
@@ -588,9 +588,9 @@ fi
 if [[ $USE_PLOTS_POSTPROC -eq 0 ]]; then
   echo "Setting up plots_post_processing"
   if [[ $BATCH_SYSTEM -eq 0 ]]; then
-    bin/julia --project=plots_post_processing/ -e 'import Pkg; Pkg.develop(path="moment_kinetics/"); Pkg.precompile()'
+    bin/julia --project=plots_post_processing/ -e 'import Pkg; Pkg.develop(path="moment_kinetics/"); Pkg.develop(path="plots_post_processing/plots_post_processing"); Pkg.precompile()'
   else
-    bin/julia --project -e 'import Pkg; Pkg.develop(path="plots_post_processing")'
+    bin/julia --project -e 'import Pkg; Pkg.develop(path="plots_post_processing/plots_post_processing")'
   fi
 else
   if [[ $BATCH_SYSTEM -eq 1 ]]; then
