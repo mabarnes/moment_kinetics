@@ -39,12 +39,13 @@ UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [weakdeps]
+IfElse = "615f187c-cbe4-4ef1-ba3b-2fcf58d6d173"
 NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
 [extensions]
 file_io_netcdf = "NCDatasets"
-manufactured_solns_ext = "Symbolics"
+manufactured_solns_ext = ["Symbolics", "IfElse"]
 
 [compat]
 HDF5_jll = "<1.14, >=1.15"

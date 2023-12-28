@@ -210,6 +210,8 @@ DEFAULT_ACCOUNT=$(eval echo ${DEFAULTS[6]})
 JULIA_DIRECTORY=$(eval echo ${DEFAULTS[7]})
 DEFAULT_USE_MAKIE_POSTPROC=$(eval echo ${DEFAULTS[8]})
 DEFAULT_USE_PLOTS_POSTPROC=$(eval echo ${DEFAULTS[9]})
+DEFAULT_USE_NETCDF=$(eval echo ${DEFAULTS[10]})
+DEFAULT_ENABLE_MMS=$(eval echo ${DEFAULTS[11]})
 
 if [[ $DEFAULT_USE_MAKIE_POSTPROC -eq 0 ]]; then
   echo "Would you like to set up makie_post_processing? [y]/n"
@@ -280,6 +282,82 @@ else
     USE_PLOTS_POSTPROC=0
   else
     USE_PLOTS_POSTPROC=1
+  fi
+fi
+
+
+if [[ $DEFAULT_USE_NETCDF -eq 0 ]]; then
+  echo "Would you like to enable optional NetCDF I/O (warning: using NetCDF sometimes"
+  echo "causes errors when using a local or system install of HDF5)? [y]/n"
+  read -p "> " input
+  echo
+  while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
+    # $input must be empty, 'y' or 'n'. It is none of these, so ask for input
+    # again until we get a valid response.
+    echo
+    echo "$input is not a valid response: [y]/n"
+    read -p "> "  input
+    echo
+  done
+  if [[ $input == "n" ]]; then
+    USE_NETCDF=1
+  else
+    USE_NETCDF=0
+  fi
+else
+  echo "Would you like to enable optional NetCDF I/O (warning: using NetCDF sometimes"
+  echo "causes errors when using a local or system install of HDF5)? y/[n]"
+  read -p "> " input
+  echo
+  while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
+    # $input must be empty, 'y' or 'n'. It is none of these, so ask for input
+    # again until we get a valid response.
+    echo
+    echo "$input is not a valid response: y/[n]"
+    read -p "> "  input
+    echo
+  done
+  if [[ $input == "y" ]]; then
+    USE_NETCDF=0
+  else
+    USE_NETCDF=1
+  fi
+fi
+
+
+if [[ $DEFAULT_ENABLE_MMS -eq 0 ]]; then
+  echo "Would you like to enable MMS testing? [y]/n"
+  read -p "> " input
+  echo
+  while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
+    # $input must be empty, 'y' or 'n'. It is none of these, so ask for input
+    # again until we get a valid response.
+    echo
+    echo "$input is not a valid response: [y]/n"
+    read -p "> "  input
+    echo
+  done
+  if [[ $input == "n" ]]; then
+    ENABLE_MMS=1
+  else
+    ENABLE_MMS=0
+  fi
+else
+  echo "Would you like to to enable MMS testing? y/[n]"
+  read -p "> " input
+  echo
+  while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
+    # $input must be empty, 'y' or 'n'. It is none of these, so ask for input
+    # again until we get a valid response.
+    echo
+    echo "$input is not a valid response: y/[n]"
+    read -p "> "  input
+    echo
+  done
+  if [[ $input == "y" ]]; then
+    ENABLE_MMS=0
+  else
+    ENABLE_MMS=1
   fi
 fi
 
@@ -419,7 +497,7 @@ echo
 # command, because passing as a prefix does not work (sometimes??) within a
 # bash script (even though as far as JTO knows it should work).
 export JULIA_DEPOT_PATH=$JULIA_DIRECTORY
-$JULIA machines/shared/machine_setup.jl "$MACHINE" "$ACCOUNT" "$JULIA_DIRECTORY" "$DEFAULT_RUN_TIME" "$DEFAULT_NODES" "$DEFAULT_POSTPROC_TIME" "$DEFAULT_POSTPROC_MEMORY" "$DEFAULT_PARTITION" "$DEFAULT_QOS" "$USE_MAKIE_POSTPROC" "$USE_PLOTS_POSTPROC"
+$JULIA machines/shared/machine_setup.jl "$MACHINE" "$ACCOUNT" "$JULIA_DIRECTORY" "$DEFAULT_RUN_TIME" "$DEFAULT_NODES" "$DEFAULT_POSTPROC_TIME" "$DEFAULT_POSTPROC_MEMORY" "$DEFAULT_PARTITION" "$DEFAULT_QOS" "$USE_MAKIE_POSTPROC" "$USE_PLOTS_POSTPROC" "$USE_NETCDF" "$ENABLE_MMS"
 
 if [ -f julia.env ]; then
   # Set up modules, JULIA_DEPOT_PATH, etc. to use for the rest of this script
@@ -460,7 +538,26 @@ fi
 # We want to always add a couple of dependencies that are required to run the
 # tests in the top-level environment by just 'include()'ing the test scripts.
 # We also run the 'stage two' setup now if it is required.
-SETUP_COMMAND="bin/julia --project -e 'import Pkg; Pkg.add([\"HDF5\", \"MPI\", \"MPIPreferences\", \"SpecialFunctions\"])"
+SETUP_COMMAND="bin/julia --project -e 'import Pkg"
+if [[ $USE_NETCDF -eq 1 || $ENABLE_MMS -eq 1 ]]; then
+  # Remove packages used by non-selected extensions in case they were installed previously
+  if [[ $USE_NETCDF -eq 1 ]]; then
+    SETUP_COMMAND="$SETUP_COMMAND; try Pkg.rm(\"NCDatasets\") catch end"
+  fi
+  if [[ $ENABLE_MMS -eq 1 ]]; then
+    SETUP_COMMAND="$SETUP_COMMAND; try Pkg.rm([\"Symbolics\", \"IfElse\"]) catch end"
+  fi
+fi
+SETUP_COMMAND="$SETUP_COMMAND; Pkg.add([\"HDF5\", \"MPI\", \"MPIPreferences\", \"SpecialFunctions\""
+if [[ $USE_NETCDF -eq 0 ]]; then
+  # Install NetCDF interface package NCDatasets to enable file_io_netcdf extension
+  SETUP_COMMAND="$SETUP_COMMAND, \"NCDatasets\""
+fi
+if [[ $ENABLE_MMS -eq 0 ]]; then
+  # Install Symbolics and IfElse packages required by manufactured_solns_ext extension
+  SETUP_COMMAND="$SETUP_COMMAND, \"Symbolics\", \"IfElse\""
+fi
+SETUP_COMMAND="$SETUP_COMMAND])"
 # [ -f <path> ] tests if <path> exists and is a file
 if [ -f machines/shared/machine_setup_stage_two.jl ]; then
   # A second setup stage exists, so run it.

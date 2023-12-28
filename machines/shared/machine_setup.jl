@@ -17,7 +17,9 @@ default_settings["base"] = Dict("default_run_time"=>"24:00:00",
                                 "default_partition"=>"",
                                 "default_qos"=>"",
                                 "use_makie"=>"1",
-                                "use_plots"=>"1")
+                                "use_plots"=>"1",
+                                "use_netcdf"=>"1",
+                                "enable_mms"=>"1")
 # No batch system steup for "generic-pc"
 default_settings["generic-pc"] = merge(default_settings["base"],
                                    Dict("default_run_time"=>"0:00:00",
@@ -45,6 +47,8 @@ default_settings["marconi"] = merge(default_settings["base"],
                                   default_qos::String;
                                   use_makie::String;
                                   use_plots::String;
+                                  use_netcdf::String;
+                                  enable_mms::String;
                                   no_force_exit::Bool=false,
                                   interactive::Bool=true)
 
@@ -108,6 +112,10 @@ re-running this function (if you want to). The arguments are:
   means no).
 * `use_plots` indicates whether plots_post_processing has been enabled ("0" means yes, "1"
   means no).
+* `use_netcdf` indicates whether NetCDF I/O has been enabled ("0" means yes, "1" means
+  no).
+* `enable_mms` indicates whether MMS testing has been enabled ("0" means yes, "1" means
+  no).
 
 Currently supported machines:
 * `"generic-pc"` - A generic personal computer. Set up for interactive use, rather than
@@ -131,7 +139,9 @@ function machine_setup_moment_kinetics(machine::String,
                                        default_partition::String,
                                        default_qos::String,
                                        use_makie::String,
-                                       use_plots::String;
+                                       use_plots::String,
+                                       use_netcdf::String,
+                                       enable_mms::String;
                                        no_force_exit::Bool=false,
                                        interactive::Bool=true)
 
@@ -226,6 +236,8 @@ function machine_setup_moment_kinetics(machine::String,
     mk_preferences["account"] = account
     mk_preferences["use_makie"] = use_makie
     mk_preferences["use_plots"] = use_plots
+    mk_preferences["use_netcdf"] = use_netcdf
+    mk_preferences["enable_mms"] = enable_mms
     open(local_preferences_filename, "w") do io
         TOML.print(io, local_preferences, sorted=true)
     end
@@ -382,7 +394,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         for setting ∈ ("default_run_time", "default_nodes", "default_postproc_time",
                        "default_postproc_memory", "default_partition",
                        "default_partition", "account", "julia_directory", "use_makie",
-                       "use_plots")
+                       "use_plots", "use_netcdf", "enable_mms")
             d[setting] = get(existing_settings, setting, d[setting])
         end
 
@@ -390,7 +402,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 d["default_postproc_time"], "\" \"", d["default_postproc_memory"],
                 "\" \"", d["default_partition"], "\" \"", d["default_qos"], "\" \"",
                 d["account"], "\" \"", d["julia_directory"], "\" \"", d["use_makie"],
-                "\" \"", d["use_plots"], "\"")
+                "\" \"", d["use_plots"], "\" \"", d["use_netcdf"], "\" \"",
+                d["enable_mms"], "\"")
         exit(0)
     end
 
