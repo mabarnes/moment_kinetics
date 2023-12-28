@@ -50,7 +50,21 @@ if isdir(local_hdf5_install_dir)
     hdf5_lib_hl = joinpath(local_hdf5_install_dir, "libhdf5_hl.so")
 else
     println("\n** Setting up to use system HDF5\n")
+
     default_hdf5_dir = get(ENV, "HDF5_DIR", "") # try to find a path to a system hdf5, may not work on all systems
+
+    using TOML
+    repo_dir = dirname(dirname(dirname(@__FILE__)))
+    local_preferences_filename = joinpath(repo_dir, "LocalPreferences.toml")
+    if ispath(local_preferences_filename)
+        local_preferences = TOML.parsefile(local_preferences_filename)
+    else
+        local_preferences = Dict{String,Any}()
+    end
+    mk_preferences = get(local_preferences, "moment_kinetics", Dict{String,String}())
+    println("mk_preferences ", mk_preferences)
+    default_hdf5_dir = get(mk_preferences, "hdf5_dir", default_hdf5_dir)
+
     hdf5_dir = ""
     hdf5_lib = ""
     hdf5_lib_hl = ""
@@ -90,9 +104,16 @@ else
             end
         end
     end
+
+    mk_preferences["hdf5_dir"] = hdf5_dir
+    open(local_preferences_filename, "w") do io
+        TOML.print(io, local_preferences, sorted=true)
+    end
 end
-if hdf5_dir != "default"
-    using HDF5
+using HDF5
+if hdf5_dir == "default"
+    HDF5.API.set_libraries!()
+else
     HDF5.API.set_libraries!(hdf5_lib, hdf5_lib_hl)
 end
 

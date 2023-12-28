@@ -224,8 +224,8 @@ function machine_setup_moment_kinetics(machine::String,
     else
         local_preferences = Dict{String,Any}()
     end
-    # Always overwrite any existing preferences, to get a fresh setup
-    mk_preferences = local_preferences["moment_kinetics"] = Dict{String,String}()
+    mk_preferences = get(local_preferences, "moment_kinetics", Dict{String,String}())
+    local_preferences["moment_kinetics"] = mk_preferences
     mk_preferences["julia_directory"] = julia_directory
     mk_preferences["default_run_time"] = default_run_time
     mk_preferences["default_nodes"] = default_nodes
