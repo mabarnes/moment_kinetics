@@ -9,7 +9,6 @@ LocalPreferences.toml
 /.julia
 bin
 machines/shared/compile_dependencies.sh
-machines/shared/machine_setup_stage_two.jl
 machines/artifacts
 /precompile-makie-post-processing-submit.sh
 /precompile-plots-post-processing-submit.sh

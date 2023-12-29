@@ -570,16 +570,7 @@ if [[ $ENABLE_MMS -eq 0 ]]; then
   # Install Symbolics and IfElse packages required by manufactured_solns_ext extension
   SETUP_COMMAND="$SETUP_COMMAND, \"Symbolics\", \"IfElse\""
 fi
-SETUP_COMMAND="$SETUP_COMMAND])"
-# [ -f <path> ] tests if <path> exists and is a file
-if [ -f machines/shared/machine_setup_stage_two.jl ]; then
-  # A second setup stage exists, so run it.
-  # This does setup for HDF5 and MPI, possibly other things if necessary.
-  echo
-  echo "Including stage two setup"
-  SETUP_COMMAND="$SETUP_COMMAND; include(\"machines/shared/machine_setup_stage_two.jl\")"
-fi
-SETUP_COMMAND="$SETUP_COMMAND'" # Add the closing quote mark
+SETUP_COMMAND="$SETUP_COMMAND]); include(\"machines/shared/machine_setup_stage_two.jl\")'"
 eval "$SETUP_COMMAND"
 
 # Add moment_kinetics package to the working project

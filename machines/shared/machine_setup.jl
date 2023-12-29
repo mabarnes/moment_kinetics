@@ -226,6 +226,7 @@ function machine_setup_moment_kinetics(machine::String,
     end
     mk_preferences = get(local_preferences, "moment_kinetics", Dict{String,String}())
     local_preferences["moment_kinetics"] = mk_preferences
+    mk_preferences["machine"] = machine
     mk_preferences["julia_directory"] = julia_directory
     mk_preferences["default_run_time"] = default_run_time
     mk_preferences["default_nodes"] = default_nodes
@@ -250,13 +251,6 @@ function machine_setup_moment_kinetics(machine::String,
                                          compile_dependencies_relative_path)
     needs_compile_dependencies = false
 
-    # A second stage of setup may be needed after restarting Julia on some machines.
-    # If it is, set `needs_second_stage = true` in the machine-specific case below.
-    second_stage_relative_path = joinpath("machines", "shared",
-                                          "machine_setup_stage_two.jl")
-    second_stage_path = joinpath(repo_dir, second_stage_relative_path)
-    needs_second_stage = false
-
     # Set this flag to true in the machine-specific branch below to require a
     # non-empty `account` setting
     needs_account = false
@@ -265,8 +259,6 @@ function machine_setup_moment_kinetics(machine::String,
         # For generic-pc, run compile_dependencies.sh script to optionally download and
         # compile HDF5
         needs_compile_dependencies = true
-
-        needs_second_stage = true
     elseif machine == "archer"
         needs_account = true
         if julia_directory == ""
@@ -275,19 +267,11 @@ function machine_setup_moment_kinetics(machine::String,
                   * "directory and the `/home/` filesystem is not available on the "
                   * "compute nodes.")
         end
-
-        # Need to set JULIA_DEPOT_PATH so the `.julia` directory is on the /work
-        # filesystem (where it can be used on compute nodes, unlike /home) before
-        # setting up MPI and HDF5, so a second stage is required for archer.
-        needs_second_stage = true
     elseif machine == "marconi"
         needs_account = true
 
         # For marconi, need to run a script to compile HDF5
         needs_compile_dependencies = true
-
-        # Second stage is required for marconi to set up HDF5 and MPI
-        needs_second_stage = true
     else
         error("Unsupported machine '$machine'")
     end
@@ -312,21 +296,14 @@ function machine_setup_moment_kinetics(machine::String,
         end
     end
 
-    if needs_second_stage
-        # Remove link if it exists already
-        islink(second_stage_path) && rm(second_stage_path)
-
-        symlink(joinpath("..", machine, "machine_setup_stage_two.jl"), second_stage_path)
-
-        if interactive
-            println()
-            println("***********************************************************************")
-            println("To complete setup, first `source julia.env` if it exists (so that")
-            println("`JULIA_DEPOT_PATH` is set correctly), then start Julia again (you can")
-            println("now use `bin/julia --project`) and to complete the setup run:")
-            println("    julia> include(\"$second_stage_relative_path\")")
-            println("***********************************************************************")
-        end
+    if interactive
+        println()
+        println("***********************************************************************")
+        println("To complete setup, first `source julia.env` if it exists (so that")
+        println("`JULIA_DEPOT_PATH` is set correctly), then start Julia again (you can")
+        println("now use `bin/julia --project`) and to complete the setup run:")
+        println("    julia> include(\"$second_stage_relative_path\")")
+        println("***********************************************************************")
     end
 
     if !no_force_exit
