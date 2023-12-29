@@ -15,6 +15,7 @@ machines/artifacts
 /precompile-submit.sh
 /submit-restart.sh
 /submit-run.sh
+/.julia_default.txt
 /.this_machine_name.txt
 moment_kinetics.so
 precompile-temp
