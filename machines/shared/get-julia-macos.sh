@@ -2,12 +2,22 @@
 
 ARTIFACT_DIR=machines/artifacts/
 
+ARCH=""
+while [[ ! $ARCH -eq "x86_64" && ! $ARCH -eq "aarch64" ]]; do
+  echo "Which architecture does your Mac use - 'x86_64' (Intel processor)"
+  echo "or 'aarch64' (Apple processor)? x86_64/[aarch64]"
+  read -p "> " ARCH
+  if [[ -z $ARCH ]]; then
+    ARCH=aarch64
+  fi
+done
+
 # Download Julia binary distribution
 if [ -z "$1" ]; then
   # No version argument passed
-  JULIA_TAR=$(machines/shared/get-julia.py --output-dir $ARTIFACT_DIR --os linux --arch x86_64)
+  JULIA_TAR=$(machines/shared/get-julia.py --output-dir $ARTIFACT_DIR --os mac --arch $ARCH)
 else
-  JULIA_TAR=$(machines/shared/get-julia.py --output-dir $ARTIFACT_DIR --os linux --arch x86_64 --version $1)
+  JULIA_TAR=$(machines/shared/get-julia.py --output-dir $ARTIFACT_DIR --os mac --arch $ARCH --version $1)
 fi
 
 cd $ARTIFACT_DIR

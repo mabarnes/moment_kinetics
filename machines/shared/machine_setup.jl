@@ -186,7 +186,7 @@ function machine_setup_moment_kinetics(machine::String,
         # Make a script to run julia, including the JULIA_DEPOT_PATH so that we can avoid
         # needing the julia.env setup
         open(julia_executable_name, "w") do io
-            println(io, "#!/bin/bash")
+            println(io, "#!/usr/bin/env bash")
             println(io, "export JULIA_DEPOT_PATH=$julia_directory")
             julia_path = joinpath(Sys.BINDIR, "julia")
             println(io, "$julia_path \"\$@\"")

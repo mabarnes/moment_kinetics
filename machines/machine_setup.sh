@@ -547,7 +547,7 @@ if [[ $USE_PLOTS_POSTPROC -eq 0 ]]; then
   else
     # Re-write bin/julia to add activation of the Python venv
     LAST_LINES=$(tail -n 2 bin/julia)
-    echo '#!/bin/bash' > bin/julia # It is necessary to use single-quotes not double quotes here, but don't understand why
+    echo '#!/usr/bin/env bash' > bin/julia # It is necessary to use single-quotes not double quotes here, but don't understand why
     echo "source $PYTHON_VENV_PATH/bin/activate" >> bin/julia
     echo "$LAST_LINES" >> bin/julia
   fi
