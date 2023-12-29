@@ -94,24 +94,22 @@ else
     DOWNLOAD_JULIA=0
   fi
 fi
-if [[ $DOWNLOAD_JULIA -eq 0 ]]; then
-  # Need machine name to get the right get-julia.sh script.
-  # Not ideal to get input here as in the 'proper' place below we can check
-  # for a valid input for $MACHINE and list the allowed values (although
-  # there will be an error here if the input is not valid as
-  # 'machines/$MACHINE/get-julia.sh would not exist). However the checking
-  # requires Julia, so cannot do it here as we need the value in order to
-  # download Julia (need to know the machine so that we download the right
-  # set of binaries for the OS, architecture, etc.
-  while [ -z $MACHINE ]; do
-    echo "Enter name of the machine to set up [$DEFAULT_MACHINE]:"
-    read -p "> "  MACHINE
-    echo
-    if [ -z $MACHINE ]; then
-      MACHINE=$DEFAULT_MACHINE
-    fi
-  done
 
+# Get name of 'machine'
+while [[ -z $MACHINE || !( $MACHINE == "generic-pc" || $MACHINE == "archer" || $MACHINE == "marconi" ) ]]; do
+  echo "Enter name of the machine to set up (must be one of 'generic-pc',"
+  echo "'archer', or 'marconi') [$DEFAULT_MACHINE]:"
+  read -p "> "  MACHINE
+  echo
+  if [ -z $MACHINE ]; then
+    MACHINE=$DEFAULT_MACHINE
+  fi
+done
+
+echo "Setting up for '$MACHINE'"
+echo
+
+if [[ $DOWNLOAD_JULIA -eq 0 ]]; then
   # Download a version of Julia that is correct for this machine.
   # Here the user can specify which version of Julia they want to use in
   # case the latest stable versionis not wanted.
@@ -171,221 +169,14 @@ echo "Using Julia at $JULIA"
 echo
 echo "$JULIA" > .julia_default.txt
 
-# If Julia was downloaded by this script, $MACHINE is already set. Otherwise,
-# need to get and check its value here.
-if [ -z "$MACHINE" ]; then
-  # Make first attempt at getting the name of the machine to setup
-  echo "Enter name of the machine to set up [$DEFAULT_MACHINE]:"
-  read -p "> "  MACHINE
-  echo
-  if [ -z $MACHINE ]; then
-    MACHINE=$DEFAULT_MACHINE
-  fi
-fi
-while true; do
-  # Get default values for this machine from the machine_setup.jl script
-  # Note: the brackets() around the command execution turn the result into an
-  # 'array' that we can get the separate elements from below.
-  # This command will fail (and print a helpful error message) if $MACHINE is
-  # not a known value, so `break` only when it succeeds.
-  DEFAULTS=($($JULIA machines/shared/machine_setup.jl --defaults $MACHINE)) && break
-
-  # If we did not get a good value for $MACHINE yet, prompt for a new one.
-  echo "Enter name of the machine to set up:"
-  read -p "> "  MACHINE
-  echo
-done
-
-echo "Setting up for '$MACHINE'"
-echo
-
 # Save the machine name so we can use it as the default if we re-run
 # machine_setup.sh.
 echo $MACHINE > .this_machine_name.txt
 
-if [[ $MACHINE -eq "generic-pc" ]]; then
+if [[ $MACHINE == "generic-pc" ]]; then
   BATCH_SYSTEM=1
 else
   BATCH_SYSTEM=0
-fi
-
-# Note that the $(eval echo <thing>)) is needed to remove quotes around
-# arguments. Adding the quotes in the Julia script is necessary so that if an
-# argument is empty it is not lost when parsing the Julia script output into
-# $DEFAULTS. Note $DEFAULTS is a Bash array.
-DEFAULT_RUN_TIME=$(eval echo ${DEFAULTS[0]})
-DEFAULT_NODES=$(eval echo ${DEFAULTS[1]})
-DEFAULT_POSTPROC_TIME=$(eval echo ${DEFAULTS[2]})
-DEFAULT_POSTPROC_MEMORY=$(eval echo ${DEFAULTS[3]})
-DEFAULT_PARTITION=$(eval echo ${DEFAULTS[4]})
-DEFAULT_QOS=$(eval echo ${DEFAULTS[5]})
-DEFAULT_ACCOUNT=$(eval echo ${DEFAULTS[6]})
-JULIA_DIRECTORY=$(eval echo ${DEFAULTS[7]})
-DEFAULT_USE_MAKIE_POSTPROC=$(eval echo ${DEFAULTS[8]})
-DEFAULT_USE_PLOTS_POSTPROC=$(eval echo ${DEFAULTS[9]})
-DEFAULT_USE_NETCDF=$(eval echo ${DEFAULTS[10]})
-DEFAULT_ENABLE_MMS=$(eval echo ${DEFAULTS[11]})
-
-if [[ $DEFAULT_USE_MAKIE_POSTPROC -eq 0 ]]; then
-  echo "Would you like to set up makie_post_processing? [y]/n"
-  read -p "> " input
-  echo
-  while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
-    # $input must be empty, 'y' or 'n'. It is none of these, so ask for input
-    # again until we get a valid response.
-    echo
-    echo "$input is not a valid response: [y]/n"
-    read -p "> "  input
-    echo
-  done
-  if [[ $input == "n" ]]; then
-    USE_MAKIE_POSTPROC=1
-  else
-    USE_MAKIE_POSTPROC=0
-  fi
-else
-  echo "Would you like to set up makie_post_processing? y/[n]"
-  read -p "> " input
-  echo
-  while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
-    # $input must be empty, 'y' or 'n'. It is none of these, so ask for input
-    # again until we get a valid response.
-    echo
-    echo "$input is not a valid response: y/[n]"
-    read -p "> "  input
-    echo
-  done
-  if [[ $input == "y" ]]; then
-    USE_MAKIE_POSTPROC=0
-  else
-    USE_MAKIE_POSTPROC=1
-  fi
-fi
-
-if [[ $DEFAULT_USE_PLOTS_POSTPROC -eq 0 ]]; then
-  echo "Would you like to set up plots_post_processing? [y]/n"
-  read -p "> " input
-  echo
-  while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
-    # $input must be empty, 'y' or 'n'. It is none of these, so ask for input
-    # again until we get a valid response.
-    echo
-    echo "$input is not a valid response: [y]/n"
-    read -p "> "  input
-    echo
-  done
-  if [[ $input == "n" ]]; then
-    USE_PLOTS_POSTPROC=1
-  else
-    USE_PLOTS_POSTPROC=0
-  fi
-else
-  echo "Would you like to set up plots_post_processing? y/[n]"
-  read -p "> " input
-  echo
-  while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
-    # $input must be empty, 'y' or 'n'. It is none of these, so ask for input
-    # again until we get a valid response.
-    echo
-    echo "$input is not a valid response: y/[n]"
-    read -p "> "  input
-    echo
-  done
-  if [[ $input == "y" ]]; then
-    USE_PLOTS_POSTPROC=0
-  else
-    USE_PLOTS_POSTPROC=1
-  fi
-fi
-
-
-if [[ $DEFAULT_USE_NETCDF -eq 0 ]]; then
-  echo "Would you like to enable optional NetCDF I/O (warning: using NetCDF sometimes"
-  echo "causes errors when using a local or system install of HDF5)? [y]/n"
-  read -p "> " input
-  echo
-  while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
-    # $input must be empty, 'y' or 'n'. It is none of these, so ask for input
-    # again until we get a valid response.
-    echo
-    echo "$input is not a valid response: [y]/n"
-    read -p "> "  input
-    echo
-  done
-  if [[ $input == "n" ]]; then
-    USE_NETCDF=1
-  else
-    USE_NETCDF=0
-  fi
-else
-  echo "Would you like to enable optional NetCDF I/O (warning: using NetCDF sometimes"
-  echo "causes errors when using a local or system install of HDF5)? y/[n]"
-  read -p "> " input
-  echo
-  while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
-    # $input must be empty, 'y' or 'n'. It is none of these, so ask for input
-    # again until we get a valid response.
-    echo
-    echo "$input is not a valid response: y/[n]"
-    read -p "> "  input
-    echo
-  done
-  if [[ $input == "y" ]]; then
-    USE_NETCDF=0
-  else
-    USE_NETCDF=1
-  fi
-fi
-
-
-if [[ $DEFAULT_ENABLE_MMS -eq 0 ]]; then
-  echo "Would you like to enable MMS testing? [y]/n"
-  read -p "> " input
-  echo
-  while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
-    # $input must be empty, 'y' or 'n'. It is none of these, so ask for input
-    # again until we get a valid response.
-    echo
-    echo "$input is not a valid response: [y]/n"
-    read -p "> "  input
-    echo
-  done
-  if [[ $input == "n" ]]; then
-    ENABLE_MMS=1
-  else
-    ENABLE_MMS=0
-  fi
-else
-  echo "Would you like to to enable MMS testing? y/[n]"
-  read -p "> " input
-  echo
-  while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
-    # $input must be empty, 'y' or 'n'. It is none of these, so ask for input
-    # again until we get a valid response.
-    echo
-    echo "$input is not a valid response: y/[n]"
-    read -p "> "  input
-    echo
-  done
-  if [[ $input == "y" ]]; then
-    ENABLE_MMS=0
-  else
-    ENABLE_MMS=1
-  fi
-fi
-
-if [[ $BATCH_SYSTEM -eq 0 ]]; then
-  # Get the account to submit jobs with
-  echo "Enter the account code used to submit jobs [$DEFAULT_ACCOUNT]:"
-  read -p "> "  ACCOUNT
-  if [[ -z ACCOUNT ]]; then
-    ACCOUNT=$DEFAULT_ACCOUNT
-  fi
-  echo
-  echo "Account code used is $ACCOUNT"
-  echo
-else
-  ACCOUNT=""
 fi
 
 if [[ $BATCH_SYSTEM -eq 0 ]]; then
@@ -429,68 +220,6 @@ echo "Using julia_directory=$JULIA_DIRECTORY"
 echo
 
 if [[ $BATCH_SYSTEM -eq 0 ]]; then
-  # Get the setting for the default run time
-  echo "Enter the default value for the time limit for simulation jobs [$DEFAULT_RUN_TIME]:"
-  read -p "> "  input
-  if [ ! -z "$input" ]; then
-    DEFAULT_RUN_TIME=$input
-  fi
-  echo
-  echo "Default simulation time limit is $DEFAULT_RUN_TIME"
-  echo
-
-  # Get the setting for the default number of nodes
-  echo "Enter the default value for the number of nodes for a run [$DEFAULT_NODES]:"
-  read -p "> "  input
-  if [ ! -z "$input" ]; then
-    DEFAULT_NODES=$input
-  fi
-  echo
-  echo "Default number of nodes is $DEFAULT_NODES"
-  echo
-
-  # Get the setting for the default postproc time
-  echo "Enter the default value for the time limit for post-processing jobs [$DEFAULT_POSTPROC_TIME]:"
-  read -p "> "  input
-  if [ ! -z "$input" ]; then
-    DEFAULT_POSTPROC_TIME=$input
-  fi
-  echo
-  echo "Default post-processing time limit is $DEFAULT_POSTPROC_TIME"
-  echo
-
-  # Get the setting for the default postproc memory
-  echo "Enter the default value for the memory requested for post-processing jobs [$DEFAULT_POSTPROC_MEMORY]:"
-  read -p "> "  input
-  if [ ! -z "$input" ]; then
-    DEFAULT_POSTPROC_MEMORY=$input
-  fi
-  echo
-  echo "Default post-processing memory requested is $DEFAULT_POSTPROC_MEMORY"
-  echo
-
-  # Get the setting for the default partition
-  echo "Enter the default value for the partition for simulation jobs [$DEFAULT_PARTITION]:"
-  read -p "> "  input
-  if [ ! -z "$input" ]; then
-    DEFAULT_PARTITION=$input
-  fi
-  echo
-  echo "Default partiion for simulations is $DEFAULT_PARTITION"
-  echo
-
-  # Get the setting for the default qos
-  echo "Enter the default value for the QOS for simulation jobs [$DEFAULT_QOS]:"
-  read -p "> "  input
-  if [ ! -z "$input" ]; then
-    DEFAULT_QOS=$input
-  fi
-  echo
-  echo "Default QOS for simulations is $DEFAULT_QOS"
-  echo
-fi
-
-if [[ $BATCH_SYSTEM -eq 0 ]]; then
   echo "Do you want to submit a serial (or debug) job to precompile, creating the"
   echo "moment_kinetics.so image (this is required in order to use the job submission"
   echo "scripts and templates provided)? [y]/n:"
@@ -523,7 +252,7 @@ echo
 # command, because passing as a prefix does not work (sometimes??) within a
 # bash script (even though as far as JTO knows it should work).
 export JULIA_DEPOT_PATH=$JULIA_DIRECTORY
-$JULIA machines/shared/machine_setup.jl "$MACHINE" "$ACCOUNT" "$JULIA_DIRECTORY" "$DEFAULT_RUN_TIME" "$DEFAULT_NODES" "$DEFAULT_POSTPROC_TIME" "$DEFAULT_POSTPROC_MEMORY" "$DEFAULT_PARTITION" "$DEFAULT_QOS" "$USE_MAKIE_POSTPROC" "$USE_PLOTS_POSTPROC" "$USE_NETCDF" "$ENABLE_MMS"
+$JULIA machines/shared/machine_setup.jl "$MACHINE"
 
 if [ -f julia.env ]; then
   # Set up modules, JULIA_DEPOT_PATH, etc. to use for the rest of this script
