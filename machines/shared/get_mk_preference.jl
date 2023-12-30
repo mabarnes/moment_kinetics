@@ -6,7 +6,7 @@ preference_name = ARGS[1]
 if length(ARGS) > 1
     default = ARGS[2]
 else
-    default = "1"
+    default = "n"
 end
 
 top_level_directory = dirname(dirname(dirname(@__FILE__)))

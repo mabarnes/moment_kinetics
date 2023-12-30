@@ -13,9 +13,9 @@ ARTIFACT_DIR=$PWD
 ######
 
 # Get default response for whether to download/build HDF5
-DEFAULT_BUILDHDF5=$(../../bin/julia ../shared/get_mk_preference.jl build_hdf5 0)
+DEFAULT_BUILDHDF5=$(../../bin/julia ../shared/get_mk_preference.jl build_hdf5 "y")
 
-if [[ $DEFAULT_BUILDHDF5 -eq 0 ]]; then
+if [[ $DEFAULT_BUILDHDF5 == "y" ]]; then
   echo "Do you want to download, and compile a local version of HDF5 (if you do"
   echo "not do this, you will be given the option to choose an HDF5 library to"
   echo "link later)? [y]/n"
@@ -26,9 +26,9 @@ if [[ $DEFAULT_BUILDHDF5 -eq 0 ]]; then
     read -p "> " input
   done
   if [[ -z $input || $input == "y" ]]; then
-    BUILDHDF5=0
+    BUILDHDF5="y"
   else
-    BUILDHDF5=1
+    BUILDHDF5="n"
   fi
 else
   echo "Do you want to download, and compile a local version of HDF5 (if you do"
@@ -41,16 +41,16 @@ else
     read -p "> " input
   done
   if [[ -z $input || $input == "n" ]]; then
-    BUILDHDF5=1
+    BUILDHDF5="y"
   else
-    BUILDHDF5=0
+    BUILDHDF5="n"
   fi
 fi
 
 # Save current response for whether to download/build HDF5 as default
 ../../bin/julia ../shared/set_mk_preference.jl build_hdf5 $BUILDHDF5
 
-if [[ BUILDHDF5 -eq 0 && -d hdf5-build ]]; then
+if [[ $BUILDHDF5 == "y" && -d hdf5-build ]]; then
   echo "HDF5 appears to have been downloaded, compiled and installed already."
   echo "Do you want to download, compile and install again, overwriting the existing "
   echo "version? y/[n]"
@@ -61,7 +61,7 @@ if [[ BUILDHDF5 -eq 0 && -d hdf5-build ]]; then
     read -p "> " input
   done
   if [[ -z $input || $input == "n" ]]; then
-    BUILDHDF5=1
+    BUILDHDF5="n"
   else
     # Remove the install directory if it exists already
     if [[ -d hdf5-build ]]; then
@@ -70,7 +70,7 @@ if [[ BUILDHDF5 -eq 0 && -d hdf5-build ]]; then
   fi
 fi
 
-if [ $BUILDHDF5 -eq 0 ]; then
+if [[ $BUILDHDF5 == "y" ]]; then
   HDF5=hdf5-1.14.3
   # Download and extract the source
   wget -O ${HDF5}.tar.bz2 https://www.hdfgroup.org/package/hdf5-1-14-3-tar-bz2/?wpdmdl=18469

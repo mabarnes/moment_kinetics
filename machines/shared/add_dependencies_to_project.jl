@@ -110,7 +110,7 @@ elseif machine_settings["hdf5_library_setting"] == "download"
                             joinpath(hdf5_dir, "libhdf5_hl.so"))
 elseif machine_settings["hdf5_library_setting"] == "prompt"
     # Prompt user to select what HDF5 to use
-    if mk_preferences["build_hdf5"] == "0"
+    if mk_preferences["build_hdf5"] == "y"
         local_hdf5_install_dir = joinpath("machines", "artifacts", "hdf5-build", "lib")
         local_hdf5_install_dir = realpath(local_hdf5_install_dir)
         # We have downloaded and compiled HDF5, so link that
