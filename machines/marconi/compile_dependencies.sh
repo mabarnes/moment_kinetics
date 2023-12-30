@@ -21,6 +21,11 @@ if [ -d hdf5-build ]; then
   done
   if [[ -z $input || $input == "n" ]]; then
     BUILDHDF5=1
+  else
+    # Remove the install directory if it exists already
+    if [[ -d hdf5-build ]]; then
+      rm -r hdf5-build
+    fi
   fi
 fi
 

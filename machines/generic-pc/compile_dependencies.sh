@@ -50,9 +50,7 @@ fi
 # Save current response for whether to download/build HDF5 as default
 ../../bin/julia ../shared/set_mk_preference.jl build_hdf5 $BUILDHDF5
 
-if [[ BUILDHDF5 -eq 1 && -d hdf5-build ]]; then
-  rm -r hdf5-build
-elif [[ BUILDHDF5 -eq 0 && -d hdf5-build ]]; then
+if [[ BUILDHDF5 -eq 0 && -d hdf5-build ]]; then
   echo "HDF5 appears to have been downloaded, compiled and installed already."
   echo "Do you want to download, compile and install again, overwriting the existing "
   echo "version? y/[n]"
@@ -64,6 +62,11 @@ elif [[ BUILDHDF5 -eq 0 && -d hdf5-build ]]; then
   done
   if [[ -z $input || $input == "n" ]]; then
     BUILDHDF5=1
+  else
+    # Remove the install directory if it exists already
+    if [[ -d hdf5-build ]]; then
+      rm -r hdf5-build
+    fi
   fi
 fi
 
