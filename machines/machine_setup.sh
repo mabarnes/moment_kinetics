@@ -195,6 +195,14 @@ fi
 # Get the location for the .julia directory, in case this has to have a
 # non-default value, e.g. because the user's home directory is not accessible
 # from compute nodes.
+if [[ -f .julia_directory_default.txt ]]; then
+  JULIA_DIRECTORY=$(cat .julia_directory_default.txt)
+else
+  # If we do not have an existing setting, try using $JULIA_DEPOT_PATH (if that
+  # is not set, then we end up with an empty default, which means use the
+  # standard default location).
+  JULIA_DIRECTORY=$JULIA_DEPOT_PATH
+fi
 echo "It can be useful or necessary to set a non-default location for the "
 echo ".julia directory. Leave this empty if the default location is OK."
 echo "Enter a name for a subdirectory of the current directory, e.g. "
@@ -218,6 +226,7 @@ fi
 echo
 echo "Using julia_directory=$JULIA_DIRECTORY"
 echo
+echo $JULIA_DIRECTORY > .julia_directory_default.txt
 
 if [[ $BATCH_SYSTEM -eq 0 ]]; then
   echo "Do you want to submit a serial (or debug) job to precompile, creating the"
