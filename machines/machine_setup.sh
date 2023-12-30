@@ -254,48 +254,12 @@ if [ -f machines/shared/compile_dependencies.sh ]; then
   machines/shared/compile_dependencies.sh
 fi
 
+bin/julia --project $OPTIMIZATION_FLAGS machines/shared/add_dependencies_to_project.jl
 # Don't use bin/julia for machine_setup_stage_two.jl because that script modifies bin/julia.
 # It is OK to not use it here, because JULIA_DEPOT_PATH has been set within this script
 $JULIA --project $OPTIMIZATION_FLAGS machines/shared/machine_setup_stage_two.jl
-
-if [[ $USE_MAKIE_POSTPROC -eq 0 ]]; then
-  echo "Setting up makie_post_processing"
-  if [[ $BATCH_SYSTEM -eq 0 ]]; then
-    bin/julia --project=makie_post_processing/ $POSTPROC_OPTIMIZATION_FLAGS -e 'import Pkg; Pkg.develop(path="moment_kinetics/"); Pkg.develop(path="makie_post_processing/makie_post_processing"); Pkg.precompile()'
-  else
-    bin/julia --project -e $OPTIMIZATION_FLAGS 'import Pkg; Pkg.develop(path="makie_post_processing/makie_post_processing")'
-  fi
-else
-  if [[ $BATCH_SYSTEM -eq 1 ]]; then
-    bin/julia --project $OPTIMIZATION_FLAGS -e 'import Pkg; try Pkg.rm("makie_post_processing") catch end'
-  fi
-fi
-
-if [[ $USE_PLOTS_POSTPROC -eq 0 ]]; then
-  echo "Setting up plots_post_processing"
-  if [[ $BATCH_SYSTEM -eq 0 ]]; then
-    bin/julia --project=plots_post_processing/ $POSTPROC_OPTIMIZATION_FLAGS -e 'import Pkg; Pkg.develop(path="moment_kinetics/"); Pkg.develop(path="plots_post_processing/plots_post_processing"); Pkg.precompile()'
-  else
-    bin/julia --project $OPTIMIZATION_FLAGS -e 'import Pkg; Pkg.develop(path="plots_post_processing/plots_post_processing")'
-  fi
-else
-  if [[ $BATCH_SYSTEM -eq 1 ]]; then
-    bin/julia --project $OPTIMIZATION_FLAGS -e 'import Pkg; try Pkg.rm("plots_post_processing") catch end'
-  fi
-fi
-
-if [[ $SUBMIT_PRECOMPILATION -eq 0 ]]; then
-  # This script launches a job that runs precompile.jl to create the
-  # moment_kinetics.so image.
-  ./precompile-submit.sh
-
-  if [[ $USE_MAKIE_POSTPROC -eq 0 ]]; then
-    ./precompile-makie-post-processing-submit.sh
-  fi
-  if [[ $USE_PLOTS_POSTPROC -eq 0 ]]; then
-    ./precompile-plots-post-processing-submit.sh
-  fi
-fi
+bin/julia --project $POSTPROC_OPTIMIZATION_FLAGS machines/shared/makie_post_processing_setup.jl
+bin/julia --project $POSTPROC_OPTIMIZATION_FLAGS machines/shared/plots_post_processing_setup.jl
 
 echo
 echo "Finished!"
