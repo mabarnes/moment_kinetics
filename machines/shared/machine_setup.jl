@@ -166,6 +166,7 @@ function machine_setup_moment_kinetics(machine::String; no_force_exit::Bool=fals
     else
         batch_system = true
     end
+    mk_preferences["batch_system"] = batch_system
 
     # Get some settings
     julia_directory = mk_preferences["julia_directory"] = ENV["JULIA_DEPOT_PATH"]

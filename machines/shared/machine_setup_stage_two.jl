@@ -44,11 +44,7 @@ else
     machine_settings = Dict{String,Any}()
 end
 
-if machine == "generic-pc"
-    batch_system = false
-else
-    batch_system = true
-end
+batch_system = mk_preferences["batch_system"]
 
 if mk_preferences["use_plots"] == "y"
     python_venv_path = joinpath(repo_dir, "machines", "artifacts", "mk_venv")
