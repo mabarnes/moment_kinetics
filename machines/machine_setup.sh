@@ -228,28 +228,6 @@ echo "Using julia_directory=$JULIA_DIRECTORY"
 echo
 echo $JULIA_DIRECTORY > .julia_directory_default.txt
 
-if [[ $BATCH_SYSTEM -eq 0 ]]; then
-  echo "Do you want to submit a serial (or debug) job to precompile, creating the"
-  echo "moment_kinetics.so image (this is required in order to use the job submission"
-  echo "scripts and templates provided)? [y]/n:"
-  read -p "> "  input
-
-  while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
-    # $input must be empty, 'y' or 'n'. It is none of these, so ask for input
-    # again until we get a valid response.
-    echo
-    echo "$input is not a valid response: [y]/n"
-    read -p "> "  input
-  done
-  if [[ -z $input || $input == "y" ]]; then
-    SUBMIT_PRECOMPILATION=0
-  else
-    SUBMIT_PRECOMPILATION=1
-  fi
-else
-  SUBMIT_PRECOMPILATION=1
-fi
-
 # Now we have a 'julia' executable and the settings, can call a Julia script
 # (machines/shared/machine_setup.jl) to create LocalPreferences.toml,
 # julia.env, bin/julia, and some machine-specific symlinks.
@@ -268,29 +246,6 @@ if [ -f julia.env ]; then
   source julia.env
 fi
 
-if [[ $USE_PLOTS_POSTPROC -eq 0 ]]; then
-  # Create a Python venv, ensure it contains matplotlib, and append its
-  # activation command to julia.env.
-  # Use the `--system-site-packages` option to let the venv include any packages
-  # already installed by the system.
-  PYTHON_VENV_PATH=$PWD/machines/artifacts/mk_venv
-  python -m venv --system-site-packages $PYTHON_VENV_PATH
-  source $PYTHON_VENV_PATH/bin/activate
-  # Use 'PYTHONNOUSERSITE=1' so that pip ignores any packages in ~/.local (which
-  # may not be accessible from compute nodes on some clusters) and therefore
-  # definitely installs matplotlib and its dependencies into mk_venv.
-  PYTHONNOUSERSITE=1 pip install matplotlib
-  if [[ $BATCH_SYSTEM -eq 0 ]]; then
-    echo "source $PYTHON_VENV_PATH/bin/activate" >> julia.env
-  else
-    # Re-write bin/julia to add activation of the Python venv
-    LAST_LINES=$(tail -n 2 bin/julia)
-    echo '#!/usr/bin/env bash' > bin/julia # It is necessary to use single-quotes not double quotes here, but don't understand why
-    echo "source $PYTHON_VENV_PATH/bin/activate" >> bin/julia
-    echo "$LAST_LINES" >> bin/julia
-  fi
-fi
-
 # [ -f <path> ] tests if <path> exists and is a file
 if [ -f machines/shared/compile_dependencies.sh ]; then
   # Need to compile some dependencies
@@ -299,33 +254,9 @@ if [ -f machines/shared/compile_dependencies.sh ]; then
   machines/shared/compile_dependencies.sh
 fi
 
-# We want to always add a couple of dependencies that are required to run the
-# tests in the top-level environment by just 'include()'ing the test scripts.
-# We also run the 'stage two' setup now if it is required.
-SETUP_COMMAND="bin/julia --project $OPTIMIZATION_FLAGS -e 'import Pkg"
-if [[ $USE_NETCDF -eq 1 || $ENABLE_MMS -eq 1 ]]; then
-  # Remove packages used by non-selected extensions in case they were installed previously
-  if [[ $USE_NETCDF -eq 1 ]]; then
-    SETUP_COMMAND="$SETUP_COMMAND; try Pkg.rm(\"NCDatasets\") catch end"
-  fi
-  if [[ $ENABLE_MMS -eq 1 ]]; then
-    SETUP_COMMAND="$SETUP_COMMAND; try Pkg.rm([\"Symbolics\", \"IfElse\"]) catch end"
-  fi
-fi
-SETUP_COMMAND="$SETUP_COMMAND; Pkg.add([\"HDF5\", \"MPI\", \"MPIPreferences\", \"SpecialFunctions\""
-if [[ $USE_NETCDF -eq 0 ]]; then
-  # Install NetCDF interface package NCDatasets to enable file_io_netcdf extension
-  SETUP_COMMAND="$SETUP_COMMAND, \"NCDatasets\""
-fi
-if [[ $ENABLE_MMS -eq 0 ]]; then
-  # Install Symbolics and IfElse packages required by manufactured_solns_ext extension
-  SETUP_COMMAND="$SETUP_COMMAND, \"Symbolics\", \"IfElse\""
-fi
-SETUP_COMMAND="$SETUP_COMMAND]); include(\"machines/shared/machine_setup_stage_two.jl\")'"
-eval "$SETUP_COMMAND"
-
-# Add moment_kinetics package to the working project
-bin/julia --project $OPTIMIZATION_FLAGS -e 'import Pkg; Pkg.develop(path="moment_kinetics"); Pkg.precompile()'
+# Don't use bin/julia for machine_setup_stage_two.jl because that script modifies bin/julia.
+# It is OK to not use it here, because JULIA_DEPOT_PATH has been set within this script
+$JULIA --project $OPTIMIZATION_FLAGS machines/shared/machine_setup_stage_two.jl
 
 if [[ $USE_MAKIE_POSTPROC -eq 0 ]]; then
   echo "Setting up makie_post_processing"
@@ -350,19 +281,6 @@ if [[ $USE_PLOTS_POSTPROC -eq 0 ]]; then
 else
   if [[ $BATCH_SYSTEM -eq 1 ]]; then
     bin/julia --project $OPTIMIZATION_FLAGS -e 'import Pkg; try Pkg.rm("plots_post_processing") catch end'
-  fi
-fi
-
-if [[ $BATCH_SYSTEM -eq 0 ]]; then
-  # Make symlinks to submission scripts
-  ln -s machines/shared/precompile-submit.sh
-  ln -s machines/shared/submit-run.sh
-  ln -s machines/shared/submit-restart.sh
-  if [[ $USE_MAKIE_POSTPROC -eq 0 ]]; then
-    ln -s machines/shared/precompile-makie-post-processing-submit.sh
-  fi
-  if [[ $USE_PLOTS_POSTPROC -eq 0 ]]; then
-    ln -s machines/shared/precompile-plots-post-processing-submit.sh
   fi
 fi
 

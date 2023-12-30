@@ -17,6 +17,7 @@ default_settings["base"] = Dict("account"=>"",
                                 "default_postproc_memory"=>"64G",
                                 "default_partition"=>"",
                                 "default_qos"=>"",
+                                "submit_precompilation"=>"y",
                                 "use_makie"=>"n",
                                 "use_plots"=>"n",
                                 "use_netcdf"=>"n",
@@ -190,6 +191,11 @@ function machine_setup_moment_kinetics(machine::String; no_force_exit::Bool=fals
         get_setting("account",
                     "Enter the account code used to submit jobs",
                     machine, mk_preferences)
+        get_setting("submit_precompilation",
+                    "Do you want to submit a serial (or debug) job to precompile, creating the\n"
+                    * "moment_kinetics.so image (this is required in order to use the job submission\n"
+                    * "scripts and templates provided)?\n",
+                    machine, mk_preferences, ["y", "n"])
     end
     get_setting("use_makie",
                 "Would you like to set up makie_post_processing?",
