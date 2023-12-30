@@ -14,7 +14,6 @@ if mk_preferences["use_makie"] == "y"
         Pkg.activate("makie_post_processing")
 
         include("add_dependencies_to_project.jl")
-        Pkg.develop(path="moment_kinetics")
         Pkg.add(["Makie", "CairoMakie"])
         Pkg.develop(path=joinpath("makie_post_processing", "makie_post_processing"))
         Pkg.precompile()

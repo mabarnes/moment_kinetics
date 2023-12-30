@@ -51,16 +51,11 @@ function get_input_with_path_completion(message=nothing)
 end
 
 
-to_add = String["HDF5", "MPI", "MPIPreferences", "SpecialFunctions"]
 to_rm = String[]
-if mk_preferences["use_netcdf"] == "y"
-    push!(to_add, "NCDatasets")
-else
+if mk_preferences["use_netcdf"] == "n"
     push!(to_rm, "NCDatasets")
 end
-if mk_preferences["enable_mms"] == "y"
-    push!(to_add, "Symbolics", "IfElse")
-else
+if mk_preferences["enable_mms"] == "n"
     push!(to_rm, "Symbolics", "IfElse")
 end
 for p ∈ to_rm
@@ -71,7 +66,7 @@ for p ∈ to_rm
     catch
     end
 end
-Pkg.add(to_add)
+Pkg.add(["HDF5", "MPI", "MPIPreferences", "SpecialFunctions"])
 
 
 # Instantiate packages so we can use MPIPreferences below
@@ -202,4 +197,21 @@ elseif machine_settings["hdf5_library_setting"] == "prompt"
 else
     error("Unrecognized setting "
           * "hdf5_library_setting=$(machine_settings["hdf5_library_setting"])")
+end
+
+
+Pkg.develop(path="moment_kinetics")
+Pkg.precompile()
+
+
+# It seems to be important to add the dependencies for MMS before the ones for NetCDF (as
+# of 30/12/2023).  Don't understand why that should be true.
+if mk_preferences["enable_mms"] == "y"
+    Pkg.add(["Symbolics", "IfElse"])
+    Pkg.precompile()
+end
+
+if mk_preferences["use_netcdf"] == "y"
+    Pkg.add("NCDatasets")
+    Pkg.precompile()
 end

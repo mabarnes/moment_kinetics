@@ -14,7 +14,6 @@ if mk_preferences["use_plots"] == "y"
         Pkg.activate("plots_post_processing")
 
         include("add_dependencies_to_project.jl")
-        Pkg.develop(path="moment_kinetics")
         Pkg.add("Plots")
         Pkg.develop(path=joinpath("plots_post_processing", "plots_post_processing"))
         Pkg.precompile()

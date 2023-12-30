@@ -30,10 +30,6 @@ if mk_preferences["use_plots"] == "y"
 end
 
 
-Pkg.develop(path="moment_kinetics")
-Pkg.precompile()
-
-
 if batch_system
   # Make symlinks to batch job submission scripts
   symlink("precompile-submit.sh", joinpath("machines", "shared", "precompile-submit.sh"))
