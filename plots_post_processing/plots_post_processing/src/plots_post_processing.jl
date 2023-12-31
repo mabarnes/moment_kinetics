@@ -15,7 +15,7 @@ export get_coords_nelement
 export get_coords_ngrid
 
 include("post_processing_input.jl")
-include("shared_utils.jl")
+include("../../../makie_post_processing/makie_post_processing/src/shared_utils.jl")
 
 # Next three lines only used for workaround needed by plot_unnormalised()
 using PyCall
