@@ -19,7 +19,7 @@ if mk_preferences["use_plots"] == "y"
         Pkg.precompile()
 
         if batch_system && mk_preferences["submit_precompilation"] == "y"
-            run(`precompile-plots-post-processing-submit.sh`)
+            run(`./precompile-plots-post-processing-submit.sh`)
         end
     else
         Pkg.add("Plots")

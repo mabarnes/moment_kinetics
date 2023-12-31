@@ -32,22 +32,24 @@ end
 
 if batch_system
   # Make symlinks to batch job submission scripts
-  symlink("precompile-submit.sh", joinpath("machines", "shared", "precompile-submit.sh"))
-  symlink("submit-run.sh", joinpath("machines", "shared", "submit-run.sh"))
-  symlink("submit-restart.sh", joinpath("machines", "shared", "submit-restart.sh"))
-  if mk_preferences["use_makie"]
-      symlink("precompile-makie-post-processing-submit.sh",
-              joinpath("machines", "shared",
-                       "precompile-makie-post-processing-submit.sh"))
+  function make_batch_symlink(script_name)
+      if islink(script_name)
+          rm(script_name)
+      end
+      symlink(joinpath("machines", "shared", script_name), script_name)
   end
-  if mk_preferences["use_plots"]
-      symlink("precompile-plots-post-processing-submit.sh",
-              joinpath("machines", "shared",
-                       "precompile-plots-post-processing-submit.sh"))
+  make_batch_symlink("precompile-submit.sh")
+  make_batch_symlink("submit-run.sh")
+  make_batch_symlink("submit-restart.sh")
+  if mk_preferences["use_makie"] == "y"
+      make_batch_symlink("precompile-makie-post-processing-submit.sh")
+  end
+  if mk_preferences["use_plots"] == "y"
+      make_batch_symlink("precompile-plots-post-processing-submit.sh")
   end
 
   if mk_preferences["submit_precompilation"] == "y"
-      run(`precompile-submit.sh`)
+      run(`./precompile-submit.sh`)
   end
 end
 
