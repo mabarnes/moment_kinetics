@@ -267,5 +267,32 @@ echo "Finished!"
 if [[ $BATCH_SYSTEM -eq 0 ]]; then
   echo "Now run \`source julia.env\` to set up your environment, and/or add it to your .bashrc"
 fi
+echo
+if [[ $BATCH_SYSTEM -eq 0 ]]; then
+  echo "To run simulations interactively, start julia like:"
+  echo "$ bin/julia --project $OPTIMIZATION_FLAGS"
+  echo
+  echo "To run post-processing interactively, start julia like:"
+  echo "$ bin/julia --project=makie_post_processing $POSTPROC_OPTIMIZATION_FLAGS"
+  echo "or"
+  echo "$ bin/julia --project=plots_post_processing $POSTPROC_OPTIMIZATION_FLAGS"
+  echo
+  echo "Note that if you change the optimization flags '$OPTIMIZATION_FLAGS' or '$POSTPROC_OPTIMIZATION_FLAGS' precompilation may need to be repeated using the new flags (which is slow)."
+elif [[ $SEPARATE_POSTPROC_PROJECTS == "y" ]]; then
+  echo "To run simulations, start julia like:"
+  echo "$ bin/julia --project $OPTIMIZATION_FLAGS"
+  echo
+  echo "To run post-processing, start julia like:"
+  echo "$ bin/julia --project=makie_post_processing $POSTPROC_OPTIMIZATION_FLAGS"
+  echo "or"
+  echo "$ bin/julia --project=plots_post_processing $POSTPROC_OPTIMIZATION_FLAGS"
+  echo
+  echo "Note that if you change the optimization flags '$OPTIMIZATION_FLAGS' or '$POSTPROC_OPTIMIZATION_FLAGS' precompilation may need to be repeated using the new flags (which is slow)."
+else
+  echo "To run simulations or do post-processing, start julia like:"
+  echo "$ bin/julia --project $OPTIMIZATION_FLAGS"
+  echo
+  echo "Note that if you change the optimization flags '$OPTIMIZATION_FLAGS' precompilation may need to be repeated using the new flags (which is slow)."
+fi
 
 exit 0
