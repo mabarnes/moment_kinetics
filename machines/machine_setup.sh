@@ -179,19 +179,6 @@ else
   BATCH_SYSTEM=0
 fi
 
-if [[ $BATCH_SYSTEM -eq 0 ]]; then
-  # Batch systems can (conveniently) use different optimization flags for
-  # running simulations and for post-processing.
-  OPTIMIZATION_FLAGS="-O3 --check-bounds=no"
-  POSTPROC_OPTIMIZATION_FLAGS="-O3"
-else
-  # On interactive systems which use the same project for running simulations
-  # and for post-processing, both should use the same optimization flags to
-  # avoid invalidating precompiled dependencies.
-  OPTIMIZATION_FLAGS="-O3"
-  POSTPROC_OPTIMIZATION_FLAGS=$OPTIMIZATION_FLAGS
-fi
-
 # Get the location for the .julia directory, in case this has to have a
 # non-default value, e.g. because the user's home directory is not accessible
 # from compute nodes.
@@ -244,6 +231,20 @@ $JULIA machines/shared/machine_setup.jl "$MACHINE"
 if [ -f julia.env ]; then
   # Set up modules, JULIA_DEPOT_PATH, etc. to use for the rest of this script
   source julia.env
+fi
+
+SEPARATE_POSTPROC_PROJECTS=$(bin/julia machines/shared/get_mk_preference.jl separate_postproc_projects)
+if [[ $BATCH_SYSTEM -eq 0 || $SEPARATE_POSTPROC_PROJECTS == "y" ]]; then
+  # Batch systems can (conveniently) use different optimization flags for
+  # running simulations and for post-processing.
+  OPTIMIZATION_FLAGS="-O3 --check-bounds=no"
+  POSTPROC_OPTIMIZATION_FLAGS="-O3"
+else
+  # On interactive systems which use the same project for running simulations
+  # and for post-processing, both should use the same optimization flags to
+  # avoid invalidating precompiled dependencies.
+  OPTIMIZATION_FLAGS="-O3"
+  POSTPROC_OPTIMIZATION_FLAGS=$OPTIMIZATION_FLAGS
 fi
 
 # [ -f <path> ] tests if <path> exists and is a file

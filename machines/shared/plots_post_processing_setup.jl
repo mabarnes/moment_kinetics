@@ -9,7 +9,7 @@ batch_system = mk_preferences["batch_system"]
 if mk_preferences["use_plots"] == "y"
     println("Setting up plots_post_processing")
 
-    if batch_system
+    if batch_system || mk_preferences["separate_postproc_projects"] == "y"
         touch(joinpath("plots_post_processing", "Project.toml"))
         Pkg.activate("plots_post_processing")
 
@@ -18,7 +18,7 @@ if mk_preferences["use_plots"] == "y"
         Pkg.develop(path=joinpath("plots_post_processing", "plots_post_processing"))
         Pkg.precompile()
 
-        if mk_preferences["submit_precompilation"] == "y"
+        if batch_system && mk_preferences["submit_precompilation"] == "y"
             run(`precompile-plots-post-processing-submit.sh`)
         end
     else

@@ -20,6 +20,7 @@ default_settings["base"] = Dict("account"=>"",
                                 "submit_precompilation"=>"y",
                                 "use_makie"=>"n",
                                 "use_plots"=>"n",
+                                "separate_postproc_projects"=>"n",
                                 "use_netcdf"=>"n",
                                 "enable_mms"=>"n")
 # No batch system steup for "generic-pc"
@@ -204,6 +205,13 @@ function machine_setup_moment_kinetics(machine::String; no_force_exit::Bool=fals
     get_setting("use_plots",
                 "Would you like to set up plots_post_processing?",
                 machine, mk_preferences, ["y", "n"])
+    if !batch_system
+        get_setting("separate_postproc_projects",
+                    "Would you like to set up separate packages for post processing (this might\n"
+                    * "be useful if you want to use different optimization flags for runs and\n"
+                    * "post-processing for example)?",
+                    machine, mk_preferences, ["y", "n"])
+    end
     get_setting("use_netcdf",
                 "Would you like to enable optional NetCDF I/O (warning: using NetCDF sometimes\n"
                 * "causes errors when using a local or system install of HDF5)?",
