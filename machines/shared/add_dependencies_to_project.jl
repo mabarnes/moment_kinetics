@@ -98,7 +98,7 @@ end
 println("\n** Setting up to use system HDF5\n")
 
 if machine_settings["hdf5_library_setting"] == "system"
-    hdf5_dir = ENV["HDF5_DIR"] # system hdf5
+    hdf5_dir = joinpath(ENV["HDF5_DIR"], "lib") # system hdf5
     using HDF5
     HDF5.API.set_libraries!(joinpath(hdf5_dir, "libhdf5.so"),
                             joinpath(hdf5_dir, "libhdf5_hl.so"))
