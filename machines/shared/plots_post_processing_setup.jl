@@ -1,6 +1,6 @@
 using Pkg, TOML
 
-repo_dir = dirname(dirname(dirname(@__FILE__)))
+repo_dir = dirname(Pkg.project().path)
 local_preferences_filename = joinpath(repo_dir, "LocalPreferences.toml")
 local_preferences = TOML.parsefile(local_preferences_filename)
 mk_preferences = local_preferences["moment_kinetics"]
