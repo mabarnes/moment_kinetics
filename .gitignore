@@ -7,9 +7,10 @@ LocalPreferences.toml
 /plots_post_processing/Project.toml
 /julia.env
 /.julia
-bin
-machines/shared/compile_dependencies.sh
-machines/artifacts
+/bin
+/machines/shared/compile_dependencies.sh
+/machines/artifacts
+/machines/generic-batch
 /precompile-makie-post-processing-submit.sh
 /precompile-plots-post-processing-submit.sh
 /precompile-submit.sh

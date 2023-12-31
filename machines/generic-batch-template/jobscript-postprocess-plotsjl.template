@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+#SBATCH --ntasks=1
+#SBATCH --time=POSTPROCTIME
+#SBATCH --account=ACCOUNT
+#SBATCH --partition=some-serial-partition
+#SBATCH --output=RUNDIRslurm-post-%j.out
+
+set -e
+
+cd $SLURM_SUBMIT_DIR
+
+# Get setup for Julia
+source julia.env
+
+echo "post-processing (with original post_processing) RUNDIR $(date)"
+bin/julia -Jplots_postproc.so --project=plots_post_processing/ run_post_processing.jl RUNDIR
+
+echo "finished post-processing RUNDIR $(date)"

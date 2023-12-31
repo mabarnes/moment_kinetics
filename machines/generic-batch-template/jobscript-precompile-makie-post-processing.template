@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+#SBATCH --ntasks=1
+#SBATCH --time=1:00:00
+#SBATCH --account=ACCOUNT
+#SBATCH --partition=some-serial-partition
+#SBATCH --output=PRECOMPILEDIRslurm-%j.out
+
+set -e
+
+cd $SLURM_SUBMIT_DIR
+
+# Get setup for Julia
+source julia.env
+
+echo "precompiling $(date)"
+
+bin/julia --project=makie_post_processing/ precompile-makie-post-processing.jl
+
+echo "finished!"

@@ -40,6 +40,8 @@ else
     DEFAULT_MACHINE=marconi
   elif module avail 2>&1 | grep -q epcc; then
     DEFAULT_MACHINE=archer
+  elif $(command -v module avail); then
+    DEFAULT_MACHINE=generic-batch
   else
     DEFAULT_MACHINE=generic-pc
   fi
@@ -96,15 +98,33 @@ else
 fi
 
 # Get name of 'machine'
-while [[ -z $MACHINE || !( $MACHINE == "generic-pc" || $MACHINE == "archer" || $MACHINE == "marconi" ) ]]; do
+while [[ -z $MACHINE || !( $MACHINE == "generic-pc" || $MACHINE == "generic-batch" || $MACHINE == "archer" || $MACHINE == "marconi" ) ]]; do
   echo "Enter name of the machine to set up (must be one of 'generic-pc',"
-  echo "'archer', or 'marconi') [$DEFAULT_MACHINE]:"
+  echo "'generic-batch', 'archer', or 'marconi') [$DEFAULT_MACHINE]:"
   read -p "> "  MACHINE
   echo
   if [ -z $MACHINE ]; then
     MACHINE=$DEFAULT_MACHINE
   fi
 done
+
+if [[ $MACHINE == "generic-batch" && ! -d machines/generic-batch ]]; then
+  echo "To use 'generic-batch' you must copy 'machines/generic-batch-template' to 'machines/generic-batch' and:"
+  echo "* Edit the modules in 'machines/generic-batch/julia.env' (see comments in that file)"
+  echo "* Edit the 'jobscript-*.template' files for precompilation or post-processing jobswith the correct serial or"
+  echo "  debug queue for your machine."
+  echo "* If you want to use a system-provided HDF5 you can delete 'machines/generic-batch/compile_dependencies.sh',"
+  echo "  and uncomment the 'hdf5_library_setting = \"system\"' option in 'machines/generic-batch/machine_settings.toml'"
+  echo "* If 'MPIPreferences.use_system_binary()' cannot auto-detect your MPI library and/or if 'mpirun' is not the "
+  echo "  right command to launch MPI processes, then you need to set the 'mpi_library_names' and 'mpiexec' settings in"
+  echo "  'machines/generic-batch/machine_settings.toml' (note if either of these settings is set, then both must be)"
+  echo "* If 'mpirun' is not the right command to launch MPI processes, you may need to edit the 'jobscript-run.template'"
+  echo "  and 'jobscript-restart.template' files in 'machines/generic-batch/' and set the setting in"
+  echo "  'machines/generic-batch/machine_settings.toml'"
+  echo "Note that 'generic-batch' is set up assuming a Linux, x86_64 based machine that uses the 'module' system and a"
+  echo "SLURM job queue."
+  exit 1
+fi
 
 echo "Setting up for '$MACHINE'"
 echo

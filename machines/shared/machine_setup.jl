@@ -30,6 +30,7 @@ default_settings["generic-pc"] = merge(default_settings["base"],
                                         "default_postproc_time"=>"0:00:00",
                                         "default_postproc_memory"=>"0",
                                         "use_makie"=>"y"))
+default_settings["generic-batch"] = deepcopy(default_settings["base"])
 default_settings["archer"] = merge(default_settings["base"],
                                    Dict("default_partition"=>"standard",
                                         "default_qos"=>"standard"))
@@ -292,16 +293,14 @@ function machine_setup_moment_kinetics(machine::String; no_force_exit::Bool=fals
                                                   "compile_dependencies.sh")
     compile_dependencies_path = joinpath(repo_dir,
                                          compile_dependencies_relative_path)
-    needs_compile_dependencies = false
 
     # Set this flag to true in the machine-specific branch below to require a
     # non-empty `account` setting
     needs_account = false
 
     if machine == "generic-pc"
-        # For generic-pc, run compile_dependencies.sh script to optionally download and
-        # compile HDF5
-        needs_compile_dependencies = true
+    elseif machine == "generic-batch"
+        needs_account = true
     elseif machine == "archer"
         needs_account = true
         if julia_directory == ""
@@ -312,9 +311,6 @@ function machine_setup_moment_kinetics(machine::String; no_force_exit::Bool=fals
         end
     elseif machine == "marconi"
         needs_account = true
-
-        # For marconi, need to run a script to compile HDF5
-        needs_compile_dependencies = true
     else
         error("Unsupported machine '$machine'")
     end
@@ -324,7 +320,7 @@ function machine_setup_moment_kinetics(machine::String; no_force_exit::Bool=fals
               * "`account` argument.")
     end
 
-    if needs_compile_dependencies
+    if isfile(joinpath("machines", machine, "compile_dependencies.sh"))
         # Remove link if it exists already
         islink(compile_dependencies_path) && rm(compile_dependencies_path)
 
