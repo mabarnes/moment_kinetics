@@ -66,7 +66,7 @@ for p ∈ to_rm
     catch
     end
 end
-Pkg.add(["HDF5", "MPI", "MPIPreferences", "SpecialFunctions"])
+Pkg.add(["HDF5", "MPI", "MPIPreferences", "PackageCompiler", "SpecialFunctions"])
 
 
 # Instantiate packages so we can use MPIPreferences below
