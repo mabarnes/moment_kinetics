@@ -25,17 +25,18 @@ if mk_preferences["use_plots"] == "y"
         Pkg.add("Plots")
         Pkg.develop(path=joinpath("plots_post_processing", "plots_post_processing"))
     end
-else
-    if !batch_system
-        # If plots_post_processing and dependencies have been added previously, remove
-        # them
-        try
-            Pkg.rm("plots_post_processing")
-        catch
-        end
-        try
-            Pkg.rm("Plots")
-        catch
-        end
+end
+if !batch_system && (mk_preferences["use_plots"] == "n" ||
+                     mk_preferences["separate_postproc_projects"] == "y")
+    # If plots_post_processing and dependencies have been added previously, remove
+    # them
+    Pkg.activate(".")
+    try
+        Pkg.rm("plots_post_processing")
+    catch
+    end
+    try
+        Pkg.rm("Plots")
+    catch
     end
 end

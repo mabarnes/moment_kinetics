@@ -25,21 +25,23 @@ if mk_preferences["use_makie"] == "y"
         Pkg.add(["Makie", "CairoMakie"])
         Pkg.develop(path=joinpath("makie_post_processing", "makie_post_processing"))
     end
-else
-    if !batch_system
-        # If makie_post_processing and dependencies have been added previously, remove
-        # them
-        try
-            Pkg.rm("makie_post_processing")
-        catch
-        end
-        try
-            Pkg.rm("Makie")
-        catch
-        end
-        try
-            Pkg.rm("CairoMakie")
-        catch
-        end
+end
+
+if !batch_system && (mk_preferences["use_makie"] == "n" ||
+                     mk_preferences["separate_postproc_projects"] == "y")
+    # If makie_post_processing and dependencies have been added previously, remove
+    # them
+    Pkg.activate(".")
+    try
+        Pkg.rm("makie_post_processing")
+    catch
+    end
+    try
+        Pkg.rm("Makie")
+    catch
+    end
+    try
+        Pkg.rm("CairoMakie")
+    catch
     end
 end
