@@ -1,5 +1,5 @@
 using moment_kinetics
-using makie_post_processing
+using plots_post_processing
 
 # Create a temporary directory for test output
 test_output_directory = tempname()
@@ -46,13 +46,4 @@ input_dict = Dict("nstep"=>1,
 
 run_moment_kinetics(input_dict)
 
-precompile_postproc_options = makie_post_processing.generate_example_input_Dict()
-
-# Try to activate all plot types to get as much compiled as possible
-for (k,v) ∈ precompile_postproc_options
-    if v === false
-        precompile_postproc_options[k] = true
-    end
-end
-
-makie_post_process(joinpath(test_output_directory, run_name), precompile_postproc_options)
+analyze_and_plot_data(joinpath(test_output_directory, run_name))
