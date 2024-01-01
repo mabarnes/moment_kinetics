@@ -17,6 +17,8 @@ POSTPROCTIME=${JOBINFO[4]}
 POSTPROCMEMORY=${JOBINFO[5]}
 PARTITION=${JOBINFO[6]}
 QOS=${JOBINFO[7]}
+MAKIE_AVAILABLE=${JOBINFO[8]}
+PLOTS_AVAILABLE=${JOBINFO[9]}
 
 # Parse command line options
 # [See e.g. https://www.stackchief.com/tutorials/Bash%20Tutorial%3A%20getopts
@@ -35,7 +37,7 @@ Usage: submit-run.sh [option] INPUT_FILE
 -f JOBID       Make this job start after JOBID finishes successfully
 -m MEM         The requested memory for post-processing
 -n NODES       The number of nodes to use for the simulation
--o             Use original post_processing, instead of makie_post_processing, for the post-processing job
+-o             Use original post_processing, instead of makie_post_processing, for the post-processing job when both are available
 -p PARTITION   The 'partition' (passed to 'sbatch --partition')
 -q QOS         The 'quality of service' (passed to 'sbatch --qos')
 -s             Only create submission scripts, do not actually submit jobs
@@ -76,6 +78,11 @@ Usage: submit-run.sh [option] INPUT_FILE
   esac
 done
 
+if [[ "$MAKIE_AVAILABLE" == "n" && "$PLOTS_AVAILABLE" == "y" ]]; then
+  # No Makie post-processing available, so always use Plots post-processing
+  MAKIEPOSTPROCESS=0
+fi
+
 # Get the positional argument as INPUTFILE
 # [See https://stackoverflow.com/a/13400237]
 INPUTFILE=${@:$OPTIND:1}
@@ -105,7 +112,9 @@ if [[ $SUBMIT -eq 0 ]]; then
   echo "In the queue" > ${RUNDIR}slurm-$JOBID.out
 fi
 
-if [[ $POSTPROC -eq 0 ]]; then
+if [[ $POSTPROC -eq 0 && "$MAKIE_AVAILABLE" == "n" && "$PLOTS_AVAILABLE" == "n" ]]; then
+  echo "No post-processing packages available, so no post-processing job submitted"
+elif [[ $POSTPROC -eq 0 ]]; then
   # Create a submission script for post-processing
   POSTPROCJOBSCRIPT=${RUNDIR}$RUNNAME-post.job
   if [[ MAKIEPOSTPROCESS -eq 1 ]]; then

@@ -43,6 +43,8 @@ settings_string *= check_and_get_pref("default_postproc_time")
 settings_string *= check_and_get_pref("default_postproc_memory")
 settings_string *= check_and_get_pref("default_partition")
 settings_string *= check_and_get_pref("default_qos")
+settings_string *= check_and_get_pref("use_makie")
+settings_string *= check_and_get_pref("use_plots")
 
 println(settings_string)
 exit(0)
