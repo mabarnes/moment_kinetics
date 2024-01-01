@@ -14,6 +14,10 @@ cd $SLURM_SUBMIT_DIR
 source julia.env
 
 echo "post-processing (with original post_processing) RUNDIR $(date)"
+
+# Set this environment variable to avoid warning messages from Qt when running without a display
+export QT_QPA_PLATFORM=offscreen
+
 bin/julia -Jplots_postproc.so --project=plots_post_processing/ run_post_processing.jl RUNDIR
 
 echo "finished post-processing RUNDIR $(date)"
