@@ -104,3 +104,120 @@ end
 ```
 
 Internally, when the `begin_*_region()` functions need to change the region type (i.e. the requested region is not already active), they call `_block_synchronize()`, which calls `MPI.Barrier()`. They also switch over the `LoopRanges` struct contained in `looping.loop_ranges` as noted above. For optimization, the `_block_synchronize()` call can be skipped - when it is correct to do so - by passing the argument `no_synchronize=true` (or some more complicated conditional expression if synchronization is necessary when using some options but not for others).
+
+
+## Package structure
+
+The structure of the packages in the `moment_kinetics` repo is set up so that
+some features, which depend on 'heavy' external packages (such as `Makie`,
+`Plots`, and `Symbolics`, which take a long time to precompile and load) can be
+optional.
+
+The structure is set up by the `machines/machine_setup.sh` script, which
+prompts the user for input to decide which optional components to include (as
+well as some settings related to batch job submission on HPC clusters).
+`machine_setup.sh` calls several other scripts to do the setup (written as far
+as possible in Julia). The structure of these scripts is explained in
+[`machine_setup` notes](@ref).
+
+The intention is that a top-level 'project' (defined by a `Project.toml` file,
+which is created and populated by `machines/machine_setup.sh`) is set up in the
+top-level directory of the repository. The `moment_kinetics` package itself
+(which is in the `moment_kinetics/` subdirectory, defined by its own
+`Project.toml` file which is tracked by git), and optionally other
+post-processing packages, are added to this top-level project using
+`Pkg.develop()`.
+
+### Optional dependencies
+
+Some capabilities that require optional dependencies are provided using
+'package extensions' ([a new feature of Julia in
+v1.9.0](https://julialang.org/blog/2023/04/julia-1.9-highlights/#package_extensions)).
+
+The way we use package extensions is a bit of a hack. Extensions are intended
+to be activated when an optional dependency (called a 'weakdep' by Julia) is
+loaded, e.g. `using moment_kinetics, NCDatasets`. This usage pattern is not the
+most convenient for the way we use `moment_kinetics` where we would rather just
+load `moment_kinetics` and then specify for example `binary_format = "netcdf"`
+in the input TOML file. To work around this, the optional dependencies are
+loaded automatically if they are installed (by calling `Base.requires()` in the
+`__init__()` function of an appropriate sub-module). This is not the way
+package extensions were intended to be used, and it may be a bit fragile - at
+the time of writing in January 2024 there would be an error on precompilation
+if the optional dependencies were added in one order, which went away when the
+order was reversed. If this causes problems, we might need to consider an
+alternative, for example adding the optional dependencies to the `startup.jl`
+file, instead of trying to auto-load them from within the `moment_kinetics`
+package.
+
+The optional capabilities at the moment are:
+* Method of manufactured solutions (MMS) testing - this requires the
+  `Symbolics` package which is heavy and has a large number of dependencies. It
+  is convenient not to require `Symbolics` when MMS capability is not being
+  used. The functionality is provided by the `manufactured_solns_ext`
+  extension. The extension also requires the `IfElse` package, which is not
+  needed elsewhere in `moment_kinetics` and so is included as a 'weakdep'
+  although `IfElse` is not a heavy dependency.
+* NetCDF output - this requires the `NCDatasets` package. Although not as heavy
+  as `Symbolics` or the plotting packages, NetCDF output is not required and
+  not used by default, so it does not hurt to make the dependency optional. As
+  a bonus, importing `NCDatasets` can sometimes cause linking errors when a
+  local or system installation of HDF5 (i.e. one not provided by the Julia
+  package manager) is used, as `NCDatasets` (sometimes?) seems to try to link a
+  different version of the library. These errors can be avoided by not enabling
+  NetCDF outut (when HDF5 output is preferred), or allowing Julia to use the
+  HDF5 library provided by its package manager (when NetCDF is preferred,
+  although this would mean that parallel I/O functionality is not available).
+
+### Post processing packages
+
+Post processing functionality is provided by separate packages
+(`makie_post_processing` and `plots_post_processing`) rather than by
+extensions. Extensions are not allowed to define new modules, functions, etc.
+within the main package, they can only add new methods (i.e. new
+implementations of the function for a different number of arguments, or
+different types of the arguments) to functions already defined in the main
+package. For post-processing, we want to add a lot of new functions, so to use
+extensions instead of separate packages we would need to define all the
+function names in the main package, and then separately the implementations in
+the extension, which would be inconvenient and harder to maintain.
+
+There are two suggested ways of setting up the post-processing packages:
+
+1. For interactive use/development on a local machine, one or both
+   post-processing packages can be added to the top-level project using
+   `Pkg.develop()`. This is convenient as there is only one project to deal
+   with. Both simulations and post-processing are run using
+   ```
+   $ bin/julia --project -O3 <...>
+   ```
+2. For optimized use on an HPC cluster it is better to set up a separate
+   project for the post-processing package(s). This allows different
+   optimization flags to be used for running simulations (`-O3
+   --check-bounds=no`) and for post-processing (`-O3`). [Note, in particular
+   Makie.jl can have performance problems if run with `--check-bounds=no`, see
+   [here](https://github.com/MakieOrg/Makie.jl/issues/3132).] Simulations
+   should be run with
+   ```
+   $ bin/julia --project -O3 --check-bounds=no <...>
+   ```
+   and post-processing with
+   ```
+   $ bin/julia --project=makie_post_processing -O3 <...>
+   ```
+   or
+   ```
+   $ bin/julia --project=plots_post_processing -O3 <...>
+   ```
+   This option can also be used on a local machine, if you want to optimise
+   your simulation runs as much as possible by using the `--check-bounds=no`
+   flag. To do this answer `y` to the prompt "Would you like to set up separate
+   packages for post processing..." from `machines/machine_setup.sh`.
+
+To support option 2, the post-processing packages are located in
+sub-sub-directories (`makie_post_processing/makie_post_processing/` and
+`plots_post_processing/plots_post_processing/`), so that the separate projects
+can be created in the sub-directories (`makie_post_processing/` and
+`plots_post_processing`). `moment_kinetics` and the other dependencies must
+also be added to the separate projects (the `machine_setup.sh` script takes
+care of this).

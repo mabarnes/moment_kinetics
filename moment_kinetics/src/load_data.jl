@@ -2307,10 +2307,11 @@ functions files.
 
 The `itime_min`, `itime_max` and `itime_skip` options can be used to select only a slice
 of time points when loading data. In `makie_post_process` these options are read from the
-input (if they are set) before `get_run_info()` is called, so that the `run_info` returned
-can be passed to [`setup_makie_post_processing_input!`](@ref), to be used for defaults for
-the remaining options. If either `itime_min` or `itime_max` are ≤0, their values are used
-as offsets from the final time index of the run.
+input (if they are set) before `get_run_info_no_setup()` is called, so that the `run_info`
+returned can be passed to
+`makie_post_processing.setup_makie_post_processing_input!()`, to be used for
+defaults for the remaining options. If either `itime_min` or `itime_max` are ≤0, their
+values are used as offsets from the final time index of the run.
 """
 function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractString,Union{Int,Nothing}}}...;
                                itime_min=1, itime_max=0, itime_skip=1, dfns=false)
@@ -2538,7 +2539,8 @@ end
 
 Load a variable
 
-`run_info` is the information about a run returned by [`get_run_info`](@ref).
+`run_info` is the information about a run returned by
+`makie_post_processing.get_run_info()`.
 
 `variable_name` is the name of the variable to load.
 

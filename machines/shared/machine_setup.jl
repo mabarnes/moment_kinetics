@@ -41,6 +41,10 @@ default_settings["marconi"] = merge(default_settings["base"],
                                     Dict("default_partition"=>"skl_fua_prod",
                                          "default_qos"=>"normal"))
 """
+    get_user_input(possible_values, default_value)
+
+Prompt for user input. If the user enters nothing, return `default_value`. Check that the
+entered value is one of `possible_values`, if not prompt again.
 """
 function get_user_input(possible_values, default_value)
     setting = default_value
@@ -71,9 +75,13 @@ function get_user_input(possible_values, default_value)
 end
 
 """
+    get_setting(setting_name, message, machine, local_defaults,
+                possible_values=nothing)
 
-Prompt the user to set a setting. Default value is read from LocalPreferences.toml if it
-has been set before, or from sensible defaults otherwise.
+Prompt the user to set a setting called `setting_name` after printing `message`. Default
+value is read from `local_defaults` if it exists there (which it will do if it has been
+set before, as then it is stored in `LocalPreferences.toml`), or from sensible defaults in
+the `machine` section of `default_settings` otherwise.
 """
 function get_setting(setting_name, message, machine, local_defaults,
                      possible_values=nothing)
@@ -116,32 +124,35 @@ used values):
   get them for the current session) or in your `.bashrc` (to get them by default). Note
   that this calls `module purge` so will remove any currently loaded modules when it is
   run.
-* Makes a symlink to the Julia exeutable used to run this command at `bin/julia` under
-  the moment_kinetics repo, so that setup and job submission scripts can use a known
-  relative path.
+* Makes a symlink to, or a bash script that calls, the Julia executable used to run this
+  command at `bin/julia` under the moment_kinetics repo, so that setup and job submission
+  scripts can use a known relative path.
   !!! note
       If you change the Julia executable, e.g. to update to a new verison, you will need
-      to either replace the symlink `<moment_kinetics>/bin/julia` by hand, or re-run
-      this function using the new executable.
+      to either replace the symlink `<moment_kinetics>/bin/julia` or edit the bash script
+      at `<moment_kinetics>/bin/julia` by hand, or re-run this function using the new
+      executable.
 
 Usually it is necessary for Julia to be restarted after running this function to run Julia
-with the correct JULIA_DEPOT_PATH, etc. so the function will force Julia to exit. If for
+with the correct `JULIA_DEPOT_PATH`, etc. so the function will force Julia to exit. If for
 some reason this is not desired (e.g. when debugging), pass `no_force_exit=true`.
 
 The `interactive` argument exists so that when this function is called from another
 script, terminal output with instructions for the next step can be disabled.
 
 Currently supported machines:
-* `"generic-pc"` - A generic personal computer. Set up for interactive use, rather than
-    for submitting jobs to a batch queue.
+* `"generic-pc"` - A generic personal computer (i.e. laptop or desktop machine).. Set up
+    for interactive use, rather than for submitting jobs to a batch queue.
+* `"generic-batch"` - A generic cluster using a batch queue. Requires some manual setup
+    first, see `machines/generic-batch-template/README.md`.
 * `"archer"` - the UK supercomputer [ARCHER2](https://www.archer2.ac.uk/)
 * `"marconi"` - the EUROfusion supercomputer
     [Marconi](https://wiki.u-gov.it/confluence/display/SCAIUS/UG3.1%3A+MARCONI+UserGuide)
 
 !!! note
-    The settings created by this function are saved in LocalPreferences.toml (using the
-    `Preferences.jl` package). It might sometimes be useful to edit these by hand (e.g.
-    the `account` setting if this needs to be changed.): it is fine to do this.
+    The settings created by this function are saved in LocalPreferences.toml. It might
+    sometimes be useful to edit these by hand (e.g.  the `account` setting if this needs
+    to be changed.): it is fine to do this.
 """
 function machine_setup_moment_kinetics(machine::String; no_force_exit::Bool=false,
                                        interactive::Bool=true)

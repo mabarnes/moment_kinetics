@@ -19,6 +19,8 @@ export animate_f_unnorm_vs_vpa, animate_f_unnorm_vs_vpa_z, get_1d_ax, get_2d_ax,
 
 include("shared_utils.jl")
 
+# Need this import just to allow links in the docstrings to be understood by Documenter.jl
+import moment_kinetics
 using moment_kinetics.analysis: analyze_fields_data, check_Chodura_condition,
                                 get_r_perturbation, get_Fourier_modes_2D,
                                 get_Fourier_modes_1D, steady_state_residuals,
@@ -421,12 +423,12 @@ Set up input, storing in the global [`input_dict`](@ref) and [`input_dict_dfns`]
 be used in the various plotting and analysis functions.
 
 The `run_info` that you are using (as returned by
-[`moment_kinetics.load_data.get_run_info`](@ref)) should be passed
-to `run_info_moments` (if it contains only the moments), or `run_info_dfns` (if it also
-contains the distributions functions), or both (if you have loaded both sets of output).
-This allows default values to be set based on the grid sizes and number of time points
-read from the output files. Note that `setup_makie_post_processing_input!()` is called by
-default at the end of `get_run_info()`, for conveinence in interactive use.
+[`get_run_info`](@ref)) should be passed to `run_info_moments` (if it contains only the
+moments), or `run_info_dfns` (if it also contains the distributions functions), or both
+(if you have loaded both sets of output).  This allows default values to be set based on
+the grid sizes and number of time points read from the output files. Note that
+`setup_makie_post_processing_input!()` is called by default at the end of
+`get_run_info()`, for conveinence in interactive use.
 
 By default an error is raised if `input_file` does not exist. To continue anyway, using
 default options, pass `allow_missing_input_file=true`.
@@ -741,7 +743,7 @@ as offsets from the final time index of the run.
 
 `setup_makie_post_processing_input!()` is called at the end of `get_run_info()`, for
 convenience when working interactively. Use
-[moment_kinetics.load_data.get_run_info_no_setup](@ref) if you do not want this. A
+[`moment_kinetics.load_data.get_run_info_no_setup`](@ref) if you do not want this. A
 post-processing input file can be passed to `setup_input_file` that will be passed to
 `setup_makie_post_processing_input!()` if you do not want to use the default input file.
 """
