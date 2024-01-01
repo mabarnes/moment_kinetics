@@ -13,7 +13,7 @@ ARTIFACT_DIR=$PWD
 ######
 
 # Get default response for whether to download/build HDF5
-DEFAULT_BUILDHDF5=$(../../bin/julia ../shared/get_mk_preference.jl build_hdf5 "y")
+DEFAULT_BUILDHDF5=$(../../bin/julia --project ../shared/get_mk_preference.jl build_hdf5 "y")
 
 if [[ $DEFAULT_BUILDHDF5 == "y" ]]; then
   echo "Do you want to download, and compile a local version of HDF5 (if you do"
@@ -48,7 +48,7 @@ else
 fi
 
 # Save current response for whether to download/build HDF5 as default
-../../bin/julia ../shared/set_mk_preference.jl build_hdf5 $BUILDHDF5
+../../bin/julia --project ../shared/set_mk_preference.jl build_hdf5 $BUILDHDF5
 
 if [[ $BUILDHDF5 == "y" && -d hdf5-build ]]; then
   echo "HDF5 appears to have been downloaded, compiled and installed already."

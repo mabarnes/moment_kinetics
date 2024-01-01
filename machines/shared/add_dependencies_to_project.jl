@@ -66,7 +66,11 @@ for p ∈ to_rm
     catch
     end
 end
-Pkg.add(["HDF5", "MPI", "MPIPreferences", "PackageCompiler", "SpecialFunctions"])
+to_add = ["HDF5", "MPI", "MPIPreferences", "PackageCompiler", "SpecialFunctions"]
+if !mk_preferences["batch_system"] && mk_preferences["use_revise"] == "y"
+    push!(to_add, "Revise")
+end
+Pkg.add(to_add)
 
 
 # Instantiate packages so we can use MPIPreferences below

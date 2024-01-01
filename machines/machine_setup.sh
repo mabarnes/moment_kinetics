@@ -246,14 +246,14 @@ echo
 # command, because passing as a prefix does not work (sometimes??) within a
 # bash script (even though as far as JTO knows it should work).
 export JULIA_DEPOT_PATH=$JULIA_DIRECTORY
-$JULIA machines/shared/machine_setup.jl "$MACHINE"
+$JULIA --project machines/shared/machine_setup.jl "$MACHINE"
 
 if [ -f julia.env ]; then
   # Set up modules, JULIA_DEPOT_PATH, etc. to use for the rest of this script
   source julia.env
 fi
 
-SEPARATE_POSTPROC_PROJECTS=$(bin/julia machines/shared/get_mk_preference.jl separate_postproc_projects)
+SEPARATE_POSTPROC_PROJECTS=$(bin/julia --project machines/shared/get_mk_preference.jl separate_postproc_projects)
 if [[ $BATCH_SYSTEM -eq 0 || $SEPARATE_POSTPROC_PROJECTS == "y" ]]; then
   # Batch systems can (conveniently) use different optimization flags for
   # running simulations and for post-processing.

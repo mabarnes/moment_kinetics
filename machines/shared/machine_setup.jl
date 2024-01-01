@@ -5,6 +5,7 @@ module machine_setup
 
 export machine_setup_moment_kinetics
 
+using Pkg
 using TOML
 
 # Default settings for the arguments to machine_setup_moment_kinetics(), set like this
@@ -22,14 +23,16 @@ default_settings["base"] = Dict("account"=>"",
                                 "use_plots"=>"n",
                                 "separate_postproc_projects"=>"n",
                                 "use_netcdf"=>"n",
-                                "enable_mms"=>"n")
+                                "enable_mms"=>"n",
+                                "use_revise"=>"n")
 # No batch system steup for "generic-pc"
 default_settings["generic-pc"] = merge(default_settings["base"],
                                    Dict("default_run_time"=>"0:00:00",
                                         "default_nodes"=>"0",
                                         "default_postproc_time"=>"0:00:00",
                                         "default_postproc_memory"=>"0",
-                                        "use_makie"=>"y"))
+                                        "use_makie"=>"y",
+                                        "use_revise"=>"y"))
 default_settings["generic-batch"] = deepcopy(default_settings["base"])
 default_settings["archer"] = merge(default_settings["base"],
                                    Dict("default_partition"=>"standard",
@@ -220,6 +223,35 @@ function machine_setup_moment_kinetics(machine::String; no_force_exit::Bool=fals
     get_setting("enable_mms",
                 "Would you like to enable MMS testing?",
                 machine, mk_preferences, ["y", "n"])
+    if !batch_system
+        get_setting("use_revise",
+                    "Would you like to automatically use Revise.jl (so that you do not "
+                    * "need to restart julia after editing code)?",
+                    machine, mk_preferences, ["y", "n"])
+        if mk_preferences["use_revise"] == "y"
+            Pkg.add("Revise")
+
+            # Check that `using Revise` is in the startup.jl
+            if julia_directory == ""
+                depot_directory = DEPOT_PATH[1]
+            else
+                depot_directory = julia_directory
+            end
+            # Ensure that the config/ subdirectory exists in depot_directory
+            config_path = joinpath(depot_directory, "config")
+            mkpath(config_path)
+            # Ensure startup.jl is a file
+            startup_path = joinpath(config_path, "startup.jl")
+            touch(startup_path)
+            result = run(`grep "using Revise" $startup_path`, wait=false)
+            if !success(result)
+                println("Adding `using Revise` to $startup_path")
+                open(startup_path, "a") do io
+                    println(io, "\nusing Revise")
+                end
+            end
+        end
+    end
 
     # Write these preferences into a [moment_kinetics] section in LocalPreferences.toml
     #
