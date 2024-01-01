@@ -20,5 +20,7 @@ LocalPreferences.toml
 /.julia_directory_default.txt
 /.this_machine_name.txt
 moment_kinetics.so
+makie_postproc.so
+plots_postproc.so
 precompile-temp
 post_processing_input.toml
