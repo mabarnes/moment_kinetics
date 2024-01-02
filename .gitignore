@@ -16,6 +16,8 @@ LocalPreferences.toml
 /precompile-submit.sh
 /submit-restart.sh
 /submit-run.sh
+/submit-precompile-and-restart.sh
+/submit-precompile-and-run.sh
 /.julia_default.txt
 /.julia_directory_default.txt
 /.this_machine_name.txt

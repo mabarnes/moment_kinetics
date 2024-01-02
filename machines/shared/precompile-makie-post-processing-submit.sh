@@ -3,12 +3,16 @@
 set -e
 
 # Parse command line options
-while getopts "h" opt; do
+ONLY_JOB_ID=1
+while getopts "hj" opt; do
   case $opt in
     h)
       echo "Submit job to precompile moment kinetics
 -h             Print help and exit"
       exit 1
+      ;;
+    j)
+      ONLY_JOB_ID=0
       ;;
   esac
 done
@@ -31,7 +35,13 @@ POSTPROCESSINGJOBSCRIPT=${PRECOMPILEDIR}precompile-makie-post-processing.job
 sed -e "s|ACCOUNT|$ACCOUNT|" -e "s|PRECOMPILEDIR|$PRECOMPILEDIR|" machines/$MACHINE/jobscript-precompile-makie-post-processing.template > $POSTPROCESSINGJOBSCRIPT
 
 JOBID=$(sbatch --parsable $POSTPROCESSINGJOBSCRIPT)
-echo "Precompile makie_post_processing: $JOBID"
+if [[ "$ONLY_JOB_ID" -eq 1 ]]; then
+  echo "Precompile makie_post_processing: $JOBID"
+else
+  echo "$JOBID"
+fi
 echo "In the queue" > $PRECOMPILEDIR/slurm-$JOBID.out
 
-echo "Done"
+if [[ "$ONLY_JOB_ID" -eq 1 ]]; then
+  echo "Done"
+fi

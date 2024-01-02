@@ -167,6 +167,18 @@ $ ./submit-run.sh -h
 for various command line options to change parameters (e.g. number of nodes,
 etc.).
 
+If you need to rebuild the system images `moment_kinetics.so` and
+`makie_postproc.so` or `plots_postproc.so` because you have updated the code
+since they were built, it may be convenient to use
+```
+$ ./submit-precompile-and-run.sh input.toml
+```
+which will submit jobs for compilation, to run the simulation, and to do post
+processing. The simulation job will wait for the compilation job creating
+`moment_kinetics.so` to finish before starting. The post processing job will
+wait for the compilation job creating `makie_postproc.so` or
+`plots_postproc.so` to finish before starting.
+
 ### Stopping a run
 
 When running in the REPL (especially with MPI) interrupting a run using Ctrl-C
@@ -233,6 +245,18 @@ $ ./submit-restart.sh -h
 ```
 for various other command line options to change parameters (e.g. number of
 nodes, etc.).
+
+If you need to rebuild the system images `moment_kinetics.so` and
+`makie_postproc.so` or `plots_postproc.so` because you have updated the code
+since they were built, it may be convenient to use
+```
+$ ./submit-precompile-and-restart.sh [-r runs/example/example.dfns.h5] input.toml
+```
+which will submit jobs for compilation, to restart the simulation, and to do
+post processing. The simulation job will wait for the compilation job creating
+`moment_kinetics.so` to finish before starting. The post processing job will
+wait for the compilation job creating `makie_postproc.so` or
+`plots_postproc.so` to finish before starting.
 
 It is possible to restart a run from another output file with different
 resolution settings or different moment-kinetic options. This is done by

@@ -27,8 +27,10 @@ POSTPROC=0
 SUBMIT=0
 RESTARTFROM=""
 FOLLOWFROM=""
+POSTPROC_FOLLOWFROM=""
 MAKIEPOSTPROCESS=1
-while getopts "haf:m:n:p:oq:r:st:u:" opt; do
+WARN_OLD_SYSIMAGE=0
+while getopts "haf:g:m:n:p:oq:r:st:u:w" opt; do
   case $opt in
     h)
       echo "Submit jobs for a simulation (using INPUT_FILE for input) and post-processing to the queue
@@ -36,6 +38,7 @@ Usage: submit-run.sh [option] INPUT_FILE
 -h             Print help and exit
 -a             Do not submit post-processing job after the run
 -f JOBID       Make this job start after JOBID finishes successfully
+-g JOBID       Make the post processing job start after JOBID finishes successfully (as well as after the simulation run finishes)
 -m MEM         The requested memory for post-processing
 -n NODES       The number of nodes to use for the simulation
 -o             Use original post_processing, instead of makie_post_processing, for the post-processing job when both are available
@@ -44,7 +47,8 @@ Usage: submit-run.sh [option] INPUT_FILE
 -r FILE        The output file to restart from (defaults to latest output in the run directory)
 -s             Only create submission scripts, do not actually submit jobs
 -t TIME        The run time, e.g. 24:00:00
--u TIME        The run time for the post-processing, e.g. 1:00:00"
+-u TIME        The run time for the post-processing, e.g. 1:00:00
+-w             Suppress the warning given when system image(s) are older than source code files"
       exit 1
       ;;
     a)
@@ -52,6 +56,9 @@ Usage: submit-run.sh [option] INPUT_FILE
       ;;
     f)
       FOLLOWFROM="-d afterok:$OPTARG"
+      ;;
+    g)
+      POSTPROC_FOLLOWFROM=",afterok:$OPTARG"
       ;;
     m)
       POSTPROCMEM=$OPTARG
@@ -79,6 +86,9 @@ Usage: submit-run.sh [option] INPUT_FILE
       ;;
     u)
       POSTPROCTIME=$OPTARG
+      ;;
+    w)
+      WARN_OLD_SYSIMAGE=1
       ;;
   esac
 done
@@ -111,8 +121,10 @@ fi
 RESTARTJOBSCRIPT=${RUNDIR}$RUNNAME-restart.job
 sed -e "s|NODES|$NODES|" -e "s|RUNTIME|$RUNTIME|" -e "s|ACCOUNT|$ACCOUNT|" -e "s|PARTITION|$PARTITION|" -e "s|QOS|$QOS|" -e "s|RUNDIR|$RUNDIR|" -e "s|INPUTFILE|$INPUTFILE|" -e "s|RESTARTFROM|$RESTARTFROM|" machines/$MACHINE/jobscript-restart.template > $RESTARTJOBSCRIPT
 
-# Check that source code has not been changed since moment_kinetics.so was created
-bin/julia --project -O3 --check-bounds=no util/check_so_newer_than_code.jl moment_kinetics.so
+if [[ "$WARN_OLD_SYSIMAGE" -eq 0 ]]; then
+  # Check that source code has not been changed since moment_kinetics.so was created
+  bin/julia --project -O3 --check-bounds=no util/check_so_newer_than_code.jl moment_kinetics.so
+fi
 
 if [[ $SUBMIT -eq 0 ]]; then
   JOBID=$(sbatch $FOLLOWFROM --parsable $RESTARTJOBSCRIPT)
@@ -128,18 +140,22 @@ elif [[ $POSTPROC -eq 0 ]]; then
   if [[ MAKIEPOSTPROCESS -eq 1 ]]; then
     POSTPROCESSTEMPLATE=jobscript-postprocess.template
 
-    # Check that source code has not been changed since makie_postproc.so was created
-    bin/julia --project=makie_post_processing -O3 util/check_so_newer_than_code.jl makie_postproc.so
+    if [[ "$WARN_OLD_SYSIMAGE" -eq 0 ]]; then
+      # Check that source code has not been changed since makie_postproc.so was created
+      bin/julia --project=makie_post_processing -O3 util/check_so_newer_than_code.jl makie_postproc.so
+    fi
   else
     POSTPROCESSTEMPLATE=jobscript-postprocess-plotsjl.template
 
-    # Check that source code has not been changed since plots_postproc.so was created
-    bin/julia --project=plots_post_processing -O3 util/check_so_newer_than_code.jl plots_postproc.so
+    if [[ "$WARN_OLD_SYSIMAGE" -eq 0 ]]; then
+      # Check that source code has not been changed since plots_postproc.so was created
+      bin/julia --project=plots_post_processing -O3 util/check_so_newer_than_code.jl plots_postproc.so
+    fi
   fi
   sed -e "s|POSTPROCMEMORY|$POSTPROCMEMORY|" -e "s|POSTPROCTIME|$POSTPROCTIME|" -e "s|ACCOUNT|$ACCOUNT|" -e "s|RUNDIR|$RUNDIR|" machines/$MACHINE/$POSTPROCESSTEMPLATE > $POSTPROCJOBSCRIPT
 
   if [[ $SUBMIT -eq 0 ]]; then
-    POSTID=$(sbatch -d afterany:$JOBID --parsable $POSTPROCJOBSCRIPT)
+    POSTID=$(sbatch -d afterany:$JOBID$POSTPROC_FOLLOWFROM --parsable $POSTPROCJOBSCRIPT)
     echo "Postprocess: $POSTID"
     echo "In the queue" > ${RUNDIR}slurm-post-$POSTID.out
   fi

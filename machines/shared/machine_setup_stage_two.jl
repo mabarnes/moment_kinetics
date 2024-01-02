@@ -41,6 +41,8 @@ if batch_system
   make_batch_symlink("precompile-submit.sh")
   make_batch_symlink("submit-run.sh")
   make_batch_symlink("submit-restart.sh")
+  make_batch_symlink("submit-precompile-and-run.sh")
+  make_batch_symlink("submit-precompile-and-restart.sh")
   if mk_preferences["use_makie"] == "y"
       make_batch_symlink("precompile-makie-post-processing-submit.sh")
   end
