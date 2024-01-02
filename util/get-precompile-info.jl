@@ -36,6 +36,8 @@ function check_and_get_pref(name)
 end
 settings_string *= check_and_get_pref("machine")
 settings_string *= check_and_get_pref("account")
+settings_string *= check_and_get_pref("use_makie")
+settings_string *= check_and_get_pref("use_plots")
 
 println(settings_string)
 exit(0)

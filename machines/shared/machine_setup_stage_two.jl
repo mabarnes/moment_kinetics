@@ -49,7 +49,7 @@ if batch_system
   end
 
   if mk_preferences["submit_precompilation"] == "y"
-      run(`./precompile-submit.sh`)
+      run(`./precompile-submit.sh -o`)
   end
 end
 

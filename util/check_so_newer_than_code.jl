@@ -37,9 +37,11 @@ function check_so_newer_than_code(so_filename = "moment_kinetics.so")
              "'$so_filename'. It is likely that you need to re-compile your system image\n" *
              "(so that the code changes take effect) by re-running "
         if is_makie
-            error_message *= "'precompile-makie-post-processing-submit.sh'."
+            error_message *= "'precompile-makie-post-processing-submit.sh'" *
+                             "\n(or 'precompile_submit.sh')."
         elseif is_plots
-            error_message *= "'precompile-plots-post-processing-submit.sh'."
+            error_message *= "'precompile-plots-post-processing-submit.sh'" *
+                             "\n(or 'precompile_submit.sh')."
         else
             error_message *= "'precompile-submit.sh'."
         end
