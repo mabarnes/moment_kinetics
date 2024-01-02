@@ -50,6 +50,48 @@ fi
 # Create directory to set up Python venv and download/compile dependencies in
 mkdir -p machines/artifacts
 
+# Get name of 'machine'
+while [[ -z $MACHINE || !( $MACHINE == "generic-pc" || $MACHINE == "generic-batch" || $MACHINE == "archer" || $MACHINE == "marconi" ) ]]; do
+  echo "Enter name of the machine to set up (must be one of 'generic-pc',"
+  echo "'generic-batch', 'archer', or 'marconi') [$DEFAULT_MACHINE]:"
+  read -p "> "  MACHINE
+  echo
+  if [ -z $MACHINE ]; then
+    MACHINE=$DEFAULT_MACHINE
+  fi
+done
+
+if [[ $MACHINE == "generic-batch" && ! -d machines/generic-batch ]]; then
+  echo "To use 'generic-batch' you must copy 'machines/generic-batch-template' to 'machines/generic-batch' and:"
+  echo "* Edit the modules in 'machines/generic-batch/julia.env' (see comments in that file)"
+  echo "* Edit the 'jobscript-*.template' files for precompilation or post-processing jobswith the correct serial or"
+  echo "  debug queue for your machine."
+  echo "* If you want to use a system-provided HDF5 you can delete 'machines/generic-batch/compile_dependencies.sh',"
+  echo "  and uncomment the 'hdf5_library_setting = \"system\"' option in 'machines/generic-batch/machine_settings.toml'"
+  echo "* If 'MPIPreferences.use_system_binary()' cannot auto-detect your MPI library and/or if 'mpirun' is not the "
+  echo "  right command to launch MPI processes, then you need to set the 'mpi_library_names' and 'mpiexec' settings in"
+  echo "  'machines/generic-batch/machine_settings.toml' (note if either of these settings is set, then both must be)"
+  echo "* If 'mpirun' is not the right command to launch MPI processes, you may need to edit the 'jobscript-run.template'"
+  echo "  and 'jobscript-restart.template' files in 'machines/generic-batch/' and set the setting in"
+  echo "  'machines/generic-batch/machine_settings.toml'"
+  echo "Note that 'generic-batch' is set up assuming a Linux, x86_64 based machine that uses the 'module' system and a"
+  echo "SLURM job queue."
+  exit 1
+fi
+
+echo "Setting up for '$MACHINE'"
+echo
+
+# Save the machine name so we can use it as the default if we re-run
+# machine_setup.sh.
+echo $MACHINE > .this_machine_name.txt
+
+if [[ $MACHINE == "generic-pc" ]]; then
+  BATCH_SYSTEM=1
+else
+  BATCH_SYSTEM=0
+fi
+
 # Make sure $JULIA is set
 # Note [ -z "$VAR" ] tests if $VAR is empty. Need the quotes to ensure that the
 # contents of $VAR are not evaluated if it is not empty.
@@ -96,38 +138,6 @@ else
     DOWNLOAD_JULIA=0
   fi
 fi
-
-# Get name of 'machine'
-while [[ -z $MACHINE || !( $MACHINE == "generic-pc" || $MACHINE == "generic-batch" || $MACHINE == "archer" || $MACHINE == "marconi" ) ]]; do
-  echo "Enter name of the machine to set up (must be one of 'generic-pc',"
-  echo "'generic-batch', 'archer', or 'marconi') [$DEFAULT_MACHINE]:"
-  read -p "> "  MACHINE
-  echo
-  if [ -z $MACHINE ]; then
-    MACHINE=$DEFAULT_MACHINE
-  fi
-done
-
-if [[ $MACHINE == "generic-batch" && ! -d machines/generic-batch ]]; then
-  echo "To use 'generic-batch' you must copy 'machines/generic-batch-template' to 'machines/generic-batch' and:"
-  echo "* Edit the modules in 'machines/generic-batch/julia.env' (see comments in that file)"
-  echo "* Edit the 'jobscript-*.template' files for precompilation or post-processing jobswith the correct serial or"
-  echo "  debug queue for your machine."
-  echo "* If you want to use a system-provided HDF5 you can delete 'machines/generic-batch/compile_dependencies.sh',"
-  echo "  and uncomment the 'hdf5_library_setting = \"system\"' option in 'machines/generic-batch/machine_settings.toml'"
-  echo "* If 'MPIPreferences.use_system_binary()' cannot auto-detect your MPI library and/or if 'mpirun' is not the "
-  echo "  right command to launch MPI processes, then you need to set the 'mpi_library_names' and 'mpiexec' settings in"
-  echo "  'machines/generic-batch/machine_settings.toml' (note if either of these settings is set, then both must be)"
-  echo "* If 'mpirun' is not the right command to launch MPI processes, you may need to edit the 'jobscript-run.template'"
-  echo "  and 'jobscript-restart.template' files in 'machines/generic-batch/' and set the setting in"
-  echo "  'machines/generic-batch/machine_settings.toml'"
-  echo "Note that 'generic-batch' is set up assuming a Linux, x86_64 based machine that uses the 'module' system and a"
-  echo "SLURM job queue."
-  exit 1
-fi
-
-echo "Setting up for '$MACHINE'"
-echo
 
 if [[ $DOWNLOAD_JULIA -eq 0 ]]; then
   # Download a version of Julia that is correct for this machine.
@@ -188,16 +198,6 @@ echo
 echo "Using Julia at $JULIA"
 echo
 echo "$JULIA" > .julia_default.txt
-
-# Save the machine name so we can use it as the default if we re-run
-# machine_setup.sh.
-echo $MACHINE > .this_machine_name.txt
-
-if [[ $MACHINE == "generic-pc" ]]; then
-  BATCH_SYSTEM=1
-else
-  BATCH_SYSTEM=0
-fi
 
 # Get the location for the .julia directory, in case this has to have a
 # non-default value, e.g. because the user's home directory is not accessible
