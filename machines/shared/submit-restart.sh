@@ -111,6 +111,9 @@ fi
 RESTARTJOBSCRIPT=${RUNDIR}$RUNNAME-restart.job
 sed -e "s|NODES|$NODES|" -e "s|RUNTIME|$RUNTIME|" -e "s|ACCOUNT|$ACCOUNT|" -e "s|PARTITION|$PARTITION|" -e "s|QOS|$QOS|" -e "s|RUNDIR|$RUNDIR|" -e "s|INPUTFILE|$INPUTFILE|" -e "s|RESTARTFROM|$RESTARTFROM|" machines/$MACHINE/jobscript-restart.template > $RESTARTJOBSCRIPT
 
+# Check that source code has not been changed since moment_kinetics.so was created
+bin/julia --project -O3 --check-bounds=no util/check_so_newer_than_code.jl moment_kinetics.so
+
 if [[ $SUBMIT -eq 0 ]]; then
   JOBID=$(sbatch $FOLLOWFROM --parsable $RESTARTJOBSCRIPT)
   echo "Restart: $JOBID"
@@ -124,8 +127,14 @@ elif [[ $POSTPROC -eq 0 ]]; then
   POSTPROCJOBSCRIPT=${RUNDIR}$RUNNAME-post.job
   if [[ MAKIEPOSTPROCESS -eq 1 ]]; then
     POSTPROCESSTEMPLATE=jobscript-postprocess.template
+
+    # Check that source code has not been changed since makie_postproc.so was created
+    bin/julia --project=makie_post_processing -O3 util/check_so_newer_than_code.jl makie_postproc.so
   else
     POSTPROCESSTEMPLATE=jobscript-postprocess-plotsjl.template
+
+    # Check that source code has not been changed since plots_postproc.so was created
+    bin/julia --project=plots_post_processing -O3 util/check_so_newer_than_code.jl plots_postproc.so
   fi
   sed -e "s|POSTPROCMEMORY|$POSTPROCMEMORY|" -e "s|POSTPROCTIME|$POSTPROCTIME|" -e "s|ACCOUNT|$ACCOUNT|" -e "s|RUNDIR|$RUNDIR|" machines/$MACHINE/$POSTPROCESSTEMPLATE > $POSTPROCJOBSCRIPT
 
