@@ -54,13 +54,3 @@ if batch_system
       run(`./precompile-submit.sh -o`)
   end
 end
-
-
-# Force exit so Julia must be restarted
-#######################################
-
-println()
-println("************************************************************")
-println("Julia must be restarted to use the updated MPI, exiting now.")
-println("************************************************************")
-exit(0)
