@@ -17,4 +17,4 @@ echo "precompiling $(date)"
 
 bin/julia --project=makie_post_processing/ precompile-makie-post-processing.jl
 
-echo "finished!"
+echo "finished! $(date)"

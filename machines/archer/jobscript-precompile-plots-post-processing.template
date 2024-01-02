@@ -24,4 +24,4 @@ echo "precompiling post-processing $(date)"
 
 bin/julia --project=plots_post_processing/ precompile-plots-post-processing.jl
 
-echo "finished!"
+echo "finished! $(date)"
