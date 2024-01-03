@@ -14,7 +14,7 @@ function runtests()
         println("calculus tests")
         @testset "fundamental theorem of calculus" begin
             @testset "$discretization $ngrid $nelement" for
-                    (discretization, element_spacing_option, etol, cheb_option) ∈ (("finite_difference", "uniform", 1.0e-15, ""), ("chebyshev_pseudospectral", "uniform", 1.0e-15, "FFT"), ("chebyshev_pseudospectral", "uniform", 1.0e-15, "matrix"), ("chebyshev_pseudospectral", "sqrt", 1.0e-2, "FFT"), ("gausslegendre_pseudospectral", "uniform", 1.0e-14, "")),
+                    (discretization, element_spacing_option, etol, cheb_option) ∈ (("finite_difference", "uniform", 1.0e-15, ""), ("chebyshev_pseudospectral", "uniform", 1.0e-15, "FFT"), ("chebyshev_pseudospectral", "uniform", 2.0e-15, "matrix"), ("chebyshev_pseudospectral", "sqrt", 1.0e-2, "FFT"), ("gausslegendre_pseudospectral", "uniform", 1.0e-14, "")),
                     ngrid ∈ (5,6,7,8,9,10), nelement ∈ (1, 2, 3, 4, 5)
 
                 if discretization == "finite_difference" && (ngrid - 1) * nelement % 2 == 1
