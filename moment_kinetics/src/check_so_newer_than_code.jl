@@ -1,4 +1,17 @@
-function check_so_newer_than_code(so_filename = "moment_kinetics.so")
+"""
+    check_so_newer_than_code(so_filename="moment_kinetics.so")
+
+Utility function that checks if `so_filename` is newer than the source code in
+`moment_kinetics/src`. If it is, prints an error message and returns `false`; otherwise
+returns `true`.
+
+If "makie" is found in `so_filename`, also checks against the source code in
+`makie_post_processing/makie_post_processing/src/`.
+
+If "plots" is found in `so_filename`, also checks against the source code in
+`plots_post_processing/plots_post_processing/src/`.
+"""
+function check_so_newer_than_code(so_filename="moment_kinetics.so")
     is_makie = occursin("makie", so_filename)
     is_plots = occursin("plots", so_filename)
 
@@ -9,6 +22,8 @@ function check_so_newer_than_code(so_filename = "moment_kinetics.so")
 
     # Get modification time of *.so system image
     so_mtime = mtime(so_filename)
+
+    repo_dir = dirname(dirname(dirname(@__FILE__)))
 
     # Get newest modification time of julia source file
     newest_jl_mtime = 0.0
@@ -21,12 +36,12 @@ function check_so_newer_than_code(so_filename = "moment_kinetics.so")
             end
         end
     end
-    get_newest_jl_mtime("moment_kinetics/src/")
+    get_newest_jl_mtime(joinpath(repo_dir, "moment_kinetics/src/"))
     if is_makie
-        get_newest_jl_mtime("makie_post_processing/makie_post_processing/src/")
+        get_newest_jl_mtime(joinpath(repo_dir, "makie_post_processing/makie_post_processing/src/"))
     end
     if is_plots
-        get_newest_jl_mtime("plots_post_processing/plots_post_processing/src/")
+        get_newest_jl_mtime(joinpath(repo_dir, "plots_post_processing/plots_post_processing/src/"))
     end
 
     so_is_newer = so_mtime > newest_jl_mtime

@@ -118,7 +118,7 @@ sed -e "s|NODES|$NODES|" -e "s|RUNTIME|$RUNTIME|" -e "s|ACCOUNT|$ACCOUNT|" -e "s
 
 if [[ "$WARN_OLD_SYSIMAGE" -eq 0 ]]; then
   # Check that source code has not been changed since moment_kinetics.so was created
-  bin/julia --project -O3 --check-bounds=no util/check_so_newer_than_code.jl moment_kinetics.so
+  bin/julia --project -O3 --check-bounds=no moment_kinetics/src/check_so_newer_than_code.jl moment_kinetics.so
 fi
 
 if [[ $SUBMIT -eq 0 ]]; then
@@ -137,14 +137,14 @@ elif [[ $POSTPROC -eq 0 ]]; then
 
     if [[ "$WARN_OLD_SYSIMAGE" -eq 0 ]]; then
       # Check that source code has not been changed since makie_postproc.so was created
-      bin/julia --project=makie_post_processing -O3 util/check_so_newer_than_code.jl makie_postproc.so
+      bin/julia --project=makie_post_processing -O3 moment_kinetics/src/check_so_newer_than_code.jl makie_postproc.so
     fi
   else
     POSTPROCESSTEMPLATE=jobscript-postprocess-plotsjl.template
 
     if [[ "$WARN_OLD_SYSIMAGE" -eq 0 ]]; then
       # Check that source code has not been changed since plots_postproc.so was created
-      bin/julia --project=plots_post_processing -O3 util/check_so_newer_than_code.jl plots_postproc.so
+      bin/julia --project=plots_post_processing -O3 moment_kinetics/src/check_so_newer_than_code.jl plots_postproc.so
     fi
   fi
   sed -e "s|POSTPROCMEMORY|$POSTPROCMEMORY|" -e "s|POSTPROCTIME|$POSTPROCTIME|" -e "s|ACCOUNT|$ACCOUNT|" -e "s|RUNDIR|$RUNDIR|" machines/$MACHINE/$POSTPROCESSTEMPLATE > $POSTPROCJOBSCRIPT

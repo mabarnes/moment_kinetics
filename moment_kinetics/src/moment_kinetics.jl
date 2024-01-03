@@ -10,6 +10,7 @@ using MPI
 # Note that order of includes matters - things used in one module must already
 # be defined
 include("../../machines/shared/machine_setup.jl") # Included so Documenter.jl can find its docs
+include("check_so_newer_than_code.jl")
 include("command_line_options.jl")
 include("constants.jl")
 include("debugging.jl")
