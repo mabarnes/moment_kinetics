@@ -135,8 +135,7 @@ function run_moment_kinetics(to::Union{TimerOutput,Nothing}, input_dict=Dict();
         # throws an error
         if global_size[] > 1
             println("$(typeof(e)) on process $(global_rank[]):")
-            showerror(stdout, e)
-            display(stacktrace(catch_backtrace()))
+            showerror(stdout, e, catch_backtrace())
             flush(stdout)
             flush(stderr)
             MPI.Abort(comm_world, 1)
