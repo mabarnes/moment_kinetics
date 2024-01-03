@@ -3,9 +3,11 @@ module LoopSetupTests
 include("setup.jl")
 
 using moment_kinetics.looping: dims_string, get_splits, get_load_balance,
-                               get_best_ranges, get_best_ranges_from_sizes,
+                               get_best_ranges, get_best_split_from_sizes,
+                               get_ranges_from_split,
                                debug_setup_loop_ranges_split_one_combination!,
                                loop_ranges_store
+using moment_kinetics.communication
 
 function runtests()
     @testset "loop setup" verbose=use_verbose begin
@@ -38,6 +40,13 @@ function runtests()
             @test get_load_balance([3,2], [4,5]) == (2.0*3.0)/(1.0*2.0)
         end
         @testset "get_best_ranges_from_sizes" begin
+            function get_best_ranges_from_sizes(block_rank, block_size, dim_sizes_list)
+                # Define this function for testing, since it was split in two in
+                # looping.jl
+                best_split = get_best_split_from_sizes(block_size, dim_sizes_list)
+                return get_ranges_from_split(block_rank, block_size, best_split,
+                                             dim_sizes_list)
+            end
             @test get_best_ranges_from_sizes(0, 1, [3,4,5]) == [1:3, 1:4, 1:5]
 
             @test get_best_ranges_from_sizes(0, 2, [3,4,5]) == [1:3, 1:2, 1:5]
@@ -102,6 +111,11 @@ function runtests()
             @test get_best_ranges_from_sizes(7, 10, [3,4,5]) == [1:3, 3:4, 4:4]
             @test get_best_ranges_from_sizes(8, 10, [3,4,5]) == [1:3, 1:2, 5:5]
             @test get_best_ranges_from_sizes(9, 10, [3,4,5]) == [1:3, 3:4, 5:5]
+
+            # Check that outer-most loop gets parallelised if load balance is the same
+            # either way
+            @test get_best_ranges_from_sizes(0, 2, [2, 2]) == [1:2, 1:1]
+            @test get_best_ranges_from_sizes(1, 2, [2, 2]) == [1:2, 2:2]
         end
         @testset "get_best_ranges" begin
             @test get_best_ranges(0, 1, (:s,:r,:z),
@@ -152,6 +166,10 @@ function runtests()
                      :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
         end
         @testset "debug_setup_loop_ranges_split_one_combination" begin
+            # Need to set comm_block[] to avoid MPI errors when creating 'anyv'
+            # communicator in debug_setup_loop_ranges_split_one_combination!()
+            comm_block[] = comm_world
+
             debug_setup_loop_ranges_split_one_combination!(
                 0, 2, (:s, :z), :s; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
                 vr=17, vz=19)
