@@ -1050,7 +1050,7 @@ function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
     nvpa = vpa.n
     nvperp = vperp.n
     #for ivperp in 1:nvperp
-    begin_vperp_region()
+    begin_vperp_region(no_synchronize=true)
     @loop_vperp ivperp begin
         func_data.lower_boundary_vpa[ivperp] = 0.0
         func_data.upper_boundary_vpa[ivperp] = 0.0
@@ -1062,7 +1062,7 @@ function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
         end
     end
     #for ivpa in 1:nvpa
-    begin_vpa_region()
+    begin_vpa_region(no_synchronize=true)
     @loop_vpa ivpa begin
         func_data.upper_boundary_vperp[ivpa] = 0.0
         for ivperpp in 1:nvperp
@@ -1071,8 +1071,6 @@ function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
             end
         end
     end
-    # return to serial parallelisation
-    begin_serial_region()
     return nothing
 end
 
@@ -1082,7 +1080,7 @@ function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
     nvpa = vpa.n
     nvperp = vperp.n
     #for ivperp in 1:nvperp
-    begin_vperp_region()
+    begin_vperp_region(no_synchronize=true)
     @loop_vperp ivperp begin
         func_data.lower_boundary_vpa[ivperp] = 0.0
         func_data.upper_boundary_vpa[ivperp] = 0.0
@@ -1094,7 +1092,7 @@ function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
         end
     end
     #for ivpa in 1:nvpa
-    begin_vpa_region()
+    begin_vpa_region(no_synchronize=true)
     @loop_vpa ivpa begin
         func_data.upper_boundary_vperp[ivpa] = 0.0
         for ivperpp in 1:nvperp
@@ -1104,7 +1102,6 @@ function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
         end
     end
     # return to serial parallelisation
-    begin_serial_region()
     return nothing
 end
 
@@ -1130,7 +1127,7 @@ function calculate_rosenbluth_potential_boundary_data!(rpbd::rosenbluth_potentia
         @. d2fdvperpdvpa[:,ivperp] = vpa.scratch
     end
     # ensure data is synchronized
-    begin_serial_region()
+    _block_synchronize()
     # carry out the numerical integration 
     calculate_boundary_data!(rpbd.H_data,fkpl.H0_weights,pdf,vpa,vperp)
     calculate_boundary_data!(rpbd.dHdvpa_data,fkpl.H0_weights,dfdvpa,vpa,vperp)
@@ -2165,14 +2162,14 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
         # solve a weak-form PDE for d2Gdvperp2
         begin_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
-            S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp]
+            #S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp] # <- this is already the value of
+                                                        #    S_dummy calculated above
             Q_dummy[ivpa,ivperp] = 2.0*d2Gdvpa2[ivpa,ivperp]
         end
         elliptic_solve!(d2Gdvperp2,S_dummy,Q_dummy,rpbd.d2Gdvperp2_data,
                     lu_obj_LB,KPperp2D_sparse,MMparMNperp2D_sparse,
                     rhsc,rhqc,sc,qc,vpa,vperp)
     end
-    begin_serial_region()
     return nothing
 end
 
