@@ -97,6 +97,16 @@ main function that contains all of the content of the program
 """
 function run_moment_kinetics(to::Union{TimerOutput,Nothing}, input_dict=Dict();
                              restart=false, restart_time_index=-1)
+
+    if global_rank[] == 0
+        # Check that, if we are using a custom compiled system image that includes
+        # moment_kinetics, the system image is newer than the source code files (if there
+        # are changes made to the source code since the system image was compiled, they
+        # will not affect the current run). Prints a warning if any code files are newer
+        # than the system image.
+        check_so_newer_than_code()
+    end
+
     mk_state = nothing
     try
         # set up all the structs, etc. needed for a run

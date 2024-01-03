@@ -32,6 +32,7 @@ using LaTeXStrings
 using Measures
 using MPI
 # modules
+using moment_kinetics: check_so_newer_than_code
 using moment_kinetics.communication
 using moment_kinetics.quadrature: composite_simpson_weights
 using moment_kinetics.array_allocation: allocate_float
@@ -313,6 +314,14 @@ does not have a `_<i>` suffix). Note that `run_index` is only used when a direct
 (rather than the prefix of a specific output file) is passed to `prefix...`
 """
 function analyze_and_plot_data(prefix...; run_index=nothing)
+
+    # Check that, if we are using a custom compiled system image that includes
+    # moment_kinetics, the system image is newer than the source code files (if there are
+    # changes made to the source code since the system image was compiled, they will not
+    # affect the current run). Prints a warning if any code files are newer than the
+    # system image.
+    check_so_newer_than_code()
+
     if length(prefix) == 0
         println("No runs to plot!")
         return nothing

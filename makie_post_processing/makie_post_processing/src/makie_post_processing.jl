@@ -21,6 +21,7 @@ include("shared_utils.jl")
 
 # Need this import just to allow links in the docstrings to be understood by Documenter.jl
 import moment_kinetics
+using moment_kinetics: check_so_newer_than_code
 using moment_kinetics.analysis: analyze_fields_data, check_Chodura_condition,
                                 get_r_perturbation, get_Fourier_modes_2D,
                                 get_Fourier_modes_1D, steady_state_residuals,
@@ -461,6 +462,14 @@ end
 function setup_makie_post_processing_input!(new_input_dict::AbstractDict{String,Any};
                                             run_info_moments=nothing,
                                             run_info_dfns=nothing)
+
+    # Check that, if we are using a custom compiled system image that includes
+    # moment_kinetics, the system image is newer than the source code files (if there are
+    # changes made to the source code since the system image was compiled, they will not
+    # affect the current run). Prints a warning if any code files are newer than the
+    # system image.
+    check_so_newer_than_code()
+
     convert_to_OrderedDicts!(new_input_dict)
 
     if isa(run_info_moments, Tuple)
