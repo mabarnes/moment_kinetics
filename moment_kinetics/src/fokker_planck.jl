@@ -112,6 +112,9 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
     S_dummy = allocate_shared_float(nvpa,nvperp)
     Q_dummy = allocate_shared_float(nvpa,nvperp)
     rhsvpavperp = allocate_shared_float(nvpa,nvperp)
+    rhsvpavperp_copy1 = allocate_shared_float(nvpa,nvperp)
+    rhsvpavperp_copy2 = allocate_shared_float(nvpa,nvperp)
+    rhsvpavperp_copy3 = allocate_shared_float(nvpa,nvperp)
     
     CC = allocate_shared_float(nvpa,nvperp)
     GG = allocate_shared_float(nvpa,nvperp)
@@ -132,7 +135,7 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
                                            LP2D_sparse,LV2D_sparse,LB2D_sparse,PUperp2D_sparse,PPparPUperp2D_sparse,
                                            PPpar2D_sparse,MMparMNperp2D_sparse,KPperp2D_sparse,
                                            lu_obj_MM,lu_obj_LP,lu_obj_LV,lu_obj_LB,
-                                           YY_arrays, S_dummy, Q_dummy, rhsvpavperp,
+                                           YY_arrays, S_dummy, Q_dummy, rhsvpavperp, rhsvpavperp_copy1, rhsvpavperp_copy2, rhsvpavperp_copy3,
                                            CC, GG, HH, dHdvpa, dHdvperp, dGdvperp, d2Gdvperp2, d2Gdvpa2, d2Gdvperpdvpa,
                                            FF, dFdvpa, dFdvperp)
     return fka

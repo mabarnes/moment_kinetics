@@ -193,6 +193,9 @@ struct fokkerplanck_weakform_arrays_struct{N}
     S_dummy::MPISharedArray{mk_float,2}
     Q_dummy::MPISharedArray{mk_float,2}
     rhsvpavperp::MPISharedArray{mk_float,2}
+    rhsvpavperp_copy1::MPISharedArray{mk_float,2}
+    rhsvpavperp_copy2::MPISharedArray{mk_float,2}
+    rhsvpavperp_copy3::MPISharedArray{mk_float,2}
     # dummy array for the result of the calculation
     CC::MPISharedArray{mk_float,2}
     # dummy arrays for storing Rosenbluth potentials
@@ -1947,21 +1950,24 @@ end
 # lu_object_lhs: the object for the differential operator that defines field
 # matrix_rhs: the weak matrix acting on the source vector
 # vpa, vperp: coordinate structs
+#
+# Note: all variants of `elliptic_solve!()` run only in serial. They do not handle
+# shared-memory parallelism themselves. The calling site must ensure that
+# `elliptic_solve!()` is only called by one process in a shared-memory block.
 function elliptic_solve!(field,source,boundary_data::vpa_vperp_boundary_data,
             lu_object_lhs,matrix_rhs,rhsvpavperp,vpa,vperp)
     # assemble the rhs of the weak system
-    begin_serial_region()
-    @serial_region begin
-        # get data into the compound index format
-        sc = vec(source)
-        fc = vec(field)
-        rhsc = vec(rhsvpavperp)
-        mul!(rhsc,matrix_rhs,sc)
-        # enforce the boundary conditions
-        enforce_dirichlet_bc!(rhsc,vpa,vperp,boundary_data)
-        # solve the linear system
-        fc .= lu_object_lhs \ rhsc
-    end
+
+    # get data into the compound index format
+    sc = vec(source)
+    fc = vec(field)
+    rhsc = vec(rhsvpavperp)
+    mul!(rhsc,matrix_rhs,sc)
+    # enforce the boundary conditions
+    enforce_dirichlet_bc!(rhsc,vpa,vperp,boundary_data)
+    # solve the linear system
+    fc .= lu_object_lhs \ rhsc
+
     return nothing
 end
 # same as above but source is made of two different terms
@@ -1970,24 +1976,24 @@ function elliptic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_bounda
             lu_object_lhs,matrix_rhs_1,matrix_rhs_2,rhs,vpa,vperp)
     
     # assemble the rhs of the weak system
-    begin_serial_region()
-    @serial_region begin
-        sc_1 = vec(source_1)
-        sc_2 = vec(source_2)
-        rhsc = vec(rhs)
-        fc = vec(field)
 
-        # Do  rhsc = matrix_rhs_1*sc_1
-        mul!(rhsc, matrix_rhs_1, sc_1)
+    # get data into the compound index format
+    sc_1 = vec(source_1)
+    sc_2 = vec(source_2)
+    rhsc = vec(rhs)
+    fc = vec(field)
 
-        # Do rhsc = matrix_rhs_2*sc_2 + rhsc
-        mul!(rhsc, matrix_rhs_2, sc_2, 1.0, 1.0)
+    # Do  rhsc = matrix_rhs_1*sc_1
+    mul!(rhsc, matrix_rhs_1, sc_1)
 
-        # enforce the boundary conditions
-        enforce_dirichlet_bc!(rhsc,vpa,vperp,boundary_data)
-        # solve the linear system
-        fc .= lu_object_lhs \ rhsc
-    end
+    # Do rhsc = matrix_rhs_2*sc_2 + rhsc
+    mul!(rhsc, matrix_rhs_2, sc_2, 1.0, 1.0)
+
+    # enforce the boundary conditions
+    enforce_dirichlet_bc!(rhsc,vpa,vperp,boundary_data)
+    # solve the linear system
+    fc .= lu_object_lhs \ rhsc
+
     return nothing
 end
 
@@ -1995,26 +2001,30 @@ end
 # because the function is only used where the lu_object_lhs is derived from a mass matrix.
 # The source is made of two different terms with different weak matrices
 # because of the form of the only algebraic equation that we consider.
+#
+# Note: `algebraic_solve!()` run only in serial. They do not handle shared-memory
+# parallelism themselves. The calling site must ensure that `algebraic_solve!()` is only
+# called by one process in a shared-memory block.
 function algebraic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_boundary_data,
             lu_object_lhs,matrix_rhs_1,matrix_rhs_2,rhs,vpa,vperp)
     
     # assemble the rhs of the weak system
-    begin_serial_region()
-    @serial_region begin
-        sc_1 = vec(source_1)
-        sc_2 = vec(source_2)
-        rhsc = vec(rhs)
-        fc = vec(field)
 
-        # Do  rhsc = matrix_rhs_1*sc_1
-        mul!(rhsc, matrix_rhs_1, sc_1)
+    # get data into the compound index format
+    sc_1 = vec(source_1)
+    sc_2 = vec(source_2)
+    rhsc = vec(rhs)
+    fc = vec(field)
 
-        # Do rhsc = matrix_rhs_2*sc_2 + rhsc
-        mul!(rhsc, matrix_rhs_2, sc_2, 1.0, 1.0)
+    # Do  rhsc = matrix_rhs_1*sc_1
+    mul!(rhsc, matrix_rhs_1, sc_1)
 
-        # solve the linear system
-        fc .= lu_object_lhs \ rhsc
-    end
+    # Do rhsc = matrix_rhs_2*sc_2 + rhsc
+    mul!(rhsc, matrix_rhs_2, sc_2, 1.0, 1.0)
+
+    # solve the linear system
+    fc .= lu_object_lhs \ rhsc
+
     return nothing
 end
 
@@ -2045,6 +2055,9 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
     S_dummy = fkpl_arrays.S_dummy
     Q_dummy = fkpl_arrays.Q_dummy
     rhsvpavperp = fkpl_arrays.rhsvpavperp
+    rhsvpavperp_copy1 = fkpl_arrays.rhsvpavperp_copy1
+    rhsvpavperp_copy2 = fkpl_arrays.rhsvpavperp_copy2
+    rhsvpavperp_copy3 = fkpl_arrays.rhsvpavperp_copy3
     
     # calculate the boundary data
     calculate_rosenbluth_potential_boundary_data!(rpbd,bwgt,@view(ffsp_in[:,:]),vpa,vperp,vpa_spectral,vperp_spectral,
@@ -2054,29 +2067,51 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
     @loop_vperp_vpa ivperp ivpa begin
         S_dummy[ivpa,ivperp] = -(4.0/sqrt(pi))*ffsp_in[ivpa,ivperp]
     end
-    elliptic_solve!(HH,S_dummy,rpbd.H_data,
-                lu_obj_LP,MM2D_sparse,rhsvpavperp,vpa,vperp)
-    elliptic_solve!(dHdvpa,S_dummy,rpbd.dHdvpa_data,
-                lu_obj_LP,PPpar2D_sparse,rhsvpavperp,vpa,vperp)
-    elliptic_solve!(dHdvperp,S_dummy,rpbd.dHdvperp_data,
-                lu_obj_LV,PUperp2D_sparse,rhsvpavperp,vpa,vperp)
+
+    # Can run the following three solves in parallel
+    begin_serial_region()
+    if block_rank[] == 0 % block_size[]
+        elliptic_solve!(HH, S_dummy, rpbd.H_data, lu_obj_LP, MM2D_sparse, rhsvpavperp,
+                        vpa, vperp)
+    end
+    if block_rank[] == 1 % block_size[]
+        elliptic_solve!(dHdvpa, S_dummy, rpbd.dHdvpa_data, lu_obj_LP, PPpar2D_sparse,
+                        rhsvpavperp_copy1, vpa, vperp)
+    end
+    if block_rank[] == 2 % block_size[]
+        elliptic_solve!(dHdvperp, S_dummy, rpbd.dHdvperp_data, lu_obj_LV, PUperp2D_sparse,
+                        rhsvpavperp_copy2, vpa, vperp)
+    end
     
     begin_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
         S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp]
     end
+
+    # The following four solves can be done in parallel. Note: do the two that are always
+    # done on ranks 0 and 1 and the first optional one that actually needs doing on rank 3
+    # to maximise the chances that all solves get run on separate processes.
+    begin_serial_region()
     if calculate_GG
-        elliptic_solve!(GG,S_dummy,rpbd.G_data,
-                    lu_obj_LP,MM2D_sparse,rhsvpavperp,vpa,vperp)
+        if block_rank[] == 2 % block_size[]
+            elliptic_solve!(GG, S_dummy, rpbd.G_data, lu_obj_LP, MM2D_sparse,
+                            rhsvpavperp_copy2, vpa, vperp)
+        end
     end
     if calculate_dGdvperp || algebraic_solve_for_d2Gdvperp2
-        elliptic_solve!(dGdvperp,S_dummy,rpbd.dGdvperp_data,
-                    lu_obj_LV,PUperp2D_sparse,rhsvpavperp,vpa,vperp)
+        if block_rank[] == (calculate_GG ? 3 : 2) % block_size[]
+            elliptic_solve!(dGdvperp, S_dummy, rpbd.dGdvperp_data, lu_obj_LV,
+                            PUperp2D_sparse, rhsvpavperp_copy3, vpa, vperp)
+        end
     end
-    elliptic_solve!(d2Gdvpa2,S_dummy,rpbd.d2Gdvpa2_data,
-                lu_obj_LP,KKpar2D_sparse,rhsvpavperp,vpa,vperp)
-    elliptic_solve!(d2Gdvperpdvpa,S_dummy,rpbd.d2Gdvperpdvpa_data,
-                lu_obj_LV,PPparPUperp2D_sparse,rhsvpavperp,vpa,vperp)
+    if block_rank[] == 0 % block_size[]
+        elliptic_solve!(d2Gdvpa2, S_dummy, rpbd.d2Gdvpa2_data, lu_obj_LP, KKpar2D_sparse,
+                        rhsvpavperp, vpa, vperp)
+    end
+    if block_rank[] == 1 % block_size[]
+        elliptic_solve!(d2Gdvperpdvpa, S_dummy, rpbd.d2Gdvperpdvpa_data, lu_obj_LV,
+                        PPparPUperp2D_sparse, rhsvpavperp_copy1, vpa, vperp)
+    end
     
     if algebraic_solve_for_d2Gdvperp2
         begin_vperp_vpa_region()
@@ -2084,12 +2119,15 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
             S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp] - d2Gdvpa2[ivpa,ivperp]
             Q_dummy[ivpa,ivperp] = -dGdvperp[ivpa,ivperp]
         end
-        # use the algebraic solve function to find
-        # d2Gdvperp2 = 2H - d2Gdvpa2 - (1/vperp)dGdvperp
-        # using a weak form
-        algebraic_solve!(d2Gdvperp2,S_dummy,Q_dummy,rpbd.d2Gdvperp2_data,
-                    lu_obj_MM,MM2D_sparse,MMparMNperp2D_sparse,
-                    rhsvpavperp,vpa,vperp)
+        begin_serial_region()
+        @serial_region begin
+            # use the algebraic solve function to find
+            # d2Gdvperp2 = 2H - d2Gdvpa2 - (1/vperp)dGdvperp
+            # using a weak form
+            algebraic_solve!(d2Gdvperp2, S_dummy, Q_dummy, rpbd.d2Gdvperp2_data,
+                             lu_obj_MM, MM2D_sparse, MMparMNperp2D_sparse, rhsvpavperp,
+                             vpa, vperp)
+        end
     else
         # solve a weak-form PDE for d2Gdvperp2
         begin_vperp_vpa_region()
@@ -2098,9 +2136,12 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
                                                         #    S_dummy calculated above
             Q_dummy[ivpa,ivperp] = 2.0*d2Gdvpa2[ivpa,ivperp]
         end
-        elliptic_solve!(d2Gdvperp2,S_dummy,Q_dummy,rpbd.d2Gdvperp2_data,
-                    lu_obj_LB,KPperp2D_sparse,MMparMNperp2D_sparse,
-                    rhsvpavperp,vpa,vperp)
+        begin_serial_region()
+        @serial_region begin
+            elliptic_solve!(d2Gdvperp2, S_dummy, Q_dummy, rpbd.d2Gdvperp2_data, lu_obj_LB,
+                            KPperp2D_sparse, MMparMNperp2D_sparse, rhsvpavperp, vpa,
+                            vperp)
+        end
     end
     return nothing
 end
