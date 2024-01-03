@@ -22,8 +22,7 @@ export calculate_rosenbluth_potentials_via_elliptic_solve!
 
 # testing
 export calculate_rosenbluth_potential_boundary_data_exact!
-export ravel_c_to_vpavperp!, ravel_vpavperp_to_c!
-export enforce_zero_bc!, ravel_c_to_vpavperp_parallel!
+export enforce_zero_bc!
 export allocate_rosenbluth_potential_boundary_data
 export calculate_rosenbluth_potential_boundary_data_exact!
 export test_rosenbluth_potential_boundary_data
@@ -194,10 +193,6 @@ struct fokkerplanck_weakform_arrays_struct{N}
     S_dummy::MPISharedArray{mk_float,2}
     Q_dummy::MPISharedArray{mk_float,2}
     rhsvpavperp::MPISharedArray{mk_float,2}
-    rhsc::MPISharedArray{mk_float,1}
-    rhqc::MPISharedArray{mk_float,1}
-    sc::MPISharedArray{mk_float,1}
-    qc::MPISharedArray{mk_float,1}
     # dummy array for the result of the calculation
     CC::MPISharedArray{mk_float,2}
     # dummy arrays for storing Rosenbluth potentials
@@ -889,43 +884,6 @@ end
 function ivpa_func(ic::mk_int,nvpa::mk_int)
     ivpa = ic - nvpa*(ivperp_func(ic,nvpa) - 1)
     return ivpa
-end
-
-function ravel_vpavperp_to_c!(pdf_c,pdf_vpavperp,nvpa::mk_int,nvperp::mk_int)
-    for ivperp in 1:nvperp
-        for ivpa in 1:nvpa
-            ic = ic_func(ivpa,ivperp,nvpa)
-            pdf_c[ic] = pdf_vpavperp[ivpa,ivperp]
-        end
-    end
-    return nothing
-end
-
-function ravel_vpavperp_to_c_parallel!(pdf_c,pdf_vpavperp,nvpa::mk_int)
-    begin_vperp_vpa_region()
-    @loop_vperp_vpa ivperp ivpa begin 
-        ic = ic_func(ivpa,ivperp,nvpa)
-        pdf_c[ic] = pdf_vpavperp[ivpa,ivperp]
-    end
-    return nothing
-end
-
-function ravel_c_to_vpavperp!(pdf_vpavperp,pdf_c,nc::mk_int,nvpa::mk_int)
-    for ic in 1:nc
-        ivpa = ivpa_func(ic,nvpa)
-        ivperp = ivperp_func(ic,nvpa)
-        pdf_vpavperp[ivpa,ivperp] = pdf_c[ic]
-    end
-    return nothing
-end
-
-function ravel_c_to_vpavperp_parallel!(pdf_vpavperp,pdf_c,nvpa::mk_int)
-    begin_vperp_vpa_region()
-    @loop_vperp_vpa ivperp ivpa begin
-        ic = ic_func(ivpa,ivperp,nvpa) 
-        pdf_vpavperp[ivpa,ivperp] = pdf_c[ic]
-    end
-    return nothing
 end
 
 function ivpa_global_func(ivpa_local::mk_int,ielement_vpa::mk_int,ngrid_vpa::mk_int)
@@ -1804,12 +1762,13 @@ function calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
                                         YY0par,YY1par,YY2par,YY3par)
 end
 
-function assemble_explicit_collision_operator_rhs_serial!(rhsc,pdfs,d2Gspdvpa2,d2Gspdvperpdvpa,
+function assemble_explicit_collision_operator_rhs_serial!(rhsvpavperp,pdfs,d2Gspdvpa2,d2Gspdvperpdvpa,
     d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp,
     vpa,vperp,YY_arrays::YY_collision_operator_arrays)
     begin_serial_region()
     @serial_region begin
         # assemble RHS of collision operator
+        rhsc = vec(rhsvpavperp)
         @. rhsc = 0.0
         
         # loop over elements
@@ -1863,7 +1822,7 @@ function assemble_explicit_collision_operator_rhs_serial!(rhsc,pdfs,d2Gspdvpa2,d
     return nothing
 end
 
-function assemble_explicit_collision_operator_rhs_parallel!(rhsc,rhsvpavperp,pdfs,d2Gspdvpa2,d2Gspdvperpdvpa,
+function assemble_explicit_collision_operator_rhs_parallel!(rhsvpavperp,pdfs,d2Gspdvpa2,d2Gspdvperpdvpa,
     d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp,
     vpa,vperp,YY_arrays::YY_collision_operator_arrays)
     # assemble RHS of collision operator
@@ -1919,14 +1878,10 @@ function assemble_explicit_collision_operator_rhs_parallel!(rhsc,rhsvpavperp,pdf
              end
         end
     end
-    # ravel to compound index
-    #begin_serial_region()
-    #ravel_vpavperp_to_c!(rhsc,rhsvpavperp,vpa.n,vperp.n)
-    ravel_vpavperp_to_c_parallel!(rhsc,rhsvpavperp,vpa.n)
     return nothing
 end
 
-function assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!(rhsc,rhsvpavperp,pdfs,dpdfsdvpa,dpdfsdvperp,d2Gspdvpa2,d2Gspdvperpdvpa,
+function assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!(rhsvpavperp,pdfs,dpdfsdvpa,dpdfsdvperp,d2Gspdvpa2,d2Gspdvperpdvpa,
     d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp,
     vpa,vperp,YY_arrays::YY_collision_operator_arrays)
     # assemble RHS of collision operator
@@ -1981,10 +1936,6 @@ function assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!(rh
              end
         end
     end
-    # ravel to compound index
-    #begin_serial_region()
-    #ravel_vpavperp_to_c!(rhsc,rhsvpavperp,vpa.n,vperp.n)
-    ravel_vpavperp_to_c_parallel!(rhsc,rhsvpavperp,vpa.n)
     return nothing
 end
 
@@ -1995,57 +1946,48 @@ end
 # boundary data: the known values of field at infinity
 # lu_object_lhs: the object for the differential operator that defines field
 # matrix_rhs: the weak matrix acting on the source vector
-# rhsc, sc: dummy arrays in the compound index (assumed MPISharedArray or SubArray type)
 # vpa, vperp: coordinate structs
 function elliptic_solve!(field,source,boundary_data::vpa_vperp_boundary_data,
-            lu_object_lhs,matrix_rhs,rhsc,sc,vpa,vperp)
-    # get data into the compound index format
-    begin_vperp_vpa_region()
-    ravel_vpavperp_to_c_parallel!(sc,source,vpa.n)
+            lu_object_lhs,matrix_rhs,rhsvpavperp,vpa,vperp)
     # assemble the rhs of the weak system
     begin_serial_region()
     @serial_region begin
+        # get data into the compound index format
+        sc = vec(source)
+        fc = vec(field)
+        rhsc = vec(rhsvpavperp)
         mul!(rhsc,matrix_rhs,sc)
         # enforce the boundary conditions
         enforce_dirichlet_bc!(rhsc,vpa,vperp,boundary_data)
         # solve the linear system
-        sc .= lu_object_lhs \ rhsc
+        fc .= lu_object_lhs \ rhsc
     end
-    # get data into the vpa vperp indices format
-    begin_vperp_vpa_region()
-    ravel_c_to_vpavperp_parallel!(field,sc,vpa.n)
     return nothing
 end
 # same as above but source is made of two different terms
 # with different weak matrices
 function elliptic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_boundary_data,
-            lu_object_lhs,matrix_rhs_1,matrix_rhs_2,rhsc_1,rhsc_2,sc_1,sc_2,vpa,vperp)
-    # get data into the compound index format
-    begin_vperp_vpa_region()
-    ravel_vpavperp_to_c_parallel!(sc_1,source_1,vpa.n)
-    ravel_vpavperp_to_c_parallel!(sc_2,source_2,vpa.n)
+            lu_object_lhs,matrix_rhs_1,matrix_rhs_2,rhs,vpa,vperp)
     
     # assemble the rhs of the weak system
     begin_serial_region()
     @serial_region begin
-        mul!(rhsc_1,matrix_rhs_1,sc_1)
-        mul!(rhsc_2,matrix_rhs_2,sc_2)
-    end
-    begin_vperp_vpa_region()
-    @loop_vperp_vpa ivperp ivpa begin
-        ic = ic_func(ivpa,ivperp,vpa.n)
-        rhsc_1[ic] += rhsc_2[ic]
-    end
-    begin_serial_region()
-    @serial_region begin
+        sc_1 = vec(source_1)
+        sc_2 = vec(source_2)
+        rhsc = vec(rhs)
+        fc = vec(field)
+
+        # Do  rhsc = matrix_rhs_1*sc_1
+        mul!(rhsc, matrix_rhs_1, sc_1)
+
+        # Do rhsc = matrix_rhs_2*sc_2 + rhsc
+        mul!(rhsc, matrix_rhs_2, sc_2, 1.0, 1.0)
+
         # enforce the boundary conditions
-        enforce_dirichlet_bc!(rhsc_1,vpa,vperp,boundary_data)
+        enforce_dirichlet_bc!(rhsc,vpa,vperp,boundary_data)
         # solve the linear system
-        sc_1 .= lu_object_lhs \ rhsc_1
+        fc .= lu_object_lhs \ rhsc
     end
-    # get data into the vpa vperp indices format
-    begin_vperp_vpa_region()
-    ravel_c_to_vpavperp_parallel!(field,sc_1,vpa.n)
     return nothing
 end
 
@@ -2054,31 +1996,25 @@ end
 # The source is made of two different terms with different weak matrices
 # because of the form of the only algebraic equation that we consider.
 function algebraic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_boundary_data,
-            lu_object_lhs,matrix_rhs_1,matrix_rhs_2,rhsc_1,rhsc_2,sc_1,sc_2,vpa,vperp)
-    # get data into the compound index format
-    begin_vperp_vpa_region()
-    ravel_vpavperp_to_c_parallel!(sc_1,source_1,vpa.n)
-    ravel_vpavperp_to_c_parallel!(sc_2,source_2,vpa.n)
+            lu_object_lhs,matrix_rhs_1,matrix_rhs_2,rhs,vpa,vperp)
     
     # assemble the rhs of the weak system
     begin_serial_region()
     @serial_region begin
-        mul!(rhsc_1,matrix_rhs_1,sc_1)
-        mul!(rhsc_2,matrix_rhs_2,sc_2)
-    end
-    begin_vperp_vpa_region()
-    @loop_vperp_vpa ivperp ivpa begin
-        ic = ic_func(ivpa,ivperp,vpa.n)
-        rhsc_1[ic] += rhsc_2[ic]
-    end
-    begin_serial_region()
-    @serial_region begin
+        sc_1 = vec(source_1)
+        sc_2 = vec(source_2)
+        rhsc = vec(rhs)
+        fc = vec(field)
+
+        # Do  rhsc = matrix_rhs_1*sc_1
+        mul!(rhsc, matrix_rhs_1, sc_1)
+
+        # Do rhsc = matrix_rhs_2*sc_2 + rhsc
+        mul!(rhsc, matrix_rhs_2, sc_2, 1.0, 1.0)
+
         # solve the linear system
-        sc_1 .= lu_object_lhs \ rhsc_1
+        fc .= lu_object_lhs \ rhsc
     end
-    # get data into the vpa vperp indices format
-    begin_vperp_vpa_region()
-    ravel_c_to_vpavperp_parallel!(field,sc_1,vpa.n)
     return nothing
 end
 
@@ -2108,10 +2044,7 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
     
     S_dummy = fkpl_arrays.S_dummy
     Q_dummy = fkpl_arrays.Q_dummy
-    rhsc = fkpl_arrays.rhsc
-    rhqc = fkpl_arrays.rhqc
-    sc = fkpl_arrays.sc
-    qc = fkpl_arrays.qc
+    rhsvpavperp = fkpl_arrays.rhsvpavperp
     
     # calculate the boundary data
     calculate_rosenbluth_potential_boundary_data!(rpbd,bwgt,@view(ffsp_in[:,:]),vpa,vperp,vpa_spectral,vperp_spectral,
@@ -2122,29 +2055,28 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
         S_dummy[ivpa,ivperp] = -(4.0/sqrt(pi))*ffsp_in[ivpa,ivperp]
     end
     elliptic_solve!(HH,S_dummy,rpbd.H_data,
-                lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
+                lu_obj_LP,MM2D_sparse,rhsvpavperp,vpa,vperp)
     elliptic_solve!(dHdvpa,S_dummy,rpbd.dHdvpa_data,
-                lu_obj_LP,PPpar2D_sparse,rhsc,sc,vpa,vperp)
+                lu_obj_LP,PPpar2D_sparse,rhsvpavperp,vpa,vperp)
     elliptic_solve!(dHdvperp,S_dummy,rpbd.dHdvperp_data,
-                lu_obj_LV,PUperp2D_sparse,rhsc,sc,vpa,vperp)
+                lu_obj_LV,PUperp2D_sparse,rhsvpavperp,vpa,vperp)
     
     begin_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
         S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp]
-    
     end
     if calculate_GG
         elliptic_solve!(GG,S_dummy,rpbd.G_data,
-                    lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
+                    lu_obj_LP,MM2D_sparse,rhsvpavperp,vpa,vperp)
     end
     if calculate_dGdvperp || algebraic_solve_for_d2Gdvperp2
         elliptic_solve!(dGdvperp,S_dummy,rpbd.dGdvperp_data,
-                    lu_obj_LV,PUperp2D_sparse,rhsc,sc,vpa,vperp)
+                    lu_obj_LV,PUperp2D_sparse,rhsvpavperp,vpa,vperp)
     end
     elliptic_solve!(d2Gdvpa2,S_dummy,rpbd.d2Gdvpa2_data,
-                lu_obj_LP,KKpar2D_sparse,rhsc,sc,vpa,vperp)
+                lu_obj_LP,KKpar2D_sparse,rhsvpavperp,vpa,vperp)
     elliptic_solve!(d2Gdvperpdvpa,S_dummy,rpbd.d2Gdvperpdvpa_data,
-                lu_obj_LV,PPparPUperp2D_sparse,rhsc,sc,vpa,vperp)
+                lu_obj_LV,PPparPUperp2D_sparse,rhsvpavperp,vpa,vperp)
     
     if algebraic_solve_for_d2Gdvperp2
         begin_vperp_vpa_region()
@@ -2157,7 +2089,7 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
         # using a weak form
         algebraic_solve!(d2Gdvperp2,S_dummy,Q_dummy,rpbd.d2Gdvperp2_data,
                     lu_obj_MM,MM2D_sparse,MMparMNperp2D_sparse,
-                    rhsc,rhqc,sc,qc,vpa,vperp)
+                    rhsvpavperp,vpa,vperp)
     else
         # solve a weak-form PDE for d2Gdvperp2
         begin_vperp_vpa_region()
@@ -2168,7 +2100,7 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
         end
         elliptic_solve!(d2Gdvperp2,S_dummy,Q_dummy,rpbd.d2Gdvperp2_data,
                     lu_obj_LB,KPperp2D_sparse,MMparMNperp2D_sparse,
-                    rhsc,rhqc,sc,qc,vpa,vperp)
+                    rhsvpavperp,vpa,vperp)
     end
     return nothing
 end

@@ -4,7 +4,6 @@ include("setup.jl")
 
 
 using MPI
-using moment_kinetics.fokker_planck_calculus: ravel_c_to_vpavperp!, ravel_vpavperp_to_c!, ravel_c_to_vpavperp_parallel!
 using LinearAlgebra: mul!
 using moment_kinetics.communication
 using moment_kinetics.looping
@@ -96,9 +95,7 @@ function runtests()
             d2fvpavperp_dvperp2_exact = allocate_float(vpa.n,vperp.n)
             d2fvpavperp_dvperp2_err = allocate_float(vpa.n,vperp.n)
             d2fvpavperp_dvperp2_num = allocate_float(vpa.n,vperp.n)
-            fc = allocate_float(nc_global)
             dfc = allocate_float(nc_global)
-            gc = allocate_float(nc_global)
             dgc = allocate_float(nc_global)
             for ivperp in 1:vperp.n
                 for ivpa in 1:vpa.n
@@ -108,28 +105,19 @@ function runtests()
                 end
             end
             
-            # fill fc with fvpavperp
-            ravel_vpavperp_to_c!(fc,fvpavperp,vpa.n,vperp.n)
-            ravel_c_to_vpavperp!(fvpavperp_test,fc,nc_global,vpa.n)
-            @. fvpavperp_err = abs(fvpavperp - fvpavperp_test)
-            max_ravel_err = maximum(fvpavperp_err)
-            @serial_region begin
-                if print_to_screen 
-                    println("max(ravel_err)",max_ravel_err)
-                end
-                @test max_ravel_err < 1.0e-15
-            end
+            # Make 1d views
+            fc = vec(fvpavperp)
+            d2fc_dvpa2 = vec(d2fvpavperp_dvpa2_num)
+            d2fc_dvperp2 = vec(d2fvpavperp_dvperp2_num)
+
             #print_vector(fc,"fc",nc_global)
             # multiply by KKpar2D and fill dfc
             mul!(dfc,KKpar2D_with_BC_terms_sparse,fc)
             mul!(dgc,KKperp2D_with_BC_terms_sparse,fc)
-            # invert mass matrix and fill fc
-            fc = lu_obj_MM \ dfc
-            gc = lu_obj_MM \ dgc
+            # invert mass matrix
+            d2fc_dvpa2 .= lu_obj_MM \ dfc
+            d2fc_dvperp2 .= lu_obj_MM \ dgc
             #print_vector(fc,"fc",nc_global)
-            # unravel
-            ravel_c_to_vpavperp!(d2fvpavperp_dvpa2_num,fc,nc_global,vpa.n)
-            ravel_c_to_vpavperp!(d2fvpavperp_dvperp2_num,gc,nc_global,vpa.n)
             @serial_region begin 
                 d2fvpavperp_dvpa2_max, d2fvpavperp_dvpa2_L2 = print_test_data(d2fvpavperp_dvpa2_exact,d2fvpavperp_dvpa2_num,d2fvpavperp_dvpa2_err,"d2fdvpa2",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
                 @test d2fvpavperp_dvpa2_max < 1.0e-7

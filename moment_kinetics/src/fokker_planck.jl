@@ -54,7 +54,7 @@ using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_paralle
 using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!
 using ..fokker_planck_calculus: calculate_YY_arrays, enforce_vpavperp_BCs!
 using ..fokker_planck_calculus: calculate_rosenbluth_potential_boundary_data!
-using ..fokker_planck_calculus: enforce_zero_bc!, elliptic_solve!, algebraic_solve!, ravel_c_to_vpavperp_parallel!
+using ..fokker_planck_calculus: enforce_zero_bc!, elliptic_solve!, algebraic_solve!
 using ..fokker_planck_calculus: calculate_rosenbluth_potentials_via_elliptic_solve!
 using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_fluxes, H_Maxwellian, dGdvperp_Maxwellian
 using ..fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian
@@ -112,10 +112,6 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
     S_dummy = allocate_shared_float(nvpa,nvperp)
     Q_dummy = allocate_shared_float(nvpa,nvperp)
     rhsvpavperp = allocate_shared_float(nvpa,nvperp)
-    rhsc = allocate_shared_float(nc)
-    rhqc = allocate_shared_float(nc)
-    sc = allocate_shared_float(nc)
-    qc = allocate_shared_float(nc)
     
     CC = allocate_shared_float(nvpa,nvperp)
     GG = allocate_shared_float(nvpa,nvperp)
@@ -136,7 +132,7 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
                                            LP2D_sparse,LV2D_sparse,LB2D_sparse,PUperp2D_sparse,PPparPUperp2D_sparse,
                                            PPpar2D_sparse,MMparMNperp2D_sparse,KPperp2D_sparse,
                                            lu_obj_MM,lu_obj_LP,lu_obj_LV,lu_obj_LB,
-                                           YY_arrays, S_dummy, Q_dummy, rhsvpavperp, rhsc, rhqc, sc, qc,
+                                           YY_arrays, S_dummy, Q_dummy, rhsvpavperp,
                                            CC, GG, HH, dHdvpa, dHdvperp, dGdvperp, d2Gdvperp2, d2Gdvpa2, d2Gdvperpdvpa,
                                            FF, dFdvpa, dFdvperp)
     return fka
@@ -236,8 +232,6 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
     # begin_vpa_region(), begin_vperp_region(), begin_vperp_vpa_region(), begin_serial_region() to synchronise the shared-memory arrays
     
     # extract the necessary precalculated and buffer arrays from fokkerplanck_arrays
-    rhsc = fkpl_arrays.rhsc
-    sc = fkpl_arrays.sc
     rhsvpavperp = fkpl_arrays.rhsvpavperp
     lu_obj_MM = fkpl_arrays.lu_obj_MM
     YY_arrays = fkpl_arrays.YY_arrays    
@@ -302,19 +296,19 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
         # locally-owned set of ivperp, ivpa indices in
         # assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!()
         _block_synchronize()
-        assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!(rhsc,rhsvpavperp,
+        assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!(rhsvpavperp,
           FF,dFdvpa,dFdvperp,
           d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,
           dHdvpa,dHdvperp,ms,msp,nussp,
           vpa,vperp,YY_arrays)
     elseif test_assembly_serial
-        assemble_explicit_collision_operator_rhs_serial!(rhsc,@view(ffs_in[:,:]),
+        assemble_explicit_collision_operator_rhs_serial!(rhsvpavperp,@view(ffs_in[:,:]),
           d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,
           dHdvpa,dHdvperp,ms,msp,nussp,
           vpa,vperp,YY_arrays)
     else
         _block_synchronize()
-        assemble_explicit_collision_operator_rhs_parallel!(rhsc,rhsvpavperp,@view(ffs_in[:,:]),
+        assemble_explicit_collision_operator_rhs_parallel!(rhsvpavperp,@view(ffs_in[:,:]),
           d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,
           dHdvpa,dHdvperp,ms,msp,nussp,
           vpa,vperp,YY_arrays)
@@ -322,10 +316,11 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
     # solve the collision operator matrix eq
     begin_serial_region()
     @serial_region begin
+        sc = vec(CC)
+        rhsc = vec(rhsvpavperp)
         # invert mass matrix and fill fc
         sc .= lu_obj_MM \ rhsc
     end
-    ravel_c_to_vpavperp_parallel!(CC,sc,vpa.n)
     return nothing
 end
 
