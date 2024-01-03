@@ -26,25 +26,34 @@ function check_so_newer_than_code(so_filename="moment_kinetics.so")
     repo_dir = dirname(dirname(dirname(@__FILE__)))
 
     # Get newest modification time of julia source file
-    newest_jl_mtime = 0.0
+    so_is_newer = true
 
-    function get_newest_jl_mtime(directory)
+    function check_file_mtimes(directory)
         for (root, dirs, files) ∈ walkdir(directory; follow_symlinks=true)
             for f ∈ files
                 mt = mtime(joinpath(root, f))
-                newest_jl_mtime = max(mt, newest_jl_mtime)
+                if mt > so_mtime
+                    # Found a file that is newer than the .so
+                    so_is_newer = false
+                    break
+                end
+            end
+            if !so_is_newer
+                # Already found a file newer than the .so. No need to continue searching.
+                break
             end
         end
     end
-    get_newest_jl_mtime(joinpath(repo_dir, "moment_kinetics/src/"))
-    if is_makie
-        get_newest_jl_mtime(joinpath(repo_dir, "makie_post_processing/makie_post_processing/src/"))
-    end
-    if is_plots
-        get_newest_jl_mtime(joinpath(repo_dir, "plots_post_processing/plots_post_processing/src/"))
-    end
+    check_file_mtimes(joinpath(repo_dir, "moment_kinetics/src/"))
 
-    so_is_newer = so_mtime > newest_jl_mtime
+    # If we already found a code file newer than the .so, no need to keep checking more
+    # files, so only keep checking if so_is_newer=true.
+    if so_is_newer && is_makie
+        check_file_mtimes(joinpath(repo_dir, "makie_post_processing/makie_post_processing/src/"))
+    end
+    if so_is_newer && is_plots
+        check_file_mtimes(joinpath(repo_dir, "plots_post_processing/plots_post_processing/src/"))
+    end
 
     if !so_is_newer
         error_message =
