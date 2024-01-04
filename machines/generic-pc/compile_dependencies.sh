@@ -41,9 +41,9 @@ else
     read -p "> " input
   done
   if [[ -z $input || $input == "n" ]]; then
-    BUILDHDF5="y"
-  else
     BUILDHDF5="n"
+  else
+    BUILDHDF5="y"
   fi
 fi
 
