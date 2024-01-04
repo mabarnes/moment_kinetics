@@ -108,7 +108,7 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
                 Bzed[iz,ir] = Bmag[iz,ir]*bzed[iz,ir]
                 Bzeta[iz,ir] = Bmag[iz,ir]*bzeta[iz,ir]
                 dBdr[iz,ir] = 0.0
-                dBdz[iz,ir] = 4.0*DeltaB*zfac*(1.0 - zfac^2)
+                dBdz[iz,ir] = (2.0/z.L)*4.0*DeltaB*zfac*(1.0 - zfac^2)
                 jacobian[iz,ir] = 1.0
             end
         end

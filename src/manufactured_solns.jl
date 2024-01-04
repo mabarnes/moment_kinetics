@@ -5,6 +5,7 @@ module manufactured_solns
 export manufactured_solutions
 export manufactured_sources
 export manufactured_electric_fields
+export manufactured_geometry
 
 using ..array_allocation: allocate_shared_float
 using ..input_structs: geometry_input
@@ -77,11 +78,11 @@ using IfElse
             Bzed = Bmag*bzed
             Bzeta = Bmag*bzeta
             if nr > 1
-                dBdr = Dr(Bmag)
+                dBdr = expand_derivatives(Dr(Bmag))
             else
                 dBdr = 0.0
             end
-            dBdz = Dz(Bmag)
+            dBdz = expand_derivatives(Dz(Bmag))
             jacobian = 1.0
         else
             input_option_error("$option", option)
@@ -499,6 +500,24 @@ using IfElse
         manufactured_E_fields = (Er_func = Er_func, Ez_func = Ez_func, phi_func = phi_func)
         
         return manufactured_E_fields
+    end
+
+    function manufactured_geometry(geometry_input_data::geometry_input,Lz,Lr,nr)
+        
+        # calculate the geometry symbolically
+        geosym = geometry_sym(geometry_input_data,Lz,Lr,nr)
+        Bmag = geosym.Bmag
+        bzed = geosym.bzed
+        dBdz = geosym.dBdz
+        Bmag_func = build_function(Bmag, z, r, expression=Val{false})
+        bzed_func = build_function(bzed, z, r, expression=Val{false})
+        dBdz_func = build_function(dBdz, z, r, expression=Val{false})
+        
+        manufactured_geometry = (Bmag_func = Bmag_func,
+                                 bzed_func = bzed_func,
+                                 dBdz_func = dBdz_func)
+        
+        return manufactured_geometry
     end
 
     function manufactured_sources(manufactured_solns_input, r_coord, z_coord, vperp_coord,

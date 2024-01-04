@@ -51,6 +51,7 @@ using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data,
                   get_unnormalised_f_dzdt_1d, get_unnormalised_f_coords_2d
 using ..velocity_moments: integrate_over_vspace
 using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
+using ..manufactured_solns: manufactured_geometry
 using ..moment_kinetics_input: mk_input, get, get_default_rhostar
 using ..input_structs: geometry_input, grid_input, species_composition
 using ..input_structs: electron_physics_type, boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath
@@ -1227,7 +1228,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
         else
             Lr_in = 1.0
         end
-
+        check_manufactured_solution_geometry(geometry,z_global,r_global)
         manufactured_solns_list = manufactured_solutions(manufactured_solns_input, Lr_in,
                                                          z_global.L, r_global.bc,
                                                          z_global.bc, geometry.input,
@@ -3854,6 +3855,41 @@ function plot_charged_pdf_2D_at_wall(run_name, run_name_label, r_global, z_globa
         end
     end
     println("done.")
+end
+
+function check_manufactured_solution_geometry(geometry,z,r)
+    Lz = z.L
+    nz = z.n
+    Lr = r.L
+    nr = r.n
+    
+    Bmag_num = geometry.Bmag
+    dBdz_num = geometry.dBdz
+    bzed_num = geometry.bzed
+    Bmag_sym = copy(Bmag_num)
+    bzed_sym = copy(bzed_num)
+    dBdz_sym = copy(dBdz_num)
+    
+    manufactured_geometry_list = manufactured_geometry(geometry.input,Lz,Lr,nr)
+    Bmag_func = manufactured_geometry_list.Bmag_func
+    bzed_func = manufactured_geometry_list.bzed_func
+    dBdz_func = manufactured_geometry_list.dBdz_func
+    for ir in 1:nr
+        for iz in 1:nz
+            Bmag_sym[iz,ir] = Bmag_func(z.grid[iz],r.grid[ir])
+            bzed_sym[iz,ir] = bzed_func(z.grid[iz],r.grid[ir])
+            dBdz_sym[iz,ir] = dBdz_func(z.grid[iz],r.grid[ir])
+        end
+    end
+    println("Geometry check")
+    Bmag_err = sqrt(sum((Bmag_sym .- Bmag_num).^2))
+    println("Bmag_err: ",Bmag_err)
+    bzed_err = sqrt(sum((bzed_sym .- bzed_num).^2))
+    println("bzed_err: ",bzed_err)
+    dBdz_err = sqrt(sum((dBdz_sym .- dBdz_num).^2))
+    println("dBdz_err: ",dBdz_err)
+    
+    return nothing
 end
 
 end
