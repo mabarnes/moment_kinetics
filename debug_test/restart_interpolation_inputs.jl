@@ -64,11 +64,10 @@ base_input = Dict(
 
 test_input =
     merge(base_input,
-          Dict("run_name" => "split1",
+          Dict("run_name" => "full-f",
                "z_nelement" => 3,
                "vpa_nelement" => 3,
-               "vz_nelement" => 3,
-               "evolve_moments_density" => true))
+               "vz_nelement" => 3))
 
 test_input_split1 =
     merge(test_input,

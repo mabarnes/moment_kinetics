@@ -357,6 +357,7 @@ end
     """
     struct DebugMPISharedArray{T, N} <: AbstractArray{T, N}
         data::Array{T,N}
+        accessed::Ref{Bool}
         is_initialized::Array{mk_int,N}
         is_read::Array{Bool,N}
         is_written::Array{Bool, N}
@@ -376,6 +377,7 @@ end
         if block_rank[] == 0
             is_initialized .= 0
         end
+        accessed = Ref(false)
         is_read = Array{Bool}(undef, dims)
         is_read .= false
         is_written = Array{Bool}(undef, dims)
@@ -395,7 +397,7 @@ end
                                        creation_stack_trace, previous_is_read,
                                        previous_is_written)
         end
-        return DebugMPISharedArray(array, is_initialized, is_read, is_written,
+        return DebugMPISharedArray(array, accessed, is_initialized, is_read, is_written,
                                    creation_stack_trace)
     end
 
@@ -417,6 +419,7 @@ end
             end
         end
         A.is_read[I...] = true
+        A.accessed[] = true
         return getindex(A.data, I...)
     end
     function Base.setindex!(A::DebugMPISharedArray{T, N}, v::T, I::Vararg{mk_int,N}) where {T, N}
@@ -424,6 +427,7 @@ end
             A.is_initialized[I...] = 1
         end
         A.is_written[I...] = true
+        A.accessed[] = true
         return setindex!(A.data, v, I...)
     end
     # Overload Base.convert() so that it is forbidden to convert a DebugMPISharedArray
@@ -670,7 +674,17 @@ end
             end
         end
 
+        # If @debug_error_stop_all is active, need to gather errors from all processes
+        # before calling any MPI functions in order to avoid hangs.
         @debug_error_stop_all _gather_errors()
+
+        # Short-circuit if array has not been read or written at all
+        any_accessed = MPI.Allreduce(array.accessed[], |, comm_block[])
+        array.accessed[] = false
+        if !any_accessed
+            return true
+        end
+
         global_is_read = reshape(MPI.Allgather(is_read, comm_block[]),
                                  global_dims...)
         global_is_written = reshape(MPI.Allgather(is_written, comm_block[]),

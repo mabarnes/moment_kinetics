@@ -201,7 +201,6 @@ function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,dSdt,compos
             @serial_region begin
                 dSdt[iz,ir,is] = -get_density(lnfC,vpa,vperp)
             end
-            begin_vperp_vpa_region()
         end
     end
     return nothing

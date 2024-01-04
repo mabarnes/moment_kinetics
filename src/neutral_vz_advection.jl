@@ -223,10 +223,10 @@ function update_speed_n_u_evolution_neutral!(advect, fvec, moments, vz, z, r, co
         density = fvec.density_neutral
         uz = fvec.uz_neutral
         vth = moments.neutral.vth
-        @loop_s_r_z is ir iz begin
-            term = source_amplitude[iz,ir] * uz[iz,ir,is] / density[iz,ir,is]
-            @loop_vperp_vpa ivperp ivpa begin
-                advect[is].speed[ivpa,ivperp,iz,ir] += term
+        @loop_sn_r_z isn ir iz begin
+            term = source_amplitude[iz,ir] * uz[iz,ir,isn] / density[iz,ir,isn]
+            @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                advect[isn].speed[ivz,ivr,ivzeta,iz,ir] += term
             end
         end
     end
