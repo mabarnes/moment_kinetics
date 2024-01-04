@@ -187,27 +187,31 @@ function runtests()
             end
             rpbd_exact = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
             # use known test function to provide exact data
+            begin_s_r_z_anyv_region()
             calculate_rosenbluth_potential_boundary_data_exact!(rpbd_exact,
                   H_M_exact,dHdvpa_M_exact,dHdvperp_M_exact,G_M_exact,
                   dGdvperp_M_exact,d2Gdvperp2_M_exact,
                   d2Gdvperpdvpa_M_exact,d2Gdvpa2_M_exact,vpa,vperp)
             # calculate the potentials numerically
-            calculate_rosenbluth_potentials_via_elliptic_solve!(fkpl_arrays.GG,fkpl_arrays.HH,fkpl_arrays.dHdvpa,fkpl_arrays.dHdvperp,
-                 fkpl_arrays.d2Gdvpa2,fkpl_arrays.dGdvperp,fkpl_arrays.d2Gdvperpdvpa,fkpl_arrays.d2Gdvperp2,F_M,
-                 vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays;
-                 algebraic_solve_for_d2Gdvperp2=false,calculate_GG=true,calculate_dGdvperp=true)
+            @views calculate_rosenbluth_potentials_via_elliptic_solve!(
+                 fkpl_arrays.GG[:,:,1], fkpl_arrays.HH[:,:,1], fkpl_arrays.dHdvpa[:,:,1],
+                 fkpl_arrays.dHdvperp[:,:,1], fkpl_arrays.d2Gdvpa2[:,:,1],
+                 fkpl_arrays.dGdvperp[:,:,1], fkpl_arrays.d2Gdvperpdvpa[:,:,1],
+                 fkpl_arrays.d2Gdvperp2[:,:,1], F_M, vpa, vperp, vpa_spectral,
+                 vperp_spectral, fkpl_arrays; algebraic_solve_for_d2Gdvperp2=false,
+                 calculate_GG=true, calculate_dGdvperp=true)
             # extract C[Fs,Fs'] result
             # and Rosenbluth potentials for testing
             begin_vperp_vpa_region()
             @loop_vperp_vpa ivperp ivpa begin
-                G_M_num[ivpa,ivperp] = fkpl_arrays.GG[ivpa,ivperp]
-                H_M_num[ivpa,ivperp] = fkpl_arrays.HH[ivpa,ivperp]
-                dHdvpa_M_num[ivpa,ivperp] = fkpl_arrays.dHdvpa[ivpa,ivperp]
-                dHdvperp_M_num[ivpa,ivperp] = fkpl_arrays.dHdvperp[ivpa,ivperp]
-                dGdvperp_M_num[ivpa,ivperp] = fkpl_arrays.dGdvperp[ivpa,ivperp]
-                d2Gdvperp2_M_num[ivpa,ivperp] = fkpl_arrays.d2Gdvperp2[ivpa,ivperp]
-                d2Gdvpa2_M_num[ivpa,ivperp] = fkpl_arrays.d2Gdvpa2[ivpa,ivperp]
-                d2Gdvperpdvpa_M_num[ivpa,ivperp] = fkpl_arrays.d2Gdvperpdvpa[ivpa,ivperp]
+                G_M_num[ivpa,ivperp] = fkpl_arrays.GG[ivpa,ivperp,1]
+                H_M_num[ivpa,ivperp] = fkpl_arrays.HH[ivpa,ivperp,1]
+                dHdvpa_M_num[ivpa,ivperp] = fkpl_arrays.dHdvpa[ivpa,ivperp,1]
+                dHdvperp_M_num[ivpa,ivperp] = fkpl_arrays.dHdvperp[ivpa,ivperp,1]
+                dGdvperp_M_num[ivpa,ivperp] = fkpl_arrays.dGdvperp[ivpa,ivperp,1]
+                d2Gdvperp2_M_num[ivpa,ivperp] = fkpl_arrays.d2Gdvperp2[ivpa,ivperp,1]
+                d2Gdvpa2_M_num[ivpa,ivperp] = fkpl_arrays.d2Gdvpa2[ivpa,ivperp,1]
+                d2Gdvperpdvpa_M_num[ivpa,ivperp] = fkpl_arrays.d2Gdvperpdvpa[ivpa,ivperp,1]
             end
             begin_serial_region()
             @serial_region begin
@@ -322,6 +326,7 @@ function runtests()
                                                                         nussp,vpa,vperp,ivpa,ivperp)
                     end
                 end
+                begin_s_r_z_anyv_region()
                 fokker_planck_collision_operator_weak_form!(Fs_M,F_M,ms,msp,nussp,
                                                  fkpl_arrays,
                                                  vperp, vpa, vperp_spectral, vpa_spectral,
@@ -332,14 +337,14 @@ function runtests()
                                                  calculate_GG = false, calculate_dGdvperp=false)
                 if test_numerical_conserving_terms && test_self_operator
                     # enforce the boundary conditions on CC before it is used for timestepping
-                    enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
+                    @views enforce_vpavperp_BCs!(fkpl_arrays.CC[:,:,1],vpa,vperp,vpa_spectral,vperp_spectral)
                     # make ad-hoc conserving corrections
-                    conserving_corrections!(fkpl_arrays.CC,Fs_M,vpa,vperp,dummy_array)            
+                    @views conserving_corrections!(fkpl_arrays.CC[:,:,1],Fs_M,vpa,vperp,dummy_array)
                 end
                 # extract C[Fs,Fs'] result
                 begin_vperp_vpa_region()
                 @loop_vperp_vpa ivperp ivpa begin
-                    C_M_num[ivpa,ivperp] = fkpl_arrays.CC[ivpa,ivperp]
+                    C_M_num[ivpa,ivperp] = fkpl_arrays.CC[ivpa,ivperp,1]
                 end
                 begin_serial_region()
                 @serial_region begin
@@ -363,7 +368,7 @@ function runtests()
                     @test C_M_max < atol_max
                     @test C_M_L2 < atol_L2
                     # calculate the entropy production
-                    lnfC = fkpl_arrays.rhsvpavperp
+                    lnfC = @view fkpl_arrays.rhsvpavperp[:,:,1]
                     @loop_vperp_vpa ivperp ivpa begin
                         lnfC[ivpa,ivperp] = Fs_M[ivpa,ivperp]*C_M_num[ivpa,ivperp]
                     end
@@ -483,6 +488,7 @@ function runtests()
                 end
             end
             # calculate the potentials numerically
+            begin_s_r_z_anyv_region()
             calculate_rosenbluth_potentials_via_direct_integration!(G_M_num,H_M_num,dHdvpa_M_num,dHdvperp_M_num,
              d2Gdvpa2_M_num,dGdvperp_M_num,d2Gdvperpdvpa_M_num,d2Gdvperp2_M_num,F_M,
              vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays)
