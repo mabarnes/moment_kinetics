@@ -577,7 +577,7 @@ using IfElse
         # the ion characteristic velocities
         dzdt = vpa * (Bzed/Bmag) - ExBgeofac*Er
         drdt = ExBgeofac*Ez*rfac
-        dvpadt = 0.5*Bzed/Bmag*(Ez - 0.5*((vperp^2)/Bmag)*dBdz)
+        dvpadt = 0.5*(Bzed/Bmag)*(Ez - 0.5*((vperp^2)/Bmag)*dBdz)
         dvperpdt = (0.5*vperp/Bmag)*(dzdt*dBdz + drdt*dBdr)
         # the ion source to maintain the manufactured solution
         Si = ( Dt(dfni) 
