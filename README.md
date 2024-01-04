@@ -338,28 +338,28 @@ $ julia -p 8 -O3 --project run_parameter_scan.jl path/to/scan/input.toml
 There is a test suite in the `test/` subdirectory. It can be run in a few ways:
 * Execute some or all of the tests as a script. For example in the terminal run
     ```
-    $ julia -O3 --project test/runtests.jl
+    $ julia -O3 --project moment_kinetcs/test/runtests.jl
     ```
     or in the REPL run
     ```
-    julia> include("test/runtests.jl")
+    julia> include("moment_kinetcs/test/runtests.jl")
     ```
     Individual test files can also be used instead of `runtests.jl`, which runs all the tests.
 * You can also run the tests using `Pkg`. Either using `pkg>` mode
     ```
     $ julia -O3 --project
     julia> <press ']' to enter pkg mode>
-    (moment_kinetics) pkg> test
+    (moment_kinetics) pkg> test moment_kinetics
     ```
     using `Pkg` in the REPL
     ```
     $ julia -O3 --project
     julia> import Pkg
-    julia> Pkg.test()
+    julia> Pkg.test("moment_kinetics")
     ```
     or run on the command line
     ```
-    julia -O3 --project -e "import Pkg; Pkg.test()`
+    julia -O3 --project -e "import Pkg; Pkg.test("moment_kinetics")`
     ```
     The downside of this method is that it will cause `NCDatasets` to be
     installed if you did not install it already, which might sometimes cause
@@ -376,11 +376,11 @@ so, it skips many cases. To run more comprehensive tests, you can activate the
     before running the tests.
 * Running from the terminal, pass as a command line argument, e.g.
     ```
-    $ julia -O3 --project --long test/runtests.jl
+    $ julia -O3 --project --long moment_kinetics/test/runtests.jl
     ```
 * Using `test_args` argument
     ```
-    julia> Pkg.test(; test_args=["--long"])
+    julia> Pkg.test("moment_kinetics"; test_args=["--long"])
     ```
     Note the semicolon is necessary.
 
