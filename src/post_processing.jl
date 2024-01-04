@@ -1230,7 +1230,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
 
         manufactured_solns_list = manufactured_solutions(manufactured_solns_input, Lr_in,
                                                          z_global.L, r_global.bc,
-                                                         z_global.bc, geometry,
+                                                         z_global.bc, geometry.input,
                                                          composition, species, r_global.n, vperp.n)
         dfni_func = manufactured_solns_list.dfni_func
         densi_func = manufactured_solns_list.densi_func

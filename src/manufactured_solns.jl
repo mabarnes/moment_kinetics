@@ -7,6 +7,7 @@ export manufactured_sources
 export manufactured_electric_fields
 
 using ..array_allocation: allocate_shared_float
+using ..input_structs: geometry_input
 using ..input_structs
 using ..looping
 using ..type_definitions: mk_float, mk_int
@@ -31,6 +32,62 @@ using IfElse
        nconst = 3.0/8.0
        pconst = 15.0/8.0
        fluxconst = 1.0
+    end
+
+    # struct of symbolic functions for geometric coefficients
+    struct geometric_coefficients_sym{T}
+        rhostar::mk_float
+        Bzed::T
+        Bzeta::T
+        Bmag::T
+        bzed::T
+        bzeta::T
+        dBdz::T
+        dBdr::T
+        jacobian::T
+    end
+    
+    function geometry_sym(geometry_input_data::geometry_input,Lz,Lr,nr)
+        # define derivative operators
+        Dr = Differential(r)
+        Dz = Differential(z)
+        # compute symbolic geometry functions
+        option = geometry_input_data.option
+        rhostar = geometry_input_data.rhostar
+        if option == "constant-helical" || option == "default"
+            pitch = geometry_input_data.pitch
+            bzed = pitch
+            bzeta = sqrt(1 - bzed^2)
+            Bmag = 1.0
+            Bzed = Bmag*bzed
+            Bzeta = Bmag*bzeta
+            dBdr = 0.0
+            dBdz = 0.0
+            jacobian = 1.0
+        elseif option == "1D-mirror"
+            DeltaB = geometry_input_data.DeltaB
+            bzed = 1.0
+            bzeta = 0.0
+            # B(z)/Bref = 1 + DeltaB*( 2(2z/L)^2 - (2z/L)^4)
+            # chosen so that
+            # B(z)/Bref = 1 + DeltaB at 2z/L = +- 1 
+            # d B(z)d z = 0 at 2z/L = +- 1 
+            zfac = 2.0*z/Lz
+            Bmag = 1.0 + DeltaB*( 2.0*zfac^2 - zfac^4)
+            Bzed = Bmag*bzed
+            Bzeta = Bmag*bzeta
+            if nr > 1
+                dBdr = 0.0
+            else
+                dBdr = Dr(Bmag)
+            end
+            dBdz = Dz(Bmag)
+            jacobian = 1.0
+        else
+            input_option_error("$option", option)
+        end
+        geo_sym = geometric_coefficients_sym(rhostar,Bzed,Bzeta,Bmag,bzed,bzeta,dBdz,dBdr,jacobian)
+        return geo_sym
     end
 
     #standard functions for building densities
@@ -376,7 +433,8 @@ using IfElse
     end
 
     function manufactured_solutions(manufactured_solns_input, Lr, Lz, r_bc, z_bc,
-                                    geometry, composition, species, nr, nvperp)
+                                    geometry_input_data::geometry_input, composition, species, nr, nvperp)
+        geometry = geometry_sym(geometry_input_data,Lz,Lr,nr)
         charged_species = species.charged[1]
         if composition.n_neutral_species > 0
             neutral_species = species.neutral[1]
@@ -444,9 +502,10 @@ using IfElse
     end
 
     function manufactured_sources(manufactured_solns_input, r_coord, z_coord, vperp_coord,
-            vpa_coord, vzeta_coord, vr_coord, vz_coord, composition, geometry, collisions,
+            vpa_coord, vzeta_coord, vr_coord, vz_coord, composition, 
+            geometry_input_data::geometry_input, collisions,
             num_diss_params, species)
-
+        geometry = geometry_sym(geometry_input_data,z_coord.L,r_coord.L,r_coord.n)
         charged_species = species.charged[1]
         if composition.n_neutral_species > 0
             neutral_species = species.neutral[1]
@@ -489,8 +548,11 @@ using IfElse
 
         # get geometric/composition data
         Bzed = geometry.Bzed
+        Bzeta = geometry.Bzeta
         Bmag = geometry.Bmag
         rhostar = geometry.rhostar
+        jacobian = geometry.jacobian
+        ExBgeofac = 0.5*rhostar*Bzeta*jacobian/Bmag^2
         #exceptions for cases with missing terms 
         if composition.n_neutral_species > 0
             cx_frequency = collisions.charge_exchange
@@ -511,7 +573,7 @@ using IfElse
                                       charged_species)
 
         # the ion source to maintain the manufactured solution
-        Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez*rfac ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
+        Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - ExBgeofac*Er ) * Dz(dfni) + ( ExBgeofac*Ez*rfac ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
                + cx_frequency*( densn*dfni - densi*gav_dfnn )  - ionization_frequency*dense*gav_dfnn)
         nu_krook = collisions.krook_collision_frequency_prefactor
         if nu_krook > 0.0

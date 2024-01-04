@@ -358,7 +358,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     if(advance.manufactured_solns_test)
         manufactured_source_list = manufactured_sources(manufactured_solns_input, r, z,
                                                         vperp, vpa, vzeta, vr, vz,
-                                                        composition, geometry, collisions,
+                                                        composition, geometry.input, collisions,
                                                         num_diss_params, species)
     else
         manufactured_source_list = false # dummy Bool to be passed as argument instead of list
