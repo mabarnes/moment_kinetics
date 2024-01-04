@@ -35,16 +35,16 @@ using IfElse
     end
 
     # struct of symbolic functions for geometric coefficients
-    struct geometric_coefficients_sym{T}
+    struct geometric_coefficients_sym{T1,T2,T3,T4,T5,T6,T7,T8}
         rhostar::mk_float
-        Bzed::T
-        Bzeta::T
-        Bmag::T
-        bzed::T
-        bzeta::T
-        dBdz::T
-        dBdr::T
-        jacobian::T
+        Bzed::T1
+        Bzeta::T2
+        Bmag::T3
+        bzed::T4
+        bzeta::T5
+        dBdz::T6
+        dBdr::T7
+        jacobian::T8
     end
     
     function geometry_sym(geometry_input_data::geometry_input,Lz,Lr,nr)
@@ -77,9 +77,9 @@ using IfElse
             Bzed = Bmag*bzed
             Bzeta = Bmag*bzeta
             if nr > 1
-                dBdr = 0.0
-            else
                 dBdr = Dr(Bmag)
+            else
+                dBdr = 0.0
             end
             dBdz = Dz(Bmag)
             jacobian = 1.0
@@ -550,6 +550,8 @@ using IfElse
         Bzed = geometry.Bzed
         Bzeta = geometry.Bzeta
         Bmag = geometry.Bmag
+        dBdz = geometry.dBdz
+        dBdr = geometry.dBdr
         rhostar = geometry.rhostar
         jacobian = geometry.jacobian
         ExBgeofac = 0.5*rhostar*Bzeta*jacobian/Bmag^2
@@ -572,9 +574,19 @@ using IfElse
                                       composition, r_coord.n, manufactured_solns_input,
                                       charged_species)
 
+        # the ion characteristic velocities
+        dzdt = vpa * (Bzed/Bmag) - ExBgeofac*Er
+        drdt = ExBgeofac*Ez*rfac
+        dvpadt = 0.5*Bzed/Bmag*(Ez - 0.5*((vperp^2)/Bmag)*dBdz)
+        dvperpdt = (0.5*vperp/Bmag)*(dzdt*dBdz + drdt*dBdr)
         # the ion source to maintain the manufactured solution
-        Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - ExBgeofac*Er ) * Dz(dfni) + ( ExBgeofac*Ez*rfac ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
-               + cx_frequency*( densn*dfni - densi*gav_dfnn )  - ionization_frequency*dense*gav_dfnn)
+        Si = ( Dt(dfni) 
+               + dzdt * Dz(dfni)  
+               + drdt * Dr(dfni)
+               + dvpadt * Dvpa(dfni)
+               + dvperpdt * Dvperp(dfni)
+               + cx_frequency*( densn*dfni - densi*gav_dfnn )
+               - ionization_frequency*dense*gav_dfnn )
         nu_krook = collisions.krook_collision_frequency_prefactor
         if nu_krook > 0.0
             Ti_over_Tref = vthi^2
