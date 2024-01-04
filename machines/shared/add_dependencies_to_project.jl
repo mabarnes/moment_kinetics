@@ -122,7 +122,7 @@ elseif machine_settings["hdf5_library_setting"] == "prompt"
         hdf5_lib = joinpath(local_hdf5_install_dir, "libhdf5.so")
         hdf5_lib_hl = joinpath(local_hdf5_install_dir, "libhdf5_hl.so")
     elseif !prompt_for_hdf5
-        hdf5_dir = mk_preferences("hdf5_dir")
+        hdf5_dir = mk_preferences["hdf5_dir"]
         if hdf5_dir != "default"
             hdf5_lib = joinpath(hdf5_dir, "libhdf5.so")
             hdf5_lib_hl = joinpath(hdf5_dir, "libhdf5_hl.so")
