@@ -185,7 +185,12 @@ function machine_setup_moment_kinetics(machine::String; no_force_exit::Bool=fals
     mk_preferences["batch_system"] = batch_system
 
     # Get some settings
-    julia_directory = mk_preferences["julia_directory"] = ENV["JULIA_DEPOT_PATH"]
+    if haskey(ENV, "JULIA_DEPOT_PATH")
+        julia_directory = ENV["JULIA_DEPOT_PATH"]
+    else
+        julia_directory = ""
+    end
+    mk_preferences["julia_directory"] = julia_directory
     if batch_system
         get_setting("default_run_time",
                     "Enter the default value for the time limit for simulation jobs",

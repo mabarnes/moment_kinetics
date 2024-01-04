@@ -245,7 +245,9 @@ echo
 # export JULIA_DEPOT_PATH instead of just passing as a prefix to the julia
 # command, because passing as a prefix does not work (sometimes??) within a
 # bash script (even though as far as JTO knows it should work).
-export JULIA_DEPOT_PATH=$JULIA_DIRECTORY
+if [ ! -z "$JULIA_DIRECTORY" ]; then
+  export JULIA_DEPOT_PATH=$JULIA_DIRECTORY
+fi
 $JULIA --project machines/shared/machine_setup.jl "$MACHINE"
 
 if [ -f julia.env ]; then
