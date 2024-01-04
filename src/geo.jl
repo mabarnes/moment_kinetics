@@ -92,6 +92,9 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
             input_option_error("$option: You have specified nr > 1 -> set nr = 1", option)
         end
         DeltaB = geometry_input_data.DeltaB
+        if DeltaB < -0.99999999
+            input_option_error("$option: You have specified DeltaB < -1 -> set DeltaB > -1", option)
+        end
         for ir in 1:nr
             for iz in 1:nz
                 bzed[iz,ir] = 1.0
