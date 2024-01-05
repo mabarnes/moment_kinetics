@@ -308,10 +308,16 @@ function get_best_anyv_split(block_size, dim_sizes)
     v_dim_nprocs = [s[end] for s ∈ vpa_splits]
 
     # Penalise the load_balances values so that we favour low numbers of processes for the
-    # velocity dimension(s). It is an entirely arbitrary choice to use just
-    # `1*v_dim_nprocs` for this - in principle we could use any function that gets bigger
-    # with the number of processes...
-    load_balances .*= v_dim_nprocs
+    # velocity dimension(s). It is an arbitrary choice to use `1.0 + v_dim_nprocs /
+    # block_size[]` for this - the motivation is that the worst possible load balance for
+    # a single dimension is 2 (as long as there are at least as many points in the
+    # dimension as there are processes) so a simple linear `v_dim_nprocs` would pretty
+    # much say 'only ever use one process for the velocity space dimensions unless there
+    # are more processes than (n_species * (number of spatial points))', which seems a bit
+    # too restrictive. Instead choose a penalisation factor that is about 1 for
+    # v_dim_nprocs=1, and increases to 1 for v_dim_nprocs=(block_size/2). In principle we
+    # could use any function that gets bigger with the number of processes...
+    @. load_balances *= 1.0 + v_dim_nprocs / block_size[]
 
     best_index = argmin(load_balances)
 
