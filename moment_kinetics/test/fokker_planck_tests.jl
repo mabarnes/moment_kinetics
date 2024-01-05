@@ -72,6 +72,8 @@ function runtests()
         
         @testset " - test weak-form 2D differentiation" begin
         # tests the correct definition of mass and stiffness matrices in 2D
+            println(" - test weak-form 2D differentiation")
+
             ngrid = 9
             nelement_vpa = 8
             nelement_vperp = 4
@@ -134,6 +136,7 @@ function runtests()
         end
         
         @testset " - test weak-form Rosenbluth potential calculation: elliptic solve" begin
+            println(" - test weak-form Rosenbluth potential calculation: elliptic solve")
             ngrid = 9
             nelement_vpa = 8
             nelement_vperp = 4
@@ -282,6 +285,7 @@ function runtests()
         end
         
         @testset " - test weak-form collision operator calculation" begin
+            println(" - test weak-form collision operator calculation")
             ngrid = 9
             nelement_vpa = 8
             nelement_vperp = 4
@@ -438,6 +442,7 @@ function runtests()
         end
         
         @testset " - test weak-form Rosenbluth potential calculation: direct integration" begin
+            println(" - test weak-form Rosenbluth potential calculation: direct integration")
             ngrid = 5 # chosen for a quick test -- direct integration is slow!
             nelement_vpa = 8
             nelement_vperp = 4
