@@ -599,70 +599,6 @@ function allocate_shared(T, dims; comm=nothing, maybe_debug=true)
     return array
 end
 
-# Need to put this before _block_synchronize() so that original_error() is defined.
-@debug_error_stop_all begin
-    # Redefine Base.error(::String) so that it communicates the error to other
-    # processes, which can pick it up in _block_synchronize() so that all processes are
-    # stopped. This should make interactive debugging easier, since all processes will
-    # stop if there is an error, instead of hanging.  Using ^C to stop hanging processes
-    # seems to mess up the MPI state so it's not possible to call, e.g.,
-    # `run_moment_kinetics()` again without restarting Julia.
-    #
-    # Also calls finalize_comms!() on all processes when erroring, so that a later run
-    # starts from a clean state. Note: if you catch the `ErrorException` raised by
-    # `error()` and try to continue, most likely you will get a segfault (when
-    # @debug_error_stop_all is active) because all the shared-memory arrays are deleted.
-    #
-    # Only want this active for debug runs, because for production runs we don't want
-    # extra MPI.Allgather() calls.
-    #
-    # The following implementation feels like a horrible hack, so I (JTO) am worried it
-    # might be fragile in the long run, but it only affects the code when debugging is
-    # enabled, and only really exists for convenience - if it breaks we can just delete
-    # it.
-    #
-    # Using 'world age' allows us to call the original Base.error(::String) from inside
-    # this redefined Base.error(::String). Implementation copied from here:
-    # https://discourse.julialang.org/t/how-to-call-the-original-function-when-overriding-it/56865/6
-    const world_age_before_definition = Base.get_world_counter()
-    original_error(message) = Base.invoke_in_world(world_age_before_definition,
-                                                   Base.error, message)
-    function Base.error(message::String)
-        # Communicate to all processes (which pick up the messages in
-        # _block_synchronize()) that there was an error
-        _ = MPI.Allgather(true, comm_world)
-
-        # Clean up MPI-allocated memory before raising error
-        finalize_comms!()
-
-        original_error(message)
-    end
-
-    # This needs to be called before each blocking collective operation (e.g.
-    # MPI.Barrier()), to make sure any errors that have occured on other processes are
-    # communicated.
-    function _gather_errors()
-        # Gather a flag from all processes saying if there has been an error. If there
-        # was, error here too so that all processes stop.
-        all_errors = MPI.Allgather(false, comm_world)
-        if any(all_errors)
-            error_procs = Vector{mk_int}(undef, 0)
-            for (i, flag) ∈ enumerate(all_errors)
-                if flag
-                    # (i-1) because MPI ranks are 0-based indices
-                    push!(error_procs, i-1)
-                end
-            end
-
-            # Clean up MPI-allocated memory before raising error
-            finalize_comms!()
-
-            original_error("Stop due to errors on other processes. Processes with "
-                           * "errors were: $error_procs.")
-        end
-    end
-end
-
 @debug_detect_redundant_block_synchronize begin
     """
     """
@@ -713,10 +649,6 @@ end
             end
         end
 
-        # If @debug_error_stop_all is active, need to gather errors from all processes
-        # before calling any MPI functions in order to avoid hangs.
-        @debug_error_stop_all _gather_errors()
-
         # Short-circuit if array has not been read or written at all
         any_accessed = MPI.Allreduce(array.accessed[], |, comm)
         array.accessed[] = false
@@ -733,10 +665,10 @@ end
             n_writes = sum(global_is_written[i, :])
             if n_writes > 1
                 if check_redundant
-                    # In the @debug_detect_redundant__block_synchronize case, cannot
-                    # use Base.error() (as redefined by @debug_error_stop_all),
-                    # because the redefined function cleans up (deletes) the
-                    # shared-memory arrays, so would cause segfaults.
+                    # In the @debug_detect_redundant_block_synchronize case,
+                    # cannot throw an error() because the we need to check that
+                    # the `_block_synchronize()` call was redundant on all
+                    # processes, not just on this one.
                     return false
                 else
                     if array.creation_stack_trace != ""
@@ -764,10 +696,9 @@ end
                     if length(read_procs) > 0
                         if check_redundant
                             # In the @debug_detect_redundant_block_synchronize case,
-                            # cannot use Base.error() (as redefined by
-                            # @debug_error_stop_all), because the redefined function
-                            # cleans up (deletes) the shared-memory arrays, so would
-                            # cause segfaults.
+                            # cannot throw an error() because the we need to check that
+                            # the `_block_synchronize()` call was redundant on all
+                            # processes, not just on this one.
                             return false
                         else
                             # 'rank' is 0-based, but read_procs was 1-based, so
@@ -812,7 +743,6 @@ be true, but if it ever changes (i.e. different blocks doing totally different w
 the debugging routines need to be updated.
 """
 function _block_synchronize()
-    @debug_error_stop_all _gather_errors()
     MPI.Barrier(comm_block[])
 
     @debug_block_synchronize begin
@@ -916,7 +846,6 @@ function _block_synchronize()
             end
         end
 
-        @debug_error_stop_all _gather_errors()
         MPI.Barrier(comm_block[])
     end
 end
@@ -939,31 +868,6 @@ we have to do some extra hacking to call [`_gather_errors()`](@ref) and avoid MP
 `_anyv_subblock_synchronize()`.
 """
 function _anyv_subblock_synchronize()
-    @debug_error_stop_all begin
-        function anyv_gather_errors()
-            request = MPI.Ibarrier(comm_anyv_subblock[])
-
-            # If the MPI.Ibarrier() call does not complete quickly, it probably means that an
-            # error happened on another process and so we need to call _gather_errors().
-            # 0.001 is the minimum interval that `sleep()` can be called with
-            wait_interval = 0.001
-            counter = 0
-            success = MPI.Test(request)
-            while counter < 100 && !success
-                sleep(wait_interval)
-                if MPI.Test(request)
-                    success = true
-                    break
-                end
-                counter += 1
-            end
-
-            if !success
-                _gather_errors()
-            end
-        end
-        anyv_gather_errors()
-    end
 
     MPI.Barrier(comm_anyv_subblock[])
 
@@ -1069,7 +973,6 @@ function _anyv_subblock_synchronize()
             end
         end
 
-        @debug_error_stop_all anyv_gather_errors()
         MPI.Barrier(comm_anyv_subblock[])
     end
 end
