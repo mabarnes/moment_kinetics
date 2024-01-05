@@ -1170,11 +1170,11 @@ function test_boundary_data(func,func_exact,func_name,vpa,vperp,buffer_vpa,buffe
     nvpa = vpa.n
     nvperp = vperp.n
     for ivperp in 1:nvperp
-        buffer_vperp_1 = abs(func.lower_boundary_vpa[ivperp] - func_exact.lower_boundary_vpa[ivperp])
-        buffer_vperp_2 = abs(func.upper_boundary_vpa[ivperp] - func_exact.upper_boundary_vpa[ivperp])
+        buffer_vperp_1[ivperp] = abs(func.lower_boundary_vpa[ivperp] - func_exact.lower_boundary_vpa[ivperp])
+        buffer_vperp_2[ivperp] = abs(func.upper_boundary_vpa[ivperp] - func_exact.upper_boundary_vpa[ivperp])
     end
     for ivpa in 1:nvpa
-        buffer_vpa = abs(func.upper_boundary_vperp[ivpa] - func_exact.upper_boundary_vperp[ivpa])
+        buffer_vpa[ivpa] = abs(func.upper_boundary_vperp[ivpa] - func_exact.upper_boundary_vperp[ivpa])
     end
     max_lower_vpa_err = maximum(buffer_vperp_1)
     max_upper_vpa_err = maximum(buffer_vperp_2)

@@ -228,21 +228,21 @@ function runtests()
                 max_dHdvperp_boundary_data_err, max_G_boundary_data_err,
                 max_dGdvperp_boundary_data_err, max_d2Gdvperp2_boundary_data_err, 
                 max_d2Gdvperpdvpa_boundary_data_err, max_d2Gdvpa2_boundary_data_err = test_rosenbluth_potential_boundary_data(fkpl_arrays.rpbd,rpbd_exact,vpa,vperp,print_to_screen=print_to_screen)
-                atol_max = 2.0e-13
-                @test max_H_boundary_data_err < atol_max
                 atol_max = 2.0e-12
+                @test max_H_boundary_data_err < atol_max
+                atol_max = 2.0e-11
                 @test max_dHdvpa_boundary_data_err < atol_max
-                atol_max = 3.0e-9
+                atol_max = 6.0e-9
                 @test max_dHdvperp_boundary_data_err < atol_max
-                atol_max = 7.0e-12
+                atol_max = 1.0e-11
                 @test max_G_boundary_data_err < atol_max
                 atol_max = 2.0e-7
                 @test max_dGdvperp_boundary_data_err < atol_max
-                atol_max = 2.0e-8
+                atol_max = 5.0e-8
                 @test max_d2Gdvperp2_boundary_data_err < atol_max
                 atol_max = 2.0e-8
                 @test max_d2Gdvperpdvpa_boundary_data_err < atol_max
-                atol_max = 7.0e-12
+                atol_max = 1.0e-11
                 @test max_d2Gdvpa2_boundary_data_err < atol_max
                 # test the elliptic solvers
                 H_M_max, H_M_L2 = print_test_data(H_M_exact,H_M_num,H_M_err,"H_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
