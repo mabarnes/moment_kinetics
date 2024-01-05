@@ -2,8 +2,8 @@ using moment_kinetics: setup_moment_kinetics, cleanup_moment_kinetics!
 using moment_kinetics.time_advance: time_advance!
 using moment_kinetics.communication
 using moment_kinetics.looping: dimension_combinations
-using Glob
-using Primes
+using moment_kinetics.Glob
+using moment_kinetics.Primes
 
 """
 Run a test for a single set of parameters
