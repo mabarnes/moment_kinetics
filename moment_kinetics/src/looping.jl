@@ -122,7 +122,15 @@ sizes : Vector{mk_int}
 function get_load_balance(nprocs_list, sizes)
     max_points = [ceil(s/n) for (n,s) ∈ zip(nprocs_list, sizes)]
     min_points = [floor(s/n) for (n,s) ∈ zip(nprocs_list, sizes)]
-    return prod(max_points) / prod(min_points)
+
+    # Add an 'epsilon' to the denominator to prevent the division giving `Inf`.
+    # If `prod(min_points) == Inf` for every combinations of process numbers per dimension
+    # then the parallelisation is not very efficient for the particular combination of
+    # dimensios being considered (as some processes have no work) but including the
+    # 'epsilon' should allow choosing the least-worst option (?), or at least make the
+    # choice of process splitting less random than finding the minimum of a vector of
+    # numbers that are all `Inf`.
+    return prod(max_points) / (prod(min_points) + 1e-14)
 end
 
 """

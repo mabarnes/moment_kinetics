@@ -35,9 +35,9 @@ function runtests()
                                        [8, 1, 1]]
         end
         @testset "get_load_balance" begin
-            @test get_load_balance([1], [4]) == 1.0
-            @test get_load_balance([2,2], [4,6]) == 1.0
-            @test get_load_balance([3,2], [4,5]) == (2.0*3.0)/(1.0*2.0)
+            @test isapprox(get_load_balance([1], [4]), 1.0; atol=1.e-8)
+            @test isapprox(get_load_balance([2,2], [4,6]), 1.0; atol=1.e-8)
+            @test isapprox(get_load_balance([3,2], [4,5]), (2.0*3.0)/(1.0*2.0); atol=1.e-8)
         end
         @testset "get_best_ranges_from_sizes" begin
             function get_best_ranges_from_sizes(block_rank, block_size, dim_sizes_list)
