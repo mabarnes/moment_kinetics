@@ -68,10 +68,10 @@ function runtests()
             @test get_best_ranges_from_sizes(4, 5, [3,4,5]) == [1:3, 1:4, 5:5]
 
             @test get_best_ranges_from_sizes(0, 6, [3,4,5]) == [1:1, 1:2, 1:5]
-            @test get_best_ranges_from_sizes(1, 6, [3,4,5]) == [2:2, 1:2, 1:5]
-            @test get_best_ranges_from_sizes(2, 6, [3,4,5]) == [3:3, 1:2, 1:5]
-            @test get_best_ranges_from_sizes(3, 6, [3,4,5]) == [1:1, 3:4, 1:5]
-            @test get_best_ranges_from_sizes(4, 6, [3,4,5]) == [2:2, 3:4, 1:5]
+            @test get_best_ranges_from_sizes(1, 6, [3,4,5]) == [1:1, 3:4, 1:5]
+            @test get_best_ranges_from_sizes(2, 6, [3,4,5]) == [2:2, 1:2, 1:5]
+            @test get_best_ranges_from_sizes(3, 6, [3,4,5]) == [2:2, 3:4, 1:5]
+            @test get_best_ranges_from_sizes(4, 6, [3,4,5]) == [3:3, 1:2, 1:5]
             @test get_best_ranges_from_sizes(5, 6, [3,4,5]) == [3:3, 3:4, 1:5]
 
             @test get_best_ranges_from_sizes(0, 7, [3,4,5]) == [1:3, 1:4, 1:0]
@@ -83,33 +83,33 @@ function runtests()
             @test get_best_ranges_from_sizes(6, 7, [3,4,5]) == [1:3, 1:4, 5:5]
 
             @test get_best_ranges_from_sizes(0, 8, [3,4,5]) == [1:3, 1:1, 1:2]
-            @test get_best_ranges_from_sizes(1, 8, [3,4,5]) == [1:3, 2:2, 1:2]
-            @test get_best_ranges_from_sizes(2, 8, [3,4,5]) == [1:3, 3:3, 1:2]
-            @test get_best_ranges_from_sizes(3, 8, [3,4,5]) == [1:3, 4:4, 1:2]
-            @test get_best_ranges_from_sizes(4, 8, [3,4,5]) == [1:3, 1:1, 3:5]
-            @test get_best_ranges_from_sizes(5, 8, [3,4,5]) == [1:3, 2:2, 3:5]
-            @test get_best_ranges_from_sizes(6, 8, [3,4,5]) == [1:3, 3:3, 3:5]
+            @test get_best_ranges_from_sizes(1, 8, [3,4,5]) == [1:3, 1:1, 3:5]
+            @test get_best_ranges_from_sizes(2, 8, [3,4,5]) == [1:3, 2:2, 1:2]
+            @test get_best_ranges_from_sizes(3, 8, [3,4,5]) == [1:3, 2:2, 3:5]
+            @test get_best_ranges_from_sizes(4, 8, [3,4,5]) == [1:3, 3:3, 1:2]
+            @test get_best_ranges_from_sizes(5, 8, [3,4,5]) == [1:3, 3:3, 3:5]
+            @test get_best_ranges_from_sizes(6, 8, [3,4,5]) == [1:3, 4:4, 1:2]
             @test get_best_ranges_from_sizes(7, 8, [3,4,5]) == [1:3, 4:4, 3:5]
 
             @test get_best_ranges_from_sizes(0, 9, [3,4,5]) == [1:1, 1:4, 1:1]
-            @test get_best_ranges_from_sizes(1, 9, [3,4,5]) == [2:2, 1:4, 1:1]
-            @test get_best_ranges_from_sizes(2, 9, [3,4,5]) == [3:3, 1:4, 1:1]
-            @test get_best_ranges_from_sizes(3, 9, [3,4,5]) == [1:1, 1:4, 2:3]
+            @test get_best_ranges_from_sizes(1, 9, [3,4,5]) == [1:1, 1:4, 2:3]
+            @test get_best_ranges_from_sizes(2, 9, [3,4,5]) == [1:1, 1:4, 4:5]
+            @test get_best_ranges_from_sizes(3, 9, [3,4,5]) == [2:2, 1:4, 1:1]
             @test get_best_ranges_from_sizes(4, 9, [3,4,5]) == [2:2, 1:4, 2:3]
-            @test get_best_ranges_from_sizes(5, 9, [3,4,5]) == [3:3, 1:4, 2:3]
-            @test get_best_ranges_from_sizes(6, 9, [3,4,5]) == [1:1, 1:4, 4:5]
-            @test get_best_ranges_from_sizes(7, 9, [3,4,5]) == [2:2, 1:4, 4:5]
+            @test get_best_ranges_from_sizes(5, 9, [3,4,5]) == [2:2, 1:4, 4:5]
+            @test get_best_ranges_from_sizes(6, 9, [3,4,5]) == [3:3, 1:4, 1:1]
+            @test get_best_ranges_from_sizes(7, 9, [3,4,5]) == [3:3, 1:4, 2:3]
             @test get_best_ranges_from_sizes(8, 9, [3,4,5]) == [3:3, 1:4, 4:5]
 
             @test get_best_ranges_from_sizes(0, 10, [3,4,5]) == [1:3, 1:2, 1:1]
-            @test get_best_ranges_from_sizes(1, 10, [3,4,5]) == [1:3, 3:4, 1:1]
-            @test get_best_ranges_from_sizes(2, 10, [3,4,5]) == [1:3, 1:2, 2:2]
-            @test get_best_ranges_from_sizes(3, 10, [3,4,5]) == [1:3, 3:4, 2:2]
-            @test get_best_ranges_from_sizes(4, 10, [3,4,5]) == [1:3, 1:2, 3:3]
-            @test get_best_ranges_from_sizes(5, 10, [3,4,5]) == [1:3, 3:4, 3:3]
-            @test get_best_ranges_from_sizes(6, 10, [3,4,5]) == [1:3, 1:2, 4:4]
-            @test get_best_ranges_from_sizes(7, 10, [3,4,5]) == [1:3, 3:4, 4:4]
-            @test get_best_ranges_from_sizes(8, 10, [3,4,5]) == [1:3, 1:2, 5:5]
+            @test get_best_ranges_from_sizes(1, 10, [3,4,5]) == [1:3, 1:2, 2:2]
+            @test get_best_ranges_from_sizes(2, 10, [3,4,5]) == [1:3, 1:2, 3:3]
+            @test get_best_ranges_from_sizes(3, 10, [3,4,5]) == [1:3, 1:2, 4:4]
+            @test get_best_ranges_from_sizes(4, 10, [3,4,5]) == [1:3, 1:2, 5:5]
+            @test get_best_ranges_from_sizes(5, 10, [3,4,5]) == [1:3, 3:4, 1:1]
+            @test get_best_ranges_from_sizes(6, 10, [3,4,5]) == [1:3, 3:4, 2:2]
+            @test get_best_ranges_from_sizes(7, 10, [3,4,5]) == [1:3, 3:4, 3:3]
+            @test get_best_ranges_from_sizes(8, 10, [3,4,5]) == [1:3, 3:4, 4:4]
             @test get_best_ranges_from_sizes(9, 10, [3,4,5]) == [1:3, 3:4, 5:5]
 
             # Check that outer-most loop gets parallelised if load balance is the same
@@ -132,32 +132,32 @@ function runtests()
             @test get_best_ranges(1, 8, (:s,:r,:z),
                                   Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :vperp=>2, :vpa=>7,
                                        :vzeta=>11, :vr=>13, :vz=>17)) ==
-                Dict(:s=>1:3, :r=>2:2, :z=>1:2, :sn=>1:1, :vperp=>1:2, :vpa=>1:7,
+                Dict(:s=>1:3, :r=>1:1, :z=>3:5, :sn=>1:1, :vperp=>1:2, :vpa=>1:7,
                      :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
             @test get_best_ranges(2, 8, (:s,:r,:z),
                                   Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :vperp=>2, :vpa=>7,
                                        :vzeta=>11, :vr=>13, :vz=>17)) ==
-                Dict(:s=>1:3, :r=>3:3, :z=>1:2, :sn=>1:1, :vperp=>1:2, :vpa=>1:7,
+                Dict(:s=>1:3, :r=>2:2, :z=>1:2, :sn=>1:1, :vperp=>1:2, :vpa=>1:7,
                      :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
             @test get_best_ranges(3, 8, (:s,:r,:z),
                                   Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :vperp=>2, :vpa=>7,
                                        :vzeta=>11, :vr=>13, :vz=>17)) ==
-                Dict(:s=>1:3, :r=>4:4, :z=>1:2, :sn=>1:1, :vperp=>1:2, :vpa=>1:7,
+                Dict(:s=>1:3, :r=>2:2, :z=>3:5, :sn=>1:1, :vperp=>1:2, :vpa=>1:7,
                      :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
             @test get_best_ranges(4, 8, (:s,:r,:z),
                                   Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :vperp=>2, :vpa=>7,
                                        :vzeta=>11, :vr=>13, :vz=>17)) ==
-                Dict(:s=>1:3, :r=>1:1, :z=>3:5, :sn=>1:1, :vperp=>1:2, :vpa=>1:7,
+                Dict(:s=>1:3, :r=>3:3, :z=>1:2, :sn=>1:1, :vperp=>1:2, :vpa=>1:7,
                      :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
             @test get_best_ranges(5, 8, (:s,:r,:z),
                                   Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :vperp=>2, :vpa=>7,
                                        :vzeta=>11, :vr=>13, :vz=>17)) ==
-                Dict(:s=>1:3, :r=>2:2, :z=>3:5, :sn=>1:1, :vperp=>1:2, :vpa=>1:7,
+                Dict(:s=>1:3, :r=>3:3, :z=>3:5, :sn=>1:1, :vperp=>1:2, :vpa=>1:7,
                      :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
             @test get_best_ranges(6, 8, (:s,:r,:z),
                                   Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :vperp=>2, :vpa=>7,
                                        :vzeta=>11, :vr=>13, :vz=>17)) ==
-                Dict(:s=>1:3, :r=>3:3, :z=>3:5, :sn=>1:1, :vperp=>1:2, :vpa=>1:7,
+                Dict(:s=>1:3, :r=>4:4, :z=>1:2, :sn=>1:1, :vperp=>1:2, :vpa=>1:7,
                      :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
             @test get_best_ranges(7, 8, (:s,:r,:z),
                                   Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :vperp=>2, :vpa=>7,

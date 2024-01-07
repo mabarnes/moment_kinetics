@@ -267,10 +267,7 @@ function get_ranges_from_split(block_rank, block_size, split, dim_sizes_list)
     sb_ranks = zeros(mk_int, length(dim_sizes_list))
     sub_rank = block_rank
     remaining_block_size = block_size
-    # Use `Base.Iterators.reverse()` because we need to divide blocks up
-    # working from right to left (slowest-varying to fastest-varying
-    # dimensions)
-    for (i, sb_size) in Base.Iterators.reverse(enumerate(split))
+    for (i, sb_size) in enumerate(split)
         remaining_block_size = remaining_block_size ÷ sb_size
         sb_ranks[i] = sub_rank ÷ remaining_block_size
         sub_rank = sub_rank % remaining_block_size
