@@ -114,8 +114,8 @@ function runtests()
 
             # Check that outer-most loop gets parallelised if load balance is the same
             # either way
-            @test get_best_ranges_from_sizes(0, 2, [2, 2]) == [1:2, 1:1]
-            @test get_best_ranges_from_sizes(1, 2, [2, 2]) == [1:2, 2:2]
+            @test get_best_ranges_from_sizes(0, 2, [2, 2]) == [1:1, 1:2]
+            @test get_best_ranges_from_sizes(1, 2, [2, 2]) == [2:2, 1:2]
         end
         @testset "get_best_ranges" begin
             @test get_best_ranges(0, 1, (:s,:r,:z),

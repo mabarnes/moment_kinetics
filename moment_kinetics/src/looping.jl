@@ -241,6 +241,11 @@ function get_splits_and_load_balances_from_sizes(block_size, dim_sizes_list)
         splits = filtered_splits
     end
 
+    # Sort splits so that those with most splitting on the slowest-varying dimensions come
+    # first. This ensures that in the case of a tie, we split the slower-varying
+    # dimension.
+    sort!(splits; rev=true)
+
     load_balances = [get_load_balance(s, dim_sizes_list) for s ∈ splits]
 
     return splits, load_balances
