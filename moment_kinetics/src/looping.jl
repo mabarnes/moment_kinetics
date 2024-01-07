@@ -365,7 +365,11 @@ function get_anyv_ranges(block_rank, block_size, split, anyv_dims, dim_sizes)
     if !(:vpa ∈ anyv_dims || :vperp ∈ anyv_dims)
         # For a 'serial' 'anyv' region, following begin_anyv_region(), only loop over
         # velocity space on the rank-0 process of the anyv subblock
-        if anyv_subblock_rank[] != 0
+        #
+        # Calculate the rank in the subblock from block_rank rather than using
+        # `anyv_subblock_rank[]` so that we can test this function without having to set
+        # up communications.
+        if block_rank % split[end] != 0
             result[:vpa] = 1:0
             result[:vperp] = 1:0
         end

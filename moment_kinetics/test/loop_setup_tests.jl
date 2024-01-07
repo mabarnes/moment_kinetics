@@ -5,6 +5,7 @@ include("setup.jl")
 using moment_kinetics.looping: dims_string, get_splits, get_load_balance,
                                get_best_ranges, get_best_split_from_sizes,
                                get_ranges_from_split, get_best_anyv_split,
+                               get_anyv_ranges,
                                debug_setup_loop_ranges_split_one_combination!,
                                loop_ranges_store
 using moment_kinetics.communication
@@ -166,18 +167,803 @@ function runtests()
                      :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
         end
         @testset "get_best_anyv_split" begin
-            @test get_best_anyv_split(1, Dict(:s=>1, :r=>1, :z=>2, :vpa=>2, :vperp=>2)) == [1,1,1,1]
-            @test get_best_anyv_split(2, Dict(:s=>1, :r=>1, :z=>2, :vpa=>2, :vperp=>2)) == [1,1,2,1]
-            @test get_best_anyv_split(3, Dict(:s=>1, :r=>1, :z=>2, :vpa=>2, :vperp=>2)) == [1,1,3,1]
-            @test get_best_anyv_split(4, Dict(:s=>1, :r=>1, :z=>2, :vpa=>2, :vperp=>2)) == [1,1,2,2]
-            @test get_best_anyv_split(2, Dict(:s=>1, :r=>1, :z=>3, :vpa=>2, :vperp=>2)) == [1,1,1,2]
+            @test get_best_anyv_split(1, Dict(:s=>1, :r=>1, :z=>2, :vperp=>2, :vpa=>2)) == [1,1,1,1]
+            @test get_best_anyv_split(2, Dict(:s=>1, :r=>1, :z=>2, :vperp=>2, :vpa=>2)) == [1,1,2,1]
+            @test get_best_anyv_split(3, Dict(:s=>1, :r=>1, :z=>2, :vperp=>2, :vpa=>2)) == [1,1,3,1]
+            @test get_best_anyv_split(4, Dict(:s=>1, :r=>1, :z=>2, :vperp=>2, :vpa=>2)) == [1,1,2,2]
+            @test get_best_anyv_split(2, Dict(:s=>1, :r=>1, :z=>3, :vperp=>2, :vpa=>2)) == [1,1,1,2]
             # Splitting the v-space dimension would be slightly more efficient for the
             # following case if parallelisation was perfect, but because 'anyv' is used
             # for the collision operator, some parts of which do not parallelise over
             # velocity space, we penalise splitting the velocity space in favour of
             # species or spatial dimensions if there is an 'efficient enough' arrangement
             # of processes that minimises the number of processes used for velocity space.
-            @test get_best_anyv_split(2, Dict(:s=>1, :r=>1, :z=>7, :vpa=>2, :vperp=>2)) == [1,1,2,1]
+            @test get_best_anyv_split(2, Dict(:s=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2)) == [1,1,2,1]
+        end
+        @testset "get_anyv_ranges" begin
+            @test get_anyv_ranges(0, 1, [1, 1, 1, 1], (:anyv,),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(0, 1, [1, 1, 1, 1], (:anyv,:vperp),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(0, 1, [1, 1, 1, 1], (:anyv,:vpa),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(0, 1, [1, 1, 1, 1], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+
+            @test get_anyv_ranges(0, 2, [1, 1, 2, 1], (:anyv,),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(0, 2, [1, 1, 2, 1], (:anyv,:vperp),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(0, 2, [1, 1, 2, 1], (:anyv,:vpa),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(0, 2, [1, 1, 2, 1], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(1, 2, [1, 1, 2, 1], (:anyv,),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(1, 2, [1, 1, 2, 1], (:anyv,:vperp),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(1, 2, [1, 1, 2, 1], (:anyv,:vpa),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(1, 2, [1, 1, 2, 1], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+
+            @test get_anyv_ranges(0, 4, [1, 1, 2, 2], (:anyv,),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(0, 4, [1, 1, 2, 2], (:anyv,:vperp),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:1, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(0, 4, [1, 1, 2, 2], (:anyv,:vpa),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:2, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(0, 4, [1, 1, 2, 2], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:1, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(1, 4, [1, 1, 2, 2], (:anyv,),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(1, 4, [1, 1, 2, 2], (:anyv,:vperp),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>2:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(1, 4, [1, 1, 2, 2], (:anyv,:vpa),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:2, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(1, 4, [1, 1, 2, 2], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>2:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(2, 4, [1, 1, 2, 2], (:anyv,),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(2, 4, [1, 1, 2, 2], (:anyv,:vperp),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>1:1, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(2, 4, [1, 1, 2, 2], (:anyv,:vpa),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>1:2, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(2, 4, [1, 1, 2, 2], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>1:1, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(3, 4, [1, 1, 2, 2], (:anyv,),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(3, 4, [1, 1, 2, 2], (:anyv,:vperp),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>2:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(3, 4, [1, 1, 2, 2], (:anyv,:vpa),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>1:2, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(3, 4, [1, 1, 2, 2], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>2:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+
+            @test get_anyv_ranges(0, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(0, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(0, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(0, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:1, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(1, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(1, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(1, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(1, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:1, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(2, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(2, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:1, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(2, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(2, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>2:2, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(3, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(3, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>2:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(3, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(3, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>2:2, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(4, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(4, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(4, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(4, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:1, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(5, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(5, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(5, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(5, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:1, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(6, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(6, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:1, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(6, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(6, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>2:2, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(7, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(7, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>2:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(7, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(7, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>2:2, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(8, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(8, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(8, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(8, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:1, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(9, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(9, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(9, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(9, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:1, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(10, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(10, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:1, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(10, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(10, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>2:2, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(11, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(11, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>2:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(11, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(11, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>2:2, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(12, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(12, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(12, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(12, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:1, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(13, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(13, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(13, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(13, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:1, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(14, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(14, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:1, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(14, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(14, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>2:2, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(15, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(15, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>2:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(15, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(15, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>2:2, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(16, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(16, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(16, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(16, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:1, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(17, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(17, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(17, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(17, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:1, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(18, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(18, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:1, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(18, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(18, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>2:2, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(19, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(19, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>2:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(19, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(19, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>2:2, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(20, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(20, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(20, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(20, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:1, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(21, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(21, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(21, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(21, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:1, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(22, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(22, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:1, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(22, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(22, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>2:2, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(23, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(23, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>2:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(23, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(23, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>2:2, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(24, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(24, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(24, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(24, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:1, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(25, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(25, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(25, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(25, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:1, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(26, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(26, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:1, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(26, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(26, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>2:2, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(27, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(27, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>2:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(27, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(27, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>2:2, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(28, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(28, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(28, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(28, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:1, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(29, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(29, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(29, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(29, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:1, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(30, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(30, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:1, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(30, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(30, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>2:2, :vpa=>1:1,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(31, 32, [2, 2, 2, 4], (:anyv,),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(31, 32, [2, 2, 2, 4], (:anyv,:vperp),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>2:2, :vpa=>1:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(31, 32, [2, 2, 2, 4], (:anyv,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+            @test get_anyv_ranges(31, 32, [2, 2, 2, 4], (:anyv,:vperp,:vpa),
+                                  Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
+                                       :vzeta=>11, :vr=>13, :vz=>17)) ==
+                  Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>2:2, :vpa=>2:2,
+                       :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
         end
         @testset "debug_setup_loop_ranges_split_one_combination" begin
             # Need to set comm_block[] to avoid MPI errors when creating 'anyv'
