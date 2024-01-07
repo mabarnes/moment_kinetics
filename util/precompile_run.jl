@@ -66,6 +66,13 @@ for input ∈ [base_input, cheb_input, wall_bc_input, wall_bc_cheb_input]
     push!(inputs_list, x)
 end
 
+collisions_input = merge(wall_bc_cheb_input, Dict("n_neutral_species" => 0,
+                                                  "nuii" => 1.0,
+                                                  "vperp_discretization" => "gausslegendre_pseudospectral",
+                                                  "vpa_discretization" => "gausslegendre_pseudospectral",
+                                                 ))
+push!(inputs_list, collisions_input)
+
 for input in inputs_list
     run_moment_kinetics(input)
 end
