@@ -75,7 +75,7 @@ in the rest of the velocity space domain.
 function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; precompute_weights=false, test_dense_matrix_construction=false, print_to_screen=true)
     bwgt = allocate_boundary_integration_weights(vpa,vperp)
     if vperp.n > 1 && precompute_weights
-        @views init_Rosenbluth_potential_boundary_integration_weights!(bwgt.G0_weights, bwgt.G1_weights, bwgt.H0_weights, bwgt.H1_weights,
+        init_Rosenbluth_potential_boundary_integration_weights!(bwgt.G0_weights, bwgt.G1_weights, bwgt.H0_weights, bwgt.H1_weights,
                                         bwgt.H2_weights, bwgt.H3_weights, vpa, vperp, print_to_screen=print_to_screen)
     end
     rpbd = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
@@ -258,10 +258,10 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
     
     if use_Maxwellian_Rosenbluth_coefficients
         begin_anyv_region()
-        dens = get_density(@view(ffsp_in[:,:]),vpa,vperp)
-        upar = get_upar(@view(ffsp_in[:,:]), vpa, vperp, dens)
-        ppar = get_ppar(@view(ffsp_in[:,:]), vpa, vperp, upar)
-        pperp = get_pperp(@view(ffsp_in[:,:]), vpa, vperp)
+        dens = get_density(ffsp_in,vpa,vperp)
+        upar = get_upar(ffsp_in, vpa, vperp, dens)
+        ppar = get_ppar(ffsp_in, vpa, vperp, upar)
+        pperp = get_pperp(ffsp_in, vpa, vperp)
         pressure = get_pressure(ppar,pperp)
         vth = sqrt(2.0*pressure/dens)
         begin_anyv_vperp_vpa_region()
@@ -279,7 +279,7 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
         _anyv_subblock_synchronize()
     else
         calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvperp,
-             d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,@view(ffsp_in[:,:]),
+             d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,ffsp_in,
              vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays,
              algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2,
              calculate_GG=calculate_GG,calculate_dGdvperp=calculate_dGdvperp)
@@ -309,13 +309,13 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
           dHdvpa,dHdvperp,ms,msp,nussp,
           vpa,vperp,YY_arrays)
     elseif test_assembly_serial
-        assemble_explicit_collision_operator_rhs_serial!(rhsvpavperp,@view(ffs_in[:,:]),
+        assemble_explicit_collision_operator_rhs_serial!(rhsvpavperp,ffs_in,
           d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,
           dHdvpa,dHdvperp,ms,msp,nussp,
           vpa,vperp,YY_arrays)
     else
         _anyv_subblock_synchronize()
-        assemble_explicit_collision_operator_rhs_parallel!(rhsvpavperp,@view(ffs_in[:,:]),
+        assemble_explicit_collision_operator_rhs_parallel!(rhsvpavperp,ffs_in,
           d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,
           dHdvpa,dHdvperp,ms,msp,nussp,
           vpa,vperp,YY_arrays)
@@ -390,13 +390,13 @@ function conserving_corrections!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
         # collision operator, so probably not worth the complication.
 
         # compute moments of the input pdf
-        dens =  get_density(@view(pdf_in[:,:]), vpa, vperp)
-        upar = get_upar(@view(pdf_in[:,:]), vpa, vperp, dens)
-        ppar = get_ppar(@view(pdf_in[:,:]), vpa, vperp, upar)
-        pperp = get_pperp(@view(pdf_in[:,:]), vpa, vperp)
+        dens =  get_density(pdf_in, vpa, vperp)
+        upar = get_upar(pdf_in, vpa, vperp, dens)
+        ppar = get_ppar(pdf_in, vpa, vperp, upar)
+        pperp = get_pperp(pdf_in, vpa, vperp)
         pressure = get_pressure(ppar,pperp)
-        qpar = get_qpar(@view(pdf_in[:,:]), vpa, vperp, upar, dummy_vpavperp)
-        rmom = get_rmom(@view(pdf_in[:,:]), vpa, vperp, upar, dummy_vpavperp)
+        qpar = get_qpar(pdf_in, vpa, vperp, upar, dummy_vpavperp)
+        rmom = get_rmom(pdf_in, vpa, vperp, upar, dummy_vpavperp)
 
         # compute moments of the numerical collision operator
         dn = get_density(CC, vpa, vperp)
@@ -500,7 +500,7 @@ could be ported if necessary.
 function init_fokker_planck_collisions_direct_integration(vperp,vpa; precompute_weights=false, print_to_screen=false)
     fka = allocate_fokkerplanck_arrays_direct_integration(vperp,vpa)
     if vperp.n > 1 && precompute_weights
-        @views init_Rosenbluth_potential_integration_weights!(fka.G0_weights, fka.G1_weights, fka.H0_weights, fka.H1_weights,
+        init_Rosenbluth_potential_integration_weights!(fka.G0_weights, fka.G1_weights, fka.H0_weights, fka.H1_weights,
                                         fka.H2_weights, fka.H3_weights, vperp, vpa, print_to_screen=print_to_screen)
     end
     return fka
