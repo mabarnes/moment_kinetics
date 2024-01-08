@@ -1092,16 +1092,13 @@ function calculate_rosenbluth_potential_boundary_data!(rpbd::rosenbluth_potentia
     #for ivpa in 1:vpa.n
     begin_anyv_vpa_region()
     @loop_vpa ivpa begin
-        @views derivative!(vperp.scratch, pdf[ivpa,:], vperp, vperp_spectral)
-        @. dfdvperp[ivpa,:] = vperp.scratch
+        @views derivative!(dfdvperp[ivpa,:], pdf[ivpa,:], vperp, vperp_spectral)
     end
     begin_anyv_vperp_region()
     @loop_vperp ivperp begin
     #for ivperp in 1:vperp.n
-        @views derivative!(vpa.scratch, pdf[:,ivperp], vpa, vpa_spectral)
-        @. dfdvpa[:,ivperp] = vpa.scratch
-        @views derivative!(vpa.scratch, dfdvperp[:,ivperp], vpa, vpa_spectral)
-        @. d2fdvperpdvpa[:,ivperp] = vpa.scratch
+        @views derivative!(dfdvpa[:,ivperp], pdf[:,ivperp], vpa, vpa_spectral)
+        @views derivative!(d2fdvperpdvpa[:,ivperp], dfdvperp[:,ivperp], vpa, vpa_spectral)
     end
     # ensure data is synchronized
     _anyv_subblock_synchronize()
@@ -2181,15 +2178,12 @@ function calculate_rosenbluth_potentials_via_direct_integration!(GG,HH,dHdvpa,dH
     # first compute the derivatives of fs' (the integration weights assume d fs' dvpa and d fs' dvperp are known)
     begin_anyv_vperp_region()
     @loop_vperp ivperp begin
-        @views derivative!(vpa.scratch, ffsp_in[:,ivperp], vpa, vpa_spectral)
-        @. dfdvpa[:,ivperp] = vpa.scratch
+        @views derivative!(dfdvpa[:,ivperp], ffsp_in[:,ivperp], vpa, vpa_spectral)
     end
     begin_anyv_vpa_region()
     @loop_vpa ivpa begin
-        @views derivative!(vperp.scratch, ffsp_in[ivpa,:], vperp, vperp_spectral)
-        @. dfdvperp[ivpa,:] = vperp.scratch
-        @views derivative!(vperp.scratch, dfdvpa[ivpa,:], vperp, vperp_spectral)
-        @. d2fdvperpdvpa[ivpa,:] = vperp.scratch
+        @views derivative!(dfdvperp[ivpa,:], ffsp_in[ivpa,:], vperp, vperp_spectral)
+        @views derivative!(d2fdvperpdvpa[ivpa,:], dfdvpa[ivpa,:], vperp, vperp_spectral)
     end
     # with the integrands calculated, compute the integrals
     calculate_rosenbluth_integrals!(GG,d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,
