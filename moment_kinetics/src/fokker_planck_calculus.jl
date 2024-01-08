@@ -1895,20 +1895,27 @@ function assemble_explicit_collision_operator_rhs_parallel_inner_loop(
         jvperpp = vperp_igrid_full_view[jvperpp_local]
         for kvperpp_local in 1:ngrid_vperp
             kvperpp = vperp_igrid_full_view[kvperpp_local]
+            YY0perp_local = YY0perp[kvperpp_local,jvperpp_local]
+            YY1perp_local = YY1perp[kvperpp_local,jvperpp_local]
+            YY2perp_local = YY2perp[kvperpp_local,jvperpp_local]
+            YY3perp_local = YY3perp[kvperpp_local,jvperpp_local]
             for jvpap_local in 1:ngrid_vpa
                 jvpap = vpa_igrid_full_view[jvpap_local]
                 pdfjj = pdfs[jvpap,jvperpp]
                 for kvpap_local in 1:ngrid_vpa
                     kvpap = vpa_igrid_full_view[kvpap_local]
+                    YY0par_local = YY0par[kvpap_local,jvpap_local]
+                    YY1par_local = YY1par[kvpap_local,jvpap_local]
+                    d2Gspdvperpdvpa_local = d2Gspdvperpdvpa[kvpap,kvperpp]
                     # first three lines represent parallel flux terms
                     # second three lines represent perpendicular flux terms
-                    result += -nussp*(YY0perp[kvperpp_local,jvperpp_local]*YY2par[kvpap_local,jvpap_local]*pdfjj*d2Gspdvpa2[kvpap,kvperpp] +
-                                        YY3perp[kvperpp_local,jvperpp_local]*YY1par[kvpap_local,jvpap_local]*pdfjj*d2Gspdvperpdvpa[kvpap,kvperpp] -
-                                        2.0*(ms/msp)*YY0perp[kvperpp_local,jvperpp_local]*YY1par[kvpap_local,jvpap_local]*pdfjj*dHspdvpa[kvpap,kvperpp] +
+                    result += -nussp*(YY0perp_local*YY2par[kvpap_local,jvpap_local]*pdfjj*d2Gspdvpa2[kvpap,kvperpp] +
+                                        YY3perp_local*YY1par_local*pdfjj*d2Gspdvperpdvpa_local -
+                                        2.0*(ms/msp)*YY0perp_local*YY1par_local*pdfjj*dHspdvpa[kvpap,kvperpp] +
                                         # end parallel flux, start of perpendicular flux
-                                        YY1perp[kvperpp_local,jvperpp_local]*YY3par[kvpap_local,jvpap_local]*pdfjj*d2Gspdvperpdvpa[kvpap,kvperpp] +
-                                        YY2perp[kvperpp_local,jvperpp_local]*YY0par[kvpap_local,jvpap_local]*pdfjj*d2Gspdvperp2[kvpap,kvperpp] -
-                                        2.0*(ms/msp)*YY1perp[kvperpp_local,jvperpp_local]*YY0par[kvpap_local,jvpap_local]*pdfjj*dHspdvperp[kvpap,kvperpp])
+                                        YY1perp_local*YY3par[kvpap_local,jvpap_local]*pdfjj*d2Gspdvperpdvpa_local +
+                                        YY2perp_local*YY0par_local*pdfjj*d2Gspdvperp2[kvpap,kvperpp] -
+                                        2.0*(ms/msp)*YY1perp_local*YY0par_local*pdfjj*dHspdvperp[kvpap,kvperpp])
                 end
             end
         end
