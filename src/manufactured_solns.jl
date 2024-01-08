@@ -593,10 +593,12 @@ using IfElse
                                       composition, r_coord.n, manufactured_solns_input,
                                       charged_species)
 
+        # the adiabatic invariant (for compactness)
+        mu = 0.5*(vperp^2)/Bmag
         # the ion characteristic velocities
         dzdt = vpa * (Bzed/Bmag) - ExBgeofac*Er
         drdt = ExBgeofac*Ez*rfac
-        dvpadt = 0.5*(Bzed/Bmag)*(Ez - ((vperp^2)/Bmag)*dBdz)
+        dvpadt = 0.5*(Bzed/Bmag)*Ez - mu*(Bzed/Bmag)*dBdz
         dvperpdt = (0.5*vperp/Bmag)*(dzdt*dBdz + drdt*dBdr)
         # the ion source to maintain the manufactured solution
         Si = ( Dt(dfni) 
