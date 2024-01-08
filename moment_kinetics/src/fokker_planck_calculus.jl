@@ -1908,51 +1908,74 @@ function assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!(rh
 
     # loop over collocation points to benefit from shared-memory parallelism
     ngrid_vpa, ngrid_vperp = vpa.ngrid, vperp.ngrid
+    vperp_igrid_full = vperp.igrid_full
+    vpa_igrid_full = vpa.igrid_full
     @loop_vperp_vpa ivperp_global ivpa_global begin
         igrid_vpa, ielement_vpax, ielement_vpa_low, ielement_vpa_hi, igrid_vperp, ielement_vperpx, ielement_vperp_low, ielement_vperp_hi = get_element_limit_indices(ivpa_global,ivperp_global,vpa,vperp)
         # loop over elements belonging to this collocation point
         for ielement_vperp in ielement_vperp_low:ielement_vperp_hi
             # correct local ivperp in the case that we on a boundary point
             ivperp_local = igrid_vperp + (ielement_vperp - ielement_vperp_low)*(1-ngrid_vperp)
-            @views YY0perp = YY_arrays.YY0perp[:,:,:,ielement_vperp]
-            @views YY1perp = YY_arrays.YY1perp[:,:,:,ielement_vperp]
-            @views YY2perp = YY_arrays.YY2perp[:,:,:,ielement_vperp]
-            @views YY3perp = YY_arrays.YY3perp[:,:,:,ielement_vperp]
+            @views YY0perp = YY_arrays.YY0perp[:,:,ivperp_local,ielement_vperp]
+            @views YY1perp = YY_arrays.YY1perp[:,:,ivperp_local,ielement_vperp]
+            @views YY2perp = YY_arrays.YY2perp[:,:,ivperp_local,ielement_vperp]
+            @views YY3perp = YY_arrays.YY3perp[:,:,ivperp_local,ielement_vperp]
+            vperp_igrid_full_view = @view vperp_igrid_full[:,ielement_vperp]
             
             for ielement_vpa in ielement_vpa_low:ielement_vpa_hi
                 # correct local ivpa in the case that we on a boundary point
                 ivpa_local = igrid_vpa + (ielement_vpa - ielement_vpa_low)*(1-ngrid_vpa)
-                @views YY0par = YY_arrays.YY0par[:,:,:,ielement_vpa]
-                @views YY1par = YY_arrays.YY1par[:,:,:,ielement_vpa]
-                @views YY2par = YY_arrays.YY2par[:,:,:,ielement_vpa]
-                @views YY3par = YY_arrays.YY3par[:,:,:,ielement_vpa]
+                @views YY0par = YY_arrays.YY0par[:,:,ivpa_local,ielement_vpa]
+                @views YY1par = YY_arrays.YY1par[:,:,ivpa_local,ielement_vpa]
+                @views YY2par = YY_arrays.YY2par[:,:,ivpa_local,ielement_vpa]
+                @views YY3par = YY_arrays.YY3par[:,:,ivpa_local,ielement_vpa]
+                vpa_igrid_full_view = @view vpa_igrid_full[:,ielement_vpa]
                 
                 # carry out the matrix sum on each 2D element
-                for jvperpp_local in 1:vperp.ngrid
-                    jvperpp = vperp.igrid_full[jvperpp_local,ielement_vperp]
-                    for kvperpp_local in 1:vperp.ngrid
-                        kvperpp = vperp.igrid_full[kvperpp_local,ielement_vperp]
-                        for jvpap_local in 1:vpa.ngrid
-                            jvpap = vpa.igrid_full[jvpap_local,ielement_vpa]
-                            for kvpap_local in 1:vpa.ngrid
-                                kvpap = vpa.igrid_full[kvpap_local,ielement_vpa]
-                                # first three lines represent parallel flux terms
-                                # second three lines represent perpendicular flux terms
-                                rhsvpavperp[ivpa_global,ivperp_global] += -nussp*(YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*dpdfsdvpa[jvpap,jvperpp]*d2Gspdvpa2[kvpap,kvperpp] +
-                                                    YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*dpdfsdvperp[jvpap,jvperpp]*d2Gspdvperpdvpa[kvpap,kvperpp] - 
-                                                    2.0*(ms/msp)*YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*pdfs[jvpap,jvperpp]*dHspdvpa[kvpap,kvperpp] +
-                                                    # end parallel flux, start of perpendicular flux
-                                                    YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*dpdfsdvpa[jvpap,jvperpp]*d2Gspdvperpdvpa[kvpap,kvperpp] + 
-                                                    YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*dpdfsdvperp[jvpap,jvperpp]*d2Gspdvperp2[kvpap,kvperpp] - 
-                                                    2.0*(ms/msp)*YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*pdfs[jvpap,jvperpp]*dHspdvperp[kvpap,kvperpp])
-                            end
-                        end
-                    end
-                end
-             end
+                rhsvpavperp[ivpa_global,ivperp_global] +=
+                    assemble_explicit_collision_operator_rhs_parallel_analytical_inputs_inner_loop(
+                        nussp, ms, msp, pdfs, dpdfsdvpa, dpdfsdvperp, d2Gspdvperp2,
+                        d2Gspdvpa2, d2Gspdvperpdvpa, dHspdvperp, dHspdvpa, YY0perp,
+                        YY0par, YY1perp, YY1par, ngrid_vperp, vperp_igrid_full_view,
+                        ngrid_vpa, vpa_igrid_full_view)
+            end
         end
     end
     return nothing
+end
+
+# Separate function for inner loop, possible optimization??
+function assemble_explicit_collision_operator_rhs_parallel_analytical_inputs_inner_loop(
+        nussp, ms, msp, pdfs, dpdfsdvpa, dpdfsdvperp, d2Gspdvperp2,
+        d2Gspdvpa2, d2Gspdvperpdvpa, dHspdvperp, dHspdvpa, YY0perp, YY0par, YY1perp,
+        YY1par, ngrid_vperp, vperp_igrid_full_view, ngrid_vpa, vpa_igrid_full_view)
+
+    # carry out the matrix sum on each 2D element
+    result = 0.0
+    for jvperpp_local in 1:ngrid_vperp
+        jvperpp = vperp_igrid_full_view[jvperpp_local]
+        for kvperpp_local in 1:ngrid_vperp
+            kvperpp = vperp_igrid_full_view[kvperpp_local]
+            for jvpap_local in 1:ngrid_vpa
+                jvpap = vpa_igrid_full_view[jvpap_local]
+                for kvpap_local in 1:ngrid_vpa
+                    kvpap = vpa_igrid_full_view[kvpap_local]
+                    # first three lines represent parallel flux terms
+                    # second three lines represent perpendicular flux terms
+                    result +=
+                        -nussp*(YY0perp[kvperpp_local,jvperpp_local]*YY1par[kvpap_local,jvpap_local]*dpdfsdvpa[jvpap,jvperpp]*d2Gspdvpa2[kvpap,kvperpp] +
+                                YY0perp[kvperpp_local,jvperpp_local]*YY1par[kvpap_local,jvpap_local]*dpdfsdvperp[jvpap,jvperpp]*d2Gspdvperpdvpa[kvpap,kvperpp] -
+                                2.0*(ms/msp)*YY0perp[kvperpp_local,jvperpp_local]*YY1par[kvpap_local,jvpap_local]*pdfs[jvpap,jvperpp]*dHspdvpa[kvpap,kvperpp] +
+                                # end parallel flux, start of perpendicular flux
+                                YY1perp[kvperpp_local,jvperpp_local]*YY0par[kvpap_local,jvpap_local]*dpdfsdvpa[jvpap,jvperpp]*d2Gspdvperpdvpa[kvpap,kvperpp] +
+                                YY1perp[kvperpp_local,jvperpp_local]*YY0par[kvpap_local,jvpap_local]*dpdfsdvperp[jvpap,jvperpp]*d2Gspdvperp2[kvpap,kvperpp] -
+                                2.0*(ms/msp)*YY1perp[kvperpp_local,jvperpp_local]*YY0par[kvpap_local,jvpap_local]*pdfs[jvpap,jvperpp]*dHspdvperp[kvpap,kvperpp])
+                end
+            end
+        end
+    end
+
+    return result
 end
 
 
