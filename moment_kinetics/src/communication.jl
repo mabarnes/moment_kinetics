@@ -23,6 +23,8 @@ export _block_synchronize, _anyv_subblock_synchronize
 using MPI
 using SHA
 
+# Import moment_kinetics so that we can refer to it in docstrings
+import moment_kinetics
 using ..debugging
 using ..type_definitions: mk_float, mk_int
 
@@ -862,8 +864,7 @@ between operations, to avoid race conditions. Should be even cheaper than
 communicator.
 
 Note: `_anyv_subblock_synchronize()` may be called different numbers of times on different
-sub-blocks, depending on how the species and spatial dimensions are split up. This means
-we have to do some extra hacking to call [`_gather_errors()`](@ref) and avoid MPI hangs.
+sub-blocks, depending on how the species and spatial dimensions are split up.
 `@debug_detect_redundant_block_synchronize` is not implemented (yet?) for
 `_anyv_subblock_synchronize()`.
 """
