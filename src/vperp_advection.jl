@@ -39,8 +39,8 @@ function update_speed_vperp!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect,
         Bmag = geometry.Bmag
         @inbounds begin
             @loop_r_z_vpa ir iz ivpa begin
-                @. dzdt = z_advect.speed[iz,ivpa,:,ir]
-                @. drdt = r_advect.speed[ir,ivpa,:,iz]
+                @. @views dzdt = z_advect.speed[iz,ivpa,:,ir]
+                @. @views drdt = r_advect.speed[ir,ivpa,:,iz]
                 @. @views vperp_advect.speed[:,ivpa,iz,ir] = (0.5*vperp.grid[:]/Bmag[iz,ir])*(dzdt[:]*dBdz[iz,ir] + drdt[:]*dBdr[iz,ir])
             end
         end
