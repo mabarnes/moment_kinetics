@@ -1168,123 +1168,69 @@ function get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_lo
     ic_global = ic_func(ivpa_global,ivperp_global,vpa.n)
     return ic_global, ivpa_global, ivperp_global
 end
-function enforce_zero_bc!(fc,vpa,vperp;impose_BC_at_zero_vperp=false)
+
+function enforce_zero_bc!(fvpavperp,vpa,vperp;impose_BC_at_zero_vperp=false)
     # lower vpa boundary
-    ielement_vpa = 1
-    ivpa_local = 1
-    for ielement_vperp in 1:vperp.nelement_local
-        for ivperp_local in 1:vperp.ngrid
-            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-            fc[ic_global] = 0.0
-        end
+    @loop_vperp ivperp begin
+        fvpavperp[1,ivperp] = 0.0
     end
     
     # upper vpa boundary
-    ielement_vpa = vpa.nelement_local
-    ivpa_local = vpa.ngrid
-    for ielement_vperp in 1:vperp.nelement_local
-        for ivperp_local in 1:vperp.ngrid
-            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-            fc[ic_global] = 0.0
-        end
+    @loop_vperp ivperp begin
+        fvpavperp[end,ivperp] = 0.0
     end
     
     if impose_BC_at_zero_vperp
         # lower vperp boundary
-        ielement_vperp = 1
-        ivperp_local = 1
-        for ielement_vpa in 1:vpa.nelement_local
-            for ivpa_local in 1:vpa.ngrid
-                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-                fc[ic_global] = 0.0
-            end
+        @loop_vpa ivpa begin
+            fvpavperp[ivpa,1] = 0.0
         end
     end
     
     # upper vperp boundary
-    ielement_vperp = vperp.nelement_local
-    ivperp_local = vperp.ngrid
-    for ielement_vpa in 1:vpa.nelement_local
-        for ivpa_local in 1:vpa.ngrid
-            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-            fc[ic_global] = 0.0
-        end
+    @loop_vpa ivpa begin
+        fvpavperp[ivpa,end] = 0.0
     end
 end
 
-function enforce_dirichlet_bc!(fc,vpa,vperp,f_bc;dirichlet_vperp_BC=false)
+function enforce_dirichlet_bc!(fvpavperp,vpa,vperp,f_bc;dirichlet_vperp_BC=false)
     # lower vpa boundary
-    ielement_vpa = 1
-    ivpa_local = 1
-    for ielement_vperp in 1:vperp.nelement_local
-        for ivperp_local in 1:vperp.ngrid
-            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-            fc[ic_global] = f_bc[ivpa_global,ivperp_global]
-        end
+    for ivperp ∈ 1:vperp.n
+        fvpavperp[1,ivperp] = f_bc[1,ivperp]
     end
     
     # upper vpa boundary
-    ielement_vpa = vpa.nelement_local
-    ivpa_local = vpa.ngrid
-    for ielement_vperp in 1:vperp.nelement_local
-        for ivperp_local in 1:vperp.ngrid
-            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-            fc[ic_global] = f_bc[ivpa_global,ivperp_global]
-        end
+    for ivperp ∈ 1:vperp.n
+        fvpavperp[end,ivperp] = f_bc[end,ivperp]
     end
     
     if dirichlet_vperp_BC
         # upper vperp boundary
-        ielement_vperp = 1
-        ivperp_local = 1
-        for ielement_vpa in 1:vpa.nelement_local
-            for ivpa_local in 1:vpa.ngrid
-                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-                fc[ic_global] = f_bc[ivpa_global,ivperp_global]
-            end
+        for ivpa ∈ 1:vpa.n
+            fvpavperp[ivpa,1] = f_bc[ivpa,1]
         end
     end
     
     # upper vperp boundary
-    ielement_vperp = vperp.nelement_local
-    ivperp_local = vperp.ngrid
-    for ielement_vpa in 1:vpa.nelement_local
-        for ivpa_local in 1:vpa.ngrid
-            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-            fc[ic_global] = f_bc[ivpa_global,ivperp_global]
-        end
+    for ivpa ∈ 1:vpa.n
+        fvpavperp[ivpa,end] = f_bc[ivpa,end]
     end
 end
 
-function enforce_dirichlet_bc!(fc,vpa,vperp,f_bc::vpa_vperp_boundary_data)
+function enforce_dirichlet_bc!(fvpavperp,vpa,vperp,f_bc::vpa_vperp_boundary_data)
     # lower vpa boundary
-    ielement_vpa = 1
-    ivpa_local = 1
-    for ielement_vperp in 1:vperp.nelement_local
-        for ivperp_local in 1:vperp.ngrid
-            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-            fc[ic_global] = f_bc.lower_boundary_vpa[ivperp_global]
-        end
+    for ivperp ∈ 1:vperp.n
+        fvpavperp[1,ivperp] = f_bc.lower_boundary_vpa[ivperp]
     end
     
     # upper vpa boundary
-    ielement_vpa = vpa.nelement_local
-    ivpa_local = vpa.ngrid
-    for ielement_vperp in 1:vperp.nelement_local
-        for ivperp_local in 1:vperp.ngrid
-            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-            fc[ic_global] = f_bc.upper_boundary_vpa[ivperp_global]
-        end
+    for ivperp ∈ 1:vperp.n
+        fvpavperp[end,ivperp] = f_bc.upper_boundary_vpa[ivperp]
     end
             
     # upper vperp boundary
-    ielement_vperp = vperp.nelement_local
-    ivperp_local = vperp.ngrid
-    for ielement_vpa in 1:vpa.nelement_local
-        for ivpa_local in 1:vpa.ngrid
-            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-            fc[ic_global] = f_bc.upper_boundary_vperp[ivpa_global]
-        end
+    for ivpa ∈ 1:vpa.n
+        fvpavperp[ivpa,end] = f_bc.upper_boundary_vperp[ivpa]
     end
     return nothing
 end
@@ -2035,7 +1981,7 @@ function elliptic_solve!(field,source,boundary_data::vpa_vperp_boundary_data,
     rhsc = vec(rhsvpavperp)
     mul!(rhsc,matrix_rhs,sc)
     # enforce the boundary conditions
-    enforce_dirichlet_bc!(rhsc,vpa,vperp,boundary_data)
+    enforce_dirichlet_bc!(rhsvpavperp,vpa,vperp,boundary_data)
     # solve the linear system
     fc .= lu_object_lhs \ rhsc
 
@@ -2061,7 +2007,7 @@ function elliptic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_bounda
     mul!(rhsc, matrix_rhs_2, sc_2, 1.0, 1.0)
 
     # enforce the boundary conditions
-    enforce_dirichlet_bc!(rhsc,vpa,vperp,boundary_data)
+    enforce_dirichlet_bc!(rhs,vpa,vperp,boundary_data)
     # solve the linear system
     fc .= lu_object_lhs \ rhsc
 
