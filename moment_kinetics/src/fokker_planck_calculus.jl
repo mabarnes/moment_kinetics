@@ -888,21 +888,48 @@ function loop_over_vperp_vpa_elements_no_divergences!(G0_weights,G1_weights,H0_w
 end 
 
 
-# Array indices for compound 1D form 
+"""
+    ic_func(ivpa::mk_int,ivperp::mk_int,nvpa::mk_int)
+
+Get the 'linear index' corresponding to `ivpa` and `ivperp`. Defined so that the linear
+index corresponds to the underlying layout in memory of a 2d array indexed by
+`[ivpa,ivperp]`, i.e. for a 2d array `f2d`:
+* `size(f2d) == (vpa.n, vperp.n)`
+* For a reference to `f2d` that is reshaped to a vector (a 1d array) `f1d = vec(f2d)` than
+  for any `ivpa` and `ivperp` it is true that `f1d[ic_func(ivpa,ivperp)] ==
+  f2d[ivpa,ivperp]`.
+"""
 function ic_func(ivpa::mk_int,ivperp::mk_int,nvpa::mk_int)
     return ivpa + nvpa*(ivperp-1)
 end
+
+"""
+    ivperp_func(ic::mk_int,nvpa::mk_int)
+
+Get the `vperp` index `ivperp` that corresponds to a 'linear index' `ic` that spans a 2d
+velocity space.
+
+Defined so that `ivperp_func(inc_func(ivpa,ivperp,nvpa), nvpa) == ivperp`.
+
+See also [`ic_func`](@ref), [`ivpa_func`](@ref).
+"""
 function ivperp_func(ic::mk_int,nvpa::mk_int)
     return floor(Int64,(ic-1)/nvpa) + 1
 end
+
+"""
+    ivpa_func(ic::mk_int,nvpa::mk_int)
+
+Get the `vpa` index `ivpa` that corresponds to a 'linear index' `ic` that spans a 2d
+velocity space.
+
+Defined so that `ivpa_func(inc_func(ivpa,ivperp,nvpa), nvpa) == ivpa`.
+
+See also [`ic_func`](@ref), [`ivperp_func`](@ref).
+"""
 function ivpa_func(ic::mk_int,nvpa::mk_int)
     ivpa = ic - nvpa*(ivperp_func(ic,nvpa) - 1)
     return ivpa
-end
-
-function ivpa_global_func(ivpa_local::mk_int,ielement_vpa::mk_int,ngrid_vpa::mk_int)
-    ivpa_global = ivpa_local + (ielement_vpa - 1)*(ngrid_vpa - 1)
-    return ivpa_global
 end
 
 # function that returns the sparse matrix index
@@ -1160,13 +1187,20 @@ function test_boundary_data(func,func_exact,func_name,vpa,vperp,buffer_vpa,buffe
     return max_err
 end
 
+"""
+    get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+
+For local (within the single element specified by `ielement_vpa` and `ielement_vperp`)
+indices `ivpa_local` and `ivperp_local`, get the global index in the 'linear-indexed' 2d
+space of size `(vperp.n, vpa.n)` (as returned by [`ic_func`](@ref)).
+"""
 function get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
     # global indices on the grids
     ivpa_global = vpa.igrid_full[ivpa_local,ielement_vpa]
     ivperp_global = vperp.igrid_full[ivperp_local,ielement_vperp]
     # global compound index
     ic_global = ic_func(ivpa_global,ivperp_global,vpa.n)
-    return ic_global, ivpa_global, ivperp_global
+    return ic_global
 end
 
 function enforce_zero_bc!(fvpavperp,vpa,vperp;impose_BC_at_zero_vperp=false)
@@ -1323,8 +1357,8 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
                 for ivperp_local in 1:vperp.ngrid
                     for ivpap_local in 1:vpa.ngrid
                         for ivpa_local in 1:vpa.ngrid
-                            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-                            icp_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpap_local,ivperpp_local) #get_indices(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivpap_local,ivperp_local,ivperpp_local)
+                            ic_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                            icp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpap_local,ivperpp_local) #get_indices(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivpap_local,ivperp_local,ivperpp_local)
                             #println("ielement_vpa: ",ielement_vpa," ielement_vperp: ",ielement_vperp)
                             #println("ivpa_local: ",ivpa_local," ivpap_local: ",ivpap_local)
                             #println("ivperp_local: ",ivperp_local," ivperpp_local: ",ivperpp_local)
@@ -1539,8 +1573,8 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
                 for ivperp_local in 1:ngrid_vperp
                     for ivpap_local in 1:ngrid_vpa
                         for ivpa_local in 1:ngrid_vpa
-                            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-                            icp_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpap_local,ivperpp_local) #get_indices(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivpap_local,ivperp_local,ivperpp_local)
+                            ic_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                            icp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpap_local,ivperpp_local) #get_indices(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivpap_local,ivperp_local,ivperpp_local)
                             icsc = icsc_func(ivpa_local,ivpap_local,ielement_vpa::mk_int,
                                            ngrid_vpa,nelement_vpa,
                                            ivperp_local,ivperpp_local,
@@ -1749,7 +1783,7 @@ function assemble_explicit_collision_operator_rhs_serial!(rhsvpavperp,pdfs,d2Gsp
                 # loop over field positions in each element
                 for ivperp_local in 1:vperp.ngrid
                     for ivpa_local in 1:vpa.ngrid
-                        ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                        ic_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
                         # carry out the matrix sum on each 2D element
                         for jvperpp_local in 1:vperp.ngrid
                             jvperpp = vperp.igrid_full[jvperpp_local,ielement_vperp]
