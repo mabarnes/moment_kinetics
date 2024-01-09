@@ -36,16 +36,21 @@ using IfElse
     end
 
     # struct of symbolic functions for geometric coefficients
-    struct geometric_coefficients_sym{T1,T2,T3,T4,T5,T6,T7,T8}
+    # Note that we restrict the types of the variables in the struct
+    # to be either a float or a Symbolics Num type. The Union appears
+    # to be required to permit geometry options where a symbolic variable
+    # does not appear in a particular geometric coefficient, because 
+    # that coefficient is a constant. 
+    struct geometric_coefficients_sym{}
         rhostar::mk_float
-        Bzed::T1
-        Bzeta::T2
-        Bmag::T3
-        bzed::T4
-        bzeta::T5
-        dBdz::T6
-        dBdr::T7
-        jacobian::T8
+        Bzed::Union{mk_float,Num}
+        Bzeta::Union{mk_float,Num}
+        Bmag::Union{mk_float,Num}
+        bzed::Union{mk_float,Num}
+        bzeta::Union{mk_float,Num}
+        dBdz::Union{mk_float,Num}
+        dBdr::Union{mk_float,Num}
+        jacobian::Union{mk_float,Num}
     end
     
     function geometry_sym(geometry_input_data::geometry_input,Lz,Lr,nr)
