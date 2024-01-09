@@ -486,7 +486,7 @@ function setup_advance_flags(moments, composition, t_input, collisions,
     if !t_input.split_operators
         # default for non-split operators is to include both vpa and z advection together
         advance_vpa_advection = true && vpa.n > 1 && z.n > 1
-        advance_vperp_advection = true && vperp.n > 1 && z.n > 1 && r.n > 1
+        advance_vperp_advection = true && vperp.n > 1 && z.n > 1
         advance_z_advection = true && z.n > 1
         advance_r_advection = true && r.n > 1
         if collisions.nuii > 0.0 && vperp.n > 1
