@@ -46,6 +46,16 @@ dBdz::Array{mk_float,2}
 dBdr::Array{mk_float,2}
 # jacobian =  grad r x grad z . grad zeta
 jacobian::Array{mk_float,2}
+
+# magnetic drift physics coefficients
+# cvdriftr = (b/B) x (b.grad b) . grad r
+cvdriftr::Array{mk_float,2}
+# cvdriftz = (b/B) x (b.grad b) . grad z
+cvdriftz::Array{mk_float,2}
+# gbdriftr = (b/B^2) x grad B . grad r
+gbdriftr::Array{mk_float,2}
+# gbdriftz = (b/B^2) x grad B . grad z
+gbdriftz::Array{mk_float,2}
 end
 
 """
@@ -65,6 +75,10 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
     dBdr = allocate_float(nz,nr)
     dBdz = allocate_float(nz,nr)
     jacobian = allocate_float(nz,nr)
+    cvdriftr = allocate_float(nz,nr)
+    cvdriftz = allocate_float(nz,nr)
+    gbdriftr = allocate_float(nz,nr)
+    gbdriftz = allocate_float(nz,nr)
     
     option = geometry_input_data.option
     rhostar = geometry_input_data.rhostar
@@ -82,6 +96,11 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
                 dBdr[iz,ir] = 0.0
                 dBdz[iz,ir] = 0.0
                 jacobian[iz,ir] = 1.0
+
+                cvdriftr[iz,ir] = 0.0
+                cvdriftz[iz,ir] = 0.0
+                gbdriftr[iz,ir] = 0.0
+                gbdriftz[iz,ir] = 0.0
             end
         end
     elseif option == "1D-mirror"
@@ -110,6 +129,36 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
                 dBdr[iz,ir] = 0.0
                 dBdz[iz,ir] = (2.0/z.L)*4.0*DeltaB*zfac*(1.0 - zfac^2)
                 jacobian[iz,ir] = 1.0
+
+                cvdriftr[iz,ir] = 0.0
+                cvdriftz[iz,ir] = 0.0
+                gbdriftr[iz,ir] = 0.0
+                gbdriftz[iz,ir] = 0.0               
+            end
+        end
+    elseif option == "low-beta-helix"
+        # a 2D configuration for testing magnetic drift physics
+        # with \vec{B} = (B0/r) \hat{zeta} + Bz \hat{z}
+        # with B0 and Bz constants
+        pitch = geometry_input_data.pitch
+        B0 = 1.0 # chose reference field strength to be Bzeta at r = 1
+        Bz = pitch*B0 # pitch determines ratio of Bz/B0 at r = 1
+        for ir in 1:nr
+            rr = r.grid[ir]
+            for iz in 1:nz
+                Bmag[iz,ir] = sqrt( (B0/rr)^2 + Bz^2 )
+                bzed[iz,ir] = Bz/Bmag[iz,ir]
+                bzeta[iz,ir] = B0/(rr*Bmag[iz,ir])
+                Bzed[iz,ir] = bzed[iz,ir]*Bmag[iz,ir]
+                Bzeta[iz,ir] = bzeta[iz,ir]*Bmag[iz,ir]
+                dBdz[iz,ir] = 0.0
+                dBdr[iz,ir] = -(Bmag[iz,ir]/rr)*bzeta[iz,ir]^2
+                jacobian[iz,ir] = 1.0
+                
+                cvdriftr[iz,ir] = 0.0
+                cvdriftz[iz,ir] = -(bzeta[iz,ir]/Bmag[iz,ir])*(bzeta[iz,ir]^2)/rr
+                gbdriftr[iz,ir] = 0.0
+                gbdriftz[iz,ir] = cvdriftz[iz,ir]
             end
         end
     else 
@@ -117,7 +166,8 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
     end
 
     geometry = geometric_coefficients(geometry_input_data, rhostar,
-               Bzed,Bzeta,Bmag,bzed,bzeta,dBdz,dBdr,jacobian)
+               Bzed,Bzeta,Bmag,bzed,bzeta,dBdz,dBdr,jacobian,
+               cvdriftr,cvdriftz,gbdriftr,gbdriftz)
     return geometry
 end
 
