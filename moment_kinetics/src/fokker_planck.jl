@@ -108,28 +108,35 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
             println("finished YY array calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
     end
+
+    # The following velocity-space-sized buffer arrays are used to evaluate the
+    # collision operator for a single species at a single spatial point. They are
+    # shared-memory arrays. The `comm` argument to `allocate_shared_float()` is used to
+    # set up the shared-memory arrays so that they are shared only by the processes on
+    # `comm_anyv_subblock[]` rather than on the full `comm_block[]`. This means that
+    # different subblocks that are calculating the collision operator at different
+    # spatial points do not interfere with each others' buffer arrays.
     nvpa, nvperp = vpa.n, vperp.n
-    n_anyv_subblocks = anyv_nsubblocks_per_block[]
-    S_dummy = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    Q_dummy = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    rhsvpavperp = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    rhsvpavperp_copy1 = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    rhsvpavperp_copy2 = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    rhsvpavperp_copy3 = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
+    S_dummy = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    Q_dummy = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    rhsvpavperp = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    rhsvpavperp_copy1 = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    rhsvpavperp_copy2 = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    rhsvpavperp_copy3 = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     
-    CC = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    GG = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    HH = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    dHdvpa = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    dHdvperp = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    dGdvperp = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    d2Gdvperp2 = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    d2Gdvpa2 = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    d2Gdvperpdvpa = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
+    CC = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    GG = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    HH = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    dHdvpa = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    dHdvperp = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    dGdvperp = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    d2Gdvperp2 = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    d2Gdvpa2 = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    d2Gdvperpdvpa = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     
-    FF = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    dFdvpa = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    dFdvperp = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
+    FF = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    dFdvpa = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    dFdvperp = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     
     fka = fokkerplanck_weakform_arrays_struct(bwgt,rpbd,MM2D_sparse,KKpar2D_sparse,KKperp2D_sparse,
                                            KKpar2D_with_BC_terms_sparse,KKperp2D_with_BC_terms_sparse,
@@ -172,29 +179,26 @@ function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,dSdt,compos
     nussp = collisions.nuii # generalise!
     # N.B. parallelisation using special 'anyv' region
     begin_s_r_z_anyv_region()
-    isubblock = anyv_isubblock_index[] + 1
     @loop_s_r_z is ir iz begin
         # first argument is Fs, and second argument is Fs' in C[Fs,Fs'] 
         @views fokker_planck_collision_operator_weak_form!(
             pdf_in[:,:,iz,ir,is], pdf_in[:,:,iz,ir,is], ms, msp, nussp, fkpl_arrays,
             vperp, vpa, vperp_spectral, vpa_spectral)
         # enforce the boundary conditions on CC before it is used for timestepping
-        @views enforce_vpavperp_BCs!(fkpl_arrays.CC[:,:,isubblock], vpa, vperp,
-                                     vpa_spectral, vperp_spectral)
+        enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
         # make ad-hoc conserving corrections
-        @views conserving_corrections!(fkpl_arrays.CC[:,:,isubblock],
-                                       pdf_in[:,:,iz,ir,is], vpa, vperp,
-                                       fkpl_arrays.S_dummy[:,:,isubblock])
+        conserving_corrections!(fkpl_arrays.CC, pdf_in[:,:,iz,ir,is], vpa, vperp,
+                                fkpl_arrays.S_dummy)
         
         # advance this part of s,r,z with the resulting C[Fs,Fs]
         begin_anyv_vperp_vpa_region()
-        CC = @view fkpl_arrays.CC[:,:,isubblock]
+        CC = fkpl_arrays.CC
         @loop_vperp_vpa ivperp ivpa begin
             pdf_out[ivpa,ivperp,iz,ir,is] += dt*CC[ivpa,ivperp]
         end
         if diagnose_entropy_production
             # assign dummy array
-            lnfC = @view fkpl_arrays.rhsvpavperp[:,:,isubblock]
+            lnfC = fkpl_arrays.rhsvpavperp
             @loop_vperp_vpa ivperp ivpa begin
                 lnfC[ivpa,ivperp] = log(abs(pdf_in[ivpa,ivperp,iz,ir,is]) + 1.0e-15)*CC[ivpa,ivperp]
             end
@@ -235,23 +239,22 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
     @boundscheck vperp.n == size(ffs_in,2) || throw(BoundsError(ffs_in))
     
     # extract the necessary precalculated and buffer arrays from fokkerplanck_arrays
-    isubblock = anyv_isubblock_index[] + 1
-    rhsvpavperp = @view fkpl_arrays.rhsvpavperp[:,:,isubblock]
+    rhsvpavperp = fkpl_arrays.rhsvpavperp
     lu_obj_MM = fkpl_arrays.lu_obj_MM
     YY_arrays = fkpl_arrays.YY_arrays    
     
-    CC = @view fkpl_arrays.CC[:,:,isubblock]
-    GG = @view fkpl_arrays.GG[:,:,isubblock]
-    HH = @view fkpl_arrays.HH[:,:,isubblock]
-    dHdvpa = @view fkpl_arrays.dHdvpa[:,:,isubblock]
-    dHdvperp = @view fkpl_arrays.dHdvperp[:,:,isubblock]
-    dGdvperp = @view fkpl_arrays.dGdvperp[:,:,isubblock]
-    d2Gdvperp2 = @view fkpl_arrays.d2Gdvperp2[:,:,isubblock]
-    d2Gdvpa2 = @view fkpl_arrays.d2Gdvpa2[:,:,isubblock]
-    d2Gdvperpdvpa = @view fkpl_arrays.d2Gdvperpdvpa[:,:,isubblock]
-    FF = @view fkpl_arrays.FF[:,:,isubblock]
-    dFdvpa = @view fkpl_arrays.dFdvpa[:,:,isubblock]
-    dFdvperp = @view fkpl_arrays.dFdvperp[:,:,isubblock]
+    CC = fkpl_arrays.CC
+    GG = fkpl_arrays.GG
+    HH = fkpl_arrays.HH
+    dHdvpa = fkpl_arrays.dHdvpa
+    dHdvperp = fkpl_arrays.dHdvperp
+    dGdvperp = fkpl_arrays.dGdvperp
+    d2Gdvperp2 = fkpl_arrays.d2Gdvperp2
+    d2Gdvpa2 = fkpl_arrays.d2Gdvpa2
+    d2Gdvperpdvpa = fkpl_arrays.d2Gdvperpdvpa
+    FF = fkpl_arrays.FF
+    dFdvpa = fkpl_arrays.dFdvpa
+    dFdvperp = fkpl_arrays.dFdvperp
     
     if use_Maxwellian_Rosenbluth_coefficients
         begin_anyv_region()
@@ -443,7 +446,6 @@ allocate the required ancilliary arrays
 function allocate_fokkerplanck_arrays_direct_integration(vperp,vpa)
     nvpa = vpa.n
     nvperp = vperp.n
-    n_anyv_subblocks = anyv_nsubblocks_per_block[]
     
     G0_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
     G1_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
@@ -451,24 +453,35 @@ function allocate_fokkerplanck_arrays_direct_integration(vperp,vpa)
     H1_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
     H2_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
     H3_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
-    GG = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    d2Gdvpa2 = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    d2Gdvperpdvpa = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    d2Gdvperp2 = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    dGdvperp = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    HH = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    dHdvpa = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    dHdvperp = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    #Cflux_vpa = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    #Cflux_vperp = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
+
+    # The following velocity-space-sized buffer arrays are used to evaluate the
+    # collision operator for a single species at a single spatial point. They are
+    # shared-memory arrays. The `comm` argument to `allocate_shared_float()` is used to
+    # set up the shared-memory arrays so that they are shared only by the processes on
+    # `comm_anyv_subblock[]` rather than on the full `comm_block[]`. This means that
+    # different subblocks that are calculating the collision operator at different
+    # spatial points do not interfere with each others' buffer arrays.
+    # Note that the 'weights' allocated above are read-only and therefore can be used
+    # simultaneously by different subblocks. They are shared over the full
+    # `comm_block[]` in order to save memory and setup time.
+    GG = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    d2Gdvpa2 = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    d2Gdvperpdvpa = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    d2Gdvperp2 = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    dGdvperp = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    HH = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    dHdvpa = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    dHdvperp = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    #Cflux_vpa = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    #Cflux_vperp = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     buffer_vpavperp_1 = allocate_float(nvpa,nvperp)
     buffer_vpavperp_2 = allocate_float(nvpa,nvperp)
-    Cssp_result_vpavperp = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    dfdvpa = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    d2fdvpa2 = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    d2fdvperpdvpa = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    dfdvperp = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
-    d2fdvperp2 = allocate_shared_float(nvpa,nvperp,n_anyv_subblocks)
+    Cssp_result_vpavperp = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    dfdvpa = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    d2fdvpa2 = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    d2fdvperpdvpa = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    dfdvperp = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    d2fdvperp2 = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     
     return fokkerplanck_arrays_direct_integration_struct(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                                GG,d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,dGdvperp,
