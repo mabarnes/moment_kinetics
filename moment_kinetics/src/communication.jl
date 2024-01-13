@@ -402,9 +402,9 @@ end
     export DebugMPISharedArray
 
     # Constructors
-    function DebugMPISharedArray(array::Array)
+    function DebugMPISharedArray(array::Array, comm)
         dims = size(array)
-        is_initialized = allocate_shared(mk_int, dims; maybe_debug=false)
+        is_initialized = allocate_shared(mk_int, dims; comm=comm, maybe_debug=false)
         if block_rank[] == 0
             is_initialized .= 0
         end
@@ -511,6 +511,8 @@ dims - mk_int or Tuple{mk_int}
     Dimensions of the array to be created. Dimensions passed define the size of the
     array which is being handled by the 'block' (rather than the global array, or a
     subset for a single process).
+comm - `MPI.Comm`, default `comm_block[]`
+    MPI communicator containing the processes that share the array.
 maybe_debug - Bool
     Can be set to `false` to force not creating a DebugMPISharedArray when debugging is
     active. This avoids recursion when including a shared-memory array as a member of a
@@ -520,9 +522,12 @@ Returns
 -------
 Array{mk_float}
 """
-function allocate_shared(T, dims; maybe_debug=true)
-    br = block_rank[]
-    bs = block_size[]
+function allocate_shared(T, dims; comm=nothing, maybe_debug=true)
+    if comm === nothing
+        comm = comm_block[]
+    end
+    br = MPI.Comm_rank(comm)
+    bs = MPI.Comm_size(comm)
     n = prod(dims)
 
     if n == 0
@@ -533,7 +538,7 @@ function allocate_shared(T, dims; maybe_debug=true)
         @debug_shared_array begin
             # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
             if maybe_debug
-                array = DebugMPISharedArray(array)
+                array = DebugMPISharedArray(array, comm)
             end
         end
 
@@ -559,7 +564,7 @@ function allocate_shared(T, dims; maybe_debug=true)
         signaturestring = string([string(s.file, s.line) for s ∈ st]...)
 
         hash = sha256(signaturestring)
-        all_hashes = MPI.Allgather(hash, comm_block[])
+        all_hashes = MPI.Allgather(hash, comm)
         l = length(hash)
         for i ∈ 1:length(all_hashes)÷l
             if all_hashes[(i - 1) * l + 1: i * l] != hash
@@ -570,7 +575,7 @@ function allocate_shared(T, dims; maybe_debug=true)
         end
     end
 
-    win, array_temp = MPI.Win_allocate_shared(Array{T}, dims_local, comm_block[])
+    win, array_temp = MPI.Win_allocate_shared(Array{T}, dims_local, comm)
 
     # Array is allocated contiguously, but `array_temp` contains only the 'locally owned'
     # part.  We want to use as a shared array, so want to wrap the entire shared array.
@@ -585,7 +590,7 @@ function allocate_shared(T, dims; maybe_debug=true)
     @debug_shared_array begin
         # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
         if maybe_debug
-            debug_array = DebugMPISharedArray(array)
+            debug_array = DebugMPISharedArray(array, comm)
             push!(global_debugmpisharedarray_store, debug_array)
             return debug_array
         end
