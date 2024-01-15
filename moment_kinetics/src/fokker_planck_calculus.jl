@@ -163,25 +163,25 @@ end
 a struct of dummy arrays and precalculated coefficients
 for the weak-form Fokker-Planck collision operator 
 """
-struct fokkerplanck_weakform_arrays_struct{N}
+struct fokkerplanck_weakform_arrays_struct{N,M <: AbstractSparseArray{mk_float,mk_int,N}}
     # boundary weights (Green's function) data
     bwgt::fokkerplanck_boundary_data_arrays_struct
     # dummy arrays for boundary data calculation
     rpbd::rosenbluth_potential_boundary_data
     # assembled 2D weak-form matrices
-    MM2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
-    KKpar2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
-    KKperp2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
-    KKpar2D_with_BC_terms_sparse::AbstractSparseArray{mk_float,mk_int,N}
-    KKperp2D_with_BC_terms_sparse::AbstractSparseArray{mk_float,mk_int,N}
-    LP2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
-    LV2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
-    LB2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
-    PUperp2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
-    PPparPUperp2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
-    PPpar2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
-    MMparMNperp2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
-    KPperp2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    MM2D_sparse::M
+    KKpar2D_sparse::M
+    KKperp2D_sparse::M
+    KKpar2D_with_BC_terms_sparse::M
+    KKperp2D_with_BC_terms_sparse::M
+    LP2D_sparse::M
+    LV2D_sparse::M
+    LB2D_sparse::M
+    PUperp2D_sparse::M
+    PPparPUperp2D_sparse::M
+    PPpar2D_sparse::M
+    MMparMNperp2D_sparse::M
+    KPperp2D_sparse::M
     # lu decomposition objects
     lu_obj_MM::SuiteSparse.UMFPACK.UmfpackLU{mk_float,mk_int}
     lu_obj_LP::SuiteSparse.UMFPACK.UmfpackLU{mk_float,mk_int}
