@@ -38,7 +38,7 @@ using Dates
 using SpecialFunctions: ellipk, ellipe
 using SparseArrays: sparse, AbstractSparseArray
 using SuiteSparse
-using LinearAlgebra: mul!, LU
+using LinearAlgebra: ldiv!, mul!, LU
 using FastGaussQuadrature
 using Printf
 
@@ -2017,7 +2017,7 @@ function elliptic_solve!(field,source,boundary_data::vpa_vperp_boundary_data,
     # enforce the boundary conditions
     enforce_dirichlet_bc!(rhsvpavperp,vpa,vperp,boundary_data)
     # solve the linear system
-    fc .= lu_object_lhs \ rhsc
+    ldiv!(fc, lu_object_lhs, rhsc)
 
     return nothing
 end
@@ -2043,7 +2043,7 @@ function elliptic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_bounda
     # enforce the boundary conditions
     enforce_dirichlet_bc!(rhs,vpa,vperp,boundary_data)
     # solve the linear system
-    fc .= lu_object_lhs \ rhsc
+    ldiv!(fc, lu_object_lhs, rhsc)
 
     return nothing
 end
@@ -2074,7 +2074,7 @@ function algebraic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_bound
     mul!(rhsc, matrix_rhs_2, sc_2, 1.0, 1.0)
 
     # solve the linear system
-    fc .= lu_object_lhs \ rhsc
+    ldiv!(fc, lu_object_lhs, rhsc)
 
     return nothing
 end
