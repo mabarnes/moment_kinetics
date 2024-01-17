@@ -216,8 +216,8 @@ function runtests()
             @test get_best_anyv_split(5, Dict(:s=>1, :r=>1, :z=>2, :vperp=>2, :vpa=>2)) == [1,1,2,2]
             @test get_best_anyv_split(6, Dict(:s=>1, :r=>1, :z=>2, :vperp=>2, :vpa=>2)) == [1,1,3,2]
             @test get_best_anyv_split(7, Dict(:s=>1, :r=>1, :z=>2, :vperp=>2, :vpa=>2)) == [1,1,3,2]
-            @test get_best_anyv_split(8, Dict(:s=>1, :r=>1, :z=>2, :vperp=>2, :vpa=>2)) == [2,1,2,2]
-            @test get_best_anyv_split(9, Dict(:s=>1, :r=>1, :z=>2, :vperp=>2, :vpa=>2)) == [2,1,2,2]
+            @test get_best_anyv_split(8, Dict(:s=>1, :r=>1, :z=>2, :vperp=>2, :vpa=>2)) == [1,1,2,4]
+            @test get_best_anyv_split(9, Dict(:s=>1, :r=>1, :z=>2, :vperp=>2, :vpa=>2)) == [1,1,2,4]
             @test get_best_anyv_split(2, Dict(:s=>1, :r=>1, :z=>3, :vperp=>2, :vpa=>2)) == [1,1,1,2]
             # Splitting the v-space dimension would be slightly more efficient for the
             # following case if parallelisation was perfect, but because 'anyv' is used

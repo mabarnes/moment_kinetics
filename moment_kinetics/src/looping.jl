@@ -300,11 +300,11 @@ and spatial dimensions.
 """
 function get_best_anyv_split(block_size, dim_sizes)
 
-    spatial_vperp_dim_sizes_list = (dim_sizes[d] for d ∈ (:s, :r, :z, :vperp))
+    spatial_vperp_dim_sizes_list = Tuple(dim_sizes[d] for d ∈ (:s, :r, :z, :vperp))
     vperp_splits, vperp_max_work =
         get_splits_and_max_work_from_sizes(block_size, spatial_vperp_dim_sizes_list)
 
-    spatial_vpa_dim_sizes_list = (dim_sizes[d] for d ∈ (:s, :r, :z, :vpa))
+    spatial_vpa_dim_sizes_list = Tuple(dim_sizes[d] for d ∈ (:s, :r, :z, :vpa))
     vpa_splits, vpa_max_work =
         get_splits_and_max_work_from_sizes(block_size, spatial_vpa_dim_sizes_list)
 
@@ -336,7 +336,34 @@ function get_best_anyv_split(block_size, dim_sizes)
 
     best_index = argmin(max_work)
 
-    return vpa_splits[best_index]
+    best_split = vpa_splits[best_index]
+
+    # Because we only optimize for 1 velocity space dimension, it can happen that there
+    # are 'extra' factors that the algorithm does not think can be use for velocity space,
+    # and end up in the process number for one of the other dimensions. However because at
+    # least for part of the time the velocity space can use a 2d parallelisation within an
+    # anyv region, it can make use of those processors. So check for 'extra' factors, and
+    # move them to the velocity dimension.
+    for i ∈ 1:length(best_split) - 1
+        dim_size = spatial_vpa_dim_sizes_list[i]
+        if best_split[i] > dim_size
+            # May have an extra factor
+
+            all_factors = factor(Vector, best_split[i])
+
+            # Check biggest factors first
+            sort!(all_factors; rev=true)
+
+            for f ∈ all_factors
+                if best_split[i] / f ≥ dim_size
+                    best_split[i] /= f
+                    best_split[end] *= f
+                end
+            end
+        end
+    end
+
+    return best_split
 end
 
 """
