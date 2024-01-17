@@ -332,7 +332,7 @@ function get_best_anyv_split(block_size, dim_sizes)
     # penalisation just leads to never splitting the velocity space unless there are more
     # processes than spatial grid points. In principle we could use any function that gets
     # bigger with the number of processes...
-    max_work = @. max_work * (1.0 + 0.5 * v_dim_nprocs / block_size[])
+    max_work = @. max_work * (1.0 + v_dim_nprocs^2 / 20)
 
     best_index = argmin(max_work)
 
