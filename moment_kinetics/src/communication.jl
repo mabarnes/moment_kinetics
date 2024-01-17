@@ -482,6 +482,23 @@ end
               * "silently disable the debug checks")
     end
 
+    # Explicit overload for vec() so the result is a DebugMPISharedArray
+    import Base: vec
+    function vec(A::DebugMPISharedArray)
+        return DebugMPISharedArray(
+            (isa(getfield(A, name), AbstractArray) ?
+             vec(getfield(A, name)) :
+             getfield(A, name)
+             for name ∈ fieldnames(typeof(A)))...)
+    end
+
+    # Explicit overload to avoid array when using DebugMPISharedArray Y, B and
+    # SparseArray A
+    import LinearAlgebra: ldiv!, Factorization
+    function ldiv!(Y::DebugMPISharedArray, A::Factorization, B::DebugMPISharedArray)
+        return ldiv!(Y.data, A, B.data)
+    end
+
     import MPI: Buffer
     function Buffer(A::DebugMPISharedArray)
         return Buffer(A.data)
