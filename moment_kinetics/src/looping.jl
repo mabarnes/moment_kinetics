@@ -76,7 +76,7 @@ eval(quote
 """
 Find possible divisions of sub_block_size into n factors
 """
-function get_splits(sub_block_size, n)
+function get_subblock_splits(sub_block_size, n)
     factors = factor(Vector, sub_block_size)
     if n == 1
         # We are splitting the last level, so must use all remaining processes
@@ -93,10 +93,10 @@ function get_splits(sub_block_size, n)
         # still to be considered
         remaining = sub_block_size ÷ this_factor
 
-        # Call get_splits() recursively to split `remaining` over the rest of
+        # Call get_subblock_splits() recursively to split `remaining` over the rest of
         # the dimensions, combining the results into a Vector of possible
         # factorizations.
-        for other_factors in get_splits(remaining, n-1)
+        for other_factors in get_subblock_splits(remaining, n-1)
             # ignore any duplicates
             if !([this_factor; other_factors] ∈ result)
                 push!(result, [this_factor; other_factors])
@@ -107,10 +107,22 @@ function get_splits(sub_block_size, n)
 end
 
 """
-Calculate the expected load balance
+Find possible divisions of each number less than or equal to `block_size` into `n`
+factors.
+"""
+function get_splits(block_size, n)
+    result = Vector{Vector{mk_int}}(undef, 0)
+    for nproc ∈ block_size:-1:1
+        result = vcat(result, get_subblock_splits(nproc, n))
+    end
+    return result
+end
 
-'Load balance' is the ratio of the maximum and minimum numbers of points on any
-process.
+"""
+Calculate the maximum number of grid points on any process
+
+This is a measure of the maximum amount of work to do on a single process. Minimising this
+will make the parallelisation as efficient as possible.
 
 Arguments
 ---------
@@ -119,18 +131,8 @@ nprocs_list : Vector{mk_int}
 sizes : Vector{mk_int}
     Size of each dimension
 """
-function get_load_balance(nprocs_list, sizes)
-    max_points = [ceil(s/n) for (n,s) ∈ zip(nprocs_list, sizes)]
-    min_points = [floor(s/n) for (n,s) ∈ zip(nprocs_list, sizes)]
-
-    # Add an 'epsilon' to the denominator to prevent the division giving `Inf`.
-    # If `prod(min_points) == Inf` for every combinations of process numbers per dimension
-    # then the parallelisation is not very efficient for the particular combination of
-    # dimensios being considered (as some processes have no work) but including the
-    # 'epsilon' should allow choosing the least-worst option (?), or at least make the
-    # choice of process splitting less random than finding the minimum of a vector of
-    # numbers that are all `Inf`.
-    return prod(max_points) / (prod(min_points) + 1e-14)
+function get_max_work(nprocs_list, sizes)
+    return prod(ceil(mk_int, s/n) for (n,s) ∈ zip(nprocs_list, sizes))
 end
 
 """
@@ -200,7 +202,9 @@ function get_best_ranges(block_rank, block_size, dims, dim_sizes)
     # Find ranges for 'dims', which should be parallelized
     dim_sizes_list = (dim_sizes[d] for d ∈ dims)
     best_split = get_best_split_from_sizes(block_size, dim_sizes_list)
-    ranges = get_ranges_from_split(block_rank, block_size, best_split, dim_sizes_list)
+    effective_block_size = prod(best_split) # May be ess than block_size
+    ranges = get_ranges_from_split(block_rank, effective_block_size, best_split,
+                                   dim_sizes_list)
     result = Dict(d=>r for (d,r) ∈ zip(dims, ranges))
 
     # Iterate over all points in ranges not being parallelized
@@ -215,7 +219,7 @@ end
 
 """
 """
-function get_splits_and_load_balances_from_sizes(block_size, dim_sizes_list)
+function get_splits_and_max_work_from_sizes(block_size, dim_sizes_list)
     splits = get_splits(block_size, length(dim_sizes_list))
     @debug_detect_redundant_block_synchronize begin
         if any(dim_sizes_list .== 1)
@@ -246,27 +250,31 @@ function get_splits_and_load_balances_from_sizes(block_size, dim_sizes_list)
     # dimension.
     sort!(splits; rev=true)
 
-    load_balances = [get_load_balance(s, dim_sizes_list) for s ∈ splits]
+    max_work = [get_max_work(s, dim_sizes_list) for s ∈ splits]
 
-    return splits, load_balances
+    return splits, max_work
 end
 
 function get_best_split_from_sizes(block_size, dim_sizes_list)
-    splits, load_balances =
-        get_splits_and_load_balances_from_sizes(block_size, dim_sizes_list)
+    splits, max_work =
+        get_splits_and_max_work_from_sizes(block_size, dim_sizes_list)
 
-    best_index = argmin(load_balances)
+    best_index = argmin(max_work)
     return splits[best_index]
 end
 
 """
 """
-function get_ranges_from_split(block_rank, block_size, split, dim_sizes_list)
+function get_ranges_from_split(block_rank, effective_block_size, split, dim_sizes_list)
+    if block_rank ≥ effective_block_size
+        # This process is not needed by this split
+        return [1:0 for _ ∈ dim_sizes_list]
+    end
 
     # Get rank of this process in each sub-block (with sub-block sizes given by split).
     sb_ranks = zeros(mk_int, length(dim_sizes_list))
     sub_rank = block_rank
-    remaining_block_size = block_size
+    remaining_block_size = effective_block_size
     for (i, sb_size) in enumerate(split)
         remaining_block_size = remaining_block_size ÷ sb_size
         sb_ranks[i] = sub_rank ÷ remaining_block_size
@@ -293,12 +301,12 @@ and spatial dimensions.
 function get_best_anyv_split(block_size, dim_sizes)
 
     spatial_vperp_dim_sizes_list = (dim_sizes[d] for d ∈ (:s, :r, :z, :vperp))
-    vperp_splits, vperp_load_balances =
-        get_splits_and_load_balances_from_sizes(block_size, spatial_vperp_dim_sizes_list)
+    vperp_splits, vperp_max_work =
+        get_splits_and_max_work_from_sizes(block_size, spatial_vperp_dim_sizes_list)
 
     spatial_vpa_dim_sizes_list = (dim_sizes[d] for d ∈ (:s, :r, :z, :vpa))
-    vpa_splits, vpa_load_balances =
-        get_splits_and_load_balances_from_sizes(block_size, spatial_vpa_dim_sizes_list)
+    vpa_splits, vpa_max_work =
+        get_splits_and_max_work_from_sizes(block_size, spatial_vpa_dim_sizes_list)
 
     if vperp_splits != vpa_splits
         error("vperp_splits=$vperp_splits and vpa_splits=$vpa_splits should be identical "
@@ -310,33 +318,32 @@ function get_best_anyv_split(block_size, dim_sizes)
     # vpa_load_balances, as each dimension will be parallelised over separately in part of
     # the collision operator, and the load balance when parallelising over both vperp and
     # vpa must be at least as good as the better of the two.
-    load_balances = max.(vperp_load_balances, vpa_load_balances)
+    max_work = max.(vperp_max_work, vpa_max_work)
 
     # Number of processes assigned to the velocity dimension(s) by each split.
     # The velocity dimension is the 'fastest varying', so is the left-most entry in each
     # split.
     v_dim_nprocs = [s[end] for s ∈ vpa_splits]
 
-    # Penalise the load_balances values so that we favour low numbers of processes for the
-    # velocity dimension(s). It is an arbitrary choice to use `1.0 + v_dim_nprocs /
-    # block_size[]` for this - the motivation is that the worst possible load balance for
-    # a single dimension is 2 (as long as there are at least as many points in the
-    # dimension as there are processes) so a simple linear `v_dim_nprocs` would pretty
-    # much say 'only ever use one process for the velocity space dimensions unless there
-    # are more processes than (n_species * (number of spatial points))', which seems a bit
-    # too restrictive. Instead choose a penalisation factor that is about 1 for
-    # v_dim_nprocs=1, and increases to 1 for v_dim_nprocs=(block_size/2). In principle we
-    # could use any function that gets bigger with the number of processes...
-    @. load_balances *= 1.0 + v_dim_nprocs / block_size[]
+    # Penalise the max_work values so that we favour low numbers of processes for the
+    # velocity dimension(s). It is an arbitrary choice to use `1.0 + 0.5 * v_dim_nprocs /
+    # block_size[]` for this - the motivation is that the spread of `max_work` values
+    # tends to be less than ~1.5 times the best value so even a not very strong
+    # penalisation just leads to never splitting the velocity space unless there are more
+    # processes than spatial grid points. In principle we could use any function that gets
+    # bigger with the number of processes...
+    max_work = @. max_work * (1.0 + 0.5 * v_dim_nprocs / block_size[])
 
-    best_index = argmin(load_balances)
+    best_index = argmin(max_work)
 
     return vpa_splits[best_index]
 end
 
 """
 """
-function get_anyv_ranges(block_rank, block_size, split, anyv_dims, dim_sizes)
+function get_anyv_ranges(block_rank, split, anyv_dims, dim_sizes)
+    effective_block_size = prod(split) # May be less than block_size
+
     if :vperp ∈ anyv_dims && :vpa ∈ anyv_dims
         vperp_vpa_split = get_best_split_from_sizes(split[end],
                                                     (dim_sizes[:vperp], dim_sizes[:vpa]))
@@ -347,9 +354,9 @@ function get_anyv_ranges(block_rank, block_size, split, anyv_dims, dim_sizes)
 
     if !(:vpa ∈ anyv_dims || :vperp ∈ anyv_dims)
         # A 'serial' (in velocity space) region
-        ranges = get_ranges_from_split(block_rank, block_size, split[1:end-1], dim_sizes_list)
+        ranges = get_ranges_from_split(block_rank, effective_block_size, split[1:end-1], dim_sizes_list)
     else
-        ranges = get_ranges_from_split(block_rank, block_size, split, dim_sizes_list)
+        ranges = get_ranges_from_split(block_rank, effective_block_size, split, dim_sizes_list)
     end
 
     dims = tuple(:s, :r, :z, anyv_dims[2:end]...,)
@@ -448,8 +455,7 @@ eval(quote
              for dims ∈ anyv_dimension_combinations
                  loop_ranges_store[dims] = LoopRanges(;
                      parallel_dims=dims, rank0=rank0, is_anyv=true, anyv_rank0=anyv_rank0,
-                     get_anyv_ranges(block_rank, block_size, anyv_split, dims,
-                                     dim_sizes)...)
+                     get_anyv_ranges(block_rank, anyv_split, dims, dim_sizes)...)
              end
 
              #####################################################################
