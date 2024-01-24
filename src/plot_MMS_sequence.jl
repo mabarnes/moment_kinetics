@@ -2,7 +2,8 @@
 """
 module plot_MMS_sequence
 
-export get_MMS_error_data
+#export get_MMS_error_data
+export run_mms_test
 
 # packages
 using Plots
@@ -18,7 +19,7 @@ using ..post_processing: compare_charged_pdf_symbolic_test, compare_fields_symbo
 using ..post_processing: compare_moments_symbolic_test, compare_neutral_pdf_symbolic_test
 using ..post_processing: read_distributed_zr_data!, construct_global_zr_coords
 using ..post_processing: allocate_global_zr_neutral_moments, allocate_global_zr_charged_moments
-using ..post_processing: allocate_global_zr_fields, get_geometry_and_composition
+using ..post_processing: allocate_global_zr_fields, get_composition
 using ..post_processing: get_coords_nelement, get_coords_ngrid
 using ..array_allocation: allocate_float
 using ..type_definitions: mk_float, mk_int
@@ -29,7 +30,9 @@ using ..load_data: load_neutral_pdf_data, load_time_data, load_species_data
 using ..load_data: load_block_data, load_coordinate_data, load_input
 using ..velocity_moments: integrate_over_vspace
 using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
-using ..moment_kinetics_input: mk_input, read_input_file
+using ..moment_kinetics_input: mk_input, read_input_file, get_default_rhostar
+using ..input_structs: geometry_input
+using ..reference_parameters
 
 import Base: get
 
@@ -69,12 +72,13 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         fid = open_readonly_output_file(run_name,"moments")
 
         scan_input = load_input(fid)
-        # get run-time input/composition/geometry/collisions/species info for convenience
-        #io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
-        #    vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
-        #    vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
-        #    drive_input, external_source_settings, num_diss_params,
-        #    manufactured_solns_input = mk_input(scan_input)
+        input = mk_input(scan_input)
+        # obtain input options from moment_kinetics_input.jl
+        # and check input to catch errors
+        io_input, evolve_moments, t_input, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
+            composition, species, collisions, geometry, drive_input, external_source_settings,
+            num_diss_params, manufactured_solns_input = input
+        
         z_nelement, r_nelement, vpa_nelement, vperp_nelement, 
           vz_nelement, vr_nelement, vzeta_nelement = get_coords_nelement(scan_input)
         z_ngrid, r_ngrid, vpa_ngrid, vperp_ngrid, 
@@ -132,6 +136,13 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
                 nelement_sequence[isim] = nelement
             else 
                 println("ERROR: scan_type = ",scan_type," requires vpa_nelement = vperp_nelement = z_nelement")
+            end
+        elseif scan_type == "vpa2vperpz_nelement"
+            nelement = z_nelement
+            if nelement == vpa_nelement && nelement == 2*vperp_nelement
+                nelement_sequence[isim] = nelement
+            else 
+                println("ERROR: scan_type = ",scan_type," requires vpa_nelement = 2.0*vperp_nelement = z_nelement")
             end
         elseif scan_type == "vpaz_nelement"
             nelement = z_nelement
@@ -191,24 +202,27 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         r_global, z_global = construct_global_zr_coords(r, z)
         #println("z: ",z)
         #println("r: ",r)
-        
+        run_names = tuple(run_name)
+        nbs = tuple(nblocks)
+        print(run_names)
+        iskip = 1 # stride in slice of arrays
         # fields 
-        read_distributed_zr_data!(phi,"phi",run_name,"moments",nblocks,z.n,r.n) 
-        read_distributed_zr_data!(Ez,"Ez",run_name,"moments",nblocks,z.n,r.n) 
-        read_distributed_zr_data!(Er,"Er",run_name,"moments",nblocks,z.n,r.n) 
+        read_distributed_zr_data!(phi,"phi",run_names,"moments",nbs,z.n,r.n,iskip) 
+        read_distributed_zr_data!(Ez,"Ez",run_names,"moments",nbs,z.n,r.n,iskip) 
+        read_distributed_zr_data!(Er,"Er",run_names,"moments",nbs,z.n,r.n,iskip) 
         # charged particle moments
-        read_distributed_zr_data!(density,"density",run_name,"moments",nblocks,z.n,r.n) 
-        read_distributed_zr_data!(parallel_flow,"parallel_flow",run_name,"moments",nblocks,z.n,r.n) 
-        read_distributed_zr_data!(parallel_pressure,"parallel_pressure",run_name,"moments",nblocks,z.n,r.n) 
-        read_distributed_zr_data!(parallel_heat_flux,"parallel_heat_flux",run_name,"moments",nblocks,z.n,r.n) 
-        read_distributed_zr_data!(thermal_speed,"thermal_speed",run_name,"moments",nblocks,z.n,r.n) 
+        read_distributed_zr_data!(density,"density",run_names,"moments",nbs,z.n,r.n,iskip) 
+        read_distributed_zr_data!(parallel_flow,"parallel_flow",run_names,"moments",nbs,z.n,r.n,iskip) 
+        read_distributed_zr_data!(parallel_pressure,"parallel_pressure",run_names,"moments",nbs,z.n,r.n,iskip) 
+        read_distributed_zr_data!(parallel_heat_flux,"parallel_heat_flux",run_names,"moments",nbs,z.n,r.n,iskip) 
+        read_distributed_zr_data!(thermal_speed,"thermal_speed",run_names,"moments",nbs,z.n,r.n,iskip) 
         # neutral particle moments 
         if n_neutral_species > 0
-            read_distributed_zr_data!(neutral_density,"density_neutral",run_name,"moments",nblocks,z.n,r.n) 
-            read_distributed_zr_data!(neutral_uz,"uz_neutral",run_name,"moments",nblocks,z.n,r.n) 
-            read_distributed_zr_data!(neutral_pz,"pz_neutral",run_name,"moments",nblocks,z.n,r.n) 
-            read_distributed_zr_data!(neutral_qz,"qz_neutral",run_name,"moments",nblocks,z.n,r.n) 
-            read_distributed_zr_data!(neutral_thermal_speed,"thermal_speed_neutral",run_name,"moments",nblocks,z.n,r.n) 
+            read_distributed_zr_data!(neutral_density,"density_neutral",run_names,"moments",nbs,z.n,r.n,iskip) 
+            read_distributed_zr_data!(neutral_uz,"uz_neutral",run_names,"moments",nbs,z.n,r.n,iskip) 
+            read_distributed_zr_data!(neutral_pz,"pz_neutral",run_names,"moments",nbs,z.n,r.n,iskip) 
+            read_distributed_zr_data!(neutral_qz,"qz_neutral",run_names,"moments",nbs,z.n,r.n,iskip) 
+            read_distributed_zr_data!(neutral_thermal_speed,"thermal_speed_neutral",run_names,"moments",nbs,z.n,r.n,iskip) 
         end
         
         
@@ -220,15 +234,22 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         else 
             Lr_in = 1.0
         end
-        geometry, composition = get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
-        
-        manufactured_solns_list = manufactured_solutions(Lr_in,z.L,r_bc,z_bc,geometry,composition,r.n,vperp.n) 
+        composition = get_composition(scan_input,n_ion_species,n_neutral_species)
+
+        reference_params = setup_reference_parameters(scan_input)
+        option = get(scan_input, "geometry_option", "constant-helical") #"1D-mirror"
+        pitch = get(scan_input, "pitch", 1.0)
+        rhostar = get(scan_input, "rhostar", get_default_rhostar(reference_params))
+        DeltaB = get(scan_input, "DeltaB", 1.0)
+        geo_in = geometry_input(rhostar,option,pitch,DeltaB)
+
+        manufactured_solns_list = manufactured_solutions(manufactured_solns_input,Lr_in,z.L,r_bc,z_bc,geo_in,composition,species,r.n,vperp.n) 
         dfni_func = manufactured_solns_list.dfni_func
         densi_func = manufactured_solns_list.densi_func
         dfnn_func = manufactured_solns_list.dfnn_func
         densn_func = manufactured_solns_list.densn_func
         
-        manufactured_E_fields = manufactured_electric_fields(Lr_in,z.L,r_bc,z_bc,composition,r.n)
+        manufactured_E_fields = manufactured_electric_fields(Lr_in,z.L,r_bc,z_bc,composition,r.n,manufactured_solns_input,species)
         Er_func = manufactured_E_fields.Er_func
         Ez_func = manufactured_E_fields.Ez_func
         phi_func = manufactured_E_fields.phi_func
@@ -324,6 +345,8 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         xlabel = L"z "*" & "*L"r "*" "*L"N_{element}"
     elseif scan_type == "vpavperpz_nelement"
         xlabel = L"N_{element}(z) = N_{element}(v_\perp) = N_{element}(v_{||})"
+    elseif scan_type == "vpa2vperpz_nelement"
+        xlabel = L"N_{element}(z) = 2N_{element}(v_\perp) = N_{element}(v_{||})"
     elseif scan_type == "vpazr_nelement0.25"
         xlabel = L"N_{element}(z) = N_{element}(r) = N_{element}(v_{||})/4"
     elseif scan_type == "vpaz_nelement0.25"
@@ -464,6 +487,196 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         println(outfile)
     end
 
+end
+
+function run_mms_test()
+   #test_option = "collisional_soundwaves"
+   #test_option = "collisionless_soundwaves_ions_only"
+   #test_option = "collisionless_soundwaves"
+   #test_option = "collisionless_wall-1D-3V-new-dfni-Er"
+   #test_option = "collisionless_wall-2D-1V-Er-nonzero-at-plate"
+   #test_option = "collisionless_wall-2D-1V-Er-zero-at-plate"
+   #test_option = "collisionless_wall-1D-1V"
+   #test_option = "collisionless_wall-1D-1V-constant-Er"
+   #test_option = "collisionless_wall-1D-1V-constant-Er-zngrid-5"
+   #test_option = "collisionless_wall-1D-1V-constant-Er-ngrid-5"
+   #test_option = "collisionless_wall-1D-1V-constant-Er-ngrid-5-opt"
+   #test_option = "krook_wall-1D-2V"
+   test_option = "mirror_wall-1D-2V"
+   #test_option = "collisionless_wall-1D-3V"
+   #test_option = "collisionless_wall-2D-3V"
+   #test_option = "collisionless_wall-2D-3V-Er-zero-at-plate"
+   #test_option = "collisionless_biased_wall-2D-3V"
+   #test_option = "collisionless_wall-1D-3V-with-sheath"
+
+    if test_option == "collisional_soundwaves"
+        # collisional 
+        path_list = ["runs/2D-sound-wave_cheb_cxiz_nel_r_2_z_2_vpa_2_vperp_2","runs/2D-sound-wave_cheb_cxiz_nel_r_2_z_2_vpa_4_vperp_4",
+                       "runs/2D-sound-wave_cheb_cxiz_nel_r_2_z_2_vpa_8_vperp_8","runs/2D-sound-wave_cheb_cxiz_nel_r_2_z_2_vpa_16_vperp_16"]
+        scan_type = "velocity_nelement"
+        scan_name = "2D-sound-wave_cheb_cxiz"
+  
+    elseif test_option == "collisionless_soundwaves"
+        # collisionless
+        path_list = ["runs/2D-sound-wave_cheb_nel_r_2_z_2_vpa_2_vperp_2","runs/2D-sound-wave_cheb_nel_r_4_z_4_vpa_4_vperp_4",# "runs/2D-sound-wave_cheb_nel_r_6_z_6_vpa_6_vperp_6",
+                     "runs/2D-sound-wave_cheb_nel_r_8_z_8_vpa_8_vperp_8","runs/2D-sound-wave_cheb_nel_r_16_z_16_vpa_16_vperp_16"
+                     ]
+        scan_type = "nelement"
+        scan_name = "2D-sound-wave_cheb"
+    elseif test_option == "collisionless_soundwaves_ions_only"
+        # collisionless
+        path_list = ["runs/2D-sound-wave_cheb_ion_only_nel_r_2_z_2_vpa_2_vperp_2","runs/2D-sound-wave_cheb_ion_only_nel_r_4_z_4_vpa_4_vperp_4", "runs/2D-sound-wave_cheb_ion_only_nel_r_8_z_8_vpa_8_vperp_8",
+#                        "runs/2D-sound-wave_cheb_nel_r_8_z_8_vpa_8_vperp_8"
+#,"runs/2D-sound-wave_cheb_nel_r_2_z_2_vpa_16_vperp_16"
+                     ]
+        scan_type = "nelement"
+        scan_name = "2D-sound-wave_cheb_ions_only"
+    elseif test_option == "collisionless_wall-2D-3V-Er-zero-at-plate"
+        # collisionless wall test, no sheath for electrons, no radial coordinate
+        path_list = ["runs/2D-wall_cheb-with-neutrals_nel_r_2_z_2_vpa_2_vperp_2",
+                        "runs/2D-wall_cheb-with-neutrals_nel_r_4_z_4_vpa_4_vperp_4",
+						"runs/2D-wall_cheb-with-neutrals_nel_r_6_z_6_vpa_6_vperp_6",
+                        #"runs/2D-wall_cheb-with-neutrals_nel_r_2_z_2_vpa_16_vperp_16" 
+						]
+        scan_type = "velocity_nelement"
+        scan_name = "2D-3V-wall_cheb"
+    elseif test_option == "collisionless_wall-2D-3V"
+        # collisionless wall test, no sheath for electrons, no radial coordinate
+        path_list = ["runs/2D-wall_cheb-with-neutrals_nel_r_2_z_2_vpa_4_vperp_4",
+                        "runs/2D-wall_cheb-with-neutrals_nel_r_2_z_2_vpa_8_vperp_8","runs/2D-wall_cheb-with-neutrals_nel_r_2_z_2_vpa_12_vperp_12",
+                        "runs/2D-wall_cheb-with-neutrals_nel_r_2_z_2_vpa_16_vperp_16"                       ]
+        scan_type = "velocity_nelement"
+        scan_name = "2D-3V-wall_cheb"
+    elseif test_option == "collisionless_biased_wall-2D-3V"
+        # collisionless wall test, no sheath for electrons, no radial coordinate
+        path_list = ["runs/2D-wall-Dirichlet_nel_r_2_z_2_vpa_2","runs/2D-wall-Dirichlet_nel_r_2_z_2_vpa_4",
+                     "runs/2D-wall-Dirichlet_nel_r_2_z_2_vpa_8","runs/2D-wall-Dirichlet_nel_r_2_z_2_vpa_16"]
+        scan_type = "velocity_nelement"
+        scan_name = "2D-3V-biased_wall_cheb"
+    
+    elseif test_option == "collisionless_wall-1D-3V"
+        # collisionless wall test, no sheath for electrons, no radial coordinate
+        path_list = ["runs/2D-wall_cheb-with-neutrals_nel_r_1_z_2_vpa_2_vperp_2","runs/2D-wall_cheb-with-neutrals_nel_r_1_z_2_vpa_4_vperp_4",
+                        "runs/2D-wall_cheb-with-neutrals_nel_r_1_z_2_vpa_8_vperp_8",#"runs/2D-wall_cheb-with-neutrals_nel_r_1_z_2_vpa_12_vperp_12",
+                        "runs/2D-wall_cheb-with-neutrals_nel_r_1_z_2_vpa_16_vperp_16"#,"runs/2D-wall_cheb-with-neutrals_nel_r_1_z_2_vpa_24_vperp_24"
+                       ]
+        scan_type = "velocity_nelement"
+        scan_name = "1D-3V-wall_cheb"
+    
+    elseif test_option == "collisionless_wall-1D-3V-updated"
+        # collisionless wall test, no sheath for electrons, no radial coordinate
+        path_list = ["runs/2D-wall_cheb-with-neutrals_nel_r_1_z_2_vpa_2_vperp_2","runs/2D-wall_cheb-with-neutrals_nel_r_1_z_4_vpa_4_vperp_4",
+                        "runs/2D-wall_cheb-with-neutrals_nel_r_1_z_8_vpa_8_vperp_8",#"runs/2D-wall_cheb-with-neutrals_nel_r_1_z_12_vpa_12_vperp_12",
+           #             "runs/2D-wall_cheb-with-neutrals_nel_r_1_z_16_vpa_16_vperp_16"#,"runs/2D-wall_cheb-with-neutrals_nel_r_1_z_2_vpa_24_vperp_24"
+                       ]
+        scan_type = "nelement"
+        scan_name = "1D-3V-wall_cheb-updated"
+    elseif test_option == "collisionless_wall-1D-3V-new-dfni"
+        # collisionless wall test, no sheath for electrons, no radial coordinate
+        path_list = ["runs/2D-wall_cheb-new-MMS-dfni-ngrid-9_nel_r_1_z_2_vpa_2_vperp_2",
+                     "runs/2D-wall_cheb-new-MMS-dfni-ngrid-9_nel_r_1_z_4_vpa_4_vperp_4",
+                     "runs/2D-wall_cheb-new-MMS-dfni-ngrid-9_nel_r_1_z_8_vpa_8_vperp_8",
+                     "runs/2D-wall_cheb-new-MMS-dfni-ngrid-9_nel_r_1_z_16_vpa_16_vperp_16",
+                     "runs/2D-wall_cheb-new-MMS-dfni-ngrid-9_nel_r_1_z_32_vpa_32_vperp_32"
+                       ]
+        scan_type = "nelement"
+        scan_name = "1D-3V-wall_cheb-new-dfni"
+    elseif test_option == "collisionless_wall-1D-3V-new-dfni-Er"
+        # collisionless wall test, no sheath for electrons, no radial coordinate
+        path_list = ["runs/2D-wall_cheb-new-MMS-dfni-Er-ngrid-9_nel_r_1_z_2_vpa_2_vperp_2",
+                     "runs/2D-wall_cheb-new-MMS-dfni-Er-ngrid-9_nel_r_1_z_4_vpa_4_vperp_4",
+                     "runs/2D-wall_cheb-new-MMS-dfni-Er-ngrid-9_nel_r_1_z_8_vpa_8_vperp_8",
+                     "runs/2D-wall_cheb-new-MMS-dfni-Er-ngrid-9_nel_r_1_z_16_vpa_16_vperp_16",
+                     "runs/2D-wall_cheb-new-MMS-dfni-Er-ngrid-9_nel_r_1_z_32_vpa_32_vperp_32"
+                       ]
+        scan_type = "nelement"
+        scan_name = "1D-3V-wall_cheb-new-dfni-Er"
+    elseif test_option == "collisionless_wall-1D-3V-with-sheath"
+        # collisionless wall test, no sheath for electrons, no radial coordinate
+        path_list = ["runs/2D-wall_cheb-with-neutrals-with-sheath_nel_r_1_z_2_vpa_2_vperp_2","runs/2D-wall_cheb-with-neutrals-with-sheath_nel_r_1_z_2_vpa_4_vperp_4",
+                        "runs/2D-wall_cheb-with-neutrals-with-sheath_nel_r_1_z_2_vpa_8_vperp_8",#"runs/2D-wall_cheb-with-neutrals-with-sheath_nel_r_1_z_2_vpa_12_vperp_12",
+                        "runs/2D-wall_cheb-with-neutrals-with-sheath_nel_r_1_z_2_vpa_16_vperp_16"#,"runs/2D-wall_cheb-with-neutrals-with-sheath_nel_r_1_z_2_vpa_24_vperp_24"
+                       ]
+        scan_type = "velocity_nelement"
+        scan_name = "1D-3V-wall-sheath_cheb"
+    elseif test_option == "collisionless_wall-2D-1V-Er-zero-at-plate"
+        #path_list = ["runs/2D-wall_MMS_nel_r_2_z_2_vpa_16_vperp_1_diss","runs/2D-wall_MMS_nel_r_4_z_4_vpa_16_vperp_1_diss",
+        #                "runs/2D-wall_MMS_nel_r_8_z_8_vpa_16_vperp_1_diss",#"runs/2D-wall_cheb-with-neutrals-with-sheath_nel_r_1_z_2_vpa_12_vperp_12",
+        #                "runs/2D-wall_MMS_nel_r_16_z_16_vpa_16_vperp_1_diss",
+        #                "runs/2D-wall_MMS_nel_r_32_z_32_vpa_16_vperp_1_diss5"#,"runs/2D-wall_cheb-with-neutrals-with-sheath_nel_r_1_z_2_vpa_24_vperp_24"
+        #               ]
+        #scan_type = "zr_nelement"
+        path_list = ["runs/2D-wall_MMS_ngrid_5_nel_r_2_z_2_vpa_8_vperp_1_diss","runs/2D-wall_MMS_ngrid_5_nel_r_4_z_4_vpa_16_vperp_1_diss",
+                        "runs/2D-wall_MMS_ngrid_5_nel_r_8_z_8_vpa_32_vperp_1_diss","runs/2D-wall_MMS_ngrid_5_nel_r_16_z_16_vpa_64_vperp_1_diss"]
+        scan_type = "vpazr_nelement0.25"
+        scan_name = "2D-1V-wall_cheb"
+    elseif test_option == "collisionless_wall-2D-1V-Er-nonzero-at-plate"
+        path_list = ["runs/2D-wall_MMSEr_ngrid_5_nel_r_2_z_2_vpa_8_vperp_1_diss","runs/2D-wall_MMSEr_ngrid_5_nel_r_4_z_4_vpa_16_vperp_1_diss","runs/2D-wall_MMSEr_ngrid_5_nel_r_8_z_8_vpa_32_vperp_1_diss","runs/2D-wall_MMSEr_ngrid_5_nel_r_16_z_16_vpa_64_vperp_1_diss",
+                    ]
+        #path_list = ["runs/2D-wall_MMSEr_nel_r_2_z_2_vpa_2_vperp_1_diss","runs/2D-wall_MMSEr_nel_r_4_z_4_vpa_4_vperp_1_diss",
+        #                "runs/2D-wall_MMSEr_nel_r_8_z_8_vpa_8_vperp_1_diss","runs/2D-wall_MMSEr_nel_r_16_z_16_vpa_16_vperp_1_diss"
+        #                #"runs/2D-wall_MMSEr_nel_r_32_z_32_vpa_16_vperp_1_diss"
+        #            ]
+        #path_list = ["runs/2D-wall_MMSEr_nel_r_2_z_2_vpa_16_vperp_1_diss","runs/2D-wall_MMSEr_nel_r_4_z_4_vpa_16_vperp_1_diss",
+        #                "runs/2D-wall_MMSEr_nel_r_8_z_8_vpa_16_vperp_1_diss",#"runs/2D-wall_cheb-with-neutrals-with-sheath_nel_r_1_z_2_vpa_12_vperp_12",
+        #                "runs/2D-wall_MMSEr_nel_r_16_z_16_vpa_16_vperp_1_diss",
+        #                "runs/2D-wall_MMSEr_nel_r_32_z_32_vpa_16_vperp_1_diss"#,"runs/2D-wall_cheb-with-neutrals-with-sheath_nel_r_1_z_2_vpa_24_vperp_24"
+        #               ]
+        scan_type = "vpazr_nelement0.25"
+        scan_name = "2D-1V-wall_cheb-nonzero-Er"
+    elseif test_option == "collisionless_wall-1D-1V-constant-Er-ngrid-5-opt"
+        # collisionless wall test, no sheath for electrons, no radial coordinate
+        path_list = ["runs/1D-wall_MMSEr_ngrid_5_nel_r_1_z_8_vpa_32_vperp_1","runs/1D-wall_MMSEr_ngrid_5_nel_r_1_z_16_vpa_64_vperp_1",
+                        "runs/1D-wall_MMSEr_ngrid_5_nel_r_1_z_32_vpa_128_vperp_1","runs/1D-wall_MMSEr_ngrid_5_nel_r_1_z_64_vpa_256_vperp_1"
+                    ]
+        scan_type = "vpaz_nelement0.25"
+        scan_name = "1D-1V-wall_cheb-constant-Er-ngrid-5-opt"
+    elseif test_option == "collisionless_wall-1D-1V-constant-Er-ngrid-5"
+        # collisionless wall test, no sheath for electrons, no radial coordinate
+        path_list = ["runs/1D-wall_MMSEr_ngrid_5_nel_r_1_z_8_vpa_8_vperp_1","runs/1D-wall_MMSEr_ngrid_5_nel_r_1_z_16_vpa_16_vperp_1",
+                        "runs/1D-wall_MMSEr_ngrid_5_nel_r_1_z_32_vpa_32_vperp_1","runs/1D-wall_MMSEr_ngrid_5_nel_r_1_z_64_vpa_64_vperp_1"
+                    ]
+        scan_type = "vpaz_nelement"
+        scan_name = "1D-1V-wall_cheb-constant-Er-ngrid-5"
+    elseif test_option == "collisionless_wall-1D-1V-constant-Er-zngrid-5"
+        # collisionless wall test, no sheath for electrons, no radial coordinate
+        path_list = ["runs/1D-wall_MMSEr_zngrid_5_nel_r_1_z_8_vpa_2_vperp_1","runs/1D-wall_MMSEr_zngrid_5_nel_r_1_z_16_vpa_4_vperp_1",
+                        "runs/1D-wall_MMSEr_zngrid_5_nel_r_1_z_32_vpa_8_vperp_1","runs/1D-wall_MMSEr_zngrid_5_nel_r_1_z_64_vpa_16_vperp_1"
+                    ]
+        scan_type = "vpaz_nelement4"
+        scan_name = "1D-1V-wall_cheb-constant-Er-zngrid-5"
+    elseif test_option == "collisionless_wall-1D-1V-constant-Er"
+        # collisionless wall test, no sheath for electrons, no radial coordinate
+        path_list = ["runs/1D-wall_MMSEr_nel_r_1_z_2_vpa_2_vperp_1","runs/1D-wall_MMSEr_nel_r_1_z_4_vpa_4_vperp_1",
+                        "runs/1D-wall_MMSEr_nel_r_1_z_8_vpa_8_vperp_1","runs/1D-wall_MMSEr_nel_r_1_z_16_vpa_16_vperp_1"
+                    ]
+        scan_type = "vpaz_nelement"
+        scan_name = "1D-1V-wall_cheb-constant-Er"
+    elseif test_option == "collisionless_wall-1D-1V"
+        # collisionless wall test, no sheath for electrons, no radial coordinate
+        path_list = ["runs/1D-wall_MMS_nel_r_1_z_2_vpa_2_vperp_1","runs/1D-wall_MMS_nel_r_1_z_4_vpa_4_vperp_1",
+                        "runs/1D-wall_MMS_nel_r_1_z_8_vpa_8_vperp_1","runs/1D-wall_MMS_nel_r_1_z_16_vpa_16_vperp_1"
+                    ]
+        scan_type = "vpaz_nelement"
+        scan_name = "1D-1V-wall_cheb"
+    elseif test_option == "krook_wall-1D-2V"
+        # Krook wall test, no sheath for electrons, no radial coordinate
+        path_list = ["runs/1D-wall_MMS_nel_r_1_z_2_vpa_2_vperp_2_krook","runs/1D-wall_MMS_nel_r_1_z_4_vpa_4_vperp_4_krook",
+                        "runs/1D-wall_MMS_nel_r_1_z_8_vpa_8_vperp_8_krook"        ]
+        scan_type = "vpavperpz_nelement"
+        scan_name = "1D-2V-wall_cheb_krook"
+    elseif test_option == "mirror_wall-1D-2V"
+        # Krook wall test, no sheath for electrons, no radial coordinate
+        path_list = ["runs/1D-mirror_MMS_ngrid_9_nel_r_1_z_4_vpa_4_vperp_2_diss",
+                     "runs/1D-mirror_MMS_ngrid_9_nel_r_1_z_8_vpa_8_vperp_4_diss",
+                     "runs/1D-mirror_MMS_ngrid_9_nel_r_1_z_16_vpa_16_vperp_8_diss",
+                     "runs/1D-mirror_MMS_ngrid_9_nel_r_1_z_32_vpa_32_vperp_16_diss",]
+        scan_type = "vpa2vperpz_nelement"
+        scan_name = "mirror_wall-1D-2V"
+    end
+    print(path_list)
+    get_MMS_error_data(path_list,scan_type,scan_name)
+    return nothing
 end
 
 end

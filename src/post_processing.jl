@@ -354,18 +354,9 @@ function get_coords_ngrid(scan_input)
     return z_ngrid, r_ngrid, vpa_ngrid, vperp_ngrid, vz_ngrid, vr_ngrid, vzeta_ngrid
 end
 
-function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species,z,r)
+function get_composition(scan_input,n_ion_species,n_neutral_species)
     reference_params = setup_reference_parameters(scan_input)
-    # set geometry_input
-    # MRH need to get this in way that does not duplicate code
-    # MRH from moment_kinetics_input.jl
-    option = get(scan_input, "geometry_option", "constant-helical") #"1D-mirror"
-    pitch = get(scan_input, "pitch", 1.0)
-    rhostar = get(scan_input, "rhostar", get_default_rhostar(reference_params))
-    DeltaB = get(scan_input, "DeltaB", 1.0)
-    geo_in = geometry_input(rhostar,option,pitch,DeltaB)
-    geometry = init_magnetic_geometry(geo_in,z,r)
-    
+     
     # set composition input
     # MRH need to get this in way that does not duplicate code
     # MRH from moment_kinetics_input.jl
@@ -404,7 +395,23 @@ function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
         electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, Er_constant,
         mn_over_mi, me_over_mi, recycling_fraction, allocate_float(n_species))
-    return geometry, composition
+    return composition
+
+end
+
+function get_geometry(scan_input,z,r)
+    reference_params = setup_reference_parameters(scan_input)
+    # set geometry_input
+    # MRH need to get this in way that does not duplicate code
+    # MRH from moment_kinetics_input.jl
+    option = get(scan_input, "geometry_option", "constant-helical") #"1D-mirror"
+    pitch = get(scan_input, "pitch", 1.0)
+    rhostar = get(scan_input, "rhostar", get_default_rhostar(reference_params))
+    DeltaB = get(scan_input, "DeltaB", 1.0)
+    geo_in = geometry_input(rhostar,option,pitch,DeltaB)
+    geometry = init_magnetic_geometry(geo_in,z,r)
+    
+    return geometry
 
 end
 
@@ -787,9 +794,12 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
         end
     end
 
-    geometry, composition =
-        get_tuple_of_return_values(get_geometry_and_composition, scan_input,
-                                   n_ion_species, n_neutral_species, z, r)
+    geometry =
+        get_tuple_of_return_values(get_geometry, scan_input,
+                                   z, r)
+    composition =
+        get_tuple_of_return_values(get_composition, scan_input,
+                                   n_ion_species, n_neutral_species)
 
     # initialise the post-processing input options
     nwrite_movie, itime_min, itime_max, nwrite_movie_pdfs, itime_min_pdfs, itime_max_pdfs,

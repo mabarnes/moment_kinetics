@@ -35,7 +35,7 @@ using ..load_data: open_readonly_output_file, get_group, load_block_data,
                    load_species_data, load_time_data
 using ..initial_conditions: vpagrid_to_dzdt
 using ..post_processing: calculate_and_write_frequencies, construct_global_zr_coords,
-                         get_geometry_and_composition, read_distributed_zr_data!
+                         read_distributed_zr_data!
 using ..type_definitions: mk_float, mk_int
 using ..velocity_moments: integrate_over_vspace, integrate_over_neutral_vspace
 
