@@ -375,8 +375,9 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             pdf.charged.norm, boundary_distributions.pdf_rboundary_charged,
             moments.charged.dens, moments.charged.upar, moments.charged.ppar, moments,
             vpa.bc, z.bc, r.bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral,
-            vpa_advect, z_advect, r_advect,
-            composition, scratch_dummy, advance.r_diffusion, advance.vpa_diffusion)
+            vpa_advect, vperp_advect, z_advect, r_advect,
+            composition, scratch_dummy, advance.r_diffusion,
+            advance.vpa_diffusion, advance.vperp_diffusion)
         # Ensure normalised pdf exactly obeys integral constraints if evolving moments
         begin_s_r_z_region()
         @loop_s_r_z is ir iz begin
@@ -479,6 +480,7 @@ function setup_advance_flags(moments, composition, t_input, collisions,
     advance_neutral_energy = false
     r_diffusion = false
     vpa_diffusion = false
+    vperp_diffusion = false
     vz_diffusion = false
     explicit_weakform_fp_collisions = false
     # all advance flags remain false if using operator-splitting
@@ -583,6 +585,7 @@ function setup_advance_flags(moments, composition, t_input, collisions,
         r_diffusion = (advance_numerical_dissipation && num_diss_params.r_dissipation_coefficient > 0.0)
         # flag to determine if a d^2/dvpa^2 operator is present
         vpa_diffusion = ((advance_numerical_dissipation && num_diss_params.vpa_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
+        vperp_diffusion = ((advance_numerical_dissipation && num_diss_params.vperp_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
         vz_diffusion = (advance_numerical_dissipation && num_diss_params.vz_dissipation_coefficient > 0.0)
     end
 
@@ -599,7 +602,7 @@ function setup_advance_flags(moments, composition, t_input, collisions,
                         advance_energy, advance_neutral_external_source,
                         advance_neutral_sources, advance_neutral_continuity,
                         advance_neutral_force_balance, advance_neutral_energy, rk_coefs,
-                        manufactured_solns_test, r_diffusion, vpa_diffusion, vz_diffusion)
+                        manufactured_solns_test, r_diffusion, vpa_diffusion, vperp_diffusion, vz_diffusion)
 end
 
 function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies_ion,nspecies_neutral)
@@ -1337,7 +1340,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
 
     z_spectral, r_spectral, vpa_spectral, vperp_spectral = spectral_objects.z_spectral, spectral_objects.r_spectral, spectral_objects.vpa_spectral, spectral_objects.vperp_spectral
     vzeta_spectral, vr_spectral, vz_spectral = spectral_objects.vzeta_spectral, spectral_objects.vr_spectral, spectral_objects.vz_spectral
-    vpa_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
+    vpa_advect, vperp_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.vperp_advect, advect_objects.r_advect, advect_objects.z_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
     ##
@@ -1366,8 +1369,8 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     enforce_boundary_conditions!(new_scratch, moments,
         boundary_distributions.pdf_rboundary_charged, vpa.bc, z.bc, r.bc, vpa, vperp, z,
         r, vpa_spectral, vperp_spectral, 
-        vpa_advect, z_advect, r_advect, composition, scratch_dummy,
-        advance.r_diffusion, advance.vpa_diffusion)
+        vpa_advect, vperp_advect, z_advect, r_advect, composition, scratch_dummy,
+        advance.r_diffusion, advance.vpa_diffusion, advance.vperp_diffusion)
 
     if moments.evolve_density && moments.enforce_conservation
         begin_s_r_z_region()

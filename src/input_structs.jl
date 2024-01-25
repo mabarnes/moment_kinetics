@@ -79,6 +79,7 @@ mutable struct advance_info
     manufactured_solns_test::Bool
     r_diffusion::Bool #flag to control how r bc is imposed when r diffusion terms are present
     vpa_diffusion::Bool #flag to control how vpa bc is imposed when vpa diffusion terms are present
+    vperp_diffusion::Bool #flag to control how vperp bc is imposed when vperp diffusion terms are present
     vz_diffusion::Bool #flag to control how vz bc is imposed when vz diffusion terms are present
 end
 
