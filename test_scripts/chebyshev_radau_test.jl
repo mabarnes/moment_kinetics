@@ -82,6 +82,15 @@ function chebyshevradau_test(; ngrid=5, L_in=3.0)
     println("exact df: ",df_exact," num df: ",df_num," abs(err): ",df_err) 
     
     for iy in 1:y.n
+        ff[iy] = exp(-y.grid[iy]^2)
+    end
+    df_exact = 0.0
+    df_num = sum(D0.*ff)/y.element_scale[1]
+    df_err = abs(df_num - df_exact)
+    println("f(y) = exp(-y^2) test")
+    println("exact df: ",df_exact," num df: ",df_num," abs(err): ",df_err) 
+    
+    for iy in 1:y.n
         ff[iy] = sin(y.grid[iy])
     end
     df_exact = 1.0
@@ -89,6 +98,7 @@ function chebyshevradau_test(; ngrid=5, L_in=3.0)
     df_err = abs(df_num - df_exact)
     println("f(y) = sin(y) test")
     println("exact df: ",df_exact," num df: ",df_num," abs(err): ",df_err) 
+    
     for iy in 1:y.n
         ff[iy] = y.grid[iy] + (y.grid[iy])^2 + (y.grid[iy])^3
     end
