@@ -5948,7 +5948,7 @@ function manufactured_solutions_get_field_and_field_sym(run_info, variable_name;
                             :density_neutral, :f, :f_neutral)
         manufactured_funcs =
             manufactured_solutions(run_info.manufactured_solns_input, Lr_in, run_info.z.L,
-                                   run_info.r.bc, run_info.z.bc, run_info.geometry,
+                                   run_info.r.bc, run_info.z.bc, run_info.geometry.input,
                                    run_info.composition, run_info.species, run_info.r.n,
                                    nvperp)
     end
