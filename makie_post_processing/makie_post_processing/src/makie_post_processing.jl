@@ -3387,11 +3387,15 @@ end
 # Utility method to avoid code duplication when saving the calculate_steady_state_residual
 # plots
 function _save_residual_plots(fig_axes, plot_prefix)
-    for (key, fa) ∈ fig_axes
-        for (ax, lp) ∈ zip(fa[2], fa[3])
-            Legend(lp, ax)
+    try
+        for (key, fa) ∈ fig_axes
+            for (ax, lp) ∈ zip(fa[2], fa[3])
+                Legend(lp, ax)
+            end
+            save(plot_prefix * replace(key, " "=>"_") * ".pdf", fa[1])
         end
-        save(plot_prefix * replace(key, " "=>"_") * ".pdf", fa[1])
+    catch e
+        println("Error in _save_residual_plots(). Error was ", e)
     end
 end
 
