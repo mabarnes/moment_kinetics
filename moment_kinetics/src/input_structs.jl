@@ -17,6 +17,7 @@ export geometry_input
 export set_defaults_and_check_top_level!, set_defaults_and_check_section!,
        Dict_to_NamedTuple
 
+using ..communication
 using ..type_definitions: mk_float, mk_int
 
 using MPI
@@ -35,10 +36,18 @@ end
 """
 struct time_info
     nstep::mk_int
-    dt::mk_float
+    dt::MPISharedArray{mk_float,1}
+    previous_dt::MPISharedArray{mk_float,1}
+    next_output_time::MPISharedArray{mk_float,1}
+    dt_before_output::MPISharedArray{mk_float,1}
+    step_to_output::MPISharedArray{Bool,1}
     nwrite_moments::mk_int
     nwrite_dfns::mk_int
     n_rk_stages::mk_int
+    adaptive::Bool
+    rtol::mk_float
+    atol::mk_float
+    atol_upar::mk_float
     split_operators::Bool
     steady_state_residual::Bool
     converged_residual_value::mk_float

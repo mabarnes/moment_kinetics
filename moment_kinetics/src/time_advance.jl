@@ -191,7 +191,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
     # create array containing coefficients needed for the Runge Kutta time advance
-    rk_coefs = setup_runge_kutta_coefficients(t_params.n_rk_stages)
+    rk_coefs = setup_runge_kutta_coefficients(t_params.n_rk_stages, t_params.adaptive)
     # create the 'advance' struct to be used in later Euler advance to
     # indicate which parts of the equations are to be advanced concurrently.
     # if no splitting of operators, all terms advanced concurrently;
@@ -776,31 +776,67 @@ returns the needed Runge Kutta coefficients;
 e.g., if f is the function to be updated, then
 f^{n+1}[stage+1] = rk_coef[1,stage]*f^{n} + rk_coef[2,stage]*f^{n+1}[stage] + rk_coef[3,stage]*(f^{n}+dt*G[f^{n+1}[stage]]
 """
-function setup_runge_kutta_coefficients(n_rk_stages)
-    rk_coefs = allocate_float(3,n_rk_stages)
-    rk_coefs .= 0.0
-    if n_rk_stages == 4
-        rk_coefs[1,1] = 0.5
-        rk_coefs[3,1] = 0.5
-        rk_coefs[2,2] = 0.5
-        rk_coefs[3,2] = 0.5
-        rk_coefs[1,3] = 2.0/3.0
-        rk_coefs[2,3] = 1.0/6.0
-        rk_coefs[3,3] = 1.0/6.0
-        rk_coefs[2,4] = 0.5
-        rk_coefs[3,4] = 0.5
-    elseif n_rk_stages == 3
-        rk_coefs[3,1] = 1.0
-        rk_coefs[1,2] = 0.75
-        rk_coefs[3,2] = 0.25
-        rk_coefs[1,3] = 1.0/3.0
-        rk_coefs[3,3] = 2.0/3.0
-    elseif n_rk_stages == 2
-        rk_coefs[3,1] = 1.0
-        rk_coefs[1,2] = 0.5
-        rk_coefs[3,2] = 0.5
+function setup_runge_kutta_coefficients(n_rk_stages, adaptive)
+    if adaptive
+        if n_rk_stages == 6
+            # Embedded 4(5) order Runge-Kutta-Fehlberg method.
+            # Note uses the 5th order solution for the time advance, even though the error
+            # estimate is for the 4th order solution.
+            #
+            # Coefficients originate here: 
+            # https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method,
+            # 'COEFFICIENTS FOR RK4(5), FORMULA 2 Table III in Fehlberg'
+            #
+            # Coefficients converted to the format for moment_kinetics time-stepper using
+            # `util/calculate_rk_coeffs.jl`
+            rk_coefs = mk_float[3//4 5//8   10469//2197  115//324        121//240    641//1980  11//36   ;
+                                1//4 3//32  17328//2197  95//54          33//10      232//165   4//3     ;
+                                0    9//32 -32896//2197 -95744//29241   -1408//285  -512//171  -512//171 ;
+                                0    0      7296//2197   553475//233928  6591//1520  2197//836  2197//836;
+                                0    0      0           -845//4104      -77//40     -56//55    -1        ;
+                                0    0      0            0              -11//40      34//55     8//11    ;
+                                0    0      0            0               0           2//55     -1        ]
+        elseif n_rk_stages == 4
+            # Fekete SSPRK(4,3)
+            # Note this is the same as moment_kinetics original 4-stage SSPRK method, with
+            # the addition of a truncation error estimate.
+            rk_coefs = mk_float[1//2 0    2//3 0    -1//2;
+                                1//2 1//2 0    0     0   ;
+                                0    1//2 1//6 0     0   ;
+                                0    0    1//6 1//2  1   ;
+                                0    0    0    1//2 -1//2]
+        else
+            error("Unsupported number of RK stages for adaptive timestepping, "
+                  * "n_rk_stages=$n_rk_stages")
+        end
     else
-        rk_coefs[3,1] = 1.0
+        rk_coefs = allocate_float(3,n_rk_stages)
+        rk_coefs .= 0.0
+        if n_rk_stages == 4
+            rk_coefs[1,1] = 0.5
+            rk_coefs[3,1] = 0.5
+            rk_coefs[2,2] = 0.5
+            rk_coefs[3,2] = 0.5
+            rk_coefs[1,3] = 2.0/3.0
+            rk_coefs[2,3] = 1.0/6.0
+            rk_coefs[3,3] = 1.0/6.0
+            rk_coefs[2,4] = 0.5
+            rk_coefs[3,4] = 0.5
+        elseif n_rk_stages == 3
+            rk_coefs[3,1] = 1.0
+            rk_coefs[1,2] = 0.75
+            rk_coefs[3,2] = 0.25
+            rk_coefs[1,3] = 1.0/3.0
+            rk_coefs[3,3] = 2.0/3.0
+        elseif n_rk_stages == 2
+            rk_coefs[3,1] = 1.0
+            rk_coefs[1,2] = 0.5
+            rk_coefs[3,2] = 0.5
+        elseif n_rk_stages == 1
+            rk_coefs[3,1] = 1.0
+        else
+            error("Unsupported number of RK stages, n_rk_stages=$n_rk_stages")
+        end
     end
     return rk_coefs
 end
@@ -844,33 +880,73 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
 
     start_time = now()
 
+    moments_output_counter = 1
+    moments_output_times = [t + i*t_params.dt[]
+                            for i ∈ t_params.nwrite_moments:t_params.nwrite_moments:t_params.nstep]
+    dfns_output_counter = 1
+    dfns_output_times = [t + i*t_params.dt[]
+                         for i ∈ t_params.nwrite_dfns:t_params.nwrite_dfns:t_params.nstep]
+    t_params.next_output_time[] = min(moments_output_times[moments_output_counter],
+                                     dfns_output_times[dfns_output_counter])
+    end_time = t + t_params.dt[] * t_params.nstep
+    epsilon = 1.e-11
+
     # main time advance loop
     iwrite_moments = 2
     iwrite_dfns = 2
     finish_now = false
-    for i ∈ 1:t_params.nstep
+    step_counter = 1
+    while true
         if t_params.split_operators
             # MRH NOT SUPPORTED
             time_advance_split_operators!(pdf, scratch, t, t_params, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
                 composition, collisions, external_source_settings, num_diss_params,
-                advance, i)
+                advance, step_counter)
         else
             time_advance_no_splitting!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
                 moments, fields, spectral_objects, advect_objects,
                 composition, collisions, geometry, boundary_distributions,
                 external_source_settings, num_diss_params, advance, fp_arrays,  scratch_dummy,
-                manufactured_source_list, i)
+                manufactured_source_list, step_counter)
         end
         # update the time
-        t += t_params.dt
+        t += t_params.previous_dt[]
 
-        if i == t_params.nstep
+        if t ≥ end_time - epsilon || t_params.dt[] < 0.0
             # Ensure all output is written at the final step
+            # Negative t_params.dt[] indicates the time stepping has failed, so stop and
+            # write output.
             finish_now = true
         end
+        if t ≥ moments_output_times[moments_output_counter] - epsilon
+            if moments_output_counter < length(moments_output_times)
+                moments_output_counter += 1
+                @serial_region begin
+                    t_params.next_output_time[] =
+                        min(moments_output_times[moments_output_counter],
+                            dfns_output_times[dfns_output_counter])
+                end
+            end
+            write_moments = true
+        else
+            write_moments = false
+        end
+        if t ≥ dfns_output_times[dfns_output_counter] - epsilon
+            if dfns_output_counter < length(dfns_output_times)
+                dfns_output_counter += 1
+                @serial_region begin
+                    t_params.next_output_time[] =
+                        min(moments_output_times[moments_output_counter],
+                            dfns_output_times[dfns_output_counter])
+                end
+            end
+            write_dfns = true
+        else
+            write_dfns = false
+        end
 
-        if mod(i,t_params.nwrite_moments) == 0 || mod(i,t_params.nwrite_dfns) == 0 || finish_now
+        if write_moments || write_dfns || finish_now
             # update the diagnostic chodura condition
             update_chodura!(moments,scratch[end].pdf,vpa,vperp,z,r,spectral_objects.r_spectral,composition,geometry,scratch_dummy,advect_objects.z_advect)
 
@@ -907,7 +983,7 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
             time_for_run = to_minutes(now() - start_time)
         end
         # write moments data to file every nwrite_moments time steps
-        if mod(i,t_params.nwrite_moments) == 0 || finish_now
+        if write_moments || finish_now
             @debug_detect_redundant_block_synchronize begin
                 # Skip check for redundant _block_synchronize() during file I/O because
                 # it only runs infrequently
@@ -916,7 +992,7 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
             begin_serial_region()
             @serial_region begin
                 if global_rank[] == 0
-                    print("finished time step ", rpad(string(i), 7),"  ",
+                    print("finished time step ", rpad(string(step_counter), 7),"  ",
                           Dates.format(now(), dateformat"H:MM:SS"))
                 end
             end
@@ -935,7 +1011,7 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
                 @loop_s is begin
                     @views residual_ni =
                         steady_state_residuals(scratch[end].density[:,:,is],
-                                               scratch[1].density[:,:,is], t_params.dt;
+                                               scratch[1].density[:,:,is], t_params.dt[];
                                                use_mpi=true, only_max_abs=true)
                     if global_rank[] == 0
                         residual_ni = first(values(residual_ni))[1]
@@ -949,7 +1025,7 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
                         residual_nn =
                             steady_state_residuals(scratch[end].density_neutral[:,:,isn],
                                                    scratch[1].density_neutral[:,:,isn],
-                                                   t_params.dt; use_mpi=true,
+                                                   t_params.dt[]; use_mpi=true,
                                                    only_max_abs=true)
                         if global_rank[] == 0
                             residual_nn = first(values(residual_nn))[1]
@@ -988,7 +1064,7 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
                 debug_detect_redundant_is_active[] = true
             end
         end
-        if mod(i,t_params.nwrite_dfns) == 0 || finish_now
+        if write_dfns || finish_now
             @debug_detect_redundant_block_synchronize begin
                 # Skip check for redundant _block_synchronize() during file I/O because
                 # it only runs infrequently
@@ -997,7 +1073,7 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
             begin_serial_region()
             @serial_region begin
                 if global_rank[] == 0
-                    println("writing distribution functions at step ", i,"  ",
+                    println("writing distribution functions at step ", step_counter,"  ",
                                    Dates.format(now(), dateformat"H:MM:SS"))
                     flush(stdout)
                 end
@@ -1017,6 +1093,17 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
         if finish_now
             break
         end
+        if t_params.adaptive
+            if t >= end_time - epsilon
+                break
+            end
+        else
+            if step_counter >= t_params.nstep
+                break
+            end
+        end
+
+        step_counter += 1
     end
     return nothing
 end
@@ -1030,7 +1117,6 @@ function time_advance_split_operators!(pdf, scratch, t, t_params, vpa, z,
     # define some abbreviated variables for tidiness
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
-    dt = t_params.dt
     n_rk_stages = t_params.n_rk_stages
     # to ensure 2nd order accuracy in time for operator-split advance,
     # have to reverse order of operations every other time step
@@ -1217,12 +1303,14 @@ stages, if the quantities are evolved separately from the modified pdf;
 or update them by taking the appropriate velocity moment of the evolved pdf
 """
 function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr, vzeta,
-                    vpa, vperp, z, r, spectral_objects, advect_objects, rk_coefs, istage, composition,
-                    geometry, num_diss_params, advance, scratch_dummy)
+                    vpa, vperp, z, r, spectral_objects, advect_objects, t, t_params,
+                    all_rk_coefs, istage, composition, geometry, num_diss_params, advance,
+                    scratch_dummy)
     begin_s_r_z_region()
 
     new_scratch = scratch[istage+1]
     old_scratch = scratch[istage]
+    rk_coefs = all_rk_coefs[:,istage]
 
     z_spectral, r_spectral, vpa_spectral, vperp_spectral = spectral_objects.z_spectral, spectral_objects.r_spectral, spectral_objects.vpa_spectral, spectral_objects.vperp_spectral
     vzeta_spectral, vr_spectral, vz_spectral = spectral_objects.vzeta_spectral, spectral_objects.vr_spectral, spectral_objects.vz_spectral
@@ -1234,11 +1322,18 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     ##
     # here we seem to have duplicate arrays for storing n, u||, p||, etc, but not for vth
     # 'scratch' is for the multiple stages of time advanced quantities, but 'moments' can be updated directly at each stage
-    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-        new_scratch.pdf[ivpa,ivperp,iz,ir,is] = rk_coefs[1]*pdf.charged.norm[ivpa,ivperp,iz,ir,is] + rk_coefs[2]*old_scratch.pdf[ivpa,ivperp,iz,ir,is] + rk_coefs[3]*new_scratch.pdf[ivpa,ivperp,iz,ir,is]
+    if t_params.adaptive
+        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+            new_scratch.pdf[ivpa,ivperp,iz,ir,is] =
+                sum(rk_coefs[i]*scratch[i].pdf[ivpa,ivperp,iz,ir,is] for i ∈ 1:istage+1)
+        end
+    else
+        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+            new_scratch.pdf[ivpa,ivperp,iz,ir,is] = rk_coefs[1]*pdf.charged.norm[ivpa,ivperp,iz,ir,is] + rk_coefs[2]*old_scratch.pdf[ivpa,ivperp,iz,ir,is] + rk_coefs[3]*new_scratch.pdf[ivpa,ivperp,iz,ir,is]
+        end
     end
     # use Runge Kutta to update any velocity moments evolved separately from the pdf
-    rk_update_evolved_moments!(new_scratch, old_scratch, moments, rk_coefs)
+    rk_update_evolved_moments!(scratch, moments, rk_coefs, t_params.adaptive, istage)
 
     # Ensure there are no negative values in the pdf before applying boundary
     # conditions, so that negative deviations do not mess up the integral-constraint
@@ -1265,7 +1360,10 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
                                                   vpa)
         end
     end
+
     # update remaining velocity moments that are calculable from the evolved pdf
+    # Note these may be needed for the boundary condition on the neutrals, so must be
+    # calculated before that is applied.
     update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition)
     # update the diagnostic chodura condition
     # update_chodura!(moments,new_scratch.pdf,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
@@ -1293,18 +1391,25 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     calculate_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
                                   num_diss_params)
 
-    ##
-    # update the neutral particle distribution and moments
-    ##
-
     if composition.n_neutral_species > 0
+        ##
+        # update the neutral particle distribution and moments
+        ##
         begin_sn_r_z_region()
-        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
-            new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = ( rk_coefs[1]*pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn]
-             + rk_coefs[2]*old_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] + rk_coefs[3]*new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn])
+        if t_params.adaptive
+            @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+                new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] =
+                    sum(rk_coefs[i]*scratch[i].pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] for i ∈ 1:istage+1)
+            end
+        else
+            @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+                new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = ( rk_coefs[1]*pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn]
+                 + rk_coefs[2]*old_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] + rk_coefs[3]*new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn])
+            end
         end
         # use Runge Kutta to update any velocity moments evolved separately from the pdf
-        rk_update_evolved_moments_neutral!(new_scratch, old_scratch, moments, rk_coefs)
+        rk_update_evolved_moments_neutral!(scratch, moments, rk_coefs, t_params.adaptive,
+                                           istage)
 
         # Ensure there are no negative values in the pdf before applying boundary
         # conditions, so that negative deviations do not mess up the integral-constraint
@@ -1335,7 +1440,54 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
                     new_scratch.pdf_neutral[:,:,:,iz,ir,isn], moments, vz)
             end
         end
+    end
 
+    if t_params.adaptive && istage == t_params.n_rk_stages
+        # Note the timestep update must be done before calculating derived moments and
+        # moment derivatives, because the timstep might need to be re-done with a smaller
+        # dt, in which case scratch[t_params.n_rk_stages+1] will be reset to the values
+        # from the beginning of the timestep here.
+        adaptive_timestep_update!(scratch, t, t_params, all_rk_coefs[:,end],
+                                  moments, composition.n_neutral_species)
+        # Re-do this in case adaptive_timestep_update re-arranged the `scratch` vector
+        new_scratch = scratch[istage+1]
+        old_scratch = scratch[istage]
+
+        if t_params.previous_dt[] == 0.0
+
+            # update remaining velocity moments that are calculable from the evolved pdf
+            # These need to be re-calculated because `new_scratch` was swapped with the
+            # beginning of the timestep, because the timestep failed
+            update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition)
+            # update the diagnostic chodura condition
+            # update_chodura!(moments,new_scratch.pdf,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
+            # update the thermal speed
+            begin_s_r_z_region()
+            try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
+                update_vth!(moments.charged.vth, new_scratch.ppar, new_scratch.pperp, new_scratch.density, vperp, z, r, composition)
+            catch e
+                if global_size[] > 1
+                    println("ERROR: error calculating vth in time_advance.jl")
+                    println(e)
+                    display(stacktrace(catch_backtrace()))
+                    flush(stdout)
+                    flush(stderr)
+                    MPI.Abort(comm_world, 1)
+                end
+                rethrow(e)
+            end
+            # update the parallel heat flux
+            update_qpar!(moments.charged.qpar, moments.charged.qpar_updated, new_scratch.density,
+                         new_scratch.upar, moments.charged.vth, new_scratch.pdf, vpa, vperp, z, r,
+                         composition, moments.evolve_density, moments.evolve_upar,
+                         moments.evolve_ppar)
+
+            calculate_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
+                                          num_diss_params)
+        end
+    end
+
+    if composition.n_neutral_species > 0
         # update remaining velocity moments that are calculable from the evolved pdf
         update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z, r,
                                         composition)
@@ -1373,23 +1525,47 @@ end
 use Runge Kutta to update any charged-particle velocity moments evolved separately from
 the pdf
 """
-function rk_update_evolved_moments!(new_scratch, old_scratch, moments, rk_coefs)
+function rk_update_evolved_moments!(scratch, moments, rk_coefs, adaptive, istage)
     # if separately evolving the particle density, update using RK
+    new_scratch = scratch[istage+1]
+    old_scratch = scratch[istage]
+
     if moments.evolve_density
-        @loop_s_r_z is ir iz begin
-            new_scratch.density[iz,ir,is] = rk_coefs[1]*moments.charged.dens[iz,ir,is] + rk_coefs[2]*old_scratch.density[iz,ir,is] + rk_coefs[3]*new_scratch.density[iz,ir,is]
+        if adaptive
+            @loop_s_r_z is ir iz begin
+                new_scratch.density[iz,ir,is] =
+                    sum(rk_coefs[i]*scratch[i].density[iz,ir,is] for i ∈ 1:istage+1)
+            end
+        else
+            @loop_s_r_z is ir iz begin
+                new_scratch.density[iz,ir,is] = rk_coefs[1]*moments.charged.dens[iz,ir,is] + rk_coefs[2]*old_scratch.density[iz,ir,is] + rk_coefs[3]*new_scratch.density[iz,ir,is]
+            end
         end
     end
     # if separately evolving the parallel flow, update using RK
     if moments.evolve_upar
-        @loop_s_r_z is ir iz begin
-            new_scratch.upar[iz,ir,is] = rk_coefs[1]*moments.charged.upar[iz,ir,is] + rk_coefs[2]*old_scratch.upar[iz,ir,is] + rk_coefs[3]*new_scratch.upar[iz,ir,is]
+        if adaptive
+            @loop_s_r_z is ir iz begin
+                new_scratch.upar[iz,ir,is] =
+                    sum(rk_coefs[i]*scratch[i].upar[iz,ir,is] for i ∈ 1:istage+1)
+            end
+        else
+            @loop_s_r_z is ir iz begin
+                new_scratch.upar[iz,ir,is] = rk_coefs[1]*moments.charged.upar[iz,ir,is] + rk_coefs[2]*old_scratch.upar[iz,ir,is] + rk_coefs[3]*new_scratch.upar[iz,ir,is]
+            end
         end
     end
     # if separately evolving the parallel pressure, update using RK;
     if moments.evolve_ppar
-        @loop_s_r_z is ir iz begin
-            new_scratch.ppar[iz,ir,is] = rk_coefs[1]*moments.charged.ppar[iz,ir,is] + rk_coefs[2]*old_scratch.ppar[iz,ir,is] + rk_coefs[3]*new_scratch.ppar[iz,ir,is]
+        if adaptive
+            @loop_s_r_z is ir iz begin
+                new_scratch.ppar[iz,ir,is] =
+                    sum(rk_coefs[i]*scratch[i].ppar[iz,ir,is] for i ∈ 1:istage+1)
+            end
+        else
+            @loop_s_r_z is ir iz begin
+                new_scratch.ppar[iz,ir,is] = rk_coefs[1]*moments.charged.ppar[iz,ir,is] + rk_coefs[2]*old_scratch.ppar[iz,ir,is] + rk_coefs[3]*new_scratch.ppar[iz,ir,is]
+            end
         end
     end
 end
@@ -1398,25 +1574,290 @@ end
 use Runge Kutta to update any neutral-particle velocity moments evolved separately from
 the pdf
 """
-function rk_update_evolved_moments_neutral!(new_scratch, old_scratch, moments, rk_coefs)
+function rk_update_evolved_moments_neutral!(scratch, moments, rk_coefs, adaptive, istage)
     # if separately evolving the particle density, update using RK
+    new_scratch = scratch[istage+1]
+    old_scratch = scratch[istage]
+
     if moments.evolve_density
-        @loop_sn_r_z isn ir iz begin
-            new_scratch.density_neutral[iz,ir,isn] = rk_coefs[1]*moments.neutral.dens[iz,ir,isn] + rk_coefs[2]*old_scratch.density_neutral[iz,ir,isn] + rk_coefs[3]*new_scratch.density_neutral[iz,ir,isn]
+        if adaptive
+            @loop_sn_r_z isn ir iz begin
+                new_scratch.density_neutral[iz,ir,isn] =
+                    sum(rk_coefs[i]*scratch[i].density_neutral[iz,ir,isn] for i ∈ 1:istage+1)
+            end
+        else
+            @loop_sn_r_z isn ir iz begin
+                new_scratch.density_neutral[iz,ir,isn] = rk_coefs[1]*moments.neutral.dens[iz,ir,isn] + rk_coefs[2]*old_scratch.density_neutral[iz,ir,isn] + rk_coefs[3]*new_scratch.density_neutral[iz,ir,isn]
+            end
         end
     end
     # if separately evolving the parallel flow, update using RK
     if moments.evolve_upar
-        @loop_sn_r_z isn ir iz begin
-            new_scratch.uz_neutral[iz,ir,isn] = rk_coefs[1]*moments.neutral.uz[iz,ir,isn] + rk_coefs[2]*old_scratch.uz_neutral[iz,ir,isn] + rk_coefs[3]*new_scratch.uz_neutral[iz,ir,isn]
+        if adaptive
+            @loop_sn_r_z isn ir iz begin
+                new_scratch.uz_neutral[iz,ir,isn] =
+                sum(rk_coefs[i]*scratch[i].uz_neutral[iz,ir,isn] for i ∈ 1:istage+1)
+            end
+        else
+            @loop_sn_r_z isn ir iz begin
+                new_scratch.uz_neutral[iz,ir,isn] = rk_coefs[1]*moments.neutral.uz[iz,ir,isn] + rk_coefs[2]*old_scratch.uz_neutral[iz,ir,isn] + rk_coefs[3]*new_scratch.uz_neutral[iz,ir,isn]
+            end
         end
     end
     # if separately evolving the parallel pressure, update using RK;
     if moments.evolve_ppar
-        @loop_sn_r_z isn ir iz begin
-            new_scratch.pz_neutral[iz,ir,isn] = rk_coefs[1]*moments.neutral.pz[iz,ir,isn] + rk_coefs[2]*old_scratch.pz_neutral[iz,ir,isn] + rk_coefs[3]*new_scratch.pz_neutral[iz,ir,isn]
+        if adaptive
+            @loop_sn_r_z isn ir iz begin
+                new_scratch.pz_neutral[iz,ir,isn] =
+                sum(rk_coefs[i]*scratch[i].pz_neutral[iz,ir,isn] for i ∈ 1:istage+1)
+            end
+        else
+            @loop_sn_r_z isn ir iz begin
+                new_scratch.pz_neutral[iz,ir,isn] = rk_coefs[1]*moments.neutral.pz[iz,ir,isn] + rk_coefs[2]*old_scratch.pz_neutral[iz,ir,isn] + rk_coefs[3]*new_scratch.pz_neutral[iz,ir,isn]
+            end
         end
     end
+end
+
+"""
+    local_error_norm(error, f, rtol, atol)
+    local_error_norm(error, f, rtol, atol, neutral=false)
+
+Maximum error norm in the range owned by this MPI process, given by
+```math
+\\max(\\frac{|\\mathtt{error}|}{\\mathtt{rtol}*|\\mathtt{f}| + \\mathtt{atol})
+```
+
+3 dimensional arrays (which represent moments) are treated as ion moments unless
+`neutral=true` is passed.
+"""
+function local_maxiumum_abs end
+
+function local_error_norm(error::MPISharedArray{mk_float,2},
+                          f::MPISharedArray{mk_float,2}, rtol, atol)
+    f_max = -Inf
+    @loop_r_z ir iz begin
+        error_norm = abs(error[iz,ir]) / (rtol*abs(f[iz,ir]) + atol)
+        f_max = max(f_max, error_norm)
+    end
+    return f_max
+end
+function local_error_norm(error::MPISharedArray{mk_float,3},
+                          f::MPISharedArray{mk_float,3}, rtol, atol, neutral=false)
+    f_max = -Inf
+    if neutral
+        @loop_sn_r_z isn ir iz begin
+            error_norm = abs(error[iz,ir,isn]) / (rtol*abs(f[iz,ir,isn]) + atol)
+            f_max = max(f_max, error_norm)
+        end
+    else
+        @loop_s_r_z is ir iz begin
+            error_norm = abs(error[iz,ir,is]) / (rtol*abs(f[iz,ir,is]) + atol)
+            f_max = max(f_max, abs(f[iz,ir,is]))
+            f_max = max(f_max, error_norm)
+        end
+    end
+    return f_max
+end
+function local_error_norm(error::MPISharedArray{mk_float,5},
+                          f::MPISharedArray{mk_float,5}, rtol, atol)
+    f_max = -Inf
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        error_norm = abs(error[ivpa,ivperp,iz,ir,is]) /
+                     (rtol*abs(f[ivpa,ivperp,iz,ir,is]) + atol)
+        f_max = max(f_max, error_norm)
+    end
+    return f_max
+end
+function local_error_norm(error::MPISharedArray{mk_float,6},
+                          f::MPISharedArray{mk_float,6}, rtol, atol)
+    f_max = -Inf
+    @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+        error_norm = abs(error[ivz,ivr,ivzeta,iz,ir,isn]) /
+                     (rtol*abs(f[ivz,ivr,ivzeta,iz,ir,isn]) + atol)
+        f_max = max(f_max, error_norm)
+    end
+    return f_max
+end
+
+"""
+    adaptive_timestep_update!(scratch, t_params, rk_coefs, moments, n_neutral_species)
+
+Check the error estimate for the embedded RK method and adjust the timestep if
+appropriate.
+"""
+function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
+                                   n_neutral_species)
+    error_coeffs = rk_coefs[:,end]
+    if length(scratch) < 3
+        # This should never happen as an adaptive RK scheme needs at least 2 RHS evals so
+        # (with the pre-timestep data) there must be at least 3 entries in `scratch`.
+        error("adaptive timestep needs a buffer scratch array")
+    end
+
+    error_norm = 0.0
+
+    # Calculate error for ion distribution functions
+    error = scratch[2].pdf
+    n = length(error_coeffs)
+    begin_s_r_z_vperp_vpa_region()
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        error[ivpa,ivperp,iz,ir,is] =
+            sum(error_coeffs[i] * scratch[i].pdf[ivpa,ivperp,iz,ir,is] for i ∈ 1:n)
+    end
+    error_norm = max(error_norm, local_error_norm(error, scratch[end].pdf, t_params.rtol,
+                                                  t_params.atol))
+
+    # Calculate error for ion moments, if necessary
+    if moments.evolve_density
+        begin_s_r_z_region()
+        error = scratch[2].density
+        @loop_s_r_z is ir iz begin
+            error[iz,ir,is] = sum(error_coeffs[i] * scratch[i].density[iz,ir,is]
+                                  for i ∈ 1:n)
+        end
+        error_norm = max(error_norm, local_error_norm(error, scratch[end].density,
+                                                      t_params.rtol, t_params.atol))
+    end
+    if moments.evolve_upar
+        begin_s_r_z_region()
+        error = scratch[2].upar
+        @loop_s_r_z is ir iz begin
+            error[iz,ir,is] = sum(error_coeffs[i] * scratch[i].upar[iz,ir,is]
+                                  for i ∈ 1:n)
+        end
+        error_norm = max(error_norm, local_error_norm(error, scratch[end].upar,
+                                                      t_params.rtol, t_params.atol))
+    end
+    if moments.evolve_ppar
+        begin_s_r_z_region()
+        error = scratch[2].ppar
+        @loop_s_r_z is ir iz begin
+            error[iz,ir,is] = sum(error_coeffs[i] * scratch[i].ppar[iz,ir,is]
+                                  for i ∈ 1:n)
+        end
+        error_norm = max(error_norm, local_error_norm(error, scratch[end].ppar,
+                                                      t_params.rtol, t_params.atol))
+    end
+
+    if n_neutral_species > 0
+        # Calculate error for neutral distribution functions
+        error = scratch[2].pdf_neutral
+        n = length(error_coeffs)
+        begin_sn_r_z_vzeta_vr_vz_region()
+        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+            error[ivz,ivr,ivzeta,iz,ir,isn] =
+                sum(error_coeffs[i] * scratch[i].pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
+                    for i ∈ 1:n)
+        end
+        error_norm = max(error_norm, local_error_norm(error, scratch[end].pdf_neutral,
+                                                      t_params.rtol, t_params.atol))
+
+        # Calculate error for ion moments, if necessary
+        if moments.evolve_density
+            begin_sn_r_z_region()
+            error = scratch[2].density_neutral
+            @loop_sn_r_z isn ir iz begin
+                error[iz,ir,isn] = sum(error_coeffs[i] *
+                                       scratch[i].density_neutral[iz,ir,isn]
+                                       for i ∈ 1:n)
+            end
+            error_norm = max(error_norm, local_error_norm(error, scratch[end].density,
+                                                          t_params.rtol, t_params.atol))
+        end
+        if moments.evolve_upar
+            begin_s_r_z_region()
+            error = scratch[2].uz_neutral
+            @loop_sn_r_z isn ir iz begin
+                error[iz,ir,isn] = sum(error_coeffs[i] *
+                                       scratch[i].uz_neutral[iz,ir,isn]
+                                       for i ∈ 1:n)
+            end
+            error_norm = max(error_norm, local_error_norm(error, scratch[end].uz_neutral,
+                                                          t_params.rtol, t_params.atol))
+        end
+        if moments.evolve_ppar
+            begin_s_r_z_region()
+            error = scratch[2].pz_neutral
+            @loop_sn_r_z isn ir iz begin
+                error[iz,ir,isn] = sum(error_coeffs[i] *
+                                       scratch[i].pz_neutral[iz,ir,isn]
+                                       for i ∈ 1:n)
+            end
+            error_norm = max(error_norm, local_error_norm(error, scratch[end].pz_neutral,
+                                                          t_params.rtol, t_params.atol))
+        end
+    end
+
+    # Get overall maximum error on the shared-memory block
+    error_norm = MPI.Reduce(error_norm, max, comm_block[]; root=0)
+
+    @serial_region begin
+        # Get maximum error over all blocks
+        error_norm = MPI.Allreduce(error_norm, max, comm_inter_block[])
+    end
+    error_norm = MPI.bcast(error_norm, 0, comm_block[])
+
+    if error_norm > 1.0
+        # Timestep failed, reduce timestep and re-try
+        success = false
+
+        # Set scratch[end] equal to scratch[1] to start the timestep over
+        scratch_temp = scratch[end]
+        scratch[end] = scratch[1]
+        scratch[1] = scratch_temp
+
+        @serial_region begin
+            # If we were trying to take a step to the output timestep, dt will be smaller on
+            # the re-try, so will not reach the output time.
+            t_params.step_to_output[] = false
+
+            # Reduce timestep to try to reduce error - this factor should probably be settable!
+            t_params.dt[] /= 2.0
+
+            minimum_dt = 1.e-14
+            if t_params.dt[] < minimum_dt
+                println("Time advance failed: trying to set dt=$(t_params.dt[]) less than "
+                        * "$minimum_dt at t=$t. Ending run.")
+                # Set dt negative to signal an error
+                t_params.dt[] = -1.0
+            end
+
+            # Don't update the simulation time, as this step failed
+            t_params.previous_dt[] = 0.0
+
+            println("t=$t, error_norm=$error_norm, decreasing timestep to ", t_params.dt[])
+        end
+    else
+        success = true
+
+        @serial_region begin
+            # Save the timestep used to complete this step, this is used to update the
+            # simulation time.
+            t_params.previous_dt[] = t_params.dt[]
+        end
+    end
+
+    @serial_region begin
+        if success && t_params.step_to_output[]
+            # Completed an output step, reset dt to what it was before it was reduced to reach
+            # the output time
+            t_params.dt[] = t_params.dt_before_output[]
+            t_params.step_to_output[] = false
+        elseif error_norm < 0.1
+            # Try increasing timestep
+            t_params.dt[] *= 1.1
+            println("t=$t, error_norm=$error_norm, increasing timestep to ", t_params.dt[])
+        end
+
+        if t + t_params.dt[] >= t_params.next_output_time[]
+            t_params.dt_before_output[] = t_params.dt[]
+            t_params.dt[] = t_params.next_output_time[] - t
+            t_params.step_to_output[] = true
+        end
+    end
+
+    return nothing
 end
 
 """
@@ -1512,13 +1953,13 @@ function ssp_rk!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyrophase
         euler_time_advance!(scratch[istage+1], scratch[istage],
             pdf, fields, moments,
             advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t,
-            t_params, spectral_objects, composition,
+            t_params.dt[], spectral_objects, composition,
             collisions, geometry, scratch_dummy, manufactured_source_list,
             external_source_settings, num_diss_params, advance, fp_arrays, istage)
         @views rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr,
                           vzeta, vpa, vperp, z, r, spectral_objects, advect_objects,
-                          advance.rk_coefs[:,istage], istage, composition, geometry,
-                          num_diss_params, advance, scratch_dummy)
+                          t, t_params, advance.rk_coefs, istage, composition,
+                          geometry, num_diss_params, advance, scratch_dummy)
     end
 
     istage = n_rk_stages+1
@@ -1598,14 +2039,13 @@ using the forward Euler method: fvec_out = fvec_in + dt*fvec_in,
 with fvec_in an input and fvec_out the output
 """
 function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
-    advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t, t_params,
+    advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t, dt,
     spectral_objects, composition, collisions, geometry, scratch_dummy,
     manufactured_source_list, external_source_settings, num_diss_params, advance, fp_arrays, istage)
 
     # define some abbreviated variables for tidiness
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
-    dt = t_params.dt
     # vpa_advection! advances the 1D advection equation in vpa.
     # only charged species have a force accelerating them in vpa;
     # however, neutral species do have non-zero d(wpa)/dt, so there is advection in wpa

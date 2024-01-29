@@ -8,7 +8,8 @@ export performance_test
 export read_input_file
 
 using ..type_definitions: mk_float, mk_int
-using ..array_allocation: allocate_float
+using ..array_allocation: allocate_float, allocate_bool, allocate_shared_float,
+                          allocate_shared_bool
 using ..communication
 using ..coordinates: define_coordinate
 using ..external_sources
@@ -202,9 +203,16 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         stopfile_name="stop",
         steady_state_residual=false,
         converged_residual_value=-1.0,
+        adaptive=false,
+        rtol=1.0e-5,
+        atol=1.0e-16,
+        atol_upar=nothing,
        )
     if timestepping_section["nwrite_dfns"] === nothing
         timestepping_section["nwrite_dfns"] = timestepping_section["nstep"]
+    end
+    if timestepping_section["atol_upar"] === nothing
+        timestepping_section["atol_upar"] = 1.0e-2 * timestepping_section["rtol"]
     end
     timestepping_input = Dict_to_NamedTuple(timestepping_section)
     if timestepping_input.split_operators && timestepping_input.adaptive
@@ -412,10 +420,35 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     #irank_z = 0
     #nrank_z = 0
 
-    t_params = time_info(timestepping_input.nstep, timestepping_input.dt,
+    if ignore_MPI
+        dt_shared = allocate_float(1)
+        dt_shared[] = timestepping_input.dt
+        previous_dt_shared = allocate_float(1)
+        previous_dt_shared[] = timestepping_input.dt
+        next_output_time = allocate_float(1)
+        next_output_time[] = 0.0
+        dt_before_output = allocate_float(1)
+        dt_before_output[] = timestepping_input.dt
+        step_to_output = allocate_bool(1)
+        step_to_output[] = false
+    else
+        dt_shared = allocate_shared_float(1)
+        dt_shared[] = timestepping_input.dt
+        previous_dt_shared = allocate_shared_float(1)
+        previous_dt_shared[] = timestepping_input.dt
+        next_output_time = allocate_shared_float(1)
+        next_output_time[] = 0.0
+        dt_before_output = allocate_shared_float(1)
+        dt_before_output[] = timestepping_input.dt
+        step_to_output = allocate_shared_bool(1)
+        step_to_output[] = false
+    end
+    t_params = time_info(timestepping_input.nstep, dt_shared, previous_dt_shared,
+                         next_output_time, dt_before_output, step_to_output,
                          timestepping_input.nwrite, timestepping_input.nwrite_dfns,
-                         timestepping_input.n_rk_stages,
-                         timestepping_input.split_operators,
+                         timestepping_input.n_rk_stages, timestepping_input.adaptive,
+                         timestepping_input.rtol, timestepping_input.atol,
+                         timestepping_input.atol_upar, timestepping_input.split_operators,
                          timestepping_input.steady_state_residual,
                          timestepping_input.converged_residual_value,
                          manufactured_solns_input.use_for_advance,
@@ -554,7 +587,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     end
 
     # check input (and initialized coordinate structs) to catch errors/unsupported options
-    check_input(io, output_dir, t_params.nstep, t_params.dt, r, z, vpa, vperp, composition,
+    check_input(io, output_dir, t_params.nstep, t_params.dt[], r, z, vpa, vperp, composition,
                 species_immutable, evolve_moments, num_diss_params, save_inputs_to_txt,
                 collisions)
 
