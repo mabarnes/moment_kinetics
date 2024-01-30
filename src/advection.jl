@@ -68,7 +68,9 @@ function setup_advection_per_species(coords...)
     # introducing NaNs (if left uninitialised) when coordinate speeds
     # are used but the coordinate has only a single point
     # (e.g. dr/dt in dvperp/dt = (vperp/2B)dB/dt, see vperp_advection.jl)
-    @. speed = 0.0
+    @serial_region begin
+        @. speed = 0.0
+    end
     # return advection_info struct containing necessary arrays
     return advection_info(rhs, df, speed, adv_fac)
 end
