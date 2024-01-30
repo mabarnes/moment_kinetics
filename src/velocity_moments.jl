@@ -28,7 +28,7 @@ using ..calculus: integral
 using ..communication
 using ..derivatives: derivative_z!
 using ..looping
-using ..input_structs: braginskii_fluid
+using ..input_structs: braginskii_fluid, kinetic_electrons
 
 #global tmpsum1 = 0.0
 #global tmpsum2 = 0.0
@@ -146,6 +146,8 @@ mutable struct moments_electron_substruct
     dT_dz::Union{MPISharedArray{mk_float,2},Nothing}
     # this is the upwinded z-derivative of the temperature Tpar = ppar/dens
     dT_dz_upwind::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the z-derivative of the electron thermal speed vth = sqrt(2*Tpar/m)
+    dvth_dz::Union{MPISharedArray{mk_float,2},Nothing}
 end
 
 """
@@ -344,7 +346,7 @@ function create_moments_electron(nz, nr, electron_model, numerical_dissipation)
     # need dupar/dz to obtain, e.g., the updated electron temperature
     dupar_dz = allocate_shared_float(nz, nr)
     dppar_dz = allocate_shared_float(nz, nr)
-    if electron_model == braginskii_fluid
+    if electron_model ∈ (braginskii_fluid, kinetic_electrons)
         dppar_dz_upwind = allocate_shared_float(nz, nr)
         dT_dz_upwind = allocate_shared_float(nz, nr)
     else
@@ -358,6 +360,7 @@ function create_moments_electron(nz, nr, electron_model, numerical_dissipation)
     end
     dqpar_dz = allocate_shared_float(nz, nr)
     dT_dz = allocate_shared_float(nz, nr)
+    dvth_dz = allocate_shared_float(nz, nr)
     
     # return struct containing arrays needed to update moments
     return moments_electron_substruct(density, density_updated, parallel_flow,
@@ -366,7 +369,7 @@ function create_moments_electron(nz, nr, electron_model, numerical_dissipation)
         parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, 
         parallel_friction_force, heat_source, v_norm_fac,
         ddens_dz, dupar_dz, dppar_dz, dppar_dz_upwind, d2ppar_dz2, dqpar_dz, 
-        dT_dz, dT_dz_upwind)
+        dT_dz, dT_dz_upwind, dvth_dz)
 end
 
 # neutral particles have natural mean velocities 
@@ -864,7 +867,7 @@ function calculate_electron_moment_derivatives!(moments, scratch, scratch_dummy,
     @loop_r_z ir iz begin
         dummy_zr[iz,ir] = -upar[iz,ir]
     end
-    if electron_model == braginskii_fluid
+    if electron_model ∈ (braginskii_fluid, kinetic_electrons)
         @views derivative_z!(moments.electron.dppar_dz_upwind, ppar, dummy_zr,
                              buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
                              buffer_r_5, buffer_r_6, z_spectral, z)

@@ -154,6 +154,30 @@ function derivative_z!(dfdz::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
 	
 end
 
+#4D version for f[vpa,vperp,z,r] -> dfn electron particles
+function derivative_z!(dfdz::AbstractArray{mk_float,4}, f::AbstractArray{mk_float,4},
+	dfdz_lower_endpoints::AbstractArray{mk_float,3},
+	dfdz_upper_endpoints::AbstractArray{mk_float,3},
+	z_send_buffer::AbstractArray{mk_float,3},
+	z_receive_buffer::AbstractArray{mk_float,3}, z_spectral, z)
+
+	# differentiate f w.r.t z
+	@loop_r_vperp_vpa ir ivperp ivpa begin
+		@views derivative!(dfdz[ivpa,ivperp,:,ir], f[ivpa,ivperp,:,ir], z, z_spectral)
+		# get external endpoints to reconcile via MPI
+		dfdz_lower_endpoints[ivpa,ivperp,ir] = z.scratch_2d[1,1]
+		dfdz_upper_endpoints[ivpa,ivperp,ir] = z.scratch_2d[end,end]
+	end
+	# now reconcile element boundaries across
+	# processes with large message involving all y
+	if z.nelement_local < z.nelement_global
+		reconcile_element_boundaries_MPI!(dfdz,
+		dfdz_lower_endpoints, dfdz_upper_endpoints,
+		z_send_buffer, z_receive_buffer, z)
+	end
+
+end
+
 #6D version for f[vz,vr,vzeta,z,r] -> dfn neutral particles
 function derivative_z!(dfdz::AbstractArray{mk_float,6}, f::AbstractArray{mk_float,6},
         dfdz_lower_endpoints::AbstractArray{mk_float,5},
@@ -336,6 +360,35 @@ function derivative_z!(dfdz::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
 		 z_send_buffer, z_receive_buffer, z)
 	end
 	
+end
+
+#4D version for f[vpa,vperp,z,r] -> dfn electron particles
+function derivative_z!(dfdz::AbstractArray{mk_float,4}, f::AbstractArray{mk_float,4},
+	advect, adv_fac_lower_buffer::AbstractArray{mk_float,3},
+	adv_fac_upper_buffer::AbstractArray{mk_float,3},
+	dfdz_lower_endpoints::AbstractArray{mk_float,3},
+	dfdz_upper_endpoints::AbstractArray{mk_float,3},
+	z_send_buffer::AbstractArray{mk_float,3},
+	z_receive_buffer::AbstractArray{mk_float,3}, z_spectral, z)
+
+# differentiate the pdf f w.r.t z
+@loop_r_vperp_vpa ir ivperp ivpa begin
+	@views derivative!(dfdz[ivpa,ivperp,:,ir], f[ivpa,ivperp,:,ir], z, advect[1].adv_fac[:,ivpa,ivperp,ir], z_spectral)
+	# get external endpoints to reconcile via MPI
+	dfdz_lower_endpoints[ivpa,ivperp,ir] = z.scratch_2d[1,1]
+	dfdz_upper_endpoints[ivpa,ivperp,ir] = z.scratch_2d[end,end]
+	adv_fac_lower_buffer[ivpa,ivperp,ir] = advect[1].adv_fac[1,ivpa,ivperp,ir]
+	adv_fac_upper_buffer[ivpa,ivperp,ir] = advect[1].adv_fac[end,ivpa,ivperp,ir]
+end
+# now reconcile element boundaries across
+# processes with large message
+if z.nelement_local < z.nelement_global
+	reconcile_element_boundaries_MPI!(dfdz,
+	 adv_fac_lower_buffer, adv_fac_upper_buffer,
+	 dfdz_lower_endpoints,dfdz_upper_endpoints,
+	 z_send_buffer, z_receive_buffer, z)
+end
+
 end
 
 #6D version for f[vz,vr,vzeta,z,r,sn] -> dfn neutral particles

@@ -5,6 +5,7 @@ module coordinates
 export define_coordinate, write_coordinate
 export equally_spaced_grid
 
+using LinearAlgebra
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_int
 using ..calculus: derivative!
@@ -17,7 +18,7 @@ using MPI
 """
 structure containing basic information related to coordinates
 """
-struct coordinate
+struct coordinate{T}
     # name is the name of the variable associated with this coordiante
     name::String
     # n_global is the total number of grid points associated with this coordinate
@@ -84,6 +85,10 @@ struct coordinate
     local_io_range::UnitRange{Int64}
     # global range to write into in output file
     global_io_range::UnitRange{Int64}
+    # array containing the LU-decomopsed, 1D differentiation matrix wrt this coordinate
+    #differentiation_matrix::Array{mk_float,2}
+    #differentiation_matrix::LU{mk_float,Array{mk_float,2},Vector{mk_int}}
+    differentiation_matrix::T
 end
 
 """
@@ -121,6 +126,22 @@ function define_coordinate(input, parallel_io::Bool=false)
     scratch_2d = allocate_float(input.ngrid, input.nelement_local)
     # struct containing the advection speed options/inputs for this coordinate
     advection = input.advection
+    # D_matrix will be the 1D differentiation matrix wrt this coordinate
+    # initialise to the identity matrix
+    D_matrix = rand(n_global, n_global)
+    #D_matrix .= 0.0
+    #for i ∈ 1:n_global
+    #    D_matrix[i,i] = 1.0
+    #end
+    # create an LU object for the differentiation matrix
+    # to be modified later once the actual D_matrix is calculated
+    LU_matrix = factorize(D_matrix)
+    #LU_matrix = LU{mk_float, Matrix{mk_float}, Vector{mk_int}}
+
+    #println("coord: ", input.name)
+    #println("D_matrix: ", D_matrix)
+    #println("LU_matrix: ", LU_matrix)
+
     # buffers for cyclic communication of boundary points
     # each chain of elements has only two external (off-rank)
     # endpoints, so only two pieces of information must be shared
@@ -149,7 +170,7 @@ function define_coordinate(input, parallel_io::Bool=false)
         cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,
         input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
         scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
-        local_io_range, global_io_range)
+        local_io_range, global_io_range, LU_matrix)
 
     if input.discretization == "chebyshev_pseudospectral" && coord.n > 1
         # create arrays needed for explicit Chebyshev pseudospectral treatment in this
@@ -158,6 +179,23 @@ function define_coordinate(input, parallel_io::Bool=false)
         spectral = setup_chebyshev_pseudospectral(coord)
         # obtain the local derivatives of the uniform grid with respect to the used grid
         derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
+        # operate on the unit vectors to obtain the column vectors of the differentiation matrix
+        unit_vector = allocate_float(coord.n)
+        unit_vector .= 0.0
+        for i ∈ 1:coord.n
+            unit_vector[i] = 1.0
+            @views derivative!(D_matrix[:,i], unit_vector, coord, spectral)
+            unit_vector[i] = 0.0
+        end
+
+        println("coord: ", coord.name)
+        # replace the differentiaation matrix with its LU decomposition
+        if (coord.name == "z")
+            LU_matrix = factorize(D_matrix)
+            @. coord.differentiation_matrix.L = LU_matrix.L
+            @. coord.differentiation_matrix.U = LU_matrix.U
+            @. coord.differentiation_matrix.p = LU_matrix.p
+        end
     else
         # create dummy Bool variable to return in place of the above struct
         spectral = false

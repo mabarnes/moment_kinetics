@@ -55,7 +55,7 @@ function update_phi!(fields, fvec, z, r, composition, collisions, moments,
     dens_e = fvec.electron_density
     # in serial as both s, r and z required locally
     if (composition.n_ion_species > 1 || true ||
-        composition.electron_physics == boltzmann_electron_response_with_simple_sheath)
+        composition.electron_physics ∈ (boltzmann_electron_response_with_simple_sheath))
         # If there is more than 1 ion species, the ranks that handle species 1 have to
         # read density for all the other species, so need to synchronize here.
         # If composition.electron_physics ==
@@ -101,7 +101,7 @@ function update_phi!(fields, fvec, z, r, composition, collisions, moments,
             @loop_r_z ir iz begin
                 fields.phi[iz,ir] = composition.T_e * log(dens_e[iz,ir] / N_e[ir])
             end
-        elseif composition.electron_physics == braginskii_fluid
+        elseif composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
             calculate_Epar_from_electron_force_balance!(fields.Ez, dens_e, moments.electron.dppar_dz,
                 collisions.nu_ei, moments.electron.parallel_friction,
                 composition.n_neutral_species, collisions.charge_exchange_electron, composition.me_over_mi,
@@ -132,7 +132,7 @@ function update_phi!(fields, fvec, z, r, composition, collisions, moments,
         end
     end
     # if advancing electron fluid equations, solve for Ez directly from force balance
-    if composition.electron_physics != braginskii_fluid
+    if composition.electron_physics ∉ (braginskii_fluid, kinetic_electrons)
         # Ez = - d phi / dz
         @views derivative_z!(fields.Ez,-fields.phi,
                     scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1],
@@ -144,7 +144,7 @@ end
 
 function calculate_phi_from_Epar!(phi, Epar, dz)
     # simple calculation of phi from Epar for now, with zero phi assumed at boundary
-    phi[1,:] .= 0.0
+    phi[1,:] .= 3.0
     @loop_r_z ir iz begin
         if iz > 1
             phi[iz,ir] = phi[iz-1,ir] - dz[iz-1]*Epar[iz,ir]

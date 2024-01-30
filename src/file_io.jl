@@ -24,7 +24,7 @@ structure containing the various input/output streams
 """
 struct ascii_ios{T <: Union{IOStream,Nothing}}
     # corresponds to the ascii file to which the distribution function is written
-    #ff::T
+    ff::T
     # corresponds to the ascii file to which velocity space moments of the
     # distribution function such as density and pressure are written
     moments_ion::T

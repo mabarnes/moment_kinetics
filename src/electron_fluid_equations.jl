@@ -5,10 +5,12 @@ export calculate_electron_upar_from_charge_conservation!
 export electron_energy_equation!
 export calculate_electron_qpar!
 export calculate_electron_parallel_friction_force!
+export calculate_electron_qpar_from_pdf!
 
 using ..looping
 using ..input_structs: boltzmann_electron_response_with_simple_sheath
-using ..input_structs: braginskii_fluid
+using ..input_structs: braginskii_fluid, kinetic_electrons
+using ..velocity_moments: integrate_over_vspace
 
 """
 use quasineutrality to obtain the electron density from the initial
@@ -58,7 +60,7 @@ function calculate_electron_upar_from_charge_conservation!(upar_e, updated, dens
         upar_e .= 0.0
         # if using a simple logical sheath model, then the electron parallel current at the boundaries in zed
         # is equal and opposite to the ion parallel current
-        if electron_model in (boltzmann_electron_response_with_simple_sheath, braginskii_fluid)
+        if electron_model ∈ (boltzmann_electron_response_with_simple_sheath, braginskii_fluid, kinetic_electrons)
             # loop over ion species, adding each species contribution to the
             # ion parallel particle flux at the boundaries in zed
             @loop_s_r is ir begin
@@ -98,7 +100,7 @@ NB: so far, this is only set up for 1D problem, where we can assume
 an isotropic distribution in f_e so that p_e = n_e T_e = ppar_e
 """
 function electron_energy_equation!(ppar, dens_i, fvec, moments, collisions, dt, composition,
-                                   num_diss_params)
+                                   num_diss_params, zgrid)
     begin_r_z_region()
     # define some abbreviated variables for convenient use in rest of function
     me_over_mi = composition.me_over_mi
@@ -107,9 +109,14 @@ function electron_energy_equation!(ppar, dens_i, fvec, moments, collisions, dt, 
     # arising from derivatives of ppar, qpar and upar
     @loop_r_z ir iz begin
         ppar[iz,ir] -= dt*(fvec.electron_upar[iz,ir]*moments.electron.dppar_dz_upwind[iz,ir]
-                    + (2/3)*moments.electron.dqpar_dz[iz,ir]
-                    + (5/3)*fvec.electron_ppar[iz,ir]*moments.electron.dupar_dz[iz,ir])
+                    + moments.electron.dqpar_dz[iz,ir]
+                    + 3*fvec.electron_ppar[iz,ir]*moments.electron.dupar_dz[iz,ir])
     end
+    # @loop_r_z ir iz begin
+    #     ppar[iz,ir] -= dt*(fvec.electron_upar[iz,ir]*moments.electron.dppar_dz_upwind[iz,ir]
+    #                 + (2/3)*moments.electron.dqpar_dz[iz,ir]
+    #                 + (5/3)*fvec.electron_ppar[iz,ir]*moments.electron.dupar_dz[iz,ir])
+    # end
     # compute the contribution to the rhs of the energy equation
     # arising from artificial diffusion
     diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
@@ -140,11 +147,17 @@ function electron_energy_equation!(ppar, dens_i, fvec, moments, collisions, dt, 
             end
         end
         if abs(collisions.ionization_electron) > 0.0
+            # @loop_s_r_z is ir iz begin
+            #     ppar[iz,ir] +=
+            #         dt * collisions.ionization_electron * fvec.density_neutral[iz,ir,is] * (
+            #         fvec.electron_ppar[iz,ir] -
+            #         (2/3)*fvec.electron_density[iz,ir] * collisions.ionization_energy)
+            # end
             @loop_s_r_z is ir iz begin
                 ppar[iz,ir] +=
                     dt * collisions.ionization_electron * fvec.density_neutral[iz,ir,is] * (
                     fvec.electron_ppar[iz,ir] -
-                    (2/3)*fvec.electron_density[iz,ir] * collisions.ionization_energy)
+                    fvec.electron_density[iz,ir] * collisions.ionization_energy)
             end
         end
     end
@@ -152,12 +165,13 @@ function electron_energy_equation!(ppar, dens_i, fvec, moments, collisions, dt, 
     calculate_electron_heat_source!(moments.electron.heat_source, fvec.electron_ppar, moments.electron.dupar_dz,
                                     fvec.density_neutral, collisions.ionization, collisions.ionization_energy,
                                     fvec.electron_density, fvec.ppar, collisions.nu_ei, composition.me_over_mi,
-                                    composition.T_wall)
+                                    composition.T_wall, zgrid)
     # add the contribution from the electron heat source                                
     @loop_r_z ir iz begin
         ppar[iz,ir] += dt * moments.electron.heat_source[iz,ir]
     end
     # enforce the parallel boundary condtion on the electron parallel pressure
+    #println("!!!NO PARALLEL BC IS BEING ENFORCED ON ELECTRON PRESSURE!!!")
     enforce_parallel_BC_on_electron_pressure!(ppar, dens_i, composition.T_wall, fvec.ppar)
     return nothing
 end
@@ -227,18 +241,22 @@ there are currently two supported options for the parallel heat flux:
 inputs:
     qpar_e = parallel electron heat flux at the previous time level
     qpar_updated = flag indicating whether qpar is updated already
+    pdf = electron pdf
     ppar_e = electron parallel pressure
     upar_e = electron parallel flow
+    vth_e = electron thermal speed
     dTe_dz = zed derivative of electron temperature
     upar_i = ion parallel flow
     nu_ei = electron-ion collision frequency
     me_over_mi = electron-to-ion mass ratio
     electron_model = choice of model for electron physics 
+    vpa = struct containing information about the vpa coordinate
 output:
     qpar_e = updated parallel electron heat flux
     qpar_updated = flag indicating that the parallel electron heat flux is updated
 """
-function calculate_electron_qpar!(qpar_e, qpar_updated, ppar_e, upar_e, dTe_dz, upar_i, nu_ei, me_over_mi, electron_model)
+function calculate_electron_qpar!(qpar_e, qpar_updated, pdf, ppar_e, upar_e, vth_e, dTe_dz, upar_i, 
+                                  nu_ei, me_over_mi, electron_model, vpa)
     # only calculate qpar_e if needs updating
     if qpar_updated == false
         @. qpar_e = 0.0
@@ -252,6 +270,9 @@ function calculate_electron_qpar!(qpar_e, qpar_updated, ppar_e, upar_e, dTe_dz, 
                     qpar_e[iz,ir] -= (1/2) * 3.16 * ppar_e[iz,ir] / (me_over_mi * nu_ei) * dTe_dz[iz,ir] 
                 end
             end
+        elseif electron_model == kinetic_electrons
+            # use the modified electron pdf to calculate the electron heat flux
+            calculate_electron_qpar_from_pdf!(qpar_e, ppar_e, vth_e, pdf, vpa)
         end
     end
     # qpar has been updated
@@ -259,8 +280,20 @@ function calculate_electron_qpar!(qpar_e, qpar_updated, ppar_e, upar_e, dTe_dz, 
     return nothing
 end
 
+"""
+calculate the parallel component of the electron heat flux,
+defined as qpar = 2 * ppar * vth * int dwpa (pdf * wpa^3)
+"""
+function calculate_electron_qpar_from_pdf!(qpar, ppar, vth, pdf, vpa)
+    # specialise to 1D for now
+    ivperp = 1
+    @loop_r_z ir iz begin
+        @views qpar[iz, ir] = 2*ppar[iz,ir]*vth[iz,ir]*integrate_over_vspace(pdf[:, ivperp, iz, ir], vpa.grid.^3, vpa.wgts)
+    end
+end
+
 function calculate_electron_heat_source!(heat_source, ppar_e, dupar_dz, dens_n, ionization, ionization_energy,
-                                         dens_e, ppar_i, nu_ei, me_over_mi, T_wall)
+                                         dens_e, ppar_i, nu_ei, me_over_mi, T_wall, zgrid)
     # heat_source currently only used for testing                                         
     # @loop_r_z ir iz begin
     #     heat_source[iz,ir] = (2/3) * ppar_e[iz,ir] * dupar_dz[iz,ir]
@@ -280,7 +313,10 @@ function calculate_electron_heat_source!(heat_source, ppar_e, dupar_dz, dens_n, 
     #     heat_source[1,ir] += 20 * 0.5 * (T_wall * dens_e[1,ir] - ppar_e[1,ir])
     #     heat_source[end,ir] += 20 * (0.5 * T_wall * dens_e[end,ir] - ppar_e[end,ir])
     # end
-    @. heat_source = 0.0
+    # Gaussian heat deposition profile, with a decay of 5 e-foldings at the ends of the domain in z
+    @loop_r_z ir iz begin
+        heat_source[iz,ir] = 50*exp(-5*(zgrid[iz]/zgrid[end])^2)
+    end
     return nothing
 end
 

@@ -106,11 +106,13 @@ end
     boltzmann_electron_response 
     boltzmann_electron_response_with_simple_sheath 
     braginskii_fluid
+    kinetic_electrons
 end
 export electron_physics_type
 export boltzmann_electron_response
 export boltzmann_electron_response_with_simple_sheath
 export braginskii_fluid
+export kinetic_electrons
 
 """
 """

@@ -33,16 +33,19 @@ include("electron_fluid_equations.jl")
 include("em_fields.jl")
 include("bgk.jl")
 include("manufactured_solns.jl") # MRH Here?
-include("initial_conditions.jl")
-include("moment_constraints.jl")
 include("advection.jl")
 include("vpa_advection.jl")
 include("z_advection.jl")
 include("r_advection.jl")
 include("vperp_advection.jl")
+include("electron_z_advection.jl")
+include("electron_vpa_advection.jl")
 include("neutral_r_advection.jl")
 include("neutral_z_advection.jl")
 include("neutral_vz_advection.jl")
+include("electron_kinetic_equation.jl")
+include("initial_conditions.jl")
+include("moment_constraints.jl")
 include("charge_exchange.jl")
 include("ionization.jl")
 include("continuity.jl")
@@ -81,6 +84,8 @@ using .moment_kinetics_input: mk_input, read_input_file, run_type, performance_t
 using .time_advance: setup_time_advance!, time_advance!
 using .type_definitions: mk_int
 using .em_fields: setup_em_fields
+using .time_advance: setup_dummy_and_buffer_arrays
+using .time_advance: allocate_advection_structs
 
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
@@ -353,23 +358,34 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
             vperp=vperp.n, vpa=vpa.n, vzeta=vzeta.n, vr=vr.n, vz=vz.n)
     end
 
-    # Allocate arrays and create the pdf and moments structs
-    pdf, moments, boundary_distributions =
-        allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
-                                 evolve_moments, collisions, num_diss_params)
-
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi (and eventually the electromagnetic fields)
     fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, 
                              drive_input.frequency, drive_input.force_Er_zero_at_wall)
 
+    # Allocate arrays and create the pdf and moments structs
+    pdf, moments, boundary_distributions, scratch =
+        allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
+                                 evolve_moments, collisions, num_diss_params, t_input)
+
+    # create structs containing the information needed to treat advection in z, r, vpa, vperp, and vz
+    # for ions, electrons and neutrals
+    # NB: the returned advection_structs are yet to be initialized
+    advection_structs = allocate_advection_structs(composition, z, r, vpa, vperp, vz, vr, vzeta)
+
+    # setup dummy arrays & buffer arrays for z r MPI                             
+    n_neutral_species_alloc = max(1, composition.n_neutral_species)
+    scratch_dummy = setup_dummy_and_buffer_arrays(r.n, z.n, vpa.n, vperp.n, vz.n, vr.n, vzeta.n, 
+        composition.n_ion_species, n_neutral_species_alloc)
+
     if restart_prefix_iblock === nothing
         restarting = false
         # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
         # each of which may be evolved separately depending on input choices.
-        init_pdf_and_moments!(pdf, moments, boundary_distributions, composition, r, z,
-                              vperp, vpa, vzeta, vr, vz, z_spectral, vpa_spectral, vz_spectral,
-                              species, collisions, t_input.use_manufactured_solns_for_init)
+        init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, composition, r, z,
+                              vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral, vpa_spectral, vz_spectral,
+                              species, collisions, t_input.use_manufactured_solns_for_init,
+                              scratch_dummy, scratch, t_input, num_diss_params, advection_structs)
         # initialize time variable
         code_time = 0.
     else
@@ -385,12 +401,11 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
 
-    moments, spectral_objects, advect_objects,
-    scratch, advance, scratch_dummy, manufactured_source_list =
-        setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
+    moments, spectral_objects, advance, manufactured_source_list =
+        setup_time_advance!(pdf, scratch, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral,
             r_spectral, composition, moments, fields, t_input, collisions,
-            geometry, boundary_distributions, num_diss_params, restarting)
+            geometry, boundary_distributions, num_diss_params, restarting, scratch_dummy)
     # setup i/o
     ascii_io, io_moments, io_dfns = setup_file_io(io_input, boundary_distributions, vz,
         vr, vzeta, vpa, vperp, z, r, composition, collisions, moments.evolve_density,
@@ -408,7 +423,7 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
     begin_s_r_z_vperp_region()
 
     return pdf, scratch, code_time, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
-           moments, fields, spectral_objects, advect_objects,
+           moments, fields, spectral_objects, advection_structs,
            composition, collisions, geometry, boundary_distributions,
            num_diss_params, advance, scratch_dummy, manufactured_source_list,
            ascii_io, io_moments, io_dfns

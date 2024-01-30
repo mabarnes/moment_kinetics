@@ -4,6 +4,7 @@ module time_advance
 
 export setup_time_advance!
 export time_advance!
+export allocate_advection_structs
 
 using MPI
 using ..type_definitions: mk_float
@@ -132,6 +133,19 @@ struct scratch_dummy_arrays
     buffer_vzvrvzetazrsn_1::MPISharedArray{mk_float,6}
     buffer_vzvrvzetazrsn_2::MPISharedArray{mk_float,6}
 
+    buffer_vpavperpzr_1::MPISharedArray{mk_float,4}
+    buffer_vpavperpzr_2::MPISharedArray{mk_float,4}
+    buffer_vpavperpzr_3::MPISharedArray{mk_float,4}
+    buffer_vpavperpzr_4::MPISharedArray{mk_float,4}
+    buffer_vpavperpzr_5::MPISharedArray{mk_float,4}
+    buffer_vpavperpzr_6::MPISharedArray{mk_float,4}
+
+    buffer_vpavperpr_1::MPISharedArray{mk_float,3}
+    buffer_vpavperpr_2::MPISharedArray{mk_float,3}
+    buffer_vpavperpr_3::MPISharedArray{mk_float,3}
+    buffer_vpavperpr_4::MPISharedArray{mk_float,3}
+    buffer_vpavperpr_5::MPISharedArray{mk_float,3}
+    buffer_vpavperpr_6::MPISharedArray{mk_float,3}
 end 
 
 struct advect_object_struct
@@ -139,6 +153,8 @@ struct advect_object_struct
     vperp_advect::Vector{advection_info{4,5}}
     z_advect::Vector{advection_info{4,5}}
     r_advect::Vector{advection_info{4,5}}
+    electron_z_advect::Vector{advection_info{4,5}}
+    electron_vpa_advect::Vector{advection_info{4,5}}
     neutral_z_advect::Vector{advection_info{5,6}}
     neutral_r_advect::Vector{advection_info{5,6}}
     neutral_vz_advect::Vector{advection_info{5,6}}
@@ -156,6 +172,68 @@ struct spectral_object_struct{Tvz,Tvr,Tvzeta,Tvpa,Tvperp,Tz,Tr}
     r_spectral::Tr
 end
 
+function allocate_advection_structs(composition, z, r, vpa, vperp, vz, vr, vzeta)
+    # define some local variables for convenience/tidiness
+    n_ion_species = composition.n_ion_species
+    n_neutral_species = composition.n_neutral_species
+    n_neutral_species_alloc = max(1,composition.n_neutral_species)
+    ##                              ##
+    # ion particle advection structs #
+    ##                              ##
+    # create structure z_advect whose members are the arrays needed to compute
+    # the advection term(s) appearing in the part of the ion kinetic equation dealing
+    # with advection in z
+    begin_serial_region()
+    z_advect = setup_advection(n_ion_species, z, vpa, vperp, r)
+    # create structure r_advect whose members are the arrays needed to compute
+    # the advection term(s) appearing in the split part of the ion kinetic equation dealing
+    # with advection in r
+    begin_serial_region()
+    r_advect = setup_advection(n_ion_species, r, vpa, vperp, z)
+    # create structure vpa_advect whose members are the arrays needed to compute
+    # the advection term(s) appearing in the split part of the ion kinetic equation dealing
+    # with advection in vpa
+    begin_serial_region()
+    vpa_advect = setup_advection(n_ion_species, vpa, vperp, z, r)
+    # create structure vperp_advect whose members are the arrays needed to compute
+    # the advection term(s) appearing in the split part of the ion kinetic equation dealing
+    # with advection in vperp
+    begin_serial_region()
+    vperp_advect = setup_advection(n_ion_species, vperp, vpa, z, r)
+    ##                                   ##
+    # electron particle advection structs #
+    ##                                   ##
+    # create structure electron_z_advect whose members are the arrays needed to compute
+    # the advection term(s) appearing in the part of the electron kinetic equation dealing
+    # with advection in z
+    begin_serial_region()
+    electron_z_advect = setup_advection(1, z, vpa, vperp, r)
+    # create structure vpa_advect whose members are the arrays needed to compute
+    # the advection term(s) appearing in the part of the electron kinetic equation dealing
+    # with advection in vpa
+    begin_serial_region()
+    electron_vpa_advect = setup_advection(1, vpa, vperp, z, r)
+    ##                                  ##
+    # neutral particle advection structs #
+    ##                                  ##
+    # create structure neutral_z_advect for neutral particle advection
+    begin_serial_region()
+    neutral_z_advect = setup_advection(n_neutral_species_alloc, z, vz, vr, vzeta, r)
+    # create structure neutral_r_advect for neutral particle advection
+    begin_serial_region()
+    neutral_r_advect = setup_advection(n_neutral_species_alloc, r, vz, vr, vzeta, z)
+    # create structure neutral_vz_advect for neutral particle advection
+    begin_serial_region()
+    neutral_vz_advect = setup_advection(n_neutral_species_alloc, vz, vr, vzeta, z, r)
+    ##                                                                 ##
+    # construct named list of advection structs to compactify arguments #
+    ##                                                                 ##
+    advection_structs = advect_object_struct(vpa_advect, vperp_advect, z_advect, r_advect, 
+                                             electron_z_advect, electron_vpa_advect,
+                                             neutral_z_advect, neutral_r_advect, neutral_vz_advect)
+    return advection_structs
+end
+
 """
 create arrays and do other work needed to setup
 the main time advance loop.
@@ -163,11 +241,12 @@ this includes creating and populating structs
 for Chebyshev transforms, velocity space moments,
 EM fields, and advection terms
 """
-function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
+function setup_time_advance!(pdf, scratch, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
                              vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
                              z_spectral, r_spectral, composition, moments,
                              fields, t_input, collisions, geometry,
-                             boundary_distributions, num_diss_params, restarting)
+                             boundary_distributions, num_diss_params, restarting,
+                             scratch_dummy)
     # define some local variables for convenience/tidiness
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
@@ -182,13 +261,14 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
 
     begin_serial_region()
 
-    # create an array of structs containing scratch arrays for the pdf and low-order moments
-    # that may be evolved separately via fluid equations
-    scratch = setup_scratch_arrays(moments, pdf.ion.norm, pdf.neutral.norm, t_input.n_rk_stages)
+    # # initialize the array of structs containing scratch arrays for the pdf and low-order moments
+    # # that may be evolved separately via fluid equations
+    # #scratch = setup_scratch_arrays(moments, pdf.ion.norm, pdf.electron.norm, pdf.neutral.norm, t_input.n_rk_stages)
+    # initialize_scratch_arrays!(scratch, moments, pdf.ion.norm, pdf.electron.norm, pdf.neutral.norm, t_input.n_rk_stages)
     # setup dummy arrays & buffer arrays for z r MPI
     n_neutral_species_alloc = max(1,composition.n_neutral_species)
-    scratch_dummy = setup_dummy_and_buffer_arrays(r.n,z.n,vpa.n,vperp.n,vz.n,vr.n,vzeta.n,
-                                   composition.n_ion_species,n_neutral_species_alloc)
+    # scratch_dummy = setup_dummy_and_buffer_arrays(r.n,z.n,vpa.n,vperp.n,vz.n,vr.n,vzeta.n,
+    #                               composition.n_ion_species,n_neutral_species_alloc)
    
     begin_serial_region()
     # update the derivatives of the electron moments as these may be needed when
@@ -217,6 +297,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     # with advection in z
     begin_serial_region()
     z_advect = setup_advection(n_ion_species, z, vpa, vperp, r)
+    electron_z_advect = setup_advection(1, z, vpa, vperp, r)
     # initialise the z advection speed
     begin_s_r_vperp_vpa_region()
     @loop_s is begin
@@ -294,7 +375,9 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
 
     #advect_objects = (vpa_advect = vpa_advect, vperp_advect = vperp_advect, z_advect = z_advect,
     # r_advect = r_advect, neutral_z_advect = neutral_z_advect, neutral_r_advect = neutral_r_advect)
-    advect_objects = advect_object_struct(vpa_advect, vperp_advect, z_advect, r_advect, neutral_z_advect, neutral_r_advect, neutral_vz_advect)
+    advect_objects = advect_object_struct(vpa_advect, vperp_advect, z_advect, r_advect, 
+                                          neutral_z_advect, neutral_r_advect, neutral_vz_advect,
+                                          electron_z_advect)
     #spectral_objects = (vz_spectral = vz_spectral, vr_spectral = vr_spectral, vzeta_spectral = vzeta_spectral,
     # vpa_spectral = vpa_spectral, vperp_spectral = vperp_spectral, z_spectral = z_spectral, r_spectral = r_spectral)
     spectral_objects = spectral_object_struct(vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral, r_spectral)
@@ -379,9 +462,9 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1], scratch_dummy.buffer_rs_3[:,1],
             scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
         # calculate the electron parallel heat flux
-        calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, moments.electron.ppar,
-            moments.electron.upar, moments.electron.dT_dz, moments.ion.upar, 
-            collisions.nu_ei, composition.me_over_mi, composition.electron_physics)
+        calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, pdf.electron.norm,
+            moments.electron.ppar, moments.electron.upar, moments.electron.vth, moments.electron.dT_dz, moments.ion.upar, 
+            collisions.nu_ei, composition.me_over_mi, composition.electron_physics, vpa)
         # calculate the electron-ion parallel friction force
         calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, moments.electron.dens,
             moments.electron.upar, moments.ion.upar, moments.electron.dT_dz,
@@ -417,8 +500,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     # Ensure all processes are synchronized at the end of the setup
     _block_synchronize()
 
-    return moments, spectral_objects, advect_objects, scratch, advance, 
-        scratch_dummy, manufactured_source_list
+    return moments, spectral_objects, advect_objects, advance, manufactured_source_list
 end
 
 """
@@ -615,6 +697,20 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
     buffer_vpavperpzrs_1 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
     buffer_vpavperpzrs_2 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
 
+    buffer_vpavperpzr_1 = allocate_shared_float(nvpa,nvperp,nz,nr)
+    buffer_vpavperpzr_2 = allocate_shared_float(nvpa,nvperp,nz,nr)
+    buffer_vpavperpzr_3 = allocate_shared_float(nvpa,nvperp,nz,nr)
+    buffer_vpavperpzr_4 = allocate_shared_float(nvpa,nvperp,nz,nr)
+    buffer_vpavperpzr_5 = allocate_shared_float(nvpa,nvperp,nz,nr)
+    buffer_vpavperpzr_6 = allocate_shared_float(nvpa,nvperp,nz,nr)
+    
+    buffer_vpavperpr_1 = allocate_shared_float(nvpa,nvperp,nr)
+    buffer_vpavperpr_2 = allocate_shared_float(nvpa,nvperp,nr)
+    buffer_vpavperpr_3 = allocate_shared_float(nvpa,nvperp,nr)
+    buffer_vpavperpr_4 = allocate_shared_float(nvpa,nvperp,nr)
+    buffer_vpavperpr_5 = allocate_shared_float(nvpa,nvperp,nr)
+    buffer_vpavperpr_6 = allocate_shared_float(nvpa,nvperp,nr)
+
     buffer_vzvrvzetazsn_1 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
     buffer_vzvrvzetazsn_2 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
     buffer_vzvrvzetazsn_3 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
@@ -642,7 +738,9 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
         buffer_vpavperpzrs_1,buffer_vpavperpzrs_2,
         buffer_vzvrvzetazsn_1,buffer_vzvrvzetazsn_2,buffer_vzvrvzetazsn_3,buffer_vzvrvzetazsn_4,buffer_vzvrvzetazsn_5,buffer_vzvrvzetazsn_6,
         buffer_vzvrvzetarsn_1,buffer_vzvrvzetarsn_2,buffer_vzvrvzetarsn_3,buffer_vzvrvzetarsn_4,buffer_vzvrvzetarsn_5,buffer_vzvrvzetarsn_6,
-        buffer_vzvrvzetazrsn_1, buffer_vzvrvzetazrsn_2)
+        buffer_vzvrvzetazrsn_1, buffer_vzvrvzetazrsn_2, 
+        buffer_vpavperpzr_1, buffer_vpavperpzr_2,buffer_vpavperpzr_3,buffer_vpavperpzr_4,buffer_vpavperpzr_5,buffer_vpavperpzr_6,
+        buffer_vpavperpr_1, buffer_vpavperpr_2, buffer_vpavperpr_3, buffer_vpavperpr_4, buffer_vpavperpr_5, buffer_vpavperpr_6)
 
 end
 
@@ -671,52 +769,20 @@ function normalize_pdf!(pdf, moments, scratch)
 end
 
 """
-create an array of structs containing scratch arrays for the normalised pdf and low-order moments
+initialize the array of structs containing scratch arrays for the normalised pdf and low-order moments
 that may be evolved separately via fluid equations
 """
-function setup_scratch_arrays(moments, pdf_ion_in, pdf_neutral_in, n_rk_stages)
-    # create n_rk_stages+1 structs, each of which will contain one pdf,
-    # one density, and one parallel flow array
-    scratch = Vector{scratch_pdf{5,3,2,6,3}}(undef, n_rk_stages+1)
-    pdf_dims = size(pdf_ion_in)
-    moment_ion_dims = size(moments.ion.dens)
-    moment_electron_dims = size(moments.electron.dens)
-    pdf_neutral_dims = size(pdf_neutral_in)
-    moment_neutral_dims = size(moments.neutral.dens)
+function initialize_scratch_arrays!(scratch, moments, pdf_ion_in, pdf_electron_in, pdf_neutral_in, n_rk_stages)
     # populate each of the structs
     for istage ∈ 1:n_rk_stages+1
-        # Allocate arrays in temporary variables so that we can identify them
-        # by source line when using @debug_shared_array
-        pdf_array = allocate_shared_float(pdf_dims...)
-        density_array = allocate_shared_float(moment_ion_dims...)
-        upar_array = allocate_shared_float(moment_ion_dims...)
-        ppar_array = allocate_shared_float(moment_ion_dims...)
-        temp_z_s_array = allocate_shared_float(moment_ion_dims...)
-
-        electron_density_array = allocate_shared_float(moment_electron_dims...)
-        electron_upar_array = allocate_shared_float(moment_electron_dims...)
-        electron_ppar_array = allocate_shared_float(moment_electron_dims...)
-        electron_temp_array = allocate_shared_float(moment_electron_dims...)
-
-        pdf_neutral_array = allocate_shared_float(pdf_neutral_dims...)
-        density_neutral_array = allocate_shared_float(moment_neutral_dims...)
-        uz_neutral_array = allocate_shared_float(moment_neutral_dims...)
-        pz_neutral_array = allocate_shared_float(moment_neutral_dims...)
-
-
-        scratch[istage] = scratch_pdf(pdf_array, density_array, upar_array,
-                                      ppar_array, temp_z_s_array,
-                                      electron_density_array, electron_upar_array,
-                                      electron_ppar_array, electron_temp_array,
-                                      pdf_neutral_array, density_neutral_array,
-                                      uz_neutral_array, pz_neutral_array)
         @serial_region begin
             # initialise the scratch arrays for the ion pdf and velocity moments
             scratch[istage].pdf .= pdf_ion_in
             scratch[istage].density .= moments.ion.dens
             scratch[istage].upar .= moments.ion.upar
             scratch[istage].ppar .= moments.ion.ppar
-            # initialise the scratch arrays for the electron velocity moments
+            # initialise the scratch arrays for the electron pdf and velocity moments
+            scratch[istage].pdf_electron .= pdf_electron_in
             scratch[istage].electron_density .= moments.electron.dens
             scratch[istage].electron_upar .= moments.electron.upar
             scratch[istage].electron_ppar .= moments.electron.ppar
@@ -728,7 +794,7 @@ function setup_scratch_arrays(moments, pdf_ion_in, pdf_neutral_in, n_rk_stages)
             scratch[istage].pz_neutral .= moments.neutral.pz
         end
     end
-    return scratch
+    return nothing
 end
 
 """
@@ -1256,9 +1322,9 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     calculate_electron_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
                                            num_diss_params, composition.electron_physics)
     # update the electron parallel heat flux
-    calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, new_scratch.electron_ppar,
-        new_scratch.electron_upar, moments.electron.dT_dz, new_scratch.upar, collisions.nu_ei,
-        composition.me_over_mi, composition.electron_physics)
+    calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, new_scratch.pdf_electron,
+        new_scratch.electron_ppar, new_scratch.electron_upar, moments.electron.vth, moments.electron.dT_dz, 
+        new_scratch.upar, collisions.nu_ei, composition.me_over_mi, composition.electron_physics, vpa)
     # update the electron parallel friction force
     calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, new_scratch.electron_density,
         new_scratch.electron_upar, new_scratch.upar, moments.electron.dT_dz, composition.me_over_mi,
@@ -1747,7 +1813,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     end
     if advance.electron_energy
         electron_energy_equation!(fvec_out.electron_ppar, fvec_out.density, fvec_in, moments, collisions, dt,
-                                  composition, num_diss_params)
+                                  composition, num_diss_params, z.grid)
     end
     # reset "xx.updated" flags to false since ff has been updated
     # and the corresponding moments have not

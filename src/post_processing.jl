@@ -980,9 +980,13 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
 
     n_runs = length(run_names)
 
+    for iz in 1:size(z.grid)
+        println("z: ", z[iz], " pz: ", neutral_pz[iz,1,1,end])
+    end
+
     # plot_unnormalised() requires PyPlot, so ensure it is used for all plots for
     # consistency
-    pyplot()
+    #pyplot()
 
     # analyze the fields data
     phi_fldline_avg, delta_phi = get_tuple_of_return_values(analyze_fields_data, phi,
@@ -1229,6 +1233,33 @@ function plot_electron_moments(density, parallel_flow, parallel_pressure,
     moment_string = "electron_qpar"
     if pp.plot_qpar0_vs_t
         plot_single_moment_z0(parallel_heat_flux, time, iz0, prefix, legend, run_names, moment_string)
+    end
+    if pp.animate_phi_vs_z
+        pmin = minimum(minimum(p) for p ∈ parallel_pressure)
+        pmax = maximum(maximum(p) for p ∈ parallel_pressure)
+        # make a gif animation of vthe(z) at different times
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            plot(legend=legend)
+            for (t, this_z, p, run_label) ∈ zip(time, z, parallel_pressure, run_names)
+                @views plot!(this_z.grid, p[:,i], xlabel="z", ylabel="ppar",
+                             ylims=(pmin, pmax), label=run_label)
+            end
+        end
+        outfile = string(prefix, "_electron_ppar_vs_z.gif")
+        gif(anim, outfile, fps=5)
+
+        pmin = minimum(minimum(p) for p ∈ thermal_speed)
+        pmax = maximum(maximum(p) for p ∈ thermal_speed)
+        # make a gif animation of vthe(z) at different times
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            plot(legend=legend)
+            for (t, this_z, p, run_label) ∈ zip(time, z, thermal_speed, run_names)
+                @views plot!(this_z.grid, p[:,i], xlabel="z", ylabel="vth",
+                             ylims=(pmin, pmax), label=run_label)
+            end
+        end
+        outfile = string(prefix, "_electron_vth_vs_z.gif")
+        gif(anim, outfile, fps=5)
     end
     # if pp.plot_qpar_vs_z_t
     #     plot_single_moment_vs_z_t(parallel_heat_flux, time, z, run_names, prefix, moment_string)
@@ -1608,6 +1639,8 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
             gif(anim, outfile, fps=5)
             # make a gif animation of f(vpa,z,t)
             anim = @animate for i ∈ itime_min_pdfs:nwrite_movie_pdfs:itime_max_pdfs
+                println("i: ", i, " itime_min_pdfs: ", itime_min_pdfs, " nwrite_movie_pdfs: ", nwrite_movie_pdfs,
+                        " itime_max_pdfs: ", itime_max_pdfs)
                 #heatmap(z, vpa, log.(abs.(ff[:,:,i])), xlabel="z", ylabel="vpa", clims = (fmin,fmax), c = :deep)
                 subplots = (@views heatmap(this_z.grid, this_vpa.grid, f[:,:,is,i], xlabel="z",
                                            ylabel="vpa", c = :deep,

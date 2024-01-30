@@ -768,11 +768,10 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     #############################################################################
     # define default values and create corresponding mutable structs holding
     # information about the composition of the species and their initial conditions
-    if electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath, 
-                           braginskii_fluid)
+    if electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
         n_species = n_ion_species + n_neutral_species
     else
-        n_species = n_ion_speces + n_neutral_species + 1
+        n_species = n_ion_species + n_neutral_species + 1
     end
     use_test_neutral_wall_pdf = false
     # electron temperature over reference temperature

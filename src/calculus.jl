@@ -128,12 +128,12 @@ function second_derivative!(d2f, f, Q, coord, spectral)
         # points are not set by a boundary condition.
         # Full grid may be across processes and bc only applied to extreme ends of the
         # domain.
-        if coord.irank == 0
-            d2f[1] = 0.0
-        end
-        if coord.irank == coord.nrank - 1
-            d2f[end] = 0.0
-        end
+        #if coord.irank == 0
+        #    d2f[1] = 0.0
+        #end
+        #if coord.irank == coord.nrank - 1
+        #    d2f[end] = 0.0
+        #end
     elseif coord.bc == "periodic"
         # Need to get first derivatives from opposite ends of grid
         if coord.nelement_local != coord.nelement_global
@@ -506,6 +506,24 @@ function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
     # synchronize buffers
     _block_synchronize()
 end
+
+# """
+# compute the 1D differentiation matrix for the given coordinate;
+# currently assumes no upwinding
+# """
+# function compute_1d_differentiation_matrix(coord, spectral::Union{Bool,<:chebyshev_info})
+#     # initialise all elements of the coord.scratch array to zero
+#     coord.scratch = 0.0
+#     for i ∈ coord.n
+#         # provide a unit impulse at the i-th grid point
+#         coord.scratch[i] = 1.0
+#         # compute the derivative of the unit impulse;
+#         # the solution is the ith column vector of the differentiation matrix
+#         @views derivative!(coord.differentiation_matrix[:, i], coord.scratch, coord, spectral)
+#         # zero out the impulse for the next iteration
+#         coord.scratch[i] = 0.0
+#     end
+# end
 
 """
 Computes the integral of the integrand, using the input wgts
