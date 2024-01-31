@@ -1201,21 +1201,11 @@ function time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa
            external_source_settings, num_diss_params, advance, fp_arrays, scratch_dummy,
            manufactured_source_list, istep)
 
-    if t_input.n_rk_stages > 1
-        ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
-            moments, fields, spectral_objects, advect_objects, composition, collisions,
-            geometry, boundary_distributions, external_source_settings, num_diss_params,
-            advance, fp_arrays, scratch_dummy, manufactured_source_list, istep)
-    else
-        euler_time_advance!(scratch, scratch, pdf, fields, moments,
-            advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t,
-            t_input, spectral_objects, composition,
-            collisions, geometry, boundary_distributions, scratch_dummy, manufactured_source_list, advance, 1)
-        # NB: this must be broken -- scratch is updated in euler_time_advance!,
-        # but not the pdf or moments. need to add update to these quantities here. Also
-        # need to apply boundary conditions, possibly other things that are taken care
-        # of in rk_update!() for the ssp_rk!() method.
-    end
+    ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
+        moments, fields, spectral_objects, advect_objects, composition, collisions,
+        geometry, boundary_distributions, external_source_settings, num_diss_params,
+        advance, fp_arrays, scratch_dummy, manufactured_source_list, istep)
+
     return nothing
 end
 
