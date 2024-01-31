@@ -94,6 +94,6 @@ vzeta_discretization = "chebyshev_pseudospectral"
  type="default"
 [numerical_dissipation]
 vpa_dissipation_coefficient = 0.001
-vperp_dissipation_coefficient = 0.0
+vperp_dissipation_coefficient = 0.001
 #z_dissipation_coefficient = 0.1
 r_dissipation_coefficient = 0.0

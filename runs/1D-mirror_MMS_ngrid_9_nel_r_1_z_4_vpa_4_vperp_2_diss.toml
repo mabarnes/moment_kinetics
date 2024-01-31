@@ -61,9 +61,8 @@ vperp_ngrid = 9
 vperp_nelement = 2
 vperp_L = 6.0
 #vperp_discretization = "finite_difference"
-vperp_discretization = "chebyshev_pseudospectral"
-#vperp_discretization = "gausslegendre_pseudospectral"
-#vperp_bc = "none"
+#vperp_discretization = "chebyshev_pseudospectral"
+vperp_discretization = "gausslegendre_pseudospectral"
 vperp_bc = "zero"
 
 vz_ngrid = 17
@@ -95,6 +94,6 @@ vzeta_discretization = "chebyshev_pseudospectral"
  type="default"
 [numerical_dissipation]
 vpa_dissipation_coefficient = 0.001
-vperp_dissipation_coefficient = 0.00
+vperp_dissipation_coefficient = 0.001
 #z_dissipation_coefficient = 0.1
 r_dissipation_coefficient = 0.0
