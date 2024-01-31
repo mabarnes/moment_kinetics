@@ -272,13 +272,17 @@ using IfElse
         elseif z_bc == "wall"
             densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
             Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr,manufactured_solns_input,species)
+            Bzeta = geometry.Bzeta
+            Bmag = geometry.Bmag
             rhostar = geometry.rhostar
+            jacobian = geometry.jacobian
+            ExBgeofac = 0.5*rhostar*Bzeta*jacobian/Bmag^2
             bzed = geometry.bzed
             epsilon = manufactured_solns_input.epsilon_offset
             alpha = manufactured_solns_input.alpha_switch
             upari =  ( (fluxconst/(sqrt(pi)*densi))*((z/Lz + 0.5)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha) 
                      - (0.5 - z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)) 
-                     + alpha*(rhostar/(2.0*bzed))*Er )
+                     + alpha*(ExBgeofac/bzed)*Er )
         end
         return upari
     end
@@ -357,14 +361,17 @@ using IfElse
 
             # get geometric/composition data
             Bzed = geometry.Bzed
+            Bzeta = geometry.Bzeta
             Bmag = geometry.Bmag
             rhostar = geometry.rhostar
+            jacobian = geometry.jacobian
+            ExBgeofac = 0.5*rhostar*Bzeta*jacobian/Bmag^2
             epsilon = manufactured_solns_input.epsilon_offset
             alpha = manufactured_solns_input.alpha_switch
             if z_bc == "periodic"
                 dfni = densi * exp( - vpa^2 - vperp^2)
             elseif z_bc == "wall"
-                vpabar = vpa - alpha*(rhostar/2.0)*(Bmag/Bzed)*Er # for alpha = 1.0, effective velocity in z direction * (Bmag/Bzed)
+                vpabar = vpa - alpha*ExBgeofac*(Bmag/Bzed)*Er # for alpha = 1.0, effective velocity in z direction * (Bmag/Bzed)
                 Hplus = 0.5*(sign(vpabar) + 1.0)
                 Hminus = 0.5*(sign(-vpabar) + 1.0)
                 ffa =  exp(- vperp^2)

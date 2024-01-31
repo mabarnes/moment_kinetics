@@ -107,9 +107,9 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
         # a 1D configuration for testing mirror and vperp physics 
         # with \vec{B} = B(z) bz \hat{z} and
         # with B = B(z) a specified function
-        if nr > 1
-            input_option_error("$option: You have specified nr > 1 -> set nr = 1", option)
-        end
+        #if nr > 1
+        #    input_option_error("$option: You have specified nr > 1 -> set nr = 1", option)
+        #end
         DeltaB = geometry_input_data.DeltaB
         if DeltaB < -0.99999999
             input_option_error("$option: You have specified DeltaB < -1 -> set DeltaB > -1", option)
