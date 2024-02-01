@@ -869,7 +869,7 @@ function update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometr
     if z.irank == 0
         @loop_s_r is ir begin
             @views moments.charged.chodura_integral_lower[ir,is] = update_chodura_integral_species!(ff[:,:,1,ir,is],dffdr[:,:,1,ir,is],
-            ff_dummy[:,:,1,ir,is],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[1,:,:,ir],moments.charged.dens[1,ir,is],del_vpa)
+            ff_dummy[:,:,1,ir,is],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[1,:,:,ir],moments.charged.dens[1,ir,is],del_vpa,1,ir)
         end
     else # we do not save this Chodura integral to the output file
         @loop_s_r is ir begin
@@ -879,7 +879,7 @@ function update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometr
     if z.irank == z.nrank - 1
         @loop_s_r is ir begin
             @views moments.charged.chodura_integral_upper[ir,is] = update_chodura_integral_species!(ff[:,:,end,ir,is],dffdr[:,:,end,ir,is],
-            ff_dummy[:,:,end,ir,is],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[end,:,:,ir],moments.charged.dens[end,ir,is],del_vpa)
+            ff_dummy[:,:,end,ir,is],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[end,:,:,ir],moments.charged.dens[end,ir,is],del_vpa,z.n,ir)
         end
     else # we do not save this Chodura integral to the output file
         @loop_s_r is ir begin
@@ -902,7 +902,7 @@ Chodura condition
  to a single species plasma with Z = 1
 
 """
-function update_chodura_integral_species!(ff,dffdr,ff_dummy,vpa,vperp,z,r,composition,geometry,vz,dens,del_vpa)
+function update_chodura_integral_species!(ff,dffdr,ff_dummy,vpa,vperp,z,r,composition,geometry,vz,dens,del_vpa,iz,ir)
     @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
     @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck vpa.n == size(dffdr, 1) || throw(BoundsError(dffdr))
@@ -915,7 +915,7 @@ function update_chodura_integral_species!(ff,dffdr,ff_dummy,vpa,vperp,z,r,compos
         # we are more than a vpa mimimum grid spacing away from 
         # the vz(vpa,r) = 0 velocity boundary
         if abs(vz[ivpa,ivperp]) > 0.5*del_vpa
-            ff_dummy[ivpa,ivperp] = (ff[ivpa,ivperp]*bzed^2/(vz[ivpa,ivperp]^2) + 
+            ff_dummy[ivpa,ivperp] = (ff[ivpa,ivperp]*bzed[iz,ir]^2/(vz[ivpa,ivperp]^2) + 
                                 geometry.rhostar*dffdr[ivpa,ivperp]/vz[ivpa,ivperp])
         else
             ff_dummy[ivpa,ivperp] = 0.0

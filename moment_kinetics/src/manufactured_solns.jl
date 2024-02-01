@@ -13,6 +13,7 @@ using ..type_definitions: mk_float, mk_int
 function manufactured_solutions end
 function manufactured_sources_setup end
 function manufactured_electric_fields end
+function manufactured_geometry end
 
 function __init__()
     try

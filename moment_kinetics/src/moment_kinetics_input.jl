@@ -6,6 +6,7 @@ export mk_input
 export performance_test
 #export advective_form
 export read_input_file
+export get_default_rhostar
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
@@ -18,6 +19,7 @@ using ..finite_differences: fd_check_option
 using ..input_structs
 using ..numerical_dissipation: setup_numerical_dissipation
 using ..reference_parameters
+using ..geo: init_magnetic_geometry
 
 using MPI
 using TOML
@@ -60,7 +62,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     #   reference value using J_||e + J_||i = 0 at z = 0
     electron_physics = get(scan_input, "electron_physics", boltzmann_electron_response)
     
-    z, r, vpa, vperp, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions, geometry =
+    z, r, vpa, vperp, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions, geometry_in =
         load_defaults(n_ion_species, n_neutral_species, electron_physics)
 
     # this is the prefix for all output files associated with this run
@@ -100,12 +102,15 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     reference_params = setup_reference_parameters(scan_input)
 
     ## set geometry_input
-    geometry.Bzed = get(scan_input, "Bzed", 1.0)
-    geometry.Bmag = get(scan_input, "Bmag", 1.0)
-    geometry.bzed = geometry.Bzed/geometry.Bmag
-    geometry.bzeta = sqrt(1.0 - geometry.bzed^2.0)
-    geometry.Bzeta = geometry.Bmag*geometry.bzeta
-    geometry.rhostar = get(scan_input, "rhostar", get_default_rhostar(reference_params))
+    #geometry.Bzed = get(scan_input, "Bzed", 1.0)
+    #geometry.Bmag = get(scan_input, "Bmag", 1.0)
+    #geometry.bzed = geometry.Bzed/geometry.Bmag
+    #geometry.bzeta = sqrt(1.0 - geometry.bzed^2.0)
+    #geometry.Bzeta = geometry.Bmag*geometry.bzeta
+    geometry_in.option = get(scan_input, "geometry_option", "constant-helical") #"1D-mirror"
+    geometry_in.pitch = get(scan_input, "pitch", 1.0)
+    geometry_in.rhostar = get(scan_input, "rhostar", get_default_rhostar(reference_params))
+    geometry_in.DeltaB = get(scan_input, "DeltaB", 1.0)
     #println("Info: Bzed is ",geometry.Bzed)
     #println("Info: Bmag is ",geometry.Bmag)
     #println("Info: rhostar is ",geometry.rhostar)
@@ -537,6 +542,8 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     else
         io = devnull
     end
+    
+    geometry = init_magnetic_geometry(geometry_in,z,r)
 
     # check input (and initialized coordinate structs) to catch errors/unsupported options
     check_input(io, output_dir, nstep, dt, r, z, vpa, vperp, composition,
@@ -1003,15 +1010,13 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     nuii = 0.0
     collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate,
                                   krook_collision_frequency_prefactor,"none", nuii)
-    Bzed = 1.0 # magnetic field component along z
-    Bmag = 1.0 # magnetic field strength
-    bzed = 1.0 # component of b unit vector along z
-    bzeta = 0.0 # component of b unit vector along zeta
-    Bzeta = 0.0 # magnetic field component along zeta
     rhostar = 0.0 #rhostar of ions for ExB drift
-    geometry = geometry_input(Bzed,Bmag,bzed,bzeta,Bzeta,rhostar)
+    option = "constant-helical"
+    pitch = 1.0
+    DeltaB = 1.0
+    geometry_in = geometry_input(rhostar,option,pitch,DeltaB)
 
-    return z, r, vpa, vperp, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions, geometry
+    return z, r, vpa, vperp, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions, geometry_in
 end
 
 """
