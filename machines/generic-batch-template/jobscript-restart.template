@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+#SBATCH --nodes=NODES
+#SBATCH --cpus-per-task=1
+#SBATCH --ntasks-per-node=48
+#SBATCH --time=RUNTIME
+#SBATCH --account=ACCOUNT
+#SBATCH --partition=PARTITION
+#SBATCH --qos=QOS
+#SBATCH --output=RUNDIRslurm-%j.out
+
+set -e
+
+cd $SLURM_SUBMIT_DIR
+
+# Get setup for Julia
+source julia.env
+
+echo "running INPUTFILE $(date)"
+
+# May need to change this if mpirun` is not what should be used on your system
+mpirun -np $SLURM_NTASKS bin/julia -Jmoment_kinetics.so --project -O3 --check-bounds=no run_moment_kinetics.jl --restart INPUTFILE RESTARTFROM
+
+echo "finished INPUTFILE $(date)"

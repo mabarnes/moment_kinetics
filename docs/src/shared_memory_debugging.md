@@ -1,1 +1,1 @@
-../../debug_test/README.md
+../../moment_kinetics/debug_test/README.md

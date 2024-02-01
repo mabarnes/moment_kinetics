@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 #SBATCH --mem=POSTPROCMEMORY
 #SBATCH --time=POSTPROCTIME
@@ -19,6 +19,6 @@ source julia.env
 export SRUN_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
 
 echo "post-processing RUNDIR $(date)"
-bin/julia -Jmakie_postproc.so --project run_makie_post_processing.jl RUNDIR
+bin/julia -Jmakie_postproc.so --project=makie_post_processing/ run_makie_post_processing.jl RUNDIR
 
 echo "finished post-processing RUNDIR $(date)"

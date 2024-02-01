@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 #SBATCH --mem=POSTPROCMEMORY
 #SBATCH --time=POSTPROCTIME
@@ -19,6 +19,10 @@ source julia.env
 export SRUN_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
 
 echo "post-processing (with original post_processing) RUNDIR $(date)"
-bin/julia -Jmoment_kinetics.so --project run_post_processing.jl RUNDIR
+
+# Set this environment variable to avoid warning messages from Qt when running without a display
+export QT_QPA_PLATFORM=offscreen
+
+bin/julia -Jplots_postproc.so --project=plots_post_processing/ run_post_processing.jl RUNDIR
 
 echo "finished post-processing RUNDIR $(date)"
