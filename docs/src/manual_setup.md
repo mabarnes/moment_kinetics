@@ -26,7 +26,7 @@ To add the `moment_kinetics` package to your project, start Julia, enter
 'Package mode' by pressing ']' at the prompt and use `develop` (to exit
 'Package mode' and return to the usual `julia>` prompt, press backspace):
 ```julia
-$ julia
+$ julia --project
 julia> ]
 pkg> develop ./moment_kinetics/
 ```
