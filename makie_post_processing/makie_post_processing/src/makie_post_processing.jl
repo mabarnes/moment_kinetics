@@ -44,7 +44,7 @@ using moment_kinetics.load_data: close_run_info, get_run_info_no_setup, get_vari
                                  neutral_dfn_variables, all_dfn_variables, ion_variables,
                                  neutral_variables, all_variables
 using moment_kinetics.initial_conditions: vpagrid_to_dzdt
-using .shared_utils: calculate_and_write_frequencies, get_geometry_and_composition
+using .shared_utils: calculate_and_write_frequencies
 using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.velocity_moments: integrate_over_vspace,
                                         integrate_over_neutral_vspace

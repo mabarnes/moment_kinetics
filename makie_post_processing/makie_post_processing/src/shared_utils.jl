@@ -63,7 +63,7 @@ end
 
 """
 """
-function get_geometry_and_composition(scan_input, z, r)
+function get_geometry(scan_input, z, r)
     # set geometry
     reference_params = setup_reference_parameters(scan_input)
     # set geometry_input
@@ -76,6 +76,12 @@ function get_geometry_and_composition(scan_input, z, r)
     geo_in = geometry_input(rhostar,option,pitch,DeltaB)
     geometry = init_magnetic_geometry(geo_in,z,r)
 
+    return geometry
+end
+
+"""
+"""
+function get_composition(scan_input)
     # set composition input
     # MRH need to get this in way that does not duplicate code
     # MRH from moment_kinetics_input.jl
@@ -116,7 +122,7 @@ function get_geometry_and_composition(scan_input, z, r)
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
         electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, Er_constant,
         mn_over_mi, me_over_mi, recycling_fraction, allocate_float(n_species))
-    return geometry, composition
+    return composition
 
 end
 
