@@ -9,7 +9,9 @@ using moment_kinetics.input_structs: boltzmann_electron_response,
                                      boltzmann_electron_response_with_simple_sheath,
                                      grid_input, geometry_input, species_composition
 using moment_kinetics.type_definitions: mk_float, mk_int
-
+using moment_kinetics.reference_parameters: setup_reference_parameters
+using moment_kinetics.moment_kinetics_input: get_default_rhostar
+using moment_kinetics.geo: init_magnetic_geometry
 using MPI
 
 """

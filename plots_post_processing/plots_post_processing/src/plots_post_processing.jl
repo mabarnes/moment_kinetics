@@ -57,8 +57,9 @@ using moment_kinetics.analysis: analyze_fields_data, analyze_moments_data,
                                 get_unnormalised_f_coords_2d
 using moment_kinetics.velocity_moments: integrate_over_vspace
 using moment_kinetics.manufactured_solns: manufactured_solutions,
-                                          manufactured_electric_fields
-using moment_kinetics.moment_kinetics_input: mk_input, geti, get_default_rhostar
+                                          manufactured_electric_fields,
+                                          manufactured_geometry
+using moment_kinetics.moment_kinetics_input: mk_input, get, get_default_rhostar
 using moment_kinetics.input_structs: geometry_input, grid_input, species_composition
 using moment_kinetics.input_structs: electron_physics_type, boltzmann_electron_response,
                                      boltzmann_electron_response_with_simple_sheath
@@ -1076,7 +1077,9 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     manufactured_solns_test = manufactured_solns_input.use_for_advance && manufactured_solns_input.use_for_init
     # Plots compare density and density_symbolic at last timestep
     #if(manufactured_solns_test && nr > 1)
+    println("manufactured_solns_test: ",manufactured_solns_test)
     if(manufactured_solns_test)
+        println("got here")
         # avoid passing Lr = 0 into manufactured_solns functions
         if r_global.n > 1
             Lr_in = r_global.L
@@ -1176,6 +1179,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
             compare_neutral_pdf_symbolic_test(run_name_label,manufactured_solns_list,"neutral",
              L"\widetilde{f}_n",L"\widetilde{f}^{sym}_n",L"\varepsilon(\widetilde{f}_n)","pdf")
         end
+    println("got here")
     end
 end
 

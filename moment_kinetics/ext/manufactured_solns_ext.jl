@@ -8,10 +8,10 @@ module manufactured_solns_ext
 
 using moment_kinetics.input_structs
 using moment_kinetics.looping
-using moment_kinetics.type_definitions: mk_int
+using moment_kinetics.type_definitions: mk_int, mk_float
 
 import moment_kinetics.manufactured_solns: manufactured_solutions, manufactured_sources_setup,
-                                           manufactured_electric_fields
+                                           manufactured_electric_fields, manufactured_geometry
 
 using Symbolics
 using IfElse
@@ -446,7 +446,10 @@ using IfElse
     end
 
     function manufactured_solutions(manufactured_solns_input, Lr, Lz, r_bc, z_bc,
-                                    geometry, composition, species, nr, nvperp)
+                                    geometry_input_data::geometry_input, composition, species, nr, nvperp)
+        
+        # calculate the geometry symbolically
+        geometry = geometry_sym(geometry_input_data,Lz,Lr,nr)
         charged_species = species.charged[1]
         if composition.n_neutral_species > 0
             neutral_species = species.neutral[1]
