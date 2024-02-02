@@ -1,6 +1,6 @@
 module shared_utils
 
-export calculate_and_write_frequencies, get_geometry_and_composition
+export calculate_and_write_frequencies, get_geometry, get_composition
 
 using moment_kinetics.analysis: fit_delta_phi_mode
 using moment_kinetics.array_allocation: allocate_float
