@@ -1079,7 +1079,6 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     #if(manufactured_solns_test && nr > 1)
     println("manufactured_solns_test: ",manufactured_solns_test)
     if(manufactured_solns_test)
-        println("got here")
         # avoid passing Lr = 0 into manufactured_solns functions
         if r_global.n > 1
             Lr_in = r_global.L
@@ -1179,7 +1178,6 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
             compare_neutral_pdf_symbolic_test(run_name_label,manufactured_solns_list,"neutral",
              L"\widetilde{f}_n",L"\widetilde{f}^{sym}_n",L"\varepsilon(\widetilde{f}_n)","pdf")
         end
-    println("got here")
     end
 end
 
