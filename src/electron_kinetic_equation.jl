@@ -191,7 +191,8 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
     io_pdf_stages = open("pdf_zright.txt", "w")
 
     # check to see if the electron pdf satisfies the electron kinetic equation to within the specified tolerance
-    average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, max_term)
+    #average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, max_term)
+    average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, abs.(pdf))
     #println("TMP FOR TESTING -- enforce_boundary_condition_on_electron_pdf needs uncommenting!!!")
     # evolve (artificially) in time until the residual is less than the tolerance
     while !electron_pdf_converged && (iteration < max_electron_pdf_iterations)
@@ -301,7 +302,8 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
                                             z, vpa, z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                                             num_diss_params, dt_max)
         # check to see if the electron pdf satisfies the electron kinetic equation to within the specified tolerance
-        average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, max_term)
+        #average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, max_term)
+        average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, abs.(pdf))
         if electron_pdf_converged
             break
         end
