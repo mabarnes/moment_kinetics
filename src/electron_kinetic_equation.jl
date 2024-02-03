@@ -14,6 +14,7 @@ using ..electron_fluid_equations: calculate_electron_qpar_from_pdf!
 using ..electron_fluid_equations: electron_energy_equation!
 using ..electron_z_advection: electron_z_advection!
 using ..electron_vpa_advection: electron_vpa_advection!
+using ..moment_constraints: hard_force_moment_constraints!
 using ..velocity_moments: integrate_over_vspace
 
 """
@@ -199,6 +200,10 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
 
         # enforce the boundary condition(s) on the electron pdf
         enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, moments.electron.upar, vpa, vpa_spectral, composition.me_over_mi)
+        for ir ∈ 1:size(ppar, 2), iz ∈ 2:size(ppar,1)-1
+            #@views hard_force_moment_constraints!(pdf[:,:,iz,ir], (evolve_density=true, evolve_upar=false, evolve_ppar=true), vpa)
+            @views hard_force_moment_constraints!(pdf[:,:,iz,ir], (evolve_density=true, evolve_upar=true, evolve_ppar=true), vpa)
+        end
         
         if (mod(iteration,50)==1)
             @loop_vpa ivpa begin
