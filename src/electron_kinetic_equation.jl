@@ -328,7 +328,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         # check to see if the electron pdf satisfies the electron kinetic equation to within the specified tolerance
         #average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, max_term)
         average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, abs.(pdf))
-        if electron_pdf_converged
+        if electron_pdf_converged || any(isnan.(ppar)) || any(isnan.(pdf))
             break
         end
         iteration += 1
