@@ -143,7 +143,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
                          buffer_r_4, z_spectral, z)
 
     #dt_electron = dt * sqrt(composition.me_over_mi)
-    dt_max = 1.0
+    dt_max = 1.0e-8 #1.0
     dt_energy = 0.001
     time = 0.0
 
@@ -922,16 +922,16 @@ function electron_kinetic_equation_residual!(residual, max_term, single_term, pd
     # initialise the residual to zero                                             
     residual .= 0.0
     # calculate the contribution to the residual from the z advection term
-    #electron_z_advection!(residual, pdf, vth, z_advect, z, vpa.grid, z_spectral, scratch_dummy)
-    dt_max_zadv = simple_z_advection!(residual, pdf, vth, z, vpa.grid, dt_electron)
+    electron_z_advection!(residual, pdf, vth, z_advect, z, vpa.grid, z_spectral, scratch_dummy)
+    #dt_max_zadv = simple_z_advection!(residual, pdf, vth, z, vpa.grid, dt_electron)
     single_term .= residual
     max_term .= abs.(residual)
     #println("z_advection: ", sum(residual), " dqpar_dz: ", sum(abs.(dqpar_dz)))
     #calculate_contribution_from_z_advection!(residual, pdf, vth, z, vpa.grid, z_spectral, scratch_dummy)
     # add in the contribution to the residual from the wpa advection term
-    #electron_vpa_advection!(residual, pdf, ppar, vth, dppar_dz, dqpar_dz, dvth_dz, 
-    #                        vpa_advect, vpa, vpa_spectral, scratch_dummy)
-    dt_max_vadv = simple_vpa_advection!(residual, pdf, ppar, vth, dppar_dz, dqpar_dz, dvth_dz, vpa, dt_electron)
+    electron_vpa_advection!(residual, pdf, ppar, vth, dppar_dz, dqpar_dz, dvth_dz, 
+                            vpa_advect, vpa, vpa_spectral, scratch_dummy)
+    #dt_max_vadv = simple_vpa_advection!(residual, pdf, ppar, vth, dppar_dz, dqpar_dz, dvth_dz, vpa, dt_electron)
     @. single_term = residual - single_term
     max_term .= max.(max_term, abs.(single_term))
     @. single_term = residual
@@ -965,7 +965,8 @@ function electron_kinetic_equation_residual!(residual, max_term, single_term, pd
     #     println("")
     # end
     # stop()
-    dt_max = min(dt_max_zadv, dt_max_vadv)
+    #dt_max = min(dt_max_zadv, dt_max_vadv)
+    dt_max = dt_electron
     #println("dt_max: ", dt_max, " dt_max_zadv: ", dt_max_zadv, " dt_max_vadv: ", dt_max_vadv)
     return dt_max
 end
