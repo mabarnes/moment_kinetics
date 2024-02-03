@@ -42,7 +42,7 @@ function source_terms!(pdf_out, fvec_in, moments, vpa, z, r, dt, spectral, compo
             @views source_terms_evolve_density!(
                 pdf_out[:,:,:,:,is], fvec_in.pdf[:,:,:,:,is], fvec_in.density[:,:,is],
                 fvec_in.upar[:,:,is], moments.ion.ddens_dz[:,:,is],
-                moments.charged.dupar_dz[:,:,is], moments, z, r, dt, spectral,
+                moments.ion.dupar_dz[:,:,is], moments, z, r, dt, spectral,
                 ion_source_settings)
         end
     end
@@ -65,7 +65,7 @@ function source_terms_evolve_density!(pdf_out, pdf_in, dens, upar, ddens_dz, dup
     end
 
     if ion_source_settings.active
-        source_amplitude = moments.charged.external_source_amplitude
+        source_amplitude = moments.ion.external_source_amplitude
         @loop_r_z ir iz begin
             term = dt * source_amplitude[iz,ir] / dens[iz,ir]
             @loop_vperp_vpa ivperp ivpa begin

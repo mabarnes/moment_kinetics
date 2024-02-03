@@ -387,14 +387,14 @@ function write_boundary_distributions!(fid, boundary_distributions, parallel_io,
     @serial_region begin
         boundary_distributions_io = create_io_group(fid, "boundary_distributions")
 
-        write_single_value!(boundary_distributions_io, "pdf_rboundary_charged_left",
-            boundary_distributions.pdf_rboundary_charged[:,:,:,1,:], vpa, vperp, z,
+        write_single_value!(boundary_distributions_io, "pdf_rboundary_ion_left",
+            boundary_distributions.pdf_rboundary_ion[:,:,:,1,:], vpa, vperp, z,
             parallel_io=parallel_io, n_ion_species=composition.n_ion_species,
-            description="Initial charged-particle pdf at left radial boundary")
-        write_single_value!(boundary_distributions_io, "pdf_rboundary_charged_right",
-            boundary_distributions.pdf_rboundary_charged[:,:,:,2,:], vpa, vperp, z,
+            description="Initial ion-particle pdf at left radial boundary")
+        write_single_value!(boundary_distributions_io, "pdf_rboundary_ion_right",
+            boundary_distributions.pdf_rboundary_ion[:,:,:,2,:], vpa, vperp, z,
             parallel_io=parallel_io, n_ion_species=composition.n_ion_species,
-            description="Initial charged-particle pdf at right radial boundary")
+            description="Initial ion-particle pdf at right radial boundary")
         write_single_value!(boundary_distributions_io, "pdf_rboundary_neutral_left",
             boundary_distributions.pdf_rboundary_neutral[:,:,:,:,1,:], vz, vr, vzeta, z,
             parallel_io=parallel_io, n_neutral_species=composition.n_neutral_species,
@@ -644,7 +644,7 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
         io_pperp = create_dynamic_variable!(dynamic, "perpendicular_pressure", mk_float, z, r;
                                            n_ion_species=n_ion_species,
                                            parallel_io=parallel_io,
-                                           description="charged species perpendicular pressure",
+                                           description="ion species perpendicular pressure",
                                            units="n_ref*T_ref")
 
         # io_qpar is the handle for the ion parallel heat flux
@@ -695,7 +695,7 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
         io_dSdt = create_dynamic_variable!(dynamic, "entropy_production", mk_float, z, r;
                                           n_ion_species=n_ion_species,
                                           parallel_io=parallel_io,
-                                          description="charged species entropy production",
+                                          description="ion species entropy production",
                                           units="")
 
         if parallel_io || z.irank == 0
@@ -1222,41 +1222,41 @@ function write_moments_data_to_binary(moments, fields, t, n_ion_species,
         end
         if z.irank == z.nrank - 1 # upper wall
             append_to_dynamic_var(io_moments.chodura_integral_upper,
-                                  moments.charged.chodura_integral_upper, t_idx,
+                                  moments.ion.chodura_integral_upper, t_idx,
                                   parallel_io, r, n_ion_species)
         elseif io_moments.chodura_integral_upper !== nothing
             append_to_dynamic_var(io_moments.chodura_integral_upper,
-                                  moments.charged.chodura_integral_upper, t_idx,
+                                  moments.ion.chodura_integral_upper, t_idx,
                                   parallel_io, 0, n_ion_species)
         end
         if io_moments.external_source_amplitude !== nothing
             append_to_dynamic_var(io_moments.external_source_amplitude,
-                                  moments.charged.external_source_amplitude, t_idx,
+                                  moments.ion.external_source_amplitude, t_idx,
                                   parallel_io, z, r)
             if moments.evolve_density
                 append_to_dynamic_var(io_moments.external_source_density_amplitude,
-                                      moments.charged.external_source_density_amplitude,
+                                      moments.ion.external_source_density_amplitude,
                                       t_idx, parallel_io, z, r)
             end
             if moments.evolve_upar
                 append_to_dynamic_var(io_moments.external_source_momentum_amplitude,
-                                      moments.charged.external_source_momentum_amplitude,
+                                      moments.ion.external_source_momentum_amplitude,
                                       t_idx, parallel_io, z, r)
             end
             if moments.evolve_ppar
                 append_to_dynamic_var(io_moments.external_source_pressure_amplitude,
-                                      moments.charged.external_source_pressure_amplitude,
+                                      moments.ion.external_source_pressure_amplitude,
                                       t_idx, parallel_io, z, r)
             end
         end
         if io_moments.external_source_controller_integral !== nothing
-            if size(moments.charged.external_source_controller_integral) == (1,1)
+            if size(moments.ion.external_source_controller_integral) == (1,1)
                 append_to_dynamic_var(io_moments.external_source_controller_integral,
-                                      moments.charged.external_source_controller_integral[1,1],
+                                      moments.ion.external_source_controller_integral[1,1],
                                       t_idx, parallel_io)
             else
                 append_to_dynamic_var(io_moments.external_source_controller_integral,
-                                      moments.charged.external_source_controller_integral,
+                                      moments.ion.external_source_controller_integral,
                                       t_idx, parallel_io, z, r)
             end
         end

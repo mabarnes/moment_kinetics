@@ -81,7 +81,7 @@ Suggested debugging strategy for race conditions is:
   failure. Usually a failure should indicate where there is a missing
   `begin_*_region()` call. There may be places though where synchronization is
   required even though the type of loop macros used does not change (for
-  example when `phi` is calculated contributions from all charged species need
+  example when `phi` is calculated contributions from all ion species need
   to be summed, resulting in an unusual pattern of array accesses); in this
   case `_block_synchronize()` can be called directly.
     * The function `debug_check_shared_memory()` can be inserted between

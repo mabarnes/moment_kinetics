@@ -8,7 +8,7 @@ using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data,
                                  load_species_data, load_fields_data,
-                                 load_charged_particle_moments_data, load_pdf_data,
+                                 load_ion_particle_moments_data, load_pdf_data,
                                  load_time_data, load_species_data
 using moment_kinetics.type_definitions: mk_float
 
@@ -24,14 +24,14 @@ struct expected_data
     vpa::Array{mk_float, 1}
     vperp::Array{mk_float, 1}
     phi::Array{mk_float, 1} #time
-    n_charged::Array{mk_float, 1} #time
-    upar_charged::Array{mk_float, 1} # time
-    ppar_charged::Array{mk_float, 1} # time
-    pperp_charged::Array{mk_float, 1} # time
-    qpar_charged::Array{mk_float, 1} # time
-    v_t_charged::Array{mk_float, 1} # time
+    n_ion::Array{mk_float, 1} #time
+    upar_ion::Array{mk_float, 1} # time
+    ppar_ion::Array{mk_float, 1} # time
+    pperp_ion::Array{mk_float, 1} # time
+    qpar_ion::Array{mk_float, 1} # time
+    v_t_ion::Array{mk_float, 1} # time
     dSdt::Array{mk_float, 1} # time
-    f_charged::Array{mk_float, 3} # vpa, vperp, time
+    f_ion::Array{mk_float, 3} # vpa, vperp, time
 end
 
 const expected =
@@ -40,21 +40,21 @@ const expected =
    [0.155051025721682, 0.644948974278318, 1.000000000000000, 1.500000000000000, 2.000000000000000, 2.500000000000000, 3.000000000000000],
    # Expected phi:
    [-1.267505494648937, -1.275683298550937],
-   # Expected n_charged:
+   # Expected n_ion:
    [0.2815330322340072, 0.2792400986636072],
-   # Expected upar_charged:
+   # Expected upar_ion:
    [0.0, 0.0],
-   # Expected ppar_charged:
+   # Expected ppar_ion:
    [0.17982280248048935, 0.14891126175332367],
-   # Expected pperp_charged
+   # Expected pperp_ion
    [0.14340146667506784, 0.1581377822859991],
-   # Expected qpar_charged
+   # Expected qpar_ion
    [0.0, 0.0],
-   # Expected v_t_charged
+   # Expected v_t_ion
    [1.0511726083010418, 1.0538509291794658],
    # Expected dSdt
    [0.0, 1.1853081348031516e-5],
-   # Expected f_charged:
+   # Expected f_ion:
    [0.0 0.0 0.0 0.0 0.0 0.0 0.0;
     0.0006199600161806666 0.00047805300997075977 0.0002665817112117718 7.637693901737056e-5 1.3272321881722645e-5 1.3988924344690309e-6 0.0;
     0.005882016862626724 0.0045356406743786385 0.002529256854781707 0.0007246442213864763 0.00012592428394890537 1.3272321881722645e-5 0.0;
@@ -87,25 +87,25 @@ const expected =
 ########################################################################################## 
 """
 fid = open_readonly_output_file(path, "dfns")
-f_charged_vpavperpzrst = load_pdf_data(fid)
-f_charged = f_charged_vpavperpzrst[:,:,1,1,1,:]
+f_ion_vpavperpzrst = load_pdf_data(fid)
+f_ion = f_ion_vpavperpzrst[:,:,1,1,1,:]
 ntind = 2
 nvpa = 13  #subject to grid choices
 nvperp = 7 #subject to grid choices
 for k in 1:ntind
   for j in 1:nvperp-1
       for i in 1:nvpa-1
-         @printf("%.15f ", f_charged[i,j,k])
+         @printf("%.15f ", f_ion[i,j,k])
          print("; ")
       end
-      @printf("%.15f ", f_charged[nvpa,j,k])
+      @printf("%.15f ", f_ion[nvpa,j,k])
       print(";;\n")
   end
   for i in 1:nvpa-1
-    @printf("%.15f ", f_charged[i,nvperp,k])
+    @printf("%.15f ", f_ion[i,nvperp,k])
     print("; ")
   end
-  @printf("%.15f ", f_charged[nvpa,nvperp,k])
+  @printf("%.15f ", f_ion[nvpa,nvperp,k])
   if k < ntind
       print(";;;\n")
   end  
@@ -216,14 +216,14 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
     end
 
     phi = nothing
-    n_charged = nothing
-    upar_charged = nothing
-    ppar_charged = nothing
-    pperp_charged = nothing
-    qpar_charged = nothing
-    v_t_charged = nothing
+    n_ion = nothing
+    upar_ion = nothing
+    ppar_ion = nothing
+    pperp_ion = nothing
+    qpar_ion = nothing
+    v_t_ion = nothing
     dSdt = nothing
-    f_charged = nothing
+    f_ion = nothing
     f_err = nothing
     vpa, vpa_spectral = nothing, nothing
     vperp, vperp_spectral = nothing, nothing
@@ -248,8 +248,8 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
             phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
 
             # load velocity moments data
-            n_charged_zrst, upar_charged_zrst, ppar_charged_zrst, 
-            pperp_charged_zrst, qpar_charged_zrst, v_t_charged_zrst, dSdt_zrst = load_charged_particle_moments_data(fid,extended_moments=true)
+            n_ion_zrst, upar_ion_zrst, ppar_ion_zrst, 
+            pperp_ion_zrst, qpar_ion_zrst, v_t_ion_zrst, dSdt_zrst = load_ion_particle_moments_data(fid,extended_moments=true)
             
             close(fid)
             
@@ -260,21 +260,21 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
             vperp, vperp_spectral = load_coordinate_data(fid, "vperp")
 
             # load particle distribution function (pdf) data
-            f_charged_vpavperpzrst = load_pdf_data(fid)
+            f_ion_vpavperpzrst = load_pdf_data(fid)
             
             close(fid)
             # select the single z, r, s point
             # keep the two time points in the arrays
             phi = phi_zrt[1,1,:]
-            n_charged = n_charged_zrst[1,1,1,:]
-            upar_charged = upar_charged_zrst[1,1,1,:]
-            ppar_charged = ppar_charged_zrst[1,1,1,:]
-            pperp_charged = pperp_charged_zrst[1,1,1,:]
-            qpar_charged = qpar_charged_zrst[1,1,1,:]
-            v_t_charged = v_t_charged_zrst[1,1,1,:]
+            n_ion = n_ion_zrst[1,1,1,:]
+            upar_ion = upar_ion_zrst[1,1,1,:]
+            ppar_ion = ppar_ion_zrst[1,1,1,:]
+            pperp_ion = pperp_ion_zrst[1,1,1,:]
+            qpar_ion = qpar_ion_zrst[1,1,1,:]
+            v_t_ion = v_t_ion_zrst[1,1,1,:]
             dSdt = dSdt_zrst[1,1,1,:]
-            f_charged = f_charged_vpavperpzrst[:,:,1,1,1,:]
-            f_err = copy(f_charged)
+            f_ion = f_ion_vpavperpzrst[:,:,1,1,1,:]
+            f_err = copy(f_ion)
             # Unnormalize f
             # NEED TO UPGRADE TO 2V MOMENT KINETICS HERE
             
@@ -293,20 +293,20 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
                 
                 @test isapprox(expected.phi[tind], phi[tind], rtol=rtol)
 
-                # Check charged particle moments and f
+                # Check ion particle moments and f
                 ######################################
 
-                @test isapprox(expected.n_charged[tind], n_charged[tind], atol=atol)
-                @test isapprox(expected.upar_charged[tind], upar_charged[tind], atol=atol)
-                @test isapprox(expected.ppar_charged[tind], ppar_charged[tind], atol=atol)
-                @test isapprox(expected.pperp_charged[tind], pperp_charged[tind], atol=atol)
-                @test isapprox(expected.qpar_charged[tind], qpar_charged[tind], atol=atol)
-                @test isapprox(expected.v_t_charged[tind], v_t_charged[tind], atol=atol)
+                @test isapprox(expected.n_ion[tind], n_ion[tind], atol=atol)
+                @test isapprox(expected.upar_ion[tind], upar_ion[tind], atol=atol)
+                @test isapprox(expected.ppar_ion[tind], ppar_ion[tind], atol=atol)
+                @test isapprox(expected.pperp_ion[tind], pperp_ion[tind], atol=atol)
+                @test isapprox(expected.qpar_ion[tind], qpar_ion[tind], atol=atol)
+                @test isapprox(expected.v_t_ion[tind], v_t_ion[tind], atol=atol)
                 @test isapprox(expected.dSdt[tind], dSdt[tind], atol=atol)
-                @. f_err = abs(expected.f_charged - f_charged)
+                @. f_err = abs(expected.f_ion - f_ion)
                 max_f_err = maximum(f_err)
                 @test isapprox(max_f_err, 0.0, atol=atol)
-                @test isapprox(expected.f_charged[:,:,tind], f_charged[:,:,tind], atol=atol)
+                @test isapprox(expected.f_ion[:,:,tind], f_ion[:,:,tind], atol=atol)
             end
         end
 

@@ -231,7 +231,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
             init_vth!(moments.ion.vth, z, r, species.ion, n_ion_species)
             @. moments.ion.ppar = 0.5 * moments.ion.dens * moments.ion.vth^2
             # initialise pressures assuming isotropic distribution
-            @. moments.ion.ppar = 0.5 * moments.charged.dens * moments.charged.vth^2
+            @. moments.ion.ppar = 0.5 * moments.ion.dens * moments.ion.vth^2
             @. moments.ion.pperp = moments.ion.ppar
             if n_neutral_species > 0
                 # initialise the neutral density profile
@@ -294,7 +294,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
     # collision operator will not be calculated before the initial values are written to
     # file.
     @serial_region begin
-        moments.charged.dSdt .= 0.0
+        moments.ion.dSdt .= 0.0
     end
 
     init_boundary_distributions!(boundary_distributions, pdf, vz, vr, vzeta, vpa, vperp,
@@ -407,8 +407,8 @@ function initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z
         for is ∈ 1:composition.n_ion_species, ir ∈ 1:r.n
             # Add ion contributions to wall flux here. Neutral contributions will be
             # added in init_neutral_pdf_over_density!()
-            if species.charged[is].z_IC.initialization_option == "bgk" || species.charged[is].vpa_IC.initialization_option == "bgk"
-                @views init_bgk_pdf!(pdf.charged.norm[:,1,:,ir,is], 0.0, species.charged[is].initial_temperature, z.grid, z.L, vpa.grid)
+            if species.ion[is].z_IC.initialization_option == "bgk" || species.ion[is].vpa_IC.initialization_option == "bgk"
+                @views init_bgk_pdf!(pdf.ion.norm[:,1,:,ir,is], 0.0, species.ion[is].initial_temperature, z.grid, z.L, vpa.grid)
             else
                 # updates pdf_norm to contain pdf / density, so that ∫dvpa pdf.norm = 1,
                 # ∫dwpa wpa * pdf.norm = 0, and ∫dwpa m_s (wpa/vths)^2 pdf.norm = 1/2
@@ -1561,7 +1561,7 @@ end
 """
 enforce boundary conditions on neutral particle distribution function
 """
-function enforce_neutral_boundary_conditions!(f_neutral, f_charged,
+function enforce_neutral_boundary_conditions!(f_neutral, f_ion,
         boundary_distributions, density_neutral, uz_neutral, pz_neutral, moments,
         density_ion, upar_ion, Er, vzeta_spectral, vr_spectral, vz_spectral, r_adv, z_adv,
         vzeta_adv, vr_adv, vz_adv, r, z, vzeta, vr, vz, composition, geometry,

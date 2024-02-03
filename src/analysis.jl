@@ -13,7 +13,7 @@ using ..coordinates: coordinate
 using ..initial_conditions: vpagrid_to_dzdt
 using ..interpolation: interpolate_to_grid_1d
 using ..load_data: open_readonly_output_file, get_nranks, load_pdf_data, load_rank_data
-using ..load_data: load_distributed_charged_pdf_slice
+using ..load_data: load_distributed_ion_pdf_slice
 using ..looping
 using ..type_definitions: mk_int
 using ..velocity_moments: integrate_over_vspace
@@ -139,12 +139,12 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, composition,
         end
     end
     if f_lower === nothing
-        f_lower = load_distributed_charged_pdf_slice(run_name, nblocks, t_range,
+        f_lower = load_distributed_ion_pdf_slice(run_name, nblocks, t_range,
                                                      composition.n_ion_species, r, z,
                                                      vperp, vpa; iz=1, ir=ir0)
     end
     if f_upper === nothing
-        f_upper = load_distributed_charged_pdf_slice(run_name, nblocks, t_range,
+        f_upper = load_distributed_ion_pdf_slice(run_name, nblocks, t_range,
                                                      composition.n_ion_species, r, z,
                                                      vperp, vpa; iz=z.n_global, ir=ir0)
     end
