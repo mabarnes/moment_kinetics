@@ -1379,7 +1379,7 @@ function check_electron_pdf_convergence(residual, norm)
     #     average_residual /= length(residual)
     # end
     average_residual = sum(abs.(residual)) / sum(norm)
-    electron_pdf_converged = (average_residual < 1e-2)
+    electron_pdf_converged = (average_residual < 1e-3)
     return average_residual, electron_pdf_converged
 end
 
