@@ -103,8 +103,8 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
     z, vpa, z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy, dt, 
     num_diss_params, max_electron_pdf_iterations)
 
-    println("TMP FOR TESTING: SETTING UPAR_I = UPAR_E = 0!!!")
-    moments.electron.upar .= 0.0
+    #println("TMP FOR TESTING: SETTING UPAR_I = UPAR_E = 0!!!")
+    #moments.electron.upar .= 0.0
 
     # there will be a better way of doing this
     # store the incoming ppar
