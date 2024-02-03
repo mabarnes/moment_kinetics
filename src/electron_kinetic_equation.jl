@@ -206,6 +206,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
 
         # enforce the boundary condition(s) on the electron pdf
         enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, moments.electron.upar, vpa, vpa_spectral, composition.me_over_mi)
+        pdf = max.(pdf, 0.0)
         for ir ∈ 1:size(ppar, 2), iz ∈ 2:size(ppar,1)-1
             #@views hard_force_moment_constraints!(pdf[:,:,iz,ir], (evolve_density=true, evolve_upar=false, evolve_ppar=true), vpa)
             @views hard_force_moment_constraints!(pdf[:,:,iz,ir], (evolve_density=true, evolve_upar=true, evolve_ppar=true), vpa)
