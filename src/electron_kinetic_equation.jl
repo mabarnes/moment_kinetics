@@ -249,8 +249,8 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
                                  buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
         end
 
-        if (mod(iteration,50) == 0)
-            println("time: ", time, " dt_electron: ", dt_electron, " phi_boundary: ", phi[1,1], " average_residual: ", average_residual)
+        if (mod(iteration,output_interval) == 0)
+            println("time: ", time, " dt_electron: ", dt_electron, " phi_boundary: ", phi[1,[1,end]], " average_residual: ", average_residual)
             @loop_z iz begin
                 println(io_upar, "z: ", z.grid[iz], " upar: ", moments.electron.upar[iz,1], " dupar_dz: ", moments.electron.dupar_dz[iz,1], " time: ", time, " iteration: ", iteration)
                 println(io_qpar, "z: ", z.grid[iz], " qpar: ", qpar[iz,1], " dqpar_dz: ", dqpar_dz[iz,1], " time: ", time, " iteration: ", iteration)
