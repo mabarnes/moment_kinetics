@@ -1060,6 +1060,7 @@ function init_electron_pdf_over_density!(pdf, density, upar, vth, phi, z, vpa, v
         @loop_z_vperp iz ivperp begin
             #@. pdf[:,ivperp,iz] = exp(-30*z.grid[iz]^2)
             #@. pdf[:,ivperp,iz] = (density[iz] / vth[iz]) *
+            #@. pdf[:,ivperp,iz] = exp(-vpa.grid[:]^2)
             @. pdf[:,ivperp,iz] = exp(-vpa.grid[:]^2) * (
                                   (1 - exp(-blend_fac*(z.grid[iz] - z.grid[1])^2) *
                                   tanh(sharp_fac*(vpa.grid[:]-vpa_crit_zmin))) *

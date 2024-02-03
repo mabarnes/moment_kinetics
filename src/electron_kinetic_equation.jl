@@ -215,11 +215,16 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
 
         # enforce the boundary condition(s) on the electron pdf
         enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, moments.electron.upar, vpa, vpa_spectral, composition.me_over_mi)
+        #println("A pdf 1 ", pdf[:,1,1,1])
+        #println("A pdf end ", pdf[:,1,end,1])
         pdf = max.(pdf, 0.0)
         for ir ∈ 1:size(ppar, 2), iz ∈ 2:size(ppar,1)-1
             #@views hard_force_moment_constraints!(pdf[:,:,iz,ir], (evolve_density=true, evolve_upar=false, evolve_ppar=true), vpa)
             @views hard_force_moment_constraints!(pdf[:,:,iz,ir], (evolve_density=true, evolve_upar=true, evolve_ppar=true), vpa)
         end
+        #println("B pdf 1 ", pdf[:,1,1,1])
+        #println("B pdf end ", pdf[:,1,end,1])
+        #error("foo")
         
         if (mod(iteration,50)==1)
             @loop_vpa ivpa begin
@@ -400,6 +405,8 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
         # adjust the critical (cutoff) speed until the first moment is as close to zero as possible
         # if the first moment is positive, then the cutoff speed needs to be reduced
         upar_over_vth = upar[1,ir] / vthe[1,ir]
+        #println("upar=", upar[1,ir], " vthe=", vthe[1,ir])
+        #println("$first_vspace_moment, u/vth=$upar_over_vth")
         vpa_unnorm = @. vpa.scratch3 = vthe[1,ir] * vpa.grid + upar[1,ir]
         upar_integral = 0.0
         #while first_vspace_moment > upar_over_vth # > 0.0
@@ -409,11 +416,13 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
         #    vpa.scratch3[ivpa_max] = 0.0
         #    # calculate the updated first moment of the normalised pdf
         #    first_vspace_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
+        #    #println("truncating pdf $ivpa_max, $first_vspace_moment, u/vth=$upar_over_vth")
         #    if first_vspace_moment > upar_over_vth #0.0
         #        ivpa_max -= 1
         #    end
         #end
         upar0 = upar[1,ir]
+        #println("before pdf left ", pdf[:,1,1,ir])
         while upar_integral > upar0
             ivpa += 1
             ivpa_max -= 1
@@ -421,13 +430,18 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
             reversed_pdf[ivpa_max] = 0.0
             # calculate the updated first moment of the normalised pdf
             upar_integral += vpa_unnorm[ivpa] * pdf[ivpa,1,1,ir] * vpa.wgts[ivpa]
+            #println("left ", ivpa, " ", upar_integral, " ", upar0)
         end
         vmax = vpa_unnorm[ivpa_max]
+        #println("first_vspace_moment=$first_vspace_moment, ivpa_max=$ivpa_max")
+        #println("done first cutoff loop")
         # update the electrostatic potential at the boundary to be the value corresponding to the updated cutoff velocity
         #phi[1,ir] = me_over_mi * vthe[1,ir]^2 * vpa.grid[ivpa_max]^2
         phi[1,ir] = me_over_mi * vmax^2
         iv0 = findfirst(x -> x>0.0, vpa_unnorm)
         pdf[iv0:end,1,1,ir] .= reversed_pdf[iv0:end]
+        #println("reversed_pdf ", reversed_pdf)
+        #println("after pdf left ", pdf[:,1,1,ir])
         # obtain the normalisation constants needed to ensure the zeroth, first and second moments
         # of the modified pdf are 1, 0 and 1/2 respectively
         # will need vpa / vthe = wpa + upar/vthe
@@ -592,6 +606,7 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
         # adjust the critical (cutoff) speed until the first moment is as close to zero as possible
         # if the first moment is negative, then the magnitude of the cutoff speed needs to be reduced
         upar_over_vth = upar[end,ir] / vthe[end,ir]
+        #println("$first_vspace_moment, u/vth=$upar_over_vth")
         vpa_unnorm = @. vpa.scratch3 = vthe[end,ir] * vpa.grid + upar[end,ir]
         upar_integral = 0.0
         #while first_vspace_moment < upar_over_vth # < 0.0
@@ -606,6 +621,7 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
         #    end
         #end
         upar_end = upar[end,ir]
+        #println("before pdf ", pdf[:,1,end,ir])
         while upar_integral < upar_end
             ivpa -= 1
             ivpa_min += 1
@@ -613,8 +629,10 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
             reversed_pdf[ivpa_min] = 0.0
             # calculate the updated first moment of the normalised pdf
             upar_integral += vpa_unnorm[ivpa] * pdf[ivpa,1,end,ir] * vpa.wgts[ivpa]
+            #println("right ", ivpa, " ", upar_integral, " ", upar_end)
         end
         vmin = vpa_unnorm[ivpa_min]
+        #println("done second cutoff loop")
 
         # zeroth_vspace_moment = integrate_over_vspace(pdf[:,1,end,1], vpa.wgts)
         # @. vpa.scratch3 = pdf[:,1,end,1] * vpa.grid
@@ -632,6 +650,7 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
         phi[end,ir] = me_over_mi * vmin^2
         iv0 = findlast(x -> x<0.0, vpa_unnorm)
         pdf[1:iv0,1,end,ir] .= reversed_pdf[1:iv0]
+        #println("after pdf ", pdf[:,1,end,ir])
         # obtain the normalisation constants needed to ensure the zeroth, first and second moments
         # of the modified pdf are 1, 0 and 1/2 respectively
         # will need vpa / vthe = wpa + upar/vthe
@@ -1006,6 +1025,7 @@ function electron_kinetic_equation_residual!(residual, max_term, single_term, pd
     #dt_max_zadv = simple_z_advection!(residual, pdf, vth, z, vpa.grid, dt_electron)
     single_term .= residual
     max_term .= abs.(residual)
+    #println("z_adv residual = ", maximum(abs.(single_term)))
     #println("z_advection: ", sum(residual), " dqpar_dz: ", sum(abs.(dqpar_dz)))
     #calculate_contribution_from_z_advection!(residual, pdf, vth, z, vpa.grid, z_spectral, scratch_dummy)
     # add in the contribution to the residual from the wpa advection term
@@ -1015,12 +1035,14 @@ function electron_kinetic_equation_residual!(residual, max_term, single_term, pd
     @. single_term = residual - single_term
     max_term .= max.(max_term, abs.(single_term))
     @. single_term = residual
+    #println("v_adv residual = ", maximum(abs.(single_term)))
     #add_contribution_from_wpa_advection!(residual, pdf, vth, ppar, dppar_dz, dqpar_dz, dvth_dz, vpa, vpa_spectral)
     # add in the contribution to the residual from the term proportional to the pdf
     add_contribution_from_pdf_term!(residual, pdf, ppar, vth, dens, ddens_dz, dvth_dz, dqpar_dz, vpa.grid, z)
     @. single_term = residual - single_term
     max_term .= max.(max_term, abs.(single_term))
     @. single_term = residual
+    #println("pdf_term residual = ", maximum(abs.(single_term)))
     # @loop_vpa ivpa begin
     #     @loop_z iz begin
     #         println("LHS: ", residual[ivpa,1,iz,1], " vpa: ", vpa.grid[ivpa], " z: ", z.grid[iz], " dvth_dz: ", dvth_dz[iz,1], " type: ", 1) 
@@ -1031,6 +1053,7 @@ function electron_kinetic_equation_residual!(residual, max_term, single_term, pd
     # add in numerical dissipation terms
     add_dissipation_term!(residual, pdf, scratch_dummy, z_spectral, z, vpa, vpa_spectral, num_diss_params)
     @. single_term = residual - single_term
+    #println("dissipation residual = ", maximum(abs.(single_term)))
     max_term .= max.(max_term, abs.(single_term))
     # add in particle and heat source term(s)
     #@. single_term = residual
