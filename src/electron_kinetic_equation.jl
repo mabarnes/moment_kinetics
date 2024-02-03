@@ -498,12 +498,18 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
             @. vpa.scratch3 *= vpa.grid
             vpa4_wpa2_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
             # assuming pdf_updated = pdf * (normalisation_constant_A + vpa^2 * normalisation_constant_B + exp(-vpa^2) * vpa^4 * normalisation_constant_C)
+            #normalisation_constant_B = (0.5 - wpa2_moment / zeroth_moment) /
+            #     (vpa2_wpa2_moment - vpa2_wpa_moment * vpa4_wpa2_moment / vpa4_wpa_moment
+            #     + wpa2_moment / zeroth_moment * (vpa2_wpa_moment * vpa4_moment / vpa4_wpa_moment - vpa2_moment))
+            #normalisation_constant_A = (1 + normalisation_constant_B 
+            #    * (vpa2_wpa_moment * vpa4_moment / vpa4_wpa_moment - vpa2_moment)) / zeroth_moment
+            #normalisation_constant_C = -normalisation_constant_B * vpa2_wpa_moment / vpa4_wpa_moment
             normalisation_constant_B = (0.5 - wpa2_moment / zeroth_moment) /
-                 (vpa2_wpa2_moment - vpa2_wpa_moment * vpa4_wpa2_moment / vpa4_wpa_moment
-                 + wpa2_moment / zeroth_moment * (vpa2_wpa_moment * vpa4_moment / vpa4_wpa_moment - vpa2_moment))
-            normalisation_constant_A = (1 + normalisation_constant_B 
-                * (vpa2_wpa_moment * vpa4_moment / vpa4_wpa_moment - vpa2_moment)) / zeroth_moment
-            normalisation_constant_C = -normalisation_constant_B * vpa2_wpa_moment / vpa4_wpa_moment
+                                       (vpa2_wpa2_moment
+                                        - wpa2_moment / zeroth_moment * vpa2_moment)
+            normalisation_constant_A = (1 - normalisation_constant_B 
+                                            * vpa2_moment) / zeroth_moment
+            normalisation_constant_C = 0.0
             @. pdf[:,1,1,ir] *= (normalisation_constant_A + exp(-afac * vpa.scratch2^2) * vpa.scratch2^2 * normalisation_constant_B 
                                 + exp(-bfac * vpa.scratch2^2) * vpa.scratch2^4 * normalisation_constant_C)
         else
@@ -696,12 +702,18 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
             @. vpa.scratch3 *= vpa.grid
             vpa4_wpa2_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
             # assuming pdf_updated = pdf * (normalisation_constant_A + vpa^2 * normalisation_constant_B + exp(-vpa^2) * vpa^4 * normalisation_constant_C)
+            #normalisation_constant_B = (0.5 - wpa2_moment / zeroth_moment) /
+            #     (vpa2_wpa2_moment - vpa2_wpa_moment * vpa4_wpa2_moment / vpa4_wpa_moment
+            #     + wpa2_moment / zeroth_moment * (vpa2_wpa_moment * vpa4_moment / vpa4_wpa_moment - vpa2_moment))
+            #normalisation_constant_A = (1 + normalisation_constant_B 
+            #    * (vpa2_wpa_moment * vpa4_moment / vpa4_wpa_moment - vpa2_moment)) / zeroth_moment
+            #normalisation_constant_C = -normalisation_constant_B * vpa2_wpa_moment / vpa4_wpa_moment
             normalisation_constant_B = (0.5 - wpa2_moment / zeroth_moment) /
-                 (vpa2_wpa2_moment - vpa2_wpa_moment * vpa4_wpa2_moment / vpa4_wpa_moment
-                 + wpa2_moment / zeroth_moment * (vpa2_wpa_moment * vpa4_moment / vpa4_wpa_moment - vpa2_moment))
-            normalisation_constant_A = (1 + normalisation_constant_B 
-                * (vpa2_wpa_moment * vpa4_moment / vpa4_wpa_moment - vpa2_moment)) / zeroth_moment
-            normalisation_constant_C = -normalisation_constant_B * vpa2_wpa_moment / vpa4_wpa_moment
+                                       (vpa2_wpa2_moment
+                                        - wpa2_moment / zeroth_moment * vpa2_moment)
+            normalisation_constant_A = (1 - normalisation_constant_B 
+                                            * vpa2_moment) / zeroth_moment
+            normalisation_constant_C = 0.0
             @. pdf[:,1,end,ir] *= (normalisation_constant_A + exp(-afac * vpa.scratch2^2) * vpa.scratch2^2 * normalisation_constant_B 
                                 + exp(-bfac * vpa.scratch2^2) * vpa.scratch2^4 * normalisation_constant_C)
         else
