@@ -340,7 +340,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, com
         # get the initial electrostatic potential and parallel electric field
         update_phi!(fields, scratch[1], z, r, composition, collisions, moments, z_spectral, r_spectral, scratch_dummy)
         # initialize the electron pdf that satisfies the electron kinetic equation
-        initialize_electron_pdf!(scratch[1], pdf, moments, fields.phi, z, vpa, vperp, z_spectral, vpa_spectral, 
+        return initialize_electron_pdf!(scratch[1], pdf, moments, fields.phi, z, vpa, vperp, z_spectral, vpa_spectral, 
                                  advection_structs.electron_z_advect, advection_structs.electron_vpa_advect,
                                  scratch_dummy, collisions, composition, 
                                  num_diss_params, t_input.dt)
@@ -500,7 +500,7 @@ function initialize_electron_pdf!(fvec, pdf, moments, phi, z, vpa, vperp, z_spec
             # solution for the electron pdf
             #max_electron_pdf_iterations = 500000
             max_electron_pdf_iterations = 10000
-            @views update_electron_pdf!(fvec, pdf.electron.norm, moments, moments.electron.dens, moments.electron.vth, 
+            return @views update_electron_pdf!(fvec, pdf.electron.norm, moments, moments.electron.dens, moments.electron.vth, 
                                         moments.electron.ppar, moments.electron.qpar, moments.electron.qpar_updated,
                                         phi, moments.electron.ddens_dz, moments.electron.dppar_dz, 
                                         moments.electron.dqpar_dz, moments.electron.dvth_dz, z, vpa, z_spectral, 

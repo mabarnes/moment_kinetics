@@ -56,7 +56,7 @@ function update_electron_pdf!(fvec, pdf, moments, dens, vthe,
     #solution_method = "picard_iteration"
     # solve the electron kinetic equation using the specified method
     if solution_method == "artificial_time_derivative"
-        update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated, 
+        return update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated, 
             moments, dens, vthe, ppar, ddens_dz, dppar_dz, dqpar_dz, dvth_dz, phi, collisions, composition, 
             z, vpa, z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy, dt, 
             num_diss_params, max_electron_pdf_iterations)
@@ -200,6 +200,15 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
     average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, abs.(pdf))
     #println("TMP FOR TESTING -- enforce_boundary_condition_on_electron_pdf needs uncommenting!!!")
     # evolve (artificially) in time until the residual is less than the tolerance
+    output_interval = 50
+    result_pdf = zeros(vpa.n, z.n, max_electron_pdf_iterations ÷ output_interval)
+    result_pdf[:,:,1] .= pdf[:,1,:,1]
+    result_ppar = zeros(z.n, max_electron_pdf_iterations ÷ output_interval)
+    result_ppar[:,1] .= ppar[:,1]
+    result_qpar = zeros(z.n, max_electron_pdf_iterations ÷ output_interval)
+    result_qpar[:,1] .= qpar[:,1]
+    result_phi = zeros(z.n, max_electron_pdf_iterations ÷ output_interval)
+    result_phi[:,1] .= phi[:,1]
     while !electron_pdf_converged && (iteration < max_electron_pdf_iterations)
         # d(pdf)/dt = -kinetic_eqn_terms, so pdf_new = pdf - dt * kinetic_eqn_terms
         @. pdf -= dt_electron * residual
@@ -262,6 +271,10 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
             println(io_qpar,"")
             println(io_ppar,"")
             println(io_vth,"")
+            result_pdf[:,:,iteration÷output_interval+1] .= pdf[:,1,:,1]
+            result_ppar[:,iteration÷output_interval+1] .= ppar[:,1]
+            result_qpar[:,iteration÷output_interval+1] .= qpar[:,1]
+            result_phi[:,iteration÷output_interval+1] .= phi[:,1]
         end
 
         dt_energy = dt_electron * 100.0
@@ -336,7 +349,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
     close(io_vth)
     close(io_pdf)
     close(io_pdf_stages)
-    return nothing    
+    return result_pdf, result_ppar, result_qpar, result_phi, z, vpa
 end
 
 function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, vpa_spectral, me_over_mi)
