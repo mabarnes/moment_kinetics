@@ -6,7 +6,7 @@ export get_electron_critical_velocities
 
 using ..looping
 using ..derivatives: derivative_z!
-using ..calculus: derivative!, integral
+using ..calculus: derivative!, second_derivative!, integral
 using ..interpolation: interpolate_to_grid_1d!
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float
@@ -1054,17 +1054,19 @@ function add_dissipation_term!(residual, pdf, scratch_dummy, z_spectral, z, vpa,
     buffer_r_3 = @view scratch_dummy.buffer_rs_3[:,1]
     buffer_r_4 = @view scratch_dummy.buffer_rs_4[:,1]
     # add in numerical dissipation terms
-    @loop_vperp_vpa ivperp ivpa begin
-        @views derivative_z!(dummy_zr1, pdf[ivpa,ivperp,:,:], buffer_r_1, buffer_r_2, buffer_r_3,
-                             buffer_r_4, z_spectral, z)
-        @views derivative_z!(dummy_zr2, dummy_zr1, buffer_r_1, buffer_r_2, buffer_r_3,
-                             buffer_r_4, z_spectral, z)
-        @. residual[ivpa,ivperp,:,:] -= num_diss_params.z_dissipation_coefficient * dummy_zr2
-    end
+    #@loop_vperp_vpa ivperp ivpa begin
+    #    @views derivative_z!(dummy_zr1, pdf[ivpa,ivperp,:,:], buffer_r_1, buffer_r_2, buffer_r_3,
+    #                         buffer_r_4, z_spectral, z)
+    #    @views derivative_z!(dummy_zr2, dummy_zr1, buffer_r_1, buffer_r_2, buffer_r_3,
+    #                         buffer_r_4, z_spectral, z)
+    #    @. residual[ivpa,ivperp,:,:] -= num_diss_params.z_dissipation_coefficient * dummy_zr2
+    #end
     @loop_r_z_vperp ir iz ivperp begin
-        @views derivative!(vpa.scratch, pdf[:,ivperp,iz,ir], vpa, false)
-        @views derivative!(vpa.scratch2, vpa.scratch, vpa, false)
-        @. residual[:,ivperp,iz,ir] -= num_diss_params.vpa_dissipation_coefficient * vpa.scratch2
+        #@views derivative!(vpa.scratch, pdf[:,ivperp,iz,ir], vpa, false)
+        #@views derivative!(vpa.scratch2, vpa.scratch, vpa, false)
+        #@. residual[:,ivperp,iz,ir] -= num_diss_params.vpa_dissipation_coefficient * vpa.scratch2
+        @views second_derivative!(vpa.scratch, pdf[:,ivperp,iz,ir], vpa, false)
+        @. residual[:,ivperp,iz,ir] -= num_diss_params.vpa_dissipation_coefficient * vpa.scratch
     end
     #stop()
     return nothing
