@@ -1,8 +1,6 @@
-use_manufactured_solns_for_advance = true
 n_ion_species = 1
 n_neutral_species = 1
 electron_physics = "boltzmann_electron_response"
-run_name = "2D-sound-wave_cheb_cxiz_nel_r_2_z_2_vpa_2_vperp_2"
 evolve_moments_density = false
 evolve_moments_parallel_flow = false
 evolve_moments_parallel_pressure = false
@@ -54,7 +52,6 @@ vpa_discretization = "chebyshev_pseudospectral"
 vperp_ngrid = 5
 vperp_nelement = 2
 vperp_L = 6.0
-vperp_bc = "periodic"
 #vperp_discretization = "finite_difference"
 vperp_discretization = "chebyshev_pseudospectral"
 
@@ -75,3 +72,6 @@ vzeta_nelement = 2
 vzeta_L = 12.0
 vzeta_bc = "periodic"
 vzeta_discretization = "chebyshev_pseudospectral"
+
+[manufactured_solns]
+use_for_advance = true

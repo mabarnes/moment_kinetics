@@ -2,7 +2,6 @@ n_ion_species = 1
 n_neutral_species = 1
 #boltzmann_electron_response = true
 electron_physics = "boltzmann_electron_response"
-run_name = "wall-bc_cheb_test"
 evolve_moments_density = false
 evolve_moments_parallel_flow = false
 evolve_moments_parallel_pressure = false

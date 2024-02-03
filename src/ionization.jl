@@ -28,7 +28,14 @@ function constant_ionization_source!(f_out, vpa, vperp, z, r, moments, compositi
     # resolution, which then causes crashes due to overshoots giving
     # negative f??
     width = 0.5
-    rwidth = 0.25
+    vperpwidth = 0.5
+    rwidth = 0.5
+    if vperp.n > 1
+        vperpprefac = 1.0/vperpwidth^2
+    else
+        vperpprefac = 1.0
+    end
+    # loop below relies on vperp[1] = 0 when vperp.n = 1
     @loop_s_r is ir begin
         rfac = exp( - (r.grid[ir]/rwidth)^2)
 
@@ -49,8 +56,9 @@ function constant_ionization_source!(f_out, vpa, vperp, z, r, moments, compositi
                 @. vpa.scratch = vpa.grid
                 prefactor = 1.0
             end
-            @loop_vpa ivpa begin
-                f_out[ivpa,1,iz,ir,is] += dt*rfac*collisions.ionization/width*prefactor*exp(-(vpa.scratch[ivpa]/width)^2)
+            @loop_vperp_vpa ivperp ivpa begin
+                vperpfac = vperpprefac*exp( - (vperp.grid[ivperp]/vperpwidth)^2) 
+                f_out[ivpa,ivperp,iz,ir,is] += dt*rfac*vperpfac*collisions.ionization/width*prefactor*exp(-(vpa.scratch[ivpa]/width)^2)
             end
         end
     end

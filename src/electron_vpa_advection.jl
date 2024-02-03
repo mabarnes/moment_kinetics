@@ -28,7 +28,7 @@ function electron_vpa_advection!(advection_term, pdf, ppar, vth, dppar_dz, dqpar
         @views derivative!(dpdf_dvpa[:,ivperp,iz,ir], pdf[:,ivperp,iz,ir], vpa, advect[1].adv_fac[:,ivperp,iz,ir], spectral)
     end
     @loop_r_z_vperp ir iz ivperp begin
-        @views second_derivative!(d2pdf_dvpa2[:,ivperp,iz,ir], pdf[:,ivperp,iz,ir], 1, vpa, spectral)
+        @views second_derivative!(d2pdf_dvpa2[:,ivperp,iz,ir], pdf[:,ivperp,iz,ir], vpa, spectral)
     end
     # calculate the advection term
     @loop_vpa ivpa begin

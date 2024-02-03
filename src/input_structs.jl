@@ -14,6 +14,8 @@ export collisions_input
 export io_input
 export pp_input
 export geometry_input
+export set_defaults_and_check_top_level!, set_defaults_and_check_section!,
+       Dict_to_NamedTuple
 
 using ..type_definitions: mk_float, mk_int
 
@@ -39,8 +41,10 @@ struct time_input
     n_rk_stages::mk_int
     split_operators::Bool
     runtime_plots::Bool
+    steady_state_residual::Bool
+    converged_residual_value::mk_float
     use_manufactured_solns_for_advance::Bool
-    use_manufactured_solns_for_init::Bool
+    stopfile::String
 end
 
 """
@@ -57,12 +61,16 @@ mutable struct advance_info
     ionization_collisions::Bool
     ionization_collisions_1V::Bool
     ionization_source::Bool
+    krook_collisions::Bool
+    explicit_weakform_fp_collisions::Bool
+    external_source::Bool
     numerical_dissipation::Bool
     source_terms::Bool
     continuity::Bool
     force_balance::Bool
     energy::Bool
     electron_energy::Bool
+    neutral_external_source::Bool
     neutral_source_terms::Bool
     neutral_continuity::Bool
     neutral_force_balance::Bool
@@ -131,10 +139,14 @@ mutable struct grid_input_mutable
     discretization::String
     # finite difference option (only used if discretization is "finite_difference")
     fd_option::String
+    # cheb option (only used if discretization is "chebyshev_pseudospectral")
+    cheb_option::String
     # boundary option
     bc::String
     # mutable struct containing advection speed options
     advection::advection_input_mutable
+    # string option determining boundary spacing
+    element_spacing_option::String
 end
 
 """
@@ -158,12 +170,16 @@ struct grid_input
     discretization::String
     # finite difference option (only used if discretization is "finite_difference")
     fd_option::String
+    # cheb option (only used if discretization is "chebyshev_pseudospectral")
+    cheb_option::String
     # boundary option
     bc::String
     # struct containing advection speed options
     advection::advection_input
     # MPI communicator
     comm::MPI.Comm
+    # string option determining boundary spacing
+    element_spacing_option::String
 end
 
 """
@@ -215,6 +231,8 @@ mutable struct species_parameters_mutable
     initial_density::mk_float
     # struct containing the initial condition info in z for this species
     z_IC::initial_condition_input_mutable
+    # struct containing the initial condition info in r for this species
+    r_IC::initial_condition_input_mutable
     # struct containing the initial condition info in vpa for this species
     vpa_IC::initial_condition_input_mutable
 end
@@ -230,6 +248,8 @@ struct species_parameters
     initial_density::mk_float
     # struct containing the initial condition info in z for this species
     z_IC::initial_condition_input
+    # struct containing the initial condition info in r for this species
+    r_IC::initial_condition_input
     # struct containing the initial condition info in vpa for this species
     vpa_IC::initial_condition_input
 end
@@ -260,16 +280,13 @@ mutable struct species_composition
     phi_wall::mk_float
     # constant for testing nonzero Er
     Er_constant::mk_float
-    # constant controlling divergence at wall boundaries in MMS test
-	epsilon_offset::mk_float
-    # logical controlling whether or not dfni(vpabar,z,r) or dfni(vpa,z,r) in MMS test
-    use_vpabar_in_mms_dfni::Bool
-    # associated float controlling form of assumed potential in MMS test
-    alpha_switch::mk_float    
-	# ratio of the neutral particle mass to the ion mass
+    # ratio of the neutral particle mass to the ion mass
     mn_over_mi::mk_float
     # ratio of the electron particle mass to the ion mass
     me_over_mi::mk_float
+    # The ion flux reaching the wall that is recycled as neutrals is reduced by
+    # `recycling_fraction` to account for ions absorbed by the wall.
+    recycling_fraction::mk_float
     # scratch buffer whose size is n_species
     scratch::Vector{mk_float}
 end
@@ -315,6 +332,14 @@ mutable struct collisions_input
     constant_ionization_rate::Bool
     # electron-ion collision frequency
     nu_ei::mk_float
+    # Coulomb collision rate at the reference density and temperature
+    krook_collision_frequency_prefactor::mk_float
+    # Setting to switch between different options for Krook collision operator
+    krook_collisions_option::String
+    # ion-ion self collision frequency
+    # nu_{ss'} = gamma_{ss'} n_{ref} / 2 (m_s)^2 (c_{ref})^3
+    # with gamma_ss' = 2 pi (Z_s Z_s')^2 e^4 ln \Lambda_{ss'} / (4 pi \epsilon_0)^2
+    nuii::mk_float
 end
 
 """
@@ -366,8 +391,12 @@ struct pp_input
     plot_upar0_vs_t::Bool
     # if plot_ppar0_vs_t = true, create plots of species ppar(z0) vs time
     plot_ppar0_vs_t::Bool
+    # if plot_pperp0_vs_t = true, create plots of species pperp(z0) vs time
+    plot_pperp0_vs_t::Bool
     # if plot_vth0_vs_t = true, create plots of species vth(z0) vs time
     plot_vth0_vs_t::Bool
+    # if plot_dSdt0_vs_t = true, create plots of species vth(z0) vs time
+    plot_dSdt0_vs_t::Bool
     # if plot_qpar0_vs_t = true, create plots of species qpar(z0) vs time
     plot_qpar0_vs_t::Bool
     # if plot_dens_vs_z_t = true, create plot of species density vs z and time
@@ -376,6 +405,8 @@ struct pp_input
     plot_upar_vs_z_t::Bool
     # if plot_ppar_vs_z_t = true, create plot of species parallel pressure vs z and time
     plot_ppar_vs_z_t::Bool
+    # if plot_Tpar_vs_z_t = true, create plot of species parallel temperature vs z and time
+    plot_Tpar_vs_z_t::Bool
     # if plot_qpar_vs_z_t = true, create plot of species parallel heat flux vs z and time
     plot_qpar_vs_z_t::Bool
     # if animate_dens_vs_z = true, create animation of species density vs z at different time slices
@@ -384,6 +415,8 @@ struct pp_input
     animate_upar_vs_z::Bool
     # if animate_ppar_vs_z = true, create animation of species parallel pressure vs z at different time slices
     animate_ppar_vs_z::Bool
+    # if animate_Tpar_vs_z = true, create animation of species parallel temperature vs z at different time slices
+    animate_Tpar_vs_z::Bool
     # if animate_vth_vs_z = true, create animation of species thermal speed vs z at different time slices
     animate_vth_vs_z::Bool
     # if animate_qpar_vs_z = true, create animation of species parallel heat flux vs z at different time slices
@@ -460,8 +493,20 @@ struct pp_input
 	plot_parallel_pressure_vs_r_z::Bool
     # if animate_parallel_pressure_vs_r_z = true animate parallel_pressure vs r z
 	animate_parallel_pressure_vs_r_z::Bool
+    # if plot_parallel_temperature_vs_r0_z = true  plot last timestep parallel_temperature[z,ir0]
+    plot_parallel_temperature_vs_r0_z::Bool
+    # if plot_wall_parallel_temperature_vs_r = true  plot last timestep parallel_temperature[z_wall,r]
+    plot_wall_parallel_temperature_vs_r::Bool
+    # if plot_parallel_temperature_vs_r_z = true plot parallel_temperature vs r z at last timestep
+    plot_parallel_temperature_vs_r_z::Bool
+    # if animate_parallel_temperature_vs_r_z = true animate parallel_temperature vs r z
+    animate_parallel_temperature_vs_r_z::Bool
+    # if plot_chodura_integral = true then plots of the in-simulation Chodura integrals are generated
+    plot_chodura_integral::Bool
     # if plot_wall_pdf = true then plot the ion distribution (vpa,vperp,z,r) in the element nearest the wall at the last timestep 
     plot_wall_pdf::Bool
+    # run analysis for a 2D (in R-Z) linear mode?
+    instability2D::Bool
     # animations of moments will use one in every nwrite_movie data slices
     nwrite_movie::mk_int
     # itime_min is the minimum time index at which to start animations of the moments
@@ -469,6 +514,8 @@ struct pp_input
     # itime_max is the final time index at which to end animations of the moments
     # if itime_max < 0, the value used will be the total number of time slices
     itime_max::mk_int
+    # Only load every itime_skip'th time-point when loading data, to save memory
+    itime_skip::mk_int
     # animations of pdfs will use one in every nwrite_movie data slices
     nwrite_movie_pdfs::mk_int
     # itime_min_pdfs is the minimum time index at which to start animations of the pdfs
@@ -476,6 +523,8 @@ struct pp_input
     # itime_max_pdfs is the final time index at which to end animations of the pdfs
     # if itime_max < 0, the value used will be the total number of time slices
     itime_max_pdfs::mk_int
+    # Only load every itime_skip_pdfs'th time-point when loading pdf data, to save memory
+    itime_skip_pdfs::mk_int
     # ivpa0 is the ivpa index used when plotting data at a single vpa location
     ivpa0::mk_int
     # ivperp0 is the ivperp index used when plotting data at a single vperp location
@@ -490,6 +539,118 @@ struct pp_input
     ivr0::mk_int
     # ivzeta0 is the ivzeta index used when plotting data at a single vzeta location
     ivzeta0::mk_int
+    # Calculate and plot the 'Chodura criterion' at the wall boundaries vs t at fixed r
+    diagnostics_chodura_t::Bool
+    # Calculate and plot the 'Chodura criterion' at the wall boundaries vs r at fixed t
+    diagnostics_chodura_r::Bool
+end
+
+import Base: get
+"""
+Utility method for converting a string to an Enum when getting from a Dict, based on the
+type of the default value
+"""
+function get(d::Dict, key, default::Enum)
+    valstring = get(d, key, nothing)
+    if valstring == nothing
+        return default
+    # instances(typeof(default)) gets the possible values of the Enum. Then convert to
+    # Symbol, then to String.
+    elseif valstring ∈ (split(s, ".")[end] for s ∈ String.(Symbol.(instances(typeof(default)))))
+        return eval(Symbol(valstring))
+    else
+        error("Expected a $(typeof(default)), but '$valstring' is not in "
+              * "$(instances(typeof(default)))")
+    end
+end
+
+"""
+Set the defaults for options in the top level of the input, and check that there are not
+any unexpected options (i.e. options that have no default).
+
+Modifies the options[section_name]::Dict by adding defaults for any values that are not
+already present.
+
+Ignores any sections, as these will be checked separately.
+"""
+function set_defaults_and_check_top_level!(options::AbstractDict; kwargs...)
+    DictType = typeof(options)
+
+    # Check for any unexpected values in the options - all options that are set should be
+    # present in the kwargs of this function call
+    options_keys_symbols = keys(kwargs)
+    options_keys = (String(k) for k ∈ options_keys_symbols)
+    for (key, value) in options
+        # Ignore any ssections when checking
+        if !(isa(value, AbstractDict) || key ∈ options_keys)
+            error("Unexpected option '$key=$value' in top-level options")
+        end
+    end
+
+    # Set default values if a key was not set explicitly
+    explicit_keys = keys(options)
+    for (key_sym, value) ∈ kwargs
+        key = String(key_sym)
+        if !(key ∈ explicit_keys)
+            options[key] = value
+        end
+    end
+
+    return options
+end
+
+"""
+Set the defaults for options in a section, and check that there are not any unexpected
+options (i.e. options that have no default).
+
+Modifies the options[section_name]::Dict by adding defaults for any values that are not
+already present.
+"""
+function set_defaults_and_check_section!(options::AbstractDict, section_name;
+                                         kwargs...)
+    DictType = typeof(options)
+
+    if !(section_name ∈ keys(options))
+        # If section is not present, create it
+        options[section_name] = DictType()
+    end
+
+    if !isa(options[section_name], AbstractDict)
+        error("Expected '$section_name' to be a section in the input file, but it has a "
+              * "value '$(options[section_name])'")
+    end
+
+    section = options[section_name]
+
+    # Check for any unexpected values in the section - all options that are set should be
+    # present in the kwargs of this function call
+    section_keys_symbols = keys(kwargs)
+    section_keys = (String(k) for k ∈ section_keys_symbols)
+    for (key, value) in section
+        if !(key ∈ section_keys)
+            error("Unexpected option '$key=$value' in section '$section_name'")
+        end
+    end
+
+    # Set default values if a key was not set explicitly
+    explicit_keys = keys(section)
+    for (key_sym, value) ∈ kwargs
+        key = String(key_sym)
+        if !(key ∈ explicit_keys)
+            section[key] = value
+        end
+    end
+
+    return section
+end
+
+"""
+Convert a Dict whose keys are String or Symbol to a NamedTuple
+
+Useful as NamedTuple is immutable, so option values cannot be accidentally changed.
+"""
+function Dict_to_NamedTuple(d)
+    return NamedTuple(Symbol(k)=>v for (k,v) ∈ d)
 end
 
 end

@@ -10,7 +10,9 @@ export update_moments!
 export update_density!
 export update_upar!
 export update_ppar!
+export update_pperp!
 export update_qpar!
+export update_vth!
 export reset_moments_status!
 export moments_ion_substruct, moments_electron_substruct, moments_neutral_substruct
 export update_neutral_density!
@@ -21,12 +23,23 @@ export update_neutral_pz!
 export update_neutral_pr!
 export update_neutral_pzeta!
 export update_neutral_qz!
+export update_chodura!
+
+# for testing 
+export get_density
+export get_upar
+export get_ppar
+export get_pperp
+export get_pressure
+export get_qpar
+export get_rmom
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float, allocate_bool, allocate_float
 using ..calculus: integral
 using ..communication
 using ..derivatives: derivative_z!
+using ..derivatives: derivative_r!
 using ..looping
 using ..input_structs: braginskii_fluid, kinetic_electrons
 
@@ -59,6 +72,8 @@ struct moments_ion_substruct
     # sets/uses the value for the same subset of species. This means ppar_update does
     # not need to be a shared memory array.
     ppar_updated::Vector{Bool}
+    # this is the perpendicular pressure
+    pperp::MPISharedArray{mk_float,3}
     # this is the parallel heat flux
     qpar::MPISharedArray{mk_float,3}
     # flag that keeps track of whether or not qpar needs updating before use
@@ -68,11 +83,16 @@ struct moments_ion_substruct
     qpar_updated::Vector{Bool}
     # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
     vth::MPISharedArray{mk_float,3}
+    # generalised Chodura integrals for the lower and upper plates
+    chodura_integral_lower::MPISharedArray{mk_float,2}
+    chodura_integral_upper::MPISharedArray{mk_float,2}
     # if evolve_ppar = true, then the velocity variable is (vpa - upa)/vth, which introduces
     # a factor of vth for each power of wpa in velocity space integrals.
     # v_norm_fac accounts for this: it is vth if using the above definition for the parallel velocity,
     # and it is one otherwise
     v_norm_fac::Union{MPISharedArray{mk_float,3},Nothing}
+    # this is the z-derivative of the particle density
+    ddens_dz::Union{MPISharedArray{mk_float,3},Nothing}
     # this is the upwinded z-derivative of the particle density
     ddens_dz_upwind::Union{MPISharedArray{mk_float,3},Nothing}
     # this is the second-z-derivative of the particle density
@@ -93,6 +113,20 @@ struct moments_ion_substruct
     dqpar_dz::Union{MPISharedArray{mk_float,3},Nothing}
     # this is the z-derivative of the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
     dvth_dz::Union{MPISharedArray{mk_float,3},Nothing}
+    # this is the entropy production dS/dt = - int (ln f sum_s' C_ss' [f_s,f_s']) d^3 v
+    dSdt::MPISharedArray{mk_float,3}
+    # Spatially varying amplitude of the external source term
+    external_source_amplitude::MPISharedArray{mk_float,2}
+    # Spatially varying amplitude of the density moment of the external source term
+    external_source_density_amplitude::MPISharedArray{mk_float,2}
+    # Spatially varying amplitude of the parallel momentum moment of the external source
+    # term
+    external_source_momentum_amplitude::MPISharedArray{mk_float,2}
+    # Spatially varying amplitude of the parallel pressure moment of the external source
+    # term
+    external_source_pressure_amplitude::MPISharedArray{mk_float,2}
+    # Integral term for the PID controller of the external source term
+    external_source_controller_integral::MPISharedArray{mk_float,2}
 end
 
 """
@@ -198,6 +232,8 @@ struct moments_neutral_substruct
     # and it is one otherwise
     v_norm_fac::MPISharedArray{mk_float,3}
     # this is the z-derivative of the particle density
+    ddens_dz::Union{MPISharedArray{mk_float,3},Nothing}
+    # this is the z-derivative of the particle density
     ddens_dz_upwind::Union{MPISharedArray{mk_float,3},Nothing}
     # this is the second-z-derivative of the particle density
     d2dens_dz2::Union{MPISharedArray{mk_float,3},Nothing}
@@ -217,12 +253,24 @@ struct moments_neutral_substruct
     dvth_dz::Union{MPISharedArray{mk_float,3},Nothing}
     # this is the z-derivative of the heat flux along z
     dqz_dz::Union{MPISharedArray{mk_float,3},Nothing}
+    # Spatially varying amplitude of the external source term
+    external_source_amplitude::MPISharedArray{mk_float,2}
+    # Spatially varying amplitude of the density moment of the external source term
+    external_source_density_amplitude::MPISharedArray{mk_float,2}
+    # Spatially varying amplitude of the parallel momentum moment of the external source
+    # term
+    external_source_momentum_amplitude::MPISharedArray{mk_float,2}
+    # Spatially varying amplitude of the parallel pressure moment of the external source
+    # term
+    external_source_pressure_amplitude::MPISharedArray{mk_float,2}
+    # Integral term for the PID controller of the external source term
+    external_source_controller_integral::MPISharedArray{mk_float,2}
 end
 
 """
 """
 function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
-                                evolve_ppar, numerical_dissipation)
+                            evolve_ppar, ion_source_settings, numerical_dissipation)
     # allocate array used for the particle density
     density = allocate_shared_float(nz, nr, n_species)
     # allocate array of Bools that indicate if the density is updated for each species
@@ -238,6 +286,8 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
     # allocate array of Bools that indicate if the parallel pressure is updated for each species
     parallel_pressure_updated = allocate_bool(n_species)
     parallel_pressure_updated .= false
+    # allocate array used for the perpendicular pressure
+    perpendicular_pressure = allocate_shared_float(nz, nr, n_species)
     # allocate array used for the parallel flow
     parallel_heat_flux = allocate_shared_float(nz, nr, n_species)
     # allocate array of Bools that indicate if the parallel flow is updated for each species
@@ -246,6 +296,8 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
     # allocate array of Bools that indicate if the parallel flow is updated for each species
     # allocate array used for the thermal speed
     thermal_speed = allocate_shared_float(nz, nr, n_species)
+    chodura_integral_lower = allocate_shared_float(nr, n_species)
+    chodura_integral_upper = allocate_shared_float(nr, n_species)
     if evolve_ppar
         v_norm_fac = thermal_speed
     else
@@ -256,8 +308,10 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
     end
 
     if evolve_density
+        ddens_dz = allocate_shared_float(nz, nr, n_species)
         ddens_dz_upwind = allocate_shared_float(nz, nr, n_species)
     else
+        ddens_dz = nothing
         ddens_dz_upwind = nothing
     end
     if evolve_density &&
@@ -300,13 +354,54 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
         dqpar_dz = nothing
         dvth_dz = nothing
     end
-    
+
+    entropy_production = allocate_shared_float(nz, nr, n_species)
+
+    if ion_source_settings.active
+        external_source_amplitude = allocate_shared_float(nz, nr)
+        if evolve_density
+            external_source_density_amplitude = allocate_shared_float(nz, nr)
+        else
+            external_source_density_amplitude = allocate_shared_float(1, 1)
+        end
+        if evolve_upar
+            external_source_momentum_amplitude = allocate_shared_float(nz, nr)
+        else
+            external_source_momentum_amplitude = allocate_shared_float(1, 1)
+        end
+        if evolve_ppar
+            external_source_pressure_amplitude = allocate_shared_float(nz, nr)
+        else
+            external_source_pressure_amplitude = allocate_shared_float(1, 1)
+        end
+        if ion_source_settings.PI_density_controller_I != 0.0 &&
+                ion_source_settings.source_type ∈ ("density_profile_control", "density_midpoint_control")
+            if ion_source_settings.source_type == "density_profile_control"
+                external_source_controller_integral = allocate_shared_float(nz, nr)
+            else
+                external_source_controller_integral = allocate_shared_float(1, 1)
+            end
+        else
+            external_source_controller_integral = allocate_shared_float(1, 1)
+        end
+    else
+        external_source_amplitude = allocate_shared_float(1, 1)
+        external_source_density_amplitude = allocate_shared_float(1, 1)
+        external_source_momentum_amplitude = allocate_shared_float(1, 1)
+        external_source_pressure_amplitude = allocate_shared_float(1, 1)
+        external_source_controller_integral = allocate_shared_float(1, 1)
+    end
+
     # return struct containing arrays needed to update moments
-    return moments_ion_substruct(density, density_updated, parallel_flow,
-        parallel_flow_updated, parallel_pressure, parallel_pressure_updated,
-        parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, v_norm_fac,
-        ddens_dz_upwind, d2dens_dz2, dupar_dz, dupar_dz_upwind, d2upar_dz2, dppar_dz,
-        dppar_dz_upwind, d2ppar_dz2, dqpar_dz, dvth_dz)
+    return moments_charged_substruct(density, density_updated, parallel_flow,
+        parallel_flow_updated, parallel_pressure, parallel_pressure_updated,perpendicular_pressure,
+        parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, 
+        chodura_integral_lower, chodura_integral_upper, v_norm_fac,
+        ddens_dz, ddens_dz_upwind, d2dens_dz2, dupar_dz, dupar_dz_upwind, d2upar_dz2,
+        dppar_dz, dppar_dz_upwind, d2ppar_dz2, dqpar_dz, dvth_dz, entropy_production,
+        external_source_amplitude, external_source_density_amplitude,
+        external_source_momentum_amplitude, external_source_pressure_amplitude,
+        external_source_controller_integral)
 end
 
 """
@@ -378,7 +473,8 @@ end
 # therefore separate moments object for neutrals 
     
 function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
-                                evolve_ppar, numerical_dissipation)
+                                evolve_ppar, neutral_source_settings,
+                                numerical_dissipation)
     density = allocate_shared_float(nz, nr, n_species)
     density_updated = allocate_bool(n_species)
     density_updated .= false
@@ -415,8 +511,10 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
     qz_updated .= false
 
     if evolve_density
+        ddens_dz = allocate_shared_float(nz, nr, n_species)
         ddens_dz_upwind = allocate_shared_float(nz, nr, n_species)
     else
+        ddens_dz = nothing
         ddens_dz_upwind = nothing
     end
     if evolve_density &&
@@ -460,11 +558,49 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
         dvth_dz = nothing
     end
 
+    if neutral_source_settings.active
+        external_source_amplitude = allocate_shared_float(nz, nr)
+        if evolve_density
+            external_source_density_amplitude = allocate_shared_float(nz, nr)
+        else
+            external_source_density_amplitude = allocate_shared_float(1, 1)
+        end
+        if evolve_upar
+            external_source_momentum_amplitude = allocate_shared_float(nz, nr)
+        else
+            external_source_momentum_amplitude = allocate_shared_float(1, 1)
+        end
+        if evolve_ppar
+            external_source_pressure_amplitude = allocate_shared_float(nz, nr)
+        else
+            external_source_pressure_amplitude = allocate_shared_float(1, 1)
+        end
+        if neutral_source_settings.PI_density_controller_I != 0.0 &&
+                neutral_source_settings.source_type ∈ ("density_profile_control", "density_midpoint_control")
+            if neutral_source_settings.source_type == "density_profile_control"
+                external_source_controller_integral = allocate_shared_float(nz, nr)
+            else
+                external_source_controller_integral = allocate_shared_float(1, 1)
+            end
+        else
+            external_source_controller_integral = allocate_shared_float(1, 1)
+        end
+    else
+        external_source_amplitude = allocate_shared_float(1, 1)
+        external_source_density_amplitude = allocate_shared_float(1, 1)
+        external_source_momentum_amplitude = allocate_shared_float(1, 1)
+        external_source_pressure_amplitude = allocate_shared_float(1, 1)
+        external_source_controller_integral = allocate_shared_float(1, 1)
+    end
+
     # return struct containing arrays needed to update moments
     return moments_neutral_substruct(density, density_updated, uz, uz_updated, ur,
         ur_updated, uzeta, uzeta_updated, pz, pz_updated, pr, pr_updated, pzeta,
-        pzeta_updated, ptot, qz, qz_updated, vth, v_norm_fac, ddens_dz_upwind, d2dens_dz2,
-        duz_dz, duz_dz_upwind, d2uz_dz2, dpz_dz, dpz_dz_upwind, d2pz_dz2, dqz_dz, dvth_dz)
+        pzeta_updated, ptot, qz, qz_updated, vth, v_norm_fac, ddens_dz, ddens_dz_upwind,
+        d2dens_dz2, duz_dz, duz_dz_upwind, d2uz_dz2, dpz_dz, dpz_dz_upwind, d2pz_dz2,
+        dqz_dz, dvth_dz, external_source_amplitude, external_source_density_amplitude,
+        external_source_momentum_amplitude, external_source_pressure_amplitude,
+        external_source_controller_integral)
 end
 
 """
@@ -500,10 +636,7 @@ function update_moments!(moments, ff, vpa, vperp, z, r, composition)
                                         moments.evolve_upar)
             moments.ion.ppar_updated[is] = true
         end
-        @loop_r_z ir iz begin
-            moments.ion.vth[iz,ir,is] =
-                sqrt(2*moments.ion.ppar[iz,ir,is]/moments.ion.dens[iz,ir,is])
-        end
+        @views update_pperp_species!(moments.charged.pperp[:,:,is], ff[:,:,:,:,is], vpa, vperp, z, r)
         if moments.ion.qpar_updated[is] == false
             @views update_qpar_species!(moments.ion.qpar[:,:,is],
                                         moments.ion.dens[:,:,is],
@@ -511,9 +644,10 @@ function update_moments!(moments, ff, vpa, vperp, z, r, composition)
                                         moments.ion.vth[:,:,is], ff[:,:,:,:,is], vpa,
                                         vperp, z, r, moments.evolve_density,
                                         moments.evolve_upar, moments.evolve_ppar)
-            moments.ion.qpar_updated[is] = true
+            moments.charged.qpar_updated[is] = true
         end
     end
+    update_vth!(moments.charged.vth, moments.charged.ppar, moments.charged.pperp, moments.charged.dens, vperp, z, r, composition)
     return nothing
 end
 
@@ -550,11 +684,14 @@ function update_density_species!(dens, ff, vpa, vperp, z, r)
     @loop_r_z ir iz begin
         # When evolve_density = false, the evolved pdf is the 'true' pdf, and the vpa
         # coordinate is (dz/dt) / c_s.
-        # Integrating calculates n_s / N_e = (1/√π)∫d(vpa/c_s) (√π f_s c_s / N_e)
-        dens[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), 
-            vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+        dens[iz,ir] = get_density(@view(ff[:,:,iz,ir]), vpa, vperp)
     end
     return nothing
+end
+
+function get_density(ff, vpa, vperp)
+    # Integrating calculates n_s / N_e = (0/√π)∫d(vpa/c_s) (√π f_s c_s / N_e)
+    return integrate_over_vspace(@view(ff[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
 end
 
 """
@@ -563,7 +700,6 @@ the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
 function update_upar!(upar, upar_updated, density, ppar, pdf, vpa, vperp, z, r,
                       composition, evolve_density, evolve_ppar)
-
     begin_s_r_z_region()
 
     n_species = size(pdf,5)
@@ -583,10 +719,12 @@ calculate the updated parallel flow (upar) for a given species
 """
 function update_upar_species!(upar, density, ppar, ff, vpa, vperp, z, r, evolve_density,
                               evolve_ppar)
+    @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
     @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
     @boundscheck r.n == size(ff, 4) || throw(BoundsError(ff))
     @boundscheck z.n == size(upar, 1) || throw(BoundsError(upar))
+    @boundscheck r.n == size(upar, 2) || throw(BoundsError(upar))
     if evolve_density && evolve_ppar
         # this is the case where the density and parallel pressure are evolved
         # separately from the normalized pdf, g_s = (√π f_s vth_s / n_s); the vpa
@@ -594,10 +732,10 @@ function update_upar_species!(upar, density, ppar, ff, vpa, vperp, z, r, evolve_
         # Integrating calculates
         # (upar_s / vth_s) = (1/√π)∫d(vpa/vth_s) * (vpa/vth_s) * (√π f_s vth_s / n_s)
         # so convert from upar_s / vth_s to upar_s / c_s
+        # we set the input density to get_upar = 1.0 as the normalised distribution has density of 1.0
         @loop_r_z ir iz begin
             vth = sqrt(2.0*ppar[iz,ir]/density[iz,ir])
-            upar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]),
-                              vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts) * vth
+            upar[iz,ir] = vth*get_upar(@view(ff[:,:,iz,ir]), vpa, vperp, 1.0)
         end
     elseif evolve_density
         # corresponds to case where only the density is evolved separately from the
@@ -605,9 +743,9 @@ function update_upar_species!(upar, density, ppar, ff, vpa, vperp, z, r, evolve_
         # (dz/dt) / c_s.
         # Integrating calculates
         # (upar_s / c_s) = (1/√π)∫d(vpa/c_s) * (vpa/c_s) * (√π f_s c_s / n_s)
+        # we set the input density to get_upar = 1.0 as the normalised distribution has density of 1.0
         @loop_r_z ir iz begin
-            upar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]),
-                              vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
+            upar[iz,ir] = get_upar(@view(ff[:,:,iz,ir]), vpa, vperp, 1.0)
         end
     else
         # When evolve_density = false, the evolved pdf is the 'true' pdf,
@@ -615,12 +753,19 @@ function update_upar_species!(upar, density, ppar, ff, vpa, vperp, z, r, evolve_
         # Integrating calculates
         # (n_s / N_e) * (upar_s / c_s) = (1/√π)∫d(vpa/c_s) * (vpa/c_s) * (√π f_s c_s / N_e)
         @loop_r_z ir iz begin
-            upar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]),
-                              vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts) /
-                          density[iz,ir]
+            upar[iz,ir] = get_upar(@view(ff[:,:,iz,ir]), vpa, vperp, density[iz,ir])
         end
     end
     return nothing
+end
+
+function get_upar(ff, vpa, vperp, density)
+    # Integrating calculates
+    # (n_s / N_e) * (upar_s / c_s) = (1/√π)∫d(vpa/c_s) * (vpa/c_s) * (√π f_s c_s / N_e)
+    # so we divide by the density of f_s
+    upar = integrate_over_vspace(@view(ff[:,:]), vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
+    upar /= density
+    return upar
 end
 
 """
@@ -659,38 +804,100 @@ function update_ppar_species!(ppar, density, upar, ff, vpa, vperp, z, r, evolve_
     if evolve_upar
         # this is the case where the parallel flow and density are evolved separately
         # from the normalized pdf, g_s = (√π f_s c_s / n_s); the vpa coordinate is
-        # ((dz/dt) - upar_s) / c_s>
-        # Integrating calculates (p_parallel/m_s n_s c_s^2) = (1/√π)∫d((vpa-upar_s)/c_s) (1/2)*((vpa-upar_s)/c_s)^2 * (√π f_s c_s / n_s)
-        # so convert from p_s / m_s n_s c_s^2 to ppar_s = p_s / m_s N_e c_s^2
+        # ((dz/dt) - upar_s) / c_s> and so we set upar = 0 in the call to get_ppar
+        # because the mean flow of the normalised ff is zero
         @loop_r_z ir iz begin
-            ppar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts) *
-                          density[iz,ir]
+            ppar[iz,ir] = density[iz,ir]*get_ppar(@view(ff[:,:,iz,ir]), vpa, vperp, 0.0)
         end
     elseif evolve_density
         # corresponds to case where only the density is evolved separately from the
         # normalised pdf, given by g_s = (√π f_s c_s / n_s); the vpa coordinate is
         # (dz/dt) / c_s.
-        # Integrating calculates
-        # (p_parallel/m_s n_s c_s^2) + (upar_s/c_s)^2 = (1/√π)∫d(vpa/c_s) (vpa/c_s)^2 * (√π f_s c_s / n_s)
-        # so subtract off the mean kinetic energy and multiply by density to get the
-        # internal energy density (aka pressure)
         @loop_r_z ir iz begin
-            ppar[iz,ir] = (integrate_over_vspace(@view(ff[:,:,iz,ir]), vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts) -
-                           upar[iz,ir]^2) * density[iz,ir]
+            ppar[iz,ir] = density[iz,ir]*get_ppar(@view(ff[:,:,iz,ir]), vpa, vperp, upar[iz,ir])
         end
     else
         # When evolve_density = false, the evolved pdf is the 'true' pdf,
         # and the vpa coordinate is (dz/dt) / c_s.
-        # Integrating calculates
-        # (p_parallel/m_s N_e c_s^2) + (n_s/N_e)*(upar_s/c_s)^2 = (1/√π)∫d(vpa/c_s) (vpa/c_s)^2 * (√π f_s c_s / N_e)
-        # so subtract off the mean kinetic energy density to get the internal energy
-        # density (aka pressure)
         @loop_r_z ir iz begin
-            ppar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts) -
-                          density[iz,ir]*upar[iz,ir]^2
+            ppar[iz,ir] = get_ppar(@view(ff[:,:,iz,ir]), vpa, vperp, upar[iz,ir])
         end
     end
     return nothing
+end
+
+function get_ppar(ff, vpa, vperp, upar)
+    # Integrating calculates
+    # (p_parallel/m_s N_e c_s^2) = (1/√π)∫d(vpa/c_s) ((vpa-upar)/c_s)^2 * (√π f_s c_s / N_e)
+    # the internal energy density (aka pressure of f_s)
+
+    # modify input vpa.grid to account for the mean flow
+    @. vpa.scratch = vpa.grid - upar
+    norm_fac = 1.0 # normalise to m_s N_e c_s^2
+    #norm_fac = 2.0 # normalise to 0.5 m_s N_e c_s^2 = N_e T_s
+    return norm_fac*integrate_over_vspace(@view(ff[:,:]), vpa.scratch, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)
+end
+
+function update_pperp!(pperp, pdf, vpa, vperp, z, r, composition)
+    @boundscheck composition.n_ion_species == size(pperp,3) || throw(BoundsError(pperp))
+    @boundscheck r.n == size(pperp,2) || throw(BoundsError(pperp))
+    @boundscheck z.n == size(pperp,1) || throw(BoundsError(pperp))
+    
+    begin_s_r_z_region()
+    
+    @loop_s is begin
+        @views update_pperp_species!(pperp[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r)
+    end
+end
+
+"""
+calculate the updated perpendicular pressure (pperp) for a given species
+"""
+function update_pperp_species!(pperp, ff, vpa, vperp, z, r)
+    @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
+    @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
+    @boundscheck r.n == size(ff, 4) || throw(BoundsError(ff))
+    @boundscheck z.n == size(pperp, 1) || throw(BoundsError(pperp))
+    @boundscheck r.n == size(pperp, 2) || throw(BoundsError(pperp))
+    @loop_r_z ir iz begin
+        pperp[iz,ir] = get_pperp(@view(ff[:,:,iz,ir]), vpa, vperp)
+    end
+    return nothing
+end
+
+function get_pperp(ff, vpa, vperp)
+    norm_fac = 0.5 # normalise to m_s N_e c_s^2
+    #norm_fac = 1.0 # normalise to 0.5 m_s N_e c_s^2 = N_e T_s
+    return norm_fac*integrate_over_vspace(@view(ff[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 2, vperp.wgts)
+end
+
+function update_vth!(vth, ppar, pperp, dens, vperp, z, r, composition)
+    @boundscheck composition.n_ion_species == size(vth,3) || throw(BoundsError(vth))
+    @boundscheck r.n == size(vth,2) || throw(BoundsError(vth))
+    @boundscheck z.n == size(vth,1) || throw(BoundsError(vth))
+    
+    begin_s_r_z_region()
+    normfac = 2.0 # if ppar normalised to 2*nref Tref = mref cref^2
+    #normfac = 1.0 # if ppar normalised to nref Tref = 0.5 * mref cref^2
+    if vperp.n > 1 #2V definition
+        @loop_s_r_z is ir iz begin
+            piso = get_pressure(ppar[iz,ir,is],pperp[iz,ir,is])
+            vth[iz,ir,is] = sqrt(normfac*piso/dens[iz,ir,is])
+        end
+    else #1V definition 
+        @loop_s_r_z is ir iz begin
+            vth[iz,ir,is] = sqrt(normfac*ppar[iz,ir,is]/dens[iz,ir,is])
+        end
+    end
+end
+
+"""
+compute the isotropic pressure from the already computed ppar and pperp
+"""
+function get_pressure(ppar::mk_float,pperp::mk_float)
+    pres = (1.0/3.0)*(ppar + 2.0*pperp) 
+    return pres
 end
 
 """
@@ -717,6 +924,7 @@ calculate the updated parallel heat flux (qpar) for a given species
 """
 function update_qpar_species!(qpar, density, upar, vth, ff, vpa, vperp, z, r, evolve_density,
                               evolve_upar, evolve_ppar)
+    @boundscheck r.n == size(ff, 4) || throw(BoundsError(ff))
     @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
     @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
@@ -754,6 +962,92 @@ function update_qpar_species!(qpar, density, upar, vth, ff, vpa, vperp, z, r, ev
 end
 
 """
+runtime diagnostic routine for computing the Chodura ratio
+in a single species plasma with Z = 1
+"""
+
+function update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
+    @boundscheck composition.n_ion_species == size(ff, 5) || throw(BoundsError(ff))
+    begin_s_z_vperp_vpa_region()
+    dffdr = scratch_dummy.buffer_vpavperpzrs_1
+    ff_dummy = scratch_dummy.buffer_vpavperpzrs_2
+    if r.n > 1
+    # first compute d f / d r using centred reconciliation and place in dummy array #1
+    derivative_r!(dffdr, ff[:,:,:,:,:],
+                  scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
+                  scratch_dummy.buffer_vpavperpzs_3,scratch_dummy.buffer_vpavperpzs_4,
+                  r_spectral,r)
+    else
+        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+            dffdr[ivpa,ivperp,iz,ir,is] = 0.0
+        end
+    end 
+    
+    del_vpa = minimum(vpa.grid[2:vpa.ngrid].-vpa.grid[1:vpa.ngrid-1])
+    begin_s_r_region()
+    if z.irank == 0
+        @loop_s_r is ir begin
+            @views moments.charged.chodura_integral_lower[ir,is] = update_chodura_integral_species!(ff[:,:,1,ir,is],dffdr[:,:,1,ir,is],
+            ff_dummy[:,:,1,ir,is],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[1,:,:,ir],moments.charged.dens[1,ir,is],del_vpa)
+        end
+    else # we do not save this Chodura integral to the output file
+        @loop_s_r is ir begin
+            moments.charged.chodura_integral_lower[ir,is] = 0.0
+        end
+    end
+    if z.irank == z.nrank - 1
+        @loop_s_r is ir begin
+            @views moments.charged.chodura_integral_upper[ir,is] = update_chodura_integral_species!(ff[:,:,end,ir,is],dffdr[:,:,end,ir,is],
+            ff_dummy[:,:,end,ir,is],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[end,:,:,ir],moments.charged.dens[end,ir,is],del_vpa)
+        end
+    else # we do not save this Chodura integral to the output file
+        @loop_s_r is ir begin
+            moments.charged.chodura_integral_upper[ir,is] =  0.0
+        end
+    end
+end
+"""
+
+compute the integral needed for the generalised Chodura condition
+
+ IChodura = (Z^2 vBohm^2 / cref^2) * int ( f bz^2 / vz^2 + dfdr*rhostar/vz )
+ vBohm = sqrt(Z Te/mi)
+ with Z = 1 and mref = mi
+ cref = sqrt(2Ti/mi)
+and normalise to the local ion density, appropriate to assessing the 
+Chodura condition 
+
+    IChodura <= (Te/e)d ne / dphi |(sheath entrance) = ni
+ to a single species plasma with Z = 1
+
+"""
+function update_chodura_integral_species!(ff,dffdr,ff_dummy,vpa,vperp,z,r,composition,geometry,vz,dens,del_vpa)
+    @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
+    @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck vpa.n == size(dffdr, 1) || throw(BoundsError(dffdr))
+    @boundscheck vperp.n == size(dffdr, 2) || throw(BoundsError(dffdr))
+    @boundscheck vpa.n == size(ff_dummy, 1) || throw(BoundsError(ff_dummy))
+    @boundscheck vperp.n == size(ff_dummy, 2) || throw(BoundsError(ff_dummy))
+    bzed = geometry.bzed
+    @loop_vperp_vpa ivperp ivpa begin
+        # avoid divide by zero by making sure 
+        # we are more than a vpa mimimum grid spacing away from 
+        # the vz(vpa,r) = 0 velocity boundary
+        if abs(vz[ivpa,ivperp]) > 0.5*del_vpa
+            ff_dummy[ivpa,ivperp] = (ff[ivpa,ivperp]*bzed^2/(vz[ivpa,ivperp]^2) + 
+                                geometry.rhostar*dffdr[ivpa,ivperp]/vz[ivpa,ivperp])
+        else
+            ff_dummy[ivpa,ivperp] = 0.0
+        end
+    end
+    chodura_integral = integrate_over_vspace(@view(ff_dummy[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+    # multiply by Te factor from vBohm and divide by the local ion density
+    chodura_integral *= 0.5*composition.T_e/dens
+    #println("chodura_integral: ",chodura_integral)
+    return chodura_integral
+end
+
+"""
 Pre-calculate spatial derivatives of the moments that will be needed for the time advance
 """
 function calculate_moment_derivatives!(moments, scratch, scratch_dummy, z, z_spectral,
@@ -764,8 +1058,8 @@ function calculate_moment_derivatives!(moments, scratch, scratch_dummy, z, z_spe
         density = @view scratch.density[:,:,is]
         upar = @view scratch.upar[:,:,is]
         ppar = @view scratch.ppar[:,:,is]
-        qpar = @view moments.ion.qpar[:,:,is]
-        vth = @view moments.ion.vth[:,:,is]
+        qpar = @view moments.charged.qpar[:,:,is]
+        vth = @view moments.charged.vth[:,:,is]
         dummy_zr = @view scratch_dummy.dummy_zrs[:,:,is]
         buffer_r_1 = @view scratch_dummy.buffer_rs_1[:,is]
         buffer_r_2 = @view scratch_dummy.buffer_rs_2[:,is]
@@ -774,11 +1068,13 @@ function calculate_moment_derivatives!(moments, scratch, scratch_dummy, z, z_spe
         buffer_r_5 = @view scratch_dummy.buffer_rs_5[:,is]
         buffer_r_6 = @view scratch_dummy.buffer_rs_6[:,is]
         if moments.evolve_density
+            @views derivative_z!(moments.charged.ddens_dz[:,:,is], density, buffer_r_1,
+                                 buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
             # Upwinded using upar as advection velocity, to be used in continuity equation
             @loop_r_z ir iz begin
                 dummy_zr[iz,ir] = -upar[iz,ir]
             end
-            @views derivative_z!(moments.ion.ddens_dz_upwind[:,:,is], density,
+            @views derivative_z!(moments.charged.ddens_dz_upwind[:,:,is], density,
                                  dummy_zr, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
                                  buffer_r_5, buffer_r_6, z_spectral, z)
         end
@@ -788,11 +1084,11 @@ function calculate_moment_derivatives!(moments, scratch, scratch_dummy, z, z_spe
             # centred second derivative for dissipation
             @views derivative_z!(dummy_zr, density, buffer_r_1, buffer_r_2, buffer_r_3,
                                  buffer_r_4, z_spectral, z)
-            @views derivative_z!(moments.ion.d2dens_dz2[:,:,is], dummy_zr, buffer_r_1,
+            @views derivative_z!(moments.charged.d2dens_dz2[:,:,is], dummy_zr, buffer_r_1,
                                  buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
         end
         if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
-            @views derivative_z!(moments.ion.dupar_dz[:,:,is], upar, buffer_r_1,
+            @views derivative_z!(moments.charged.dupar_dz[:,:,is], upar, buffer_r_1,
                                  buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
         end
         if moments.evolve_upar
@@ -962,6 +1258,32 @@ function update_moments_neutral!(moments, pdf, vz, vr, vzeta, z, r, composition)
         end
     end
     return nothing
+end
+
+function get_qpar_1V(ff, vpa, vperp, upar)
+    @. vpa.scratch = vpa.grid - upar
+    return integrate_over_vspace(@view(ff[:,:]), vpa.scratch, 3, vpa.wgts, vperp.grid, 0, vperp.wgts)
+end
+
+function get_qpar(ff, vpa, vperp, upar, dummy_vpavperp)
+    for ivperp in 1:vperp.n 
+        for ivpa in 1:vpa.n
+            wpar = vpa.grid[ivpa]-upar
+            dummy_vpavperp[ivpa,ivperp] = ff[ivpa,ivperp]*wpar*( wpar^2 + vperp.grid[ivperp]^2)
+        end
+    end
+    return integrate_over_vspace(@view(dummy_vpavperp[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+end
+
+# generalised moment useful for computing numerical conserving terms in the collision operator
+function get_rmom(ff, vpa, vperp, upar, dummy_vpavperp)
+    for ivperp in 1:vperp.n 
+        for ivpa in 1:vpa.n
+            wpar = vpa.grid[ivpa]-upar
+            dummy_vpavperp[ivpa,ivperp] = ff[ivpa,ivperp]*( wpar^2 + vperp.grid[ivperp]^2)^2
+        end
+    end
+    return integrate_over_vspace(@view(dummy_vpavperp[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
 end
 
 """
@@ -1319,21 +1641,21 @@ function update_neutral_qz_species!(qz, density, uz, vth, ff, vz, vr, vzeta, z, 
     elseif evolve_ppar
         @loop_r_z ir iz begin
             @. vz.scratch = vz.grid - uz[iz,ir]
-            qz[iz,ir] = integrate_over_neutral_vspace(@view(ff[:,:,:,iz,ir]), vz.grid, 3,
+            qz[iz,ir] = integrate_over_neutral_vspace(@view(ff[:,:,:,iz,ir]), vz.scratch, 3,
                             vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0, vzeta.wgts) *
                         density[iz,ir] * vth[iz,ir]^3
         end
     elseif evolve_density
         @loop_r_z ir iz begin
             @. vz.scratch = vz.grid - uz[iz,ir]
-            qz[iz,ir] = integrate_over_neutral_vspace(@view(ff[:,:,:,iz,ir]), vz.grid, 3,
+            qz[iz,ir] = integrate_over_neutral_vspace(@view(ff[:,:,:,iz,ir]), vz.scratch, 3,
                             vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0, vzeta.wgts) *
                         density[iz,ir]
         end
     else
         @loop_r_z ir iz begin
             @. vz.scratch = vz.grid - uz[iz,ir]
-            qz[iz,ir] = integrate_over_neutral_vspace(@view(ff[:,:,:,iz,ir]), vz.grid, 3,
+            qz[iz,ir] = integrate_over_neutral_vspace(@view(ff[:,:,:,iz,ir]), vz.scratch, 3,
                             vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0, vzeta.wgts)
         end
     end
@@ -1362,6 +1684,8 @@ function calculate_moment_derivatives_neutral!(moments, scratch, scratch_dummy, 
         buffer_r_5 = @view scratch_dummy.buffer_rsn_5[:,isn]
         buffer_r_6 = @view scratch_dummy.buffer_rsn_6[:,isn]
         if moments.evolve_density
+            @views derivative_z!(moments.neutral.ddens_dz[:,:,isn], density, buffer_r_1,
+                                 buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
             # Upwinded using upar as advection velocity, to be used in continuity equation
             @loop_r_z ir iz begin
                 dummy_zr[iz,ir] = -uz[iz,ir]

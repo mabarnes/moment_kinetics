@@ -9,7 +9,7 @@ using Primes
 Run a test for a single set of parameters
 """
 # Note 'name' should not be shared by any two tests in this file
-function run_test(test_input, debug_loop_type, debug_loop_parallel_dims)
+function run_test(test_input, debug_loop_type, debug_loop_parallel_dims; restart=false)
 
     name = test_input["run_name"]
 
@@ -19,7 +19,8 @@ function run_test(test_input, debug_loop_type, debug_loop_parallel_dims)
 
         # run simulation
         mk_state = setup_moment_kinetics(test_input; debug_loop_type=debug_loop_type,
-                                         debug_loop_parallel_dims=debug_loop_parallel_dims)
+                                         debug_loop_parallel_dims=debug_loop_parallel_dims,
+                                         restart=restart)
         time_advance!(mk_state...)
         cleanup_moment_kinetics!(mk_state[end-2:end]...)
     end
@@ -42,7 +43,7 @@ function dimension_combination_is_used(dim_combination)
     return any(occursin(search_string, read(f, String)) for f ∈ source_files)
 end
 
-function runtests()
+function runtests(; restart=false)
 
     global_size[] == 1 && error("Cannot run debug checks in serial")
 
@@ -57,11 +58,17 @@ function runtests()
         n_factors = length(factor(Vector, global_size[]))
 
         for input ∈ test_input_list, debug_loop_type ∈ dimension_combinations_to_test
+            if :sn ∈ debug_loop_type && "n_neutral_species" ∈ keys(input) &&
+                    input["n_neutral_species"] <= 0
+                # Skip neutral dimension parallelisation options if the number of neutral
+                # species is zero, as these would just be equivalent to running in serial
+                continue
+            end
             ndims = length(debug_loop_type)
             for i ∈ 1:(ndims+n_factors-1)÷n_factors
                 debug_loop_parallel_dims =
                     debug_loop_type[(i-1)*n_factors+1:min(i*n_factors, ndims)]
-                run_test(input, debug_loop_type, debug_loop_parallel_dims)
+                run_test(input, debug_loop_type, debug_loop_parallel_dims; restart=restart)
             end
         end
     end

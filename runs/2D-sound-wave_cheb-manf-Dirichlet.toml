@@ -1,8 +1,6 @@
-use_manufactured_solns_for_advance = true
 n_ion_species = 1
 n_neutral_species = 0
 boltzmann_electron_response = true
-run_name = "2D-sound-wave_cheb-manf-Dirichlet"
 evolve_moments_density = false
 evolve_moments_parallel_flow = false
 evolve_moments_parallel_pressure = false
@@ -51,5 +49,7 @@ vpa_discretization = "chebyshev_pseudospectral"
 vperp_ngrid = 5
 vperp_nelement = 8
 vperp_L = 8.0
-vperp_bc = "periodic"
 vperp_discretization = "finite_difference"
+
+[manufactured_solns]
+use_for_advance = true

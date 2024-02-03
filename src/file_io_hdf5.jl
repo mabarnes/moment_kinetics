@@ -7,27 +7,27 @@ function io_has_parallel(::Val{hdf5})
     return HDF5.has_parallel()
 end
 
-function open_output_file_hdf5(prefix, parallel_io, io_comm)
+function open_output_file_hdf5(prefix, parallel_io, io_comm, mode="cw")
     # the hdf5 file will be given by output_dir/run_name with .h5 appended
     filename = string(prefix, ".h5")
     # create the new HDF5 file
     if parallel_io
         # if a file with the requested name already exists, remove it
-        if MPI.Comm_rank(io_comm) == 0 && isfile(filename)
+        if mode == "cw" && MPI.Comm_rank(io_comm) == 0 && isfile(filename)
             rm(filename)
         end
         MPI.Barrier(io_comm)
 
-        fid = h5open(filename, "cw", io_comm)
+        fid = h5open(filename, mode, io_comm)
     else
         # if a file with the requested name already exists, remove it
-        isfile(filename) && rm(filename)
+        mode == "cw" && isfile(filename) && rm(filename)
 
         # Not doing parallel I/O, so do not need to pass communicator
-        fid = h5open(filename, "cw")
+        fid = h5open(filename, mode)
     end
 
-    return fid
+    return fid, (filename, parallel_io, io_comm)
 end
 
 # HDF5.H5DataStore is the supertype for HDF5.File and HDF5.Group
@@ -77,9 +77,15 @@ function write_single_value!(file_or_group::HDF5.H5DataStore, name,
                              data::Union{Number, AbstractString, AbstractArray{T,N}},
                              coords::Union{coordinate,mk_int}...; parallel_io,
                              n_ion_species=nothing, n_neutral_species=nothing,
-                             description=nothing) where {T,N}
+                             description=nothing, units=nothing) where {T,N}
     if isa(data, Union{Number, AbstractString})
         file_or_group[name] = data
+        if description !== nothing
+            add_attribute!(file_or_group[name], "description", description)
+        end
+        if units !== nothing
+            add_attribute!(file_or_group[name], "units", units)
+        end
         return nothing
     end
 
@@ -107,8 +113,8 @@ function write_single_value!(file_or_group::HDF5.H5DataStore, name,
     end
     dim_sizes, chunk_sizes = hdf5_get_fixed_dim_sizes(coords, parallel_io)
     io_var = create_dataset(file_or_group, name, T, dim_sizes, chunk=chunk_sizes)
-    local_ranges = Tuple(isa(c, coordinate) ? c.local_io_range : 1:c for c ∈ coords)
-    global_ranges = Tuple(isa(c, coordinate) ? c.global_io_range : 1:c for c ∈ coords)
+    local_ranges = Tuple(isa(c, mk_int) ? (1:c) : c.local_io_range for c ∈ coords)
+    global_ranges = Tuple(isa(c, mk_int) ? (1:c) : c.global_io_range for c ∈ coords)
 
     if N == 1
         io_var[global_ranges[1]] = @view data[local_ranges[1]]
@@ -160,12 +166,12 @@ of species).
 """
 function hdf5_get_fixed_dim_sizes(coords, parallel_io)
     if parallel_io
-        dim_sizes = Tuple(isa(c, coordinate) ? c.n_global : c for c in coords)
+        dim_sizes = Tuple(isa(c, mk_int) ? c : c.n_global for c in coords)
     else
-        dim_sizes = Tuple(isa(c, coordinate) ? c.n : c for c in coords)
+        dim_sizes = Tuple(isa(c, mk_int) ? c : c.n for c in coords)
     end
     if parallel_io
-        chunk_sizes = Tuple(isa(c, coordinate) ? max(c.n-1,1) : c for c in coords)
+        chunk_sizes = Tuple(isa(c, mk_int) ? c : max(c.n-1,1) for c in coords)
     else
         chunk_sizes = dim_sizes
     end
@@ -259,6 +265,7 @@ end
 
 function append_to_dynamic_var(io_var::HDF5.Dataset,
                                data::Union{Number,AbstractArray{T,N}}, t_idx,
+                               parallel_io::Bool,
                                coords::Union{coordinate,Integer}...) where {T,N}
     # Extend time dimension for this variable
     dims = size(io_var)
@@ -268,7 +275,13 @@ function append_to_dynamic_var(io_var::HDF5.Dataset,
     global_ranges = Tuple(isa(c, coordinate) ? c.global_io_range : 1:c for c ∈ coords)
 
     if isa(data, Number)
-        io_var[t_idx] = data
+        if !parallel_io || global_rank[] == 0
+            # A scalar value is required to be the same on all processes, so when using
+            # parallel I/O, only write from one process to avoid overwriting (which would
+            # mean processes having to wait, and make which process wrote the final value
+            # random).
+            io_var[t_idx] = data
+        end
     elseif N == 1
         io_var[global_ranges[1], t_idx] = @view data[local_ranges[1]]
     elseif N == 2

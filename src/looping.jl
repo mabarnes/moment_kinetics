@@ -366,9 +366,17 @@ eval(quote
              loop_ranges_store[dims] = LoopRanges(;
                  parallel_dims=dims, rank0 = rank0, ranges...)
          else
-             # Use the same ranges as serial loops
+             # Loop over all indices for non-parallelised dimensions (dimensions not in
+             # `dims`), but only loop over parallel dimensions (dimensions in `dims`) on
+             # rank0.
+             this_ranges = Dict(d=>1:n for (d,n) in dim_sizes)
+             if !rank0
+                 for d ∈ dims
+                     this_ranges[d] = 1:0
+                 end
+             end
              loop_ranges_store[dims] = LoopRanges(;
-                 parallel_dims=dims, rank0 = rank0, serial_ranges...)
+                 parallel_dims=dims, rank0 = rank0, this_ranges...)
          end
      end
 
@@ -399,12 +407,22 @@ for dims ∈ dimension_combinations
         function $nested_macro_body_name(body, it_vars...)
             ex = Expr(:escape, body)
             # Reverse it_vars so final iteration variable is the inner loop
-            for (it, range) ∈ zip(reverse(it_vars), reverse($range_exprs))
-                this_range = eval(range)
+            it_vars_vec = collect(reverse(it_vars))
+            for i ∈ 1:length(it_vars_vec)
+                rangei = Symbol(:range, i)
                 ex = quote
-                    for $(esc(it)) = $this_range
+                    for $(esc(it_vars_vec[i])) = $rangei
                         $ex
                     end
+                end
+            end
+            range_exprs_vec = collect(reverse($range_exprs))
+            for i ∈ 1:length(it_vars_vec)
+                rangei = Symbol(:range, i)
+                range_expr = eval(range_exprs_vec[i])
+                ex = quote
+                    $rangei = $range_expr
+                    $ex
                 end
             end
             return ex

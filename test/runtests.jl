@@ -7,10 +7,16 @@ function runtests()
         include(joinpath(@__DIR__, "calculus_tests.jl"))
         include(joinpath(@__DIR__, "interpolation_tests.jl"))
         include(joinpath(@__DIR__, "loop_setup_tests.jl"))
+        include(joinpath(@__DIR__, "velocity_integral_tests.jl"))
         include(joinpath(@__DIR__, "sound_wave_tests.jl"))
         include(joinpath(@__DIR__, "nonlinear_sound_wave_tests.jl"))
+        include(joinpath(@__DIR__, "Krook_collisions_tests.jl"))
+        include(joinpath(@__DIR__, "restart_interpolation_tests.jl"))
         include(joinpath(@__DIR__, "harrisonthompson.jl"))
         include(joinpath(@__DIR__, "wall_bc_tests.jl"))
+        include(joinpath(@__DIR__, "recycling_fraction_tests.jl"))
+        include(joinpath(@__DIR__, "fokker_planck_tests.jl"))
+        include(joinpath(@__DIR__, "fokker_planck_time_evolution_tests.jl"))
     end
 end
 

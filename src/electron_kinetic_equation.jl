@@ -1174,7 +1174,7 @@ function add_dissipation_term!(residual, pdf, scratch_dummy, z_spectral, z, vpa,
         #@views derivative!(vpa.scratch, pdf[:,ivperp,iz,ir], vpa, false)
         #@views derivative!(vpa.scratch2, vpa.scratch, vpa, false)
         #@. residual[:,ivperp,iz,ir] -= num_diss_params.vpa_dissipation_coefficient * vpa.scratch2
-        @views second_derivative!(vpa.scratch, pdf[:,ivperp,iz,ir], vpa, false)
+        @views second_derivative!(vpa.scratch, pdf[:,ivperp,iz,ir], vpa, vpa_spectral)
         @. residual[:,ivperp,iz,ir] -= num_diss_params.vpa_dissipation_coefficient * vpa.scratch
     end
     #stop()

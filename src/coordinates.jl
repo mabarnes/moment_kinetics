@@ -4,21 +4,25 @@ module coordinates
 
 export define_coordinate, write_coordinate
 export equally_spaced_grid
+export set_element_boundaries
 
 using LinearAlgebra
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_int
 using ..calculus: derivative!
-using ..chebyshev: scaled_chebyshev_grid, setup_chebyshev_pseudospectral
+using ..chebyshev: scaled_chebyshev_grid, scaled_chebyshev_radau_grid, setup_chebyshev_pseudospectral
+using ..finite_differences: finite_difference_info
+using ..gauss_legendre: scaled_gauss_legendre_lobatto_grid, scaled_gauss_legendre_radau_grid, setup_gausslegendre_pseudospectral
 using ..quadrature: composite_simpson_weights
 using ..input_structs: advection_input
+using ..moment_kinetics_structs: null_spatial_dimension_info, null_velocity_dimension_info
 
 using MPI
 
 """
 structure containing basic information related to coordinates
 """
-struct coordinate{T}
+struct coordinate
     # name is the name of the variable associated with this coordiante
     name::String
     # n_global is the total number of grid points associated with this coordinate
@@ -49,10 +53,14 @@ struct coordinate{T}
     imin::Array{mk_int,1}
     # imax[j] contains the maximum index on the full grid for element j
     imax::Array{mk_int,1}
+    # igrid_full[i,j] contains the index of the full grid for the elemental grid point i, on element j
+    igrid_full::Array{mk_int,2}
     # discretization option for the grid
     discretization::String
     # if the discretization is finite differences, fd_option provides the precise scheme
     fd_option::String
+    # if the discretization is chebyshev_pseudospectral, cheb_option chooses whether to use FFT or differentiation matrices for d / d coord
+    cheb_option::String
     # bc is the boundary condition option for this coordinate
     bc::String
     # wgts contains the integration weights associated with each grid point
@@ -85,10 +93,12 @@ struct coordinate{T}
     local_io_range::UnitRange{Int64}
     # global range to write into in output file
     global_io_range::UnitRange{Int64}
-    # array containing the LU-decomopsed, 1D differentiation matrix wrt this coordinate
-    #differentiation_matrix::Array{mk_float,2}
-    #differentiation_matrix::LU{mk_float,Array{mk_float,2},Vector{mk_int}}
-    differentiation_matrix::T
+    # scale for each element
+    element_scale::Array{mk_float,1}
+    # shift for each element
+    element_shift::Array{mk_float,1}
+    # option used to set up element spacing
+    element_spacing_option::String
 end
 
 """
@@ -96,7 +106,7 @@ create arrays associated with a given coordinate,
 setup the coordinate grid, and populate the coordinate structure
 containing all of this information
 """
-function define_coordinate(input, parallel_io::Bool=false)
+function define_coordinate(input, parallel_io::Bool=false; init_YY::Bool=true)
     # total number of grid points is ngrid for the first element
     # plus ngrid-1 unique points for each additional element due
     # to the repetition of a point at the element boundary
@@ -109,11 +119,15 @@ function define_coordinate(input, parallel_io::Bool=false)
         input.nelement_local, n_local)
     # obtain (local) index mapping from the grid within each element
     # to the full grid
-    imin, imax = elemental_to_full_grid_map(input.ngrid, input.nelement_local)
+    imin, imax, igrid_full = elemental_to_full_grid_map(input.ngrid, input.nelement_local)
+    # initialise the data used to construct the grid
+    # boundaries for each element
+    element_boundaries = set_element_boundaries(input.nelement_global, input.L, input.element_spacing_option, input.name)
+    # shift and scale factors for each local element
+    element_scale, element_shift = set_element_scale_and_shift(input.nelement_global, input.nelement_local, input.irank, element_boundaries)
     # initialize the grid and the integration weights associated with the grid
     # also obtain the Chebyshev theta grid and spacing if chosen as discretization option
-    grid, wgts, uniform_grid = init_grid(input.ngrid, input.nelement_global,
-        input.nelement_local, n_global, n_local, input.irank, input.L,
+    grid, wgts, uniform_grid = init_grid(input.ngrid, input.nelement_local, n_global, n_local, input.irank, input.L, element_scale, element_shift,
         imin, imax, igrid, input.discretization, input.name)
     # calculate the widths of the cells between neighboring grid points
     cell_width = grid_spacing(grid, n_local)
@@ -126,28 +140,11 @@ function define_coordinate(input, parallel_io::Bool=false)
     scratch_2d = allocate_float(input.ngrid, input.nelement_local)
     # struct containing the advection speed options/inputs for this coordinate
     advection = input.advection
-    # D_matrix will be the 1D differentiation matrix wrt this coordinate
-    # initialise to the identity matrix
-    D_matrix = rand(n_global, n_global)
-    #D_matrix .= 0.0
-    #for i ∈ 1:n_global
-    #    D_matrix[i,i] = 1.0
-    #end
-    # create an LU object for the differentiation matrix
-    # to be modified later once the actual D_matrix is calculated
-    LU_matrix = factorize(D_matrix)
-    #LU_matrix = LU{mk_float, Matrix{mk_float}, Vector{mk_int}}
-
-    #println("coord: ", input.name)
-    #println("D_matrix: ", D_matrix)
-    #println("LU_matrix: ", LU_matrix)
-
     # buffers for cyclic communication of boundary points
     # each chain of elements has only two external (off-rank)
     # endpoints, so only two pieces of information must be shared
     send_buffer = allocate_float(1)
     receive_buffer = allocate_float(1)
-
     # Add some ranges to support parallel file io
     if !parallel_io
         # No parallel io, just write everything
@@ -167,48 +164,96 @@ function define_coordinate(input, parallel_io::Bool=false)
     end
     coord = coordinate(input.name, n_global, n_local, input.ngrid,
         input.nelement_global, input.nelement_local, input.nrank, input.irank, input.L, grid,
-        cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,
+        cell_width, igrid, ielement, imin, imax, igrid_full, input.discretization, input.fd_option, input.cheb_option,
         input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
         scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
-        local_io_range, global_io_range, LU_matrix)
+        local_io_range, global_io_range, element_scale, element_shift, input.element_spacing_option)
 
-    if input.discretization == "chebyshev_pseudospectral" && coord.n > 1
+    if coord.n == 1 && occursin("v", coord.name)
+        spectral = null_velocity_dimension_info()
+        coord.duniform_dgrid .= 1.0
+    elseif coord.n == 1
+        spectral = null_spatial_dimension_info()
+        coord.duniform_dgrid .= 1.0
+    elseif input.discretization == "chebyshev_pseudospectral"
         # create arrays needed for explicit Chebyshev pseudospectral treatment in this
         # coordinate and create the plans for the forward and backward fast Chebyshev
         # transforms
         spectral = setup_chebyshev_pseudospectral(coord)
         # obtain the local derivatives of the uniform grid with respect to the used grid
         derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
-        # operate on the unit vectors to obtain the column vectors of the differentiation matrix
-        unit_vector = allocate_float(coord.n)
-        unit_vector .= 0.0
-        for i ∈ 1:coord.n
-            unit_vector[i] = 1.0
-            @views derivative!(D_matrix[:,i], unit_vector, coord, spectral)
-            unit_vector[i] = 0.0
-        end
-
-        println("coord: ", coord.name)
-        # replace the differentiaation matrix with its LU decomposition
-        if (coord.name == "z")
-            LU_matrix = factorize(D_matrix)
-            @. coord.differentiation_matrix.L = LU_matrix.L
-            @. coord.differentiation_matrix.U = LU_matrix.U
-            @. coord.differentiation_matrix.p = LU_matrix.p
-        end
+    elseif input.discretization == "gausslegendre_pseudospectral"
+        # create arrays needed for explicit GaussLegendre pseudospectral treatment in this
+        # coordinate and create the matrices for differentiation
+        spectral = setup_gausslegendre_pseudospectral(coord,init_YY=init_YY)
+        # obtain the local derivatives of the uniform grid with respect to the used grid
+        derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
     else
-        # create dummy Bool variable to return in place of the above struct
-        spectral = false
+        # finite_difference_info is just a type so that derivative methods, etc., dispatch
+        # to the finite difference versions, it does not contain any information.
+        spectral = finite_difference_info()
         coord.duniform_dgrid .= 1.0
     end
 
     return coord, spectral
 end
 
+function set_element_boundaries(nelement_global, L, element_spacing_option, coord_name)
+    # set global element boundaries between [-L/2,L/2]
+    element_boundaries = allocate_float(nelement_global+1)
+    if element_spacing_option == "sqrt" && nelement_global > 3
+        # number of boundaries of sqrt grid
+        nsqrt = floor(mk_int,(nelement_global)/2) + 1
+        if nelement_global%2 > 0 # odd
+            if nsqrt < 3
+                fac = 2.0/3.0
+            else
+                fac = 1.0/( 3.0/2.0 - 0.5*((nsqrt-2)/(nsqrt-1))^2)
+            end
+        else
+            fac = 1.0
+        end
+        
+        for j in 1:nsqrt
+            element_boundaries[j] = -(L/2.0) + fac*(L/2.0)*((j-1)/(nsqrt-1))^2
+        end
+        for j in 1:nsqrt
+            element_boundaries[(nelement_global+1)+ 1 - j] = (L/2.0) - fac*(L/2.0)*((j-1)/(nsqrt-1))^2
+        end
+        
+    elseif element_spacing_option == "uniform" || (element_spacing_option == "sqrt" && nelement_global < 4) # uniform spacing 
+        for j in 1:nelement_global+1
+            element_boundaries[j] = L*((j-1)/(nelement_global) - 0.5)
+        end
+    else 
+        println("ERROR: element_spacing_option: ",element_spacing_option, " not supported")
+    end
+    if coord_name == "vperp"
+        #shift so that the range of element boundaries is [0,L]
+        for j in 1:nelement_global+1
+            element_boundaries[j] += L/2.0
+        end
+    end
+    return element_boundaries
+end
+
+function set_element_scale_and_shift(nelement_global, nelement_local, irank, element_boundaries)
+    element_scale = allocate_float(nelement_local)
+    element_shift = allocate_float(nelement_local)
+    
+    for j in 1:nelement_local
+        iel_global = j + irank*nelement_local
+        upper_boundary = element_boundaries[iel_global+1]
+        lower_boundary = element_boundaries[iel_global]
+        element_scale[j] = 0.5*(upper_boundary-lower_boundary)
+        element_shift[j] = 0.5*(upper_boundary+lower_boundary)
+    end
+    return element_scale, element_shift
+end
 """
 setup a grid with n_global grid points on the interval [-L/2,L/2]
 """
-function init_grid(ngrid, nelement_global, nelement_local, n_global, n_local, irank, L,
+function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_scale, element_shift,
                    imin, imax, igrid, discretization, name)
     uniform_grid = equally_spaced_grid(n_global, n_local, irank, L)
     uniform_grid_shifted = equally_spaced_grid_shifted(n_global, n_local, irank, L)
@@ -225,10 +270,9 @@ function init_grid(ngrid, nelement_global, nelement_local, n_global, n_local, ir
     elseif discretization == "chebyshev_pseudospectral"
         if name == "vperp"
             # initialize chebyshev grid defined on [-L/2,L/2]
-            grid, wgts = scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n_local, irank, L, imin, imax)
-            grid .= grid .+ L/2.0 # shift to [0,L] appropriate to vperp variable
+            grid, wgts = scaled_chebyshev_radau_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax, irank)
             wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
-                                        # see note above on normalisation
+                                       # see note above on normalisation
         else
             # initialize chebyshev grid defined on [-L/2,L/2]
             # with n grid points chosen to facilitate
@@ -236,7 +280,16 @@ function init_grid(ngrid, nelement_global, nelement_local, n_global, n_local, ir
             # needed to obtain Chebyshev spectral coefficients
             # 'wgts' are the integration weights attached to each grid points
             # that are those associated with Clenshaw-Curtis quadrature
-            grid, wgts = scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n_local, irank, L, imin, imax)
+            grid, wgts = scaled_chebyshev_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax)
+        end
+    elseif discretization == "gausslegendre_pseudospectral"
+        if name == "vperp"
+            # use a radau grid for the 1st element near the origin
+            grid, wgts = scaled_gauss_legendre_radau_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax, irank)
+            wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
+                                       # see note above on normalisation
+        else
+            grid, wgts = scaled_gauss_legendre_lobatto_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax)
         end
     elseif discretization == "finite_difference"
         if name == "vperp"
@@ -345,6 +398,7 @@ indices on the full grid for each element
 function elemental_to_full_grid_map(ngrid, nelement)
     imin = allocate_int(nelement)
     imax = allocate_int(nelement)
+    igrid_full = allocate_int(ngrid, nelement)
     @inbounds begin
         # the first element contains ngrid entries
         imin[1] = 1
@@ -357,8 +411,14 @@ function elemental_to_full_grid_map(ngrid, nelement)
                 imax[i] = imin[i] + ngrid - 2
             end
         end
+        
+        for j in 1:nelement
+            for i in 1:ngrid
+                igrid_full[i,j] = i + (j - 1)*(ngrid - 1)
+            end
+        end
     end
-    return imin, imax
+    return imin, imax, igrid_full
 end
 
 end

@@ -70,6 +70,7 @@ function update_phi!(fields, fvec, z, r, composition, collisions, moments,
         
     # TODO: parallelise this...
     @serial_region begin
+        ne = @view scratch_dummy.dummy_zrs[:,:,1]
         jpar_i = @view scratch_dummy.buffer_rs_1[:,:,1]
         N_e = @view scratch_dummy.buffer_rs_2[:,:,1]
         if composition.electron_physics == boltzmann_electron_response
@@ -88,7 +89,7 @@ function update_phi!(fields, fvec, z, r, composition, collisions, moments,
             # where positive sign above (and negative sign below)
             # is due to the fact that electrons reaching the wall flow towards more negative z.
             # Using J_||e + J_||i = 0, and rearranging for N_e, we have
-            # N_e = - 2.0 * sqrt( pi * composition.me_over_mi) * jpar_i * exp( - composition.phi_wall / composition.T_e)
+            #N_e = - 2.0 * sqrt( pi * composition.me_over_mi) * jpar_i * exp( - composition.phi_wall / composition.T_e)
             @loop_r ir begin
                  N_e[ir] = - 2.0 * sqrt( pi * composition.me_over_mi) * jpar_i[ir] * exp( - composition.phi_wall / composition.T_e)
                  # N_e must be positive, so force this in case a numerical error or something
@@ -115,9 +116,9 @@ function update_phi!(fields, fvec, z, r, composition, collisions, moments,
     ## calculate the electric fields after obtaining phi
     #Er = - d phi / dr 
     if r.n > 1
-        @views derivative_r!(fields.Er,-fields.phi,
-                scratch_dummy.buffer_zs_1[:,1], scratch_dummy.buffer_zs_2[:,1],
-                scratch_dummy.buffer_zs_3[:,1], scratch_dummy.buffer_zs_4[:,1],
+        derivative_r!(fields.Er,-fields.phi,
+                scratch_dummy.buffer_z_1, scratch_dummy.buffer_z_2,
+                scratch_dummy.buffer_z_3, scratch_dummy.buffer_z_4,
                 r_spectral,r)
         if z.irank == 0 && fields.force_Er_zero_at_wall
             fields.Er[1,:] .= 0.0
@@ -133,11 +134,13 @@ function update_phi!(fields, fvec, z, r, composition, collisions, moments,
     end
     # if advancing electron fluid equations, solve for Ez directly from force balance
     if composition.electron_physics ∉ (braginskii_fluid, kinetic_electrons)
-        # Ez = - d phi / dz
-        @views derivative_z!(fields.Ez,-fields.phi,
+        if z.n > 1
+            # Ez = - d phi / dz
+            @views derivative_z!(fields.Ez,-fields.phi,
                     scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1],
                     scratch_dummy.buffer_rs_3[:,1], scratch_dummy.buffer_rs_4[:,1],
                     z_spectral,z)
+        end
     end
     return nothing
 end

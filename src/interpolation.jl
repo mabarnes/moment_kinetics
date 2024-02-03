@@ -8,6 +8,7 @@ module interpolation
 export interpolate_to_grid_z
 
 using ..array_allocation: allocate_float
+using ..moment_kinetics_structs: null_spatial_dimension_info, null_velocity_dimension_info
 using ..type_definitions: mk_float
 
 """
@@ -23,11 +24,33 @@ f : Array{mk_float}
     Field to be interpolated
 coord : coordinate
     `coordinate` struct giving the coordinate along which f varies
-spectral : Bool or chebyshev_info
+spectral : discretization_info
     struct containing information for discretization, whose type determines which method
     is used.
 """
-function interpolate_to_grid_1d!() end
+function interpolate_to_grid_1d! end
+
+function interpolate_to_grid_1d!(result, new_grid, f, coord,
+                                 spectral::null_spatial_dimension_info)
+    # There is only one point in the 'old grid' represented by coord (as indicated by the
+    # type of the `spectral` argument), and we are interpolating in a spatial dimension.
+    # Assume that the variable should be taken to be constant in this dimension to
+    # 'interpolate'.
+    result .= f[1]
+
+    return nothing
+end
+
+function interpolate_to_grid_1d!(result, new_grid, f, coord,
+                                 spectral::null_velocity_dimension_info)
+    # There is only one point in the 'old grid' represented by coord (as indicated by the
+    # type of the `spectral` argument), and we are interpolating in a velocity space
+    # dimension. Assume that the profile 'should be' a Maxwellian over the new grid, with
+    # a width of 1 in units of the reference speed.
+    @. result = f[1] * exp(-new_grid^2)
+
+    return nothing
+end
 
 """
 Interpolation from a regular grid to a 1d grid with arbitrary spacing

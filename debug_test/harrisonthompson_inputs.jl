@@ -72,6 +72,6 @@ test_input_chebyshev = merge(test_input_finite_difference,
                                   "vz_nelement" => 2))
 
 test_input_list = [
-     test_input_finite_difference,
+     #test_input_finite_difference,
      test_input_chebyshev,
     ]

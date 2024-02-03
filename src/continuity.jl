@@ -12,14 +12,14 @@ use the continuity equation dn/dt + d(n*upar)/dz to update the density n for all
 species
 """
 function continuity_equation!(dens_out, fvec_in, moments, composition, dt, spectral,
-                              ionization, num_diss_params)
+                              ionization, ion_source_settings, num_diss_params)
     begin_s_r_z_region()
 
     @loop_s_r_z is ir iz begin
         # Use ddens_dz is upwinded using upar
         dens_out[iz,ir,is] -=
-            dt*(fvec_in.upar[iz,ir,is]*moments.ion.ddens_dz_upwind[iz,ir,is] +
-                fvec_in.density[iz,ir,is]*moments.ion.dupar_dz[iz,ir,is])
+            dt*(fvec_in.upar[iz,ir,is]*moments.charged.ddens_dz_upwind[iz,ir,is] +
+                fvec_in.density[iz,ir,is]*moments.charged.dupar_dz[iz,ir,is])
     end
 
     # update the density to account for ionization collisions;
@@ -30,11 +30,19 @@ function continuity_equation!(dens_out, fvec_in, moments, composition, dt, spect
         end
     end
 
+    if ion_source_settings.active
+        source_amplitude = moments.charged.external_source_density_amplitude
+        @loop_s_r_z is ir iz begin
+            dens_out[iz,ir,is] +=
+                dt * source_amplitude[iz,ir]
+        end
+    end
+
     # Ad-hoc diffusion to stabilise numerics...
     diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
     if diffusion_coefficient > 0.0
         @loop_s_r_z is ir iz begin
-            dens_out[iz,ir,is] += dt*diffusion_coefficient*moments.ion.d2dens_dz[iz,ir,is]
+            dens_out[iz,ir,is] += dt*diffusion_coefficient*moments.charged.d2dens_dz2[iz,ir,is]
         end
     end
 end
@@ -44,7 +52,8 @@ use the continuity equation dn/dt + d(n*upar)/dz to update the density n for all
 species
 """
 function neutral_continuity_equation!(dens_out, fvec_in, moments, composition, dt,
-                                      spectral, ionization, num_diss_params)
+                                      spectral, ionization, neutral_source_settings,
+                                      num_diss_params)
     begin_sn_r_z_region()
 
     @loop_sn_r_z isn ir iz begin
@@ -62,11 +71,19 @@ function neutral_continuity_equation!(dens_out, fvec_in, moments, composition, d
         end
     end
 
+    if neutral_source_settings.active
+        source_amplitude = moments.neutral.external_source_density_amplitude
+        @loop_s_r_z is ir iz begin
+            dens_out[iz,ir,is] +=
+                dt * source_amplitude[iz,ir]
+        end
+    end
+
     # Ad-hoc diffusion to stabilise numerics...
     diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
     if diffusion_coefficient > 0.0
         @loop_sn_r_z isn ir iz begin
-            dens_out[iz,ir,isn] += dt*diffusion_coefficient*moments.neutral.d2dens_dz[iz,ir,isn]
+            dens_out[iz,ir,isn] += dt*diffusion_coefficient*moments.neutral.d2dens_dz2[iz,ir,isn]
         end
     end
 end

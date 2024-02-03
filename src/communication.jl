@@ -12,10 +12,12 @@ loop ranges), as at the moment we only run with 1 ion species and 1 neutral spec
 """
 module communication
 
-export allocate_shared, block_rank, block_size, comm_block, comm_inter_block,
+export allocate_shared, block_rank, block_size, n_blocks, comm_block, comm_inter_block,
        iblock_index, comm_world, finalize_comms!, initialize_comms!, global_rank,
        MPISharedArray, global_size
 export setup_distributed_memory_MPI
+export setup_distributed_memory_MPI_for_weights_precomputation
+export _block_synchronize
 
 using MPI
 using SHA
@@ -37,7 +39,7 @@ assign to this and not just copy a pointer into the `.val` member because otherw
 `MPI.Comm` object created by `MPI.Comm_split()` would be deleted, which probably makes
 MPI.jl delete the communicator.
 """
-const comm_block = Ref(MPI.Comm())
+const comm_block = Ref(MPI.COMM_NULL)
 
 """
 Communicator connecting the root processes of each shared memory block
@@ -47,7 +49,7 @@ assign to this and not just copy a pointer into the `.val` member because otherw
 `MPI.Comm` object created by `MPI.Comm_split()` would be deleted, which probably makes
 MPI.jl delete the communicator.
 """
-const comm_inter_block = Ref(MPI.Comm())
+const comm_inter_block = Ref(MPI.COMM_NULL)
 
 # Use Ref for these variables so that they can be made `const` (so have a definite
 # type), but contain a value assigned at run-time.
@@ -73,6 +75,10 @@ const block_size = Ref{mk_int}()
 
 """
 """
+const n_blocks = Ref{mk_int}()
+
+"""
+"""
 const global_Win_store = Vector{MPI.Win}(undef, 0)
 
 """
@@ -95,6 +101,13 @@ notation definitions:
     - block: group of processes that share data with shared memory
     - z group: group of processes that need to communicate data for z derivatives
     - r group: group of processes that need to communicate data for r derivatives
+This routine assumes that the number of processes is selected by the user
+to match exactly the number the ratio 
+
+  nblocks = (r_nelement_global/r_nelement_local)*(z_nelement_global/z_nelement_local)
+  
+This guarantees perfect load balancing. Shared memory is used to parallelise the other
+dimensions within each distributed-memory parallelised rz block.   
 """
 function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelement_global,r_nelement_local; printout=false)
     # setup some local constants and dummy variables
@@ -102,11 +115,11 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
     nrank_global = global_size[] # number of processes 
     
     # get information about how the grid is divided up
-    # number of sections `chunks' of the x grid
+    # number of sections `chunks' of the r grid
     r_nchunks = floor(mk_int,r_nelement_global/r_nelement_local)
     # number of sections `chunks' of the z grid
 	z_nchunks = floor(mk_int,z_nelement_global/z_nelement_local) # number of sections of the z grid
-	# get the number of shared-memorz blocks in the z r decomposition
+	# get the number of shared-memory blocks in the z r decomposition
     nblocks = r_nchunks*z_nchunks
     # get the number of ranks per block
     nrank_per_zr_block = floor(mk_int,nrank_global/nblocks)
@@ -121,12 +134,12 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
     end
 	# throw an error if user specified information is inconsistent
     if (nrank_per_zr_block*nblocks < nrank_global)
-        if irank_global ==0 
-            println("ERROR: You must choose global number of processes to be an integer multiple of the number of \n 
-                     nblocks = (r_nelement_global/r_nelement_local)*(z_nelement_global/z_nelement_local)")
-            flush(stdout)
-        end
-        MPI.Abort(comm_world,1)
+        error("ERROR: You must choose global number of processes to be an integer "
+              * "multiple of the number of\n"
+              * "nblocks($nblocks) = (r_nelement_global($r_nelement_global)/"
+              * "r_nelement_local($r_nelement_local))*"
+              * "(z_nelement_global($z_nelement_global)/"
+              * "z_nelement_local($z_nelement_local))")
     end
     
     # assign information regarding shared-memory blocks
@@ -143,6 +156,7 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
     iblock_index[] = iblock
     block_rank[] = irank_block
     block_size[] = nrank_per_zr_block
+    n_blocks[] = nblocks
     # construct a communicator for intra-block communication
     comm_block[] = MPI.Comm_split(comm_world,iblock,irank_block)
     # MPI.Comm_split(comm,color,key)
@@ -203,6 +217,139 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
     return z_irank, z_nrank_per_group, z_comm, r_irank, r_nrank_per_group, r_comm
 end
 
+"""
+Function to take information from user about vpa vperp grids and 
+number of processes allocated to set up communicators for 
+precomputation of the Rosenbluth potential integration weights
+notation definitions:
+    - block: group of processes that share data with shared memory
+    - vpa group: group of processes that need to communicate data for vpa derivatives/integrals
+    - vperp group: group of processes that need to communicate data for vperp derivatives/integrals
+This routine assumes that the number of processes is selected by the user
+to match or be larger than the ratio 
+
+  nblocks = (vpa_nelement_global/vpa_nelement_local)*(vperp_nelement_global/vperp_nelement_local)
+  
+We also need to know (from user input) the maximum number of cores per shared memory region.
+A fraction of the cores will not contribute to the calculation, as we cannot guarantee that 
+the same number of cores is required for the rz parallelisation as the vpa vperp parallelisation 
+"""
+function setup_distributed_memory_MPI_for_weights_precomputation(vpa_nelement_global,vpa_nelement_local,
+               vperp_nelement_global,vperp_nelement_local, max_cores_per_block; printout=false)
+    # setup some local constants and dummy variables
+    irank_global = global_rank[] # rank index within global processes
+    nrank_global = global_size[] # number of processes 
+    
+    # get information about how the grid is divided up
+    # number of sections `chunks' of the vperp grid
+    vperp_nchunks = floor(mk_int,vperp_nelement_global/vperp_nelement_local)
+    # number of sections `chunks' of the vpa grid
+	vpa_nchunks = floor(mk_int,vpa_nelement_global/vpa_nelement_local)
+	# get the number of shared-memory blocks in the vpa vperp decomposition
+    nblocks = vperp_nchunks*vpa_nchunks
+    # get the number of ranks per block
+    nrank_per_vpavperp_block = min(floor(mk_int,nrank_global/nblocks), max_cores_per_block)
+    # get the total number of useful cores 
+    nrank_vpavperp = nrank_per_vpavperp_block*nblocks
+    # N.B. the user should pick the largest possible value for nblocks that is consistent 
+    # with the total number of cores available and complete shared-memory regions. This 
+    # should be done by choosing 
+    #  (vperp_nelement_global/vperp_nelement_local)*(vpa_nelement_global/vpa_nelement_local)
+    # in the input file. For example, if there are 26 cores available, and 8 global elements in 
+    # each dimension, we should choose 4 local elements, making nblocks = 16 and nrank_per_vpavperp_block = 1.
+    if printout
+        println("debug info:")
+        println("nrank_global: ",nrank_global)
+        println("vperp_nchunks: ",vperp_nchunks)
+        println("vpa_nchunks: ",vpa_nchunks)
+        println("nblocks: ",nblocks)
+        println("nrank_per_vpavperp_block: ",nrank_per_vpavperp_block)
+        println("max_cores_per_block: ",max_cores_per_block)
+    end
+	 
+    # Create a communicator which includes enough cores for the calculation
+    # and includes irank_global = 0. Excess cores have a copy of the communicator
+    # with a different color. After the calculation is completed a MPI broadcast
+    # on the world communicator should be carried out to get the data to the 
+    # excess cores.
+    irank_vpavperp = mod(irank_global,nrank_vpavperp)
+    igroup_vpavperp = floor(mk_int,irank_global/nrank_vpavperp)
+    comm_vpavperp = MPI.Comm_split(comm_world,igroup_vpavperp,irank_vpavperp)
+    # MPI.Comm_split(comm,color,key)
+	# comm -> communicator to be split
+	# color -> label of group of processes
+	# key -> label of process in group
+    # if color == nothing then this process is excluded from the communicator
+    
+    # assign information regarding shared-memory blocks
+    # block index -- which block is this process in 
+    iblock = floor(mk_int,irank_vpavperp/nrank_per_vpavperp_block)
+    # rank index within a block
+    irank_block = mod(irank_vpavperp,nrank_per_vpavperp_block)
+
+    if printout
+        println("iblock: ",iblock)
+        println("irank_block: ",irank_block)
+    end
+    # assign the block rank to the global variables
+    iblock_index[] = iblock
+    block_rank[] = irank_block
+    block_size[] = nrank_per_vpavperp_block
+    # construct a communicator for intra-block communication
+    comm_block[] = MPI.Comm_split(comm_vpavperp,iblock,irank_block)
+    
+    vpa_ngroup = vperp_nchunks
+    vpa_nrank_per_group = vpa_nchunks
+	vpa_igroup = floor(mk_int,iblock/vpa_nchunks) # iblock(irank) - > vpa_igroup 
+	vpa_irank =  mod(iblock,vpa_nchunks) # iblock(irank) -> vpa_irank
+	# iblock = vpa_igroup * vpa_nchunks + vpa_irank_sub 
+
+    if printout
+        # useful information for debugging
+        println("vpa_ngroup: ",vpa_ngroup)
+        println("vpa_nrank_per_group: ",vpa_nrank_per_group)
+        println("vpa_igroup: ",vpa_igroup)
+        println("vpa_irank_sub: ",vpa_irank)
+        println("iblock: ",iblock, " ", vpa_igroup * vpa_nchunks + vpa_irank)
+        println("")
+    end
+
+    vperp_ngroup = vpa_nchunks
+	vperp_nrank_per_group = vperp_nchunks
+	vperp_igroup = vpa_irank # block(irank) - > vperp_igroup 
+	vperp_irank = vpa_igroup # block(irank) -> vperp_irank
+    # irank = vperp_igroup + vpa_nrank_per_group * vperp_irank
+
+    if printout
+        # useful information for debugging
+        println("vperp_ngroup: ",vperp_ngroup)
+        println("vperp_nrank_per_group: ",vperp_nrank_per_group)
+        println("vperp_igroup: ",vperp_igroup)
+        println("vperp_irank: ",vperp_irank)
+        println("iblock: ",iblock, " ", vperp_irank * vperp_ngroup + vperp_igroup)
+        println("")
+    end
+
+	# construct communicators for inter-block communication
+	# only communicate between lead processes on a block
+    if block_rank[] == 0 #&& utilised_core
+        comm_inter_block[] = MPI.Comm_split(comm_vpavperp, 0, iblock)
+        vperp_comm = MPI.Comm_split(comm_vpavperp,vperp_igroup,vperp_irank)
+        vpa_comm = MPI.Comm_split(comm_vpavperp,vpa_igroup,vpa_irank)
+    else # assign a dummy value 
+        comm_inter_block[] = MPI.Comm_split(comm_vpavperp, nothing, iblock)
+        vperp_comm = MPI.Comm_split(comm_vpavperp,nothing,vperp_irank)
+        vpa_comm = MPI.Comm_split(comm_vpavperp,nothing,vpa_irank)
+    end
+    # MPI.Comm_split(comm,color,key)
+	# comm -> communicator to be split
+	# color -> label of group of processes
+	# key -> label of process in group
+    # if color == nothing then this process is excluded from the communicator
+    
+    return vpa_irank, vpa_nrank_per_group, vpa_comm, vperp_irank, vperp_nrank_per_group, vperp_comm
+end
+
 @debug_shared_array begin
     """
     Special type for debugging race conditions in accesses to shared-memory arrays.
@@ -210,6 +357,8 @@ end
     """
     struct DebugMPISharedArray{T, N} <: AbstractArray{T, N}
         data::Array{T,N}
+        accessed::Ref{Bool}
+        is_initialized::Array{mk_int,N}
         is_read::Array{Bool,N}
         is_written::Array{Bool, N}
         creation_stack_trace::String
@@ -224,6 +373,11 @@ end
     # Constructors
     function DebugMPISharedArray(array::Array)
         dims = size(array)
+        is_initialized = allocate_shared(mk_int, dims; maybe_debug=false)
+        if block_rank[] == 0
+            is_initialized .= 0
+        end
+        accessed = Ref(false)
         is_read = Array{Bool}(undef, dims)
         is_read .= false
         is_written = Array{Bool}(undef, dims)
@@ -239,21 +393,41 @@ end
             previous_is_read .= true
             previous_is_written = Array{Bool}(undef, dims)
             previous_is_written .= true
-            return DebugMPISharedArray(array, is_read, is_written, creation_stack_trace,
-                                       previous_is_read, previous_is_written)
+            return DebugMPISharedArray(array, is_initialized, is_read, is_written,
+                                       creation_stack_trace, previous_is_read,
+                                       previous_is_written)
         end
-        return DebugMPISharedArray(array, is_read, is_written, creation_stack_trace)
+        return DebugMPISharedArray(array, accessed, is_initialized, is_read, is_written,
+                                   creation_stack_trace)
     end
 
     # Define functions needed for AbstractArray interface
     # (https://docs.julialang.org/en/v1/manual/interfaces/#man-interface-array)
     Base.size(A::DebugMPISharedArray{T, N}) where {T, N} = size(A.data)
     function Base.getindex(A::DebugMPISharedArray{T, N}, I::Vararg{mk_int,N}) where {T, N}
+        @debug_track_initialized begin
+            if !all(A.is_initialized[I...] .== 1)
+                if A.creation_stack_trace != ""
+                    error("Shared memory array read at $I before being initialized. "
+                          * "Array was created at:\n"
+                          * A.creation_stack_trace)
+                else
+                    error("Shared memory array read at $I before being initialized. "
+                          * "Enable `debug_track_array_allocate_location` to track where "
+                          * "array was created.")
+                end
+            end
+        end
         A.is_read[I...] = true
+        A.accessed[] = true
         return getindex(A.data, I...)
     end
     function Base.setindex!(A::DebugMPISharedArray{T, N}, v::T, I::Vararg{mk_int,N}) where {T, N}
+        @debug_track_initialized begin
+            A.is_initialized[I...] = 1
+        end
         A.is_written[I...] = true
+        A.accessed[] = true
         return setindex!(A.data, v, I...)
     end
     # Overload Base.convert() so that it is forbidden to convert a DebugMPISharedArray
@@ -306,12 +480,16 @@ dims - mk_int or Tuple{mk_int}
     Dimensions of the array to be created. Dimensions passed define the size of the
     array which is being handled by the 'block' (rather than the global array, or a
     subset for a single process).
+maybe_debug - Bool
+    Can be set to `false` to force not creating a DebugMPISharedArray when debugging is
+    active. This avoids recursion when including a shared-memory array as a member of a
+    DebugMPISharedArray for debugging purposes.
 
 Returns
 -------
 Array{mk_float}
 """
-function allocate_shared(T, dims)
+function allocate_shared(T, dims; maybe_debug=true)
     br = block_rank[]
     bs = block_size[]
     n = prod(dims)
@@ -323,7 +501,9 @@ function allocate_shared(T, dims)
 
         @debug_shared_array begin
             # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
-            array = DebugMPISharedArray(array)
+            if maybe_debug
+                array = DebugMPISharedArray(array)
+            end
         end
 
         return array
@@ -331,9 +511,9 @@ function allocate_shared(T, dims)
 
     if br == 0
         # Allocate points on rank-0 for simplicity
-        n_local = n
+        dims_local = dims
     else
-        n_local = 0
+        dims_local = Tuple(0 for _ ∈ dims)
     end
 
     @debug_shared_array_allocate begin
@@ -359,31 +539,25 @@ function allocate_shared(T, dims)
         end
     end
 
-    win, ptr = MPI.Win_allocate_shared(T, n_local, comm_block[])
+    win, array_temp = MPI.Win_allocate_shared(Array{T}, dims_local, comm_block[])
 
-    # Array is allocated contiguously, but `ptr` points to the 'locally owned' part.
-    # We want to use as a shared array, so want to wrap the entire shared array.
-    # Get start pointer of array from rank-0 process. Cannot use ptr, as this
-    # is null when n_local=0.
-    _, _, base_ptr = MPI.Win_shared_query(win, 0)
-    base_ptr = Ptr{T}(base_ptr)
-
-    if base_ptr == Ptr{Nothing}(0)
-        error("Got null pointer when trying to allocate shared array")
-    end
+    # Array is allocated contiguously, but `array_temp` contains only the 'locally owned'
+    # part.  We want to use as a shared array, so want to wrap the entire shared array.
+    # Get array from rank-0 process, which 'owns' the whole array.
+    array = MPI.Win_shared_query(Array{T}, dims, win; rank=0)
 
     # Don't think `win::MPI.Win` knows about the type of the pointer (its concrete type
     # is something like `MPI.Win(Ptr{Nothing} @0x00000000033affd0)`), so it's fine to
     # put them all in the same global_Win_store - this won't introduce type instability
     push!(global_Win_store, win)
 
-    array = unsafe_wrap(Array, base_ptr, dims)
-
     @debug_shared_array begin
         # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
-        debug_array = DebugMPISharedArray(array)
-        push!(global_debugmpisharedarray_store, debug_array)
-        return debug_array
+        if maybe_debug
+            debug_array = DebugMPISharedArray(array)
+            push!(global_debugmpisharedarray_store, debug_array)
+            return debug_array
+        end
     end
 
     return array
@@ -500,7 +674,17 @@ end
             end
         end
 
+        # If @debug_error_stop_all is active, need to gather errors from all processes
+        # before calling any MPI functions in order to avoid hangs.
         @debug_error_stop_all _gather_errors()
+
+        # Short-circuit if array has not been read or written at all
+        any_accessed = MPI.Allreduce(array.accessed[], |, comm_block[])
+        array.accessed[] = false
+        if !any_accessed
+            return true
+        end
+
         global_is_read = reshape(MPI.Allgather(is_read, comm_block[]),
                                  global_dims...)
         global_is_written = reshape(MPI.Allgather(is_written, comm_block[]),

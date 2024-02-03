@@ -31,7 +31,7 @@ function electron_z_advection!(advection_term, pdf, vth, advect, z, vpa, spectra
                   scratch_dummy.buffer_vpavperpr_4, scratch_dummy.buffer_vpavperpr_5,
                   scratch_dummy.buffer_vpavperpr_6, spectral, z)
     @loop_r_vperp_vpa ir ivperp ivpa begin
-        @views second_derivative!(d2pdf_dz2[ivpa,ivperp,:,ir], pdf[ivpa,ivperp,:,ir], 1, z, spectral)
+        @views second_derivative!(d2pdf_dz2[ivpa,ivperp,:,ir], pdf[ivpa,ivperp,:,ir], z, spectral)
     end
     # calculate the advection term
     @loop_z iz begin

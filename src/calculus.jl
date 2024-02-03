@@ -2,11 +2,12 @@
 """
 module calculus
 
-export derivative!, second_derivative!
+export derivative!, second_derivative!, laplacian_derivative!
 export reconcile_element_boundaries_MPI!
 export integral
 
-using ..moment_kinetics_structs: chebyshev_info
+using ..moment_kinetics_structs: discretization_info, null_spatial_dimension_info,
+                                 null_velocity_dimension_info, weak_discretization_info
 using ..type_definitions: mk_float, mk_int
 using MPI
 using ..communication: block_rank
@@ -42,7 +43,7 @@ function elementwise_second_derivative! end
 
 Upwinding derivative.
 """
-function derivative!(df, f, coord, adv_fac, spectral::Union{Bool,<:chebyshev_info})
+function derivative!(df, f, coord, adv_fac, spectral::discretization_info)
     # get the derivative at each grid point within each element and store in
     # coord.scratch_2d
     elementwise_derivative!(coord, f, adv_fac, spectral)
@@ -60,25 +61,20 @@ function derivative!(df, f, coord, spectral)
     # get the derivative at each grid point within each element and store in
     # coord.scratch_2d
     elementwise_derivative!(coord, f, spectral)
-    # map the derivative from the elem;ntal grid to the full grid;
+    # map the derivative from the elemental grid to the full grid;
     # at element boundaries, use the average of the derivatives from neighboring elements.
     derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)
 end
 
-function second_derivative!(df, f, coord, spectral::Bool)
-    # Finite difference version must use an appropriate second derivative stencil, not
-    # apply the 1st derivative twice as for the spectral element method
-
-    # get the derivative at each grid point within each element and store in
-    # coord.scratch_2d
-    elementwise_second_derivative!(coord, f, spectral)
-    # map the derivative from the elem;ntal grid to the full grid;
-    # at element boundaries, use the average of the derivatives from neighboring elements.
-    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)
+# Special versions for 'null' coordinates with only one point
+function derivative!(df, f, coord, spectral::Union{null_spatial_dimension_info,
+                                                   null_velocity_dimension_info})
+    df .= 0.0
+    return nothing
 end
 
-function second_derivative!(d2f, f, Q, coord, spectral)
-    # computes d / d coord ( Q . d f / d coord)
+function second_derivative!(d2f, f, coord, spectral)
+    # computes d^2f / d(coord)^2
     # For spectral element methods, calculate second derivative by applying first
     # derivative twice, with special treatment for element boundaries
 
@@ -89,9 +85,6 @@ function second_derivative!(d2f, f, Q, coord, spectral)
 
     # Save elementwise first derivative result
     coord.scratch2_2d .= coord.scratch_2d
-
-    #form Q . d f / d coord
-    coord.scratch3 .= Q .* coord.scratch3
 
     # Second derivative for element interiors
     elementwise_derivative!(coord, coord.scratch3, spectral)
@@ -128,12 +121,12 @@ function second_derivative!(d2f, f, Q, coord, spectral)
         # points are not set by a boundary condition.
         # Full grid may be across processes and bc only applied to extreme ends of the
         # domain.
-        #if coord.irank == 0
-        #    d2f[1] = 0.0
-        #end
-        #if coord.irank == coord.nrank - 1
-        #    d2f[end] = 0.0
-        #end
+        if coord.irank == 0
+            d2f[1] = 0.0
+        end
+        if coord.irank == coord.nrank - 1
+            d2f[end] = 0.0
+        end
     elseif coord.bc == "periodic"
         # Need to get first derivatives from opposite ends of grid
         if coord.nelement_local != coord.nelement_global
@@ -145,6 +138,55 @@ function second_derivative!(d2f, f, Q, coord, spectral)
         error("Unsupported bc '$(coord.bc)'")
     end
     return nothing
+end
+
+"""
+    mass_matrix_solve!(f, b, spectral::weak_discretization_info)
+
+Solve
+```math
+M.f = b
+```
+for \$a\$, where \$M\$ is the mass matrix of a weak-form finite element method and \$b\$
+is an input.
+"""
+function mass_matrix_solve! end
+
+"""
+Apply 'K-matrix' as part of a weak-form second derivative
+"""
+function elementwise_apply_Kmat! end
+
+function second_derivative!(d2f, f, coord, spectral::weak_discretization_info)
+    # obtain the RHS of numerical weak-form of the equation 
+    # g = d^2 f / d coord^2, which is 
+    # M * g = K * f, with M the mass matrix and K an appropriate stiffness matrix
+    # by multiplying by basis functions and integrating by parts    
+    elementwise_apply_Kmat!(coord, f, spectral)
+    # map the RHS vector K * f from the elemental grid to the full grid;
+    # at element boundaries, use the average of K * f from neighboring elements.
+    derivative_elements_to_full_grid!(coord.scratch, coord.scratch_2d, coord)
+    # solve weak form matrix problem M * g = K * f to obtain g = d^2 f / d coord^2
+    mass_matrix_solve!(d2f, coord.scratch, spectral)
+end
+
+"""
+Apply 'L-matrix' as part of a weak-form Laplacian derivative
+"""
+function elementwise_apply_Lmat! end
+
+function laplacian_derivative!(d2f, f, coord, spectral::weak_discretization_info)
+    # for coord.name 'vperp' obtain the RHS of numerical weak-form of the equation 
+    # g = (1/coord) d/d coord ( coord  d f / d coord ), which is 
+    # M * g = K * f, with M the mass matrix, and K an appropriate stiffness matrix,
+    # by multiplying by basis functions and integrating by parts.
+    # for all other coord.name, do exactly the same as second_derivative! above.
+    elementwise_apply_Lmat!(coord, f, spectral)
+    # map the RHS vector K * f from the elemental grid to the full grid;
+    # at element boundaries, use the average of K * f from neighboring elements.
+    derivative_elements_to_full_grid!(coord.scratch, coord.scratch_2d, coord)
+    # solve weak form matrix problem M * g = K * f to obtain g = d^2 f / d coord^2
+    mass_matrix_solve!(d2f, coord.scratch, spectral)
 end
 
 """
@@ -506,24 +548,6 @@ function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
     # synchronize buffers
     _block_synchronize()
 end
-
-# """
-# compute the 1D differentiation matrix for the given coordinate;
-# currently assumes no upwinding
-# """
-# function compute_1d_differentiation_matrix(coord, spectral::Union{Bool,<:chebyshev_info})
-#     # initialise all elements of the coord.scratch array to zero
-#     coord.scratch = 0.0
-#     for i ∈ coord.n
-#         # provide a unit impulse at the i-th grid point
-#         coord.scratch[i] = 1.0
-#         # compute the derivative of the unit impulse;
-#         # the solution is the ith column vector of the differentiation matrix
-#         @views derivative!(coord.differentiation_matrix[:, i], coord.scratch, coord, spectral)
-#         # zero out the impulse for the next iteration
-#         coord.scratch[i] = 0.0
-#     end
-# end
 
 """
 Computes the integral of the integrand, using the input wgts
