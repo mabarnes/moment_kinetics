@@ -353,46 +353,68 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
     pdf_adjustment_option = "vpa4_gaussian"
 
     # wpa_values will be used to store the wpa = (vpa - upar)/vthe values corresponding to a vpa grid symmetric about vpa=0
-    wpa_values = vpa.scratch
+    #wpa_values = vpa.scratch
     # interpolated_pdf will be used to store the pdf interpolated onto the vpa-symmetric grid
-    interpolated_pdf = vpa.scratch2
+    #interpolated_pdf = vpa.scratch2
+    reversed_pdf = vpa.scratch
 
     # ivpa_zero is the index of the interpolated_pdf corresponding to vpa = 0
     ivpa_zero = (vpa.n+1)÷2
 
     @loop_r ir begin
         # construct a grid of wpa = (vpa - upar)/vthe values corresponding to a vpa-symmetric grid
-        @. wpa_values = vpa.grid - upar[1,ir] / vthe[1,ir]
+        #@. wpa_values = vpa.grid #- upar[1,ir] / vthe[1,ir]
+        #wpa_of_minus_vpa = @. vpa.scratch3 = -vpa.grid - upar[1,ir] / vthe[1,ir]
+        reversed_wpa_of_minus_vpa = vpa.scratch2 .= .-reverse(vpa.grid) .- upar[1,ir] / vthe[1,ir]
         # interpolate the pdf onto this grid
-        @views interpolate_to_grid_1d!(interpolated_pdf, wpa_values, pdf[:,1,1,ir], vpa, vpa_spectral)
+        #@views interpolate_to_grid_1d!(interpolated_pdf, wpa_values, pdf[:,1,1,ir], vpa, vpa_spectral)
+        @views interpolate_to_grid_1d!(reversed_pdf, reversed_wpa_of_minus_vpa, pdf[:,1,1,ir], vpa, vpa_spectral) # Could make this more efficient by only interpolating to the points needed below, by taking an appropriate view of wpa_of_minus_vpa. Also, in the element containing vpa=0, this interpolation depends on the values that will be replaced by the reflected, interpolated values, which is not ideal (maybe this element should be treated specially first?).
+        reverse!(reversed_pdf)
         # fill in the vpa > 0 points of the pdf by mirroring the vpa < 0 points
-        @. interpolated_pdf[ivpa_zero+1:end] = interpolated_pdf[ivpa_zero-1:-1:1]
+        #@. interpolated_pdf[ivpa_zero+1:end] = interpolated_pdf[ivpa_zero-1:-1:1]
         # construct a grid of vpa/vthe = wpa + upar/vthe values corresponding to the wpa-symmetric grid
-        @. wpa_values = vpa.grid + upar[1,ir] / vthe[1,ir]
+        #@. wpa_values = vpa.grid #+ upar[1,ir] / vthe[1,ir]
         # interpolate back onto the original wpa grid
-        @views interpolate_to_grid_1d!(pdf[:,1,1,ir], wpa_values, interpolated_pdf, vpa, vpa_spectral)
+        #@views interpolate_to_grid_1d!(pdf[:,1,1,ir], wpa_values, interpolated_pdf, vpa, vpa_spectral)
         # construct wpa * pdf
-        @. vpa.scratch3 = pdf[:,1,1,ir] * vpa.grid
+        #@. vpa.scratch3 = pdf[:,1,1,ir] * vpa.grid
         # calculate the first moment of the normalised pdf
         #first_vspace_moment = 0.0
-        first_vspace_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
+        #first_vspace_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
         # the initial max vpa index is the largest one possible; this will be reduced if the first moment is positive
-        ivpa_max = vpa.n
+        ivpa = 0
+        ivpa_max = vpa.n + 1
         # adjust the critical (cutoff) speed until the first moment is as close to zero as possible
         # if the first moment is positive, then the cutoff speed needs to be reduced
-        while first_vspace_moment > 0.0
-            # zero out the pdf at the current cutoff velocity
-            pdf[ivpa_max,1,1,ir] = 0.0
-            # update wpa * pdf
-            vpa.scratch3[ivpa_max] = 0.0
-            # calculate the updated first moment of the normalised pdf
-            first_vspace_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-            # if first_vspace_moment > 0.0
+        upar_over_vth = upar[1,ir] / vthe[1,ir]
+        vpa_unnorm = @. vpa.scratch3 = vthe[1,ir] * vpa.grid + upar[1,ir]
+        upar_integral = 0.0
+        #while first_vspace_moment > upar_over_vth # > 0.0
+        #    # zero out the pdf at the current cutoff velocity
+        #    pdf[ivpa_max,1,1,ir] = 0.0
+        #    # update wpa * pdf
+        #    vpa.scratch3[ivpa_max] = 0.0
+        #    # calculate the updated first moment of the normalised pdf
+        #    first_vspace_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
+        #    if first_vspace_moment > upar_over_vth #0.0
+        #        ivpa_max -= 1
+        #    end
+        #end
+        upar0 = upar[1,ir]
+        while upar_integral > upar0
+            ivpa += 1
             ivpa_max -= 1
-            # end
+            # zero out the reversed pdf at the current cutoff velocity
+            reversed_pdf[ivpa_max] = 0.0
+            # calculate the updated first moment of the normalised pdf
+            upar_integral += vpa_unnorm[ivpa] * pdf[ivpa,1,1,ir] * vpa.wgts[ivpa]
         end
+        vmax = vpa_unnorm[ivpa_max]
         # update the electrostatic potential at the boundary to be the value corresponding to the updated cutoff velocity
-        phi[1,ir] = me_over_mi * vthe[1,ir]^2 * vpa.grid[ivpa_max]^2
+        #phi[1,ir] = me_over_mi * vthe[1,ir]^2 * vpa.grid[ivpa_max]^2
+        phi[1,ir] = me_over_mi * vmax^2
+        iv0 = findfirst(x -> x>0.0, vpa_unnorm)
+        pdf[iv0:end,1,1,ir] .= reversed_pdf[iv0:end]
         # obtain the normalisation constants needed to ensure the zeroth, first and second moments
         # of the modified pdf are 1, 0 and 1/2 respectively
         # will need vpa / vthe = wpa + upar/vthe
@@ -517,15 +539,18 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
 
     @loop_r ir begin
         # construct a grid of wpa = (vpa - upar)/vthe values corresponding to a vpa-symmetric grid
-        @. wpa_values = vpa.grid - upar[end,ir] / vthe[end,ir]
+        #@. wpa_values = vpa.grid # - upar[end,ir] / vthe[end,ir]
+        reversed_wpa_of_minus_vpa = vpa.scratch2 .= .-reverse(vpa.grid) .- upar[end,ir] / vthe[end,ir]
         # interpolate the pdf onto this grid
-        @views interpolate_to_grid_1d!(interpolated_pdf, wpa_values, pdf[:,1,end,ir], vpa, vpa_spectral)
+        #@views interpolate_to_grid_1d!(interpolated_pdf, wpa_values, pdf[:,1,end,ir], vpa, vpa_spectral)
+        @views interpolate_to_grid_1d!(reversed_pdf, reversed_wpa_of_minus_vpa, pdf[:,1,end,ir], vpa, vpa_spectral) # Could make this more efficient by only interpolating to the points needed below, by taking an appropriate view of wpa_of_minus_vpa. Also, in the element containing vpa=0, this interpolation depends on the values that will be replaced by the reflected, interpolated values, which is not ideal (maybe this element should be treated specially first?).
+        reverse!(reversed_pdf)
         # fill in the vpa < 0 points of the pdf by mirroring the vpa > 0 points
-        @. interpolated_pdf[ivpa_zero-1:-1:1] = interpolated_pdf[ivpa_zero+1:end]
+        #@. interpolated_pdf[ivpa_zero-1:-1:1] = interpolated_pdf[ivpa_zero+1:end]
         # construct a grid of vpa/vthe = wpa + upar/vthe values corresponding to the wpa-symmetric grid
-        @. wpa_values = vpa.grid + upar[end,ir] / vthe[end,ir]
+        #@. wpa_values = vpa.grid #+ upar[end,ir] / vthe[end,ir]
         # interpolate back onto the original wpa grid
-        @views interpolate_to_grid_1d!(pdf[:,1,end,ir], wpa_values, interpolated_pdf, vpa, vpa_spectral)
+        #@views interpolate_to_grid_1d!(pdf[:,1,end,ir], wpa_values, interpolated_pdf, vpa, vpa_spectral)
 
         # zeroth_vspace_moment = integrate_over_vspace(pdf[:,1,end,1], vpa.wgts)
         # @. vpa.scratch3 = pdf[:,1,end,1] * vpa.grid
@@ -539,24 +564,38 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
         # println(io_pdf_stages,"")
 
         # construct wpa * pdf
-        @. vpa.scratch3 = pdf[:,1,end,ir] * vpa.grid
+        #@. vpa.scratch3 = pdf[:,1,end,ir] * vpa.grid
         # calculate the first moment of the normalised pdf
-        first_vspace_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
+        #first_vspace_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
         # the initial min vpa index is the smallest one possible; this will be increased if the first moment is negative
-        ivpa_min = 1
+        ivpa = vpa.n+1
+        ivpa_min = 0
         # adjust the critical (cutoff) speed until the first moment is as close to zero as possible
         # if the first moment is negative, then the magnitude of the cutoff speed needs to be reduced
-        while first_vspace_moment < 0.0
-            # zero out the pdf at the current cutoff velocity
-            pdf[ivpa_min,1,end,ir] = 0.0
-            # update wpa * pdf
-            vpa.scratch3[ivpa_min] = 0.0
-            # calculate the updated first moment of the normalised pdf
-            first_vspace_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-            # if first_vspace_moment < 0.0
+        upar_over_vth = upar[end,ir] / vthe[end,ir]
+        vpa_unnorm = @. vpa.scratch3 = vthe[end,ir] * vpa.grid + upar[end,ir]
+        upar_integral = 0.0
+        #while first_vspace_moment < upar_over_vth # < 0.0
+        #    # zero out the pdf at the current cutoff velocity
+        #    pdf[ivpa_min,1,end,ir] = 0.0
+        #    # update wpa * pdf
+        #    vpa.scratch3[ivpa_min] = 0.0
+        #    # calculate the updated first moment of the normalised pdf
+        #    first_vspace_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
+        #    if first_vspace_moment < upar_over_vth
+        #        ivpa_min += 1
+        #    end
+        #end
+        upar_end = upar[end,ir]
+        while upar_integral < upar_end
+            ivpa -= 1
             ivpa_min += 1
-            # end
+            # zero out the reversed pdf at the current cutoff velocity
+            reversed_pdf[ivpa_min] = 0.0
+            # calculate the updated first moment of the normalised pdf
+            upar_integral += vpa_unnorm[ivpa] * pdf[ivpa,1,end,ir] * vpa.wgts[ivpa]
         end
+        vmin = vpa_unnorm[ivpa_min]
 
         # zeroth_vspace_moment = integrate_over_vspace(pdf[:,1,end,1], vpa.wgts)
         # @. vpa.scratch3 = pdf[:,1,end,1] * vpa.grid
@@ -570,7 +609,10 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
         # println(io_pdf_stages,"")
 
         # update the electrostatic potential at the boundary to be the value corresponding to the updated cutoff velocity
-        phi[end,ir] = me_over_mi * vthe[end,ir]^2 * vpa.grid[ivpa_min]^2
+        #phi[end,ir] = me_over_mi * vthe[end,ir]^2 * vpa.grid[ivpa_min]^2
+        phi[end,ir] = me_over_mi * vmin^2
+        iv0 = findlast(x -> x<0.0, vpa_unnorm)
+        pdf[1:iv0,1,end,ir] .= reversed_pdf[1:iv0]
         # obtain the normalisation constants needed to ensure the zeroth, first and second moments
         # of the modified pdf are 1, 0 and 1/2 respectively
         # will need vpa / vthe = wpa + upar/vthe
