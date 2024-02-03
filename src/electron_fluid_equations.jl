@@ -172,7 +172,7 @@ function electron_energy_equation!(ppar, dens_i, fvec, moments, collisions, dt, 
     end
     # enforce the parallel boundary condtion on the electron parallel pressure
     #println("!!!NO PARALLEL BC IS BEING ENFORCED ON ELECTRON PRESSURE!!!")
-    enforce_parallel_BC_on_electron_pressure!(ppar, dens_i, composition.T_wall, fvec.ppar)
+    #enforce_parallel_BC_on_electron_pressure!(ppar, dens_i, composition.T_wall, fvec.ppar)
     return nothing
 end
 
