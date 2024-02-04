@@ -325,14 +325,15 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
                                             dppar_dz, dqpar_dz, dvth_dz, 
                                             z, vpa, z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                                             num_diss_params, dt_max)
+        # check to see if the electron pdf satisfies the electron kinetic equation to within the specified tolerance
+        #average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, max_term)
+        average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, abs.(pdf))
+
         # Divide by wpa to relax CFL condition at large wpa - only looking for steady
         # state here, so does not matter that this makes time evolution incorrect.
         @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
             residual[ivpa,ivperp,iz,ir] /= sqrt(1.0 + vpa.grid[ivpa]^2)
         end
-        # check to see if the electron pdf satisfies the electron kinetic equation to within the specified tolerance
-        #average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, max_term)
-        average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, abs.(pdf))
         if electron_pdf_converged || any(isnan.(ppar)) || any(isnan.(pdf))
             break
         end
