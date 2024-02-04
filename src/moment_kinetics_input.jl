@@ -911,7 +911,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     # ratio of the neutral particle mass to the ion particle mass
     mn_over_mi = 1.0
     # ratio of the electron particle mass to the ion particle mass
-    me_over_mi = 1.0/1836.0
+    me_over_mi = 1.0/1836.0/2.0
     # The ion flux reaching the wall that is recycled as neutrals is reduced by
     # `recycling_fraction` to account for ions absorbed by the wall.
     recycling_fraction = 1.0
