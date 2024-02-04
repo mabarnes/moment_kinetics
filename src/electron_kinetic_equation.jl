@@ -383,6 +383,8 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
     # corrections to the pdf needed to ensure moment constraints are satisfied
     pdf_adjustment_option = "vpa4_gaussian"
 
+    cutoff_step_width = 0.1
+
     # wpa_values will be used to store the wpa = (vpa - upar)/vthe values corresponding to a vpa grid symmetric about vpa=0
     #wpa_values = vpa.scratch
     # interpolated_pdf will be used to store the pdf interpolated onto the vpa-symmetric grid
@@ -436,16 +438,23 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
         #end
         upar0 = upar[1,ir]
         #println("before pdf left ", pdf[:,1,1,ir])
-        while upar_integral > upar0
+        while upar_integral > upar0 && ivpa_max > 1
             ivpa += 1
             ivpa_max -= 1
             # zero out the reversed pdf at the current cutoff velocity
-            reversed_pdf[ivpa_max] = 0.0
+            #reversed_pdf[ivpa_max] = 0.0
             # calculate the updated first moment of the normalised pdf
             upar_integral += vpa_unnorm[ivpa] * pdf[ivpa,1,1,ir] * vpa.wgts[ivpa]
             #println("left ", ivpa, " ", upar_integral, " ", upar0)
         end
-        vmax = vpa_unnorm[ivpa_max]
+        integral_excess = upar_integral - upar0
+        fraction_of_pdf = integral_excess / (vpa_unnorm[ivpa] * vpa.wgts[ivpa]) / pdf[ivpa,1,1,ir]
+        vmax = 0.5*(vpa_unnorm[ivpa+1] + vpa_unnorm[ivpa]) +
+               fraction_of_pdf*(vpa_unnorm[ivpa] - vpa_unnorm[ivpa+1])
+        wmax = (-vmax - upar[1,ir]) / vthe[1,ir]
+        @loop_vpa ivpa begin
+            reversed_pdf[ivpa] *= 0.5*(1.0 - tanh((vpa.grid[ivpa] - wmax) / cutoff_step_width))
+        end
         #println("first_vspace_moment=$first_vspace_moment, ivpa_max=$ivpa_max")
         #println("done first cutoff loop")
         # update the electrostatic potential at the boundary to be the value corresponding to the updated cutoff velocity
@@ -635,16 +644,23 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
         #end
         upar_end = upar[end,ir]
         #println("before pdf ", pdf[:,1,end,ir])
-        while upar_integral < upar_end
+        while upar_integral < upar_end && ivpa > 1
             ivpa -= 1
             ivpa_min += 1
             # zero out the reversed pdf at the current cutoff velocity
-            reversed_pdf[ivpa_min] = 0.0
+            #reversed_pdf[ivpa_min] = 0.0
             # calculate the updated first moment of the normalised pdf
             upar_integral += vpa_unnorm[ivpa] * pdf[ivpa,1,end,ir] * vpa.wgts[ivpa]
             #println("right ", ivpa, " ", upar_integral, " ", upar_end)
         end
-        vmin = vpa_unnorm[ivpa_min]
+        integral_excess = upar_integral - upar_end
+        fraction_of_pdf = integral_excess / (vpa_unnorm[ivpa] * vpa.wgts[ivpa]) / pdf[ivpa,1,end,ir]
+        vmin = 0.5*(vpa_unnorm[ivpa-1] + vpa_unnorm[ivpa]) +
+               fraction_of_pdf*(vpa_unnorm[ivpa] - vpa_unnorm[ivpa-1])
+        wmin = (-vmin - upar[end,ir]) / vthe[end,ir]
+        @loop_vpa ivpa begin
+            reversed_pdf[ivpa] *= 0.5*(1.0 + tanh((vpa.grid[ivpa] - wmin) / cutoff_step_width))
+        end
         #println("done second cutoff loop")
 
         # zeroth_vspace_moment = integrate_over_vspace(pdf[:,1,end,1], vpa.wgts)
