@@ -240,7 +240,7 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         else 
             Lr_in = 1.0
         end
-        composition = get_composition(scan_input,n_ion_species,n_neutral_species)
+        composition = get_composition(scan_input)
 
         reference_params = setup_reference_parameters(scan_input)
         option = get(scan_input, "geometry_option", "constant-helical") #"1D-mirror"
@@ -519,9 +519,9 @@ function run_mms_test()
    #test_option = "collisionless_wall-1D-1V-constant-Er-ngrid-5"
    #test_option = "collisionless_wall-1D-1V-constant-Er-ngrid-5-opt"
    #test_option = "krook_wall-1D-2V"
-   #test_option = "mirror_wall-1D-2V"
+   test_option = "mirror_wall-1D-2V"
    #test_option = "mirror_wall-1D-2V-ngrid-5"
-   test_option = "mirror_wall-2D-2V-ngrid-5"
+   #test_option = "mirror_wall-2D-2V-ngrid-5"
    #test_option = "collisionless_wall-1D-3V"
    #test_option = "collisionless_wall-2D-3V"
    #test_option = "collisionless_wall-2D-3V-Er-zero-at-plate"

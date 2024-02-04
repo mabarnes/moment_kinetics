@@ -7,6 +7,7 @@
 module manufactured_solns_ext
 
 using moment_kinetics.input_structs
+using moment_kinetics.input_structs: geometry_input
 using moment_kinetics.looping
 using moment_kinetics.type_definitions: mk_int, mk_float
 
@@ -447,7 +448,6 @@ using IfElse
 
     function manufactured_solutions(manufactured_solns_input, Lr, Lz, r_bc, z_bc,
                                     geometry_input_data::geometry_input, composition, species, nr, nvperp)
-        
         # calculate the geometry symbolically
         geometry = geometry_sym(geometry_input_data,Lz,Lr,nr)
         charged_species = species.charged[1]
@@ -530,14 +530,13 @@ using IfElse
         manufactured_geometry = (Bmag_func = Bmag_func,
                                  bzed_func = bzed_func,
                                  dBdz_func = dBdz_func)
-
         return manufactured_geometry
     end
 
     function manufactured_sources_setup(manufactured_solns_input, r_coord, z_coord, vperp_coord,
-            vpa_coord, vzeta_coord, vr_coord, vz_coord, composition, geometry_input_data::geometry_input, collisions,
+            vpa_coord, vzeta_coord, vr_coord, vz_coord, composition, 
+            geometry_input_data::geometry_input, collisions,
             num_diss_params, species)
-
         geometry = geometry_sym(geometry_input_data,z_coord.L,r_coord.L,r_coord.n)
         charged_species = species.charged[1]
         if composition.n_neutral_species > 0
@@ -616,13 +615,12 @@ using IfElse
         dvperpdt = (0.5*vperp/Bmag)*(dzdt*dBdz + drdt*dBdr)
         # the ion source to maintain the manufactured solution
         Si = ( Dt(dfni) 
-               + dzdt * Dz(dfni)
+               + dzdt * Dz(dfni)  
                + drdt * Dr(dfni)
                + dvpadt * Dvpa(dfni)
                + dvperpdt * Dvperp(dfni)
                + cx_frequency*( densn*dfni - densi*gav_dfnn )
                - ionization_frequency*dense*gav_dfnn )
-
         nu_krook = collisions.krook_collision_frequency_prefactor
         if nu_krook > 0.0
             Ti_over_Tref = vthi^2

@@ -641,11 +641,9 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     end
 
     geometry =
-        get_tuple_of_return_values(get_geometry, scan_input,
-                                   z, r)
+        get_tuple_of_return_values(get_geometry, scan_input, z, r)
     composition =
-        get_tuple_of_return_values(get_composition, scan_input,
-                                   n_ion_species, n_neutral_species)
+        get_tuple_of_return_values(get_composition, scan_input)
 
     # initialise the post-processing input options
     nwrite_movie, itime_min, itime_max, nwrite_movie_pdfs, itime_min_pdfs, itime_max_pdfs,

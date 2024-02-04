@@ -5,9 +5,11 @@ export calculate_and_write_frequencies, get_geometry, get_composition
 using moment_kinetics.analysis: fit_delta_phi_mode
 using moment_kinetics.array_allocation: allocate_float
 using moment_kinetics.coordinates: define_coordinate
+using moment_kinetics.geo: init_magnetic_geometry
 using moment_kinetics.input_structs: boltzmann_electron_response,
                                      boltzmann_electron_response_with_simple_sheath,
                                      grid_input, geometry_input, species_composition
+using moment_kinetics.moment_kinetics_input: get_default_rhostar, setup_reference_parameters
 using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.reference_parameters: setup_reference_parameters
 using moment_kinetics.moment_kinetics_input: get_default_rhostar
@@ -63,14 +65,15 @@ end
 
 """
 """
-function get_composition(scan_input,n_ion_species,n_neutral_species)
+function get_composition(scan_input)
     reference_params = setup_reference_parameters(scan_input)
-     
     # set composition input
     # MRH need to get this in way that does not duplicate code
     # MRH from moment_kinetics_input.jl
     electron_physics = get(scan_input, "electron_physics", boltzmann_electron_response)
 
+    n_ion_species = get(scan_input, "n_ion_species", 1)
+    n_neutral_species = get(scan_input, "n_neutral_species", 1)
     if electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
         n_species = n_ion_species + n_neutral_species
     else
