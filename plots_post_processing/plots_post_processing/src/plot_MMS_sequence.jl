@@ -143,6 +143,13 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
             else 
                 println("ERROR: scan_type = ",scan_type," requires vpa_nelement = 2.0*vperp_nelement = z_nelement")
             end
+        elseif scan_type == "vpa2vperpzr_nelement"
+            nelement = z_nelement
+            if nelement == vpa_nelement && nelement == 2*vperp_nelement && nelement == r_nelement
+                nelement_sequence[isim] = nelement
+            else 
+                println("ERROR: scan_type = ",scan_type," requires vpa_nelement = 2.0*vperp_nelement = z_nelement = r_nelement")
+            end
         elseif scan_type == "vpaz_nelement"
             nelement = z_nelement
             if nelement == vpa_nelement
@@ -346,6 +353,8 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         xlabel = L"N_{element}(z) = N_{element}(v_\perp) = N_{element}(v_{||})"
     elseif scan_type == "vpa2vperpz_nelement"
         xlabel = L"N_{element}(z) = 2N_{element}(v_\perp) = N_{element}(v_{||})"
+    elseif scan_type == "vpa2vperpzr_nelement"
+        xlabel = L"N_{element}(z) = N_{element}(r) = 2N_{element}(v_\perp) = N_{element}(v_{||})"
     elseif scan_type == "vpazr_nelement0.25"
         xlabel = L"N_{element}(z) = N_{element}(r) = N_{element}(v_{||})/4"
     elseif scan_type == "vpaz_nelement0.25"
@@ -511,7 +520,8 @@ function run_mms_test()
    #test_option = "collisionless_wall-1D-1V-constant-Er-ngrid-5-opt"
    #test_option = "krook_wall-1D-2V"
    #test_option = "mirror_wall-1D-2V"
-   test_option = "mirror_wall-1D-2V-ngrid-5"
+   #test_option = "mirror_wall-1D-2V-ngrid-5"
+   test_option = "mirror_wall-2D-2V-ngrid-5"
    #test_option = "collisionless_wall-1D-3V"
    #test_option = "collisionless_wall-2D-3V"
    #test_option = "collisionless_wall-2D-3V-Er-zero-at-plate"
@@ -691,6 +701,14 @@ function run_mms_test()
                      "runs/1D-mirror_MMS_ngrid_5_nel_r_1_z_64_vpa_64_vperp_32_diss",]
         scan_type = "vpa2vperpz_nelement"
         scan_name = "mirror_wall-1D-2V-ngrid-5"
+    elseif test_option == "mirror_wall-2D-2V-ngrid-5"
+        # Mirror wall test, no sheath for electrons, no radial coordinate
+        path_list = ["runs/2D-mirror_MMS_ngrid_5_nel_r_4_z_4_vpa_4_vperp_2_diss",
+                     "runs/2D-mirror_MMS_ngrid_5_nel_r_8_z_8_vpa_8_vperp_4_diss",
+                     "runs/2D-mirror_MMS_ngrid_5_nel_r_16_z_16_vpa_16_vperp_8_diss",
+		     "runs/2D-mirror_MMS_ngrid_5_nel_r_32_z_32_vpa_32_vperp_16_diss",]
+        scan_type = "vpa2vperpzr_nelement"
+        scan_name = "mirror_wall-2D-2V-ngrid-5"
     end
     print(path_list)
     get_MMS_error_data(path_list,scan_type,scan_name)
