@@ -338,8 +338,13 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
 
         # Divide by wpa to relax CFL condition at large wpa - only looking for steady
         # state here, so does not matter that this makes time evolution incorrect.
+        Lz = z.L
         @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-            residual[ivpa,ivperp,iz,ir] /= sqrt(1.0 + vpa.grid[ivpa]^2)
+            zval = z.grid[iz]
+            znorm = 2.0*zval/Lz
+            residual[ivpa,ivperp,iz,ir] *=
+                (1.0 + 20.0*(1.0 - znorm^2)) /
+                sqrt(1.0 + vpa.grid[ivpa]^2)
         end
         if electron_pdf_converged || any(isnan.(ppar)) || any(isnan.(pdf))
             break
