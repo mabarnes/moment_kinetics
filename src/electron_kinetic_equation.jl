@@ -1,5 +1,6 @@
 module electron_kinetic_equation
 
+using Dates
 using LinearAlgebra
 
 export get_electron_critical_velocities
@@ -358,6 +359,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
     if !electron_pdf_converged
         # need to exit or handle this appropriately
         println("!!!max number of iterations for electron pdf update exceeded!!!")
+        println("Stopping at ", Dates.format(now(), dateformat"H:MM:SS"))
         @loop_vpa ivpa begin
             @loop_z iz begin
                 println(io_pdf, "z: ", z.grid[iz], " wpa: ", vpa.grid[ivpa], " pdf: ", pdf[ivpa, 1, iz, 1], " time: ", time, " residual: ", residual[ivpa, 1, iz, 1])
