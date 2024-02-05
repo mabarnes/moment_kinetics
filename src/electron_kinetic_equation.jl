@@ -198,7 +198,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
 
     # check to see if the electron pdf satisfies the electron kinetic equation to within the specified tolerance
     #average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, max_term)
-    average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, abs.(pdf))
+    average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, abs.(pdf), moments.electron.upar, vthe, vpa)
     #println("TMP FOR TESTING -- enforce_boundary_condition_on_electron_pdf needs uncommenting!!!")
     # evolve (artificially) in time until the residual is less than the tolerance
     output_interval = 1000
@@ -333,7 +333,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
                                             num_diss_params, dt_max)
         # check to see if the electron pdf satisfies the electron kinetic equation to within the specified tolerance
         #average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, max_term)
-        average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, abs.(pdf))
+        average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, abs.(pdf), moments.electron.upar, vthe, vpa)
         if (mod(iteration,output_interval) == 0)
             result_residual[:,:,iteration÷output_interval+1] .= residual[:,1,:,1]
         end
@@ -1441,7 +1441,7 @@ function get_electron_critical_velocities(phi, vthe, me_over_mi)
     return crit_speed_zmin, crit_speed_zmax
 end
 
-function check_electron_pdf_convergence(residual, norm)
+function check_electron_pdf_convergence(residual, norm, upar, vthe, vpa)
     #average_residual = 0.0
     # @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
     #     if norm[ivpa, ivperp, iz, ir] > eps(mk_float)
@@ -1451,8 +1451,26 @@ function check_electron_pdf_convergence(residual, norm)
     #     end
     #     average_residual /= length(residual)
     # end
-    average_residual = sum(abs.(residual)) / sum(norm)
+
+    # Only sum residual over points that are not set by the sheath boundary condition, as
+    # those that are set by the sheath boundary condition are not used by the time
+    # advance, and so might not converge to 0.
+    # First, sum the contributions from the bulk of the domain
+    sum_residual = sum(abs.(@view residual[:,:,2:end-1,:]))
+    # Then add the contributions from the evolved parts of the sheath boundary points
+    @loop_r ir begin
+        vpa_unnorm_lower = @. vpa.scratch3 = vthe[1,ir] * vpa.grid + upar[1,ir]
+        iv0_lower = findfirst(x -> x>0.0, vpa_unnorm_lower)
+        vpa_unnorm_upper = @. vpa.scratch3 = vthe[end,ir] * vpa.grid + upar[end,ir]
+        iv0_upper = findlast(x -> x>0.0, vpa_unnorm_upper)
+        sum_residual += sum(abs.(@view residual[1:iv0_lower-1,:,1,ir])) +
+                        sum(abs.(@view residual[iv0_upper+1:end,:,end,ir]))
+    end
+
+    average_residual = sum_residual / sum(norm)
+
     electron_pdf_converged = (average_residual < 1e-3)
+
     return average_residual, electron_pdf_converged
 end
 
