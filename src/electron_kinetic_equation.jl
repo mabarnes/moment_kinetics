@@ -287,7 +287,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
             result_phi[:,iteration÷output_interval+1] .= phi[:,1]
         end
 
-        dt_energy = dt_electron * 100.0
+        dt_energy = dt_electron * 10.0
 
         # get an updated iterate of the electron parallel pressure
         #ppar .= ppar_old
@@ -306,7 +306,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
                                  buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
             end
 
-            dt_energy = dt_electron
+            #dt_energy = dt_electron
             electron_energy_equation!(ppar, dens, fvec, moments, collisions, dt_energy, composition, num_diss_params, z.grid)
             fvec.electron_ppar .= ppar
         
