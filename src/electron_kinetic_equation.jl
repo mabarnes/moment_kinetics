@@ -201,7 +201,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
     average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, abs.(pdf))
     #println("TMP FOR TESTING -- enforce_boundary_condition_on_electron_pdf needs uncommenting!!!")
     # evolve (artificially) in time until the residual is less than the tolerance
-    output_interval = 50
+    output_interval = 1000
     result_pdf = zeros(vpa.n, z.n, max_electron_pdf_iterations ÷ output_interval)
     result_pdf[:,:,1] .= pdf[:,1,:,1]
     result_ppar = zeros(z.n, max_electron_pdf_iterations ÷ output_interval)
