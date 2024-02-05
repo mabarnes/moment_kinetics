@@ -145,7 +145,10 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
     #dt_electron = dt * sqrt(composition.me_over_mi)
     dt_max = 1.0e-8 #1.0
     #dt_max = 2.5e-9 #1.0
-    dt_energy = 0.001
+    #dt_energy = 0.001
+    dt_energy = 1.0e-7
+    #n_ppar_subcycles = 1000
+    n_ppar_subcycles = 100
     time = 0.0
 
     # define residual to point to a dummy array;
@@ -287,13 +290,12 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
             result_phi[:,iteration÷output_interval+1] .= phi[:,1]
         end
 
-        dt_energy = dt_electron * 10.0
+        #dt_energy = dt_electron * 10.0
 
         # get an updated iterate of the electron parallel pressure
         #ppar .= ppar_old
         wpa3_moment = @. qpar / vthe^3
-        #for i in 1:1000
-        for i in 1:100
+        for i in 1:n_ppar_subcycles
             @. qpar = vthe^3 * wpa3_moment
             # Compute the upwinded z-derivative of the electron parallel pressure for the 
             # electron energy equation
