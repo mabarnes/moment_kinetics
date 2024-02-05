@@ -292,7 +292,8 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         # get an updated iterate of the electron parallel pressure
         #ppar .= ppar_old
         wpa3_moment = @. qpar / vthe^3
-        for i in 1:1000
+        #for i in 1:1000
+        for i in 1:100
             @. qpar = vthe^3 * wpa3_moment
             # Compute the upwinded z-derivative of the electron parallel pressure for the 
             # electron energy equation
