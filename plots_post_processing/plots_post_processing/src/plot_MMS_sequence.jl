@@ -392,6 +392,8 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
     elseif scan_name == "2D-1V-wall_cheb" || scan_name == "2D-1V-wall_cheb-nonzero-Er" || scan_name == "1D-1V-wall_cheb-constant-Er-ngrid-5-opt" 
         ytick_sequence = Array([1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0])
         #ytick_sequence = Array([1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0])
+    elseif scan_name == "mirror_wall-2D-2V-ngrid-5"
+        ytick_sequence = Array([1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
     else
         ytick_sequence = Array([1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
     end
@@ -438,8 +440,8 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
     println(outfile)
     
     try
-        plot(nelement_sequence, [ion_density_error_sequence,phi_error_sequence,Ez_error_sequence,Er_error_sequence,ion_pdf_error_sequence], xlabel=xlabel,
-             label=[ylabel_ion_density ylabel_phi ylabel_Ez ylabel_Er ylabel_ion_pdf], ylabel="",
+        plot(nelement_sequence, [ion_density_error_sequence,phi_error_sequence,Ez_error_sequence,Er_error_sequence,ion_pdf_error_sequence,expected_scaling], xlabel=xlabel,
+             label=[ylabel_ion_density ylabel_phi ylabel_Ez ylabel_Er ylabel_ion_pdf expected_label], ylabel="",
              shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_sequence, nelement_sequence), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
              xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
              foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
