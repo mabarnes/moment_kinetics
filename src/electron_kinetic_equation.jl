@@ -230,7 +230,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         #println("B pdf end ", pdf[:,1,end,1])
         #error("foo")
         
-        if (mod(iteration,50)==1)
+        if (mod(iteration,output_interval)==1)
             @loop_vpa ivpa begin
                 println(io_pdf_stages, "vpa: ", vpa.grid[ivpa], " pdf: ", pdf[ivpa,1,end,1], " iteration: ", iteration, " flag: ", 1)
             end
