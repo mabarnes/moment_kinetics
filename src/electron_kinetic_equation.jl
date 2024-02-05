@@ -144,6 +144,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
 
     #dt_electron = dt * sqrt(composition.me_over_mi)
     dt_max = 1.0e-8 #1.0
+    #dt_max = 2.5e-9 #1.0
     dt_energy = 0.001
     time = 0.0
 
@@ -449,9 +450,12 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
         end
         integral_excess = upar_integral - upar0
         fraction_of_pdf = integral_excess / (vpa_unnorm[ivpa] * vpa.wgts[ivpa]) / pdf[ivpa,1,1,ir]
+        #println("fraction_of_pdf=", fraction_of_pdf)
         vmax = 0.5*(vpa_unnorm[ivpa+1] + vpa_unnorm[ivpa]) +
                fraction_of_pdf*(vpa_unnorm[ivpa] - vpa_unnorm[ivpa+1])
+        #println("vmax=$vmax, v-no-interp=", vpa_unnorm[ivpa])
         wmax = (-vmax - upar[1,ir]) / vthe[1,ir]
+        #println("wmax=$wmax, w-no-interp", (vpa_unnorm[ivpa] - upar0)/vthe[1,ir])
         @loop_vpa ivpa begin
             reversed_pdf[ivpa] *= 0.5*(1.0 - tanh((vpa.grid[ivpa] - wmax) / cutoff_step_width))
         end
@@ -462,6 +466,7 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
         phi[1,ir] = me_over_mi * vmax^2
         iv0 = findfirst(x -> x>0.0, vpa_unnorm)
         pdf[iv0:end,1,1,ir] .= reversed_pdf[iv0:end]
+        #println("check reversed change ", reversed_pdf[iv0:end])
         #println("reversed_pdf ", reversed_pdf)
         #println("after pdf left ", pdf[:,1,1,ir])
         # obtain the normalisation constants needed to ensure the zeroth, first and second moments
@@ -655,8 +660,10 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
         end
         integral_excess = upar_integral - upar_end
         fraction_of_pdf = integral_excess / (vpa_unnorm[ivpa] * vpa.wgts[ivpa]) / pdf[ivpa,1,end,ir]
+        #println("B fraction_of_pdf=", fraction_of_pdf)
         vmin = 0.5*(vpa_unnorm[ivpa-1] + vpa_unnorm[ivpa]) +
                fraction_of_pdf*(vpa_unnorm[ivpa] - vpa_unnorm[ivpa-1])
+        #println("vmin=$vmin, v-no-interp=", vpa_unnorm[ivpa])
         wmin = (-vmin - upar[end,ir]) / vthe[end,ir]
         @loop_vpa ivpa begin
             reversed_pdf[ivpa] *= 0.5*(1.0 + tanh((vpa.grid[ivpa] - wmin) / cutoff_step_width))
