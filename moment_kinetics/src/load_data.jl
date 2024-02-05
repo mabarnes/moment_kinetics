@@ -2421,7 +2421,7 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
 
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
-    io_input, evolve_moments, t_input, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
+    io_input, evolve_moments, t_params, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
         composition, species, collisions, geometry, drive_input, external_source_settings,
         num_diss_params, manufactured_solns_input = mk_input(input)
 

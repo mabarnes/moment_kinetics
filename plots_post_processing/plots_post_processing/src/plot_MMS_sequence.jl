@@ -69,7 +69,7 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
 
         scan_input = load_input(fid)
         # get run-time input/composition/geometry/collisions/species info for convenience
-        #io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
+        #io_input, evolve_moments, t_params, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
         #    vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
         #    vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
         #    drive_input, external_source_settings, num_diss_params,

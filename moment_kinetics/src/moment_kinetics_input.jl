@@ -402,7 +402,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     #irank_z = 0
     #nrank_z = 0
 
-    t_input = time_input(nstep, dt, nwrite_moments, nwrite_dfns, n_rk_stages,
+    t_params = time_info(nstep, dt, nwrite_moments, nwrite_dfns, n_rk_stages,
                          split_operators, steady_state_residual, converged_residual_value,
                          manufactured_solns_input.use_for_advance, stopfile_name)
     # replace mutable structures with immutable ones to optimize performance
@@ -544,7 +544,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
                 collisions)
 
     # return immutable structs for z, vpa, species and composition
-    all_inputs = (io_immutable, evolve_moments, t_input, z, z_spectral, r, r_spectral,
+    all_inputs = (io_immutable, evolve_moments, t_params, z, z_spectral, r, r_spectral,
                   vpa, vpa_spectral, vperp, vperp_spectral, gyrophase, gyrophase_spectral,
                   vz, vz_spectral, vr, vr_spectral, vzeta, vzeta_spectral, composition,
                   species_immutable, collisions, geometry, drive_immutable,

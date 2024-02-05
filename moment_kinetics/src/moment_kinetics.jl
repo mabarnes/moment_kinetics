@@ -284,7 +284,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     input = mk_input(input_dict; save_inputs_to_txt=true, ignore_MPI=false)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
-    io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
+    io_input, evolve_moments, t_params, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
         vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
         vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
         drive_input, external_source_settings, num_diss_params,
@@ -401,7 +401,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     scratch, advance, fp_arrays, scratch_dummy, manufactured_source_list =
         setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral,
-            r_spectral, composition, drive_input, moments, t_input, collisions, species,
+            r_spectral, composition, drive_input, moments, t_params, collisions, species,
             geometry, boundary_distributions, external_source_settings, num_diss_params,
             manufactured_solns_input, restarting)
 
@@ -427,7 +427,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
 
     begin_s_r_z_vperp_region()
 
-    return pdf, scratch, code_time, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
+    return pdf, scratch, code_time, t_params, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
            composition, collisions, geometry, boundary_distributions,
            external_source_settings, num_diss_params, advance, fp_arrays, scratch_dummy,

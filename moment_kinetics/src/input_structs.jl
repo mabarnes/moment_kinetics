@@ -3,7 +3,7 @@
 module input_structs
 
 export evolve_moments_options
-export time_input
+export time_info
 export advection_input, advection_input_mutable
 export grid_input, grid_input_mutable
 export initial_condition_input, initial_condition_input_mutable
@@ -33,7 +33,7 @@ end
 
 """
 """
-struct time_input
+struct time_info
     nstep::mk_int
     dt::mk_float
     nwrite_moments::mk_int

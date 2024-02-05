@@ -1021,7 +1021,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     input = mk_input(scan_input)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
-    io_input, evolve_moments, t_input, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
+    io_input, evolve_moments, t_params, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
         composition, species, collisions, geometry, drive_input, external_source_settings,
         num_diss_params, manufactured_solns_input = input
 

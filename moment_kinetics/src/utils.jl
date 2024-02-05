@@ -30,7 +30,7 @@ Get many parameters for the simulation setup given by `input` or in the file
 """
 function get_unnormalized_parameters end
 function get_unnormalized_parameters(input::Dict)
-    io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
+    io_input, evolve_moments, t_params, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
         vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
         vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
         drive_input, external_source_settings, num_diss_params, manufactured_solns_input =
@@ -59,10 +59,10 @@ function get_unnormalized_parameters(input::Dict)
 
     parameters["cs0"] = cnorm
 
-    dt = t_input.dt * timenorm
+    dt = t_params.dt * timenorm
     parameters["dt"] = dt
-    parameters["output time step"] = dt * t_input.nwrite
-    parameters["total simulated time"] = dt * t_input.nstep
+    parameters["output time step"] = dt * t_params.nwrite
+    parameters["total simulated time"] = dt * t_params.nstep
 
     parameters["T_e"] = Tnorm * composition.T_e
     parameters["T_wall"] = Tnorm * composition.T_wall
