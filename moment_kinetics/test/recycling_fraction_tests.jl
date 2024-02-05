@@ -65,11 +65,11 @@ test_input = Dict("n_ion_species" => 1,
                   "charge_exchange_frequency" => 0.75,
                   "ionization_frequency" => 0.5,
                   "constant_ionization_rate" => false,
-                  "nstep" => 1000,
-                  "dt" => 1.0e-4,
-                  "nwrite" => 1000,
-                  "n_rk_stages" => 4,
-                  "split_operators" => false,
+                  "timestepping" => Dict{String,Any}("nstep" => 1000,
+                                                     "dt" => 1.0e-4,
+                                                     "nwrite" => 1000,
+                                         "n_rk_stages" => 4,
+                                                     "split_operators" => false),
                   "r_ngrid" => 1,
                   "r_nelement" => 1,
                   "z_ngrid" => 9,
@@ -103,12 +103,13 @@ test_input_split2 = merge(test_input_split1,
                                "evolve_moments_parallel_flow" => true))
 test_input_split3 = merge(test_input_split2,
                           Dict("run_name" => "split3",
-                               "dt" => 1.0e-5,
                                "z_nelement" => 16,
                                "vpa_nelement" => 31,
                                "vz_nelement" => 31,
                                "evolve_moments_parallel_pressure" => true,
                                "numerical_dissipation" => Dict{String,Any}("force_minimum_pdf_value" => 0.0, "vpa_dissipation_coefficient" => 1e-2)))
+test_input_split3["timestepping"] = merge(test_input_split3["timestepping"],
+                                           Dict("dt" => 1.0e-5))
 
 """
 Run a test for a single set of parameters

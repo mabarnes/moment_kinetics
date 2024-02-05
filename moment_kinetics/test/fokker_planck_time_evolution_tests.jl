@@ -135,7 +135,6 @@ test_input_gauss_legendre = Dict("run_name" => "gausslegendre_pseudospectral",
                               "constant_ionization_rate" => false,
                               "electron_physics" => "boltzmann_electron_response",
                               "nuii" => 1.0,
-                              "use_semi_lagrange" => false,
                               "Bzed" => 1.0,
                               "Bmag" => 1.0,
                               "rhostar" => 1.0,
@@ -170,10 +169,10 @@ test_input_gauss_legendre = Dict("run_name" => "gausslegendre_pseudospectral",
                               "r_nelement" => 1,
                               "r_nelement_local" => 1,
                               "r_bc" => "periodic",   
-                              "dt" => 0.01,
-                              "nstep" => 5000,
-                              "nwrite" => 5000,
-                              "nwrite_dfns" => 5000 )
+                              "timestepping" => Dict{String,Any}("dt" => 0.01,
+                                                                 "nstep" => 5000,
+                                                                 "nwrite" => 5000,
+                                                                 "nwrite_dfns" => 5000 ))
 
 
 """

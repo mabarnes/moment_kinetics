@@ -3,10 +3,11 @@ test_type = "Fokker-Planck collisions"
 # default input for test
 test_input_full_f = Dict(
      "run_name" => "full_f",
-     "dt" => 0.0,
-     "nstep" => 3,
-     "nwrite" => 2,
-     "nwrite_dfns" => 2,
+     "timestepping" => Dict{String,Any}("dt" => 0.0,
+                            "n_rk_stages" => 4,
+                                        "nstep" => 3,
+                                        "nwrite" => 2,
+                                        "nwrite_dfns" => 2),
      "Bmag" => 1.0,
      "Bzed" => 1.0,
      "T_e" => 1.0,
@@ -25,7 +26,6 @@ test_input_full_f = Dict(
      "constant_ionization_rate" => false,
      "n_ion_species" => 1,
      "n_neutral_species" => 0,
-     "n_rk_stages" => 4,
      "nuii" => 1.0,
      "r_bc" => "periodic",
      "r_discretization" => "chebyshev_pseudospectral",

@@ -24,12 +24,6 @@ z_IC_upar_phase2 = 0.0
 z_IC_temperature_amplitude2 = 0.5
 z_IC_temperature_phase2 = 0.0
 charge_exchange_frequency = 0.6283185307179586
-nstep = 100
-dt = 0.0005
-nwrite = 100000000
-use_semi_lagrange = false
-n_rk_stages = 4
-split_operators = false
 r_ngrid = 1
 r_nelement = 1
 z_ngrid = 81
@@ -41,3 +35,10 @@ vpa_nelement = 1
 vpa_L = 8.0
 vpa_bc = "periodic"
 vpa_discretization = "finite_difference"
+
+[timestepping]
+nstep = 100
+dt = 0.0005
+nwrite = 100000000
+n_rk_stages = 4
+split_operators = false

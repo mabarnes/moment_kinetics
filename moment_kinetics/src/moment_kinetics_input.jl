@@ -189,17 +189,27 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     collisions.nuii = get(scan_input, "nuii", 0.0)
     
     # parameters related to the time stepping
-    nstep = get(scan_input, "nstep", 5)
-    dt = get(scan_input, "dt", 0.00025/sqrt(species.charged[1].initial_temperature))
-    nwrite_moments = get(scan_input, "nwrite", 1)
-    nwrite_dfns = get(scan_input, "nwrite_dfns", nstep)
-    # options are n_rk_stages = 1, 2, 3 or 4 (corresponding to forward Euler,
-    # Heun's method, SSP RK3 and 4-stage SSP RK3)
-    n_rk_stages = get(scan_input, "n_rk_stages", 4)
-    split_operators = get(scan_input, "split_operators", false)
-    stopfile_name = joinpath(output_dir, "stop")
-    steady_state_residual = get(scan_input, "steady_state_residual", false)
-    converged_residual_value = get(scan_input, "converged_residual_value", -1.0)
+    timestepping_section = set_defaults_and_check_section!(
+        scan_input, "timestepping";
+        nstep=5,
+        dt=0.00025/sqrt(species.charged[1].initial_temperature),
+        nwrite=1,
+        nwrite_dfns=nothing,
+        # options are n_rk_stages = 1, 2, 3 or 4 (corresponding to forward Euler,
+        # Heun's method, SSP RK3 and 4-stage SSP RK3)
+        n_rk_stages=4,
+        split_operators=false,
+        stopfile_name="stop",
+        steady_state_residual=false,
+        converged_residual_value=-1.0,
+       )
+    if timestepping_section["nwrite_dfns"] === nothing
+        timestepping_section["nwrite_dfns"] = timestepping_section["nstep"]
+    end
+    timestepping_input = Dict_to_NamedTuple(timestepping_section)
+    if timestepping_input.split_operators && timestepping_input.adaptive
+        error("Adaptive timestepping not supported with operator splitting")
+    end
 
     use_for_init_is_default = !(("manufactured_solns" ∈ keys(scan_input)) &&
                                 ("use_for_init" ∈ keys(scan_input["manufactured_solns"])))
@@ -402,9 +412,14 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     #irank_z = 0
     #nrank_z = 0
 
-    t_params = time_info(nstep, dt, nwrite_moments, nwrite_dfns, n_rk_stages,
-                         split_operators, steady_state_residual, converged_residual_value,
-                         manufactured_solns_input.use_for_advance, stopfile_name)
+    t_params = time_info(timestepping_input.nstep, timestepping_input.dt,
+                         timestepping_input.nwrite, timestepping_input.nwrite_dfns,
+                         timestepping_input.n_rk_stages,
+                         timestepping_input.split_operators,
+                         timestepping_input.steady_state_residual,
+                         timestepping_input.converged_residual_value,
+                         manufactured_solns_input.use_for_advance,
+                         timestepping_input.stopfile_name)
     # replace mutable structures with immutable ones to optimize performance
     # and avoid possible misunderstandings	
 	z_advection_immutable = advection_input(z.advection.option, z.advection.constant_speed,
@@ -539,7 +554,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     end
 
     # check input (and initialized coordinate structs) to catch errors/unsupported options
-    check_input(io, output_dir, nstep, dt, r, z, vpa, vperp, composition,
+    check_input(io, output_dir, t_params.nstep, t_params.dt, r, z, vpa, vperp, composition,
                 species_immutable, evolve_moments, num_diss_params, save_inputs_to_txt,
                 collisions)
 

@@ -53,12 +53,11 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "z_IC_temperature_phase2" => 0.0,
                                     "charge_exchange_frequency" => 2*π*0.1,
                                     "ionization_frequency" => 0.0,
-                                    "nstep" => 1500,
-                                    "dt" => 0.002,
-                                    "nwrite" => 20,
-                                    "use_semi_lagrange" => false,
-                                    "n_rk_stages" => 4,
-                                    "split_operators" => false,
+                                    "timestepping" => Dict{String,Any}("nstep" => 1500,
+                                                                       "dt" => 0.002,
+                                                                       "nwrite" => 20,
+                                                           "n_rk_stages" => 4,
+                                                                       "split_operators" => false),
                                     "r_ngrid" => 1,
                                     "r_nelement" => 1,
                                     "r_bc" => "periodic",
@@ -151,10 +150,15 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
     println("    - testing ", name)
 
     # Convert dict from symbol keys to String keys
-    modified_inputs = Dict(String(k) => v for (k, v) in args)
+    modified_inputs = Dict(String(k) => v for (k, v) in args
+                           if k ∉ keys(test_input["timestepping"]))
+    modified_timestepping_inputs = Dict(String(k) => v for (k, v) in args
+                                        if k ∈ keys(test_input["timestepping"]))
 
     # Update default inputs with values to be changed
     input = merge(test_input, modified_inputs)
+    input["timestepping"] = merge(test_input["timestepping"],
+                                  modified_timestepping_inputs)
 
     input["run_name"] = name
 
