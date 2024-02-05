@@ -510,8 +510,8 @@ function initialize_electron_pdf!(fvec, pdf, moments, phi, z, vpa, vperp, z_spec
             # now that we have our initial guess for the electron pdf, we iterate
             # using the time-independent electron kinetic equation to find a self-consistent
             # solution for the electron pdf
-            #max_electron_pdf_iterations = 500000
-            max_electron_pdf_iterations = 10000
+            max_electron_pdf_iterations = 500000
+            #max_electron_pdf_iterations = 10000
             return @views update_electron_pdf!(fvec, pdf.electron.norm, moments, moments.electron.dens, moments.electron.vth, 
                                         moments.electron.ppar, moments.electron.qpar, moments.electron.qpar_updated,
                                         phi, moments.electron.ddens_dz, moments.electron.dppar_dz, 
