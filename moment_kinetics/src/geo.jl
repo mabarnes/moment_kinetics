@@ -114,10 +114,11 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
         if DeltaB < -0.99999999
             input_option_error("$option: You have specified DeltaB < -1 -> set DeltaB > -1", option)
         end
+        pitch = geometry_input_data.pitch
         for ir in 1:nr
             for iz in 1:nz
-                bzed[iz,ir] = 1.0
-                bzeta[iz,ir] = 0.0
+                bzed[iz,ir] = pitch
+                bzeta[iz,ir] = sqrt(1 - bzed[iz,ir]^2)
                 # B(z)/Bref = 1 + DeltaB*( 2(2z/L)^2 - (2z/L)^4)
                 # chosen so that
                 # B(z)/Bref = 1 + DeltaB at 2z/L = +- 1 

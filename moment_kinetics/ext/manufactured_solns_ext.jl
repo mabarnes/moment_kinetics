@@ -61,8 +61,8 @@ using IfElse
         # compute symbolic geometry functions
         option = geometry_input_data.option
         rhostar = geometry_input_data.rhostar
+        pitch = geometry_input_data.pitch
         if option == "constant-helical" || option == "default"
-            pitch = geometry_input_data.pitch
             bzed = pitch
             bzeta = sqrt(1 - bzed^2)
             Bmag = 1.0
@@ -73,8 +73,8 @@ using IfElse
             jacobian = 1.0
         elseif option == "1D-mirror"
             DeltaB = geometry_input_data.DeltaB
-            bzed = 1.0
-            bzeta = 0.0
+            bzed = pitch
+            bzeta = sqrt(1 - bzed^2)
             # B(z)/Bref = 1 + DeltaB*( 2(2z/L)^2 - (2z/L)^4)
             # chosen so that
             # B(z)/Bref = 1 + DeltaB at 2z/L = +- 1 
