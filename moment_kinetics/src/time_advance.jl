@@ -191,7 +191,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
     # create array containing coefficients needed for the Runge Kutta time advance
-    rk_coefs = setup_runge_kutta_coefficients(t_params.n_rk_stages, t_params.adaptive)
+    rk_coefs = setup_runge_kutta_coefficients!(t_params)
     # create the 'advance' struct to be used in later Euler advance to
     # indicate which parts of the equations are to be advanced concurrently.
     # if no splitting of operators, all terms advanced concurrently;
@@ -776,9 +776,9 @@ returns the needed Runge Kutta coefficients;
 e.g., if f is the function to be updated, then
 f^{n+1}[stage+1] = rk_coef[1,stage]*f^{n} + rk_coef[2,stage]*f^{n+1}[stage] + rk_coef[3,stage]*(f^{n}+dt*G[f^{n+1}[stage]]
 """
-function setup_runge_kutta_coefficients(n_rk_stages, adaptive)
-    if adaptive
-        if n_rk_stages == 6
+function setup_runge_kutta_coefficients!(t_params)
+    if t_params.adaptive
+        if t_params.n_rk_stages == 6
             # Embedded 4(5) order Runge-Kutta-Fehlberg method.
             # Note uses the 5th order solution for the time advance, even though the error
             # estimate is for the 4th order solution.
@@ -796,7 +796,8 @@ function setup_runge_kutta_coefficients(n_rk_stages, adaptive)
                                 0    0      0           -845//4104      -77//40     -56//55    -1        ;
                                 0    0      0            0              -11//40      34//55     8//11    ;
                                 0    0      0            0               0           2//55     -1        ]
-        elseif n_rk_stages == 4
+            t_params.rk_order[] = 5
+        elseif t_params.n_rk_stages == 4
             # Fekete SSPRK(4,3)
             # Note this is the same as moment_kinetics original 4-stage SSPRK method, with
             # the addition of a truncation error estimate.
@@ -805,6 +806,7 @@ function setup_runge_kutta_coefficients(n_rk_stages, adaptive)
                                 0    1//2 1//6 0     0   ;
                                 0    0    1//6 1//2  1   ;
                                 0    0    0    1//2 -1//2]
+            t_params.rk_order[] = 3
         else
             error("Unsupported number of RK stages for adaptive timestepping, "
                   * "n_rk_stages=$n_rk_stages")
@@ -812,7 +814,7 @@ function setup_runge_kutta_coefficients(n_rk_stages, adaptive)
     else
         rk_coefs = allocate_float(3,n_rk_stages)
         rk_coefs .= 0.0
-        if n_rk_stages == 4
+        if t_params.n_rk_stages == 4
             rk_coefs[1,1] = 0.5
             rk_coefs[3,1] = 0.5
             rk_coefs[2,2] = 0.5
@@ -822,18 +824,22 @@ function setup_runge_kutta_coefficients(n_rk_stages, adaptive)
             rk_coefs[3,3] = 1.0/6.0
             rk_coefs[2,4] = 0.5
             rk_coefs[3,4] = 0.5
-        elseif n_rk_stages == 3
+            t_params.rk_order[] = 3
+        elseif t_params.n_rk_stages == 3
             rk_coefs[3,1] = 1.0
             rk_coefs[1,2] = 0.75
             rk_coefs[3,2] = 0.25
             rk_coefs[1,3] = 1.0/3.0
             rk_coefs[3,3] = 2.0/3.0
-        elseif n_rk_stages == 2
+            t_params.rk_order[] = 3 # ? Not sure about this order
+        elseif t_params.n_rk_stages == 2
             rk_coefs[3,1] = 1.0
             rk_coefs[1,2] = 0.5
             rk_coefs[3,2] = 0.5
-        elseif n_rk_stages == 1
+            t_params.rk_order[] = 2
+        elseif t_params.n_rk_stages == 1
             rk_coefs[3,1] = 1.0
+            t_params.rk_order[] = 1
         else
             error("Unsupported number of RK stages, n_rk_stages=$n_rk_stages")
         end
@@ -1812,8 +1818,10 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
             # the re-try, so will not reach the output time.
             t_params.step_to_output[] = false
 
-            # Reduce timestep to try to reduce error - this factor should probably be settable!
-            t_params.dt[] /= 2.0
+            # Get new timestep estimate using same formula as for a successful step, but
+            # limit decrease to factor 1/2 - this factor should probably be settable!
+            t_params.dt[] = max(t_params.dt[] / 2.0,
+                                t_params.dt[] * t_params.step_update_prefactor * error_norm^(-1.0/t_params.rk_order[]))
             t_params.dt[] = max(t_params.dt[], t_params.minimum_dt)
 
             minimum_dt = 1.e-14
@@ -1836,21 +1844,26 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
             # Save the timestep used to complete this step, this is used to update the
             # simulation time.
             t_params.previous_dt[] = t_params.dt[]
+
+            if t_params.step_to_output[]
+                # Completed an output step, reset dt to what it was before it was reduced to reach
+                # the output time
+                t_params.dt[] = t_params.dt_before_output[]
+                t_params.step_to_output[] = false
+            else
+                # Adjust timestep according to Fehlberg's suggestion
+                # (https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method).
+                # `step_update_prefactor` is a constant numerical factor to make the estimate
+                # of a good value for the next timestep slightly conservative. It defaults to
+                # 0.9.
+                t_params.dt[] *= t_params.step_update_prefactor * error_norm^(-1.0/t_params.rk_order[])
+                t_params.dt[] = max(t_params.dt[], t_params.minimum_dt)
+                println("t=$t, error_norm=$error_norm, changing timestep to ", t_params.dt[])
+            end
         end
     end
 
     @serial_region begin
-        if success && t_params.step_to_output[]
-            # Completed an output step, reset dt to what it was before it was reduced to reach
-            # the output time
-            t_params.dt[] = t_params.dt_before_output[]
-            t_params.step_to_output[] = false
-        elseif error_norm < 0.1
-            # Try increasing timestep
-            t_params.dt[] *= 1.1
-            println("t=$t, error_norm=$error_norm, increasing timestep to ", t_params.dt[])
-        end
-
         if t + t_params.dt[] >= t_params.next_output_time[]
             t_params.dt_before_output[] = t_params.dt[]
             t_params.dt[] = t_params.next_output_time[] - t

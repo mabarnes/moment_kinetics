@@ -207,6 +207,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         rtol=1.0e-5,
         atol=1.0e-16,
         atol_upar=nothing,
+        step_update_prefactor=0.9,
         minimum_dt=0.0,
        )
     if timestepping_section["nwrite_dfns"] === nothing
@@ -218,6 +219,10 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     timestepping_input = Dict_to_NamedTuple(timestepping_section)
     if timestepping_input.split_operators && timestepping_input.adaptive
         error("Adaptive timestepping not supported with operator splitting")
+    end
+    if !(0.0 < timestepping_input.step_update_prefactor < 1.0)
+        error("step_update_prefactor=$(timestepping_input.step_update_prefactor) must "
+              * "be between 0.0 and 1.0.")
     end
 
     use_for_init_is_default = !(("manufactured_solns" ∈ keys(scan_input)) &&
@@ -447,9 +452,11 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     t_params = time_info(timestepping_input.nstep, dt_shared, previous_dt_shared,
                          next_output_time, dt_before_output, step_to_output,
                          timestepping_input.nwrite, timestepping_input.nwrite_dfns,
-                         timestepping_input.n_rk_stages, timestepping_input.adaptive,
-                         timestepping_input.rtol, timestepping_input.atol,
-                         timestepping_input.atol_upar, timestepping_input.minimum_dt,
+                         timestepping_input.n_rk_stages, Ref(0),
+                         timestepping_input.adaptive, timestepping_input.rtol,
+                         timestepping_input.atol, timestepping_input.atol_upar,
+                         timestepping_input.step_update_prefactor,
+                         timestepping_input.minimum_dt,
                          timestepping_input.split_operators,
                          timestepping_input.steady_state_residual,
                          timestepping_input.converged_residual_value,

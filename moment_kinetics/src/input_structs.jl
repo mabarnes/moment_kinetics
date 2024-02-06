@@ -44,10 +44,12 @@ struct time_info
     nwrite_moments::mk_int
     nwrite_dfns::mk_int
     n_rk_stages::mk_int
+    rk_order::Ref{mk_int}
     adaptive::Bool
     rtol::mk_float
     atol::mk_float
     atol_upar::mk_float
+    step_update_prefactor::mk_float
     minimum_dt::mk_float
     split_operators::Bool
     steady_state_residual::Bool
