@@ -207,6 +207,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         rtol=1.0e-5,
         atol=1.0e-16,
         atol_upar=nothing,
+        minimum_dt=0.0,
        )
     if timestepping_section["nwrite_dfns"] === nothing
         timestepping_section["nwrite_dfns"] = timestepping_section["nstep"]
@@ -448,7 +449,8 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
                          timestepping_input.nwrite, timestepping_input.nwrite_dfns,
                          timestepping_input.n_rk_stages, timestepping_input.adaptive,
                          timestepping_input.rtol, timestepping_input.atol,
-                         timestepping_input.atol_upar, timestepping_input.split_operators,
+                         timestepping_input.atol_upar, timestepping_input.minimum_dt,
+                         timestepping_input.split_operators,
                          timestepping_input.steady_state_residual,
                          timestepping_input.converged_residual_value,
                          manufactured_solns_input.use_for_advance,

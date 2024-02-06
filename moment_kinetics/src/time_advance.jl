@@ -1798,7 +1798,7 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
     end
     error_norm = MPI.bcast(error_norm, 0, comm_block[])
 
-    if error_norm > 1.0
+    if error_norm > 1.0 && t_params.dt[] > t_params.minimum_dt
         # Timestep failed, reduce timestep and re-try
         success = false
 
@@ -1814,6 +1814,7 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
 
             # Reduce timestep to try to reduce error - this factor should probably be settable!
             t_params.dt[] /= 2.0
+            t_params.dt[] = max(t_params.dt[], t_params.minimum_dt)
 
             minimum_dt = 1.e-14
             if t_params.dt[] < minimum_dt

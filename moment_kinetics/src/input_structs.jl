@@ -48,6 +48,7 @@ struct time_info
     rtol::mk_float
     atol::mk_float
     atol_upar::mk_float
+    minimum_dt::mk_float
     split_operators::Bool
     steady_state_residual::Bool
     converged_residual_value::mk_float
