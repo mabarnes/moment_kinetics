@@ -44,7 +44,7 @@ bzeta::Array{mk_float,2}
 dBdz::Array{mk_float,2}
 # d Bmag d r
 dBdr::Array{mk_float,2}
-# jacobian =  grad r x grad z . grad zeta
+# jacobian =  r grad r x grad z . grad zeta
 jacobian::Array{mk_float,2}
 
 # magnetic drift physics coefficients
