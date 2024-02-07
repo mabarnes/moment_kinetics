@@ -249,16 +249,9 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         calculate_electron_qpar_from_pdf!(qpar, ppar, vthe, pdf, vpa)
         qpar_updated = true
         
-        # calculate the updated dqpar/dz
-        for iz ∈ 2:z.n-1
-            dqpar_dz[iz,1] = 0.5*(qpar[iz+1,1]-qpar[iz,1])/z.cell_width[iz] + 0.5*(qpar[iz]-qpar[iz-1,1])/z.cell_width[iz-1]
-        end
-        dqpar_dz[1,1] = (qpar[2,1]-qpar[1,1])/z.cell_width[1]
-        dqpar_dz[z.n,1] = (qpar[end,1]-qpar[end-1,1])/z.cell_width[end-1]
-
         # compute the z-derivative of the parallel electron heat flux
-        #@views derivative_z!(dqpar_dz, qpar, buffer_r_1,
-        #    buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+        @views derivative_z!(dqpar_dz, qpar, buffer_r_1,
+            buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
 
         # Compute the upwinded z-derivative of the electron parallel pressure for the 
         # electron energy equation
