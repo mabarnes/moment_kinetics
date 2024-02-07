@@ -4,14 +4,8 @@ name: Run tests in parallel
 on: [push, pull_request, workflow_dispatch]
 
 jobs:
-  test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macOS-latest]
-        include:
-          - julia_version: '1.8'
-      fail-fast: false
+  test-ubuntu:
+    runs-on: ubuntu-latest
     timeout-minutes: 120
 
     steps:
@@ -19,29 +13,50 @@ jobs:
       - uses: mpi4py/setup-mpi@v1
         with:
           mpi: 'openmpi'
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
       - uses: julia-actions/setup-julia@v1
         with:
-          version: ${{ matrix.julia_version }}
+          version: '1.10'
           arch: x64
-      - uses: julia-actions/julia-buildpkg@v1
-        env:
-          # Use the system Python for PyCall - avoids library linking error on macOS
-          PYTHON: "${{ env.pythonLocation }}/bin/python"
       - run: |
-          pip3 install --user matplotlib
-          julia --project -e 'using MPIPreferences; MPIPreferences.use_system_binary()'
-          julia --project -e 'using Pkg; Pkg.build("MPI"; verbose=true)'
+          touch Project.toml
+          julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["MPI", "MPIPreferences", "NCDatasets", "Random", "SpecialFunctions", "Test"]); Pkg.develop(path="moment_kinetics/"); using MPIPreferences; MPIPreferences.use_system_binary()'
+          julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.precompile()'
           # Need to use openmpi so that the following arguments work:
           # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
           #   than physical cores).
           # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
           #   terrible performance when oversubscribing.
-          mpiexec -np 3 --mca rmaps_base_oversubscribe 1 julia --project=@. -O3 --check-bounds=no test/runtests.jl --debug 1
-          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project=@. -O3 --check-bounds=no test/runtests.jl --debug 1
-          mpiexec -np 2 --mca rmaps_base_oversubscribe 1 julia --project=@. -O3 --check-bounds=no test/runtests.jl --debug 1 --long
+          mpiexec -np 3 --mca rmaps_base_oversubscribe 1 julia --project -O3 --check-bounds=no moment_kinetics/test/runtests.jl --debug 1 --force-optional-dependencies
+          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project -O3 --check-bounds=no moment_kinetics/test/runtests.jl --debug 1 --force-optional-dependencies
+          mpiexec -np 2 --mca rmaps_base_oversubscribe 1 julia --project -O3 --check-bounds=no moment_kinetics/test/runtests.jl --debug 1 --long --force-optional-dependencies
+          # Note: MPI.jl's default implementation is mpich, which has a similar option
+          # `--with-device=ch3:sock`, but that needs to be set when compiling mpich.
+        shell: bash
+
+  # macOS is slow at the moment, so only run one set of parallel tests
+  test-macOS:
+    runs-on: macOS-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mpi4py/setup-mpi@v1
+        with:
+          mpi: 'openmpi'
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: '1.10'
+          arch: x64
+      - run: |
+          touch Project.toml
+          julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["MPI", "MPIPreferences", "NCDatasets", "Random", "SpecialFunctions", "Test"]); Pkg.develop(path="moment_kinetics/"); using MPIPreferences; MPIPreferences.use_system_binary()'
+          julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.precompile()'
+          # Need to use openmpi so that the following arguments work:
+          # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
+          #   than physical cores).
+          # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
+          #   terrible performance when oversubscribing.
+          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project -O3 --check-bounds=no moment_kinetics/test/runtests.jl --debug 1 --force-optional-dependencies
           # Note: MPI.jl's default implementation is mpich, which has a similar option
           # `--with-device=ch3:sock`, but that needs to be set when compiling mpich.
         shell: bash

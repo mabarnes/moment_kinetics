@@ -1,10 +1,7 @@
 export chebyshevradau_test
 
 using Printf
-using Plots
-using LaTeXStrings
 using MPI
-using Measures
 
 import moment_kinetics
 using moment_kinetics.chebyshev

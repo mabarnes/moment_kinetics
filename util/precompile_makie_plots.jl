@@ -1,8 +1,5 @@
-# provide option of running from command line via 'julia moment_kinetics.jl'
-using Pkg
-Pkg.activate(".")
-
 using moment_kinetics
+using makie_post_processing
 
 # Create a temporary directory for test output
 test_output_directory = tempname()
@@ -23,7 +20,7 @@ input_dict = Dict("nstep"=>1,
                   "z_discretization" => "chebyshev_pseudospectral",
                   "vperp_ngrid" => 5,
                   "vperp_nelement" => 1,
-                  "vperp_bc" => "periodic",
+                  #"vperp_bc" => "periodic",
                   "vperp_L" => 4.0,
                   "vperp_discretization" => "chebyshev_pseudospectral",
                   "vpa_ngrid" => 7,
@@ -49,8 +46,7 @@ input_dict = Dict("nstep"=>1,
 
 run_moment_kinetics(input_dict)
 
-precompile_postproc_options =
-    moment_kinetics.makie_post_processing.generate_example_input_Dict()
+precompile_postproc_options = makie_post_processing.generate_example_input_Dict()
 
 # Try to activate all plot types to get as much compiled as possible
 for (k,v) ∈ precompile_postproc_options
@@ -59,5 +55,4 @@ for (k,v) ∈ precompile_postproc_options
     end
 end
 
-moment_kinetics.makie_post_processing.makie_post_process(
-    joinpath(test_output_directory, run_name), precompile_postproc_options)
+makie_post_process(joinpath(test_output_directory, run_name), precompile_postproc_options)

@@ -2,5 +2,5 @@
 ===================
 
 ```@autodocs
-Modules = [moment_kinetics.plot_MMS_sequence]
+Modules = [plots_post_processing.plot_MMS_sequence]
 ```
