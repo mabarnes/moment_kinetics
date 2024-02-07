@@ -8,9 +8,10 @@ export set_element_boundaries
 
 using LinearAlgebra
 using ..type_definitions: mk_float, mk_int
-using ..array_allocation: allocate_float, allocate_int
+using ..array_allocation: allocate_float, allocate_shared_float, allocate_int
 using ..calculus: derivative!
 using ..chebyshev: scaled_chebyshev_grid, scaled_chebyshev_radau_grid, setup_chebyshev_pseudospectral
+using ..communication
 using ..finite_differences: finite_difference_info
 using ..gauss_legendre: scaled_gauss_legendre_lobatto_grid, scaled_gauss_legendre_radau_grid, setup_gausslegendre_pseudospectral
 using ..quadrature: composite_simpson_weights
@@ -77,6 +78,12 @@ struct coordinate
     scratch2::Array{mk_float,1}
     # scratch3 is an array used for intermediate calculations requiring n entries
     scratch3::Array{mk_float,1}
+    # scratch_shared is a shared-memory array used for intermediate calculations requiring
+    # n entries
+    scratch_shared::MPISharedArray{mk_float,1}
+    # scratch_shared2 is a shared-memory array used for intermediate calculations requiring
+    # n entries
+    scratch_shared2::MPISharedArray{mk_float,1}
     # scratch_2d and scratch2_2d are arrays used for intermediate calculations requiring
     # ngrid x nelement entries
     scratch_2d::Array{mk_float,2}
@@ -136,6 +143,8 @@ function define_coordinate(input, parallel_io::Bool=false; init_YY::Bool=true)
     duniform_dgrid = allocate_float(input.ngrid, input.nelement_local)
     # scratch is an array used for intermediate calculations requiring n entries
     scratch = allocate_float(n_local)
+    scratch_shared = allocate_shared_float(n_local)
+    scratch_shared2 = allocate_shared_float(n_local)
     # scratch_2d is an array used for intermediate calculations requiring ngrid x nelement entries
     scratch_2d = allocate_float(input.ngrid, input.nelement_local)
     # struct containing the advection speed options/inputs for this coordinate
@@ -165,7 +174,7 @@ function define_coordinate(input, parallel_io::Bool=false; init_YY::Bool=true)
     coord = coordinate(input.name, n_global, n_local, input.ngrid,
         input.nelement_global, input.nelement_local, input.nrank, input.irank, input.L, grid,
         cell_width, igrid, ielement, imin, imax, igrid_full, input.discretization, input.fd_option, input.cheb_option,
-        input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
+        input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch), scratch_shared, scratch_shared2,
         scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
         local_io_range, global_io_range, element_scale, element_shift, input.element_spacing_option)
 
