@@ -69,13 +69,17 @@ function update_phi!(fields, fvec, z, r, composition, collisions, moments,
                            # for each radial position in parallel if possible 
         
     # TODO: parallelise this...
-    @serial_region begin
-        ne = @view scratch_dummy.dummy_zrs[:,:,1]
-        jpar_i = @view scratch_dummy.buffer_rs_1[:,:,1]
-        N_e = @view scratch_dummy.buffer_rs_2[:,:,1]
-        if composition.electron_physics == boltzmann_electron_response
+    ne = @view scratch_dummy.dummy_zrs[:,:,1]
+    jpar_i = @view scratch_dummy.buffer_rs_1[:,:,1]
+    N_e = @view scratch_dummy.buffer_rs_2[:,:,1]
+    if composition.electron_physics == boltzmann_electron_response
+        begin_serial_region()
+        @serial_region begin
             N_e .= 1.0
-        elseif composition.electron_physics == boltzmann_electron_response_with_simple_sheath
+        end
+    elseif composition.electron_physics == boltzmann_electron_response_with_simple_sheath
+        begin_serial_region()
+        @serial_region begin
             # calculate Sum_{i} Z_i n_i u_i = J_||i at z = 0
             jpar_i .= 0.0
             for is in 1:n_ion_species
@@ -98,17 +102,17 @@ function update_phi!(fields, fvec, z, r, composition, collisions, moments,
             end
             # See P.C. Stangeby, The Plasma Boundary of Magnetic Fusion Devices, IOP Publishing, Chpt 2, p75
         end
-        if composition.electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
-            @loop_r_z ir iz begin
-                fields.phi[iz,ir] = composition.T_e * log(dens_e[iz,ir] / N_e[ir])
-            end
-        elseif composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
-            calculate_Epar_from_electron_force_balance!(fields.Ez, dens_e, moments.electron.dppar_dz,
-                collisions.nu_ei, moments.electron.parallel_friction,
-                composition.n_neutral_species, collisions.charge_exchange_electron, composition.me_over_mi,
-                fvec.density_neutral, fvec.uz_neutral, fvec.electron_upar)
-            calculate_phi_from_Epar!(fields.phi, fields.Ez, z.cell_width)
+    end
+    if composition.electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
+        @loop_r_z ir iz begin
+            fields.phi[iz,ir] = composition.T_e * log(dens_e[iz,ir] / N_e[ir])
         end
+    elseif composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
+        calculate_Epar_from_electron_force_balance!(fields.Ez, dens_e, moments.electron.dppar_dz,
+            collisions.nu_ei, moments.electron.parallel_friction,
+            composition.n_neutral_species, collisions.charge_exchange_electron, composition.me_over_mi,
+            fvec.density_neutral, fvec.uz_neutral, fvec.electron_upar)
+        calculate_phi_from_Epar!(fields.phi, fields.Ez, z)
     end
     ## can calculate phi at z = L and hence phi_wall(z=L) using jpar_i at z =L if needed
     _block_synchronize()
@@ -145,12 +149,29 @@ function update_phi!(fields, fvec, z, r, composition, collisions, moments,
     return nothing
 end
 
-function calculate_phi_from_Epar!(phi, Epar, dz)
+function calculate_phi_from_Epar!(phi, Epar, z)
     # simple calculation of phi from Epar for now, with zero phi assumed at boundary
-    phi[1,:] .= 3.0
-    @loop_r_z ir iz begin
-        if iz > 1
-            phi[iz,ir] = phi[iz-1,ir] - dz[iz-1]*Epar[iz,ir]
+    begin_serial_region()
+
+    dz = z.cell_width
+    @serial_region begin
+        phi[1,:] .= 3.0
+        @loop_r_z ir iz begin
+            if iz > 1
+                phi[iz,ir] = phi[iz-1,ir] - dz[iz-1]*Epar[iz,ir]
+            end
+        end
+
+        # Add contributions to integral along z from processes at smaller z-values than
+        # this one.
+        this_delta_phi = phi[end,:] .- phi[1,:]
+        for irank ∈ 1:z.nrank-1
+            delta_phi = MPI.Bcast(this_delta_phi, irank, z.comm)
+            if z.irank > irank
+                @loop_r_z ir iz begin
+                    phi[iz,ir] += delta_phi[ir]
+                end
+            end
         end
     end
     return nothing

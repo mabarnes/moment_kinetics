@@ -20,10 +20,12 @@ function electron_z_advection!(advection_term, pdf, vth, advect, z, vpa, spectra
     d2pdf_dz2 = scratch_dummy.buffer_vpavperpzr_2
     begin_r_vperp_vpa_region()
     # get the updated speed along the z direction using the current pdf
-    @views update_electron_speed_z!(advect[1], vth[:,:], vpa)
+    @views update_electron_speed_z!(advect[1], vth, vpa)
     # update adv_fac -- note that there is no factor of dt here because
     # in some cases the electron kinetic equation is solved as a steady-state equation iteratively
-    @views @. advect[1].adv_fac[:,:,:,:] = -advect[1].speed[:,:,:,:]
+    @loop_r_vperp_vpa ir ivperp ivpa begin
+        @views advect[1].adv_fac[:,ivpa,ivperp,ir] = -advect[1].speed[:,ivpa,ivperp,ir]
+    end
     #calculate the upwind derivative
     derivative_z!(dpdf_dz, pdf,
                   advect, scratch_dummy.buffer_vpavperpr_1,
@@ -34,9 +36,9 @@ function electron_z_advection!(advection_term, pdf, vth, advect, z, vpa, spectra
     #    @views second_derivative!(d2pdf_dz2[ivpa,ivperp,:,ir], pdf[ivpa,ivperp,:,ir], z, spectral)
     #end
     # calculate the advection term
-    @loop_z iz begin
-        @. advection_term[:,:,iz,:] -= advect[1].adv_fac[iz,:,:,:] * dpdf_dz[:,:,iz,:]
-        #@. advection_term[:,:,iz,:] -= advect[1].adv_fac[iz,:,:,:] * dpdf_dz[:,:,iz,:] + 0.0001*d2pdf_dz2[:,:,iz,:]
+    @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+        advection_term[ivpa,ivperp,iz,ir] -= advect[1].adv_fac[iz,ivpa,ivperp,ir] * dpdf_dz[ivpa,ivperp,iz,ir]
+        #advection_term[ivpa,ivperp,iz,ir] -= advect[1].adv_fac[iz,ivpa,ivperp,ir] * dpdf_dz[ivpa,ivperp,iz,ir] + 0.0001*d2pdf_dz2[ivpa,ivperp,iz,ir]
     end
     return nothing
 end

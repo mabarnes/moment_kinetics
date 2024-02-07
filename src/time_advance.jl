@@ -2155,7 +2155,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     end
     if advance.electron_energy
         electron_energy_equation!(fvec_out.electron_ppar, fvec_out.density, fvec_in, moments, collisions, dt,
-                                  composition, num_diss_params, z.grid)
+                                  composition, num_diss_params, z)
     end
     # reset "xx.updated" flags to false since ff has been updated
     # and the corresponding moments have not

@@ -19,10 +19,12 @@ function electron_vpa_advection!(advection_term, pdf, ppar, vth, dppar_dz, dqpar
     d2pdf_dvpa2 = scratch_dummy.buffer_vpavperpzr_2
     begin_r_z_vperp_region()
     # get the updated speed along the wpa direction using the current pdf
-    @views update_electron_speed_vpa!(advect[1], ppar[:,:], vth[:,:], dppar_dz[:,:], dqpar_dz[:,:], dvth_dz[:,:], vpa.grid)
+    @views update_electron_speed_vpa!(advect[1], ppar, vth, dppar_dz, dqpar_dz, dvth_dz, vpa.grid)
     # update adv_fac -- note that there is no factor of dt here because
     # in some cases the electron kinetic equation is solved as a steady-state equation iteratively
-    @views @. advect[1].adv_fac[:,:,:,:] = -advect[1].speed[:,:,:,:]
+    @loop_r_z_vperp ir iz ivperp begin
+        @views @. advect[1].adv_fac[:,ivperp,iz,ir] = -advect[1].speed[:,ivperp,iz,ir]
+    end
     #calculate the upwind derivative of the electron pdf w.r.t. wpa
     @loop_r_z_vperp ir iz ivperp begin
         @views derivative!(dpdf_dvpa[:,ivperp,iz,ir], pdf[:,ivperp,iz,ir], vpa, advect[1].adv_fac[:,ivperp,iz,ir], spectral)
@@ -31,9 +33,9 @@ function electron_vpa_advection!(advection_term, pdf, ppar, vth, dppar_dz, dqpar
     #    @views second_derivative!(d2pdf_dvpa2[:,ivperp,iz,ir], pdf[:,ivperp,iz,ir], vpa, spectral)
     #end
     # calculate the advection term
-    @loop_vpa ivpa begin
-        @. advection_term[ivpa,:,:,:] -= advect[1].adv_fac[ivpa,:,:,:] * dpdf_dvpa[ivpa,:,:,:]
-        #@. advection_term[ivpa,:,:,:] -= advect[1].adv_fac[ivpa,:,:,:] * dpdf_dvpa[ivpa,:,:,:] + 0.0001*d2pdf_dvpa2[ivpa,:,:,:]
+    @loop_r_z_vperp ir iz ivperp begin
+        @. advection_term[:,ivperp,iz,ir] -= advect[1].adv_fac[:,ivperp,iz,ir] * dpdf_dvpa[:,ivperp,iz,ir]
+        #@. advection_term[:,ivperp,iz,ir] -= advect[1].adv_fac[:,ivperp,iz,ir] * dpdf_dvpa[:,ivperp,iz,ir] + 0.0001*d2pdf_dvpa2[:,ivperp,iz,ir]
     end
     #@loop_vpa ivpa begin
     #    println("electron_vpa_advection: ", advection_term[ivpa,1,10,1], " vpa: ", vpa.grid[ivpa], " dpdf_dvpa: ", dpdf_dvpa[ivpa,1,10,1],

@@ -300,61 +300,63 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
     init_boundary_distributions!(boundary_distributions, pdf, vz, vr, vzeta, vpa, vperp,
                                  z, r, composition)
 
-    @serial_region begin 
-        moments.electron.dens_updated = false
-        # initialise the electron density profile
-        init_electron_density!(moments.electron.dens, moments.electron.dens_updated, moments.ion.dens)
-        # initialise the electron parallel flow profile
-        init_electron_upar!(moments.electron.upar, moments.electron.upar_updated, moments.electron.dens, 
-            moments.ion.upar, moments.ion.dens, composition.electron_physics)
-        # initialise the electron thermal speed profile
-        init_electron_vth!(moments.electron.vth, moments.ion.vth, composition.T_e, composition.me_over_mi, z.grid)
-        # calculate the electron temperature from the thermal speed
-        @. moments.electron.temp = composition.me_over_mi * moments.electron.vth^2
-        # the electron temperature has now been updated
-        moments.electron.temp_updated = true
-        # calculate the electron parallel pressure from the density and temperature
-        @. moments.electron.ppar = 0.5 * moments.electron.dens * moments.electron.temp
-        # the electron parallel pressure now been updated
-        moments.electron.ppar_updated = true
-
-        # calculate the zed derivative of the initial electron density
-        @views derivative_z!(moments.electron.ddens_dz, moments.electron.dens, 
-            scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1], scratch_dummy.buffer_rs_3[:,1],
-            scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
-        # calculate the zed derivative of the initial electron temperature
-        @views derivative_z!(moments.electron.dT_dz, moments.electron.temp, 
-            scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1], scratch_dummy.buffer_rs_3[:,1],
-            scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
-        # calculate the zed derivative of the initial electron thermal speed
-        @views derivative_z!(moments.electron.dvth_dz, moments.electron.vth, 
-            scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1], scratch_dummy.buffer_rs_3[:,1],
-            scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
-        # calculate the zed derivative of the initial electron parallel pressure
-        @views derivative_z!(moments.electron.dppar_dz, moments.electron.ppar, 
-            scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1], scratch_dummy.buffer_rs_3[:,1],
-            scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
-        # calculate the electron parallel heat flux;
-        # if using kinetic electrons, this relies on the electron pdf, which itself relies on the electron heat flux
-        calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, pdf.electron.norm, 
-            moments.electron.ppar, moments.electron.upar, moments.electron.vth, moments.electron.dT_dz, moments.ion.upar, 
-            collisions.nu_ei, composition.me_over_mi, composition.electron_physics, vpa)
-        # calculate the zed derivative of the initial electron parallel heat flux
-        @views derivative_z!(moments.electron.dqpar_dz, moments.electron.qpar, 
-            scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1], scratch_dummy.buffer_rs_3[:,1],
-            scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
-        # calculate the electron-ion parallel friction force
-        calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, moments.electron.dens,
-            moments.electron.upar, moments.ion.upar, moments.electron.dT_dz,
-            composition.me_over_mi, collisions.nu_ei, composition.electron_physics)
-        
-        # initialize the scratch arrays containing pdfs and moments for the first RK stage
-        # the electron pdf is yet to be initialised but with the current code logic, the scratch
-        # arrays need to exist and be otherwise initialised in order to compute the initial electron pdf
-        initialize_scratch_arrays!(scratch, moments, pdf.ion.norm, pdf.electron.norm, pdf.neutral.norm, t_input.n_rk_stages)
-        # get the initial electrostatic potential and parallel electric field
-        update_phi!(fields, scratch[1], z, r, composition, collisions, moments, z_spectral, r_spectral, scratch_dummy)
+    moments.electron.dens_updated = false
+    # initialise the electron density profile
+    init_electron_density!(moments.electron.dens, moments.electron.dens_updated, moments.ion.dens)
+    # initialise the electron parallel flow profile
+    init_electron_upar!(moments.electron.upar, moments.electron.upar_updated, moments.electron.dens, 
+        moments.ion.upar, moments.ion.dens, composition.electron_physics, r, z)
+    # initialise the electron thermal speed profile
+    init_electron_vth!(moments.electron.vth, moments.ion.vth, composition.T_e, composition.me_over_mi, z.grid)
+    # calculate the electron temperature from the thermal speed
+    @loop_r_z ir iz begin
+        moments.electron.temp[iz,ir] = composition.me_over_mi * moments.electron.vth[iz,ir]^2
     end
+    # the electron temperature has now been updated
+    moments.electron.temp_updated = true
+    # calculate the electron parallel pressure from the density and temperature
+    @loop_r_z ir iz begin
+        moments.electron.ppar[iz,ir] = 0.5 * moments.electron.dens[iz,ir] * moments.electron.temp[iz,ir]
+    end
+    # the electron parallel pressure now been updated
+    moments.electron.ppar_updated = true
+
+    # calculate the zed derivative of the initial electron density
+    @views derivative_z!(moments.electron.ddens_dz, moments.electron.dens, 
+        scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1], scratch_dummy.buffer_rs_3[:,1],
+        scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
+    # calculate the zed derivative of the initial electron temperature
+    @views derivative_z!(moments.electron.dT_dz, moments.electron.temp, 
+        scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1], scratch_dummy.buffer_rs_3[:,1],
+        scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
+    # calculate the zed derivative of the initial electron thermal speed
+    @views derivative_z!(moments.electron.dvth_dz, moments.electron.vth, 
+        scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1], scratch_dummy.buffer_rs_3[:,1],
+        scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
+    # calculate the zed derivative of the initial electron parallel pressure
+    @views derivative_z!(moments.electron.dppar_dz, moments.electron.ppar, 
+        scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1], scratch_dummy.buffer_rs_3[:,1],
+        scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
+    # calculate the electron parallel heat flux;
+    # if using kinetic electrons, this relies on the electron pdf, which itself relies on the electron heat flux
+    calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, pdf.electron.norm, 
+        moments.electron.ppar, moments.electron.upar, moments.electron.vth, moments.electron.dT_dz, moments.ion.upar, 
+        collisions.nu_ei, composition.me_over_mi, composition.electron_physics, vpa)
+    # calculate the zed derivative of the initial electron parallel heat flux
+    @views derivative_z!(moments.electron.dqpar_dz, moments.electron.qpar, 
+        scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1], scratch_dummy.buffer_rs_3[:,1],
+        scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
+    # calculate the electron-ion parallel friction force
+    calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, moments.electron.dens,
+        moments.electron.upar, moments.ion.upar, moments.electron.dT_dz,
+        composition.me_over_mi, collisions.nu_ei, composition.electron_physics)
+    
+    # initialize the scratch arrays containing pdfs and moments for the first RK stage
+    # the electron pdf is yet to be initialised but with the current code logic, the scratch
+    # arrays need to exist and be otherwise initialised in order to compute the initial electron pdf
+    initialize_scratch_arrays!(scratch, moments, pdf.ion.norm, pdf.electron.norm, pdf.neutral.norm, t_input.n_rk_stages)
+    # get the initial electrostatic potential and parallel electric field
+    update_phi!(fields, scratch[1], z, r, composition, collisions, moments, z_spectral, r_spectral, scratch_dummy)
 
     # initialize the electron pdf that satisfies the electron kinetic equation
     return initialize_electron_pdf!(scratch[1], pdf, moments, fields.phi, z, vpa, vperp, z_spectral, vpa_spectral, 
@@ -373,8 +375,9 @@ that may be evolved separately via fluid equations
 """
 function initialize_scratch_arrays!(scratch, moments, pdf_ion_in, pdf_electron_in, pdf_neutral_in, n_rk_stages)
     # populate each of the structs
-    for istage ∈ 1:n_rk_stages+1
-        @serial_region begin
+    begin_serial_region()
+    @serial_region begin
+        for istage ∈ 1:n_rk_stages+1
             # initialise the scratch arrays for the ion pdf and velocity moments
             scratch[istage].pdf .= pdf_ion_in
             scratch[istage].density .= moments.ion.dens
@@ -484,7 +487,6 @@ end
 
 function initialize_electron_pdf!(fvec, pdf, moments, phi, z, vpa, vperp, z_spectral, vpa_spectral, z_advect, vpa_advect,
                                   scratch_dummy, collisions, composition, num_diss_params, dt)
-    @serial_region begin
         @loop_r ir begin
             # this is the initial guess for the electron pdf
             # it will be iteratively updated to satisfy the time-independent
@@ -492,33 +494,36 @@ function initialize_electron_pdf!(fvec, pdf, moments, phi, z, vpa, vperp, z_spec
             @views init_electron_pdf_over_density!(pdf.electron.norm[:,:,:,ir], moments.electron.dens[:,ir],
                 moments.electron.upar[:,ir], moments.electron.vth[:,ir], phi[:,ir], z, vpa, vperp, composition.me_over_mi)
         end
-        # update the electron pdf in the fvec struct
-        fvec.pdf_electron .= pdf.electron.norm
-        # now that the initial electron pdf is given, the electron parallel heat flux should be updated
-        # if using kinetic electrons
-        if composition.electron_physics == kinetic_electrons
-            moments.electron.qpar_updated = false
-            calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, pdf.electron.norm, 
-                moments.electron.ppar, moments.electron.upar, moments.electron.vth, 
-                moments.electron.dT_dz, moments.ion.upar, 
-                collisions.nu_ei, composition.me_over_mi, composition.electron_physics, vpa)
-            # update dqpar/dz for electrons
-            # calculate the zed derivative of the initial electron parallel heat flux
-            @views derivative_z!(moments.electron.dqpar_dz, moments.electron.qpar, 
-                scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1], scratch_dummy.buffer_rs_3[:,1],
-                scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
-            # now that we have our initial guess for the electron pdf, we iterate
-            # using the time-independent electron kinetic equation to find a self-consistent
-            # solution for the electron pdf
-            max_electron_pdf_iterations = 500000
-            #max_electron_pdf_iterations = 10000
-            return @views update_electron_pdf!(fvec, pdf.electron.norm, moments, moments.electron.dens, moments.electron.vth, 
-                                        moments.electron.ppar, moments.electron.qpar, moments.electron.qpar_updated,
-                                        phi, moments.electron.ddens_dz, moments.electron.dppar_dz, 
-                                        moments.electron.dqpar_dz, moments.electron.dvth_dz, z, vpa, z_spectral, 
-                                        vpa_spectral, z_advect, vpa_advect, scratch_dummy, dt, collisions, composition,
-                                        num_diss_params, max_electron_pdf_iterations)
+    # now that the initial electron pdf is given, the electron parallel heat flux should be updated
+    # if using kinetic electrons
+    if composition.electron_physics == kinetic_electrons
+        begin_serial_region()
+        @serial_region begin
+            # update the electron pdf in the fvec struct
+            fvec.pdf_electron .= pdf.electron.norm
         end
+
+        moments.electron.qpar_updated = false
+        calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, pdf.electron.norm, 
+            moments.electron.ppar, moments.electron.upar, moments.electron.vth, 
+            moments.electron.dT_dz, moments.ion.upar, 
+            collisions.nu_ei, composition.me_over_mi, composition.electron_physics, vpa)
+        # update dqpar/dz for electrons
+        # calculate the zed derivative of the initial electron parallel heat flux
+        @views derivative_z!(moments.electron.dqpar_dz, moments.electron.qpar, 
+            scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1], scratch_dummy.buffer_rs_3[:,1],
+            scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
+        # now that we have our initial guess for the electron pdf, we iterate
+        # using the time-independent electron kinetic equation to find a self-consistent
+        # solution for the electron pdf
+        max_electron_pdf_iterations = 500000
+        #max_electron_pdf_iterations = 10000
+        return @views update_electron_pdf!(fvec, pdf.electron.norm, moments, moments.electron.dens, moments.electron.vth, 
+                                    moments.electron.ppar, moments.electron.qpar, moments.electron.qpar_updated,
+                                    phi, moments.electron.ddens_dz, moments.electron.dppar_dz, 
+                                    moments.electron.dqpar_dz, moments.electron.dvth_dz, z, vpa, z_spectral, 
+                                    vpa_spectral, z_advect, vpa_advect, scratch_dummy, dt, collisions, composition,
+                                    num_diss_params, max_electron_pdf_iterations)
     end
 end
 
@@ -765,8 +770,8 @@ end
 """
 initialise the electron parallel flow density
 """
-function init_electron_upar!(upar_e, updated, dens_e, upar_i, dens_i, electron_model)
-    calculate_electron_upar_from_charge_conservation!(upar_e, updated, dens_e, upar_i, dens_i, electron_model)
+function init_electron_upar!(upar_e, updated, dens_e, upar_i, dens_i, electron_model, r, z)
+    calculate_electron_upar_from_charge_conservation!(upar_e, updated, dens_e, upar_i, dens_i, electron_model, r, z)
     return nothing
 end
 
@@ -1177,7 +1182,7 @@ this 'initital' value for the electron will just be the first guess in an iterat
 function init_electron_pdf_over_density!(pdf, density, upar, vth, phi, z, vpa, vperp, me_over_mi)
     if z.bc == "wall"
         # get critical velocities beyond which electrons are lost to the wall
-        vpa_crit_zmin, vpa_crit_zmax = get_electron_critical_velocities(phi, vth, me_over_mi)
+        vpa_crit_zmin, vpa_crit_zmax = get_electron_critical_velocities(phi, vth, me_over_mi, z)
         println("vpa_crit_zmin = ", vpa_crit_zmin, " vpa_crit_zmax = ", vpa_crit_zmax)
         # loop over all z values on this rank, initialising a shifted Maxwellian velocity distribution
         sharp_fac = 10
