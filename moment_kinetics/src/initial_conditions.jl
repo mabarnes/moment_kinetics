@@ -23,7 +23,7 @@ using ..coordinates: coordinate
 using ..external_sources
 using ..interpolation: interpolate_to_grid_1d!
 using ..looping
-using ..moment_kinetics_structs: scratch_pdf
+using ..moment_kinetics_structs: scratch_pdf, em_fields_struct
 using ..velocity_moments: integrate_over_vspace, integrate_over_neutral_vspace
 using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_vpa
 using ..velocity_moments: integrate_over_positive_vz, integrate_over_negative_vz
@@ -1133,7 +1133,7 @@ end
 enforce boundary conditions in vpa and z on the evolved pdf;
 also enforce boundary conditions in z on all separately evolved velocity space moments of the pdf
 """
-function enforce_boundary_conditions!(f, f_r_bc, density, upar, ppar, moments, vpa_bc,
+function enforce_boundary_conditions!(f, f_r_bc, density, upar, ppar, phi, moments, vpa_bc,
         z_bc, r_bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral, vpa_adv, vperp_adv, z_adv, r_adv, composition, scratch_dummy,
         r_diffusion, vpa_diffusion, vperp_diffusion)
     if vpa.n > 1
@@ -1155,7 +1155,7 @@ function enforce_boundary_conditions!(f, f_r_bc, density, upar, ppar, moments, v
         begin_s_r_vperp_vpa_region()
         # enforce the z BC on the evolved velocity space moments of the pdf
         @views enforce_z_boundary_condition_moments!(density, moments, z_bc)
-        @views enforce_z_boundary_condition!(f, density, upar, ppar, moments, z_bc, z_adv, z,
+        @views enforce_z_boundary_condition!(f, density, upar, ppar, phi, moments, z_bc, z_adv, z,
                                              vperp, vpa, composition,
                                              scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
                                              scratch_dummy.buffer_vpavperprs_3, scratch_dummy.buffer_vpavperprs_4)
@@ -1169,11 +1169,11 @@ function enforce_boundary_conditions!(f, f_r_bc, density, upar, ppar, moments, v
             r_diffusion)
     end
 end
-function enforce_boundary_conditions!(fvec_out::scratch_pdf, moments, f_r_bc, vpa_bc,
+function enforce_boundary_conditions!(fvec_out::scratch_pdf, moments, fields::em_fields_struct, f_r_bc, vpa_bc,
         z_bc, r_bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral, vpa_adv, vperp_adv, z_adv, r_adv, composition, scratch_dummy,
         r_diffusion, vpa_diffusion, vperp_diffusion)
     enforce_boundary_conditions!(fvec_out.pdf, f_r_bc, fvec_out.density, fvec_out.upar,
-        fvec_out.ppar, moments, vpa_bc, z_bc, r_bc, vpa, vperp, z, r, 
+        fvec_out.ppar, fields.phi, moments, vpa_bc, z_bc, r_bc, vpa, vperp, z, r, 
         vpa_spectral, vperp_spectral, vpa_adv, vperp_adv, z_adv,
         r_adv, composition, scratch_dummy, r_diffusion, vpa_diffusion, vperp_diffusion)
 end
@@ -1231,7 +1231,7 @@ end
 """
 enforce boundary conditions on charged particle f in z
 """
-function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::String, adv,
+function enforce_z_boundary_condition!(pdf, density, upar, ppar, phi, moments, bc::String, adv,
                                        z, vperp, vpa, composition, end1::AbstractArray{mk_float,4},
                                        end2::AbstractArray{mk_float,4}, buffer1::AbstractArray{mk_float,4},
                                        buffer2::AbstractArray{mk_float,4})
@@ -1293,7 +1293,7 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::St
             else
                 @loop_r ir begin
                     @views enforce_zero_incoming_bc!(pdf[:,:,:,ir,is],
-                                                     adv[is].speed[:,:,:,ir], z, zero)
+                                                     adv[is].speed[:,:,:,ir], z, zero, phi[:,ir])
                 end
             end
         end
@@ -1504,26 +1504,29 @@ end
 """
 enforce a zero incoming BC in z for given species pdf at each radial location
 """
-function enforce_zero_incoming_bc!(pdf, speed, z, zero)
+function enforce_zero_incoming_bc!(pdf, speed, z, zero, phi)
     nvpa = size(pdf,1)
+    nz = z.n
     # no parallel BC should be enforced for dz/dt = 0
     # note that the parallel velocity coordinate vpa may be dz/dt or
     # some version of the peculiar velocity (dz/dt - upar),
     # so use advection speed below instead of vpa
     if z.irank == 0
+        vcut = sqrt(phi[2]-phi[1]) # sqrt(-1) an option!
         @loop_vperp_vpa ivperp ivpa begin
             # for left boundary in zed (z = -Lz/2), want
             # f(z=-Lz/2, v_parallel > 0) = 0
-            if speed[1,ivpa,ivperp] > zero
+            if speed[1,ivpa,ivperp] > zero - vcut
                 pdf[ivpa,ivperp,1] = 0.0
             end
         end
     end
     if z.irank == z.nrank - 1
+        vcut = sqrt(phi[nz-1]-phi[nz]) # sqrt(-1) an option!
         @loop_vperp_vpa ivperp ivpa begin
             # for right boundary in zed (z = Lz/2), want
             # f(z=Lz/2, v_parallel < 0) = 0
-            if speed[end,ivpa,ivperp] < -zero
+            if speed[end,ivpa,ivperp] < -zero + vcut
                 pdf[ivpa,ivperp,end] = 0.0
             end
         end

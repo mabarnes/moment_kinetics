@@ -371,7 +371,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
         # condition
         enforce_boundary_conditions!(
             pdf.charged.norm, boundary_distributions.pdf_rboundary_charged,
-            moments.charged.dens, moments.charged.upar, moments.charged.ppar, moments,
+            moments.charged.dens, moments.charged.upar, moments.charged.ppar, fields.phi, moments,
             vpa.bc, z.bc, r.bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral,
             vpa_advect, vperp_advect, z_advect, r_advect,
             composition, scratch_dummy, advance.r_diffusion,
@@ -1268,7 +1268,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     # set to zero at the sheath boundary according to the final upar has a non-zero
     # contribution from one or more of the terms.
     # NB: probably need to do the same for the evolved moments
-    enforce_boundary_conditions!(new_scratch, moments,
+    enforce_boundary_conditions!(new_scratch, moments, fields,
         boundary_distributions.pdf_rboundary_charged, vpa.bc, z.bc, r.bc, vpa, vperp, z,
         r, vpa_spectral, vperp_spectral, 
         vpa_advect, vperp_advect, z_advect, r_advect, composition, scratch_dummy,
