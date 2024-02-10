@@ -266,6 +266,9 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
 
         begin_r_z_region()
         @loop_r_z ir iz begin
+            if (iz == 1 && z.irank == 0) || (iz == z.n && z.irank == z.nrank - 1)
+                continue
+            end
             #@views hard_force_moment_constraints!(pdf[:,:,iz,ir], (evolve_density=true, evolve_upar=false, evolve_ppar=true), vpa)
             @views hard_force_moment_constraints!(pdf[:,:,iz,ir], (evolve_density=true, evolve_upar=true, evolve_ppar=true), vpa)
         end
