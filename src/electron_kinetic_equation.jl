@@ -149,7 +149,8 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
     #dt_energy = 0.001
     dt_energy = 1.0e-7
     #n_ppar_subcycles = 1000
-    n_ppar_subcycles = 200
+    #n_ppar_subcycles = 200
+    n_ppar_subcycles = 1
     time = 0.0
 
     # define residual to point to a dummy array;
