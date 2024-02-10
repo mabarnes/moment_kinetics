@@ -530,8 +530,16 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
         integral_excess = upar_integral - upar0
         fraction_of_pdf = integral_excess / (vpa_unnorm[ivpa] * vpa.wgts[ivpa]) / pdf[ivpa,1,1,ir]
         #println("fraction_of_pdf=", fraction_of_pdf)
-        vmax = 0.5*(vpa_unnorm[ivpa+1] + vpa_unnorm[ivpa]) +
-               fraction_of_pdf*(vpa_unnorm[ivpa] - vpa_unnorm[ivpa+1])
+
+        # Define so that when fraction_of_pdf=1 (when all of the contribution to the
+        # integral from the point at ivpa is required to make upar_integral<upar0) the
+        # cut-off velocity is half way between ivpa and ivpa+1, while when
+        # fraction_of_pdf=0 (none of the contribution to the integral from the point at
+        # ivpa is required to make upar_integral<upar0) the cut-off is half way between
+        # ivpa-1 and ivpa.
+        vmax = 0.5 * (vpa_unnorm[ivpa] + vpa_unnorm[ivpa+1]) +
+               0.5 * fraction_of_pdf*(vpa_unnorm[ivpa-1] - vpa_unnorm[ivpa+1])
+
         #println("vmax=$vmax, v-no-interp=", vpa_unnorm[ivpa])
         wmax = (-vmax - upar[1,ir]) / vthe[1,ir]
         #println("wmax=$wmax, w-no-interp", (vpa_unnorm[ivpa] - upar0)/vthe[1,ir])
@@ -742,8 +750,16 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
         integral_excess = upar_integral - upar_end
         fraction_of_pdf = integral_excess / (vpa_unnorm[ivpa] * vpa.wgts[ivpa]) / pdf[ivpa,1,end,ir]
         #println("B fraction_of_pdf=", fraction_of_pdf)
-        vmin = 0.5*(vpa_unnorm[ivpa-1] + vpa_unnorm[ivpa]) +
-               fraction_of_pdf*(vpa_unnorm[ivpa] - vpa_unnorm[ivpa-1])
+
+        # Define so that when fraction_of_pdf=1 (when all of the contribution to the
+        # integral from the point at ivpa is required to make upar_integral>upar_end) the
+        # cut-off velocity is half way between ivpa-1 and ivpa, while when
+        # fraction_of_pdf=0 (none of the contribution to the integral from the point at
+        # ivpa is required to make upar_integral>upar_end) the cut-off is half way between
+        # ivpa and ivpa+1.
+        vmin = 0.5 * (vpa_unnorm[ivpa-1] + vpa_unnorm[ivpa]) +
+               0.5 * fraction_of_pdf*(vpa_unnorm[ivpa+1] - vpa_unnorm[ivpa-1])
+
         #println("vmin=$vmin, v-no-interp=", vpa_unnorm[ivpa])
         wmin = (-vmin - upar[end,ir]) / vthe[end,ir]
         @loop_vpa ivpa begin
