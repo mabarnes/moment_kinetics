@@ -29,7 +29,7 @@ output:
 """
 function calculate_electron_density!(dens_e, updated, dens_i)
     # only update the electron density if it has not already been updated
-    if !updated
+    if !updated[]
         begin_r_z_region()
         # enforce quasineutrality
         @loop_r_z ir iz begin
@@ -40,7 +40,7 @@ function calculate_electron_density!(dens_e, updated, dens_i)
         end
     end
     # set flag indicating that the electron density has been updated
-    updated = true
+    updated[] = true
     return nothing
 end
 
@@ -59,7 +59,7 @@ output:
 """
 function calculate_electron_upar_from_charge_conservation!(upar_e, updated, dens_e, upar_i, dens_i, electron_model, r, z)
     # only calculate the electron parallel flow if it is not already updated
-    if !updated
+    if !updated[]
         begin_r_region()
         # get the number of zed grid points, nz
         nz = size(upar_e,1)
@@ -105,8 +105,8 @@ function calculate_electron_upar_from_charge_conservation!(upar_e, updated, dens
                 upar_e[iz,ir] /= dens_e[iz,ir]
             end
         end
+        updated[] = true
     end
-    updated = true
     return nothing
 end
 
@@ -280,7 +280,7 @@ output:
 function calculate_electron_qpar!(qpar_e, qpar_updated, pdf, ppar_e, upar_e, vth_e, dTe_dz, upar_i, 
                                   nu_ei, me_over_mi, electron_model, vpa)
     # only calculate qpar_e if needs updating
-    if qpar_updated == false
+    if !qpar_updated[]
         if electron_model == braginskii_fluid
             begin_r_z_region()
             # use the classical Braginskii expression for the electron heat flux
@@ -301,7 +301,7 @@ function calculate_electron_qpar!(qpar_e, qpar_updated, pdf, ppar_e, upar_e, vth
         end
     end
     # qpar has been updated
-    qpar_updated = true
+    qpar_updated[] = true
     return nothing
 end
 

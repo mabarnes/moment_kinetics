@@ -300,7 +300,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
     init_boundary_distributions!(boundary_distributions, pdf, vz, vr, vzeta, vpa, vperp,
                                  z, r, composition)
 
-    moments.electron.dens_updated = false
+    moments.electron.dens_updated[] = false
     # initialise the electron density profile
     init_electron_density!(moments.electron.dens, moments.electron.dens_updated, moments.ion.dens)
     # initialise the electron parallel flow profile
@@ -313,13 +313,13 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
         moments.electron.temp[iz,ir] = composition.me_over_mi * moments.electron.vth[iz,ir]^2
     end
     # the electron temperature has now been updated
-    moments.electron.temp_updated = true
+    moments.electron.temp_updated[] = true
     # calculate the electron parallel pressure from the density and temperature
     @loop_r_z ir iz begin
         moments.electron.ppar[iz,ir] = 0.5 * moments.electron.dens[iz,ir] * moments.electron.temp[iz,ir]
     end
     # the electron parallel pressure now been updated
-    moments.electron.ppar_updated = true
+    moments.electron.ppar_updated[] = true
 
     # calculate the zed derivative of the initial electron density
     @views derivative_z!(moments.electron.ddens_dz, moments.electron.dens, 
@@ -503,7 +503,7 @@ function initialize_electron_pdf!(fvec, pdf, moments, phi, z, vpa, vperp, z_spec
             fvec.pdf_electron .= pdf.electron.norm
         end
 
-        moments.electron.qpar_updated = false
+        moments.electron.qpar_updated[] = false
         calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, pdf.electron.norm, 
             moments.electron.ppar, moments.electron.upar, moments.electron.vth, 
             moments.electron.dT_dz, moments.ion.upar, 

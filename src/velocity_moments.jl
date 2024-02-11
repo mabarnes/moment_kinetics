@@ -132,27 +132,27 @@ end
 """
 moments_electron_substruct is a struct that contains moment information for electrons
 """
-mutable struct moments_electron_substruct
+struct moments_electron_substruct
     # this is the particle density
     dens::MPISharedArray{mk_float,2}
     # flag that keeps track of if the density needs updating before use
-    dens_updated::Bool
+    dens_updated::Ref{Bool}
     # this is the parallel flow
     upar::MPISharedArray{mk_float,2}
     # flag that keeps track of whether or not upar needs updating before use
-    upar_updated::Bool
+    upar_updated::Ref{Bool}
     # this is the parallel pressure
     ppar::MPISharedArray{mk_float,2}
     # flag that keeps track of whether or not ppar needs updating before use
-    ppar_updated::Bool
+    ppar_updated::Ref{Bool}
     # this is the temperature
     temp::MPISharedArray{mk_float,2}
     # flag that keeps track of whether or not temp needs updating before use
-    temp_updated::Bool
+    temp_updated::Ref{Bool}
     # this is the parallel heat flux
     qpar::MPISharedArray{mk_float,2}
     # flag that keeps track of whether or not qpar needs updating before use
-    qpar_updated::Bool
+    qpar_updated::Ref{Bool}
     # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
     vth::MPISharedArray{mk_float,2}
     # this is the parallel friction force between ions and electrons
@@ -411,23 +411,23 @@ function create_moments_electron(nz, nr, electron_model, numerical_dissipation)
     # allocate array used for the particle density
     density = allocate_shared_float(nz, nr)
     # initialise Bool variable that indicates if the density is updated for each species
-    density_updated = false
+    density_updated = Ref(false)
     # allocate array used for the parallel flow
     parallel_flow = allocate_shared_float(nz, nr)
     # allocate Bool variable that indicates if the parallel flow is updated for each species
-    parallel_flow_updated = false
+    parallel_flow_updated = Ref(false)
     # allocate array used for the parallel pressure
     parallel_pressure = allocate_shared_float(nz, nr)
     # allocate Bool variable that indicates if the parallel pressure is updated for each species
-    parallel_pressure_updated = false
+    parallel_pressure_updated = Ref(false)
     # allocate array used for the temperature
     temperature = allocate_shared_float(nz, nr)
     # allocate Bool variable that indicates if the temperature is updated for each species
-    temperature_updated = false
+    temperature_updated = Ref(false)
     # allocate array used for the parallel flow
     parallel_heat_flux = allocate_shared_float(nz, nr)
     # allocate Bool variables that indicates if the parallel flow is updated for each species
-    parallel_heat_flux_updated = false
+    parallel_heat_flux_updated = Ref(false)
     # allocate array used for the election-ion parallel friction force
     parallel_friction_force = allocate_shared_float(nz, nr)
     # allocate array used for electron heat source
