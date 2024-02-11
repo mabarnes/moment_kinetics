@@ -38,7 +38,7 @@ using ..electron_fluid_equations: calculate_electron_density!
 using ..electron_fluid_equations: calculate_electron_upar_from_charge_conservation!
 using ..electron_fluid_equations: calculate_electron_qpar!
 using ..electron_fluid_equations: calculate_electron_parallel_friction_force!
-using ..electron_kinetic_equation: update_electron_pdf!, get_electron_critical_velocities
+using ..electron_kinetic_equation: update_electron_pdf!, enforce_boundary_condition_on_electron_pdf!
 using ..input_structs: boltzmann_electron_response_with_simple_sheath, kinetic_electrons
 using ..derivatives: derivative_z!
 
@@ -337,6 +337,10 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
     @views derivative_z!(moments.electron.dppar_dz, moments.electron.ppar, 
         scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1], scratch_dummy.buffer_rs_3[:,1],
         scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
+    # Initialise the array for the electron pd
+    init_electron_pdf_over_density_and_boundary_phi!(
+        pdf.electron.norm, fields.phi, moments.electron.dens, moments.electron.upar,
+        moments.electron.vth, z, vpa, vperp, vpa_spectral, composition.me_over_mi)
     # calculate the electron parallel heat flux;
     # if using kinetic electrons, this relies on the electron pdf, which itself relies on the electron heat flux
     calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, pdf.electron.norm, 
@@ -487,13 +491,6 @@ end
 
 function initialize_electron_pdf!(fvec, pdf, moments, phi, z, vpa, vperp, z_spectral, vpa_spectral, z_advect, vpa_advect,
                                   scratch_dummy, collisions, composition, num_diss_params, dt)
-        @loop_r ir begin
-            # this is the initial guess for the electron pdf
-            # it will be iteratively updated to satisfy the time-independent
-            # electron kinetic equation
-            @views init_electron_pdf_over_density!(pdf.electron.norm[:,:,:,ir], moments.electron.dens[:,ir],
-                moments.electron.upar[:,ir], moments.electron.vth[:,ir], phi[:,ir], z, vpa, vperp, composition.me_over_mi)
-        end
     # now that the initial electron pdf is given, the electron parallel heat flux should be updated
     # if using kinetic electrons
     if composition.electron_physics == kinetic_electrons
@@ -1174,38 +1171,61 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
 end
 
 """
-init_electron_pdf_over_density initialises the normalised electron pdf = pdf_e * vth_e / dens_e;
+init_electron_pdf_over_density_and_boundary_phi initialises the normalised electron pdf = pdf_e *
+vth_e / dens_e and the boundary values of the electrostatic potential phi;
 care is taken to ensure that the parallel boundary condition is satisfied;
 NB: as the electron pdf is obtained via a time-independent equation,
 this 'initital' value for the electron will just be the first guess in an iterative solution
 """
-function init_electron_pdf_over_density!(pdf, density, upar, vth, phi, z, vpa, vperp, me_over_mi)
-    if z.bc == "wall"
-        # get critical velocities beyond which electrons are lost to the wall
-        vpa_crit_zmin, vpa_crit_zmax = get_electron_critical_velocities(phi, vth, me_over_mi, z)
-        println("vpa_crit_zmin = ", vpa_crit_zmin, " vpa_crit_zmax = ", vpa_crit_zmax)
-        # loop over all z values on this rank, initialising a shifted Maxwellian velocity distribution
-        sharp_fac = 10
-        blend_fac = 100
-        @loop_z_vperp iz ivperp begin
-            #@. pdf[:,ivperp,iz] = exp(-30*z.grid[iz]^2)
-            #@. pdf[:,ivperp,iz] = (density[iz] / vth[iz]) *
-            #@. pdf[:,ivperp,iz] = exp(-vpa.grid[:]^2)
-            @. pdf[:,ivperp,iz] = exp(-vpa.grid[:]^2) * (
-                                  (1 - exp(-blend_fac*(z.grid[iz] - z.grid[1])^2) *
-                                  tanh(sharp_fac*(vpa.grid[:]-vpa_crit_zmin))) *
-                                  (1 - exp(-blend_fac*(z.grid[iz] - z.grid[end])^2) *
-                                  tanh(-sharp_fac*(vpa.grid[:]-vpa_crit_zmax)))) #/
-                                  #(1 - exp(-blend_fac*(z.grid[iz] - z.grid[1])^2) * tanh(-sharp_fac*vpa_crit_zmin)) /
-                                  #(1 - exp(-blend_fac*(z.grid[iz] - z.grid[end])^2) * tanh(sharp_fac*vpa_crit_zmax)))
-#                                   exp(-((vpa.grid[:] - upar[iz])^2) / vth[iz]^2)
-                                   #                                      exp(-((vpa.grid - upar[iz])^2 + vperp.grid[ivperp]^2) / vth[iz]^2)
+function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upar, vth, z,
+        vpa, vperp, vpa_spectral, me_over_mi)
 
-            # ensure that the normalised electron pdf integrates to unity
-            norm_factor = integrate_over_vspace(pdf[:,ivperp,iz], vpa.wgts)
-            @. pdf[:,ivperp,iz] /= norm_factor
-            #println("TMP FOR TESTING -- init electron pdf")
-            #@. pdf[:,ivperp,iz] = exp(-2*vpa.grid[:]^2)*exp(-z.grid[iz]^2)
+    if z.bc == "wall"
+        @loop_r ir begin
+            # Initialise an unshifted Maxwellian as a first step
+            @loop_z iz begin
+                vpa_over_vth = @. vpa.scratch3 = vpa.grid + upar[iz,ir] / vth[iz,ir]
+                @loop_vperp ivperp begin
+                    @. pdf[:,ivperp,iz,ir] = exp(-vpa_over_vth^2)
+                end
+            end
+            # Apply the sheath boundary condition to get cut-off boundary distribution
+            # functions and boundary values of phi
+            enforce_boundary_condition_on_electron_pdf!(pdf, phi, vth, upar, vpa, vpa_spectral, me_over_mi)
+            # get critical velocities beyond which electrons are lost to the wall
+            #vpa_crit_zmin, vpa_crit_zmax = get_electron_critical_velocities(phi, vth, me_over_mi, z)
+            #println("vpa_crit_zmin = ", vpa_crit_zmin, " vpa_crit_zmax = ", vpa_crit_zmax)
+            # Blend boundary distribution function into bulk of domain to avoid
+            # discontinuities (as much as possible)
+            blend_fac = 100
+            if z.nrank > 1
+                error("Distributed MPI not supported in this init yet")
+            end
+            @loop_z_vperp iz ivperp begin
+                #@. pdf[:,ivperp,iz] = exp(-30*z.grid[iz]^2)
+                #@. pdf[:,ivperp,iz] = (density[iz] / vth[iz]) *
+                #@. pdf[:,ivperp,iz] = exp(-vpa.grid[:]^2)
+                blend_fac_lower = exp(-blend_fac*(z.grid[iz] + 0.5*z.L)^2)
+                blend_fac_upper = exp(-blend_fac*(z.grid[iz] - 0.5*z.L)^2)
+                @. pdf[:,ivperp,iz,ir] = (1.0 - blend_fac_lower) * (1.0 - blend_fac_upper) * pdf[:,ivperp,iz,ir] +
+                                         blend_fac_lower * pdf[:,ivperp,1,ir] +
+                                         blend_fac_upper * pdf[:,ivperp,end,ir]
+                #@. pdf[:,ivperp,iz,ir] = exp(-vpa.grid^2) * (
+                #                         (1 - exp(-blend_fac*(z.grid[iz] - z.grid[1])^2) *
+                #                          tanh(sharp_fac*(vpa.grid-vpa_crit_zmin))) *
+                #                         (1 - exp(-blend_fac*(z.grid[iz] - z.grid[end])^2) *
+                #                          tanh(-sharp_fac*(vpa.grid-vpa_crit_zmax)))) #/
+                                         #(1 - exp(-blend_fac*(z.grid[iz] - z.grid[1])^2) * tanh(-sharp_fac*vpa_crit_zmin)) /
+                                         #(1 - exp(-blend_fac*(z.grid[iz] - z.grid[end])^2) * tanh(sharp_fac*vpa_crit_zmax)))
+                                         #exp(-((vpa.grid[:] - upar[iz])^2) / vth[iz]^2)
+                                         #exp(-((vpa.grid - upar[iz])^2 + vperp.grid[ivperp]^2) / vth[iz]^2)
+
+                # ensure that the normalised electron pdf integrates to unity
+                norm_factor = integrate_over_vspace(pdf[:,ivperp,iz,ir], vpa.wgts)
+                @. pdf[:,ivperp,iz,ir] /= norm_factor
+                #println("TMP FOR TESTING -- init electron pdf")
+                #@. pdf[:,ivperp,iz] = exp(-2*vpa.grid[:]^2)*exp(-z.grid[iz]^2)
+            end
         end
     else
         println("!!! currently, only the wall BC is supported for kinetic electrons !!!")
