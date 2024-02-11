@@ -353,6 +353,8 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
                 qpar[iz,ir] = vthe[iz,ir]^3 * wpa3_moment[iz,ir]
                 dummy_zr[iz,ir] = -upar[iz,ir]
             end
+            @views derivative_z!(dqpar_dz, qpar, buffer_r_1, buffer_r_2, buffer_r_3,
+                                 buffer_r_4, z_spectral, z)
             # Compute the upwinded z-derivative of the electron parallel pressure for the 
             # electron energy equation
             @views derivative_z!(moments.electron.dppar_dz_upwind, ppar, dummy_zr,
