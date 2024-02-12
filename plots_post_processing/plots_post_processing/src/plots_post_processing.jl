@@ -1029,7 +1029,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
         composition, species, collisions, geometry, drive_input, external_source_settings,
         num_diss_params, manufactured_solns_input = input
 
-    if !is_1D1V
+    if !is_1D1V || true
         # make plots and animations of the phi, Ez and Er
         plot_charged_moments_2D(density, parallel_flow, parallel_pressure, 
                                 perpendicular_pressure, thermal_speed, entropy_production,
@@ -3434,6 +3434,20 @@ function plot_charged_pdf_2D_at_wall(run_name, run_name_label, r_global, z_globa
             # plot f(vpa,ivperp0,iz_wall,ir0,is,itime) at the wall
             @views plot(vpa.grid, pdf[:,ivperp0,ir0,is,itime0], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i")
             outfile = string(run_name_label, "_pdf(vpa,vperp0,iz_"*zlabel*",ir0)"*description*"vs_vpa.pdf")
+            trysavefig(outfile)
+            
+            # plot f(vpa,ivperp0,iz_wall,ir0,is,itime)/vpa^2 at the wall
+            deltavpa = minimum(vpa.grid[2:vpa.n].-vpa.grid[1:vpa.n-1])
+            vpafunc = copy(vpa.grid)
+            for ivpa in 1:vpa.n
+                if abs(vpa.grid[ivpa]) > 0.5*deltavpa
+                    vpafunc[ivpa] = 1.0/(vpa.grid[ivpa]^2)
+                else
+                    vpafunc[ivpa] = 0.0
+                end
+            end
+            @views plot(vpa.grid, vpafunc.*pdf[:,ivperp0,ir0,is,itime0], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i/v_{\|\|}^2")
+            outfile = string(run_name_label, "_pdf(vpa,vperp0,iz_"*zlabel*",ir0)_over_vpa2"*description*"vs_vpa.pdf")
             trysavefig(outfile)
 
             # plot f(vpa,vperp,iz_wall,ir0,is,itime) at the wall
