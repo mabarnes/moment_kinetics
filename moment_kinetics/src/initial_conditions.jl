@@ -1511,8 +1511,13 @@ function enforce_zero_incoming_bc!(pdf, speed, z, zero, phi)
     # note that the parallel velocity coordinate vpa may be dz/dt or
     # some version of the peculiar velocity (dz/dt - upar),
     # so use advection speed below instead of vpa
+    epsz = 1.0 # the ratio |z - z_wall|/|delta z|, with delta z the grid spacing at the wall
+    # for epsz < 1, the cut off below would be imposed for particles travelling
+    # out to a distance z = epsz * delta z from the wall before returning
+    # epsz should really be an input parameter
     if z.irank == 0
-        vcut = sqrt(phi[2]-phi[1]) # sqrt(-1) an option!
+        deltaphi = phi[2] - phi[1]
+        vcut = deltaphi > 0 ? sqrt(deltaphi)*(epsz^0.25) : 0.0
         @loop_vperp_vpa ivperp ivpa begin
             # for left boundary in zed (z = -Lz/2), want
             # f(z=-Lz/2, v_parallel > 0) = 0
@@ -1522,7 +1527,8 @@ function enforce_zero_incoming_bc!(pdf, speed, z, zero, phi)
         end
     end
     if z.irank == z.nrank - 1
-        vcut = sqrt(phi[nz-1]-phi[nz]) # sqrt(-1) an option!
+        deltaphi = phi[nz-1] - phi[nz]
+        vcut = deltaphi > 0 ? sqrt(deltaphi)*(epsz^0.25) : 0.0
         @loop_vperp_vpa ivperp ivpa begin
             # for right boundary in zed (z = Lz/2), want
             # f(z=Lz/2, v_parallel < 0) = 0
