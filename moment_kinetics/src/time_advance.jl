@@ -375,7 +375,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             vpa.bc, z.bc, r.bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral,
             vpa_advect, vperp_advect, z_advect, r_advect,
             composition, scratch_dummy, advance.r_diffusion,
-            advance.vpa_diffusion, advance.vperp_diffusion)
+            advance.vpa_diffusion, advance.vperp_diffusion, boundary_distributions.bc_parameters)
         # Ensure normalised pdf exactly obeys integral constraints if evolving moments
         begin_s_r_z_region()
         @loop_s_r_z is ir iz begin
@@ -1272,7 +1272,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         boundary_distributions.pdf_rboundary_charged, vpa.bc, z.bc, r.bc, vpa, vperp, z,
         r, vpa_spectral, vperp_spectral, 
         vpa_advect, vperp_advect, z_advect, r_advect, composition, scratch_dummy,
-        advance.r_diffusion, advance.vpa_diffusion, advance.vperp_diffusion)
+        advance.r_diffusion, advance.vpa_diffusion, advance.vperp_diffusion, boundary_distributions.bc_parameters)
 
     if moments.evolve_density && moments.enforce_conservation
         begin_s_r_z_region()

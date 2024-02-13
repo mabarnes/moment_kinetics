@@ -6,6 +6,7 @@ export allocate_pdf_and_moments
 export init_pdf_and_moments!
 export enforce_boundary_conditions!
 export enforce_neutral_boundary_conditions!
+export setup_boundary_parameters
 
 # functional testing 
 export create_boundary_distributions
@@ -36,6 +37,20 @@ using ..velocity_moments: update_ppar!, update_upar!, update_density!, update_pp
 using ..manufactured_solns: manufactured_solutions
 
 using MPI
+
+
+Base.@kwdef struct boundary_condition_parameters
+    # parameter controlling the cutoff of the ion distribution function 
+    # in the vpa domain at the wall in z
+    epsz::mk_float = 0.0
+end
+
+function setup_boundary_parameters(input_section::Dict)
+
+    input = Dict(Symbol(k)=>v for (k,v) in input_section)
+
+    return boundary_condition_parameters(; input...)
+end
 
 """
 """
@@ -76,6 +91,7 @@ struct boundary_distributions_struct
     pdf_rboundary_charged::MPISharedArray{mk_float,5}
     # neutral particle r boundary values (vz,vr,vzeta,z,r,s)
     pdf_rboundary_neutral::MPISharedArray{mk_float,6}
+    bc_parameters::boundary_condition_parameters
 end
 
 """
@@ -83,7 +99,7 @@ Creates the structs for the pdf and the velocity-space moments
 """
 function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
                                   evolve_moments, collisions, external_source_settings,
-                                  numerical_dissipation)
+                                  numerical_dissipation, boundary_parameters::boundary_condition_parameters)
     pdf = create_pdf(composition, r, z, vperp, vpa, vzeta, vr, vz)
 
     # create the 'moments' struct that contains various v-space moments and other
@@ -116,7 +132,7 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
                              evolve_moments.parallel_pressure)
 
     boundary_distributions = create_boundary_distributions(vz, vr, vzeta, vpa, vperp, z,
-                                                           composition)
+                                                           composition, boundary_parameters)
 
     return pdf, moments, boundary_distributions
 end
@@ -1105,7 +1121,7 @@ Allocate arrays for distributions to be applied as boundary conditions to the pd
 various boundaries. Also initialise the Knudsen cosine distribution here so it can be used
 when initialising the neutral pdf.
 """
-function create_boundary_distributions(vz, vr, vzeta, vpa, vperp, z, composition)
+function create_boundary_distributions(vz, vr, vzeta, vpa, vperp, z, composition, boundary_parameters::boundary_condition_parameters)
     zero = 1.0e-14
 
     #initialise knudsen distribution for neutral wall bc
@@ -1119,7 +1135,7 @@ function create_boundary_distributions(vz, vr, vzeta, vpa, vperp, z, composition
     pdf_rboundary_neutral =  allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, 2,
                                                    composition.n_neutral_species)
 
-    return boundary_distributions_struct(knudsen_cosine, pdf_rboundary_charged, pdf_rboundary_neutral)
+    return boundary_distributions_struct(knudsen_cosine, pdf_rboundary_charged, pdf_rboundary_neutral, boundary_parameters)
 end
 
 function init_boundary_distributions!(boundary_distributions, pdf, vz, vr, vzeta, vpa, vperp, z, r, composition)
@@ -1135,7 +1151,7 @@ also enforce boundary conditions in z on all separately evolved velocity space m
 """
 function enforce_boundary_conditions!(f, f_r_bc, density, upar, ppar, phi, moments, vpa_bc,
         z_bc, r_bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral, vpa_adv, vperp_adv, z_adv, r_adv, composition, scratch_dummy,
-        r_diffusion, vpa_diffusion, vperp_diffusion)
+        r_diffusion, vpa_diffusion, vperp_diffusion, bc_parameters)
     if vpa.n > 1
         begin_s_r_z_vperp_region()
         @loop_s_r_z_vperp is ir iz ivperp begin
@@ -1156,7 +1172,7 @@ function enforce_boundary_conditions!(f, f_r_bc, density, upar, ppar, phi, momen
         # enforce the z BC on the evolved velocity space moments of the pdf
         @views enforce_z_boundary_condition_moments!(density, moments, z_bc)
         @views enforce_z_boundary_condition!(f, density, upar, ppar, phi, moments, z_bc, z_adv, z,
-                                             vperp, vpa, composition,
+                                             vperp, vpa, composition, bc_parameters,
                                              scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
                                              scratch_dummy.buffer_vpavperprs_3, scratch_dummy.buffer_vpavperprs_4)
                                               
@@ -1171,11 +1187,11 @@ function enforce_boundary_conditions!(f, f_r_bc, density, upar, ppar, phi, momen
 end
 function enforce_boundary_conditions!(fvec_out::scratch_pdf, moments, fields::em_fields_struct, f_r_bc, vpa_bc,
         z_bc, r_bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral, vpa_adv, vperp_adv, z_adv, r_adv, composition, scratch_dummy,
-        r_diffusion, vpa_diffusion, vperp_diffusion)
+        r_diffusion, vpa_diffusion, vperp_diffusion, bc_parameters)
     enforce_boundary_conditions!(fvec_out.pdf, f_r_bc, fvec_out.density, fvec_out.upar,
         fvec_out.ppar, fields.phi, moments, vpa_bc, z_bc, r_bc, vpa, vperp, z, r, 
         vpa_spectral, vperp_spectral, vpa_adv, vperp_adv, z_adv,
-        r_adv, composition, scratch_dummy, r_diffusion, vpa_diffusion, vperp_diffusion)
+        r_adv, composition, scratch_dummy, r_diffusion, vpa_diffusion, vperp_diffusion, bc_parameters)
 end
 
 """
@@ -1232,7 +1248,7 @@ end
 enforce boundary conditions on charged particle f in z
 """
 function enforce_z_boundary_condition!(pdf, density, upar, ppar, phi, moments, bc::String, adv,
-                                       z, vperp, vpa, composition, end1::AbstractArray{mk_float,4},
+                                       z, vperp, vpa, composition, bc_parameters, end1::AbstractArray{mk_float,4},
                                        end2::AbstractArray{mk_float,4}, buffer1::AbstractArray{mk_float,4},
                                        buffer2::AbstractArray{mk_float,4})
     # this block ensures periodic BC can be supported with distributed memory MPI
@@ -1293,7 +1309,8 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, phi, moments, b
             else
                 @loop_r ir begin
                     @views enforce_zero_incoming_bc!(pdf[:,:,:,ir,is],
-                                                     adv[is].speed[:,:,:,ir], z, zero, phi[:,ir])
+                                                     adv[is].speed[:,:,:,ir], z, zero, phi[:,ir],
+                                                     bc_parameters.epsz)
                 end
             end
         end
@@ -1504,17 +1521,17 @@ end
 """
 enforce a zero incoming BC in z for given species pdf at each radial location
 """
-function enforce_zero_incoming_bc!(pdf, speed, z, zero, phi)
+function enforce_zero_incoming_bc!(pdf, speed, z, zero, phi, epsz)
     nvpa = size(pdf,1)
     nz = z.n
     # no parallel BC should be enforced for dz/dt = 0
     # note that the parallel velocity coordinate vpa may be dz/dt or
     # some version of the peculiar velocity (dz/dt - upar),
     # so use advection speed below instead of vpa
-    epsz = 1.0 # the ratio |z - z_wall|/|delta z|, with delta z the grid spacing at the wall
+    
+    # epsz is the ratio |z - z_wall|/|delta z|, with delta z the grid spacing at the wall
     # for epsz < 1, the cut off below would be imposed for particles travelling
     # out to a distance z = epsz * delta z from the wall before returning
-    # epsz should really be an input parameter
     if z.irank == 0
         deltaphi = phi[2] - phi[1]
         vcut = deltaphi > 0 ? sqrt(deltaphi)*(epsz^0.25) : 0.0
