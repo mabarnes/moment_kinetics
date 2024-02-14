@@ -39,6 +39,12 @@ and/or
 pkg> develop ./plots_post_processing/plots_post_processing/
 ```
 
+To use the `run_moment_kinetics.jl` script, you will need to install `MPI`
+into the top-level project
+```julia
+pkg> add MPI
+```
+
 ## Set up MPI
 
 You probably want to use your system's MPI rather than a Julia-provided
@@ -49,6 +55,7 @@ and then use its `use_system_binary()` function.
 ```julia
 pkg> add MPIPreferences
 pkg> <press 'backspace'>
+julia> using MPIPreferences
 julia> MPIPreferences.use_system_binary()
 ```
 Normally this should 'just work'. Sometimes, for example if the MPI library
@@ -74,3 +81,46 @@ source. The system-provided, MPI-linked libhdf5 depended on libcurl, and Julia
 links to an incompatible libcurl, causing an error. When compiled from source
 (enabling MPI!), HDF5 does not require libcurl (guess it is an optional
 dependency), avoiding the problem.
+
+## Enable MMS features
+
+To enable the "method of manufactured solutions" (MMS) features, install the
+`Symbolics` package (for more explanation, see [Optional dependencies](@ref))
+```julia
+pkg> add Symbolics
+```
+
+## Enable NetCDF output
+
+If you want the option to output to NetCDF instead of HDF5, install the
+`NCDatasets` package (for more explanation, see [Optional dependencies](@ref))
+```julia
+pkg> add NCDatasets
+```
+
+## Set up `Plots`-based plotting routines
+
+The `plots_post_processing` package has some functions that have to use `PyPlot`
+directly to access features not available through the `Plots` wrapper. This
+means that Julia has to be able to access an instance of Python which has
+`matplotlib` available. If you are going to use `plots_post_processing` you may
+well want to use the same Python that you use outside Julia (e.g. a
+system-provided Python) - to do so:
+* Check that `matplotlib` is installed, e.g. check that
+  ```python
+  $ python
+  >>> import matplotlib
+  ```
+  completes without an error. If not, install matplotlib, for example with a
+  command like
+  ```shell
+  pip install --user matplotlib
+  ```
+* Set up Julia to use your chosen Python
+  ```julia
+  $ which python
+  /your/python/location
+  $ julia -O3 --project
+  julia> ENV["PYTHON"]="/your/python/location"
+  julia> using Pkg; Pkg.build("PyCall")
+  ```
