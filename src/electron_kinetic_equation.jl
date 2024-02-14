@@ -385,6 +385,15 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
             if num_diss_params.moment_dissipation_coefficient > 0.0
                 @views derivative_z!(moments.electron.d2ppar_dz2, dppar_dz, buffer_r_1,
                                  buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+                begin_serial_region()
+                @serial_region begin
+                    if z.irank == 0
+                        moments.electron.d2ppar_dz2[1,:] .= 0.0
+                    end
+                    if z.irank == z.nrank - 1
+                        moments.electron.d2ppar_dz2[end,:] .= 0.0
+                    end
+                end
             end
 
             #dt_energy = dt_electron
