@@ -165,6 +165,10 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
     n_ppar_subcycles = 1
     time = 0.0
 
+    #z_speedup_fac = 20.0
+    #z_speedup_fac = 5.0
+    z_speedup_fac = 1.0
+
     # define residual to point to a dummy array;
     # to be filled with the contributions to the electron kinetic equation; i.e., d(pdf)/dt = -residual
     residual = scratch_dummy.buffer_vpavperpzr_6
@@ -189,7 +193,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         zval = z.grid[iz]
         znorm = 2.0*zval/Lz
         residual[ivpa,ivperp,iz,ir] *=
-            (1.0 + 20.0*(1.0 - znorm^2)) /
+            (1.0 + z_speedup_fac*(1.0 - znorm^2)) /
             sqrt(1.0 + vpa.grid[ivpa]^2)
     end
     if n_blocks[] == 1
@@ -371,6 +375,16 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
 
             #dt_energy = dt_electron
             electron_energy_equation!(ppar, dens, fvec, moments, collisions, dt_energy, composition, num_diss_params, z)
+
+            # Apply same 'speed up' hack to ppar that we do to the distribution function,
+            # but without the wpa dependence.
+            @loop_r_z ir iz begin
+                zval = z.grid[iz]
+                znorm = 2.0*zval/Lz
+                ppar[iz,ir] = fvec.electron_ppar[iz,ir] +
+                              (ppar[iz,ir] - fvec.electron_ppar[iz,ir]) *
+                              (1.0 + z_speedup_fac*(1.0 - znorm^2))
+            end
             begin_r_z_region()
             @loop_r_z ir iz begin
                 fvec.electron_ppar[iz,ir] = ppar[iz,ir]
@@ -420,7 +434,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
             zval = z.grid[iz]
             znorm = 2.0*zval/Lz
             residual[ivpa,ivperp,iz,ir] *=
-                (1.0 + 20.0*(1.0 - znorm^2)) /
+                (1.0 + z_speedup_fac*(1.0 - znorm^2)) /
                 sqrt(1.0 + vpa.grid[ivpa]^2)
         end
         if electron_pdf_converged || any(isnan.(ppar)) || any(isnan.(pdf))
