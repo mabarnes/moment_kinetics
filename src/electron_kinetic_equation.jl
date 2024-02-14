@@ -324,7 +324,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         if (mod(iteration,100) == 0)
             begin_serial_region()
             @serial_region begin
-                println("time: ", time, " dt_electron: ", dt_electron, " phi_boundary: ", phi[1,[1,end]], " average_residual: ", average_residual)
+                println("iteration: ", iteration, " time: ", time, " dt_electron: ", dt_electron, " phi_boundary: ", phi[[1,end],1], " average_residual: ", average_residual)
             end
         end
         if (mod(iteration,output_interval) == 0)
@@ -345,6 +345,17 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
                 result_vth[:,iteration÷output_interval+1] .= vthe[:,1]
                 result_qpar[:,iteration÷output_interval+1] .= qpar[:,1]
                 result_phi[:,iteration÷output_interval+1] .= phi[:,1]
+            end
+        else
+            begin_serial_region()
+            @serial_region begin
+                if iteration÷output_interval+1+iteration%output_interval < size(result_pdf, 3)
+                    result_pdf[:,:,iteration÷output_interval+1+iteration%output_interval] .= pdf[:,1,:,1]
+                    result_ppar[:,iteration÷output_interval+1+iteration%output_interval] .= ppar[:,1]
+                    result_vth[:,iteration÷output_interval+1+iteration%output_interval] .= vthe[:,1]
+                    result_qpar[:,iteration÷output_interval+1+iteration%output_interval] .= qpar[:,1]
+                    result_phi[:,iteration÷output_interval+1+iteration%output_interval] .= phi[:,1]
+                end
             end
         end
 
@@ -463,6 +474,13 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         close(io_vth)
         close(io_pdf)
         close(io_pdf_stages)
+
+        result_pdf = result_pdf[:,:,1:min(iteration÷output_interval+output_interval,max_electron_pdf_iterations÷output_interval)]
+        result_ppar = result_ppar[:,1:min(iteration÷output_interval+output_interval,max_electron_pdf_iterations÷output_interval)]
+        result_vth = result_vth[:,1:min(iteration÷output_interval+output_interval,max_electron_pdf_iterations÷output_interval)]
+        result_qpar = result_qpar[:,1:min(iteration÷output_interval+output_interval,max_electron_pdf_iterations÷output_interval)]
+        result_phi = result_phi[:,1:min(iteration÷output_interval+output_interval,max_electron_pdf_iterations÷output_interval)]
+        result_residual = result_residual[:,:,1:min(iteration÷output_interval+output_interval,max_electron_pdf_iterations÷output_interval)]
     end
     return result_pdf, dens, upar, result_ppar, result_vth, result_qpar, result_phi, z, vpa, result_residual
 end
