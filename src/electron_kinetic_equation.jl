@@ -153,10 +153,13 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
                          buffer_r_4, z_spectral, z)
 
     #dt_electron = dt * sqrt(composition.me_over_mi)
-    dt_max = 3.0e-8 #1.0
-    #dt_max = 2.5e-9 #1.0
-    #dt_energy = 0.001
-    dt_energy = 1.0e-7
+    #dt_max = 3.0e-8
+    dt_max = 1.0e-8
+    #dt_max = 2.5e-9
+
+    #dt_energy = 1.0e-7
+    dt_energy = 1.0e-8
+    #dt_energy = 2.5e-9
     #n_ppar_subcycles = 1000
     #n_ppar_subcycles = 200
     n_ppar_subcycles = 1
