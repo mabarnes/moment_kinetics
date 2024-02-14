@@ -257,6 +257,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         result_residual = zeros(vpa.n, z.n, max_electron_pdf_iterations ÷ output_interval)
     end
     # evolve (artificially) in time until the residual is less than the tolerance
+    try
     while !electron_pdf_converged && (iteration < max_electron_pdf_iterations)
         begin_r_z_region()
         # d(pdf)/dt = -kinetic_eqn_terms, so pdf_new = pdf - dt * kinetic_eqn_terms
@@ -454,6 +455,9 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
             break
         end
         iteration += 1
+    end
+    catch e
+        println("Error: $e")
     end
     begin_serial_region()
     @serial_region begin
