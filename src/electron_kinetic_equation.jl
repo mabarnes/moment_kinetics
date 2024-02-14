@@ -264,12 +264,14 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
             pdf[ivpa,ivperp,iz,ir] -= dt_electron * residual[ivpa,ivperp,iz,ir]
         end
 
+        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+            pdf[ivpa,ivperp,iz,ir] = max(pdf[ivpa,ivperp,iz,ir], 0.0)
+        end
+
         # enforce the boundary condition(s) on the electron pdf
         enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, vpa_spectral, composition.me_over_mi)
         #println("A pdf 1 ", pdf[:,1,1,1])
         #println("A pdf end ", pdf[:,1,end,1])
-
-        #pdf = max.(pdf, 0.0)
 
         begin_r_z_region()
         @loop_r_z ir iz begin
