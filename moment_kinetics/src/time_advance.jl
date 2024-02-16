@@ -12,7 +12,7 @@ using ..array_allocation: allocate_float, allocate_shared_float, allocate_shared
 using ..communication
 using ..communication: _block_synchronize
 using ..debugging
-using ..file_io: write_data_to_ascii, write_moments_data_to_binary, write_dfns_data_to_binary, debug_dump
+using ..file_io: write_data_to_ascii, write_all_moments_data_to_binary, write_all_dfns_data_to_binary, debug_dump
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf
 using ..velocity_moments: update_moments!, update_moments_neutral!, reset_moments_status!
@@ -1065,9 +1065,10 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
             write_data_to_ascii(moments, fields, vpa, vperp, z, r, t,
                                 composition.n_ion_species, composition.n_neutral_species,
                                 ascii_io)
-            write_moments_data_to_binary(moments, fields, t, composition.n_ion_species,
-                                         composition.n_neutral_species, io_moments,
-                                         iwrite_moments, time_for_run, t_params, r, z)
+            write_all_moments_data_to_binary(moments, fields, t,
+                                             composition.n_ion_species,
+                                             composition.n_neutral_species, io_moments,
+                                             iwrite_moments, time_for_run, t_params, r, z)
 
             if t_params.steady_state_residual
                 # Calculate some residuals to see how close simulation is to steady state
@@ -1147,11 +1148,11 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
                     flush(stdout)
                 end
             end
-            write_dfns_data_to_binary(pdf.ion.norm, pdf.neutral.norm, moments, fields,
-                                      t, composition.n_ion_species,
-                                      composition.n_neutral_species, io_dfns, iwrite_dfns,
-                                      time_for_run, t_params, r, z, vperp, vpa, vzeta, vr,
-                                      vz)
+            write_all_dfns_data_to_binary(pdf, moments, fields, t,
+                                          composition.n_ion_species,
+                                          composition.n_neutral_species, io_dfns,
+                                          iwrite_dfns, time_for_run, t_params, r, z,
+                                          vperp, vpa, vzeta, vr, vz)
             iwrite_dfns += 1
             begin_s_r_z_vperp_region()
             @debug_detect_redundant_block_synchronize begin

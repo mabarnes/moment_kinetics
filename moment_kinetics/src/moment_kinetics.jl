@@ -77,7 +77,7 @@ using Primes
 
 using .file_io: setup_file_io, finish_file_io
 using .file_io: write_data_to_ascii
-using .file_io: write_moments_data_to_binary, write_dfns_data_to_binary
+using .file_io: write_all_moments_data_to_binary, write_all_dfns_data_to_binary
 using .command_line_options: get_options
 using .communication
 using .communication: _block_synchronize
@@ -425,11 +425,12 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         composition.n_ion_species, composition.n_neutral_species, ascii_io)
     # write initial data to binary files
 
-    write_moments_data_to_binary(moments, fields, code_time, composition.n_ion_species,
-        composition.n_neutral_species, io_moments, 1, 0.0, t_params, r, z)
-    write_dfns_data_to_binary(pdf.ion.norm, pdf.neutral.norm, moments, fields,
-         code_time, composition.n_ion_species, composition.n_neutral_species, io_dfns, 1,
-         0.0, t_params, r, z, vperp, vpa, vzeta, vr, vz)
+    write_all_moments_data_to_binary(moments, fields, code_time,
+        composition.n_ion_species, composition.n_neutral_species, io_moments, 1, 0.0, t_params, r,
+        z)
+    write_all_dfns_data_to_binary(pdf.ion.norm, pdf.neutral.norm, moments, fields,
+        code_time, composition.n_ion_species, composition.n_neutral_species, io_dfns, 1,
+        0.0, t_params, r, z, vperp, vpa, vzeta, vr, vz)
 
     begin_s_r_z_vperp_region()
 
