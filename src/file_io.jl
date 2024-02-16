@@ -117,11 +117,13 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower,
 structure containing the data/metadata needed for binary file i/o
 distribution function data only
 """
-struct io_dfns_info{Tfile, Tfi, Tfn, Tmoments}
+struct io_dfns_info{Tfile, Tfi, Tfe, Tfn, Tmoments}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the ion species distribution function variable
     f::Tfi
+    # handle for the electron distribution function variable
+    f_electron::Tfe
     # handle for the neutral species distribution function variable
     f_neutral::Tfn
 
@@ -980,14 +982,13 @@ end
 define dynamic (time-evolving) distribution function variables for writing to the output
 file
 """
-function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz,
-                                       n_ion_species, n_neutral_species, parallel_io,
-                                       external_source_settings, evolve_density,
-                                       evolve_upar, evolve_ppar)
+function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz, composition,
+                                       parallel_io, external_source_settings,
+                                       evolve_density, evolve_upar, evolve_ppar)
 
     @serial_region begin
-        io_moments = define_dynamic_moment_variables!(fid, n_ion_species,
-                                                      n_neutral_species, r, z,
+        io_moments = define_dynamic_moment_variables!(fid, composition.n_ion_species,
+                                                      composition.n_neutral_species, r, z,
                                                       parallel_io,
                                                       external_source_settings,
                                                       evolve_density, evolve_upar,
@@ -997,17 +998,27 @@ function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz,
 
         # io_f is the handle for the ion pdf
         io_f = create_dynamic_variable!(dynamic, "f", mk_float, vpa, vperp, z, r;
-                                        n_ion_species=n_ion_species,
+                                        n_ion_species=composition.n_ion_species,
                                         parallel_io=parallel_io,
                                         description="ion species distribution function")
 
+        if composition.electron_physics == kinetic_electrons
+            # io_f_electron is the handle for the electron pdf
+            io_f_electron = create_dynamic_variable!(dynamic, "f_electron", mk_float, vpa,
+                                                     vperp, z, r;
+                                                     parallel_io=parallel_io,
+                                                     description="electron distribution function")
+        else
+            io_f_electron = nothing
+        end
+
         # io_f_neutral is the handle for the neutral pdf
         io_f_neutral = create_dynamic_variable!(dynamic, "f_neutral", mk_float, vz, vr, vzeta, z, r;
-                                                n_neutral_species=n_neutral_species,
+                                                n_neutral_species=composition.n_neutral_species,
                                                 parallel_io=parallel_io,
                                                 description="neutral species distribution function")
 
-        return io_dfns_info(fid, io_f, io_f_neutral, parallel_io, io_moments)
+        return io_dfns_info(fid, io_f, io_f_electron, io_f_neutral, parallel_io, io_moments)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -1179,9 +1190,8 @@ function setup_dfns_io(prefix, binary_format, boundary_distributions, r, z, vper
         ### create variables for time-dependent quantities and store them ###
         ### in a struct for later access ###
         io_dfns = define_dynamic_dfn_variables!(
-            fid, r, z, vperp, vpa, vzeta, vr, vz, composition.n_ion_species,
-            composition.n_neutral_species, parallel_io, external_source_settings,
-            evolve_density, evolve_upar, evolve_ppar)
+            fid, r, z, vperp, vpa, vzeta, vr, vz, composition, parallel_io,
+            external_source_settings, evolve_density, evolve_upar, evolve_ppar)
 
         close(fid)
 
@@ -1232,8 +1242,8 @@ function reopen_dfns_io(file_info)
                                      getvar("time_for_run"),
                                      parallel_io)
 
-        return io_dfns_info(fid, getvar("f"), getvar("f_neutral"), parallel_io,
-                            io_moments)
+        return io_dfns_info(fid, getvar("f"), getvar("f_electron"), getvar("f_neutral"),
+                            parallel_io, io_moments)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -1523,7 +1533,7 @@ function write_neutral_moments_data_to_binary(moments, n_neutral_species,
 end
 
 """
-write time-dependent distribution function data for ions and neutrals to the
+write time-dependent distribution function data for ions, electrons and neutrals to the
 binary output file
 """
 function write_all_dfns_data_to_binary(pdf, moments, fields, t, n_ion_species,
@@ -1549,6 +1559,8 @@ function write_all_dfns_data_to_binary(pdf, moments, fields, t, n_ion_species,
         # add the distribution function data at this time slice to the output file
         write_ion_dfns_data_to_binary(pdf.ion.norm, n_ion_species, io_or_file_info_dfns,
                                       t_idx, r, z, vperp, vpa)
+        write_electron_dfns_data_to_binary(pdf.electron.norm, io_or_file_info_dfns, t_idx,
+                                           r, z, vperp, vpa)
         write_neutral_dfns_data_to_binary(pdf.neutral.norm, n_neutral_species,
                                           io_or_file_info_dfns, t_idx, r, z, vzeta, vr,
                                           vz)
@@ -1578,6 +1590,34 @@ function write_ion_dfns_data_to_binary(ff, n_ion_species, io_or_file_info_dfns, 
 
         append_to_dynamic_var(io_dfns.f, ff, t_idx, parallel_io, vpa, vperp, z, r,
                               n_ion_species)
+
+        closefile && close(io_dfns.fid)
+    end
+    return nothing
+end
+
+"""
+write time-dependent distribution function data for electrons to the binary output file
+"""
+function write_electron_dfns_data_to_binary(ff_electron, io_or_file_info_dfns, t_idx, r,
+                                            z, vperp, vpa)
+    @serial_region begin
+        # Only read/write from first process in each 'block'
+
+        if isa(io_or_file_info_dfns, io_dfns_info)
+            io_dfns = io_or_file_info_dfns
+            closefile = false
+        else
+            io_dfns = reopen_dfns_io(io_or_file_info_dfns)
+            closefile = true
+        end
+
+        parallel_io = io_dfns.parallel_io
+
+        if io_dfns.f_electron !== nothing
+            append_to_dynamic_var(io_dfns.f_electron, ff_electron, t_idx, parallel_io,
+                                  vpa, vperp, z, r)
+        end
 
         closefile && close(io_dfns.fid)
     end
