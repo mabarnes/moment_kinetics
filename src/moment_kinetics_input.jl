@@ -21,6 +21,7 @@ using ..reference_parameters
 
 using MPI
 using TOML
+using UUIDs
 
 """
 Read input from a TOML file
@@ -522,6 +523,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     io_settings["binary_format"] = get(io_settings, "binary_format", hdf5)
     io_settings["parallel_io"] = get(io_settings, "parallel_io",
                                      io_has_parallel(Val(io_settings["binary_format"])))
+    io_settings["run_id"] = string(uuid4())
     io_immutable = io_input(; output_dir=output_dir, run_name=run_name,
                               Dict(Symbol(k)=>v for (k,v) in io_settings)...)
 

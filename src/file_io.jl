@@ -20,7 +20,6 @@ using ..type_definitions: mk_float, mk_int
 using LibGit2
 using MPI
 using Pkg
-using UUIDs
 using TOML
 
 @debug_shared_array using ..communication: DebugMPISharedArray
@@ -170,7 +169,7 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
             ascii = ascii_ios(nothing, nothing, nothing, nothing, nothing)
         end
 
-        run_id = string(uuid4())
+        run_id = io_input.run_id
 
         io_moments = setup_moments_io(out_prefix, io_input.binary_format, r, z,
                                       composition, collisions, evolve_density,
