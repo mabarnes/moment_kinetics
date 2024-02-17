@@ -19,7 +19,6 @@ using ..type_definitions: mk_float, mk_int
 using LibGit2
 using MPI
 using Pkg
-using UUIDs
 using TOML
 
 @debug_shared_array using ..communication: DebugMPISharedArray
@@ -206,7 +205,7 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
             ascii = ascii_ios(nothing, nothing, nothing)
         end
 
-        run_id = string(uuid4())
+        run_id = io_input.run_id
 
         io_moments = setup_moments_io(out_prefix, io_input.binary_format, vz, vr, vzeta,
                                       vpa, vperp, r, z, composition, collisions,
@@ -305,14 +304,6 @@ Write provenance tracking information, to allow runs to be reproduced.
 """
 function write_provenance_tracking_info!(fid, parallel_io, run_id, restart_time_index,
                                          input_dict, previous_runs_info)
-
-    if !parallel_io
-        # Communicate run_id to all blocks
-        # Need to convert run_id to a Vector{Char} for MPI
-        run_id_chars = [run_id...]
-        MPI.Bcast!(run_id_chars, 0, comm_inter_block[])
-        run_id = string(run_id_chars...)
-    end
 
     @serial_region begin
         provenance_tracking = create_io_group(fid, "provenance_tracking")

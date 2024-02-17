@@ -25,6 +25,7 @@ using ..geo: init_magnetic_geometry, setup_geometry_input
 using MPI
 using Quadmath
 using TOML
+using UUIDs
 
 """
 Read input from a TOML file
@@ -587,6 +588,15 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     io_settings["binary_format"] = get(io_settings, "binary_format", hdf5)
     io_settings["parallel_io"] = get(io_settings, "parallel_io",
                                      io_has_parallel(Val(io_settings["binary_format"])))
+    run_id = string(uuid4())
+    if !ignore_MPI
+        # Communicate run_id to all blocks
+        # Need to convert run_id to a Vector{Char} for MPI
+        run_id_chars = [run_id...]
+        MPI.Bcast!(run_id_chars, 0, comm_world)
+        run_id = string(run_id_chars...)
+    end
+    io_settings["run_id"] = run_id
     io_immutable = io_input(; output_dir=output_dir, run_name=run_name,
                               Dict(Symbol(k)=>v for (k,v) in io_settings)...)
 
