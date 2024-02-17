@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-#SBATCH --ntasks=1
+#SBATCH --ntasks=48
 #SBATCH --time=1:00:00
 #SBATCH --account=ACCOUNT
 #SBATCH --partition=skl_fua_dbg
@@ -17,4 +17,4 @@ echo "precompiling $(date)"
 
 bin/julia --project -O3 --check-bounds=no precompile-no-run.jl
 
-echo "finished!"
+echo "finished! $(date)"

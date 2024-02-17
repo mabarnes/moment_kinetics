@@ -97,6 +97,10 @@ if __name__ == "__main__":
             else:
                 version = [x for x in version if "musl" not in x["triplet"]]
 
+        if args.os == "mac":
+            # Not sure what to do with .dmg version, so pick .tar.gz version
+            version = [x for x in version if x["extension"] == "tar.gz"]
+
         if len(version) > 1:
             raise ValueError(
                 f"Expected a single possibility for os={args.os} and arch={args.arch} with musl={args.musl}. Got {len(version)}."

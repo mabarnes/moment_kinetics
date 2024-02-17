@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -e
 
@@ -11,7 +11,7 @@ ARTIFACT_DIR=$PWD
 BUILDHDF5=0
 if [ -d hdf5-build ]; then
   echo "HDF5 appears to have been downloaded, compiled and installed already."
-  echo "Do you want to download, compile and install again, overwriting the exsiting "
+  echo "Do you want to download, compile and install again, overwriting the existing "
   echo "version? y/[n]"
   read -p "> " input
   while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
@@ -21,13 +21,18 @@ if [ -d hdf5-build ]; then
   done
   if [[ -z $input || $input == "n" ]]; then
     BUILDHDF5=1
+  else
+    # Remove the install directory if it exists already
+    if [[ -d hdf5-build ]]; then
+      rm -r hdf5-build
+    fi
   fi
 fi
 
 if [ $BUILDHDF5 -eq 0 ]; then
-  HDF5=hdf5-1.14.1-2
+  HDF5=hdf5-1.14.3
   # Download and extract the source
-  wget -O ${HDF5}.tar.bz2 https://www.hdfgroup.org/package/hdf5-1-14-1-2-tar-bz2/?wpdmdl=17997
+  wget -O ${HDF5}.tar.bz2 https://www.hdfgroup.org/package/hdf5-1-14-3-tar-bz2/?wpdmdl=18469
   tar xjf ${HDF5}.tar.bz2
 
   cd $HDF5

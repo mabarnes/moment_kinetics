@@ -1,0 +1,19 @@
+# HDF5 settings
+###############
+
+#hdf5_library_setting = "system"  # Always use system HDF5
+#hdf5_library_setting = "download"  # Always download HDF5
+hdf5_library_setting = "prompt"  # Prompt for whether to download HDF5 when running machines/machine_setup.sh
+
+
+# MPI settings
+##############
+
+# You might need to set this if MPIPreferences.use_system_binary() cannot
+# automatically find the MPI library
+#mpi_library_names = "libmpi_something_00"
+
+# You might need to set this if `mpiexec` is not what should be used to run MPI
+# programs (although this setting is probably actually not used, and only the
+# commands in the jobscript templates are important).
+#mpiexec = "srun"

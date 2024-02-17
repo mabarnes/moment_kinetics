@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 ARTIFACT_DIR=machines/artifacts/
 

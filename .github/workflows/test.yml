@@ -14,17 +14,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
       - uses: julia-actions/setup-julia@v1
         with:
-          version: '1.8'
+          version: '1.10'
           arch: x64
       - uses: julia-actions/julia-buildpkg@v1
-        env:
-          # Use the system Python for PyCall - avoids library linking error on macOS
-          PYTHON: "${{ env.pythonLocation }}/bin/python"
+        with:
+          project: 'moment_kinetics/'
+      # The following is copied and simplified from
+      # https://github.com/julia-actions/julia-runtest/blob/master/action.yml
+      # in order to pass customised arguments to `Pkg.test()`
       - run: |
-          pip3 install --user matplotlib
-      - uses: julia-actions/julia-runtest@v1
+          julia --check-bounds=yes --color=yes --depwarn=yes --project=moment_kinetics/ -e 'import Pkg; Pkg.test(; test_args=["--force-optional-dependencies"])'
+        shell: bash
