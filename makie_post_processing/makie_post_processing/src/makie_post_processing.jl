@@ -721,9 +721,11 @@ end
 
 """
     get_run_info(run_dir...; itime_min=1, itime_max=0,
-                 itime_skip=1, dfns=false, do_setup=true, setup_input_file=nothing)
+                 itime_skip=1, dfns=false, initial_electron=false, do_setup=true,
+                 setup_input_file=nothing)
     get_run_info((run_dir, restart_index)...; itime_min=1, itime_max=0,
-                 itime_skip=1, dfns=false, do_setup=true, setup_input_file=nothing)
+                 itime_skip=1, dfns=false, initial_electron=false, do_setup=true,
+                 setup_input_file=nothing)
 
 Get file handles and other info for a single run
 
@@ -741,7 +743,8 @@ argument can be a String `run_dir` giving a directory to read output from or a T
 mix Strings and Tuples in a call).
 
 By default load data from moments files, pass `dfns=true` to load from distribution
-functions files.
+functions files, or `initial_electron=true` and `dfns=true` to load from initial electron
+state files.
 
 The `itime_min`, `itime_max` and `itime_skip` options can be used to select only a slice
 of time points when loading data. In `makie_post_process` these options are read from the

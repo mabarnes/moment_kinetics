@@ -30,15 +30,21 @@ const em_variables = ("phi", "Er", "Ez")
 const ion_moment_variables = ("density", "parallel_flow", "parallel_pressure",
                               "thermal_speed", "temperature", "parallel_heat_flux",
                               "collision_frequency", "sound_speed", "mach_number")
+const electron_moment_variables = ("electron_density", "electron_parallel_flow",
+                                   "electron_parallel_pressure", "electron_thermal_speed",
+                                   "electron_temperature", "electron_parallel_heat_flux")
 const neutral_moment_variables = ("density_neutral", "uz_neutral", "pz_neutral",
                                   "thermal_speed_neutral", "temperature_neutral",
                                   "qz_neutral")
 const all_moment_variables = tuple(em_variables..., ion_moment_variables...,
+                                   electron_moment_variables...,
                                    neutral_moment_variables...)
 
 const ion_dfn_variables = ("f",)
+const electron_dfn_variables = ("f_electron",)
 const neutral_dfn_variables = ("f_neutral",)
-const all_dfn_variables = tuple(ion_dfn_variables..., neutral_dfn_variables...)
+const all_dfn_variables = tuple(ion_dfn_variables..., electron_dfn_variables...,
+                                neutral_dfn_variables...)
 
 const ion_variables = tuple(ion_moment_variables..., ion_dfn_variables)
 const neutral_variables = tuple(neutral_moment_variables..., neutral_dfn_variables)
@@ -2046,6 +2052,202 @@ function load_distributed_ion_pdf_slice(run_names::Tuple, nblocks::Tuple, t_rang
 end
 
 """
+Read a slice of an electron distribution function
+
+run_names is a tuple. If it has more than one entry, this means that there are multiple
+restarts (which are sequential in time), so concatenate the data from each entry together.
+
+The slice to take is specified by the keyword arguments.
+"""
+function load_distributed_electron_pdf_slice(run_names::Tuple, nblocks::Tuple, t_range,
+                                             n_species::mk_int, r::coordinate,
+                                             z::coordinate, vperp::coordinate,
+                                             vpa::coordinate; ir=nothing, iz=nothing,
+                                             ivperp=nothing, ivpa=nothing)
+    # dimension of pdf is [vpa,vperp,z,r,t]
+
+    result_dims = mk_int[]
+    if ivpa === nothing
+        ivpa = 1:vpa.n_global
+        push!(result_dims, vpa.n_global)
+    elseif !isa(ivpa, mk_int)
+        push!(result_dims, length(ivpa))
+    end
+    if ivperp === nothing
+        ivperp = 1:vperp.n_global
+        push!(result_dims, vperp.n_global)
+    elseif !isa(ivperp, mk_int)
+        push!(result_dims, length(ivperp))
+    end
+    if iz === nothing
+        iz = 1:z.n_global
+        push!(result_dims, z.n_global)
+    elseif isa(iz, mk_int)
+        push!(result_dims, 1)
+    else
+        push!(result_dims, length(iz))
+    end
+    if ir === nothing
+        ir = 1:r.n_global
+        push!(result_dims, r.n_global)
+    elseif isa(ir, mk_int)
+        push!(result_dims, 1)
+    else
+        push!(result_dims, length(ir))
+    end
+    push!(result_dims, length(t_range))
+
+    f_global = allocate_float(result_dims...)
+
+    local_tind_start = 1
+    local_tind_end = -1
+    global_tind_start = 1
+    global_tind_end = -1
+    for (run_name, nb) in zip(run_names, nblocks)
+        for iblock in 0:nb-1
+            fid = open_readonly_output_file(run_name, "dfns", iblock=iblock, printout=false)
+
+            z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid)
+
+            # max index set to avoid double assignment of repeated points
+            # nr/nz if irank = nrank-1, (nr-1)/(nz-1) otherwise
+            imax_r = (r_irank == r.nrank - 1 ? r.n : r.n - 1)
+            imax_z = (z_irank == z.nrank - 1 ? z.n : z.n - 1)
+            local_r_range = 1:imax_r
+            local_z_range = 1:imax_z
+            global_r_range = iglobal_func(1, r_irank, r.n):iglobal_func(imax_r, r_irank, r.n)
+            global_z_range = iglobal_func(1, z_irank, z.n):iglobal_func(imax_z, z_irank, z.n)
+
+            if ir !== nothing && !any(i ∈ global_r_range for i in ir)
+                # No data for the slice on this rank
+                continue
+            elseif isa(ir, StepRange)
+                # Note that `findfirst(test, array)` returns the index `i` of the first
+                # element of `array` for which `test(array[i])` is `true`.
+                # `findlast()` similarly finds the index of the last element...
+                start_ind = findfirst(i -> i>=ir.start, global_r_range)
+                start = global_r_range[start_ind]
+                stop_ind = findlast(i -> i<=ir.stop, global_r_range)
+                stop = global_r_range[stop_ind]
+                local_r_range = (local_r_range.start + start - global_r_range.start):ir.step:(local_r_range.stop + stop - global_r_range.stop)
+                global_r_range = findfirst(i->i ∈ global_r_range, ir):findlast(i->i ∈ global_r_range, ir)
+            elseif isa(ir, UnitRange)
+                start_ind = findfirst(i -> i>=ir.start, global_r_range)
+                start = global_r_range[start_ind]
+                stop_ind = findlast(i -> i<=ir.stop, global_r_range)
+                stop = global_r_range[stop_ind]
+                local_r_range = (local_r_range.start + start - global_r_range.start):(local_r_range.stop + stop - global_r_range.stop)
+                global_r_range = findfirst(i->i ∈ global_r_range, ir):findlast(i->i ∈ global_r_range, ir)
+            elseif isa(ir, mk_int)
+                local_r_range = ir - (global_r_range.start - 1)
+                global_r_range = ir
+            end
+            if iz !== nothing && !any(i ∈ global_z_range for i in iz)
+                # No data for the slice on this rank
+                continue
+            elseif isa(iz, StepRange)
+                # Note that `findfirst(test, array)` returns the index `i` of the first
+                # element of `array` for which `test(array[i])` is `true`.
+                # `findlast()` similarly finds the index of the last element...
+                start_ind = findfirst(i -> i>=iz.start, global_z_range)
+                start = global_z_range[start_ind]
+                stop_ind = findlast(i -> i<=iz.stop, global_z_range)
+                stop = global_z_range[stop_ind]
+                local_z_range = (local_z_range.start + start - global_z_range.start):iz.step:(local_z_range.stop + stop - global_z_range.stop)
+                global_z_range = findfirst(i->i ∈ global_z_range, iz):findlast(i->i ∈ global_z_range, iz)
+            elseif isa(iz, UnitRange)
+                start_ind = findfirst(i -> i>=iz.start, global_z_range)
+                start = global_z_range[start_ind]
+                stop_ind = findlast(i -> i<=iz.stop, global_z_range)
+                stop = global_z_range[stop_ind]
+                local_z_range = (local_z_range.start + start - global_z_range.start):(local_z_range.stop + stop - global_z_range.stop)
+                global_z_range = findfirst(i->i ∈ global_z_range, iz):findlast(i->i ∈ global_z_range, iz)
+            elseif isa(iz, mk_int)
+                local_z_range = iz - (global_z_range.start - 1)
+                global_z_range = iz
+            end
+
+            f_local_slice = load_pdf_data(fid)
+
+            if local_tind_start > 1
+                # The run being loaded is a restart (as local_tind_start=1 for the first
+                # run), so skip the first point, as this is a duplicate of the last point
+                # of the previous restart
+                skip_first = 1
+            else
+                skip_first = 0
+            end
+            ntime_local = size(f_local_slice, ndims(f_local_slice)) - skip_first
+            local_tind_end = local_tind_start + ntime_local - 1
+            local_t_range = collect(it - local_tind_start + 1 + skip_first
+                                    for it ∈ t_range
+                                    if local_tind_start <= it <= local_tind_end)
+            global_tind_end = global_tind_start + length(local_t_range) - 1
+
+            f_global_slice = selectdim(f_global, ndims(f_global),
+                                       global_tind_start:global_tind_end)
+
+            # Note: use selectdim() and get the dimension from thisdim because the actual
+            # number of dimensions in f_global_slice, f_local_slice is different depending
+            # on which combination of ivpa, ivperp, iz, ir, and is was passed.
+            thisdim = ndims(f_local_slice) - 5
+            f_local_slice = selectdim(f_local_slice, thisdim, ivpa)
+
+            thisdim = ndims(f_local_slice) - 4
+            f_local_slice = selectdim(f_local_slice, thisdim, ivperp)
+
+            thisdim = ndims(f_local_slice) - 3
+            if isa(iz, mk_int)
+                f_global_slice = selectdim(f_global_slice, thisdim, 1)
+                f_local_slice = selectdim(f_local_slice, thisdim,
+                                          ilocal_func(iz, z_irank, z.n))
+            else
+                f_global_slice = selectdim(f_global_slice, thisdim, global_z_range)
+                f_local_slice = selectdim(f_local_slice, thisdim, local_z_range)
+            end
+
+            thisdim = ndims(f_local_slice) - 2
+            if isa(ir, mk_int)
+                f_global_slice = selectdim(f_global_slice, thisdim, 1)
+                f_local_slice = selectdim(f_local_slice, thisdim,
+                                          ilocal_func(ir, r_irank, r.n))
+            else
+                f_global_slice = selectdim(f_global_slice, thisdim, global_r_range)
+                f_local_slice = selectdim(f_local_slice, thisdim, local_r_range)
+            end
+
+            thisdim = ndims(f_local_slice) - 1
+            f_global_slice = selectdim(f_global_slice, thisdim)
+            f_local_slice = selectdim(f_local_slice, thisdim)
+
+            # Select time slice
+            thisdim = ndims(f_local_slice)
+            f_local_slice = selectdim(f_local_slice, thisdim, local_t_range)
+
+            f_global_slice .= f_local_slice
+            close(fid)
+        end
+        local_tind_start = local_tind_end + 1
+        global_tind_start = global_tind_end + 1
+    end
+
+    if isa(iz, mk_int)
+        thisdim = ndims(f_global) - 3
+        f_global = selectdim(f_global, thisdim, 1)
+    end
+    if isa(ir, mk_int)
+        thisdim = ndims(f_global) - 2
+        f_global = selectdim(f_global, thisdim, 1)
+    end
+    if isa(t_range, mk_int)
+        thisdim = ndims(f_global)
+        f_global = selectdim(f_global, thisdim, 1)
+    end
+
+    return f_global
+end
+
+"""
 Read a slice of a neutral distribution function
 
 run_names is a tuple. If it has more than one entry, this means that there are multiple
@@ -2280,9 +2482,10 @@ function ilocal_func(iglobal,irank,nlocal)
 end
 
 """
-    get_run_info_no_setup(run_dir...; itime_min=1, itime_max=0, itime_skip=1, dfns=false)
+    get_run_info_no_setup(run_dir...; itime_min=1, itime_max=0, itime_skip=1, dfns=false,
+                          initial_electron=false)
     get_run_info_no_setup((run_dir, restart_index)...; itime_min=1, itime_max=0,
-                          itime_skip=1, dfns=false)
+                          itime_skip=1, dfns=false, initial_electron=false)
 
 Get file handles and other info for a single run
 
@@ -2300,7 +2503,8 @@ argument can be a String `run_dir` giving a directory to read output from or a T
 mix Strings and Tuples in a call).
 
 By default load data from moments files, pass `dfns=true` to load from distribution
-functions files.
+functions files, or `initial_electron=true` and `dfns=true` to load from initial electron
+state files.
 
 The `itime_min`, `itime_max` and `itime_skip` options can be used to select only a slice
 of time points when loading data. In `makie_post_process` these options are read from the
@@ -2311,14 +2515,19 @@ defaults for the remaining options. If either `itime_min` or `itime_max` are ≤
 values are used as offsets from the final time index of the run.
 """
 function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractString,Union{Int,Nothing}}}...;
-                               itime_min=1, itime_max=0, itime_skip=1, dfns=false)
+                               itime_min=1, itime_max=0, itime_skip=1, dfns=false,
+                               initial_electron=false)
     if length(run_dir) == 0
         error("No run_dir passed")
+    end
+    if initial_electron && !dfns
+        error("When `initial_electron=true` is passed, `dfns=true` must also be passed")
     end
     if length(run_dir) > 1
         run_info = Tuple(get_run_info_no_setup(r; itime_min=itime_min,
                                                itime_max=itime_max, itime_skip=itime_skip,
-                                               dfns=dfns)
+                                               dfns=dfns,
+                                               initial_electron=initial_electron)
                          for r ∈ run_dir)
         return run_info
     end
@@ -2377,7 +2586,9 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         error("Invalid restart_index=$restart_index")
     end
 
-    if dfns
+    if initial_electron
+        ext = "initial_electron"
+    elseif dfns
         ext = "dfns"
     else
         ext = "moments"
@@ -2688,6 +2899,15 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             end
             !isa(it, mk_int) && push!(dims, nt)
             result = allocate_float(dims...)
+        elseif nd == 5
+            # electron distribution function variable with dimensions (vpa,vperp,z,r,t)
+            dims = Vector{mk_int}()
+            !isa(ivpa, mk_int) && push!(dims, nvpa)
+            !isa(ivperp, mk_int) && push!(dims, nvperp)
+            !isa(iz, mk_int) && push!(dims, nz)
+            !isa(ir, mk_int) && push!(dims, nr)
+            !isa(it, mk_int) && push!(dims, nt)
+            result = allocate_float(dims...)
         elseif nd == 6
             # ion distribution function variable with dimensions (vpa,vperp,z,r,s,t)
             nspecies = size(variable[1], 5)
@@ -2745,6 +2965,8 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                         result .= v[iz,ir,tind]
                     elseif nd == 4
                         result .= v[iz,ir,is,tind]
+                    elseif nd == 5
+                        result .= v[ivpa,ivperp,iz,ir,tind]
                     elseif nd == 6
                         result .= v[ivpa,ivperp,iz,ir,is,tind]
                     elseif nd == 7
@@ -2775,6 +2997,8 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                         selectdim(result, ndims(result), global_it_start:global_it_end) .= v[iz,ir,tinds]
                     elseif nd == 4
                         selectdim(result, ndims(result), global_it_start:global_it_end) .= v[iz,ir,is,tinds]
+                    elseif nd == 5
+                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[ivpa,ivperp,iz,ir,tinds]
                     elseif nd == 6
                         selectdim(result, ndims(result), global_it_start:global_it_end) .= v[ivpa,ivperp,iz,ir,is,tinds]
                     elseif nd == 7
@@ -2794,6 +3018,8 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
         # Use existing distributed I/O loading functions
         if variable_name ∈ em_variables
             nd = 3
+        elseif variable_name ∈ electron_dfn_variables
+            nd = 5
         elseif variable_name ∈ ion_dfn_variables
             nd = 6
         elseif variable_name ∈ neutral_dfn_variables
@@ -2820,6 +3046,13 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                                       run_info.ext, run_info.nblocks, run_info.z_local.n,
                                       run_info.r_local.n, run_info.itime_skip)
             result = result[iz,ir,is,it]
+        elseif nd === 5
+            result = load_distributed_electron_pdf_slice(run_info.files, run_info.nblocks,
+                                                         it, run_info.n_ion_species,
+                                                         run_info.r_local,
+                                                         run_info.z_local, run_info.vperp,
+                                                         run_info.vpa; ir=ir, iz=iz,
+                                                         ivperp=ivperp, ivpa=ivpa)
         elseif nd === 6
             result = load_distributed_ion_pdf_slice(run_info.files, run_info.nblocks, it,
                                                     run_info.n_ion_species,
