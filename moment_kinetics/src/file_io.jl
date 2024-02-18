@@ -146,7 +146,7 @@ end
 structure containing the data/metadata needed for binary file i/o
 for electron initialization
 """
-struct io_electron_initialization_info{Tfile, Tfe, Tmom}
+struct io_initial_electron_info{Tfile, Tfe, Tmom}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the electron distribution function variable
@@ -159,6 +159,8 @@ struct io_electron_initialization_info{Tfile, Tfe, Tmom}
     electron_parallel_pressure::Tmom
     # handle for the electron parallel heat flux variable
     electron_parallel_heat_flux::Tmom
+    # handle for the electron thermal speed variable
+    electron_thermal_speed::Tmom
 
     # Use parallel I/O?
     parallel_io::Bool
@@ -321,6 +323,36 @@ function setup_initial_electron_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, co
     # For other processes in the block, return (nothing, nothing, nothing)
     return nothing, nothing, nothing
 end
+
+"""
+Reopen an existing initial electron output file to append more data
+"""
+function reopen_initial_electron_io(file_info)
+    @serial_region begin
+        filename, parallel_io, io_comm = file_info
+        fid = reopen_output_file(filename, parallel_io, io_comm)
+        dyn = get_group(fid, "dynamic_data")
+
+        variable_list = get_variable_keys(dyn)
+        function getvar(name)
+            if name ∈ variable_list
+                return dyn[name]
+            else
+                return nothing
+            end
+        end
+        return io_initial_electron_info(fid, getvar("pseudotime"), getvar("f_electron"),
+                                        getvar("electron_density"),
+                                        getvar("electron_parallel_flow"),
+                                        getvar("electron_parallel_pressure"),
+                                        getvar("electron_parallel_heat_flux"),
+                                        getvar("electron_thermal_speed"), parallel_io)
+    end
+
+    # For processes other than the root process of each shared-memory group...
+    return nothing
+end
+
 
 """
 Get a (sub-)group from a file or group
@@ -737,8 +769,7 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                            description="simulation time")
 
         io_phi, io_Er, io_Ez =
-            define_dynamic_em_field_variables!(fid, r, z, parallel_io,
-                                               external_source_settings)
+            define_dynamic_em_field_variables!(fid, r, z, parallel_io)
 
         io_density, io_upar, io_ppar, io_pperp, io_qpar, io_vth, io_dSdt,
         external_source_amplitude, external_source_density_amplitude,
@@ -1441,16 +1472,14 @@ function write_all_moments_data_to_binary(moments, fields, t, n_ion_species,
         # add the time for this time slice to the hdf5 file
         append_to_dynamic_var(io_moments.time, t, t_idx, parallel_io)
 
-        write_em_fields_data_to_binary(fields, io_or_file_info_moments, t_idx, r, z)
+        write_em_fields_data_to_binary(fields, io_moments, t_idx, r, z)
 
-        write_ion_moments_data_to_binary(moments, n_ion_species, io_or_file_info_moments,
-                                         t_idx, r, z)
+        write_ion_moments_data_to_binary(moments, n_ion_species, io_moments, t_idx, r, z)
 
-        write_electron_moments_data_to_binary(moments, io_or_file_info_moments, t_idx, r,
-                                              z)
+        write_electron_moments_data_to_binary(moments, io_moments, t_idx, r, z)
 
-        write_neutral_moments_data_to_binary(moments, n_neutral_species,
-                                             io_or_file_info_moments, t_idx, r, z)
+        write_neutral_moments_data_to_binary(moments, n_neutral_species, io_moments,
+                                             t_idx, r, z)
 
         append_to_dynamic_var(io_moments.time_for_run, time_for_run, t_idx, parallel_io)
 
@@ -1462,18 +1491,12 @@ end
 
 """
 write time-dependent EM fields data to the binary output file
+
+Note: should only be called from within a function that (re-)opens the output file.
 """
-function write_em_fields_data_to_binary(fields, io_or_file_info_moments, t_idx, r, z)
+function write_em_fields_data_to_binary(fields, io_moments::io_moments_info, t_idx, r, z)
     @serial_region begin
         # Only read/write from first process in each 'block'
-
-        if isa(io_or_file_info_moments, io_moments_info)
-            io_moments = io_or_file_info_moments
-            closefile = false
-        else
-            io_moments = reopen_moments_io(io_or_file_info_moments)
-            closefile = true
-        end
 
         parallel_io = io_moments.parallel_io
 
@@ -1481,8 +1504,6 @@ function write_em_fields_data_to_binary(fields, io_or_file_info_moments, t_idx, 
         append_to_dynamic_var(io_moments.phi, fields.phi, t_idx, parallel_io, z, r)
         append_to_dynamic_var(io_moments.Er, fields.Er, t_idx, parallel_io, z, r)
         append_to_dynamic_var(io_moments.Ez, fields.Ez, t_idx, parallel_io, z, r)
-
-        closefile && close(io_moments.fid)
     end
 
     return nothing
@@ -1490,19 +1511,13 @@ end
 
 """
 write time-dependent moments data for ions to the binary output file
+
+Note: should only be called from within a function that (re-)opens the output file.
 """
-function write_ion_moments_data_to_binary(moments, n_ion_species, io_or_file_info_moments,
-                                          t_idx, r, z)
+function write_ion_moments_data_to_binary(moments, n_ion_species,
+                                          io_moments::io_moments_info, t_idx, r, z)
     @serial_region begin
         # Only read/write from first process in each 'block'
-
-        if isa(io_or_file_info_moments, io_moments_info)
-            io_moments = io_or_file_info_moments
-            closefile = false
-        else
-            io_moments = reopen_moments_io(io_or_file_info_moments)
-            closefile = true
-        end
 
         parallel_io = io_moments.parallel_io
 
@@ -1570,8 +1585,6 @@ function write_ion_moments_data_to_binary(moments, n_ion_species, io_or_file_inf
                                       t_idx, parallel_io, z, r)
             end
         end
-
-        closefile && close(io_moments.fid)
     end
 
     return nothing
@@ -1579,19 +1592,14 @@ end
 
 """
 write time-dependent moments data for electrons to the binary output file
+
+Note: should only be called from within a function that (re-)opens the output file.
 """
-function write_electron_moments_data_to_binary(moments, io_or_file_info_moments, t_idx, r,
-                                               z)
+function write_electron_moments_data_to_binary(moments,
+                                               io_moments::Union{io_moments_info,io_initial_electron_info},
+                                               t_idx, r, z)
     @serial_region begin
         # Only read/write from first process in each 'block'
-
-        if isa(io_or_file_info_moments, io_moments_info)
-            io_moments = io_or_file_info_moments
-            closefile = false
-        else
-            io_moments = reopen_moments_io(io_or_file_info_moments)
-            closefile = true
-        end
 
         parallel_io = io_moments.parallel_io
 
@@ -1605,8 +1613,6 @@ function write_electron_moments_data_to_binary(moments, io_or_file_info_moments,
                               moments.electron.qpar, t_idx, parallel_io, z, r)
         append_to_dynamic_var(io_moments.electron_thermal_speed, moments.electron.vth,
                               t_idx, parallel_io, z, r)
-
-        closefile && close(io_moments.fid)
     end
 
     return nothing
@@ -1614,23 +1620,17 @@ end
 
 """
 write time-dependent moments data for neutrals to the binary output file
+
+Note: should only be called from within a function that (re-)opens the output file.
 """
 function write_neutral_moments_data_to_binary(moments, n_neutral_species,
-                                              io_or_file_info_moments, t_idx, r, z)
+                                              io_moments::io_moments_info, t_idx, r, z)
     if n_neutral_species ≤ 0
         return nothing
     end
 
     @serial_region begin
         # Only read/write from first process in each 'block'
-
-        if isa(io_or_file_info_moments, io_moments_info)
-            io_moments = io_or_file_info_moments
-            closefile = false
-        else
-            io_moments = reopen_moments_io(io_or_file_info_moments)
-            closefile = true
-        end
 
         parallel_io = io_moments.parallel_io
 
@@ -1676,8 +1676,6 @@ function write_neutral_moments_data_to_binary(moments, n_neutral_species,
                                       t_idx, parallel_io, z, r)
             end
         end
-
-        closefile && close(io_moments.fid)
     end
 
     return nothing
@@ -1708,13 +1706,12 @@ function write_all_dfns_data_to_binary(pdf, moments, fields, t, n_ion_species,
                                          time_for_run, r, z)
 
         # add the distribution function data at this time slice to the output file
-        write_ion_dfns_data_to_binary(pdf.ion.norm, n_ion_species, io_or_file_info_dfns,
-                                      t_idx, r, z, vperp, vpa)
-        write_electron_dfns_data_to_binary(pdf.electron.norm, io_or_file_info_dfns, t_idx,
-                                           r, z, vperp, vpa)
-        write_neutral_dfns_data_to_binary(pdf.neutral.norm, n_neutral_species,
-                                          io_or_file_info_dfns, t_idx, r, z, vzeta, vr,
-                                          vz)
+        write_ion_dfns_data_to_binary(pdf.ion.norm, n_ion_species, io_dfns, t_idx, r, z,
+                                      vperp, vpa)
+        write_electron_dfns_data_to_binary(pdf.electron.norm, io_dfns, t_idx, r, z, vperp,
+                                           vpa)
+        write_neutral_dfns_data_to_binary(pdf.neutral.norm, n_neutral_species, io_dfns,
+                                          t_idx, r, z, vzeta, vr, vz)
 
         closefile && close(io_dfns.fid)
     end
@@ -1723,45 +1720,32 @@ end
 
 """
 write time-dependent distribution function data for ions to the binary output file
+
+Note: should only be called from within a function that (re-)opens the output file.
 """
-function write_ion_dfns_data_to_binary(ff, n_ion_species, io_or_file_info_dfns, t_idx, r,
+function write_ion_dfns_data_to_binary(ff, n_ion_species, io_dfns::io_dfns_info, t_idx, r,
                                        z, vperp, vpa)
     @serial_region begin
         # Only read/write from first process in each 'block'
-
-        if isa(io_or_file_info_dfns, io_dfns_info)
-            io_dfns = io_or_file_info_dfns
-            closefile = false
-        else
-            io_dfns = reopen_dfns_io(io_or_file_info_dfns)
-            closefile = true
-        end
 
         parallel_io = io_dfns.parallel_io
 
         append_to_dynamic_var(io_dfns.f, ff, t_idx, parallel_io, vpa, vperp, z, r,
                               n_ion_species)
-
-        closefile && close(io_dfns.fid)
     end
     return nothing
 end
 
 """
 write time-dependent distribution function data for electrons to the binary output file
+
+Note: should only be called from within a function that (re-)opens the output file.
 """
-function write_electron_dfns_data_to_binary(ff_electron, io_or_file_info_dfns, t_idx, r,
-                                            z, vperp, vpa)
+function write_electron_dfns_data_to_binary(ff_electron,
+                                            io_dfns::Union{io_dfns_info,io_initial_electron_info},
+                                            t_idx, r, z, vperp, vpa)
     @serial_region begin
         # Only read/write from first process in each 'block'
-
-        if isa(io_or_file_info_dfns, io_dfns_info)
-            io_dfns = io_or_file_info_dfns
-            closefile = false
-        else
-            io_dfns = reopen_dfns_io(io_or_file_info_dfns)
-            closefile = true
-        end
 
         parallel_io = io_dfns.parallel_io
 
@@ -1769,28 +1753,20 @@ function write_electron_dfns_data_to_binary(ff_electron, io_or_file_info_dfns, t
             append_to_dynamic_var(io_dfns.f_electron, ff_electron, t_idx, parallel_io,
                                   vpa, vperp, z, r)
         end
-
-        closefile && close(io_dfns.fid)
     end
     return nothing
 end
 
 """
 write time-dependent distribution function data for neutrals to the binary output file
+
+Note: should only be called from within a function that (re-)opens the output file.
 """
 function write_neutral_dfns_data_to_binary(ff_neutral, n_neutral_species,
-                                           io_or_file_info_dfns, t_idx, r, z, vzeta, vr,
+                                           io_dfns::io_dfns_info, t_idx, r, z, vzeta, vr,
                                            vz)
     @serial_region begin
         # Only read/write from first process in each 'block'
-
-        if isa(io_or_file_info_dfns, io_dfns_info)
-            io_dfns = io_or_file_info_dfns
-            closefile = false
-        else
-            io_dfns = reopen_dfns_io(io_or_file_info_dfns)
-            closefile = true
-        end
 
         parallel_io = io_dfns.parallel_io
 
@@ -1798,8 +1774,6 @@ function write_neutral_dfns_data_to_binary(ff_neutral, n_neutral_species,
             append_to_dynamic_var(io_dfns.f_neutral, ff_neutral, t_idx, parallel_io, vz,
                                   vr, vzeta, z, r, n_neutral_species)
         end
-
-        closefile && close(io_dfns.fid)
     end
     return nothing
 end
