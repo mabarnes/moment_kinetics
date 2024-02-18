@@ -2280,10 +2280,9 @@ function ilocal_func(iglobal,irank,nlocal)
 end
 
 """
-    get_run_info_no_setup(run_dir...; itime_min=1, itime_max=0, itime_skip=1, dfns=false,
-                          do_setup=true, setup_input_file=nothing)
+    get_run_info_no_setup(run_dir...; itime_min=1, itime_max=0, itime_skip=1, dfns=false)
     get_run_info_no_setup((run_dir, restart_index)...; itime_min=1, itime_max=0,
-                          itime_skip=1, dfns=false, do_setup=true, setup_input_file=nothing)
+                          itime_skip=1, dfns=false)
 
 Get file handles and other info for a single run
 
