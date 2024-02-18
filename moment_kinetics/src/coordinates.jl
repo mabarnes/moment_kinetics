@@ -113,7 +113,7 @@ create arrays associated with a given coordinate,
 setup the coordinate grid, and populate the coordinate structure
 containing all of this information
 """
-function define_coordinate(input, parallel_io::Bool=false; init_YY::Bool=true)
+function define_coordinate(input, parallel_io::Bool=false; ignore_MPI=false, init_YY::Bool=true)
     # total number of grid points is ngrid for the first element
     # plus ngrid-1 unique points for each additional element due
     # to the repetition of a point at the element boundary
@@ -143,8 +143,13 @@ function define_coordinate(input, parallel_io::Bool=false; init_YY::Bool=true)
     duniform_dgrid = allocate_float(input.ngrid, input.nelement_local)
     # scratch is an array used for intermediate calculations requiring n entries
     scratch = allocate_float(n_local)
-    scratch_shared = allocate_shared_float(n_local)
-    scratch_shared2 = allocate_shared_float(n_local)
+    if ignore_MPI
+        scratch_shared = allocate_float(n_local)
+        scratch_shared2 = allocate_float(n_local)
+    else
+        scratch_shared = allocate_shared_float(n_local)
+        scratch_shared2 = allocate_shared_float(n_local)
+    end
     # scratch_2d is an array used for intermediate calculations requiring ngrid x nelement entries
     scratch_2d = allocate_float(input.ngrid, input.nelement_local)
     # struct containing the advection speed options/inputs for this coordinate

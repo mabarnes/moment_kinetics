@@ -45,10 +45,12 @@ function runtests()
                                  irank, Lvperp, discretization, fd_option, cheb_option, bc, adv_input,
                                  comm, "uniform")
         # create the coordinate struct 'x'
-        vpa, vpa_spectral = define_coordinate(vpa_input)
-        vperp, vperp_spectral = define_coordinate(vperp_input)
-        vz, vz_spectral = define_coordinate(vz_input)
-        vr, vr_spectral = define_coordinate(vr_input)
+        # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
+        # errors due to communicators not being fully set up.
+        vpa, vpa_spectral = define_coordinate(vpa_input; ignore_MPI=true)
+        vperp, vperp_spectral = define_coordinate(vperp_input; ignore_MPI=true)
+        vz, vz_spectral = define_coordinate(vz_input; ignore_MPI=true)
+        vr, vr_spectral = define_coordinate(vr_input; ignore_MPI=true)
 
         dfn = allocate_float(vpa.n,vperp.n)
         dfn1D = allocate_float(vz.n, vr.n)
