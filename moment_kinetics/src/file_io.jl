@@ -274,7 +274,7 @@ function setup_initial_electron_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, co
         # state
         restart_time_index = -1
 
-        electrons_prefix = string(out_prefix, ".initial_electrons")
+        electrons_prefix = string(out_prefix, ".initial_electron")
         if !parallel_io
             electrons_prefix *= ".$(iblock_index[])"
         end
