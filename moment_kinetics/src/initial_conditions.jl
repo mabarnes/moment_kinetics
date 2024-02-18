@@ -25,7 +25,7 @@ using ..interpolation: interpolate_to_grid_1d!
 using ..looping
 using ..em_fields: update_phi!
 using ..file_io: setup_initial_electron_io, write_electron_dfns_data_to_binary,
-                 write_electron_moments_data_to_binary
+                 write_electron_moments_data_to_binary, finish_initial_electron_io
 using ..moment_kinetics_structs: scratch_pdf
 using ..velocity_moments: integrate_over_vspace, integrate_over_neutral_vspace
 using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_vpa
@@ -503,6 +503,7 @@ function initialize_electron_pdf!(fvec, pdf, moments, phi, r, z, vpa, vperp, vze
     # if using kinetic electrons
     if composition.electron_physics == kinetic_electrons
         begin_serial_region()
+        io_initial_electron = nothing
         @serial_region begin
             if false && isfile(initial_electron_output_filename)
             else
@@ -556,6 +557,7 @@ function initialize_electron_pdf!(fvec, pdf, moments, phi, r, z, vpa, vperp, vze
         write_electron_dfns_data_to_binary(pdf.electron.norm, io_initial_electron, t_idx,
                                            r, z, vperp, vpa)
         write_electron_moments_data_to_binary(moments, io_initial_electron, t_idx, r, z)
+        finish_initial_electron_io(io_initial_electron)
 
         return result
     end

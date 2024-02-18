@@ -1833,6 +1833,22 @@ function finish_file_io(ascii_io::Union{ascii_ios,Nothing},
     return nothing
 end
 
+"""
+close output files for electron initialization
+"""
+function finish_initial_electron_io(
+        binary_initial_electron::Union{io_initial_electron_info,Tuple,Nothing})
+
+    @serial_region begin
+        # Only read/write from first process in each 'block'
+
+        if binary_initial_electron !== nothing && !isa(binary_initial_electron, Tuple)
+            close(binary_initial_electron.fid)
+        end
+    end
+    return nothing
+end
+
 # Include the non-optional implementations of binary I/O functions
 include("file_io_hdf5.jl")
 
