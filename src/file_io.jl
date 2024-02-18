@@ -44,7 +44,7 @@ end
 structure containing the data/metadata needed for binary file i/o
 moments & fields only
 """
-struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower,
+struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
                        Tchodura_upper, Texti1, Texti2, Texti3, Texti4,
                        Texti5, Textn1, Textn2, Textn3, Textn4, Textn5}
     # file identifier for the binary file to which data is written
@@ -76,15 +76,15 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower,
     # handle for chodura diagnostic (upper)
     chodura_integral_upper::Tchodura_upper
     # handle for the electron species density
-    electron_density::Tphi
+    electron_density::Tmome
     # handle for the electron species parallel flow
-    electron_parallel_flow::Tphi
+    electron_parallel_flow::Tmome
     # handle for the electron species parallel pressure
-    electron_parallel_pressure::Tphi
+    electron_parallel_pressure::Tmome
     # handle for the electron species parallel heat flux
-    electron_parallel_heat_flux::Tphi
+    electron_parallel_heat_flux::Tmome
     # handle for the electron species thermal speed
-    electron_thermal_speed::Tphi
+    electron_thermal_speed::Tmome
 
     # handle for the neutral species density
     density_neutral::Tmomn
@@ -131,6 +131,28 @@ struct io_dfns_info{Tfile, Tfi, Tfe, Tfn, Tmoments}
 
     # Handles for moment variables
     io_moments::Tmoments
+end
+
+"""
+structure containing the data/metadata needed for binary file i/o
+for electron initialization
+"""
+struct io_electron_initialization_info{Tfile, Tfe, Tmom}
+    # file identifier for the binary file to which data is written
+    fid::Tfile
+    # handle for the electron distribution function variable
+    f_electron::Tfe
+    # handle for the electron density variable
+    electron_density::Tmom
+    # handle for the electron parallel flow variable
+    electron_parallel_flow::Tmom
+    # handle for the electron parallel pressure variable
+    electron_parallel_pressure::Tmom
+    # handle for the electron parallel heat flux variable
+    electron_parallel_heat_flux::Tmom
+
+    # Use parallel I/O?
+    parallel_io::Bool
 end
 
 """
@@ -185,6 +207,78 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
                                 restart_time_index, previous_runs_info, time_for_setup)
 
         return ascii, io_moments, io_dfns
+    end
+    # For other processes in the block, return (nothing, nothing, nothing)
+    return nothing, nothing, nothing
+end
+
+"""
+open output file to save the initial electron pressure and distribution function
+"""
+function setup_initial_electron_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition,
+                                   collisions, evolve_density, evolve_upar, evolve_ppar,
+                                   external_source_settings, input_dict,
+                                   previous_runs_info)
+    begin_serial_region()
+    @serial_region begin
+        # Only read/write from first process in each 'block'
+
+        # check to see if output_dir exists in the current directory
+        # if not, create it
+        isdir(io_input.output_dir) || mkdir(io_input.output_dir)
+        out_prefix = joinpath(io_input.output_dir, io_input.run_name)
+
+        run_id = io_input.run_id
+        parallel_io = io_input.parallel_io
+        io_comm = comm_inter_block[]
+
+        # dummy value for restart_time_index, which is not used for the initial electron
+        # state
+        restart_time_index = -1
+
+        electrons_prefix = string(out_prefix, ".initial_electrons")
+        if !parallel_io
+            electrons_prefix *= ".$(iblock_index[])"
+        end
+        fid, file_info = open_output_file(electrons_prefix, io_input.binary_format,
+                                          parallel_io, io_comm)
+
+        # write a header to the output file
+        add_attribute!(fid, "file_info",
+                       "Output initial electron state from the moment_kinetics code")
+
+        # write some overview information to the output file
+        write_overview!(fid, composition, collisions, parallel_io, evolve_density,
+                        evolve_upar, evolve_ppar, -1.0)
+
+        # write provenance tracking information to the output file
+        write_provenance_tracking_info!(fid, parallel_io, run_id, restart_time_index,
+                                        input_dict, previous_runs_info)
+
+        # write the input settings
+        write_input!(fid, input_dict, parallel_io)
+
+        ### define coordinate dimensions ###
+        coords_group = define_spatial_coordinates!(fid, z, r, parallel_io)
+        add_vspace_coordinates!(coords_group, vz, vr, vzeta, vpa, vperp, parallel_io)
+
+        ### create variables for time-dependent quantities ###
+        dynamic = create_io_group(fid, "dynamic_data", description="time evolving variables")
+        io_f_electron = create_dynamic_variable!(dynamic, "f_electron", mk_float, vpa,
+                                                 vperp, z, r;
+                                                 parallel_io=parallel_io,
+                                                 description="electron distribution function")
+
+        io_electron_density, io_electron_upar, io_electron_ppar, io_electron_qpar,
+        io_electron_vth =
+            define_dynamic_electron_moment_variables!(fid, r, z, parallel_io,
+                                                      external_source_settings,
+                                                      evolve_density, evolve_upar,
+                                                      evolve_ppar)
+
+        close(fid)
+
+        return file_info
     end
     # For other processes in the block, return (nothing, nothing, nothing)
     return nothing, nothing, nothing

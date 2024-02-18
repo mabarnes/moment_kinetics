@@ -343,7 +343,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
                               z_spectral, r_spectral, vpa_spectral, vz_spectral, species,
                               collisions, external_source_settings,
                               manufactured_solns_input, scratch_dummy, scratch, t_input,
-                              num_diss_params, advection_structs)
+                              num_diss_params, advection_structs, io_input, input_dict)
         # initialize time variable
         code_time = 0.
         previous_runs_info = nothing
