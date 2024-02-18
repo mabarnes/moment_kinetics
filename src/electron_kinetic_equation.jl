@@ -468,6 +468,11 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
     catch e
         println("Error: $e")
     end
+    # Update the 'scratch' arrays with the final result
+    begin_r_z_vperp_vpa_region()
+    @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+        fvec.pdf_electron[ivpa,ivperp,iz,ir] = pdf[ivpa,ivperp,iz,ir]
+    end
     begin_serial_region()
     @serial_region begin
         if !electron_pdf_converged

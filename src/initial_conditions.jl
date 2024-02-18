@@ -357,7 +357,9 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
     
     # initialize the scratch arrays containing pdfs and moments for the first RK stage
     # the electron pdf is yet to be initialised but with the current code logic, the scratch
-    # arrays need to exist and be otherwise initialised in order to compute the initial electron pdf
+    # arrays need to exist and be otherwise initialised in order to compute the initial
+    # electron pdf. The electron arrays will be updated as necessary by
+    # initialize_electron_pdf!().
     initialize_scratch_arrays!(scratch, moments, pdf.ion.norm, pdf.electron.norm, pdf.neutral.norm, t_input.n_rk_stages)
     # get the initial electrostatic potential and parallel electric field
     update_phi!(fields, scratch[1], z, r, composition, collisions, moments, z_spectral, r_spectral, scratch_dummy)
@@ -367,8 +369,6 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
                              advection_structs.electron_z_advect, advection_structs.electron_vpa_advect,
                              scratch_dummy, collisions, composition, 
                              num_diss_params, t_input.dt)
-    # re-initialize the scratch arrays now that the electron pdf has been initialised
-    initialize_scratch_arrays!(scratch, moments, pdf.ion.norm, pdf.electron.norm, pdf.neutral.norm, t_input.n_rk_stages)
 
     return nothing
 end
