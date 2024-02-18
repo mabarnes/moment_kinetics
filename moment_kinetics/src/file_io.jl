@@ -146,9 +146,11 @@ end
 structure containing the data/metadata needed for binary file i/o
 for electron initialization
 """
-struct io_initial_electron_info{Tfile, Tfe, Tmom}
+struct io_initial_electron_info{Tfile, Ttime, Tfe, Tmom}
     # file identifier for the binary file to which data is written
     fid::Tfile
+    # handle for the pseudotime variable
+    pseudotime::Ttime
     # handle for the electron distribution function variable
     f_electron::Tfe
     # handle for the electron density variable
@@ -304,6 +306,8 @@ function setup_initial_electron_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, co
 
         ### create variables for time-dependent quantities ###
         dynamic = create_io_group(fid, "dynamic_data", description="time evolving variables")
+        io_pseudotime = create_dynamic_variable!(dynamic, "time", mk_float; parallel_io=parallel_io,
+                                                 description="pseudotime used for electron initialization")
         io_f_electron = create_dynamic_variable!(dynamic, "f_electron", mk_float, vpa,
                                                  vperp, z, r;
                                                  parallel_io=parallel_io,
@@ -341,7 +345,7 @@ function reopen_initial_electron_io(file_info)
                 return nothing
             end
         end
-        return io_initial_electron_info(fid, getvar("pseudotime"), getvar("f_electron"),
+        return io_initial_electron_info(fid, getvar("time"), getvar("f_electron"),
                                         getvar("electron_density"),
                                         getvar("electron_parallel_flow"),
                                         getvar("electron_parallel_pressure"),
@@ -1775,6 +1779,42 @@ function write_neutral_dfns_data_to_binary(ff_neutral, n_neutral_species,
                                   vr, vzeta, z, r, n_neutral_species)
         end
     end
+    return nothing
+end
+
+"""
+    write_initial_electron_state(pdf, moments, io_initial_electron, t_idx, r, z,
+                                 vperp, vpa)
+
+Write the electron state to an output file.
+"""
+function write_initial_electron_state(pdf, moments, t, io_or_file_info_initial_electron,
+                                      t_idx, r, z, vperp, vpa)
+
+    @serial_region begin
+        # Only read/write from first process in each 'block'
+
+        if isa(io_or_file_info_initial_electron, io_dfns_info)
+            io_initial_electron = io_or_file_info_initial_electron
+            closefile = false
+        else
+            io_initial_electron = reopen_initial_electron_io(io_or_file_info_initial_electron)
+            closefile = true
+        end
+
+        parallel_io = io_initial_electron.parallel_io
+
+        # add the pseudo-time for this time slice to the hdf5 file
+        append_to_dynamic_var(io_initial_electron.pseudotime, t, t_idx, parallel_io)
+
+        write_electron_dfns_data_to_binary(pdf, io_initial_electron, t_idx, r, z, vperp,
+                                           vpa)
+
+        write_electron_moments_data_to_binary(moments, io_initial_electron, t_idx, r, z)
+
+        closefile && close(io_initial_electron.fid)
+    end
+
     return nothing
 end
 

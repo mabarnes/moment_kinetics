@@ -17,7 +17,7 @@ using ..electron_fluid_equations: calculate_electron_qpar_from_pdf!
 using ..electron_fluid_equations: electron_energy_equation!
 using ..electron_z_advection: electron_z_advection!
 using ..electron_vpa_advection: electron_vpa_advection!
-using ..file_io: write_electron_dfns_data_to_binary, write_electron_moments_data_to_binary
+using ..file_io: write_initial_electron_state
 using ..moment_constraints: hard_force_moment_constraints!
 using ..velocity_moments: integrate_over_vspace
 
@@ -246,10 +246,8 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
     @serial_region begin
         output_counter += 1
         if io_initial_electron !== nothing
-            write_electron_dfns_data_to_binary(pdf, io_initial_electron,
-                                               output_counter, r, z, vperp, vpa)
-            write_electron_moments_data_to_binary(moments, io_initial_electron,
-                                                  output_counter, r, z)
+            write_initial_electron_state(pdf, moments, time, io_initial_electron,
+                                         output_counter, r, z, vperp, vpa)
         end
         result_pdf = zeros(vpa.n, z.n, max_electron_pdf_iterations ÷ output_interval)
         result_pdf[:,:,1] .= pdf[:,1,:,1]
@@ -350,10 +348,8 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
                 println(io_vth,"")
                 output_counter += 1
                 if io_initial_electron !== nothing
-                    write_electron_dfns_data_to_binary(pdf, io_initial_electron,
-                                                       output_counter, r, z, vperp, vpa)
-                    write_electron_moments_data_to_binary(moments, io_initial_electron,
-                                                          output_counter, r, z)
+                    write_initial_electron_state(pdf, moments, time, io_initial_electron,
+                                                 output_counter, r, z, vperp, vpa)
                 end
                 result_pdf[:,:,iteration÷output_interval+1] .= pdf[:,1,:,1]
                 result_ppar[:,iteration÷output_interval+1] .= ppar[:,1]
@@ -514,7 +510,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         result_phi = result_phi[:,1:min(iteration÷output_interval+output_interval,max_electron_pdf_iterations÷output_interval)]
         result_residual = result_residual[:,:,1:min(iteration÷output_interval+output_interval,max_electron_pdf_iterations÷output_interval)]
     end
-    return result_pdf, dens, upar, result_ppar, result_vth, result_qpar, result_phi, z, vpa, result_residual, output_counter
+    return result_pdf, dens, upar, result_ppar, result_vth, result_qpar, result_phi, z, vpa, result_residual, time, output_counter
 end
 
 function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, vpa_spectral, me_over_mi)
