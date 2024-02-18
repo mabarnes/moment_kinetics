@@ -1,8 +1,5 @@
 using Pkg
 
-# Activate the moment_kinetics package
-Pkg.activate(".")
-
 using PackageCompiler
 
 # Create the sysimage 'makie_postproc.so' in the base moment_kinetics source directory

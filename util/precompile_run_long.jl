@@ -5,7 +5,6 @@ push!(ARGS, "--long")
 using Pkg
 Pkg.activate(".")
 
-using TimerOutputs
 using moment_kinetics
 
 # Create a temporary directory for test output
