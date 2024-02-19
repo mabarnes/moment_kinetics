@@ -1712,8 +1712,10 @@ function write_all_dfns_data_to_binary(pdf, moments, fields, t, n_ion_species,
         # add the distribution function data at this time slice to the output file
         write_ion_dfns_data_to_binary(pdf.ion.norm, n_ion_species, io_dfns, t_idx, r, z,
                                       vperp, vpa)
-        write_electron_dfns_data_to_binary(pdf.electron.norm, io_dfns, t_idx, r, z, vperp,
-                                           vpa)
+        if pdf.electron !== nothing
+            write_electron_dfns_data_to_binary(pdf.electron.norm, io_dfns, t_idx, r, z,
+                                               vperp, vpa)
+        end
         write_neutral_dfns_data_to_binary(pdf.neutral.norm, n_neutral_species, io_dfns,
                                           t_idx, r, z, vzeta, vr, vz)
 

@@ -286,7 +286,7 @@ struct pdf_struct
     #ion particles: s + r + z + vperp + vpa
     ion::pdf_substruct{5}
     # electron particles: r + z + vperp + vpa
-    electron::pdf_substruct{4}
+    electron::Union{pdf_substruct{4},Nothing}
     #neutral particles: s + r + z + vzeta + vr + vz
     neutral::pdf_substruct{6}
 end

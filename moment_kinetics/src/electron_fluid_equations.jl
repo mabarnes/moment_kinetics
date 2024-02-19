@@ -11,6 +11,7 @@ using ..communication
 using ..looping
 using ..input_structs: boltzmann_electron_response_with_simple_sheath
 using ..input_structs: braginskii_fluid, kinetic_electrons
+using ..moment_kinetics_structs: pdf_substruct
 using ..velocity_moments: integrate_over_vspace
 
 using MPI
@@ -297,7 +298,12 @@ function calculate_electron_qpar!(qpar_e, qpar_updated, pdf, ppar_e, upar_e, vth
             end
         elseif electron_model == kinetic_electrons
             # use the modified electron pdf to calculate the electron heat flux
-            calculate_electron_qpar_from_pdf!(qpar_e, ppar_e, vth_e, pdf, vpa)
+            if isa(pdf, pdf_substruct)
+                electron_pdf = pdf.norm
+            else
+                electron_pdf = pdf
+            end
+            calculate_electron_qpar_from_pdf!(qpar_e, ppar_e, vth_e, electron_pdf, vpa)
         end
     end
     # qpar has been updated

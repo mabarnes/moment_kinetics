@@ -92,20 +92,24 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
 
     # create an array of structs containing scratch arrays for the pdf and low-order moments
     # that may be evolved separately via fluid equations
-    scratch = allocate_scratch_arrays(moments, pdf.ion.norm, pdf.electron.norm, pdf.neutral.norm, t_input.n_rk_stages)
+    scratch = allocate_scratch_arrays(moments, pdf, t_input.n_rk_stages)
 
     return pdf, moments, boundary_distributions, scratch
 end
 
-function allocate_scratch_arrays(moments, pdf_ion_in, pdf_electron_in, pdf_neutral_in, n_rk_stages)
+function allocate_scratch_arrays(moments, pdf, n_rk_stages)
     # create n_rk_stages+1 structs, each of which will contain one pdf,
     # one density, and one parallel flow array
     scratch = Vector{scratch_pdf{5,3,4,2,6,3}}(undef, n_rk_stages+1)
-    pdf_dims = size(pdf_ion_in)
+    pdf_dims = size(pdf.ion.norm)
     moment_ion_dims = size(moments.ion.dens)
-    pdf_electron_dims = size(pdf_electron_in)
+    if pdf.electron === nothing
+        pdf_electron_dims = (0,0,0,0)
+    else
+        pdf_electron_dims = size(pdf.electron.norm)
+    end
     moment_electron_dims = size(moments.electron.dens)
-    pdf_neutral_dims = size(pdf_neutral_in)
+    pdf_neutral_dims = size(pdf.neutral.norm)
     moment_neutral_dims = size(moments.neutral.dens)
     # populate each of the structs
     for istage ∈ 1:n_rk_stages+1
@@ -152,13 +156,18 @@ function create_pdf(composition, r, z, vperp, vpa, vzeta, vr, vz)
     pdf_ion_buffer = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, composition.n_neutral_species) # n.b. n_species is n_neutral_species here
     pdf_neutral_norm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, composition.n_neutral_species)
     pdf_neutral_buffer = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, composition.n_ion_species)
-    pdf_electron_norm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n)
-    # MB: not sure if pdf_electron_buffer will ever be needed, but create for now
-    # to emulate ion and neutral behaviour
-    pdf_electron_buffer = allocate_shared_float(vpa.n, vperp.n, z.n, r.n)
+    if composition.electron_physics == kinetic_electrons
+        pdf_electron_norm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n)
+        # MB: not sure if pdf_electron_buffer will ever be needed, but create for now
+        # to emulate ion and neutral behaviour
+        pdf_electron_buffer = allocate_shared_float(vpa.n, vperp.n, z.n, r.n)
+        electron_substruct = pdf_substruct(pdf_electron_norm, pdf_electron_buffer)
+    else
+        electron_substruct = nothing
+    end
 
     return pdf_struct(pdf_substruct(pdf_ion_norm, pdf_ion_buffer),
-                      pdf_substruct(pdf_electron_norm, pdf_electron_buffer),
+                      electron_substruct,
                       pdf_substruct(pdf_neutral_norm, pdf_neutral_buffer))
 
 end
@@ -301,13 +310,15 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
     @views derivative_z!(moments.electron.dppar_dz, moments.electron.ppar, 
         scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1], scratch_dummy.buffer_rs_3[:,1],
         scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
-    # Initialise the array for the electron pd
-    init_electron_pdf_over_density_and_boundary_phi!(
-        pdf.electron.norm, fields.phi, moments.electron.dens, moments.electron.upar,
-        moments.electron.vth, z, vpa, vperp, vpa_spectral, composition.me_over_mi)
+    if composition.electron_physics == kinetic_electrons
+        # Initialise the array for the electron pdf
+        init_electron_pdf_over_density_and_boundary_phi!(
+            pdf.electron.norm, fields.phi, moments.electron.dens, moments.electron.upar,
+            moments.electron.vth, z, vpa, vperp, vpa_spectral, composition.me_over_mi)
+    end
     # calculate the electron parallel heat flux;
     # if using kinetic electrons, this relies on the electron pdf, which itself relies on the electron heat flux
-    calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, pdf.electron.norm, 
+    calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, pdf.electron,
         moments.electron.ppar, moments.electron.upar, moments.electron.vth, moments.electron.dT_dz, moments.ion.upar, 
         collisions.nu_ei, composition.me_over_mi, composition.electron_physics, vpa)
     # calculate the zed derivative of the initial electron parallel heat flux
@@ -324,7 +335,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
     # arrays need to exist and be otherwise initialised in order to compute the initial
     # electron pdf. The electron arrays will be updated as necessary by
     # initialize_electron_pdf!().
-    initialize_scratch_arrays!(scratch, moments, pdf.ion.norm, pdf.electron.norm, pdf.neutral.norm, t_input.n_rk_stages)
+    initialize_scratch_arrays!(scratch, moments, pdf, t_input.n_rk_stages)
     # get the initial electrostatic potential and parallel electric field
     update_phi!(fields, scratch[1], z, r, composition, collisions, moments, z_spectral, r_spectral, scratch_dummy)
 
@@ -343,24 +354,26 @@ end
 initialize the array of structs containing scratch arrays for the normalised pdf and low-order moments
 that may be evolved separately via fluid equations
 """
-function initialize_scratch_arrays!(scratch, moments, pdf_ion_in, pdf_electron_in, pdf_neutral_in, n_rk_stages)
+function initialize_scratch_arrays!(scratch, moments, pdf, n_rk_stages)
     # populate each of the structs
     begin_serial_region()
     @serial_region begin
         for istage ∈ 1:n_rk_stages+1
             # initialise the scratch arrays for the ion pdf and velocity moments
-            scratch[istage].pdf .= pdf_ion_in
+            scratch[istage].pdf .= pdf.ion.norm
             scratch[istage].density .= moments.ion.dens
             scratch[istage].upar .= moments.ion.upar
             scratch[istage].ppar .= moments.ion.ppar
             # initialise the scratch arrays for the electron pdf and velocity moments
-            scratch[istage].pdf_electron .= pdf_electron_in
+            if pdf.electron !== nothing
+                scratch[istage].pdf_electron .= pdf.electron.norm
+            end
             scratch[istage].electron_density .= moments.electron.dens
             scratch[istage].electron_upar .= moments.electron.upar
             scratch[istage].electron_ppar .= moments.electron.ppar
             scratch[istage].electron_temp .= moments.electron.temp
             # initialise the scratch arrays for the neutral velocity moments and pdf
-            scratch[istage].pdf_neutral .= pdf_neutral_in
+            scratch[istage].pdf_neutral .= pdf.neutral.norm
             scratch[istage].density_neutral .= moments.neutral.dens
             scratch[istage].uz_neutral .= moments.neutral.uz
             scratch[istage].pz_neutral .= moments.neutral.pz
@@ -486,7 +499,7 @@ function initialize_electron_pdf!(fvec, pdf, moments, phi, r, z, vpa, vperp, vze
         end
 
         moments.electron.qpar_updated[] = false
-        calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, pdf.electron.norm, 
+        calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, pdf.electron,
             moments.electron.ppar, moments.electron.upar, moments.electron.vth, 
             moments.electron.dT_dz, moments.ion.upar, 
             collisions.nu_ei, composition.me_over_mi, composition.electron_physics, vpa)
