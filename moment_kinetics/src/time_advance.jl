@@ -266,12 +266,13 @@ this includes creating and populating structs
 for Chebyshev transforms, velocity space moments,
 EM fields, and advection terms
 """
-function setup_time_advance!(pdf, scratch, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
-                             vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
-                             z_spectral, r_spectral, composition, drive_input, moments,
-                             t_input, collisions, species, geometry,
+function setup_time_advance!(pdf, fields, scratch, vz, vr, vzeta, vpa, vperp, z, r,
+                             vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral,
+                             vperp_spectral, z_spectral, r_spectral, composition,
+                             drive_input, moments, t_input, collisions, species, geometry,
                              boundary_distributions, external_source_settings,
-                             num_diss_params, manufactured_solns_input, restarting)
+                             num_diss_params, manufactured_solns_input, advection_structs,
+                             scratch_dummy, restarting)
     # define some local variables for convenience/tidiness
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
@@ -288,29 +289,20 @@ function setup_time_advance!(pdf, scratch, vz, vr, vzeta, vpa, vperp, z, r, vz_s
 
     begin_serial_region()
 
-    # create an array of structs containing scratch arrays for the pdf and low-order moments
-    # that may be evolved separately via fluid equations
-    scratch = setup_scratch_arrays(moments, pdf.ion.norm, pdf.neutral.norm, t_input.n_rk_stages)
     # setup dummy arrays & buffer arrays for z r MPI
     n_neutral_species_alloc = max(1,composition.n_neutral_species)
-    scratch_dummy = setup_dummy_and_buffer_arrays(r.n,z.n,vpa.n,vperp.n,vz.n,vr.n,vzeta.n,
-                                   composition.n_ion_species,n_neutral_species_alloc)
     # create arrays for Fokker-Planck collisions 
     if advance.explicit_weakform_fp_collisions
         fp_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; precompute_weights=true)
     else
         fp_arrays = nothing
     end
-    # create the "fields" structure that contains arrays
-    # for the electrostatic potential phi and eventually the electromagnetic fields
-    fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency, drive_input.force_Er_zero_at_wall)
-    # initialize the electrostatic potential
-    begin_serial_region()
     # update the derivatives of the electron moments as these may be needed when
     # computing the electrostatic potential (and components of the electric field)
     calculate_electron_moment_derivatives!(moments, scratch[1], scratch_dummy, z, 
                                            z_spectral, num_diss_params, composition.electron_physics)
     # initialize the electrostatic potential
+    begin_serial_region()
     update_phi!(fields, scratch[1], z, r, composition, collisions, moments, z_spectral, r_spectral, scratch_dummy)
     @serial_region begin
         # save the initial phi(z) for possible use later (e.g., if forcing phi)
@@ -325,15 +317,17 @@ function setup_time_advance!(pdf, scratch, vz, vr, vzeta, vpa, vperp, z, r, vz_s
     calculate_moment_derivatives_neutral!(moments, scratch[1], scratch_dummy, z,
                                           z_spectral, num_diss_params)
 
+    r_advect = advection_structs.r_advect
+    z_advect = advection_structs.z_advect
+    vperp_advect = advection_structs.vperp_advect
+    vpa_advect = advection_structs.vpa_advect
+    neutral_r_advect = advection_structs.neutral_r_advect
+    neutral_z_advect = advection_structs.neutral_z_advect
+    neutral_vz_advect = advection_structs.neutral_vz_advect
     ##
     # ion particle advection only
     ##
 
-    # create structure r_advect whose members are the arrays needed to compute
-    # the advection term(s) appearing in the split part of the GK equation dealing
-    # with advection in r
-    begin_serial_region()
-    r_advect = setup_advection(n_ion_species, r, vpa, vperp, z)
     if r.n > 1
         # initialise the r advection speed
         begin_s_z_vperp_vpa_region()
@@ -345,11 +339,6 @@ function setup_time_advance!(pdf, scratch, vz, vr, vzeta, vpa, vperp, z, r, vz_s
         # enforce prescribed boundary condition in r on the distribution function f
     end
 
-    # create structure z_advect whose members are the arrays needed to compute
-    # the advection term(s) appearing in the split part of the GK equation dealing
-    # with advection in z
-    begin_serial_region()
-    z_advect = setup_advection(n_ion_species, z, vpa, vperp, r)
     if z.n > 1
         # initialise the z advection speed
         begin_s_r_vperp_vpa_region()
@@ -360,23 +349,13 @@ function setup_time_advance!(pdf, scratch, vz, vr, vzeta, vpa, vperp, z, r, vz_s
                                    geometry)
         end
     end
-    begin_serial_region()
 
-    # create structure vpa_advect whose members are the arrays needed to compute
-    # the advection term(s) appearing in the split part of the GK equation dealing
-    # with advection in vpa
-    vpa_advect = setup_advection(n_ion_species, vpa, vperp, z, r)
     # initialise the vpa advection speed
     begin_s_r_z_vperp_region()
     update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, vperp, z, r,
                       composition, collisions, external_source_settings.ion, 0.0,
                       geometry)
 
-    # create structure vperp_advect whose members are the arrays needed to compute
-    # the advection term(s) appearing in the split part of the GK equation dealing
-    # with advection in vperp
-    begin_serial_region()
-    vperp_advect = setup_advection(n_ion_species, vperp, vpa, z, r)
     # initialise the vperp advection speed
     if vperp.n > 1
         begin_serial_region()
@@ -391,9 +370,6 @@ function setup_time_advance!(pdf, scratch, vz, vr, vzeta, vpa, vperp, z, r, vz_s
     # Neutral particle advection
     ##
 
-    # create structure neutral_r_advect for neutral particle advection
-    begin_serial_region()
-    neutral_r_advect = setup_advection(n_neutral_species_alloc, r, vz, vr, vzeta, z)
     if n_neutral_species > 0 && r.n > 1
         # initialise the r advection speed
         begin_sn_z_vzeta_vr_vz_region()
@@ -402,9 +378,6 @@ function setup_time_advance!(pdf, scratch, vz, vr, vzeta, vpa, vperp, z, r, vz_s
         end
     end
 
-    # create structure neutral_z_advect for neutral particle advection
-    begin_serial_region()
-    neutral_z_advect = setup_advection(n_neutral_species_alloc, z, vz, vr, vzeta, r)
     if n_neutral_species > 0 && z.n > 1
         # initialise the z advection speed
         begin_sn_r_vzeta_vr_vz_region()
@@ -417,9 +390,6 @@ function setup_time_advance!(pdf, scratch, vz, vr, vzeta, vpa, vperp, z, r, vz_s
         end
     end
 
-    # create structure neutral_vz_advect for neutral particle advection
-    begin_serial_region()
-    neutral_vz_advect = setup_advection(n_neutral_species_alloc, vz, vr, vzeta, z, r)
     if n_neutral_species > 0
         # initialise the z advection speed
         @serial_region begin
@@ -440,7 +410,6 @@ function setup_time_advance!(pdf, scratch, vz, vr, vzeta, vpa, vperp, z, r, vz_s
     # construct advect & spectral objects to compactify arguments
     ##
 
-    advect_objects = advect_object_struct(vpa_advect, vperp_advect, z_advect, r_advect, neutral_z_advect, neutral_r_advect, neutral_vz_advect)
     spectral_objects = spectral_object_struct(vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral, r_spectral)
     if(advance.manufactured_solns_test)
         manufactured_source_list = manufactured_sources(manufactured_solns_input, r, z,
@@ -513,16 +482,16 @@ function setup_time_advance!(pdf, scratch, vz, vr, vzeta, vpa, vperp, z, r, vz_s
         calculate_electron_density!(moments.electron.dens, moments.electron.dens_updated, moments.ion.dens)
         calculate_electron_upar_from_charge_conservation!(moments.electron.upar, moments.electron.upar_updated,
                                                           moments.electron.dens, moments.ion.upar, moments.ion.dens,
-                                                          composition.electron_physics)
+                                                          composition.electron_physics, r, z)
         # compute the updated electron temperature
         # NB: not currently necessary, as initial vth is not directly dependent on ion quantities
         @. moments.electron.temp = moments.electron.vth^2
         # as the electron temperature has now been updated, set the appropriate flag
-        moments.electron.temp_updated = true
+        moments.electron.temp_updated[] = true
         # compute the updated electron parallel pressure
         @. moments.electron.ppar = 0.5 * moments.electron.dens * moments.electron.temp
         # as the electron ppar has now been updated, set the appropriate flag
-        moments.electron.ppar_updated = true
+        moments.electron.ppar_updated[] = true
         # calculate the zed derivative of the initial electron temperature, potentially
         # needed in the following calculation of the electron parallel friction force and
         # parallel heat flux
@@ -568,8 +537,8 @@ function setup_time_advance!(pdf, scratch, vz, vr, vzeta, vpa, vperp, z, r, vz_s
     # Ensure all processes are synchronized at the end of the setup
     _block_synchronize()
 
-    return moments, fields, spectral_objects, advect_objects,
-           advance, fp_arrays, scratch_dummy, manufactured_source_list
+    return moments, fields, spectral_objects, advance, fp_arrays, scratch_dummy,
+           manufactured_source_list
 end
 
 """
@@ -877,35 +846,6 @@ function normalize_pdf!(pdf, moments, scratch)
 end
 
 """
-initialize the array of structs containing scratch arrays for the normalised pdf and low-order moments
-that may be evolved separately via fluid equations
-"""
-function initialize_scratch_arrays!(scratch, moments, pdf_ion_in, pdf_electron_in, pdf_neutral_in, n_rk_stages)
-    # populate each of the structs
-    for istage ∈ 1:n_rk_stages+1
-        @serial_region begin
-            # initialise the scratch arrays for the ion pdf and velocity moments
-            scratch[istage].pdf .= pdf_ion_in
-            scratch[istage].density .= moments.ion.dens
-            scratch[istage].upar .= moments.ion.upar
-            scratch[istage].ppar .= moments.ion.ppar
-            # initialise the scratch arrays for the electron pdf and velocity moments
-            scratch[istage].pdf_electron .= pdf_electron_in
-            scratch[istage].electron_density .= moments.electron.dens
-            scratch[istage].electron_upar .= moments.electron.upar
-            scratch[istage].electron_ppar .= moments.electron.ppar
-            scratch[istage].electron_temp .= moments.electron.temp
-            # initialise the scratch arrays for the neutral velocity moments and pdf
-            scratch[istage].pdf_neutral .= pdf_neutral_in
-            scratch[istage].density_neutral .= moments.neutral.dens
-            scratch[istage].uz_neutral .= moments.neutral.uz
-            scratch[istage].pz_neutral .= moments.neutral.pz
-        end
-    end
-    return nothing
-end
-
-"""
 given the number of Runge Kutta stages that are requested,
 returns the needed Runge Kutta coefficients;
 e.g., if f is the function to be updated, then
@@ -1055,9 +995,8 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                           Dates.format(now(), dateformat"H:MM:SS"))
                 end
             end
-            write_data_to_ascii(moments, fields, vpa, vperp, z, r, t,
-                                composition.n_ion_species, composition.n_neutral_species,
-                                ascii_io)
+            write_data_to_ascii(moments, fields, z, r, t, composition.n_ion_species,
+                                composition.n_neutral_species, ascii_io)
             write_all_moments_data_to_binary(moments, fields, t,
                                              composition.n_ion_species,
                                              composition.n_neutral_species, io_moments,
@@ -1365,7 +1304,7 @@ or update them by taking the appropriate velocity moment of the evolved pdf
 """
 function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr, vzeta,
                     vpa, vperp, z, r, spectral_objects, advect_objects, rk_coefs, istage, composition,
-                    geometry, num_diss_params, advance, scratch_dummy)
+                    collisions, geometry, num_diss_params, advance, scratch_dummy)
     begin_s_r_z_region()
 
     new_scratch = scratch[istage+1]
@@ -1440,73 +1379,10 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     calculate_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
                                   num_diss_params)
 
-    ##
-    # update the neutral particle distribution and moments
-    ##
-
-    if composition.n_neutral_species > 0
-        begin_sn_r_z_region()
-        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
-            new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = ( rk_coefs[1]*pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn]
-             + rk_coefs[2]*old_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] + rk_coefs[3]*new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn])
-        end
-        # use Runge Kutta to update any velocity moments evolved separately from the pdf
-        rk_update_evolved_moments_neutral!(new_scratch, old_scratch, moments, rk_coefs)
-
-        # Ensure there are no negative values in the pdf before applying boundary
-        # conditions, so that negative deviations do not mess up the integral-constraint
-        # corrections in the sheath boundary conditions.
-        force_minimum_pdf_value_neutral!(new_scratch.pdf_neutral, num_diss_params)
-
-        # Enforce boundary conditions in z and vpa on the distribution function.
-        # Must be done after Runge Kutta update so that the boundary condition applied to
-        # the updated pdf is consistent with the updated moments - otherwise different upar
-        # between 'pdf', 'old_scratch' and 'new_scratch' might mean a point that should be
-        # set to zero at the sheath boundary according to the final upar has a non-zero
-        # contribution from one or more of the terms.
-        # NB: probably need to do the same for the evolved moments
-        # Note, so far vr and vzeta do not need advect objects, so pass `nothing` for
-        # those as a placeholder
-        enforce_neutral_boundary_conditions!(new_scratch.pdf_neutral, new_scratch.pdf,
-            boundary_distributions, new_scratch.density_neutral, new_scratch.uz_neutral,
-            new_scratch.pz_neutral, moments, new_scratch.density, new_scratch.upar,
-            fields.Er, vzeta_spectral, vr_spectral, vz_spectral, neutral_r_advect,
-            neutral_z_advect, nothing, nothing, neutral_vz_advect, r, z, vzeta, vr, vz,
-            composition, geometry, scratch_dummy, advance.r_diffusion,
-            advance.vz_diffusion)
-
-        if moments.evolve_density && moments.enforce_conservation
-            begin_sn_r_z_region()
-            @loop_sn_r_z isn ir iz begin
-                @views hard_force_moment_constraints_neutral!(
-                    new_scratch.pdf_neutral[:,:,:,iz,ir,isn], moments, vz)
-            end
-        end
-
-        # update remaining velocity moments that are calculable from the evolved pdf
-        update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z, r,
-                                        composition)
-        # update the thermal speed
-        begin_sn_r_z_region()
-        @loop_sn_r_z isn ir iz begin
-            moments.neutral.vth[iz,ir,isn] = sqrt(2.0*new_scratch.pz_neutral[iz,ir,isn]/new_scratch.density_neutral[iz,ir,isn])
-        end
-
-        # update the parallel heat flux
-        update_neutral_qz!(moments.neutral.qz, moments.neutral.qz_updated,
-                           new_scratch.density_neutral, new_scratch.uz_neutral,
-                           moments.neutral.vth, new_scratch.pdf_neutral, vz, vr, vzeta, z,
-                           r, composition, moments.evolve_density, moments.evolve_upar,
-                           moments.evolve_ppar)
-
-        calculate_moment_derivatives_neutral!(moments, new_scratch, scratch_dummy, z,
-                                              z_spectral, num_diss_params)
-    end
-
     # update the lowest three electron moments (density, upar and ppar)
     calculate_electron_density!(new_scratch.electron_density, moments.electron.dens_updated, new_scratch.density)
     calculate_electron_upar_from_charge_conservation!(new_scratch.electron_upar, moments.electron.upar_updated,
-        new_scratch.electron_density, new_scratch.upar, new_scratch.density, composition.electron_physics)
+        new_scratch.electron_density, new_scratch.upar, new_scratch.density, composition.electron_physics, r, z)
     # if electron model is braginskii_fluid, then ppar is evolved via the energy equation
     # and is already updated;
     # otherwise update assuming electron temperature is fixed in time
@@ -1519,10 +1395,10 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         @. new_scratch.electron_ppar = 0.5 * new_scratch.electron_density * moments.electron.vth^2
     end
     @. moments.electron.temp = 2 * new_scratch.electron_ppar / new_scratch.electron_density
-    moments.electron.temp_updated = true
+    moments.electron.temp_updated[] = true
     @. moments.electron.vth = sqrt(moments.electron.temp)
     # regardless of electron model, electron ppar is now updated
-    moments.electron.ppar_updated = true
+    moments.electron.ppar_updated[] = true
     # calculate the corresponding zed derivatives of the moments
     calculate_electron_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
                                            num_diss_params, composition.electron_physics)
@@ -1565,9 +1441,10 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         enforce_neutral_boundary_conditions!(new_scratch.pdf_neutral, new_scratch.pdf,
             boundary_distributions, new_scratch.density_neutral, new_scratch.uz_neutral,
             new_scratch.pz_neutral, moments, new_scratch.density, new_scratch.upar,
-            fields.Er, neutral_r_advect, neutral_z_advect, nothing, nothing,
-            neutral_vz_advect, r, z, vzeta, vr, vz, composition, geometry, scratch_dummy,
-            advance.r_diffusion, advance.vz_diffusion)
+            fields.Er, vzeta_spectral, vr_spectral, vz_spectral, neutral_r_advect,
+            neutral_z_advect, nothing, nothing, neutral_vz_advect, r, z, vzeta, vr, vz,
+            composition, geometry, scratch_dummy, advance.r_diffusion,
+            advance.vz_diffusion)
 
         if moments.evolve_density && moments.enforce_conservation
             begin_sn_r_z_region()
@@ -1768,8 +1645,8 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
             external_source_settings, num_diss_params, advance, fp_arrays, istage)
         @views rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr,
                           vzeta, vpa, vperp, z, r, spectral_objects, advect_objects,
-                          advance.rk_coefs[:,istage], istage, composition, geometry,
-                          num_diss_params, advance, scratch_dummy)
+                          advance.rk_coefs[:,istage], istage, composition, collisions,
+                          geometry, num_diss_params, advance, scratch_dummy)
     end
 
     istage = n_rk_stages+1

@@ -10,7 +10,7 @@ using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data,
                                  load_species_data, load_fields_data,
-                                 load_ion_particle_moments_data, load_pdf_data,
+                                 load_ion_moments_data, load_pdf_data,
                                  load_neutral_particle_moments_data,
                                  load_neutral_pdf_data, load_time_data, load_species_data
 using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
@@ -224,7 +224,7 @@ function run_test(test_input, rtol, atol; args...)
             phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
 
             # load velocity moments data
-            n_ion_zrst, upar_ion_zrst, ppar_ion_zrst, qpar_ion_zrst, v_t_ion_zrst = load_ion_particle_moments_data(fid)
+            n_ion_zrst, upar_ion_zrst, ppar_ion_zrst, qpar_ion_zrst, v_t_ion_zrst = load_ion_moments_data(fid)
             n_neutral_zrst, upar_neutral_zrst, ppar_neutral_zrst, qpar_neutral_zrst, v_t_neutral_zrst = load_neutral_particle_moments_data(fid)
             z, z_spectral = load_coordinate_data(fid, "z")
 

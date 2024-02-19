@@ -8,7 +8,7 @@ using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data,
                                  load_species_data, load_fields_data,
-                                 load_ion_particle_moments_data, load_pdf_data,
+                                 load_ion_moments_data, load_pdf_data,
                                  load_time_data, load_species_data
 using moment_kinetics.type_definitions: mk_float
 
@@ -249,7 +249,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
 
             # load velocity moments data
             n_ion_zrst, upar_ion_zrst, ppar_ion_zrst, 
-            pperp_ion_zrst, qpar_ion_zrst, v_t_ion_zrst, dSdt_zrst = load_ion_particle_moments_data(fid,extended_moments=true)
+            pperp_ion_zrst, qpar_ion_zrst, v_t_ion_zrst, dSdt_zrst = load_ion_moments_data(fid,extended_moments=true)
             
             close(fid)
             

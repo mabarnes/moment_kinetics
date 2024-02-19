@@ -1973,10 +1973,10 @@ function reset_moments_status!(moments)
     moments.neutral.pzeta_updated .= false
     moments.neutral.pr_updated .= false
     moments.neutral.qz_updated .= false
-    moments.electron.dens_updated = false
-    moments.electron.upar_updated = false
-    moments.electron.ppar_updated = false
-    moments.electron.qpar_updated = false
+    moments.electron.dens_updated[] = false
+    moments.electron.upar_updated[] = false
+    moments.electron.ppar_updated[] = false
+    moments.electron.qpar_updated[] = false
 end
 
 end

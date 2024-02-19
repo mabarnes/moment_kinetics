@@ -12,7 +12,7 @@ using moment_kinetics.file_io: io_has_parallel
 using moment_kinetics.input_structs: grid_input, advection_input, hdf5
 using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data,
                                  load_species_data, load_fields_data,
-                                 load_ion_particle_moments_data, load_pdf_data,
+                                 load_ion_moments_data, load_pdf_data,
                                  load_neutral_particle_moments_data,
                                  load_neutral_pdf_data, load_time_data, load_species_data
 using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa

@@ -85,7 +85,7 @@ using .debugging
 using .external_sources
 using .input_structs
 using .initial_conditions: allocate_pdf_and_moments, init_pdf_and_moments!,
-                           enforce_boundary_conditions!
+                           enforce_boundary_conditions!, initialize_scratch_arrays!
 using .load_data: reload_evolving_fields!
 using .looping
 using .moment_constraints: hard_force_moment_constraints!
@@ -318,8 +318,8 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     end
 
     # create the "fields" structure that contains arrays
-    # for the electrostatic potential phi (and eventually the electromagnetic fields)
-    fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, 
+    # for the electrostatic potential phi and the electromagnetic fields
+    fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude,
                              drive_input.frequency, drive_input.force_Er_zero_at_wall)
 
     # Allocate arrays and create the pdf and moments structs
@@ -416,17 +416,21 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         initialize_external_source_amplitude!(moments, external_source_settings, vperp,
                                               vzeta, vr, composition.n_neutral_species)
 
+        # Copy the reloaded values into the `scratch` struct
+        initialize_scratch_arrays!(scratch, moments, pdf, t_input.n_rk_stages)
+
         _block_synchronize()
     end
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
 
-    moments, spectral_objects, advance, manufactured_source_list =
-        setup_time_advance!(pdf, scratch, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
-            vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral,
-            r_spectral, composition, drive_input, moments, fields, t_input, collisions,
-            geometry, boundary_distributions, external_source_settings, num_diss_params,
-            manufactured_solns_input, restarting)
+    moments, fields, spectral_objects, advance, fp_arrays, manufactured_source_list =
+        setup_time_advance!(pdf, fields, scratch, vz, vr, vzeta, vpa, vperp, z, r,
+            vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
+            z_spectral, r_spectral, composition, drive_input, moments, t_input,
+            collisions, species, geometry, boundary_distributions,
+            external_source_settings, num_diss_params, manufactured_solns_input,
+            advection_structs, scratch_dummy, restarting)
 
     # This is the closest we can get to the end time of the setup before writing it to the
     # output file
@@ -438,8 +442,8 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         moments.evolve_upar, moments.evolve_ppar, external_source_settings, input_dict,
         restart_time_index, previous_runs_info, time_for_setup)
     # write initial data to ascii files
-    write_data_to_ascii(moments, fields, vpa, vperp, z, r, code_time,
-        composition.n_ion_species, composition.n_neutral_species, ascii_io)
+    write_data_to_ascii(moments, fields, z, r, code_time, composition.n_ion_species,
+        composition.n_neutral_species, ascii_io)
     # write initial data to binary files
 
     write_all_moments_data_to_binary(moments, fields, code_time,

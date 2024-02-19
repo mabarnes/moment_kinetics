@@ -276,6 +276,11 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
                      pdf.ion.norm, vpa, vperp, z, r, composition,
                      moments.evolve_density, moments.evolve_upar, moments.evolve_ppar)
 
+        initialize_external_source_amplitude!(moments, external_source_settings, vperp,
+                                              vzeta, vr, n_neutral_species)
+        initialize_external_source_controller_integral!(moments, external_source_settings,
+                                                        n_neutral_species)
+
         if n_neutral_species > 0
             update_neutral_qz!(moments.neutral.qz, moments.neutral.qz_updated,
                                moments.neutral.dens, moments.neutral.uz,
@@ -1003,6 +1008,11 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
         vz, vr, vzeta, z, vz_spectral, density, uz, pz, vth, v_norm_fac, evolve_density,
         evolve_upar, evolve_ppar, wall_flux_0, wall_flux_L)
 
+    # Reduce the ion flux by `recycling_fraction` to account for ions absorbed by the
+    # wall.
+    wall_flux_0 *= composition.recycling_fraction
+    wall_flux_L *= composition.recycling_fraction
+
     #if spec.vz_IC.initialization_option == "gaussian"
     # For now, continue to use 'vpa' initialization options for neutral species
     if spec.vpa_IC.initialization_option == "gaussian"
@@ -1341,7 +1351,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
     return nothing
 end
 
-function init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composition)
+function init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composition, zero)
 
     begin_serial_region()
     @serial_region begin
@@ -1370,7 +1380,7 @@ function init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composi
                             v_transverse = sqrt(vzeta.grid[ivzeta]^2 + vr.grid[ivr]^2)
                             v_normal = abs(vz.grid[ivz])
                             v_tot = sqrt(v_normal^2 + v_transverse^2)
-                            if  v_tot > 0.0
+                            if  v_tot > zero
                                 prefac = v_normal/v_tot
                             else
                                 prefac = 0.0
@@ -1432,11 +1442,13 @@ various boundaries. Also initialise the Knudsen cosine distribution here so it c
 when initialising the neutral pdf.
 """
 function create_boundary_distributions(vz, vr, vzeta, vpa, vperp, z, composition)
+    zero = 1.0e-14
+
     #initialise knudsen distribution for neutral wall bc
     knudsen_cosine = allocate_shared_float(vz.n, vr.n, vzeta.n)
     #initialise knudsen distribution for neutral wall bc - can be done here as this only
     #depends on T_wall, which has already been set
-    init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composition)
+    init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composition, zero)
     #initialise fixed-in-time radial boundary condition based on initial condition values
     pdf_rboundary_ion = allocate_shared_float(vpa.n, vperp.n, z.n, 2,
                                                   composition.n_ion_species)
@@ -1459,8 +1471,8 @@ enforce boundary conditions in vpa and z on the evolved pdf;
 also enforce boundary conditions in z on all separately evolved velocity space moments of the pdf
 """
 function enforce_boundary_conditions!(f, f_r_bc, density, upar, ppar, moments, vpa_bc,
-        z_bc, r_bc, vpa, vperp, z, r, vpa_adv, z_adv, r_adv, composition, scratch_dummy,
-        r_diffusion, vpa_diffusion)
+        z_bc, r_bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral, vpa_adv, z_adv, r_adv,
+        composition, scratch_dummy, r_diffusion, vpa_diffusion)
     if vpa.n > 1
         begin_s_r_z_vperp_region()
         @loop_s_r_z_vperp is ir iz ivperp begin
