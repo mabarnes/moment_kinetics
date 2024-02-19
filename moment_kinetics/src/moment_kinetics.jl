@@ -118,9 +118,7 @@ function run_moment_kinetics(to::Union{TimerOutput,Nothing}, input_dict=Dict();
     mk_state = nothing
     try
         # set up all the structs, etc. needed for a run
-        #mk_state = setup_moment_kinetics(input_dict; restart=restart,
-        #                                 restart_time_index=restart_time_index)
-        return setup_moment_kinetics(input_dict; restart=restart,
+        mk_state = setup_moment_kinetics(input_dict; restart=restart,
                                          restart_time_index=restart_time_index)
 
         # solve the 1+1D kinetic equation to advance f in time by nstep time steps
@@ -344,7 +342,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         restarting = false
         # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
         # each of which may be evolved separately depending on input choices.
-        return init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geometry,
+        init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geometry,
                               composition, r, z, vperp, vpa, vzeta, vr, vz,
                               z_spectral, r_spectral, vpa_spectral, vz_spectral, species,
                               collisions, external_source_settings,

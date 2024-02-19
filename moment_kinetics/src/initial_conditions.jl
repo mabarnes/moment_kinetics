@@ -368,12 +368,12 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
     update_phi!(fields, scratch[1], z, r, composition, collisions, moments, z_spectral, r_spectral, scratch_dummy)
 
     # initialize the electron pdf that satisfies the electron kinetic equation
-    return initialize_electron_pdf!(scratch[1], pdf, moments, fields.phi, r, z, vpa,
-                                    vperp, vzeta, vr, vz, z_spectral, vpa_spectral,
-                                    advection_structs.electron_z_advect,
-                                    advection_structs.electron_vpa_advect, scratch_dummy,
-                                    collisions, composition, external_source_settings,
-                                    num_diss_params, t_input.dt, io_input, input_dict)
+    initialize_electron_pdf!(scratch[1], pdf, moments, fields.phi, r, z, vpa, vperp,
+                             vzeta, vr, vz, z_spectral, vpa_spectral,
+                             advection_structs.electron_z_advect,
+                             advection_structs.electron_vpa_advect, scratch_dummy,
+                             collisions, composition, external_source_settings,
+                             num_diss_params, t_input.dt, io_input, input_dict)
 
     return nothing
 end
@@ -540,27 +540,29 @@ function initialize_electron_pdf!(fvec, pdf, moments, phi, r, z, vpa, vperp, vze
         max_electron_pdf_iterations = 2000000
         #max_electron_pdf_iterations = 500000
         #max_electron_pdf_iterations = 10000
-        result = @views update_electron_pdf!(fvec, pdf.electron.norm, moments, moments.electron.dens, moments.electron.vth, 
-                                    moments.electron.ppar, moments.electron.qpar, moments.electron.qpar_updated,
-                                    phi, moments.electron.ddens_dz, moments.electron.dppar_dz, 
-                                    moments.electron.dqpar_dz, moments.electron.dvth_dz,
-                                    r, z, vperp, vpa, z_spectral, vpa_spectral, z_advect,
-                                    vpa_advect, scratch_dummy, dt, collisions,
-                                    composition, num_diss_params,
-                                    max_electron_pdf_iterations;
-                                    io_initial_electron=io_initial_electron)
+        electron_pseudotime, n_debug_outputs =
+            @views update_electron_pdf!(fvec, pdf.electron.norm, moments,
+                                        moments.electron.dens, moments.electron.vth,
+                                        moments.electron.ppar, moments.electron.qpar,
+                                        moments.electron.qpar_updated, phi,
+                                        moments.electron.ddens_dz,
+                                        moments.electron.dppar_dz,
+                                        moments.electron.dqpar_dz,
+                                        moments.electron.dvth_dz, r, z, vperp, vpa,
+                                        z_spectral, vpa_spectral, z_advect, vpa_advect,
+                                        scratch_dummy, dt, collisions, composition,
+                                        num_diss_params, max_electron_pdf_iterations;
+                                        io_initial_electron=io_initial_electron)
 
         # Write the converged initial state for the electrons to a file so that it can be
         # re-used if the simulation is re-run.
-        n_debug_outputs = output_counter = result[end]
-        t = result[end-1]
         t_idx = n_debug_outputs+1
-        write_initial_electron_state(pdf.electron.norm, moments, t, io_initial_electron,
-                                     t_idx, r, z, vperp, vpa)
+        write_initial_electron_state(pdf.electron.norm, moments, electron_pseudotime,
+                                     io_initial_electron, t_idx, r, z, vperp, vpa)
         finish_initial_electron_io(io_initial_electron)
 
-        return result
     end
+    return nothing
 end
 
 """

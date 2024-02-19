@@ -63,13 +63,15 @@ function update_electron_pdf!(fvec, pdf, moments, dens, vthe, ppar, qpar, qpar_u
             r, z, vperp, vpa, z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy, dt,
             num_diss_params, max_electron_pdf_iterations; io_initial_electron=io_initial_electron)
     elseif solution_method == "shooting_method"
-        update_electron_pdf_with_shooting_method!(pdf, dens, vthe, ppar, qpar, qpar_updated, 
-            phi, ddens_dz, dppar_dz, dqpar_dz, dvth_dz, z, vpa, vpa_spectral, scratch_dummy, composition)
+        return update_electron_pdf_with_shooting_method!(pdf, dens, vthe, ppar, qpar,
+            qpar_updated, phi, ddens_dz, dppar_dz, dqpar_dz, dvth_dz, z, vpa,
+            vpa_spectral, scratch_dummy, composition)
     elseif solution_method == "picard_iteration"
-        update_electron_pdf_with_picard_iteration!(pdf, dens, vthe, ppar, ddens_dz, dppar_dz, dqpar_dz, dvth_dz,
-            z, vpa, vpa_spectral, scratch_dummy, max_electron_pdf_iterations)
+        return update_electron_pdf_with_picard_iteration!(pdf, dens, vthe, ppar, ddens_dz,
+            dppar_dz, dqpar_dz, dvth_dz, z, vpa, vpa_spectral, scratch_dummy,
+            max_electron_pdf_iterations)
     else
-        println("!!! invalid solution method specified !!!")
+        error("!!! invalid solution method specified !!!")
     end
     return nothing    
 end
@@ -234,12 +236,6 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
     #average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, max_term)
     average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, pdf, upar, vthe, z, vpa)
 
-    result_pdf = nothing
-    result_ppar = nothing
-    result_vth = nothing
-    result_qpar = nothing
-    result_phi = nothing
-    result_residual = nothing
     output_interval = 1000
     output_counter = 0
     begin_serial_region()
@@ -249,17 +245,6 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
             write_initial_electron_state(pdf, moments, time, io_initial_electron,
                                          output_counter, r, z, vperp, vpa)
         end
-        result_pdf = zeros(vpa.n, z.n, max_electron_pdf_iterations ÷ output_interval)
-        result_pdf[:,:,1] .= pdf[:,1,:,1]
-        result_ppar = zeros(z.n, max_electron_pdf_iterations ÷ output_interval)
-        result_ppar[:,1] .= ppar[:,1]
-        result_vth = zeros(z.n, max_electron_pdf_iterations ÷ output_interval)
-        result_vth[:,1] .= vthe[:,1]
-        result_qpar = zeros(z.n, max_electron_pdf_iterations ÷ output_interval)
-        result_qpar[:,1] .= qpar[:,1]
-        result_phi = zeros(z.n, max_electron_pdf_iterations ÷ output_interval)
-        result_phi[:,1] .= phi[:,1]
-        result_residual = zeros(vpa.n, z.n, max_electron_pdf_iterations ÷ output_interval)
     end
     # evolve (artificially) in time until the residual is less than the tolerance
     try
@@ -351,22 +336,6 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
                     write_initial_electron_state(pdf, moments, time, io_initial_electron,
                                                  output_counter, r, z, vperp, vpa)
                 end
-                result_pdf[:,:,iteration÷output_interval+1] .= pdf[:,1,:,1]
-                result_ppar[:,iteration÷output_interval+1] .= ppar[:,1]
-                result_vth[:,iteration÷output_interval+1] .= vthe[:,1]
-                result_qpar[:,iteration÷output_interval+1] .= qpar[:,1]
-                result_phi[:,iteration÷output_interval+1] .= phi[:,1]
-            end
-        else
-            begin_serial_region()
-            @serial_region begin
-                if iteration÷output_interval+1+iteration%output_interval < size(result_pdf, 3)
-                    result_pdf[:,:,iteration÷output_interval+1+iteration%output_interval] .= pdf[:,1,:,1]
-                    result_ppar[:,iteration÷output_interval+1+iteration%output_interval] .= ppar[:,1]
-                    result_vth[:,iteration÷output_interval+1+iteration%output_interval] .= vthe[:,1]
-                    result_qpar[:,iteration÷output_interval+1+iteration%output_interval] .= qpar[:,1]
-                    result_phi[:,iteration÷output_interval+1+iteration%output_interval] .= phi[:,1]
-                end
             end
         end
 
@@ -449,12 +418,6 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         # check to see if the electron pdf satisfies the electron kinetic equation to within the specified tolerance
         #average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, max_term)
         average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, pdf, upar, vthe, z, vpa)
-        if (mod(iteration,output_interval) == 0)
-            begin_serial_region()
-            @serial_region begin
-                result_residual[:,:,iteration÷output_interval+1] .= residual[:,1,:,1]
-            end
-        end
 
         # Divide by wpa to relax CFL condition at large wpa - only looking for steady
         # state here, so does not matter that this makes time evolution incorrect.
@@ -502,15 +465,8 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         close(io_vth)
         close(io_pdf)
         close(io_pdf_stages)
-
-        result_pdf = result_pdf[:,:,1:min(iteration÷output_interval+output_interval,max_electron_pdf_iterations÷output_interval)]
-        result_ppar = result_ppar[:,1:min(iteration÷output_interval+output_interval,max_electron_pdf_iterations÷output_interval)]
-        result_vth = result_vth[:,1:min(iteration÷output_interval+output_interval,max_electron_pdf_iterations÷output_interval)]
-        result_qpar = result_qpar[:,1:min(iteration÷output_interval+output_interval,max_electron_pdf_iterations÷output_interval)]
-        result_phi = result_phi[:,1:min(iteration÷output_interval+output_interval,max_electron_pdf_iterations÷output_interval)]
-        result_residual = result_residual[:,:,1:min(iteration÷output_interval+output_interval,max_electron_pdf_iterations÷output_interval)]
     end
-    return result_pdf, dens, upar, result_ppar, result_vth, result_qpar, result_phi, z, vpa, result_residual, time, output_counter
+    return time, output_counter
 end
 
 function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, vpa_spectral, me_over_mi)
