@@ -26,13 +26,13 @@ using ..looping
 using ..em_fields: update_phi!
 using ..file_io: setup_initial_electron_io, write_initial_electron_state,
                  finish_initial_electron_io
-using ..moment_kinetics_structs: scratch_pdf
+using ..moment_kinetics_structs: scratch_pdf, pdf_substruct, pdf_struct, moments_struct,
+                                 boundary_distributions_struct
 using ..velocity_moments: integrate_over_vspace, integrate_over_neutral_vspace
 using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_vpa
 using ..velocity_moments: integrate_over_positive_vz, integrate_over_negative_vz
 using ..velocity_moments: create_moments_ion, create_moments_electron, create_moments_neutral
 using ..velocity_moments: update_qpar!
-using ..velocity_moments: moments_ion_substruct, moments_electron_substruct, moments_neutral_substruct
 using ..velocity_moments: update_neutral_density!, update_neutral_pz!, update_neutral_pr!, update_neutral_pzeta!
 using ..velocity_moments: update_neutral_uz!, update_neutral_ur!, update_neutral_uzeta!, update_neutral_qz!
 using ..velocity_moments: update_ppar!, update_upar!, update_density!, update_pperp!, update_vth!, reset_moments_status!
@@ -47,50 +47,6 @@ using ..derivatives: derivative_z!
 using ..manufactured_solns: manufactured_solutions
 
 using MPI
-
-"""
-"""
-struct pdf_substruct{n_distribution}
-    norm::MPISharedArray{mk_float,n_distribution}
-    buffer::MPISharedArray{mk_float,n_distribution} # for collision operator terms when pdfs must be interpolated onto different velocity space grids
-end
-
-# struct of structs neatly contains i+n info?
-struct pdf_struct
-    #ion particles: s + r + z + vperp + vpa
-    ion::pdf_substruct{5}
-    # electron particles: r + z + vperp + vpa
-    electron::pdf_substruct{4}
-    #neutral particles: s + r + z + vzeta + vr + vz
-    neutral::pdf_substruct{6}
-end
-
-struct moments_struct
-    ion::moments_ion_substruct
-    electron::moments_electron_substruct
-    neutral::moments_neutral_substruct
-    # flag that indicates if the density should be evolved via continuity equation
-    evolve_density::Bool
-    # flag that indicates if particle number should be conserved for each species
-    # effects like ionisation or net particle flux from the domain would lead to
-    # non-conservation
-    particle_number_conserved::Bool
-    # flag that indicates if exact particle conservation should be enforced
-    enforce_conservation::Bool
-    # flag that indicates if the parallel flow should be evolved via force balance
-    evolve_upar::Bool
-    # flag that indicates if the parallel pressure should be evolved via the energy equation
-    evolve_ppar::Bool
-end
-
-struct boundary_distributions_struct
-    # knudsen cosine distribution for imposing the neutral wall boundary condition
-    knudsen::MPISharedArray{mk_float,3}
-    # ion particle r boundary values (vpa,vperp,z,r,s)
-    pdf_rboundary_ion::MPISharedArray{mk_float,5}
-    # neutral particle r boundary values (vz,vr,vzeta,z,r,s)
-    pdf_rboundary_neutral::MPISharedArray{mk_float,6}
-end
 
 """
 Creates the structs for the pdf and the velocity-space moments
