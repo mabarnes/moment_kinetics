@@ -26,6 +26,7 @@ using ..looping
 using ..em_fields: update_phi!
 using ..file_io: setup_initial_electron_io, write_initial_electron_state,
                  finish_initial_electron_io
+using ..load_data: reload_electron_data!
 using ..moment_kinetics_structs: scratch_pdf, pdf_substruct, pdf_struct, moments_struct,
                                  boundary_distributions_struct
 using ..velocity_moments: integrate_over_vspace, integrate_over_neutral_vspace
@@ -43,6 +44,7 @@ using ..electron_fluid_equations: calculate_electron_parallel_friction_force!
 using ..electron_kinetic_equation: update_electron_pdf!, enforce_boundary_condition_on_electron_pdf!
 using ..input_structs: boltzmann_electron_response_with_simple_sheath, kinetic_electrons
 using ..derivatives: derivative_z!
+using ..utils: get_default_restart_filename, get_prefix_iblock_and_move_existing_file
 
 using ..manufactured_solns: manufactured_solutions
 
@@ -344,7 +346,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
                              vzeta, vr, vz, z_spectral, vpa_spectral,
                              advection_structs.electron_z_advect,
                              advection_structs.electron_vpa_advect, scratch_dummy,
-                             collisions, composition, external_source_settings,
+                             collisions, composition, geometry, external_source_settings,
                              num_diss_params, t_input.dt, io_input, input_dict)
 
     return nothing
@@ -470,19 +472,38 @@ end
 
 function initialize_electron_pdf!(fvec, pdf, moments, phi, r, z, vpa, vperp, vzeta, vr,
                                   vz, z_spectral, vpa_spectral, z_advect, vpa_advect,
-                                  scratch_dummy, collisions, composition,
+                                  scratch_dummy, collisions, composition, geometry,
                                   external_source_settings, num_diss_params, dt, io_input,
                                   input_dict)
     # now that the initial electron pdf is given, the electron parallel heat flux should be updated
     # if using kinetic electrons
     if composition.electron_physics == kinetic_electrons
         begin_serial_region()
+        restart_filename = get_default_restart_filename(io_input, "initial_electron";
+                                                        error_if_no_file_found=false)
+        if restart_filename === nothing
+            # No file to restart from
+            previous_runs_info = nothing
+            code_time = 0.0
+            restart_time_index = -1
+        else
+            # Previously-created electron distribution function exists, so use it as
+            # the initial guess.
+            backup_prefix_iblock =
+                get_prefix_iblock_and_move_existing_file(restart_filename,
+                                                         io_input.output_dir)
+
+            # Reload pdf and moments from an existing output file
+            code_time, previous_runs_info, restart_time_index =
+                reload_electron_data!(pdf, moments, backup_prefix_iblock, -1,
+                                      geometry, r, z, vpa, vperp, vzeta, vr, vz)
+
+            # Broadcast code_time from the root process of each shared-memory block (on which it
+            # might have been loaded from a restart file).
+            code_time = MPI.Bcast(code_time, 0, comm_block[])
+        end
         io_initial_electron = nothing
         @serial_region begin
-            if false && isfile(initial_electron_output_filename)
-            else
-                previous_runs_info = nothing
-            end
             # Setup I/O for initial electron state
             io_initial_electron = setup_initial_electron_io(io_input, vz, vr, vzeta, vpa,
                                                             vperp, z, r, composition,
@@ -492,6 +513,7 @@ function initialize_electron_pdf!(fvec, pdf, moments, phi, r, z, vpa, vperp, vze
                                                             moments.evolve_ppar,
                                                             external_source_settings,
                                                             input_dict,
+                                                            restart_time_index,
                                                             previous_runs_info)
 
             # update the electron pdf in the fvec struct
@@ -526,7 +548,8 @@ function initialize_electron_pdf!(fvec, pdf, moments, phi, r, z, vpa, vperp, vze
                                         z_spectral, vpa_spectral, z_advect, vpa_advect,
                                         scratch_dummy, dt, collisions, composition,
                                         num_diss_params, max_electron_pdf_iterations;
-                                        io_initial_electron=io_initial_electron)
+                                        io_initial_electron=io_initial_electron,
+                                        initial_time=code_time)
 
         # Write the converged initial state for the electrons to a file so that it can be
         # re-used if the simulation is re-run.

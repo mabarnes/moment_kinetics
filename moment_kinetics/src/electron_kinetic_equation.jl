@@ -50,7 +50,8 @@ OUTPUT:
 function update_electron_pdf!(fvec, pdf, moments, dens, vthe, ppar, qpar, qpar_updated,
         phi, ddens_dz, dppar_dz, dqpar_dz, dvth_dz, r, z, vperp, vpa, z_spectral,
         vpa_spectral, z_advect, vpa_advect, scratch_dummy, dt, collisions, composition,
-        num_diss_params, max_electron_pdf_iterations; io_initial_electron=nothing)
+        num_diss_params, max_electron_pdf_iterations; io_initial_electron=nothing,
+        initial_time=0.0)
 
     # set the method to use to solve the electron kinetic equation
     solution_method = "artificial_time_derivative"
@@ -61,7 +62,8 @@ function update_electron_pdf!(fvec, pdf, moments, dens, vthe, ppar, qpar, qpar_u
         return update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated, 
             moments, dens, vthe, ppar, ddens_dz, dppar_dz, dqpar_dz, dvth_dz, phi, collisions, composition, 
             r, z, vperp, vpa, z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy, dt,
-            num_diss_params, max_electron_pdf_iterations; io_initial_electron=io_initial_electron)
+            num_diss_params, max_electron_pdf_iterations;
+            io_initial_electron=io_initial_electron, initial_time=initial_time)
     elseif solution_method == "shooting_method"
         return update_electron_pdf_with_shooting_method!(pdf, dens, vthe, ppar, qpar,
             qpar_updated, phi, ddens_dz, dppar_dz, dqpar_dz, dvth_dz, z, vpa,
@@ -99,13 +101,15 @@ The electron kinetic equation is:
     scratch_dummy = dummy arrays to be used for temporary storage
     dt = time step size
     max_electron_pdf_iterations = maximum number of iterations to use in the solution of the electron kinetic equation
+    io_initial_electron = info struct for binary file I/O
+    initial_time = initial value for the (pseudo-)time
 OUTPUT:
     pdf = updated (modified) electron pdf
 """
 function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated, 
     moments, dens, vthe, ppar, ddens_dz, dppar_dz, dqpar_dz, dvth_dz, phi, collisions, composition,
     r, z, vperp, vpa, z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy, dt,
-    num_diss_params, max_electron_pdf_iterations; io_initial_electron=nothing)
+    num_diss_params, max_electron_pdf_iterations; io_initial_electron=nothing, initial_time=0.0)
 
     begin_r_z_region()
 
@@ -164,7 +168,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
     #n_ppar_subcycles = 1000
     #n_ppar_subcycles = 200
     n_ppar_subcycles = 1
-    time = 0.0
+    time = initial_time
 
     #z_speedup_fac = 20.0
     #z_speedup_fac = 5.0
@@ -248,7 +252,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
     end
     # evolve (artificially) in time until the residual is less than the tolerance
     try
-    while !electron_pdf_converged && (iteration < max_electron_pdf_iterations)
+    while !electron_pdf_converged && (iteration <= max_electron_pdf_iterations)
         begin_r_z_region()
         # d(pdf)/dt = -kinetic_eqn_terms, so pdf_new = pdf - dt * kinetic_eqn_terms
         @loop_r_z_vperp_vpa ir iz ivperp ivpa begin

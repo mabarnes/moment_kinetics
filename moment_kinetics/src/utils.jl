@@ -144,7 +144,7 @@ function get_backup_filename(filename)
     iblock = nothing
     basename = nothing
     type = nothing
-    if iblock_or_type == "dfns"
+    if iblock_or_type ∈ ("dfns", "initial_electron")
         iblock = nothing
         type = iblock_or_type
         basename = temp
@@ -158,7 +158,7 @@ function get_backup_filename(filename)
         type = type[2:end]
         parallel_io = false
     end
-    if type != "dfns"
+    if type ∉ ("dfns", "initial_electron")
         error("Must pass the '.dfns.h5' output file for restarting. Got $filename.")
     end
     backup_dfns_filename = ""
@@ -173,8 +173,12 @@ function get_backup_filename(filename)
         end
         # Create dfns_filename here even though it is the filename passed in, as
         # parallel_io=false branch needs to get the right `iblock` for this block.
-        dfns_filename = "$(basename).dfns.$(extension)"
-        moments_filename = "$(basename).moments.$(extension)"
+        dfns_filename = "$(basename).$(type).$(extension)"
+        if type == "dfns"
+            moments_filename = "$(basename).moments.$(extension)"
+        else
+            moments_filename = nothing
+        end
         backup_moments_filename = "$(basename)_$(counter).moments.$(extension)"
     else
         while true
@@ -186,8 +190,12 @@ function get_backup_filename(filename)
         end
         # Create dfns_filename here even though it is almost the filename passed in, in
         # order to get the right `iblock` for this block.
-        dfns_filename = "$(basename).dfns.$(iblock).$(extension)"
-        moments_filename = "$(basename).moments.$(iblock).$(extension)"
+        dfns_filename = "$(basename).$(type).$(iblock).$(extension)"
+        if type == "dfns"
+            moments_filename = "$(basename).moments.$(iblock).$(extension)"
+        else
+            moments_filename = nothing
+        end
         backup_moments_filename = "$(basename)_$(counter).moments.$(iblock).$(extension)"
     end
     backup_dfns_filename == "" && error("Failed to find a name for backup file.")
@@ -253,7 +261,9 @@ function get_prefix_iblock_and_move_existing_file(restart_filename, output_dir)
         # restarting from another run, and will not be overwriting the file.
         if (parallel_io && global_rank[] == 0) || (!parallel_io && block_rank[] == 0)
             mv(dfns_filename, backup_dfns_filename)
-            mv(moments_filename, backup_moments_filename)
+            if moments_filename !== nothing
+                mv(moments_filename, backup_moments_filename)
+            end
         end
     else
         # Reload from dfns_filename without moving the file

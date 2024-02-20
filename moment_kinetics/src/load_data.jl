@@ -822,7 +822,7 @@ function reload_electron_data!(pdf, moments, restart_prefix_iblock, time_index, 
     previous_runs_info = nothing
     begin_serial_region()
     @serial_region begin
-        fid = open_readonly_output_file(restart_prefix_iblock[1], "dfns";
+        fid = open_readonly_output_file(restart_prefix_iblock[1], "initial_electron";
                                         iblock=restart_prefix_iblock[2])
         try # finally to make sure to close file0
             overview = get_group(fid, "overview")

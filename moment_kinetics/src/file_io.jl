@@ -260,7 +260,7 @@ open output file to save the initial electron pressure and distribution function
 function setup_initial_electron_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition,
                                    collisions, evolve_density, evolve_upar, evolve_ppar,
                                    external_source_settings, input_dict,
-                                   previous_runs_info)
+                                   restart_time_index, previous_runs_info)
     begin_serial_region()
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -273,10 +273,6 @@ function setup_initial_electron_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, co
         run_id = io_input.run_id
         parallel_io = io_input.parallel_io
         io_comm = comm_inter_block[]
-
-        # dummy value for restart_time_index, which is not used for the initial electron
-        # state
-        restart_time_index = -1
 
         electrons_prefix = string(out_prefix, ".initial_electron")
         if !parallel_io
