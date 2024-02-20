@@ -421,6 +421,11 @@ function setup_moment_kinetics(input_dict::AbstractDict;
 
         _block_synchronize()
     end
+
+    # Broadcast code_time from the root process of each shared-memory block (on which it
+    # might have been loaded from a restart file).
+    code_time = MPI.Bcast(code_time, 0, comm_block[])
+
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
 
