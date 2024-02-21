@@ -476,9 +476,11 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
                 finish_initial_electron_io(io_initial_electron)
             end
 
-            error("!!!max number of iterations for electron pdf update exceeded!!!\n"
-                  * "Stopping at $(Dates.format(now(), dateformat"H:MM:SS"))")
         end
+    end
+    if !electron_pdf_converged
+        error("!!!max number of iterations for electron pdf update exceeded!!!\n"
+              * "Stopping at $(Dates.format(now(), dateformat"H:MM:SS"))")
     end
     return time, output_counter
 end
