@@ -17,7 +17,7 @@ using ..electron_fluid_equations: calculate_electron_qpar_from_pdf!
 using ..electron_fluid_equations: electron_energy_equation!
 using ..electron_z_advection: electron_z_advection!
 using ..electron_vpa_advection: electron_vpa_advection!
-using ..file_io: write_initial_electron_state
+using ..file_io: write_initial_electron_state, finish_initial_electron_io
 using ..moment_constraints: hard_force_moment_constraints!
 using ..velocity_moments: integrate_over_vspace
 
@@ -453,9 +453,6 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
     begin_serial_region()
     @serial_region begin
         if !electron_pdf_converged
-            # need to exit or handle this appropriately
-            println("!!!max number of iterations for electron pdf update exceeded!!!")
-            println("Stopping at ", Dates.format(now(), dateformat"H:MM:SS"))
             @loop_vpa ivpa begin
                 @loop_z iz begin
                     println(io_pdf, "z: ", z.grid[iz], " wpa: ", vpa.grid[ivpa], " pdf: ", pdf[ivpa, 1, iz, 1], " time: ", time, " residual: ", residual[ivpa, 1, iz, 1])
@@ -469,6 +466,19 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         close(io_vth)
         close(io_pdf)
         close(io_pdf_stages)
+        if !electron_pdf_converged
+            # need to exit or handle this appropriately
+
+            if io_initial_electron !== nothing
+                output_counter += 1
+                write_initial_electron_state(pdf, moments, time, io_initial_electron,
+                                             output_counter, r, z, vperp, vpa)
+                finish_initial_electron_io(io_initial_electron)
+            end
+
+            error("!!!max number of iterations for electron pdf update exceeded!!!\n"
+                  * "Stopping at $(Dates.format(now(), dateformat"H:MM:SS"))")
+        end
     end
     return time, output_counter
 end
