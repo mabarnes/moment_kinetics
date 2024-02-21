@@ -151,6 +151,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         # update the z-derivative of the electron thermal speed from the z-derivatives of the electron density
         # and parallel pressure
         dvth_dz[iz,ir] = 0.5 * vthe[iz,ir] * (dppar_dz[iz,ir] / ppar[iz,ir] - ddens_dz[iz,ir] / dens[iz,ir])
+        fvec.electron_ppar[iz,ir] = ppar[iz,ir]
     end
 
     # compute the z-derivative of the input electron parallel heat flux, needed for the electron kinetic equation
