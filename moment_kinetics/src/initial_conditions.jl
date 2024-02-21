@@ -520,6 +520,11 @@ function initialize_electron_pdf!(fvec, pdf, moments, phi, r, z, vpa, vperp, vze
             fvec.pdf_electron .= pdf.electron.norm
         end
 
+        @loop_r_z ir iz begin
+            # update the electron thermal speed using the updated electron parallel pressure
+            moments.electron.vth[iz,ir] = sqrt(abs(2.0 * moments.electron.ppar[iz,ir] / (moments.electron.dens[iz,ir] * composition.me_over_mi)))
+        end
+
         moments.electron.qpar_updated[] = false
         calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, pdf.electron,
             moments.electron.ppar, moments.electron.upar, moments.electron.vth, 

@@ -146,11 +146,11 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
     #@. ddens_dz = (dppar_dz / ppar)*0.9
 
     @loop_r_z ir iz begin
+        # update the electron thermal speed using the updated electron parallel pressure
+        vthe[iz,ir] = sqrt(abs(2.0 * ppar[iz,ir] / (dens[iz,ir] * composition.me_over_mi)))
         # update the z-derivative of the electron thermal speed from the z-derivatives of the electron density
         # and parallel pressure
         dvth_dz[iz,ir] = 0.5 * vthe[iz,ir] * (dppar_dz[iz,ir] / ppar[iz,ir] - ddens_dz[iz,ir] / dens[iz,ir])
-        # update the electron thermal speed itself using the updated electron parallel pressure
-        vthe[iz,ir] = sqrt(abs(2.0 * ppar[iz,ir] / (dens[iz,ir] * composition.me_over_mi)))
     end
 
     # compute the z-derivative of the input electron parallel heat flux, needed for the electron kinetic equation
@@ -401,11 +401,11 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
                                  buffer_r_4, z_spectral, z)
             begin_r_z_region()
             @loop_r_z ir iz begin
+                # update the electron thermal speed using the updated electron parallel pressure
+                vthe[iz,ir] = sqrt(abs(2.0 * ppar[iz,ir] / (dens[iz,ir] * composition.me_over_mi)))
                 # update the z-derivative of the electron thermal speed from the z-derivatives of the electron density
                 # and parallel pressure
                 dvth_dz[iz,ir] = 0.5 * vthe[iz,ir] * (dppar_dz[iz,ir] / ppar[iz,ir] - ddens_dz[iz,ir] / dens[iz,ir])
-                # update the electron thermal speed itself using the updated electron parallel pressure
-                vthe[iz,ir] = sqrt(abs(2.0 * ppar[iz,ir] / (dens[iz,ir] * composition.me_over_mi)))
             end
         end
 
