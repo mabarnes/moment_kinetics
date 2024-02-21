@@ -253,6 +253,72 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
     # evolve (artificially) in time until the residual is less than the tolerance
     try
     while !electron_pdf_converged && (iteration <= max_electron_pdf_iterations)
+        #dt_energy = dt_electron * 10.0
+
+        # get an updated iterate of the electron parallel pressure
+        begin_r_z_region()
+        #ppar .= ppar_old
+        wpa3_moment = @view scratch_dummy.buffer_zrs_1[:,:,1]
+        @loop_r_z ir iz begin
+            wpa3_moment[iz,ir] = qpar[iz,ir] / vthe[iz,ir]^3
+        end
+        for i in 1:n_ppar_subcycles
+            @loop_r_z ir iz begin
+                qpar[iz,ir] = vthe[iz,ir]^3 * wpa3_moment[iz,ir]
+                dummy_zr[iz,ir] = -upar[iz,ir]
+            end
+            @views derivative_z!(dqpar_dz, qpar, buffer_r_1, buffer_r_2, buffer_r_3,
+                                 buffer_r_4, z_spectral, z)
+            # Compute the upwinded z-derivative of the electron parallel pressure for the
+            # electron energy equation
+            @views derivative_z!(moments.electron.dppar_dz_upwind, ppar, dummy_zr,
+                             buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
+                             buffer_r_5, buffer_r_6, z_spectral, z)
+            # centred second derivative for dissipation
+            if num_diss_params.moment_dissipation_coefficient > 0.0
+                @views derivative_z!(moments.electron.d2ppar_dz2, dppar_dz, buffer_r_1,
+                                 buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+                begin_serial_region()
+                @serial_region begin
+                    if z.irank == 0
+                        moments.electron.d2ppar_dz2[1,:] .= 0.0
+                    end
+                    if z.irank == z.nrank - 1
+                        moments.electron.d2ppar_dz2[end,:] .= 0.0
+                    end
+                end
+            end
+
+            #dt_energy = dt_electron
+            electron_energy_equation!(ppar, dens, fvec, moments, collisions, dt_energy, composition, num_diss_params, z)
+
+            # Apply same 'speed up' hack to ppar that we do to the distribution function,
+            # but without the wpa dependence.
+            @loop_r_z ir iz begin
+                zval = z.grid[iz]
+                znorm = 2.0*zval/Lz
+                ppar[iz,ir] = fvec.electron_ppar[iz,ir] +
+                              (ppar[iz,ir] - fvec.electron_ppar[iz,ir]) *
+                              (1.0 + z_speedup_fac*(1.0 - znorm^2))
+            end
+            begin_r_z_region()
+            @loop_r_z ir iz begin
+                fvec.electron_ppar[iz,ir] = ppar[iz,ir]
+            end
+
+            # compute the z-derivative of the updated electron parallel pressure
+            @views derivative_z!(dppar_dz, ppar, buffer_r_1, buffer_r_2, buffer_r_3,
+                                 buffer_r_4, z_spectral, z)
+            begin_r_z_region()
+            @loop_r_z ir iz begin
+                # update the electron thermal speed using the updated electron parallel pressure
+                vthe[iz,ir] = sqrt(abs(2.0 * ppar[iz,ir] / (dens[iz,ir] * composition.me_over_mi)))
+                # update the z-derivative of the electron thermal speed from the z-derivatives of the electron density
+                # and parallel pressure
+                dvth_dz[iz,ir] = 0.5 * vthe[iz,ir] * (dppar_dz[iz,ir] / ppar[iz,ir] - ddens_dz[iz,ir] / dens[iz,ir])
+            end
+        end
+
         begin_r_z_region()
         # d(pdf)/dt = -kinetic_eqn_terms, so pdf_new = pdf - dt * kinetic_eqn_terms
         @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
@@ -340,72 +406,6 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
                     write_initial_electron_state(pdf, moments, time, io_initial_electron,
                                                  output_counter, r, z, vperp, vpa)
                 end
-            end
-        end
-
-        #dt_energy = dt_electron * 10.0
-
-        # get an updated iterate of the electron parallel pressure
-        begin_r_z_region()
-        #ppar .= ppar_old
-        wpa3_moment = @view scratch_dummy.buffer_zrs_1[:,:,1]
-        @loop_r_z ir iz begin
-            wpa3_moment[iz,ir] = qpar[iz,ir] / vthe[iz,ir]^3
-        end
-        for i in 1:n_ppar_subcycles
-            @loop_r_z ir iz begin
-                qpar[iz,ir] = vthe[iz,ir]^3 * wpa3_moment[iz,ir]
-                dummy_zr[iz,ir] = -upar[iz,ir]
-            end
-            @views derivative_z!(dqpar_dz, qpar, buffer_r_1, buffer_r_2, buffer_r_3,
-                                 buffer_r_4, z_spectral, z)
-            # Compute the upwinded z-derivative of the electron parallel pressure for the 
-            # electron energy equation
-            @views derivative_z!(moments.electron.dppar_dz_upwind, ppar, dummy_zr,
-                             buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
-                             buffer_r_5, buffer_r_6, z_spectral, z)
-            # centred second derivative for dissipation
-            if num_diss_params.moment_dissipation_coefficient > 0.0
-                @views derivative_z!(moments.electron.d2ppar_dz2, dppar_dz, buffer_r_1,
-                                 buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
-                begin_serial_region()
-                @serial_region begin
-                    if z.irank == 0
-                        moments.electron.d2ppar_dz2[1,:] .= 0.0
-                    end
-                    if z.irank == z.nrank - 1
-                        moments.electron.d2ppar_dz2[end,:] .= 0.0
-                    end
-                end
-            end
-
-            #dt_energy = dt_electron
-            electron_energy_equation!(ppar, dens, fvec, moments, collisions, dt_energy, composition, num_diss_params, z)
-
-            # Apply same 'speed up' hack to ppar that we do to the distribution function,
-            # but without the wpa dependence.
-            @loop_r_z ir iz begin
-                zval = z.grid[iz]
-                znorm = 2.0*zval/Lz
-                ppar[iz,ir] = fvec.electron_ppar[iz,ir] +
-                              (ppar[iz,ir] - fvec.electron_ppar[iz,ir]) *
-                              (1.0 + z_speedup_fac*(1.0 - znorm^2))
-            end
-            begin_r_z_region()
-            @loop_r_z ir iz begin
-                fvec.electron_ppar[iz,ir] = ppar[iz,ir]
-            end
-        
-            # compute the z-derivative of the updated electron parallel pressure
-            @views derivative_z!(dppar_dz, ppar, buffer_r_1, buffer_r_2, buffer_r_3,
-                                 buffer_r_4, z_spectral, z)
-            begin_r_z_region()
-            @loop_r_z ir iz begin
-                # update the electron thermal speed using the updated electron parallel pressure
-                vthe[iz,ir] = sqrt(abs(2.0 * ppar[iz,ir] / (dens[iz,ir] * composition.me_over_mi)))
-                # update the z-derivative of the electron thermal speed from the z-derivatives of the electron density
-                # and parallel pressure
-                dvth_dz[iz,ir] = 0.5 * vthe[iz,ir] * (dppar_dz[iz,ir] / ppar[iz,ir] - ddens_dz[iz,ir] / dens[iz,ir])
             end
         end
 
