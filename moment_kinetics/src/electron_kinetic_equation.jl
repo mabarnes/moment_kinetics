@@ -518,9 +518,20 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
         # construct a grid of wpa = (vpa - upar)/vthe values corresponding to a vpa-symmetric grid
         #@. wpa_values = vpa.grid #- upar[1,ir] / vthe[1,ir]
         #wpa_of_minus_vpa = @. vpa.scratch3 = -vpa.grid - upar[1,ir] / vthe[1,ir]
+
+        # Want to construct the w-grid corresponding to -vpa.
+        #   wpa(vpa) = (vpa - upar)/vth
+        #   ⇒ vpa = vth*wpa(vpa) + upar
+        #   wpa(-vpa) = (-vpa - upar)/vth
+        #             = (-(vth*wpa(vpa) + upar) - upar)/vth
+        #             = (-vth*wpa - 2*upar)/vth
+        #             = -wpa - 2*upar/vth
+        # [Note that `vpa.grid` is slightly mis-named here - it contains the values of
+        #  wpa(+vpa) as we are using a 'moment kinetic' approach.]
         # Need to reverse vpa.grid because the grid passed as the second argument of
         # interpolate_to_grid_1d!() needs to be sorted in increasing order.
-        reversed_wpa_of_minus_vpa = vpa.scratch2 .= .-reverse(vpa.grid) .- upar[1,ir] / vthe[1,ir]
+        reversed_wpa_of_minus_vpa = vpa.scratch2 .= .-reverse(vpa.grid) .- 2.0 * upar[1,ir] / vthe[1,ir]
+        #reversed_wpa_of_minus_vpa = vpa.scratch2 .= .-reverse(vpa.grid) .- 1.5 * upar[1,ir] / vthe[1,ir]
         # interpolate the pdf onto this grid
         #@views interpolate_to_grid_1d!(interpolated_pdf, wpa_values, pdf[:,1,1,ir], vpa, vpa_spectral)
         @views interpolate_to_grid_1d!(reversed_pdf, reversed_wpa_of_minus_vpa, pdf[:,1,1,ir], vpa, vpa_spectral) # Could make this more efficient by only interpolating to the points needed below, by taking an appropriate view of wpa_of_minus_vpa. Also, in the element containing vpa=0, this interpolation depends on the values that will be replaced by the reflected, interpolated values, which is not ideal (maybe this element should be treated specially first?).
@@ -736,7 +747,13 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
         #@. wpa_values = vpa.grid # - upar[end,ir] / vthe[end,ir]
         # Need to reverse vpa.grid because the grid passed as the second argument of
         # interpolate_to_grid_1d!() needs to be sorted in increasing order.
-        reversed_wpa_of_minus_vpa = vpa.scratch2 .= .-reverse(vpa.grid) .- upar[end,ir] / vthe[end,ir]
+
+        # [Note that `vpa.grid` is slightly mis-named here - it contains the values of
+        #  wpa(+vpa) as we are using a 'moment kinetic' approach.]
+        # Need to reverse vpa.grid because the grid passed as the second argument of
+        # interpolate_to_grid_1d!() needs to be sorted in increasing order.
+        reversed_wpa_of_minus_vpa = vpa.scratch2 .= .-reverse(vpa.grid) .- 2.0 * upar[end,ir] / vthe[end,ir]
+        #reversed_wpa_of_minus_vpa = vpa.scratch2 .= .-reverse(vpa.grid) .- 1.5 * upar[end,ir] / vthe[end,ir]
         # interpolate the pdf onto this grid
         #@views interpolate_to_grid_1d!(interpolated_pdf, wpa_values, pdf[:,1,end,ir], vpa, vpa_spectral)
         @views interpolate_to_grid_1d!(reversed_pdf, reversed_wpa_of_minus_vpa, pdf[:,1,end,ir], vpa, vpa_spectral) # Could make this more efficient by only interpolating to the points needed below, by taking an appropriate view of wpa_of_minus_vpa. Also, in the element containing vpa=0, this interpolation depends on the values that will be replaced by the reflected, interpolated values, which is not ideal (maybe this element should be treated specially first?).
