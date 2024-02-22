@@ -499,7 +499,9 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
 
     # pdf_adjustment_option determines the velocity-dependent pre-factor for the
     # corrections to the pdf needed to ensure moment constraints are satisfied
-    pdf_adjustment_option = "vpa4_gaussian"
+    #pdf_adjustment_option = "vpa4"
+    #pdf_adjustment_option = "vpa4_gaussian"
+    pdf_adjustment_option = "no1st_vpa2"
 
     cutoff_step_width = 0.1
 
@@ -693,6 +695,11 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
             #normalisation_constant_C = 0.0
             @. pdf[:,1,1,ir] *= (normalisation_constant_A + exp(-afac * vpa.scratch2^2) * vpa.scratch2^2 * normalisation_constant_B 
                                 + exp(-bfac * vpa.scratch2^2) * vpa.scratch2^4 * normalisation_constant_C)
+        elseif pdf_adjustment_option == "no1st_vpa2"
+            normalisation_constant_B = (1.0 - 0.5*zeroth_moment/wpa2_moment) /
+                                       (vpa2_moment - zeroth_moment*vpa2_wpa2_moment / wpa2_moment)
+            normalisation_constant_A = (0.5 - normalisation_constant_B*vpa2_wpa2_moment) / wpa2_moment
+            @. pdf[:,1,1,ir] *= (normalisation_constant_A + vpa.scratch2^2 * normalisation_constant_B)
         else
             println("pdf_adjustment_option not recognised")
             stop()
@@ -921,6 +928,11 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
             #normalisation_constant_C = 0.0
             @. pdf[:,1,end,ir] *= (normalisation_constant_A + exp(-afac * vpa.scratch2^2) * vpa.scratch2^2 * normalisation_constant_B 
                                 + exp(-bfac * vpa.scratch2^2) * vpa.scratch2^4 * normalisation_constant_C)
+        elseif pdf_adjustment_option == "no1st_vpa2"
+            normalisation_constant_B = (1.0 - 0.5*zeroth_moment/wpa2_moment) /
+                                       (vpa2_moment - zeroth_moment*vpa2_wpa2_moment / wpa2_moment)
+            normalisation_constant_A = (0.5 - normalisation_constant_B*vpa2_wpa2_moment) / wpa2_moment
+            @. pdf[:,1,end,ir] *= (normalisation_constant_A + vpa.scratch2^2 * normalisation_constant_B)
         else
             println("pdf_adjustment_option not recognised")
             stop()
