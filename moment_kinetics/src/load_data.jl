@@ -3688,14 +3688,14 @@ end
 
 function get_variable(run_info, variable_name; kwargs...)
     if variable_name == "temperature"
-        vth = postproc_load_variable(run_info, "thermal_speed")
+        vth = postproc_load_variable(run_info, "thermal_speed"; kwargs...)
         variable = vth.^2
     elseif variable_name == "collision_frequency"
-        n = postproc_load_variable(run_info, "density")
-        vth = postproc_load_variable(run_info, "thermal_speed")
+        n = postproc_load_variable(run_info, "density"; kwargs...)
+        vth = postproc_load_variable(run_info, "thermal_speed"; kwargs...)
         variable = get_collision_frequency(run_info.collisions, n, vth)
     elseif variable_name == "temperature_neutral"
-        vth = postproc_load_variable(run_info, "thermal_speed_neutral")
+        vth = postproc_load_variable(run_info, "thermal_speed_neutral"; kwargs...)
         variable = vth.^2
     elseif variable_name == "sound_speed"
         T_e = run_info.composition.T_e
@@ -3712,7 +3712,7 @@ function get_variable(run_info, variable_name; kwargs...)
         cs = get_variable(run_info, "sound_speed"; kwargs...)
         variable = upar ./ cs
     else
-        variable = postproc_load_variable(run_info, variable_name)
+        variable = postproc_load_variable(run_info, variable_name; kwargs...)
     end
 
     return variable
