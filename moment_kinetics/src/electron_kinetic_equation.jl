@@ -594,11 +594,13 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
                0.5 * fraction_of_pdf*(vpa_unnorm[ivpa-1] - vpa_unnorm[ivpa+1])
 
         #println("vmax=$vmax, v-no-interp=", vpa_unnorm[ivpa])
-        wmax = (-vmax - upar[1,ir]) / vthe[1,ir]
+        #wmax = (-vmax - upar[1,ir]) / vthe[1,ir]
         #println("wmax=$wmax, w-no-interp", (vpa_unnorm[ivpa] - upar0)/vthe[1,ir])
-        @loop_vpa ivpa begin
-            reversed_pdf[ivpa] *= 0.5*(1.0 - tanh((vpa.grid[ivpa] - wmax) / cutoff_step_width))
-        end
+        #@loop_vpa ivpa begin
+        #    reversed_pdf[ivpa] *= 0.5*(1.0 - tanh((vpa.grid[ivpa] - wmax) / cutoff_step_width))
+        #end
+        reversed_pdf[ivpa_max+1:end] .= 0
+        reversed_pdf[ivpa_max] *= fraction_of_pdf
         #println("first_vspace_moment=$first_vspace_moment, ivpa_max=$ivpa_max")
         #println("done first cutoff loop")
         # update the electrostatic potential at the boundary to be the value corresponding to the updated cutoff velocity
@@ -825,10 +827,12 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, 
                0.5 * fraction_of_pdf*(vpa_unnorm[ivpa+1] - vpa_unnorm[ivpa-1])
 
         #println("vmin=$vmin, v-no-interp=", vpa_unnorm[ivpa])
-        wmin = (-vmin - upar[end,ir]) / vthe[end,ir]
-        @loop_vpa ivpa begin
-            reversed_pdf[ivpa] *= 0.5*(1.0 + tanh((vpa.grid[ivpa] - wmin) / cutoff_step_width))
-        end
+        #wmin = (-vmin - upar[end,ir]) / vthe[end,ir]
+        #@loop_vpa ivpa begin
+        #    reversed_pdf[ivpa] *= 0.5*(1.0 + tanh((vpa.grid[ivpa] - wmin) / cutoff_step_width))
+        #end
+        reversed_pdf[1:ivpa_min-1] .= 0
+        reversed_pdf[ivpa_min] *= fraction_of_pdf
         #println("done second cutoff loop")
 
         # zeroth_vspace_moment = integrate_over_vspace(pdf[:,1,end,1], vpa.wgts)
