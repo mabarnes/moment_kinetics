@@ -560,7 +560,7 @@ function setup_advance_flags(moments, composition, t_input, collisions,
     advance_ionization = false
     advance_ionization_1V = false
     advance_ionization_source = false
-    advance_krook_collisions = false
+    advance_krook_collisions_ii = false
     advance_external_source = false
     advance_numerical_dissipation = false
     advance_sources = false
@@ -637,8 +637,8 @@ function setup_advance_flags(moments, composition, t_input, collisions,
         if collisions.ionization > 0.0 && collisions.constant_ionization_rate
             advance_ionization_source = true
         end
-        if collisions.krook_collision_frequency_prefactor > 0.0
-            advance_krook_collisions = true
+        if collisions.krook_collision_frequency_prefactor_ii > 0.0
+            advance_krook_collisions_ii = true
         end
         advance_external_source = external_source_settings.ion.active
         advance_neutral_external_source = external_source_settings.neutral.active
@@ -695,7 +695,7 @@ function setup_advance_flags(moments, composition, t_input, collisions,
                         advance_neutral_z_advection, advance_neutral_r_advection,
                         advance_neutral_vz_advection, advance_cx, advance_cx_1V,
                         advance_ionization, advance_ionization_1V,
-                        advance_ionization_source, advance_krook_collisions,
+                        advance_ionization_source, advance_krook_collisions_ii,
                         explicit_weakform_fp_collisions,
                         advance_external_source, advance_numerical_dissipation,
                         advance_sources, advance_continuity, advance_force_balance,
@@ -1148,12 +1148,12 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
             end
         end
         if collisions.krook_collision_frequency_prefactor  > 0.0
-            advance.krook_collisions = true
+            advance.krook_collisions_ii = true
             time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
                 z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
                 z_SL, vpa_SL, composition, collisions, sources, num_diss_params,
                 advance, istep)
-            advance.krook_collisions = false
+            advance.krook_collisions_ii = false
         end
         # and add the source terms associated with redefining g = pdf/density or pdf*vth/density
         # to the kinetic equation
@@ -1846,7 +1846,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     end
 
     # Add Krook collision operator for ions
-    if advance.krook_collisions
+    if advance.krook_collisions_ii
         krook_collisions!(fvec_out.pdf, fvec_in, moments, composition, collisions,
                           vperp, vpa, dt)
     end

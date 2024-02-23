@@ -60,7 +60,7 @@ mutable struct advance_info
     ionization_collisions::Bool
     ionization_collisions_1V::Bool
     ionization_source::Bool
-    krook_collisions::Bool
+    krook_collisions_ii::Bool
     explicit_weakform_fp_collisions::Bool
     external_source::Bool
     numerical_dissipation::Bool

@@ -18,6 +18,7 @@ using ..electron_fluid_equations: electron_energy_equation!
 using ..electron_z_advection: electron_z_advection!
 using ..electron_vpa_advection: electron_vpa_advection!
 using ..file_io: write_initial_electron_state, finish_initial_electron_io
+using ..krook_collisions: electron_krook_collisions!
 using ..moment_constraints: hard_force_moment_constraints!
 using ..velocity_moments: integrate_over_vspace
 
@@ -122,6 +123,8 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
     #ppar_old .= ppar
 
     upar = moments.electron.upar
+    println("WARNING: when time-evolving the ions, this should really be something like fvec_in.upar, so that it is defined at the correct time level...")
+    upar_ion = moments.ion.upar
 
     # create a (z,r) dimension dummy array for use in taking derivatives
     dummy_zr = @view scratch_dummy.dummy_zrs[:,:,1]
@@ -185,10 +188,10 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
     # initialise the electron pdf convergence flag to false
     electron_pdf_converged = false
     # calculate the residual of the electron kinetic equation for the initial guess of the electron pdf
-    dt_electron = electron_kinetic_equation_residual!(residual, max_term, single_term, pdf, dens, vthe, ppar, 
+    dt_electron = electron_kinetic_equation_residual!(residual, max_term, single_term, pdf, dens, upar, vthe, ppar, upar_ion,
                                         ddens_dz, dppar_dz, dqpar_dz, dvth_dz, 
-                                        z, vpa, z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-                                        num_diss_params, dt_max)
+                                        z, vperp, vpa, z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                                        collisions, num_diss_params, dt_max)
     # Divide by wpa to relax CFL condition at large wpa - only looking for steady
     # state here, so does not matter that this makes time evolution incorrect.
     # Also increase the effective timestep for z-values far from the sheath boundary -
@@ -416,10 +419,10 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         # TMP FOR TESTING
         #dqpar_dz .= 0.0
         # calculate the residual of the electron kinetic equation for the updated electron pdf
-        dt_electron = electron_kinetic_equation_residual!(residual, max_term, single_term, pdf, dens, vthe, ppar, ddens_dz, 
+        dt_electron = electron_kinetic_equation_residual!(residual, max_term, single_term, pdf, dens, upar, vthe, ppar, ddens_dz, upar_ion,
                                             dppar_dz, dqpar_dz, dvth_dz, 
-                                            z, vpa, z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-                                            num_diss_params, dt_max)
+                                            z, vperp, vpa, z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                                            collisions, num_diss_params, dt_max)
         # check to see if the electron pdf satisfies the electron kinetic equation to within the specified tolerance
         #average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, max_term)
         average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, pdf, upar, vthe, z, vpa)
@@ -1219,10 +1222,10 @@ INPUTS:
 OUTPUT:
     residual = updated residual of the electron kinetic equation
 """
-function electron_kinetic_equation_residual!(residual, max_term, single_term, pdf, dens, vth, ppar, 
+function electron_kinetic_equation_residual!(residual, max_term, single_term, pdf, dens, upar, vth, ppar, upar_ion,
                                              ddens_dz, dppar_dz, dqpar_dz, dvth_dz, 
-                                             z, vpa, z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-                                             num_diss_params, dt_electron)
+                                             z, vperp, vpa, z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                                             collisions, num_diss_params, dt_electron)
 
     # initialise the residual to zero                                             
     begin_r_vperp_vpa_region()
@@ -1278,6 +1281,15 @@ function electron_kinetic_equation_residual!(residual, max_term, single_term, pd
     # end
     # stop()
     #dt_max = min(dt_max_zadv, dt_max_vadv)
+
+    if collisions.krook_collision_frequency_prefactor_ee > 0.0
+        # Add a Krook collision operator
+        # Set dt=-1 as we update the residual here rather than adding an update to
+        # 'fvec_out'.
+        electron_krook_collisions!(residual, pdf, dens, upar, upar_ion, vth,
+                                   collisions, vperp, vpa, -1.0)
+    end
+
     dt_max = dt_electron
     #println("dt_max: ", dt_max, " dt_max_zadv: ", dt_max_zadv, " dt_max_vadv: ", dt_max_vadv)
     return dt_max
