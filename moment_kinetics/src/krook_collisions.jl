@@ -2,7 +2,7 @@
 """
 module krook_collisions
 
-export setup_krook_collisions, get_collision_frequency, krook_collisions!
+export setup_krook_collisions!, get_collision_frequency, krook_collisions!
 
 using ..constants: epsilon0, proton_charge
 using ..looping
@@ -12,7 +12,7 @@ Calculate normalized collision frequency at reference parameters for Coulomb col
 
 Currently valid only for hydrogenic ions (Z=1)
 """
-function setup_krook_collisions(reference_params)
+function setup_krook_collisions!(collisions, reference_params, scan_input)
     Nref = reference_params.Nref
     Tref = reference_params.Tref
     mref = reference_params.mref
@@ -26,7 +26,20 @@ function setup_krook_collisions(reference_params)
                    (4.0 * π * epsilon0^2 * mref^2 * cref^3) # s^-1
     nu_ii0 = nu_ii0_per_s * timeref
 
-    return nu_ii0
+    collisions.krook_collisions_option = get(scan_input, "krook_collisions_option", "none")
+    if collisions.krook_collisions_option == "reference_parameters"
+        collisions.krook_collision_frequency_prefactor = nu_ii0
+    elseif collisions.krook_collisions_option == "manual" # get the frequency from the input file
+        collisions.krook_collision_frequency_prefactor = get(scan_input, "nuii_krook", nu_ii0)
+    elseif collisions.krook_collisions_option == "none"
+        # By default, no krook collisions included
+        collisions.krook_collision_frequency_prefactor = -1.0
+    else
+        error("Invalid option "
+              * "krook_collisions_option=$(collisions.krook_collisions_option) passed")
+    end
+
+    return nothing
 end
 
 """

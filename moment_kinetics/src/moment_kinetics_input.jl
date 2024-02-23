@@ -13,7 +13,7 @@ using ..communication
 using ..coordinates: define_coordinate
 using ..external_sources
 using ..file_io: io_has_parallel, input_option_error, open_ascii_output_file
-using ..krook_collisions: setup_krook_collisions
+using ..krook_collisions: setup_krook_collisions!
 using ..finite_differences: fd_check_option
 using ..input_structs
 using ..numerical_dissipation: setup_numerical_dissipation
@@ -177,19 +177,8 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     collisions.ionization_energy = get(scan_input, "ionization_energy", 0.0)
     collisions.constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
     collisions.nu_ei = get(scan_input, "nu_ei", 0.0)
-    collisions.krook_collisions_option = get(scan_input, "krook_collisions_option", "none")
-    nuii_krook_default = setup_krook_collisions(reference_params)
-    if collisions.krook_collisions_option == "reference_parameters"
-        collisions.krook_collision_frequency_prefactor = nuii_krook_default
-    elseif collisions.krook_collisions_option == "manual" # get the frequency from the input file
-        collisions.krook_collision_frequency_prefactor = get(scan_input, "nuii_krook", nuii_krook_default)
-    elseif collisions.krook_collisions_option == "none"
-        # By default, no krook collisions included
-        collisions.krook_collision_frequency_prefactor = -1.0
-    else
-        error("Invalid option "
-              * "krook_collisions_option=$(collisions.krook_collisions_option) passed")
-    end
+    # Set options for Krook collisions in the `collisions` struct
+    setup_krook_collisions!(collisions, reference_params, scan_input)
     # set the Fokker-Planck collision frequency
     collisions.nuii = get(scan_input, "nuii", 0.0)
     
