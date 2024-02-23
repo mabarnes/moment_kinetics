@@ -18,12 +18,7 @@ function setup_krook_collisions(reference_params)
     mref = reference_params.mref
     timeref = reference_params.timeref
     cref = reference_params.cref
-
-    Nref_per_cm3 = Nref * 1.0e-6
-
-    # Coulomb logarithm at reference parameters for same-species ion-ion collisions, using
-    # NRL formulary. Formula given for n in units of cm^-3 and T in units of eV.
-    logLambda_ii = 23.0 - log(sqrt(2.0*Nref_per_cm3) / Tref^1.5)
+    logLambda_ii = reference_params.logLambda_ii
 
     # Collision frequency, using \hat{\nu} from Appendix, p. 277 of Helander "Collisional
     # Transport in Magnetized Plasmas" (2002).
