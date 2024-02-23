@@ -282,8 +282,8 @@ end
 """
 Add Krook collision operator for electrons
 """
-function electron_krook_collisions!(pdf_out, fvec_in, moments, composition, collisions,
-                                    vperp, vpa, dt)
+function electron_krook_collisions!(pdf_out, pdf_in, dens_in, upar_in, upar_ion_in,
+                                    vth_in, collisions, vperp, vpa, dt)
     begin_r_z_region()
 
     # For now, electrons are always fully moment-kinetic
@@ -301,8 +301,8 @@ function electron_krook_collisions!(pdf_out, fvec_in, moments, composition, coll
         # Compared to evolve_upar version, grid is already normalized by vth, and multiply
         # through by vth, remembering pdf is already multiplied by vth
         @loop_r_z ir iz begin
-            n = fvec_in.electron_density[iz,ir]
-            vth = moments.electron.vth[iz,ir]
+            n = dens_in[iz,ir]
+            vth = vth_in[iz,ir]
             nu_ee = get_collision_frequency_ee(collisions, n, vth)
             nu_ei = get_collision_frequency_ei(collisions, n, vth)
 
@@ -311,13 +311,13 @@ function electron_krook_collisions!(pdf_out, fvec_in, moments, composition, coll
             # coordinate.
             # For now, assume there is only one ion species rather than bothering to
             # calculate an average ion flow speed, or sum over ion species here.
-            @. vpa.scratch = vpa.grid + (fvec_in.upar[iz,ir,1] - fvec_in.electron_upar[iz,ir]) / vth
+            @. vpa.scratch = vpa.grid + (upar_ion_in[iz,ir,1] - upar_in[iz,ir]) / vth
 
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir] -= dt * (
-                    nu_ee * (fvec_in.electron_pdf[ivpa,ivperp,iz,ir]
+                    nu_ee * (pdf_in[ivpa,ivperp,iz,ir]
                              - exp(-vpa.grid[ivpa]^2 - vperp.grid[ivperp]^2))
-                    + nu_ei * (fvec_in.electron_pdf[ivpa,ivperp,iz,ir]
+                    + nu_ei * (pdf_in[ivpa,ivperp,iz,ir]
                                - exp(-vpa.scratch[ivpa]^2 - vperp.grid[ivperp]^2))
                    )
             end
@@ -326,23 +326,23 @@ function electron_krook_collisions!(pdf_out, fvec_in, moments, composition, coll
         # Compared to full-f collision operater, multiply through by vth, remembering pdf
         # is already multiplied by vth, and grid is already normalized by vth
         @loop_r_z ir iz begin
-            n = fvec_in.electron_density[iz,ir]
-            vth = moments.electron.vth[iz,ir]
+            n = dens_in[iz,ir]
+            vth = vth_in[iz,ir]
             nu_ee = get_collision_frequency_ee(collisions, n, vth)
             nu_ei = get_collision_frequency_ei(collisions, n, vth)
 
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir] -= dt * (
-                    nu_ee * (fvec_in.electron_pdf[ivpa,ivperp,iz,ir]
-                             - exp(-((vpa.grid[ivpa] - fvec_in.electron_upar[iz,ir])/vth)^2
+                    nu_ee * (pdf_in[ivpa,ivperp,iz,ir]
+                             - exp(-((vpa.grid[ivpa] - upar_in[iz,ir])/vth)^2
                                    - (vperp.grid[ivperp]/vth)^2))
                     # e-i collisions push electrons towards a Maxwellian drifting at the ion
                     # parallel flow, so need a corresponding normalised parallel velocity
                     # coordinate.
                     # For now, assume there is only one ion species rather than bothering to
                     # calculate an average ion flow speed, or sum over ion species here.
-                    + nu_ei * (fvec_in.electron_pdf[ivpa,ivperp,iz,ir]
-                               - exp(-((vpa.grid[ivpa] - fvec_in.upar[iz,ir,1])/vth)^2
+                    + nu_ei * (pdf_in[ivpa,ivperp,iz,ir]
+                               - exp(-((vpa.grid[ivpa] - upar_ion_in[iz,ir,1])/vth)^2
                                      - (vperp.grid[ivperp]/vth)^2))
                    )
             end
@@ -350,8 +350,8 @@ function electron_krook_collisions!(pdf_out, fvec_in, moments, composition, coll
     elseif evolve_upar
         # Compared to evolve_density version, grid is already shifted by upar
         @loop_r_z ir iz begin
-            n = fvec_in.electron_density[iz,ir]
-            vth = moments.electron.vth[iz,ir]
+            n = dens_in[iz,ir]
+            vth = vth_in[iz,ir]
             nu_ee = get_collision_frequency_ee(collisions, n, vth)
             nu_ei = get_collision_frequency_ei(collisions, n, vth)
 
@@ -360,14 +360,14 @@ function electron_krook_collisions!(pdf_out, fvec_in, moments, composition, coll
             # coordinate.
             # For now, assume there is only one ion species rather than bothering to
             # calculate an average ion flow speed, or sum over ion species here.
-            @. vpa.scratch = vpa.grid + (fvec_in.upar[iz,ir,1] - fvec_in.electron_upar[iz,ir])
+            @. vpa.scratch = vpa.grid + (upar_ion_in[iz,ir,1] - upar_in[iz,ir])
 
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir] -= dt * (
-                    nu_ee * (fvec_in.electron_pdf[ivpa,ivperp,iz,ir]
+                    nu_ee * (pdf_in[ivpa,ivperp,iz,ir]
                              - 1.0 / vth * exp(-(vpa.grid[ivpa] / vth)^2
                                                - (vperp.grid[ivperp] / vth)^2))
-                    + nu_ei * (fvec_in.electron_pdf[ivpa,ivperp,iz,ir]
+                    + nu_ei * (pdf_in[ivpa,ivperp,iz,ir]
                                - 1.0 / vth * exp(-(vpa.scratch[ivpa] / vth)^2
                                                  - (vperp.grid[ivperp] / vth)^2))
                    )
@@ -377,32 +377,32 @@ function electron_krook_collisions!(pdf_out, fvec_in, moments, composition, coll
         # Compared to full-f collision operater, divide through by density, remembering
         # that pdf is already normalized by density
         @loop_r_z ir iz begin
-            n = fvec_in.electron_density[iz,ir]
-            vth = moments.electron.vth[iz,ir]
+            n = dens_in[iz,ir]
+            vth = vth_in[iz,ir]
             nu_ee = get_collision_frequency_ee(collisions, n, vth)
             nu_ei = get_collision_frequency_ei(collisions, n, vth)
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir] -= dt * (
-                    nu_ee * (fvec_in.electron_pdf[ivpa,ivperp,iz,ir]
+                    nu_ee * (pdf_in[ivpa,ivperp,iz,ir]
                              - 1.0 / vth
-                             * exp(-((vpa.grid[ivpa] - fvec_in.electron_upar[iz,ir]) / vth)^2
+                             * exp(-((vpa.grid[ivpa] - upar_in[iz,ir]) / vth)^2
                                    - (vperp.grid[ivperp]/vth)^2))
                     # e-i collisions push electrons towards a Maxwellian drifting at the ion
                     # parallel flow, so need a corresponding normalised parallel velocity
                     # coordinate.
                     # For now, assume there is only one ion species rather than bothering to
                     # calculate an average ion flow speed, or sum over ion species here.
-                    + nu_ei * (fvec_in.electron_pdf[ivpa,ivperp,iz,ir]
+                    + nu_ei * (pdf_in[ivpa,ivperp,iz,ir]
                                - 1.0 / vth
-                               * exp(-((vpa.grid[ivpa] - fvec_in.upar[iz,ir,1]) / vth)^2
+                               * exp(-((vpa.grid[ivpa] - upar_ion_in[iz,ir,1]) / vth)^2
                                      - (vperp.grid[ivperp]/vth)^2))
                    )
             end
         end
     else
         @loop_r_z ir iz begin
-            n = fvec_in.electron_density[iz,ir]
-            vth = moments.electron.vth[iz,ir]
+            n = dens_in[iz,ir]
+            vth = vth_in[iz,ir]
             if vperp.n == 1
                 vth_prefactor = 1.0 / vth
             else
@@ -412,18 +412,18 @@ function electron_krook_collisions!(pdf_out, fvec_in, moments, composition, coll
             nu_ei = get_collision_frequency_ei(collisions, n, vth)
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir] -= dt * (
-                    nu_ee * (fvec_in.electron_pdf[ivpa,ivperp,iz,ir]
+                    nu_ee * (pdf_in[ivpa,ivperp,iz,ir]
                              - n * vth_prefactor
-                             * exp(-((vpa.grid[ivpa] - fvec_in.electron_upar[iz,ir])/vth)^2
+                             * exp(-((vpa.grid[ivpa] - upar_in[iz,ir])/vth)^2
                                    - (vperp.grid[ivperp]/vth)^2))
                     # e-i collisions push electrons towards a Maxwellian drifting at the ion
                     # parallel flow, so need a corresponding normalised parallel velocity
                     # coordinate.
                     # For now, assume there is only one ion species rather than bothering to
                     # calculate an average ion flow speed, or sum over ion species here.
-                    + nu_ee * (fvec_in.electron_pdf[ivpa,ivperp,iz,ir]
+                    + nu_ee * (pdf_in[ivpa,ivperp,iz,ir]
                                - n * vth_prefactor
-                               * exp(-((vpa.grid[ivpa] - fvec_in.upar[iz,ir,1])/vth)^2
+                               * exp(-((vpa.grid[ivpa] - upar_ion_in[iz,ir,1])/vth)^2
                                      - (vperp.grid[ivperp]/vth)^2))
                    )
             end
