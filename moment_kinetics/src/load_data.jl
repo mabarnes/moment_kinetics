@@ -18,6 +18,7 @@ using ..coordinates: coordinate, define_coordinate
 using ..file_io: check_io_implementation, get_group, get_subgroup_keys, get_variable_keys
 using ..input_structs: advection_input, grid_input, hdf5, netcdf
 using ..interpolation: interpolate_to_grid_1d!
+using ..krook_collisions
 using ..looping
 using ..moment_kinetics_input: mk_input
 using ..type_definitions: mk_float, mk_int
@@ -29,7 +30,8 @@ using MPI
 const em_variables = ("phi", "Er", "Ez")
 const ion_moment_variables = ("density", "parallel_flow", "parallel_pressure",
                               "thermal_speed", "temperature", "parallel_heat_flux",
-                              "collision_frequency", "sound_speed", "mach_number")
+                              "collision_frequency_ii", "collision_frequency_ee",
+                              "collision_frequency_ei", "sound_speed", "mach_number")
 const electron_moment_variables = ("electron_density", "electron_parallel_flow",
                                    "electron_parallel_pressure", "electron_thermal_speed",
                                    "electron_temperature", "electron_parallel_heat_flux")
@@ -3690,10 +3692,18 @@ function get_variable(run_info, variable_name; kwargs...)
     if variable_name == "temperature"
         vth = postproc_load_variable(run_info, "thermal_speed"; kwargs...)
         variable = vth.^2
-    elseif variable_name == "collision_frequency"
+    elseif variable_name == "collision_frequency_ii"
         n = postproc_load_variable(run_info, "density"; kwargs...)
         vth = postproc_load_variable(run_info, "thermal_speed"; kwargs...)
-        variable = get_collision_frequency(run_info.collisions, n, vth)
+        variable = get_collision_frequency_ii(run_info.collisions, n, vth)
+    elseif variable_name == "collision_frequency_ee"
+        n = postproc_load_variable(run_info, "electron_density"; kwargs...)
+        vth = postproc_load_variable(run_info, "electron_thermal_speed"; kwargs...)
+        variable = get_collision_frequency_ee(run_info.collisions, n, vth)
+    elseif variable_name == "collision_frequency_ei"
+        n = postproc_load_variable(run_info, "electron_density"; kwargs...)
+        vth = postproc_load_variable(run_info, "electron_thermal_speed"; kwargs...)
+        variable = get_collision_frequency_ei(run_info.collisions, n, vth)
     elseif variable_name == "temperature_neutral"
         vth = postproc_load_variable(run_info, "thermal_speed_neutral"; kwargs...)
         variable = vth.^2

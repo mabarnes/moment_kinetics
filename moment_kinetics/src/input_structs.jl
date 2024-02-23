@@ -331,8 +331,12 @@ mutable struct collisions_input
     constant_ionization_rate::Bool
     # electron-ion collision frequency
     nu_ei::mk_float
-    # Coulomb collision rate at the reference density and temperature
-    krook_collision_frequency_prefactor::mk_float
+    # Ion-ion Coulomb collision rate at the reference density and temperature
+    krook_collision_frequency_prefactor_ii::mk_float
+    # Electron-electron Coulomb collision rate at the reference density and temperature
+    krook_collision_frequency_prefactor_ee::mk_float
+    # Electron-ion Coulomb collision rate at the reference density and temperature
+    krook_collision_frequency_prefactor_ei::mk_float
     # Setting to switch between different options for Krook collision operator
     krook_collisions_option::String
     # ion-ion self collision frequency

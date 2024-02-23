@@ -1038,6 +1038,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     collisions = collisions_input(charge_exchange, charge_exchange_electron, ionization,
                                   ionization_electron, ionization_energy,
                                   constant_ionization_rate, nu_ei,
+                                  krook_collision_frequency_prefactor,
+                                  krook_collision_frequency_prefactor,
                                   krook_collision_frequency_prefactor, "none", nuii)
     Bzed = 1.0 # magnetic field component along z
     Bmag = 1.0 # magnetic field strength
