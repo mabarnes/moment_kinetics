@@ -806,8 +806,8 @@ function VariableCache(run_info, variable_name::String, t_chunk_size::mk_int;
     tinds_chunk = 1:t_chunk_size
     dim_slices = (is=is, iz=iz, ir=ir, ivperp=ivperp, ivpa=ivpa, ivzeta=ivzeta, ivr=ivr,
                   ivz=ivz)
-    data_chunk = postproc_load_variable(run_info, variable_name;
-                                        it=tinds_range_global[tinds_chunk], dim_slices...)
+    data_chunk = get_variable(run_info, variable_name; it=tinds_range_global[tinds_chunk],
+                              dim_slices...)
 
     return VariableCache(run_info, variable_name, t_chunk_size,
                          n_tinds, tinds_range_global, Ref(tinds_chunk),
