@@ -1843,9 +1843,11 @@ for dim ∈ one_dimension_combinations_no_t
                              all(isapprox.(ri.time, run_info[1].time))
                              for ri ∈ run_info[2:end])
                          # All times are the same
-                         title = lift(i->string("t = ", run_info[1].time[i]), frame_index)
+                         time = select_slice(run_info[1].time, :t; input=input, it=it)
+                         title = lift(i->string("t = ", time[i]), frame_index)
                      else
-                         title = lift(i->join((string("t", irun, " = ", ri.time[i])
+                         time = select_slice(ri.time, :t; input=input, it=it)
+                         title = lift(i->join((string("t", irun, " = ", time[i])
                                                for (irun,ri) ∈ enumerate(run_info)), "; "),
                                       frame_index)
                      end
@@ -1933,7 +1935,8 @@ for dim ∈ one_dimension_combinations_no_t
                      ind = frame_index
                  end
                  if ax === nothing
-                     title = lift(i->string("t = ", run_info.time[i]), ind)
+                     time = select_slice(run_info.time, :t; input=input, it=it)
+                     title = lift(i->string("t = ", time[i]), ind)
                      fig, ax = get_1d_ax(; xlabel="$($dim_str)",
                                          ylabel=get_variable_symbol(var_name),
                                          yscale=yscale, title=title, axis_args...)
@@ -2078,10 +2081,12 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
 
                      if length(run_info) > 1
                          title = get_variable_symbol(var_name)
-                         subtitles = (lift(i->string(ri.run_name, "\nt = ", ri.time[i]),
+                         time = select_slice(ri.time, :t; input=input, it=it)
+                         subtitles = (lift(i->string(ri.run_name, "\nt = ", time[i]),
                                            frame_index)
                                       for ri ∈ run_info)
                      else
+                         time = select_slice(run_info[1].time, :t; input=input, it=it)
                          title = lift(i->string(get_variable_symbol(var_name), "\nt = ",
                                                 run_info[1].time[i]),
                                       frame_index)
@@ -2164,6 +2169,7 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                      colormap = input.colormap
                  end
                  if title === nothing && ax == nothing
+                     time = select_slice(run_info.time, :t; input=input, it=it)
                      title = lift(i->string(get_variable_symbol(var_name), "\nt = ",
                                             run_info.time[i]),
                                   ind)
