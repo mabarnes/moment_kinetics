@@ -1256,7 +1256,7 @@ function electron_kinetic_equation_residual!(residual, max_term, single_term, pd
         residual[ivpa,ivperp,iz,ir] = 0.0
     end
     # calculate the contribution to the residual from the z advection term
-    electron_z_advection!(residual, pdf, vth, z_advect, z, vpa.grid, z_spectral, scratch_dummy)
+    electron_z_advection!(residual, pdf, upar, vth, z_advect, z, vpa.grid, z_spectral, scratch_dummy)
     #dt_max_zadv = simple_z_advection!(residual, pdf, vth, z, vpa.grid, dt_electron)
     #single_term .= residual
     #max_term .= abs.(residual)
