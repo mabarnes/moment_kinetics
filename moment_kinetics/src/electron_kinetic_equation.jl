@@ -194,19 +194,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
                                         ddens_dz, dppar_dz, dqpar_dz, dvth_dz, 
                                         z, vperp, vpa, z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                                         collisions, num_diss_params, dt_max)
-    # Divide by wpa to relax CFL condition at large wpa - only looking for steady
-    # state here, so does not matter that this makes time evolution incorrect.
-    # Also increase the effective timestep for z-values far from the sheath boundary -
-    # these have a less-limited timestep so letting them evolve faster speeds up
-    # convergence to the steady state.
-    Lz = z.L
-    @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-        zval = z.grid[iz]
-        znorm = 2.0*zval/Lz
-        residual[ivpa,ivperp,iz,ir] *=
-            (1.0 + z_speedup_fac*(1.0 - znorm^2)) /
-            sqrt(1.0 + vpa.grid[ivpa]^2)
-    end
+    speedup_hack_residual!(residual, z_speedup_fac, z, vpa)
     if n_blocks[] == 1
         text_output_suffix = ""
     else
@@ -302,7 +290,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
             # but without the wpa dependence.
             @loop_r_z ir iz begin
                 zval = z.grid[iz]
-                znorm = 2.0*zval/Lz
+                znorm = 2.0*zval/z.L
                 ppar[iz,ir] = fvec.electron_ppar[iz,ir] +
                               (ppar[iz,ir] - fvec.electron_ppar[iz,ir]) *
                               (1.0 + z_speedup_fac*(1.0 - znorm^2))
@@ -433,20 +421,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         #average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, max_term)
         average_residual, electron_pdf_converged = check_electron_pdf_convergence(residual, pdf, upar, vthe, z, vpa)
 
-        # Divide by wpa to relax CFL condition at large wpa - only looking for steady
-        # state here, so does not matter that this makes time evolution incorrect.
-        # Also increase the effective timestep for z-values far from the sheath boundary -
-        # these have a less-limited timestep so letting them evolve faster speeds up
-        # convergence to the steady state.
-        begin_r_z_vperp_region()
-        Lz = z.L
-        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-            zval = z.grid[iz]
-            znorm = 2.0*zval/Lz
-            residual[ivpa,ivperp,iz,ir] *=
-                (1.0 + z_speedup_fac*(1.0 - znorm^2)) /
-                sqrt(1.0 + vpa.grid[ivpa]^2)
-        end
+        speedup_hack_residual!(residual, z_speedup_fac, z, vpa)
         if electron_pdf_converged || any(isnan.(ppar)) || any(isnan.(pdf))
             break
         end
@@ -493,6 +468,30 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
               * "Stopping at $(Dates.format(now(), dateformat"H:MM:SS"))")
     end
     return time, output_counter
+end
+
+function speedup_hack_residual!(residual, z_speedup_fac, z, vpa)
+    # Divide by wpa to relax CFL condition at large wpa - only looking for steady
+    # state here, so does not matter that this makes time evolution incorrect.
+    # Also increase the effective timestep for z-values far from the sheath boundary -
+    # these have a less-limited timestep so letting them evolve faster speeds up
+    # convergence to the steady state.
+
+    # Actually modify so that large wpa does go faster (to allow some phase mixing - maybe
+    # this makes things more stable?), but not by so much.
+    #vpa_fudge_factor = 1.0
+    #vpa_fudge_factor = 0.8
+    vpa_fudge_factor = 0.0
+
+    Lz = z.L
+    @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+        zval = z.grid[iz]
+        znorm = 2.0*zval/Lz
+        residual[ivpa,ivperp,iz,ir] *=
+            (1.0 + z_speedup_fac*(1.0 - znorm^2)) /
+            sqrt(1.0 + vpa_fudge_factor * vpa.grid[ivpa]^2)
+    end
+    return nothing
 end
 
 function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vperp, vpa,
