@@ -2507,20 +2507,29 @@ end
 """
 enforce zero boundary condition at vperp -> infinity
 """
-function enforce_vperp_boundary_condition!(f, bc, vperp, vperp_spectral)
+function enforce_vperp_boundary_condition! end
+
+function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,5}, bc, vperp, vperp_spectral)
+    @loop_s is begin
+        @views enforce_vperp_boundary_condition!(f[:,:,:,:,is], bc, vperp, vperp_spectral)
+    end
+    return nothing
+end
+
+function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,4}, bc, vperp, vperp_spectral)
     if bc == "zero"
         nvperp = vperp.n
         ngrid = vperp.ngrid
         # set zero boundary condition
-        @loop_s_r_z_vpa is ir iz ivpa begin
-            f[ivpa,nvperp,iz,ir,is] = 0.0
+        @loop_r_z_vpa ir iz ivpa begin
+            f[ivpa,nvperp,iz,ir] = 0.0
         end
         # set regularity condition d F / d vperp = 0 at vperp = 0
         if vperp.discretization == "gausslegendre_pseudospectral" || vperp.discretization == "chebyshev_pseudospectral"
             D0 = vperp_spectral.radau.D0
-            @loop_s_r_z_vpa is ir iz ivpa begin
+            @loop_r_z_vpa ir iz ivpa begin
                 # adjust F(vperp = 0) so that d F / d vperp = 0 at vperp = 0
-                f[ivpa,1,iz,ir,is] = -sum(D0[2:ngrid].*f[ivpa,2:ngrid,iz,ir,is])/D0[1]
+                f[ivpa,1,iz,ir] = -sum(D0[2:ngrid].*f[ivpa,2:ngrid,iz,ir])/D0[1]
             end
         else
             println("vperp.bc=\"$bc\" not supported by discretization "
