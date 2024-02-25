@@ -175,10 +175,11 @@ creates the normalised pdfs and the velocity-space moments and populates them
 with a self-consistent initial condition
 """
 function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geometry, composition, r, z,
-                               vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral, vpa_spectral, vz_spectral,
-                               species, collisions, external_source_settings, manufactured_solns_input,
-                               scratch_dummy, scratch, t_input, num_diss_params, advection_structs,
-                               io_input, input_dict)
+                               vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
+                               vperp_spectral, vpa_spectral, vz_spectral, species,
+                               collisions, external_source_settings,
+                               manufactured_solns_input, scratch_dummy, scratch, t_input,
+                               num_diss_params, advection_structs, io_input, input_dict)
     if manufactured_solns_input.use_for_init
         init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z,
                                              r, composition.n_ion_species,
@@ -310,9 +311,16 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
         scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
     if composition.electron_physics == kinetic_electrons
         # Initialise the array for the electron pdf
+        begin_serial_region()
+        speed = @view scratch_dummy.buffer_vpavperpzrs_1[:,:,:,:,1]
+        @serial_region begin
+            speed .= 0.0
+        end
         init_electron_pdf_over_density_and_boundary_phi!(
             pdf.electron.norm, fields.phi, moments.electron.dens, moments.electron.upar,
-            moments.electron.vth, z, vpa, vperp, vpa_spectral, composition.me_over_mi)
+            moments.electron.vth, z, vpa, vperp, vperp_spectral, vpa_spectral,
+            [(speed=speed,)], num_diss_params,
+            composition.me_over_mi)
     end
     # calculate the electron parallel heat flux;
     # if using kinetic electrons, this relies on the electron pdf, which itself relies on the electron heat flux
@@ -339,7 +347,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
 
     # initialize the electron pdf that satisfies the electron kinetic equation
     initialize_electron_pdf!(scratch[1], pdf, moments, fields.phi, r, z, vpa, vperp,
-                             vzeta, vr, vz, z_spectral, vpa_spectral,
+                             vzeta, vr, vz, z_spectral, vperp_spectral, vpa_spectral,
                              advection_structs.electron_z_advect,
                              advection_structs.electron_vpa_advect, scratch_dummy,
                              collisions, composition, geometry, external_source_settings,
@@ -467,10 +475,10 @@ function initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z
 end
 
 function initialize_electron_pdf!(fvec, pdf, moments, phi, r, z, vpa, vperp, vzeta, vr,
-                                  vz, z_spectral, vpa_spectral, z_advect, vpa_advect,
-                                  scratch_dummy, collisions, composition, geometry,
-                                  external_source_settings, num_diss_params, dt, io_input,
-                                  input_dict)
+                                  vz, z_spectral, vperp_spectral, vpa_spectral, z_advect,
+                                  vpa_advect, scratch_dummy, collisions, composition,
+                                  geometry, external_source_settings, num_diss_params, dt,
+                                  io_input, input_dict)
     # now that the initial electron pdf is given, the electron parallel heat flux should be updated
     # if using kinetic electrons
     if composition.electron_physics == kinetic_electrons
@@ -546,9 +554,10 @@ function initialize_electron_pdf!(fvec, pdf, moments, phi, r, z, vpa, vperp, vze
                                         moments.electron.dppar_dz,
                                         moments.electron.dqpar_dz,
                                         moments.electron.dvth_dz, r, z, vperp, vpa,
-                                        z_spectral, vpa_spectral, z_advect, vpa_advect,
-                                        scratch_dummy, dt, collisions, composition,
-                                        num_diss_params, max_electron_pdf_iterations;
+                                        z_spectral, vperp_spectral, vpa_spectral,
+                                        z_advect, vpa_advect, scratch_dummy, dt,
+                                        collisions, composition, num_diss_params,
+                                        max_electron_pdf_iterations;
                                         io_initial_electron=io_initial_electron,
                                         initial_time=code_time)
 
@@ -1222,9 +1231,10 @@ NB: as the electron pdf is obtained via a time-independent equation,
 this 'initital' value for the electron will just be the first guess in an iterative solution
 """
 function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upar, vth, z,
-        vpa, vperp, vpa_spectral, me_over_mi)
+        vpa, vperp, vperp_spectral, vpa_spectral, vpa_advect, num_diss_params, me_over_mi)
 
     if z.bc == "wall"
+        begin_r_region()
         @loop_r ir begin
             # Initialise an unshifted Maxwellian as a first step
             @loop_z iz begin
@@ -1233,9 +1243,16 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
                     @. pdf[:,ivperp,iz,ir] = exp(-vpa_over_vth^2)
                 end
             end
-            # Apply the sheath boundary condition to get cut-off boundary distribution
-            # functions and boundary values of phi
-            enforce_boundary_condition_on_electron_pdf!(pdf, phi, vth, upar, vpa, vpa_spectral, me_over_mi)
+        end
+        # Apply the sheath boundary condition to get cut-off boundary distribution
+        # functions and boundary values of phi
+        enforce_boundary_condition_on_electron_pdf!(pdf, phi, vth, upar, vperp, vpa,
+                                                    vperp_spectral, vpa_spectral,
+                                                    vpa_advect,
+                                                    num_diss_params.vpa_dissipation_coefficient > 0.0,
+                                                    me_over_mi)
+        begin_r_region()
+        @loop_r ir begin
             # get critical velocities beyond which electrons are lost to the wall
             #vpa_crit_zmin, vpa_crit_zmax = get_electron_critical_velocities(phi, vth, me_over_mi, z)
             #println("vpa_crit_zmin = ", vpa_crit_zmin, " vpa_crit_zmax = ", vpa_crit_zmax)

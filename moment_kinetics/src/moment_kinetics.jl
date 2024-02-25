@@ -276,8 +276,8 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         # each of which may be evolved separately depending on input choices.
         init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geometry,
                               composition, r, z, vperp, vpa, vzeta, vr, vz,
-                              z_spectral, r_spectral, vpa_spectral, vz_spectral, species,
-                              collisions, external_source_settings,
+                              z_spectral, r_spectral, vperp_spectral, vpa_spectral,
+                              vz_spectral, species, collisions, external_source_settings,
                               manufactured_solns_input, scratch_dummy, scratch, t_input,
                               num_diss_params, advection_structs, io_input, input_dict)
         # initialize time variable

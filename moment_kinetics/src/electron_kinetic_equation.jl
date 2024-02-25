@@ -8,6 +8,8 @@ export get_electron_critical_velocities
 
 using ..looping
 using ..derivatives: derivative_z!
+using ..boundary_conditions: enforce_v_boundary_condition_local!,
+                             enforce_vperp_boundary_condition!
 using ..calculus: derivative!, second_derivative!, integral
 using ..communication
 using ..interpolation: interpolate_to_grid_1d!
@@ -50,7 +52,7 @@ OUTPUT:
 """
 function update_electron_pdf!(fvec, pdf, moments, dens, vthe, ppar, qpar, qpar_updated,
         phi, ddens_dz, dppar_dz, dqpar_dz, dvth_dz, r, z, vperp, vpa, z_spectral,
-        vpa_spectral, z_advect, vpa_advect, scratch_dummy, dt, collisions, composition,
+        vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy, dt, collisions, composition,
         num_diss_params, max_electron_pdf_iterations; io_initial_electron=nothing,
         initial_time=0.0)
 
@@ -62,7 +64,7 @@ function update_electron_pdf!(fvec, pdf, moments, dens, vthe, ppar, qpar, qpar_u
     if solution_method == "artificial_time_derivative"
         return update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated, 
             moments, dens, vthe, ppar, ddens_dz, dppar_dz, dqpar_dz, dvth_dz, phi, collisions, composition, 
-            r, z, vperp, vpa, z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy, dt,
+            r, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy, dt,
             num_diss_params, max_electron_pdf_iterations;
             io_initial_electron=io_initial_electron, initial_time=initial_time)
     elseif solution_method == "shooting_method"
@@ -109,7 +111,7 @@ OUTPUT:
 """
 function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated, 
     moments, dens, vthe, ppar, ddens_dz, dppar_dz, dqpar_dz, dvth_dz, phi, collisions, composition,
-    r, z, vperp, vpa, z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy, dt,
+    r, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy, dt,
     num_diss_params, max_electron_pdf_iterations; io_initial_electron=nothing, initial_time=0.0)
 
     begin_r_z_region()
@@ -334,7 +336,11 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         end
 
         # enforce the boundary condition(s) on the electron pdf
-        enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, vpa_spectral, composition.me_over_mi)
+        enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vperp, vpa,
+                                                    vperp_spectral, vpa_spectral,
+                                                    vpa_advect,
+                                                    num_diss_params.vpa_dissipation_coefficient > 0.0,
+                                                    composition.me_over_mi)
         #println("A pdf 1 ", pdf[:,1,1,1])
         #println("A pdf end ", pdf[:,1,end,1])
 
@@ -489,7 +495,25 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
     return time, output_counter
 end
 
-function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vpa, vpa_spectral, me_over_mi)
+function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vperp, vpa,
+                                                     vperp_spectral, vpa_spectral,
+                                                     vpa_adv, vpa_diffusion, me_over_mi)
+    # Enforce velocity-space boundary conditions
+    if vpa.n > 1
+        begin_r_z_vperp_region()
+        @loop_r_z_vperp ir iz ivperp begin
+            # enforce the vpa BC
+            # use that adv.speed independent of vpa
+            @views enforce_v_boundary_condition_local!(pdf[:,ivperp,iz,ir], vpa.bc,
+                                                       vpa_adv[1].speed[:,ivperp,iz,ir],
+                                                       vpa_diffusion, vpa, vpa_spectral)
+        end
+    end
+    if vperp.n > 1
+        begin_r_z_vpa_region()
+        @views enforce_vperp_boundary_condition!(pdf, vperp.bc, vperp, vperp_spectral)
+    end
+
     # first enforce the boundary condition at z_min.
     # this involves forcing the pdf to be zero for electron travelling faster than the max speed
     # they could attain by accelerating in the electric field between the wall and the simulation boundary;
