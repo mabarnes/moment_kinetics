@@ -53,6 +53,7 @@ include("electron_vpa_advection.jl")
 include("neutral_r_advection.jl")
 include("neutral_z_advection.jl")
 include("neutral_vz_advection.jl")
+include("boundary_conditions.jl")
 include("charge_exchange.jl")
 include("ionization.jl")
 include("krook_collisions.jl")
@@ -84,7 +85,7 @@ using .debugging
 using .external_sources
 using .input_structs
 using .initial_conditions: allocate_pdf_and_moments, init_pdf_and_moments!,
-                           enforce_boundary_conditions!, initialize_scratch_arrays!
+                           initialize_scratch_arrays!
 using .load_data: reload_evolving_fields!
 using .looping
 using .moment_constraints: hard_force_moment_constraints!

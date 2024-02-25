@@ -27,8 +27,8 @@ using ..velocity_moments: calculate_moment_derivatives!, calculate_moment_deriva
 using ..velocity_moments: calculate_electron_moment_derivatives!
 using ..velocity_moments: update_chodura!
 using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
-using ..initial_conditions: enforce_boundary_conditions!
-using ..initial_conditions: enforce_neutral_boundary_conditions!
+using ..boundary_conditions: enforce_boundary_conditions!
+using ..boundary_conditions: enforce_neutral_boundary_conditions!
 using ..input_structs: advance_info, time_input
 using ..moment_constraints: hard_force_moment_constraints!,
                             hard_force_moment_constraints_neutral!
