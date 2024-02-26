@@ -491,6 +491,9 @@ function initialize_electron_pdf!(fvec, pdf, moments, phi, r, z, vpa, vperp, vze
             code_time = 0.0
             restart_time_index = -1
         else
+            if global_rank[] == 0
+                println("Restarting electrons from $restart_filename")
+            end
             # Previously-created electron distribution function exists, so use it as
             # the initial guess.
             backup_prefix_iblock =
