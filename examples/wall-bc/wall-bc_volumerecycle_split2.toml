@@ -71,7 +71,6 @@ nstep = 1000000
 dt = 3.0e-5
 nwrite = 10000
 nwrite_dfns = 10000
-n_rk_stages = 4
 split_operators = false
 
 [ion_source]

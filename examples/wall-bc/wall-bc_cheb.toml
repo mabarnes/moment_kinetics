@@ -63,7 +63,6 @@ vz_discretization = "chebyshev_pseudospectral"
 nstep = 50000
 dt = 1.0e-5
 nwrite = 1000
-n_rk_stages = 4
 split_operators = false
 
 [numerical_dissipation]

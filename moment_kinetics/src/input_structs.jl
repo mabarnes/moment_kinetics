@@ -43,9 +43,10 @@ struct time_info
     step_to_output::MPISharedArray{Bool,1}
     nwrite_moments::mk_int
     nwrite_dfns::mk_int
-    n_rk_stages::mk_int
+    type::String
+    n_rk_stages::Ref{mk_int}
     rk_order::Ref{mk_int}
-    adaptive::Bool
+    adaptive::Ref{Bool}
     rtol::mk_float
     atol::mk_float
     atol_upar::mk_float

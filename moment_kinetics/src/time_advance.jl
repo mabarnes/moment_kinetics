@@ -205,7 +205,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
 
     # create an array of structs containing scratch arrays for the pdf and low-order moments
     # that may be evolved separately via fluid equations
-    scratch = setup_scratch_arrays(moments, pdf.charged.norm, pdf.neutral.norm, t_params.n_rk_stages)
+    scratch = setup_scratch_arrays(moments, pdf.charged.norm, pdf.neutral.norm, t_params.n_rk_stages[])
     # setup dummy arrays & buffer arrays for z r MPI
     n_neutral_species_alloc = max(1,composition.n_neutral_species)
     scratch_dummy = setup_dummy_and_buffer_arrays(r.n,z.n,vpa.n,vperp.n,vz.n,vr.n,vzeta.n,
@@ -777,73 +777,91 @@ e.g., if f is the function to be updated, then
 f^{n+1}[stage+1] = rk_coef[1,stage]*f^{n} + rk_coef[2,stage]*f^{n+1}[stage] + rk_coef[3,stage]*(f^{n}+dt*G[f^{n+1}[stage]]
 """
 function setup_runge_kutta_coefficients!(t_params)
-    if t_params.adaptive
-        if t_params.n_rk_stages == 6
-            # Embedded 4(5) order Runge-Kutta-Fehlberg method.
-            # Note uses the 5th order solution for the time advance, even though the error
-            # estimate is for the 4th order solution.
-            #
-            # Coefficients originate here: 
-            # https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method,
-            # 'COEFFICIENTS FOR RK4(5), FORMULA 2 Table III in Fehlberg'
-            #
-            # Coefficients converted to the format for moment_kinetics time-stepper using
-            # `util/calculate_rk_coeffs.jl`
-            rk_coefs = mk_float[3//4 5//8   10469//2197  115//324        121//240    641//1980  11//36   ;
-                                1//4 3//32  17328//2197  95//54          33//10      232//165   4//3     ;
-                                0    9//32 -32896//2197 -95744//29241   -1408//285  -512//171  -512//171 ;
-                                0    0      7296//2197   553475//233928  6591//1520  2197//836  2197//836;
-                                0    0      0           -845//4104      -77//40     -56//55    -1        ;
-                                0    0      0            0              -11//40      34//55     8//11    ;
-                                0    0      0            0               0           2//55     -1        ]
-            t_params.rk_order[] = 5
-        elseif t_params.n_rk_stages == 4
-            # Fekete SSPRK(4,3)
-            # Note this is the same as moment_kinetics original 4-stage SSPRK method, with
-            # the addition of a truncation error estimate.
-            rk_coefs = mk_float[1//2 0    2//3 0    -1//2;
-                                1//2 1//2 0    0     0   ;
-                                0    1//2 1//6 0     0   ;
-                                0    0    1//6 1//2  1   ;
-                                0    0    0    1//2 -1//2]
-            t_params.rk_order[] = 3
-        else
-            error("Unsupported number of RK stages for adaptive timestepping, "
-                  * "n_rk_stages=$n_rk_stages")
-        end
-    else
-        rk_coefs = allocate_float(3,n_rk_stages)
+    if t_params.type == "RKF5(4)"
+        # Embedded 5th order / 4th order Runge-Kutta-Fehlberg method.
+        # Note uses the 5th order solution for the time advance, even though the error
+        # estimate is for the 4th order solution.
+        #
+        # Coefficients originate here: 
+        # https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method,
+        # 'COEFFICIENTS FOR RK4(5), FORMULA 2 Table III in Fehlberg'
+        #
+        # Coefficients converted to the format for moment_kinetics time-stepper using
+        # `util/calculate_rk_coeffs.jl`
+        rk_coefs = mk_float[3//4 5//8   10469//2197  115//324        121//240    641//1980  11//36   ;
+                            1//4 3//32  17328//2197  95//54          33//10      232//165   4//3     ;
+                            0    9//32 -32896//2197 -95744//29241   -1408//285  -512//171  -512//171 ;
+                            0    0      7296//2197   553475//233928  6591//1520  2197//836  2197//836;
+                            0    0      0           -845//4104      -77//40     -56//55    -1        ;
+                            0    0      0            0              -11//40      34//55     8//11    ;
+                            0    0      0            0               0           2//55     -1        ]
+        t_params.n_rk_stages[] = 6
+        t_params.rk_order[] = 5
+        t_params.adaptive[] = true
+    elseif t_params.type == "Fekete4(3)"
+        # Fekete SSPRK(4,3)
+        # Note this is the same as moment_kinetics original 4-stage SSPRK method, with
+        # the addition of a truncation error estimate.
+        rk_coefs = mk_float[1//2 0    2//3 0    -1//2;
+                            1//2 1//2 0    0     0   ;
+                            0    1//2 1//6 0     0   ;
+                            0    0    1//6 1//2  1   ;
+                            0    0    0    1//2 -1//2]
+        t_params.n_rk_stages[] = 4
+        t_params.rk_order[] = 3
+        t_params.adaptive[] = true
+    elseif t_params.type == "SSPRK4"
+        t_params.n_rk_stages[] = 4
+        rk_coefs = allocate_float(3, t_params.n_rk_stages[])
         rk_coefs .= 0.0
-        if t_params.n_rk_stages == 4
-            rk_coefs[1,1] = 0.5
-            rk_coefs[3,1] = 0.5
-            rk_coefs[2,2] = 0.5
-            rk_coefs[3,2] = 0.5
-            rk_coefs[1,3] = 2.0/3.0
-            rk_coefs[2,3] = 1.0/6.0
-            rk_coefs[3,3] = 1.0/6.0
-            rk_coefs[2,4] = 0.5
-            rk_coefs[3,4] = 0.5
-            t_params.rk_order[] = 3
-        elseif t_params.n_rk_stages == 3
-            rk_coefs[3,1] = 1.0
-            rk_coefs[1,2] = 0.75
-            rk_coefs[3,2] = 0.25
-            rk_coefs[1,3] = 1.0/3.0
-            rk_coefs[3,3] = 2.0/3.0
-            t_params.rk_order[] = 3 # ? Not sure about this order
-        elseif t_params.n_rk_stages == 2
-            rk_coefs[3,1] = 1.0
-            rk_coefs[1,2] = 0.5
-            rk_coefs[3,2] = 0.5
-            t_params.rk_order[] = 2
-        elseif t_params.n_rk_stages == 1
-            rk_coefs[3,1] = 1.0
-            t_params.rk_order[] = 1
-        else
-            error("Unsupported number of RK stages, n_rk_stages=$n_rk_stages")
-        end
+        rk_coefs[1,1] = 0.5
+        rk_coefs[3,1] = 0.5
+        rk_coefs[2,2] = 0.5
+        rk_coefs[3,2] = 0.5
+        rk_coefs[1,3] = 2.0/3.0
+        rk_coefs[2,3] = 1.0/6.0
+        rk_coefs[3,3] = 1.0/6.0
+        rk_coefs[2,4] = 0.5
+        rk_coefs[3,4] = 0.5
+        t_params.n_rk_stages[] = 4
+        t_params.rk_order[] = 3
+        t_params.adaptive[] = false
+    elseif t_params.type == "SSPRK3"
+        t_params.n_rk_stages[] = 3
+        rk_coefs = allocate_float(3, t_params.n_rk_stages[])
+        rk_coefs .= 0.0
+        rk_coefs[3,1] = 1.0
+        rk_coefs[1,2] = 0.75
+        rk_coefs[3,2] = 0.25
+        rk_coefs[1,3] = 1.0/3.0
+        rk_coefs[3,3] = 2.0/3.0
+        t_params.rk_order[] = 3 # ? Not sure about this order
+        t_params.adaptive[] = false
+    elseif t_params.type == "SSPRK2"
+        t_params.n_rk_stages[] = 2
+        rk_coefs = allocate_float(3, t_params.n_rk_stages[])
+        rk_coefs .= 0.0
+        rk_coefs[3,1] = 1.0
+        rk_coefs[1,2] = 0.5
+        rk_coefs[3,2] = 0.5
+        t_params.rk_order[] = 2
+        t_params.adaptive[] = false
+    elseif t_params.type == "SSPRK1"
+        t_params.n_rk_stages[] = 1
+        rk_coefs = allocate_float(3, t_params.n_rk_stages[])
+        rk_coefs .= 0.0
+        rk_coefs[3,1] = 1.0
+        t_params.rk_order[] = 1
+        t_params.adaptive[] = false
+    else
+        error("Unsupported RK timestep method, type=$(t_params.type)\n"
+              * "Valid methods are: SSPRK4, SSPRK3, SSPRK2, SSPRK1, RKF5(4), Fekete4(3)")
     end
+
+    if t_params.split_operators && t_params.adaptive
+        error("Adaptive timestepping not supported with operator splitting")
+    end
+
     return rk_coefs
 end
 
@@ -1928,7 +1946,7 @@ function ssp_rk!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyrophase
 
     begin_s_r_z_region()
 
-    n_rk_stages = t_params.n_rk_stages
+    n_rk_stages = t_params.n_rk_stages[]
 
     first_scratch = scratch[1]
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin

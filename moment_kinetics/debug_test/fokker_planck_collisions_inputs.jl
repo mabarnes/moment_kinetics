@@ -4,7 +4,6 @@ test_type = "Fokker-Planck collisions"
 test_input_full_f = Dict(
      "run_name" => "full_f",
      "timestepping" => Dict{String,Any}("dt" => 0.0,
-                            "n_rk_stages" => 4,
                                         "nstep" => 3,
                                         "nwrite" => 2,
                                         "nwrite_dfns" => 2),

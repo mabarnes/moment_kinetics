@@ -196,14 +196,11 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         dt=0.00025/sqrt(species.charged[1].initial_temperature),
         nwrite=1,
         nwrite_dfns=nothing,
-        # options are n_rk_stages = 1, 2, 3 or 4 (corresponding to forward Euler,
-        # Heun's method, SSP RK3 and 4-stage SSP RK3)
-        n_rk_stages=4,
+        type="SSPRK4",
         split_operators=false,
         stopfile_name="stop",
         steady_state_residual=false,
         converged_residual_value=-1.0,
-        adaptive=false,
         rtol=1.0e-5,
         atol=1.0e-16,
         atol_upar=nothing,
@@ -217,9 +214,6 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         timestepping_section["atol_upar"] = 1.0e-2 * timestepping_section["rtol"]
     end
     timestepping_input = Dict_to_NamedTuple(timestepping_section)
-    if timestepping_input.split_operators && timestepping_input.adaptive
-        error("Adaptive timestepping not supported with operator splitting")
-    end
     if !(0.0 < timestepping_input.step_update_prefactor < 1.0)
         error("step_update_prefactor=$(timestepping_input.step_update_prefactor) must "
               * "be between 0.0 and 1.0.")
@@ -452,9 +446,9 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     t_params = time_info(timestepping_input.nstep, dt_shared, previous_dt_shared,
                          next_output_time, dt_before_output, step_to_output,
                          timestepping_input.nwrite, timestepping_input.nwrite_dfns,
-                         timestepping_input.n_rk_stages, Ref(0),
-                         timestepping_input.adaptive, timestepping_input.rtol,
-                         timestepping_input.atol, timestepping_input.atol_upar,
+                         timestepping_input.type, Ref(0), Ref(0), Ref(false),
+                         timestepping_input.rtol, timestepping_input.atol,
+                         timestepping_input.atol_upar,
                          timestepping_input.step_update_prefactor,
                          timestepping_input.minimum_dt,
                          timestepping_input.split_operators,

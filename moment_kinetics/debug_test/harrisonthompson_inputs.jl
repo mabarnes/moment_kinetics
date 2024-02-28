@@ -35,7 +35,7 @@ test_input_finite_difference = Dict("n_ion_species" => 2,
                                     "timestepping" => Dict{String,Any}("nstep" => 3,
                                                                        "dt" => 0.0005,
                                                                        "nwrite" => 2,
-                                                                       "n_rk_stages" => 2,
+                                                                       "type" => "SSPRK2"
                                                                        "split_operators" => false),
                                     "z_ngrid" => 4,
                                     "z_nelement" => 1,

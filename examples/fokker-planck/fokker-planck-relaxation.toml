@@ -61,5 +61,4 @@ nstep = 5000
 dt = 1.0e-2
 nwrite = 5000
 nwrite_dfns = 5000
-n_rk_stages = 4
 split_operators = false

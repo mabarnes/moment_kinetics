@@ -39,7 +39,7 @@ test_input = Dict(
     "timestepping" => Dict{String,Any}("nstep" => 3,
                                        "dt" => 1.e-8,
                                        "nwrite" => 2,
-                                       "n_rk_stages" => 2,
+                                       "type" => "SSPRK2",
                                        "split_operators" => false),
     "z_ngrid" => 3,
     "z_nelement" => 2,
