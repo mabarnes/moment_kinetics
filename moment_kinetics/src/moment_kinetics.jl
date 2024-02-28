@@ -35,6 +35,7 @@ include("file_io.jl")
 include("geo.jl")
 include("velocity_moments.jl")
 include("velocity_grid_transforms.jl")
+include("gyroaverages.jl")
 include("em_fields.jl")
 include("bgk.jl")
 include("manufactured_solns.jl") # MRH Here?
