@@ -268,6 +268,8 @@ mutable struct species_composition
     #   density is fixed to be Nₑ*(eϕ/T_e) and N_e is calculated using a current
     #   condition at the wall
     electron_physics::electron_physics_type
+    # if true -- initialize electrons using output from a previous run with Boltzmann electron response
+    initialize_electrons_from_boltzmann::Bool
     # if false -- wall bc uses true Knudsen cosine to specify neutral pdf leaving the wall
     # if true -- use a simpler pdf that is easier to integrate
     use_test_neutral_wall_pdf::Bool

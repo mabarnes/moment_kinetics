@@ -95,6 +95,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     if !(0.0 <= composition.recycling_fraction <= 1.0)
         error("recycling_fraction must be between 0 and 1. Got $recycling_fraction.")
     end
+    composition.initialize_electrons_from_boltzmann = get(scan_input, "initialize_electrons_from_boltzmann", false)
 
     # Reference parameters that define the conversion between physical quantities and
     # normalised values used in the code.
@@ -907,6 +908,9 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     else
         n_species = n_ion_species + n_neutral_species + 1
     end
+    # if initialize_electrons_from_boltzmann = true, then initialize the electrons using
+    # output from a simulation where a Boltzmann electron response was assumed
+    initialize_electrons_from_boltzmann = false
     use_test_neutral_wall_pdf = false
     # electron temperature over reference temperature
     T_e = 1.0
@@ -924,7 +928,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     # `recycling_fraction` to account for ions absorbed by the wall.
     recycling_fraction = 1.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
-        electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, Er_constant,
+        electron_physics, initialize_electrons_from_boltzmann, 
+        use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, Er_constant,
         mn_over_mi, me_over_mi, recycling_fraction, allocate_float(n_species))
     
     species_ion = Array{species_parameters_mutable,1}(undef,n_ion_species)

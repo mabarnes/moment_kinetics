@@ -165,11 +165,11 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
 
     #dt_electron = dt * sqrt(composition.me_over_mi)
     #dt_max = 3.0e-8
-    dt_max = 1.0e-8
+    dt_max = 1.0e-7
     #dt_max = 2.5e-9
 
     #dt_energy = 1.0e-7
-    dt_energy = 1.0e-8
+    dt_energy = 1.0e-7
     #dt_energy = 2.5e-9
     #n_ppar_subcycles = 1000
     #n_ppar_subcycles = 200
@@ -283,18 +283,18 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
                 end
             end
 
-            #dt_energy = dt_electron
-            electron_energy_equation!(ppar, dens, fvec, moments, collisions, dt_energy, composition, num_diss_params, z)
+            # #dt_energy = dt_electron
+            # electron_energy_equation!(ppar, dens, fvec, moments, collisions, dt_energy, composition, num_diss_params, z)
 
-            # Apply same 'speed up' hack to ppar that we do to the distribution function,
-            # but without the wpa dependence.
-            @loop_r_z ir iz begin
-                zval = z.grid[iz]
-                znorm = 2.0*zval/z.L
-                ppar[iz,ir] = fvec.electron_ppar[iz,ir] +
-                              (ppar[iz,ir] - fvec.electron_ppar[iz,ir]) *
-                              (1.0 + z_speedup_fac*(1.0 - znorm^2))
-            end
+            # # Apply same 'speed up' hack to ppar that we do to the distribution function,
+            # # but without the wpa dependence.
+            # @loop_r_z ir iz begin
+            #     zval = z.grid[iz]
+            #     znorm = 2.0*zval/z.L
+            #     ppar[iz,ir] = fvec.electron_ppar[iz,ir] +
+            #                   (ppar[iz,ir] - fvec.electron_ppar[iz,ir]) *
+            #                   (1.0 + z_speedup_fac*(1.0 - znorm^2))
+            # end
             begin_r_z_region()
             @loop_r_z ir iz begin
                 fvec.electron_ppar[iz,ir] = ppar[iz,ir]
@@ -1716,7 +1716,7 @@ function check_electron_pdf_convergence(residual, pdf, upar, vthe, z, vpa)
         end
         @loop_vperp ivperp begin
             sum_residual += sum(abs.(@view residual[iv0_start:iv0_end,ivperp,iz,ir]))
-            sum_pdf += sum(abs.(@view pdf[iv0_start:iv0_end,ivperp,iz,ir]))
+            sum_pdf += sum(abs.(@view pdf[iv0_start:iv0_end,ivperp,iz,ir]) * vthe[iz,ir])
         end
     end
     sum_residual, sum_pdf = MPI.Allreduce([sum_residual, sum_pdf], +, comm_world)

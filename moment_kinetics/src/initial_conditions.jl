@@ -4,6 +4,7 @@ module initial_conditions
 
 export allocate_pdf_and_moments
 export init_pdf_and_moments!
+export initialize_electrons!
 
 # functional testing 
 export create_boundary_distributions
@@ -272,24 +273,51 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
     init_boundary_distributions!(boundary_distributions, pdf, vz, vr, vzeta, vpa, vperp,
                                  z, r, composition)
 
+    initialize_electrons!(pdf, moments, fields, geometry, composition, r, z,
+                         vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral, vpa_spectral, vperp_spectral,
+                         collisions, external_source_settings,
+                         scratch_dummy, scratch, t_input, num_diss_params, advection_structs,
+                         io_input, input_dict)
+
+    return nothing
+end
+
+function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z,
+    vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral, vpa_spectral, vperp_spectral,
+    collisions, external_source_settings,
+    scratch_dummy, scratch, t_input, num_diss_params, advection_structs,
+    io_input, input_dict; restart=false)
+
     moments.electron.dens_updated[] = false
     # initialise the electron density profile
     init_electron_density!(moments.electron.dens, moments.electron.dens_updated, moments.ion.dens)
     # initialise the electron parallel flow profile
     init_electron_upar!(moments.electron.upar, moments.electron.upar_updated, moments.electron.dens, 
         moments.ion.upar, moments.ion.dens, composition.electron_physics, r, z)
-    # initialise the electron thermal speed profile
-    init_electron_vth!(moments.electron.vth, moments.ion.vth, composition.T_e, composition.me_over_mi, z.grid)
-    # calculate the electron temperature from the thermal speed
-    @loop_r_z ir iz begin
-        moments.electron.temp[iz,ir] = composition.me_over_mi * moments.electron.vth[iz,ir]^2
+    # different choices for initialization of electron temperature/pressure/vth depending on whether
+    # we are restarting from a previous simulation with Boltzmann electrons or not
+    if restart
+        # if restarting from a simulations where Boltzmann electrons were used, then the assumption is
+        # that the electron parallel temperature is constant along the field line and equal to T_e
+        moments.electron.temp .= composition.T_e
+        # the thermal speed is related to the temperature by vth_e / v_ref = sqrt((T_e/T_ref) / (m_e/m_ref))
+        moments.electron.vth .= sqrt(composition.T_e / composition.me_over_mi)
+        # ppar = 0.5 * n * T, so we can calculate the parallel pressure from the density and T_e
+        moments.electron.ppar .= 0.5 * moments.electron.dens * composition.T_e
+    else
+        # initialise the electron thermal speed profile
+        init_electron_vth!(moments.electron.vth, moments.ion.vth, composition.T_e, composition.me_over_mi, z.grid)
+        # calculate the electron temperature from the thermal speed
+        @loop_r_z ir iz begin
+            moments.electron.temp[iz,ir] = composition.me_over_mi * moments.electron.vth[iz,ir]^2
+        end
+        # calculate the electron parallel pressure from the density and temperature
+        @loop_r_z ir iz begin
+            moments.electron.ppar[iz,ir] = 0.5 * moments.electron.dens[iz,ir] * moments.electron.temp[iz,ir]
+        end
     end
     # the electron temperature has now been updated
     moments.electron.temp_updated[] = true
-    # calculate the electron parallel pressure from the density and temperature
-    @loop_r_z ir iz begin
-        moments.electron.ppar[iz,ir] = 0.5 * moments.electron.dens[iz,ir] * moments.electron.temp[iz,ir]
-    end
     # the electron parallel pressure now been updated
     moments.electron.ppar_updated[] = true
 
@@ -322,7 +350,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
             [(speed=speed,)], num_diss_params,
             composition.me_over_mi)
     end
-    # calculate the electron parallel heat flux;
+    # calculate the initial electron parallel heat flux;
     # if using kinetic electrons, this relies on the electron pdf, which itself relies on the electron heat flux
     calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, pdf.electron,
         moments.electron.ppar, moments.electron.upar, moments.electron.vth, moments.electron.dT_dz, moments.ion.upar, 
@@ -336,14 +364,16 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
         moments.electron.upar, moments.ion.upar, moments.electron.dT_dz,
         composition.me_over_mi, collisions.nu_ei, composition.electron_physics)
     
-    # initialize the scratch arrays containing pdfs and moments for the first RK stage
-    # the electron pdf is yet to be initialised but with the current code logic, the scratch
-    # arrays need to exist and be otherwise initialised in order to compute the initial
-    # electron pdf. The electron arrays will be updated as necessary by
-    # initialize_electron_pdf!().
-    initialize_scratch_arrays!(scratch, moments, pdf, t_input.n_rk_stages)
-    # get the initial electrostatic potential and parallel electric field
-    update_phi!(fields, scratch[1], z, r, composition, collisions, moments, z_spectral, r_spectral, scratch_dummy)
+    if restart == false
+        # initialize the scratch arrays containing pdfs and moments for the first RK stage
+        # the electron pdf is yet to be initialised but with the current code logic, the scratch
+        # arrays need to exist and be otherwise initialised in order to compute the initial
+        # electron pdf. The electron arrays will be updated as necessary by
+        # initialize_electron_pdf!().
+        initialize_scratch_arrays!(scratch, moments, pdf, t_input.n_rk_stages)
+        # get the initial electrostatic potential and parallel electric field
+        update_phi!(fields, scratch[1], z, r, composition, collisions, moments, z_spectral, r_spectral, scratch_dummy)
+    end
 
     # initialize the electron pdf that satisfies the electron kinetic equation
     initialize_electron_pdf!(scratch[1], pdf, moments, fields.phi, r, z, vpa, vperp,
@@ -485,7 +515,7 @@ function initialize_electron_pdf!(fvec, pdf, moments, phi, r, z, vpa, vperp, vze
         begin_serial_region()
         restart_filename = get_default_restart_filename(io_input, "initial_electron";
                                                         error_if_no_file_found=false)
-        if restart_filename === nothing
+        if restart_filename === nothing || composition.initialize_electrons_from_boltzmann
             # No file to restart from
             previous_runs_info = nothing
             code_time = 0.0
