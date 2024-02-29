@@ -2010,6 +2010,12 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
                 # of a good value for the next timestep slightly conservative. It defaults to
                 # 0.9.
                 t_params.dt[] *= t_params.step_update_prefactor * error_norm^(-1.0/t_params.rk_order[])
+
+                # Limit so timestep cannot increase by a large factor, which might lead to
+                # numerical instability in some cases.
+                t_params.dt[] = min(t_params.dt[], t_params.max_increase_factor * t_params.previous_dt[])
+
+                # Prevent timestep from going below minimum_dt
                 t_params.dt[] = max(t_params.dt[], t_params.minimum_dt)
                 println("t=$t, error_norm=$error_norm, changing timestep to ", t_params.dt[])
             end

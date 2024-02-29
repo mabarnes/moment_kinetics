@@ -52,6 +52,7 @@ struct time_info
     atol::mk_float
     atol_upar::mk_float
     step_update_prefactor::mk_float
+    max_increase_factor::mk_float
     minimum_dt::mk_float
     split_operators::Bool
     steady_state_residual::Bool
