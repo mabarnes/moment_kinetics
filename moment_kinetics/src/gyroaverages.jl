@@ -119,8 +119,8 @@ function zrcoordinatelist!(gyrophase,zlist,rlist,rho_val,r_val,z_val,bzeta)
     ngyro = gyrophase.n
     for i in 1:ngyro
         gphase = gyrophase.grid[i]
-        zlist[i] = z_val + rho_val*sin(gphase)*bzeta
-        rlist[i] = r_val + rho_val*cos(gphase)
+        zlist[i] = z_val + rho_val*cos(gphase)*bzeta
+        rlist[i] = r_val + rho_val*sin(gphase)
     end
 end
 
