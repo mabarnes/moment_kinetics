@@ -37,7 +37,7 @@ function print_matrix(matrix,name::String,n::mk_int,m::mk_int)
     end
 
 
-function gyroaverage_test(; ngrid=5, nelement=4, ngrid_vperp=3, nelement_vperp=1, Lvperp=3.0, ngrid_gyrophase=5, discretization="chebyshev_pseudospectral")
+function gyroaverage_test(;rhostar=0.1, pitch=0.5, ngrid=5, kr=2, kz=2, nelement=4, ngrid_vperp=3, nelement_vperp=1, Lvperp=3.0, ngrid_gyrophase=5, discretization="chebyshev_pseudospectral")
 
         #ngrid = 17
         #nelement = 4
@@ -90,9 +90,9 @@ function gyroaverage_test(; ngrid=5, nelement=4, ngrid_vperp=3, nelement_vperp=1
         gyrophase, gyrophase_spectral = define_coordinate(gyrophase_input,init_YY=false)
         
         # create test geometry
-        rhostar = 0.1 #rhostar of ions for ExB drift
+        #rhostar = 0.1 #rhostar of ions for ExB drift
         option = "constant-helical"
-        pitch = 1.0
+        #pitch = 1.0
         DeltaB = 1.0
         geometry_in = geometry_input(rhostar,option,pitch,DeltaB)
         geometry = init_magnetic_geometry(geometry_in,z,r)
@@ -111,8 +111,8 @@ function gyroaverage_test(; ngrid=5, nelement=4, ngrid_vperp=3, nelement_vperp=1
         # initialise the matrix for the gyroaverages
         gyro = init_gyro_operators(vperp,z,r,gyrophase,geometry,composition)
         # initialise a test field
-        kr = 2
-        kz = 2
+        #kr = 2
+        #kz = 2
         phi = allocate_float(z.n,r.n)
         gphi = allocate_float(vperp.n,z.n,r.n)
         for ir in 1:r.n
@@ -129,7 +129,7 @@ function gyroaverage_test(; ngrid=5, nelement=4, ngrid_vperp=3, nelement_vperp=1
                 end
             end
         end
-        println(maximum(abs.(gyro.gyromatrix)))
+        #println(maximum(abs.(gyro.gyromatrix)))
         #end
         
         # gyroaverage phi

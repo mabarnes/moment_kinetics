@@ -24,6 +24,7 @@ no contribution from outside of the domain
 """
 
 function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition)
+    println("Begin: init_gyro_operators")
     gyromatrix = allocate_float(z.n,r.n,vperp.n,z.n,r.n)
     
     # init the matrix!
@@ -36,7 +37,7 @@ function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition)
     relementlist = allocate_int(gyrophase.n)
     
     @loop_r_z_vperp ir iz ivperp begin
-        println("ivperp, iz, ir: ",ivperp," ",iz," ",ir)
+        #println("ivperp, iz, ir: ",ivperp," ",iz," ",ir)
         r_val = r.grid[ir]
         z_val = z.grid[iz]
         vperp_val = vperp.grid[ivperp]
@@ -53,10 +54,10 @@ function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition)
         # determine which elements contain these z', r'
         elementlist!(zelementlist,zlist,z)
         elementlist!(relementlist,rlist,r)
-        println(z_val,zlist)
-        println(r_val,rlist)
-        println(zelementlist)
-        println(relementlist)
+        #println(z_val,zlist)
+        #println(r_val,rlist)
+        #println(zelementlist)
+        #println(relementlist)
         # initialise matrix to zero
         @. gyromatrix[:,:,ivperp,iz,ir] = 0.0
         for igyro in 1:gyrophase.n
@@ -67,7 +68,11 @@ function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition)
             izel = zelementlist[igyro]
             if izel < 1
                 # z' point is outside of the grid, skip this point
-                continue
+                # if simply ignore contributions from outside of the domain
+                #continue
+                # if set to zero any <field> where the path exits the domain
+                @. gyromatrix[:,:,ivperp,iz,ir] = 0.0
+                break
             end
             izmin, izmax = z.igrid_full[1,izel], z.igrid_full[z.ngrid,izel]
             znodes = z.grid[izmin:izmax]
@@ -75,14 +80,18 @@ function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition)
             irel = relementlist[igyro]
             if irel < 1
                 # r' point is outside of the grid, skip this point
-                continue
+                # if simply ignore contributions from outside of the domain
+                #continue
+                # if set to zero any <field> where the path exits the domain
+                @. gyromatrix[:,:,ivperp,iz,ir] = 0.0
+                break
             end
             irmin, irmax = r.igrid_full[1,irel], r.igrid_full[r.ngrid,irel]
             rnodes = r.grid[irmin:irmax]
             
-            println("igyro ",igyro)
-            println("izel ",izel," znodes ",znodes)
-            println("irel ",irel," rnodes ",rnodes)
+            #println("igyro ",igyro)
+            #println("izel ",izel," znodes ",znodes)
+            #println("irel ",irel," rnodes ",rnodes)
             # sum over all contributing Lagrange polynomials from each
             # collocation point in the element
             icounter = 0
@@ -97,11 +106,12 @@ function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition)
                     icounter +=1
                 end
             end
-            println("counter: ",icounter)
+            #println("counter: ",icounter)
         end
     end
     
     gyro = gyro_operators(gyromatrix)
+    println("Finished: init_gyro_operators")
     return gyro
 end
 
