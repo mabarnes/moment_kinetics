@@ -782,7 +782,7 @@ function setup_runge_kutta_coefficients!(t_params)
         # Note uses the 5th order solution for the time advance, even though the error
         # estimate is for the 4th order solution.
         #
-        # Coefficients originate here: 
+        # Coefficients originate here:
         # https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method,
         # 'COEFFICIENTS FOR RK4(5), FORMULA 2 Table III in Fehlberg'
         #
@@ -798,18 +798,18 @@ function setup_runge_kutta_coefficients!(t_params)
         t_params.n_rk_stages[] = 6
         t_params.rk_order[] = 5
         t_params.adaptive[] = true
+        t_params.low_storage[] = false
     elseif t_params.type == "Fekete4(3)"
-        # Fekete SSPRK(4,3)
+        # Fekete 4-stage, 3rd-order SSPRK (see comments in util/calculate_rk_coeffs.jl.
         # Note this is the same as moment_kinetics original 4-stage SSPRK method, with
         # the addition of a truncation error estimate.
-        rk_coefs = mk_float[1//2 0    2//3 0    -1//2;
-                            1//2 1//2 0    0     0   ;
-                            0    1//2 1//6 0     0   ;
-                            0    0    1//6 1//2  1   ;
-                            0    0    0    1//2 -1//2]
+        rk_coeffs = mk_float[1//2 0    2//3 0    -1//2;
+                             0    1//2 1//6 1//2  1   ;
+                             1//2 1//2 1//6 1//2 -1//2]
         t_params.n_rk_stages[] = 4
         t_params.rk_order[] = 3
         t_params.adaptive[] = true
+        t_params.low_storage[] = true
     elseif t_params.type == "SSPRK4"
         t_params.n_rk_stages[] = 4
         rk_coefs = allocate_float(3, t_params.n_rk_stages[])
@@ -826,6 +826,7 @@ function setup_runge_kutta_coefficients!(t_params)
         t_params.n_rk_stages[] = 4
         t_params.rk_order[] = 3
         t_params.adaptive[] = false
+        t_params.low_storage[] = true
     elseif t_params.type == "SSPRK3"
         t_params.n_rk_stages[] = 3
         rk_coefs = allocate_float(3, t_params.n_rk_stages[])
@@ -837,6 +838,7 @@ function setup_runge_kutta_coefficients!(t_params)
         rk_coefs[3,3] = 2.0/3.0
         t_params.rk_order[] = 3 # ? Not sure about this order
         t_params.adaptive[] = false
+        t_params.low_storage[] = true
     elseif t_params.type == "SSPRK2"
         t_params.n_rk_stages[] = 2
         rk_coefs = allocate_float(3, t_params.n_rk_stages[])
@@ -846,6 +848,7 @@ function setup_runge_kutta_coefficients!(t_params)
         rk_coefs[3,2] = 0.5
         t_params.rk_order[] = 2
         t_params.adaptive[] = false
+        t_params.low_storage[] = true
     elseif t_params.type == "SSPRK1"
         t_params.n_rk_stages[] = 1
         rk_coefs = allocate_float(3, t_params.n_rk_stages[])
@@ -853,12 +856,13 @@ function setup_runge_kutta_coefficients!(t_params)
         rk_coefs[3,1] = 1.0
         t_params.rk_order[] = 1
         t_params.adaptive[] = false
+        t_params.low_storage[] = true
     else
         error("Unsupported RK timestep method, type=$(t_params.type)\n"
               * "Valid methods are: SSPRK4, SSPRK3, SSPRK2, SSPRK1, RKF5(4), Fekete4(3)")
     end
 
-    if t_params.split_operators && t_params.adaptive
+    if t_params.split_operators && t_params.adaptive[]
         error("Adaptive timestepping not supported with operator splitting")
     end
 
@@ -1117,7 +1121,7 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
         if finish_now
             break
         end
-        if t_params.adaptive
+        if t_params.adaptive[]
             if t >= end_time - epsilon
                 break
             end
@@ -1346,18 +1350,18 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     ##
     # here we seem to have duplicate arrays for storing n, u||, p||, etc, but not for vth
     # 'scratch' is for the multiple stages of time advanced quantities, but 'moments' can be updated directly at each stage
-    if t_params.adaptive
+    if t_params.low_storage[]
+        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+            new_scratch.pdf[ivpa,ivperp,iz,ir,is] = rk_coefs[1]*pdf.charged.norm[ivpa,ivperp,iz,ir,is] + rk_coefs[2]*old_scratch.pdf[ivpa,ivperp,iz,ir,is] + rk_coefs[3]*new_scratch.pdf[ivpa,ivperp,iz,ir,is]
+        end
+    else
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
             new_scratch.pdf[ivpa,ivperp,iz,ir,is] =
                 sum(rk_coefs[i]*scratch[i].pdf[ivpa,ivperp,iz,ir,is] for i ∈ 1:istage+1)
         end
-    else
-        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-            new_scratch.pdf[ivpa,ivperp,iz,ir,is] = rk_coefs[1]*pdf.charged.norm[ivpa,ivperp,iz,ir,is] + rk_coefs[2]*old_scratch.pdf[ivpa,ivperp,iz,ir,is] + rk_coefs[3]*new_scratch.pdf[ivpa,ivperp,iz,ir,is]
-        end
     end
     # use Runge Kutta to update any velocity moments evolved separately from the pdf
-    rk_update_evolved_moments!(scratch, moments, rk_coefs, t_params.adaptive, istage)
+    rk_update_evolved_moments!(scratch, moments, rk_coefs, t_params.low_storage[], istage)
 
     # Ensure there are no negative values in the pdf before applying boundary
     # conditions, so that negative deviations do not mess up the integral-constraint
@@ -1420,19 +1424,19 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         # update the neutral particle distribution and moments
         ##
         begin_sn_r_z_region()
-        if t_params.adaptive
-            @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
-                new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] =
-                    sum(rk_coefs[i]*scratch[i].pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] for i ∈ 1:istage+1)
-            end
-        else
+        if t_params.low_storage[]
             @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
                 new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = ( rk_coefs[1]*pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn]
                  + rk_coefs[2]*old_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] + rk_coefs[3]*new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn])
             end
+        else
+            @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+                new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] =
+                    sum(rk_coefs[i]*scratch[i].pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] for i ∈ 1:istage+1)
+            end
         end
         # use Runge Kutta to update any velocity moments evolved separately from the pdf
-        rk_update_evolved_moments_neutral!(scratch, moments, rk_coefs, t_params.adaptive,
+        rk_update_evolved_moments_neutral!(scratch, moments, rk_coefs, t_params.low_storage[],
                                            istage)
 
         # Ensure there are no negative values in the pdf before applying boundary
@@ -1466,7 +1470,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         end
     end
 
-    if t_params.adaptive && istage == t_params.n_rk_stages
+    if t_params.adaptive[] && istage == t_params.n_rk_stages
         # Note the timestep update must be done before calculating derived moments and
         # moment derivatives, because the timstep might need to be re-done with a smaller
         # dt, in which case scratch[t_params.n_rk_stages+1] will be reset to the values
@@ -1549,46 +1553,46 @@ end
 use Runge Kutta to update any charged-particle velocity moments evolved separately from
 the pdf
 """
-function rk_update_evolved_moments!(scratch, moments, rk_coefs, adaptive, istage)
+function rk_update_evolved_moments!(scratch, moments, rk_coefs, low_storage, istage)
     # if separately evolving the particle density, update using RK
     new_scratch = scratch[istage+1]
     old_scratch = scratch[istage]
 
     if moments.evolve_density
-        if adaptive
+        if low_storage
             @loop_s_r_z is ir iz begin
-                new_scratch.density[iz,ir,is] =
-                    sum(rk_coefs[i]*scratch[i].density[iz,ir,is] for i ∈ 1:istage+1)
+                new_scratch.density[iz,ir,is] = rk_coefs[1]*moments.charged.dens[iz,ir,is] + rk_coefs[2]*old_scratch.density[iz,ir,is] + rk_coefs[3]*new_scratch.density[iz,ir,is]
             end
         else
             @loop_s_r_z is ir iz begin
-                new_scratch.density[iz,ir,is] = rk_coefs[1]*moments.charged.dens[iz,ir,is] + rk_coefs[2]*old_scratch.density[iz,ir,is] + rk_coefs[3]*new_scratch.density[iz,ir,is]
+                new_scratch.density[iz,ir,is] =
+                    sum(rk_coefs[i]*scratch[i].density[iz,ir,is] for i ∈ 1:istage+1)
             end
         end
     end
     # if separately evolving the parallel flow, update using RK
     if moments.evolve_upar
-        if adaptive
+        if low_storage
             @loop_s_r_z is ir iz begin
-                new_scratch.upar[iz,ir,is] =
-                    sum(rk_coefs[i]*scratch[i].upar[iz,ir,is] for i ∈ 1:istage+1)
+                new_scratch.upar[iz,ir,is] = rk_coefs[1]*moments.charged.upar[iz,ir,is] + rk_coefs[2]*old_scratch.upar[iz,ir,is] + rk_coefs[3]*new_scratch.upar[iz,ir,is]
             end
         else
             @loop_s_r_z is ir iz begin
-                new_scratch.upar[iz,ir,is] = rk_coefs[1]*moments.charged.upar[iz,ir,is] + rk_coefs[2]*old_scratch.upar[iz,ir,is] + rk_coefs[3]*new_scratch.upar[iz,ir,is]
+                new_scratch.upar[iz,ir,is] =
+                    sum(rk_coefs[i]*scratch[i].upar[iz,ir,is] for i ∈ 1:istage+1)
             end
         end
     end
     # if separately evolving the parallel pressure, update using RK;
     if moments.evolve_ppar
-        if adaptive
+        if low_storage
             @loop_s_r_z is ir iz begin
-                new_scratch.ppar[iz,ir,is] =
-                    sum(rk_coefs[i]*scratch[i].ppar[iz,ir,is] for i ∈ 1:istage+1)
+                new_scratch.ppar[iz,ir,is] = rk_coefs[1]*moments.charged.ppar[iz,ir,is] + rk_coefs[2]*old_scratch.ppar[iz,ir,is] + rk_coefs[3]*new_scratch.ppar[iz,ir,is]
             end
         else
             @loop_s_r_z is ir iz begin
-                new_scratch.ppar[iz,ir,is] = rk_coefs[1]*moments.charged.ppar[iz,ir,is] + rk_coefs[2]*old_scratch.ppar[iz,ir,is] + rk_coefs[3]*new_scratch.ppar[iz,ir,is]
+                new_scratch.ppar[iz,ir,is] =
+                    sum(rk_coefs[i]*scratch[i].ppar[iz,ir,is] for i ∈ 1:istage+1)
             end
         end
     end
@@ -1598,46 +1602,46 @@ end
 use Runge Kutta to update any neutral-particle velocity moments evolved separately from
 the pdf
 """
-function rk_update_evolved_moments_neutral!(scratch, moments, rk_coefs, adaptive, istage)
+function rk_update_evolved_moments_neutral!(scratch, moments, rk_coefs, low_storage, istage)
     # if separately evolving the particle density, update using RK
     new_scratch = scratch[istage+1]
     old_scratch = scratch[istage]
 
     if moments.evolve_density
-        if adaptive
+        if low_storage
             @loop_sn_r_z isn ir iz begin
-                new_scratch.density_neutral[iz,ir,isn] =
-                    sum(rk_coefs[i]*scratch[i].density_neutral[iz,ir,isn] for i ∈ 1:istage+1)
+                new_scratch.density_neutral[iz,ir,isn] = rk_coefs[1]*moments.neutral.dens[iz,ir,isn] + rk_coefs[2]*old_scratch.density_neutral[iz,ir,isn] + rk_coefs[3]*new_scratch.density_neutral[iz,ir,isn]
             end
         else
             @loop_sn_r_z isn ir iz begin
-                new_scratch.density_neutral[iz,ir,isn] = rk_coefs[1]*moments.neutral.dens[iz,ir,isn] + rk_coefs[2]*old_scratch.density_neutral[iz,ir,isn] + rk_coefs[3]*new_scratch.density_neutral[iz,ir,isn]
+                new_scratch.density_neutral[iz,ir,isn] =
+                    sum(rk_coefs[i]*scratch[i].density_neutral[iz,ir,isn] for i ∈ 1:istage+1)
             end
         end
     end
     # if separately evolving the parallel flow, update using RK
     if moments.evolve_upar
-        if adaptive
+        if low_storage
             @loop_sn_r_z isn ir iz begin
-                new_scratch.uz_neutral[iz,ir,isn] =
-                sum(rk_coefs[i]*scratch[i].uz_neutral[iz,ir,isn] for i ∈ 1:istage+1)
+                new_scratch.uz_neutral[iz,ir,isn] = rk_coefs[1]*moments.neutral.uz[iz,ir,isn] + rk_coefs[2]*old_scratch.uz_neutral[iz,ir,isn] + rk_coefs[3]*new_scratch.uz_neutral[iz,ir,isn]
             end
         else
             @loop_sn_r_z isn ir iz begin
-                new_scratch.uz_neutral[iz,ir,isn] = rk_coefs[1]*moments.neutral.uz[iz,ir,isn] + rk_coefs[2]*old_scratch.uz_neutral[iz,ir,isn] + rk_coefs[3]*new_scratch.uz_neutral[iz,ir,isn]
+                new_scratch.uz_neutral[iz,ir,isn] =
+                sum(rk_coefs[i]*scratch[i].uz_neutral[iz,ir,isn] for i ∈ 1:istage+1)
             end
         end
     end
     # if separately evolving the parallel pressure, update using RK;
     if moments.evolve_ppar
-        if adaptive
+        if low_storage
             @loop_sn_r_z isn ir iz begin
-                new_scratch.pz_neutral[iz,ir,isn] =
-                sum(rk_coefs[i]*scratch[i].pz_neutral[iz,ir,isn] for i ∈ 1:istage+1)
+                new_scratch.pz_neutral[iz,ir,isn] = rk_coefs[1]*moments.neutral.pz[iz,ir,isn] + rk_coefs[2]*old_scratch.pz_neutral[iz,ir,isn] + rk_coefs[3]*new_scratch.pz_neutral[iz,ir,isn]
             end
         else
             @loop_sn_r_z isn ir iz begin
-                new_scratch.pz_neutral[iz,ir,isn] = rk_coefs[1]*moments.neutral.pz[iz,ir,isn] + rk_coefs[2]*old_scratch.pz_neutral[iz,ir,isn] + rk_coefs[3]*new_scratch.pz_neutral[iz,ir,isn]
+                new_scratch.pz_neutral[iz,ir,isn] =
+                sum(rk_coefs[i]*scratch[i].pz_neutral[iz,ir,isn] for i ∈ 1:istage+1)
             end
         end
     end
@@ -1725,9 +1729,18 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
     error = scratch[2].pdf
     n = length(error_coeffs)
     begin_s_r_z_vperp_vpa_region()
-    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-        error[ivpa,ivperp,iz,ir,is] =
-            sum(error_coeffs[i] * scratch[i].pdf[ivpa,ivperp,iz,ir,is] for i ∈ 1:n)
+    if t_params.low_storage[]
+        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+            error[ivpa,ivperp,iz,ir,is] =
+                error_coeffs[1] * scratch[1].pdf[ivpa,ivperp,iz,ir,is] +
+                error_coeffs[2] * scratch[end-1].pdf[ivpa,ivperp,iz,ir,is] +
+                error_coeffs[3] * scratch[end].pdf[ivpa,ivperp,iz,ir,is]
+        end
+    else
+        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+            error[ivpa,ivperp,iz,ir,is] =
+                sum(error_coeffs[i] * scratch[i].pdf[ivpa,ivperp,iz,ir,is] for i ∈ 1:n)
+        end
     end
     error_norm = max(error_norm, local_error_norm(error, scratch[end].pdf, t_params.rtol,
                                                   t_params.atol))
@@ -1736,9 +1749,17 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
     if moments.evolve_density
         begin_s_r_z_region()
         error = scratch[2].density
-        @loop_s_r_z is ir iz begin
-            error[iz,ir,is] = sum(error_coeffs[i] * scratch[i].density[iz,ir,is]
-                                  for i ∈ 1:n)
+        if t_params.low_storage[]
+            @loop_s_r_z is ir iz begin
+                error[iz,ir,is] = error_coeffs[1] * scratch[1].density[iz,ir,is] +
+                                  error_coeffs[2] * scratch[end-1].density[iz,ir,is] +
+                                  error_coeffs[3] * scratch[end].density[iz,ir,is]
+            end
+        else
+            @loop_s_r_z is ir iz begin
+                error[iz,ir,is] = sum(error_coeffs[i] * scratch[i].density[iz,ir,is]
+                                      for i ∈ 1:n)
+            end
         end
         error_norm = max(error_norm, local_error_norm(error, scratch[end].density,
                                                       t_params.rtol, t_params.atol))
@@ -1746,9 +1767,17 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
     if moments.evolve_upar
         begin_s_r_z_region()
         error = scratch[2].upar
-        @loop_s_r_z is ir iz begin
-            error[iz,ir,is] = sum(error_coeffs[i] * scratch[i].upar[iz,ir,is]
-                                  for i ∈ 1:n)
+        if t_params.low_storage[]
+            @loop_s_r_z is ir iz begin
+                error[iz,ir,is] = error_coeffs[1] * scratch[1].upar[iz,ir,is] +
+                                  error_coeffs[2] * scratch[end-1].upar[iz,ir,is] +
+                                  error_coeffs[3] * scratch[end].upar[iz,ir,is]
+            end
+        else
+            @loop_s_r_z is ir iz begin
+                error[iz,ir,is] = sum(error_coeffs[i] * scratch[i].upar[iz,ir,is]
+                                      for i ∈ 1:n)
+            end
         end
         error_norm = max(error_norm, local_error_norm(error, scratch[end].upar,
                                                       t_params.rtol, t_params.atol))
@@ -1756,9 +1785,17 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
     if moments.evolve_ppar
         begin_s_r_z_region()
         error = scratch[2].ppar
-        @loop_s_r_z is ir iz begin
-            error[iz,ir,is] = sum(error_coeffs[i] * scratch[i].ppar[iz,ir,is]
-                                  for i ∈ 1:n)
+        if t_params.low_storage[]
+            @loop_s_r_z is ir iz begin
+                error[iz,ir,is] = error_coeffs[1] * scratch[1].ppar[iz,ir,is] +
+                                  error_coeffs[2] * scratch[end-1].ppar[iz,ir,is] +
+                                  error_coeffs[3] * scratch[end].ppar[iz,ir,is]
+            end
+        else
+            @loop_s_r_z is ir iz begin
+                error[iz,ir,is] = sum(error_coeffs[i] * scratch[i].ppar[iz,ir,is]
+                                      for i ∈ 1:n)
+            end
         end
         error_norm = max(error_norm, local_error_norm(error, scratch[end].ppar,
                                                       t_params.rtol, t_params.atol))
@@ -1769,10 +1806,19 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
         error = scratch[2].pdf_neutral
         n = length(error_coeffs)
         begin_sn_r_z_vzeta_vr_vz_region()
-        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
-            error[ivz,ivr,ivzeta,iz,ir,isn] =
-                sum(error_coeffs[i] * scratch[i].pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
-                    for i ∈ 1:n)
+        if t_params.low_storage[]
+            @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+                error[ivz,ivr,ivzeta,iz,ir,isn] =
+                    error_coeffs[1] * scratch[1].pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] +
+                    error_coeffs[2] * scratch[end-1].pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] +
+                    error_coeffs[3] * scratch[end].pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
+            end
+        else
+            @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+                error[ivz,ivr,ivzeta,iz,ir,isn] =
+                    sum(error_coeffs[i] * scratch[i].pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
+                        for i ∈ 1:n)
+            end
         end
         error_norm = max(error_norm, local_error_norm(error, scratch[end].pdf_neutral,
                                                       t_params.rtol, t_params.atol))
@@ -1781,10 +1827,18 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
         if moments.evolve_density
             begin_sn_r_z_region()
             error = scratch[2].density_neutral
-            @loop_sn_r_z isn ir iz begin
-                error[iz,ir,isn] = sum(error_coeffs[i] *
-                                       scratch[i].density_neutral[iz,ir,isn]
-                                       for i ∈ 1:n)
+            if t_params.low_storage[]
+                @loop_sn_r_z isn ir iz begin
+                    error[iz,ir,isn] = error_coeffs[1] * scratch[1].density_neutral[iz,ir,isn] +
+                                       error_coeffs[2] * scratch[end-1].density_neutral[iz,ir,isn] +
+                                       error_coeffs[3] * scratch[end].density_neutral[iz,ir,isn]
+                end
+            else
+                @loop_sn_r_z isn ir iz begin
+                    error[iz,ir,isn] = sum(error_coeffs[i] *
+                                           scratch[i].density_neutral[iz,ir,isn]
+                                           for i ∈ 1:n)
+                end
             end
             error_norm = max(error_norm, local_error_norm(error, scratch[end].density,
                                                           t_params.rtol, t_params.atol))
@@ -1792,10 +1846,18 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
         if moments.evolve_upar
             begin_s_r_z_region()
             error = scratch[2].uz_neutral
-            @loop_sn_r_z isn ir iz begin
-                error[iz,ir,isn] = sum(error_coeffs[i] *
-                                       scratch[i].uz_neutral[iz,ir,isn]
-                                       for i ∈ 1:n)
+            if t_params.low_storage[]
+                @loop_sn_r_z isn ir iz begin
+                    error[iz,ir,isn] = error_coeffs[1] * scratch[1].uz_neutral[iz,ir,isn] +
+                                       error_coeffs[2] * scratch[end-1].uz_neutral[iz,ir,isn] +
+                                       error_coeffs[3] * scratch[end].uz_neutral[iz,ir,isn]
+                end
+            else
+                @loop_sn_r_z isn ir iz begin
+                    error[iz,ir,isn] = sum(error_coeffs[i] *
+                                           scratch[i].uz_neutral[iz,ir,isn]
+                                           for i ∈ 1:n)
+                end
             end
             error_norm = max(error_norm, local_error_norm(error, scratch[end].uz_neutral,
                                                           t_params.rtol, t_params.atol))
@@ -1803,10 +1865,18 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
         if moments.evolve_ppar
             begin_s_r_z_region()
             error = scratch[2].pz_neutral
-            @loop_sn_r_z isn ir iz begin
-                error[iz,ir,isn] = sum(error_coeffs[i] *
-                                       scratch[i].pz_neutral[iz,ir,isn]
-                                       for i ∈ 1:n)
+            if t_params.low_storage[]
+                @loop_sn_r_z isn ir iz begin
+                    error[iz,ir,isn] = error_coeffs[1] * scratch[1].pz_neutral[iz,ir,isn] +
+                                       error_coeffs[2] * scratch[end-1].pz_neutral[iz,ir,isn] +
+                                       error_coeffs[3] * scratch[end].pz_neutral[iz,ir,isn]
+                end
+            else
+                @loop_sn_r_z isn ir iz begin
+                    error[iz,ir,isn] = sum(error_coeffs[i] *
+                                           scratch[i].pz_neutral[iz,ir,isn]
+                                           for i ∈ 1:n)
+                end
             end
             error_norm = max(error_norm, local_error_norm(error, scratch[end].pz_neutral,
                                                           t_params.rtol, t_params.atol))

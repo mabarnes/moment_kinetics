@@ -47,6 +47,7 @@ struct time_info
     n_rk_stages::Ref{mk_int}
     rk_order::Ref{mk_int}
     adaptive::Ref{Bool}
+    low_storage::Ref{Bool}
     rtol::mk_float
     atol::mk_float
     atol_upar::mk_float

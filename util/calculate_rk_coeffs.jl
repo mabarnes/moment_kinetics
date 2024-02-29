@@ -158,7 +158,7 @@ upper-triangular elements.
 Returns an array `rk_coeffs` of size `n_rk_stages`x`n_rk_stages` where `size(a) =
 (n_rk_stages, n_rk_stages)`.
 """
-function convert_butcher_tableau_for_moment_kinetics(a, b)
+function convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=true)
     n_rk_stages = size(a, 1)
     if size(b, 1) > 1
         adaptive = true
@@ -214,37 +214,100 @@ function convert_butcher_tableau_for_moment_kinetics(a, b)
     #    println(k_subs[i])
     #end
 
-    rk_coeffs = zeros(Rational{Int64}, n_rk_stages+1, output_size)
-    for i in 1:n_rk_stages
-        k_coeff = Symbolics.coeff(y_out[i+1], k[i])
+    if low_storage
+        rk_coeffs = zeros(Rational{Int64}, 3, output_size)
+        for i in 1:n_rk_stages
+            k_coeff = Symbolics.coeff(y_out[i+1], k[i])
 
-        for j ∈ 1:i
-            rk_coeffs[j,i] = Symbolics.coeff(y_out[i+1], y[j])
+            if i == 1
+                j = i
+                rk_coeffs[1,i] = Symbolics.coeff(y_out[i+1], y[j])
+                #println("k_coeff=$k_coeff, yout[$i]=", y_out[i+1])
+                #println("before rk_coeffs[:,$i]=", rk_coeffs[:,i])
+                # Subtract k_coeff because k_coeff*y[i] is included in the 'forward Euler step'
+                rk_coeffs[1,i] -= k_coeff
+
+                # Coefficient of the result of the 'forward Euler step' (y1 + h*f(y[i])
+                rk_coeffs[3,i] = k_coeff
+                #println("after rk_coeffs[:,$i]=", rk_coeffs[:,i])
+            else
+                j = 1
+                rk_coeffs[1,i] = Symbolics.coeff(y_out[i+1], y[j])
+                for j ∈ 2:i-2
+                    if Symbolics.coeff(y_out[i+1], y[j]) != 0
+                        error("Found non-zero coefficient where zero was expected for low-storage coefficients")
+                    end
+                end
+                j = i
+                rk_coeffs[2,i] = Symbolics.coeff(y_out[i+1], y[j])
+                #println("k_coeff=$k_coeff, yout[$i]=", y_out[i+1])
+                #println("before rk_coeffs[:,$i]=", rk_coeffs[:,i])
+                # Subtract k_coeff because k_coeff*y[i] is included in the 'forward Euler step'
+                rk_coeffs[2,i] -= k_coeff
+
+                # Coefficient of the result of the 'forward Euler step' (y1 + h*f(y[i])
+                rk_coeffs[3,i] = k_coeff
+                #println("after rk_coeffs[:,$i]=", rk_coeffs[:,i])
+            end
         end
-        #println("k_coeff=$k_coeff, yout[$i]=", y_out[i+1])
-        #println("before rk_coeffs[:,$i]=", rk_coeffs[:,i])
-        # Subtract k_coeff because k_coeff*y[i] is included in the 'forward Euler step'
-        rk_coeffs[i,i] -= k_coeff
 
-        # Coefficient of the result of the 'forward Euler step' (y1 + h*f(y[i])
-        rk_coeffs[i+1,i] = k_coeff
-        #println("after rk_coeffs[:,$i]=", rk_coeffs[:,i])
-    end
+        #for i ∈ 1:n_rk_stages
+        #    println("k$i = ", k_subs[i])
+        #end
+        if adaptive
+            error_coefficients = b[2,:] .- b[1,:]
+            #println("error_coefficients=", error_coefficients)
+            #println("error coefficients ", error_coefficients)
+            y_err = sum(error_coefficients[j]*k_subs[j] for j ∈ 1:n_rk_stages)
+            y_err = simplify(expand(y_err))
 
-    #for i ∈ 1:n_rk_stages
-    #    println("k$i = ", k_subs[i])
-    #end
-    if adaptive
-        error_coefficients = b[2,:] .- b[1,:]
-        #println("error_coefficients=", error_coefficients)
-        #println("error coefficietns ", error_coefficients)
-        y_err = sum(error_coefficients[j]*k_subs[j] for j ∈ 1:n_rk_stages)
-        y_err = simplify(expand(y_err))
+            # Use final column of rk_coeffs to store the coefficients used to calculate the truncation
+            # error estimate
+            j = 1
+            rk_coeffs[1,n_rk_stages+1] = Symbolics.coeff(y_err, y[j])
+            for j ∈ 2:n_rk_stages-1
+                if Symbolics.coeff(y_err, y[j]) != 0
+                    error("Found non-zero error coefficient where zero was expected for low-storage coefficients")
+                end
+            end
+            j = n_rk_stages
+            rk_coeffs[2,n_rk_stages+1] = Symbolics.coeff(y_err, y[j])
+            j = n_rk_stages + 1
+            rk_coeffs[3,n_rk_stages+1] = Symbolics.coeff(y_err, y[j])
+        end
+    else
+        rk_coeffs = zeros(Rational{Int64}, n_rk_stages+1, output_size)
+        for i in 1:n_rk_stages
+            k_coeff = Symbolics.coeff(y_out[i+1], k[i])
 
-        # Use final column of rk_coeffs to store the coefficients used to calculate the truncation
-        # error estimate
-        for j ∈ 1:n_rk_stages+1
-            rk_coeffs[j,n_rk_stages+1] = Symbolics.coeff(y_err, y[j])
+            for j ∈ 1:i
+                rk_coeffs[j,i] = Symbolics.coeff(y_out[i+1], y[j])
+            end
+            #println("k_coeff=$k_coeff, yout[$i]=", y_out[i+1])
+            #println("before rk_coeffs[:,$i]=", rk_coeffs[:,i])
+            # Subtract k_coeff because k_coeff*y[i] is included in the 'forward Euler step'
+            rk_coeffs[i,i] -= k_coeff
+
+            # Coefficient of the result of the 'forward Euler step' (y1 + h*f(y[i])
+            rk_coeffs[i+1,i] = k_coeff
+            #println("after rk_coeffs[:,$i]=", rk_coeffs[:,i])
+        end
+
+        #for i ∈ 1:n_rk_stages
+        #    println("k$i = ", k_subs[i])
+        #end
+        if adaptive
+            error_coefficients = b[2,:] .- b[1,:]
+            #println("error_coefficients=", error_coefficients)
+            #println("error coefficients ", error_coefficients)
+            y_err = sum(error_coefficients[j]*k_subs[j] for j ∈ 1:n_rk_stages)
+            y_err = simplify(expand(y_err))
+
+            # Use final column of rk_coeffs to store the coefficients used to calculate the truncation
+            # error estimate
+            for j ∈ 1:n_rk_stages+1
+                rk_coeffs[j,n_rk_stages+1] = Symbolics.coeff(y_err, y[j])
+            end
         end
     end
 
@@ -297,10 +360,10 @@ function convert_rk_coeffs_to_butcher_tableau(rkcoeffs::AbstractArray{T,N}) wher
     return a, b
 end
 
-println("\nRKF5(4))")
+println("\nRKF5(4)")
 a = B
 b = vcat(CH,C)
-rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b)
+rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=false)
 print("a="); display(a)
 print("b="); display(b)
 print("rk_coeffs="); display(rk_coeffs)
@@ -386,7 +449,7 @@ a = [0 0 0 0;
      0 1//2 0 0;
      0 0 1 0]
 b = [1//6 1//3 1//3 1//6]
-rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b)
+rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=false)
 print("a="); display(a)
 print("b="); display(b)
 print("rk_coeffs="); display(rk_coeffs)
