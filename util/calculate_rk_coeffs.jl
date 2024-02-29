@@ -159,6 +159,7 @@ Returns an array `rk_coeffs` of size `n_rk_stages`x`n_rk_stages` where `size(a) 
 (n_rk_stages, n_rk_stages)`.
 """
 function convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=true)
+    using_rationals = isa(a[1,1], Rational)
     n_rk_stages = size(a, 1)
     if size(b, 1) > 1
         adaptive = true
@@ -183,10 +184,18 @@ function convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=true)
     k = Symbolics.scalarize(k)
     k_subs = Symbolics.scalarize(k_subs)
 
-    k_subs[1] = (y[2] - y[1]) // a[2,1]
+    if using_rationals
+        k_subs[1] = (y[2] - y[1]) // a[2,1]
+    else
+        k_subs[1] = (y[2] - y[1]) / a[2,1]
+    end
     k_subs[1] = simplify(expand(k_subs[1]))
     for i ∈ 2:n_rk_stages-1
-        k_subs[i] = (y[i+1] - y[1] - sum(a[i+1,j]*k_subs[j] for j ∈ 1:i-1)) // a[i+1,i]
+        if using_rationals
+            k_subs[i] = (y[i+1] - y[1] - sum(a[i+1,j]*k_subs[j] for j ∈ 1:i-1)) // a[i+1,i]
+        else
+            k_subs[i] = (y[i+1] - y[1] - sum(a[i+1,j]*k_subs[j] for j ∈ 1:i-1)) / a[i+1,i]
+        end
         k_subs[i] = simplify(expand(k_subs[i]))
     end
 
@@ -201,9 +210,15 @@ function convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=true)
     y_out[n_rk_stages+1] = y[1] + sum(b[1,j]*k_subs[j] for j ∈ 1:n_rk_stages-1) +
                            b[1,n_rk_stages]*k[n_rk_stages]
     y_out[n_rk_stages+1] = simplify(expand(y_out[n_rk_stages+1]))
-    k_subs[n_rk_stages] = (y[n_rk_stages+1] - y[1]
-                           - sum(b[1,j]*k_subs[j] for j ∈ 1:n_rk_stages-1)) //
-                          b[1,n_rk_stages]
+    if using_rationals
+        k_subs[n_rk_stages] = (y[n_rk_stages+1] - y[1]
+                               - sum(b[1,j]*k_subs[j] for j ∈ 1:n_rk_stages-1)) //
+                              b[1,n_rk_stages]
+    else
+        k_subs[n_rk_stages] = (y[n_rk_stages+1] - y[1]
+                               - sum(b[1,j]*k_subs[j] for j ∈ 1:n_rk_stages-1)) /
+                              b[1,n_rk_stages]
+    end
     k_subs[n_rk_stages] = simplify(expand(k_subs[n_rk_stages]))
     #println("y_out")
     #for i ∈ 1:n_rk_stages+1
@@ -215,7 +230,11 @@ function convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=true)
     #end
 
     if low_storage
-        rk_coeffs = zeros(Rational{Int64}, 3, output_size)
+        if using_rationals
+            rk_coeffs = zeros(Rational{Int64}, 3, output_size)
+        else
+            rk_coeffs = zeros(3, output_size)
+        end
         for i in 1:n_rk_stages
             k_coeff = Symbolics.coeff(y_out[i+1], k[i])
 
@@ -276,7 +295,11 @@ function convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=true)
             rk_coeffs[3,n_rk_stages+1] = Symbolics.coeff(y_err, y[j])
         end
     else
-        rk_coeffs = zeros(Rational{Int64}, n_rk_stages+1, output_size)
+        if using_rationals
+            rk_coeffs = zeros(Rational{Int64}, n_rk_stages+1, output_size)
+        else
+            rk_coeffs = zeros(n_rk_stages+1, output_size)
+        end
         for i in 1:n_rk_stages
             k_coeff = Symbolics.coeff(y_out[i+1], k[i])
 
@@ -478,13 +501,91 @@ print("b="); display(b)
 println("a=$a")
 println("b=$b")
 
+println("\nFekete 10(4)")
+"""
+Optimal 4th order strong-stability preserving embedded Runge-Kutta method with 10 stages,
+from [Fekete, Conde and Shadid, "Embedded pairs for optimal explicit strong stability
+preserving Runge-Kutta methods", Journal of Computational and Applied Mathematics 421
+(2022) 114325, https://doi.org/10.1016/j.cam.2022.114325]. This methods is from section
+2.3, with the '\$\\tilde{b}^T_4\$' embedded pair, which is recommended in the conclusions.
+"""
+a = [0     0     0     0     0     0    0    0    0    0;
+     1//6  0     0     0     0     0    0    0    0    0;
+     1//6  1//6  0     0     0     0    0    0    0    0;
+     1//6  1//6  1//6  0     0     0    0    0    0    0;
+     1//6  1//6  1//6  1//6  0     0    0    0    0    0;
+     1//15 1//15 1//15 1//15 1//15 0    0    0    0    0;
+     1//15 1//15 1//15 1//15 1//15 1//6 0    0    0    0;
+     1//15 1//15 1//15 1//15 1//15 1//6 1//6 0    0    0;
+     1//15 1//15 1//15 1//15 1//15 1//6 1//6 1//6 0    0;
+     1//15 1//15 1//15 1//15 1//15 1//6 1//6 1//6 1//6 0;
+    ]
+b = [1//10 1//10 1//10 1//10 1//10 1//10 1//10 1//10 1//10 1//10;
+     #0     3//8  0     1//8  0     0     0     3//8  0     1//8 ]
+     #3//14 0     0     2//7  0     0     0     3//7  0     1//14]
+     #0     2//9  0     0     5//18 1//3  0     0     0     1//6 ]
+     1//5  0     0     3//10 0     0     1//5  0     3//10 0    ]
+     #1//10 0     0     2//5  0     3//10 0     0     0     1//5 ]
+     #1//6  0     0     0     1//3  5//18 0     0     2//9  0    ]
+     #0     2//5  0     1//10 0     0     0     1//5  3//10 0    ]
+     #1//7  0     5//14 0     0     0     0     3//14 2//7 0    ]
+rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=false)
+print("a="); display(a)
+print("b="); display(b)
+print("rk_coeffs="); display(rk_coeffs)
+println("a=$a")
+println("b=$b")
+println("rk_coeffs=$rk_coeffs")
+for i ∈ 1:size(rk_coeffs, 2)
+    println("i=$i, sum=", sum(rk_coeffs[:,i]))
+end
+println("convert back:")
+a, b = convert_rk_coeffs_to_butcher_tableau(rk_coeffs)
+print("a="); display(a)
+print("b="); display(b)
+
+println("\nFekete 6(4)")
+"""
+6-stage, 4th order strong-stability preserving embedded Runge-Kutta method from [Fekete,
+Conde and Shadid, "Embedded pairs for optimal explicit strong stability preserving
+Runge-Kutta methods", Journal of Computational and Applied Mathematics 421 (2022) 114325,
+https://doi.org/10.1016/j.cam.2022.114325]. This method is from section 2.3. Provided
+because it has fewer stages than the 10-stage 4th-order method, but not recommended by
+Fekete et al.
+"""
+a = [0               0               0               0               0               0;
+     0.3552975516919 0               0               0               0               0;
+     0.2704882223931 0.3317866983600 0               0               0               0;
+     0.1223997401356 0.1501381660925 0.1972127376054 0               0               0;
+     0.0763425067155 0.0936433683640 0.1230044665810 0.2718245927242 0               0;
+     0.0763425067155 0.0936433683640 0.1230044665810 0.2718245927242 0.4358156542577 0;
+    ]
+b = [0.1522491819555 0.1867521364225 0.1555370561501 0.1348455085546 0.2161974490441 0.1544186678729;
+     0.1210663237182 0.2308844004550 0.0853424972752 0.3450614904457 0.0305351538213 0.1871101342844]
+rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=false)
+print("a="); display(a)
+print("b="); display(b)
+print("rk_coeffs="); display(rk_coeffs)
+println("a=$a")
+println("b=$b")
+println("rk_coeffs=$rk_coeffs")
+for i ∈ 1:size(rk_coeffs, 2)
+    println("i=$i, sum=", sum(rk_coeffs[:,i]))
+end
+println("convert back:")
+a, b = convert_rk_coeffs_to_butcher_tableau(rk_coeffs)
+print("a="); display(a)
+print("b="); display(b)
+
 """
     construct_fekete_3rd_order(nstage)
 
 Construct optimal 3rd order strong-stability preserving embedded Runge-Kutta method with
 `nstage` stages, from [Fekete, Conde and Shadid, "Embedded pairs for optimal explicit
 strong stability preserving Runge-Kutta methods", Journal of Computational and Applied
-Mathematics 421 (2022) 114325, https://doi.org/10.1016/j.cam.2022.114325]
+Mathematics 421 (2022) 114325, https://doi.org/10.1016/j.cam.2022.114325]. These methods
+are from section 2.2, with the 'Optimization (10)' embedded pair, which is recommended in
+the conclusions.
 """
 function construct_fekete_3rd_order(nstage)
     n = floor(Int64, sqrt(nstage))
@@ -523,6 +624,87 @@ end
 
 println("\nFekete 4(3)")
 a, b = construct_fekete_3rd_order(4)
+rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b)
+print("a="); display(a)
+print("b="); display(b)
+print("rk_coeffs="); display(rk_coeffs)
+println("a=$a")
+println("b=$b")
+println("rk_coeffs=$rk_coeffs")
+for i ∈ 1:size(rk_coeffs, 2)
+    println("i=$i, sum=", sum(rk_coeffs[:,i]))
+end
+println("convert back:")
+a, b = convert_rk_coeffs_to_butcher_tableau(rk_coeffs)
+print("a="); display(a)
+print("b="); display(b)
+
+"""
+    construct_fekete_2nd_order(nstage)
+
+Construct optimal 2nd order strong-stability preserving embedded Runge-Kutta method with
+`nstage` stages, from [Fekete, Conde and Shadid, "Embedded pairs for optimal explicit
+strong stability preserving Runge-Kutta methods", Journal of Computational and Applied
+Mathematics 421 (2022) 114325, https://doi.org/10.1016/j.cam.2022.114325]. These methods
+are from section 2.1, with the 'Optimization (10)' embedded pair, which is recommended in
+the conclusions.
+"""
+function construct_fekete_2nd_order(nstage)
+    a = zeros(Rational{Int64}, nstage, nstage)
+    for i ∈ 2:nstage
+        for j ∈ 1:i-1
+            a[i,j] = 1//(nstage - 1)
+        end
+    end
+
+    b = zeros(Rational{Int64}, 2, nstage)
+
+    b[1,:] .= 1//nstage
+
+    # 'Pair' from 'optimization 10'
+    b[2, 1] = (nstage + 1) // nstage^2
+    b[2, 2:end-1] .= 1 // nstage
+    b[2, end] = (nstage - 1) // nstage^2
+
+    return a, b
+end
+
+println("\nFekete 4(2)")
+a, b = construct_fekete_2nd_order(4)
+rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=false)
+print("a="); display(a)
+print("b="); display(b)
+print("rk_coeffs="); display(rk_coeffs)
+println("a=$a")
+println("b=$b")
+println("rk_coeffs=$rk_coeffs")
+for i ∈ 1:size(rk_coeffs, 2)
+    println("i=$i, sum=", sum(rk_coeffs[:,i]))
+end
+println("convert back:")
+a, b = convert_rk_coeffs_to_butcher_tableau(rk_coeffs)
+print("a="); display(a)
+print("b="); display(b)
+
+println("\nFekete 3(2)")
+a, b = construct_fekete_2nd_order(3)
+rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=false)
+print("a="); display(a)
+print("b="); display(b)
+print("rk_coeffs="); display(rk_coeffs)
+println("a=$a")
+println("b=$b")
+println("rk_coeffs=$rk_coeffs")
+for i ∈ 1:size(rk_coeffs, 2)
+    println("i=$i, sum=", sum(rk_coeffs[:,i]))
+end
+println("convert back:")
+a, b = convert_rk_coeffs_to_butcher_tableau(rk_coeffs)
+print("a="); display(a)
+print("b="); display(b)
+
+println("\nFekete 2(2)")
+a, b = construct_fekete_2nd_order(2)
 rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b)
 print("a="); display(a)
 print("b="); display(b)
