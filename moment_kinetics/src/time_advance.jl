@@ -1104,7 +1104,7 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
                 @loop_s is begin
                     @views residual_ni =
                         steady_state_residuals(scratch[end].density[:,:,is],
-                                               scratch[1].density[:,:,is], t_params.dt[];
+                                               scratch[1].density[:,:,is], t_params.previous_dt[];
                                                use_mpi=true, only_max_abs=true)
                     if global_rank[] == 0
                         residual_ni = first(values(residual_ni))[1]
@@ -1118,7 +1118,7 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
                         residual_nn =
                             steady_state_residuals(scratch[end].density_neutral[:,:,isn],
                                                    scratch[1].density_neutral[:,:,isn],
-                                                   t_params.dt[]; use_mpi=true,
+                                                   t_params.previous_dt[]; use_mpi=true,
                                                    only_max_abs=true)
                         if global_rank[] == 0
                             residual_nn = first(values(residual_nn))[1]
