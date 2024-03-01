@@ -55,7 +55,7 @@ moments & fields only
 """
 struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower,
                        Tchodura_upper, Texti1, Texti2, Texti3, Texti4,
-                       Texti5, Textn1, Textn2, Textn3, Textn4, Textn5}
+                       Texti5, Textn1, Textn2, Textn3, Textn4, Textn5, Tint}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the time variable
@@ -105,6 +105,8 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower,
 
     # cumulative wall clock time taken by the run
     time_for_run::Ttime
+    # cumulative number of timesteps taken
+    nsteps::Tint
 
     # Use parallel I/O?
     parallel_io::Bool
@@ -861,6 +863,10 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
             description="cumulative wall clock time for run (excluding setup)",
             units="minutes")
 
+        io_nsteps = create_dynamic_variable!(
+            dynamic, "nsteps", mk_int; parallel_io=parallel_io,
+            description="cumulative number of timesteps for the run")
+
         return io_moments_info(fid, io_time, io_phi, io_Er, io_Ez, io_density, io_upar,
                                io_ppar, io_pperp, io_qpar, io_vth, io_dSdt, io_chodura_lower, io_chodura_upper, io_density_neutral, io_uz_neutral,
                                io_pz_neutral, io_qz_neutral, io_thermal_speed_neutral,
@@ -874,7 +880,7 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                external_source_neutral_momentum_amplitude,
                                external_source_neutral_pressure_amplitude,
                                external_source_neutral_controller_integral,
-                               io_time_for_run, parallel_io)
+                               io_time_for_run, io_nsteps, parallel_io)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -1043,7 +1049,7 @@ function reopen_moments_io(file_info)
                                getvar("external_source_neutral_momentum_amplitude"),
                                getvar("external_source_neutral_pressure_amplitude"),
                                getvar("external_source_neutral_controller_integral"),
-                               getvar("time_for_run"), parallel_io)
+                               getvar("time_for_run"), getvar("nsteps"), parallel_io)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -1143,7 +1149,7 @@ function reopen_dfns_io(file_info)
                                      getvar("external_source_neutral_momentum_amplitude"),
                                      getvar("external_source_neutral_pressure_amplitude"),
                                      getvar("external_source_neutral_controller_integral"),
-                                     getvar("time_for_run"),
+                                     getvar("time_for_run"), getvar("nsteps"),
                                      parallel_io)
 
         return io_dfns_info(fid, getvar("f"), getvar("f_neutral"), parallel_io,
@@ -1176,7 +1182,7 @@ write time-dependent moments data to the binary output file
 """
 function write_moments_data_to_binary(moments, fields, t, n_ion_species,
                                       n_neutral_species, io_or_file_info_moments, t_idx,
-                                      time_for_run, r, z)
+                                      time_for_run, nsteps, r, z)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -1308,6 +1314,7 @@ function write_moments_data_to_binary(moments, fields, t, n_ion_species,
         end
 
         append_to_dynamic_var(io_moments.time_for_run, time_for_run, t_idx, parallel_io)
+        append_to_dynamic_var(io_moments.nsteps, nsteps, t_idx, parallel_io)
 
         closefile && close(io_moments.fid)
     end
@@ -1319,7 +1326,7 @@ write time-dependent distribution function data to the binary output file
 """
 function write_dfns_data_to_binary(ff, ff_neutral, moments, fields, t, n_ion_species,
                                    n_neutral_species, io_or_file_info_dfns, t_idx,
-                                   time_for_run, r, z, vperp, vpa, vzeta, vr, vz)
+                                   time_for_run, nsteps, r, z, vperp, vpa, vzeta, vr, vz)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -1334,7 +1341,8 @@ function write_dfns_data_to_binary(ff, ff_neutral, moments, fields, t, n_ion_spe
         # Write the moments for this time slice to the output file.
         # This also updates the time.
         write_moments_data_to_binary(moments, fields, t, n_ion_species, n_neutral_species,
-                                     io_dfns.io_moments, t_idx, time_for_run, r, z)
+                                     io_dfns.io_moments, t_idx, time_for_run, nsteps, r,
+                                     z)
 
         parallel_io = io_dfns.parallel_io
 

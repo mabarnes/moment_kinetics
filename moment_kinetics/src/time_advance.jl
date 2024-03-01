@@ -1094,7 +1094,7 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
                                 ascii_io)
             write_moments_data_to_binary(moments, fields, t, composition.n_ion_species,
                                          composition.n_neutral_species, io_moments,
-                                         iwrite_moments, time_for_run, r, z)
+                                         iwrite_moments, time_for_run, step_counter, r, z)
 
             if t_params.steady_state_residual
                 # Calculate some residuals to see how close simulation is to steady state
@@ -1174,7 +1174,8 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
             write_dfns_data_to_binary(pdf.charged.norm, pdf.neutral.norm, moments, fields,
                                       t, composition.n_ion_species,
                                       composition.n_neutral_species, io_dfns, iwrite_dfns,
-                                      time_for_run, r, z, vperp, vpa, vzeta, vr, vz)
+                                      time_for_run, step_counter, r, z, vperp, vpa, vzeta,
+                                      vr, vz)
             iwrite_dfns += 1
             begin_s_r_z_vperp_region()
             @debug_detect_redundant_block_synchronize begin
