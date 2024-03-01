@@ -1535,7 +1535,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         end
     end
 
-    if t_params.adaptive[] && istage == t_params.n_rk_stages
+    if t_params.adaptive[] && istage == t_params.n_rk_stages[]
         # Note the timestep update must be done before calculating derived moments and
         # moment derivatives, because the timstep might need to be re-done with a smaller
         # dt, in which case scratch[t_params.n_rk_stages+1] will be reset to the values
