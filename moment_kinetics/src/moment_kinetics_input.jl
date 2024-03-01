@@ -198,7 +198,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         nwrite_dfns=nothing,
         type="SSPRK4",
         split_operators=false,
-        stopfile_name="stop",
+        stopfile_name=joinpath(output_dir, "stop"),
         steady_state_residual=false,
         converged_residual_value=-1.0,
         rtol=1.0e-5,
