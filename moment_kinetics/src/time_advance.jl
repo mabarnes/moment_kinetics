@@ -2029,6 +2029,9 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
         end
     end
 
+    # Shared-memory variables have been updated, so synchronize
+    _block_synchronize()
+
     return nothing
 end
 
