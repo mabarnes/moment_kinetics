@@ -1409,7 +1409,7 @@ or update them by taking the appropriate velocity moment of the evolved pdf
 function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr, vzeta,
                     vpa, vperp, z, r, spectral_objects, advect_objects, t, t_params,
                     all_rk_coefs, istage, composition, geometry, num_diss_params, advance,
-                    scratch_dummy)
+                    scratch_dummy, istep)
     begin_s_r_z_region()
 
     new_scratch = scratch[istage+1]
@@ -1552,7 +1552,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         # dt, in which case scratch[t_params.n_rk_stages+1] will be reset to the values
         # from the beginning of the timestep here.
         adaptive_timestep_update!(scratch, t, t_params, all_rk_coefs[:,end],
-                                  moments, composition.n_neutral_species)
+                                  moments, composition.n_neutral_species; debug_print=(istep % 100 == 0))
         # Re-do this in case adaptive_timestep_update re-arranged the `scratch` vector
         new_scratch = scratch[istage+1]
         old_scratch = scratch[istage]
@@ -1790,7 +1790,7 @@ Check the error estimate for the embedded RK method and adjust the timestep if
 appropriate.
 """
 function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
-                                   n_neutral_species)
+                                   n_neutral_species; debug_print=false)
     error_coeffs = rk_coefs[:,end]
     if length(scratch) < 3
         # This should never happen as an adaptive RK scheme needs at least 2 RHS evals so
@@ -1998,7 +1998,7 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
             # Don't update the simulation time, as this step failed
             t_params.previous_dt[] = 0.0
 
-            println("t=$t, error_norm=$error_norm, decreasing timestep to ", t_params.dt[])
+            println("t=$t, timestep failed, error_norm=$error_norm, decreasing timestep to ", t_params.dt[])
         end
     else
         success = true
@@ -2027,7 +2027,9 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
 
                 # Prevent timestep from going below minimum_dt
                 t_params.dt[] = max(t_params.dt[], t_params.minimum_dt)
-                println("t=$t, error_norm=$error_norm, changing timestep to ", t_params.dt[])
+                if debug_print
+                    println("t=$t, error_norm=$error_norm, dt=", t_params.dt[])
+                end
             end
         end
     end
@@ -2096,7 +2098,7 @@ end
 function ssp_rk!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects, composition, collisions,
            geometry, boundary_distributions, external_source_settings, num_diss_params,
-           advance, fp_arrays, scratch_dummy, manufactured_source_list,  istep)
+           advance, fp_arrays, scratch_dummy, manufactured_source_list, istep)
 
     begin_s_r_z_region()
 
@@ -2145,7 +2147,7 @@ function ssp_rk!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyrophase
         @views rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr,
                           vzeta, vpa, vperp, z, r, spectral_objects, advect_objects,
                           t, t_params, advance.rk_coefs, istage, composition,
-                          geometry, num_diss_params, advance, scratch_dummy)
+                          geometry, num_diss_params, advance, scratch_dummy, istep)
     end
 
     istage = n_rk_stages+1
