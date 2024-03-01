@@ -982,8 +982,11 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
     dfns_output_counter = 1
     dfns_output_times = [t + i*t_params.dt[]
                          for i ∈ t_params.nwrite_dfns:t_params.nwrite_dfns:t_params.nstep]
-    t_params.next_output_time[] = min(moments_output_times[moments_output_counter],
-                                     dfns_output_times[dfns_output_counter])
+    @serial_region begin
+        t_params.next_output_time[] = min(moments_output_times[moments_output_counter],
+                                         dfns_output_times[dfns_output_counter])
+    end
+    _block_synchronize()
     end_time = t + t_params.dt[] * t_params.nstep
     epsilon = 1.e-11
 
@@ -1800,10 +1803,16 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
 
     error_norm = 0.0
 
+    # Read the current dt here, so we only need one _block_synchronize() call for this and
+    # the begin_s_r_z_vperp_vpa_region()
+    current_dt = t_params.dt[]
+    _block_synchronize()
+
     # Calculate error for ion distribution functions
     error = scratch[2].pdf
     n = length(error_coeffs)
-    begin_s_r_z_vperp_vpa_region()
+    # No need to synchronize here, as we just called _block_synchronize()
+    begin_s_r_z_vperp_vpa_region(; no_synchronize=true)
     if t_params.low_storage[]
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
             error[ivpa,ivperp,iz,ir,is] =
@@ -1967,7 +1976,10 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
     end
     error_norm = MPI.bcast(error_norm, 0, comm_block[])
 
-    if error_norm > 1.0 && t_params.dt[] > t_params.minimum_dt
+    # Use current_dt instead of t_params.dt[] here because we are about to write to
+    # the shared-memory variable t_params.dt[] below, and we do not want to add an extra
+    # _block_synchronize() call after reading it here.
+    if error_norm > 1.0 && current_dt > t_params.minimum_dt
         # Timestep failed, reduce timestep and re-try
         success = false
 

@@ -427,26 +427,29 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
 
     if ignore_MPI
         dt_shared = allocate_float(1)
-        dt_shared[] = timestepping_input.dt
         previous_dt_shared = allocate_float(1)
-        previous_dt_shared[] = timestepping_input.dt
         next_output_time = allocate_float(1)
-        next_output_time[] = 0.0
         dt_before_output = allocate_float(1)
-        dt_before_output[] = timestepping_input.dt
         step_to_output = allocate_bool(1)
+        dt_shared[] = timestepping_input.dt
+        previous_dt_shared[] = timestepping_input.dt
+        next_output_time[] = 0.0
+        dt_before_output[] = timestepping_input.dt
         step_to_output[] = false
     else
         dt_shared = allocate_shared_float(1)
-        dt_shared[] = timestepping_input.dt
         previous_dt_shared = allocate_shared_float(1)
-        previous_dt_shared[] = timestepping_input.dt
         next_output_time = allocate_shared_float(1)
-        next_output_time[] = 0.0
         dt_before_output = allocate_shared_float(1)
-        dt_before_output[] = timestepping_input.dt
         step_to_output = allocate_shared_bool(1)
-        step_to_output[] = false
+        if block_rank[] == 0
+            dt_shared[] = timestepping_input.dt
+            previous_dt_shared[] = timestepping_input.dt
+            next_output_time[] = 0.0
+            dt_before_output[] = timestepping_input.dt
+            step_to_output[] = false
+        end
+        _block_synchronize()
     end
     t_params = time_info(timestepping_input.nstep, dt_shared, previous_dt_shared,
                          next_output_time, dt_before_output, step_to_output,
