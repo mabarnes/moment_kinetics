@@ -1746,7 +1746,6 @@ function local_error_norm(error::MPISharedArray{mk_float,3},
     else
         @loop_s_r_z is ir iz begin
             error_norm = abs(error[iz,ir,is]) / (rtol*abs(f[iz,ir,is]) + atol)
-            f_max = max(f_max, abs(f[iz,ir,is]))
             f_max = max(f_max, error_norm)
         end
     end
