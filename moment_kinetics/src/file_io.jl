@@ -104,7 +104,7 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower,
     external_source_neutral_controller_integral::Textn5
 
     # cumulative wall clock time taken by the run
-    time_for_run
+    time_for_run::Ttime
 
     # Use parallel I/O?
     parallel_io::Bool
