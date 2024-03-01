@@ -814,17 +814,17 @@ function setup_runge_kutta_coefficients!(t_params)
         # will lead to high memory usage), with one extra buffer for the truncation error
         # estimate which would need to be updated incrementally at each stage, rather than
         # calculated only at the end of the RK step.
-        rk_coeffs = mk_float[5//6 0    0    0    3//5  0    0    0    0    -1//2  -1//5;
-                             1//6 5//6 0    0    0     0    0    0    0     0      6//5;
-                             0    1//6 5//6 0    0     0    0    0    0     0      0   ;
-                             0    0    1//6 5//6 0     0    0    0    0     0     -9//5;
-                             0    0    0    1//6 1//3  0    0    0    0     0      9//5;
-                             0    0    0    0    1//15 5//6 0    0    0     9//10  0   ;
-                             0    0    0    0    0     1//6 5//6 0    0     0     -6//5;
-                             0    0    0    0    0     0    1//6 5//6 0     0      6//5;
-                             0    0    0    0    0     0    0    1//6 5//6  0     -9//5;
-                             0    0    0    0    0     0    0    0    1//6  1//2   9//5;
-                             0    0    0    0    0     0    0    0    0     1//10 -1   ]
+        rk_coefs = mk_float[5//6 0    0    0    3//5  0    0    0    0    -1//2  -1//5;
+                            1//6 5//6 0    0    0     0    0    0    0     0      6//5;
+                            0    1//6 5//6 0    0     0    0    0    0     0      0   ;
+                            0    0    1//6 5//6 0     0    0    0    0     0     -9//5;
+                            0    0    0    1//6 1//3  0    0    0    0     0      9//5;
+                            0    0    0    0    1//15 5//6 0    0    0     9//10  0   ;
+                            0    0    0    0    0     1//6 5//6 0    0     0     -6//5;
+                            0    0    0    0    0     0    1//6 5//6 0     0      6//5;
+                            0    0    0    0    0     0    0    1//6 5//6  0     -9//5;
+                            0    0    0    0    0     0    0    0    1//6  1//2   9//5;
+                            0    0    0    0    0     0    0    0    0     1//10 -1   ]
         t_params.n_rk_stages[] = 10
         t_params.rk_order[] = 4
         t_params.adaptive[] = true
@@ -841,13 +841,13 @@ function setup_runge_kutta_coefficients!(t_params)
         #                     0.0             0.0                 0.0                    0.0                    0.0                 0.1544186678729         0.2117066988196524   ]
         # Might as well set to 0 the entries that look like they should be 0 apart from
         # rounding errors.
-        rk_coeffs = mk_float[0.6447024483081 0.2386994475333264 0.5474858792272213  0.3762853856474131 0.0                -0.18132326703443313    -0.0017300417984673078;
-                             0.3552975516919 0.4295138541066736 0.0                 0.0                0.0                 0.0                    -0.18902907903375094  ;
-                             0.0             0.33178669836      0.25530138316744333 0.0                0.0                 0.2059808002676668      0.2504712436879622   ;
-                             0.0             0.0                0.1972127376054     0.3518900216285391 0.0                 0.4792670116241715     -0.9397479180374522   ;
-                             0.0             0.0                0.0                 0.2718245927242    0.5641843457422999  0.0                     1.1993626679930305   ;
-                             0.0             0.0                0.0                 0.0                0.4358156542577     0.3416567872695656     -0.5310335716309745   ;
-                             0.0             0.0                0.0                 0.0                0.0                 0.1544186678729         0.2117066988196524   ]
+        rk_coefs = mk_float[0.6447024483081 0.2386994475333264 0.5474858792272213  0.3762853856474131 0.0                -0.18132326703443313    -0.0017300417984673078;
+                            0.3552975516919 0.4295138541066736 0.0                 0.0                0.0                 0.0                    -0.18902907903375094  ;
+                            0.0             0.33178669836      0.25530138316744333 0.0                0.0                 0.2059808002676668      0.2504712436879622   ;
+                            0.0             0.0                0.1972127376054     0.3518900216285391 0.0                 0.4792670116241715     -0.9397479180374522   ;
+                            0.0             0.0                0.0                 0.2718245927242    0.5641843457422999  0.0                     1.1993626679930305   ;
+                            0.0             0.0                0.0                 0.0                0.4358156542577     0.3416567872695656     -0.5310335716309745   ;
+                            0.0             0.0                0.0                 0.0                0.0                 0.1544186678729         0.2117066988196524   ]
         t_params.n_rk_stages[] = 6
         t_params.rk_order[] = 4
         t_params.adaptive[] = true
@@ -856,20 +856,20 @@ function setup_runge_kutta_coefficients!(t_params)
         # Fekete 4-stage, 3rd-order SSPRK (see comments in util/calculate_rk_coeffs.jl.
         # Note this is the same as moment_kinetics original 4-stage SSPRK method, with
         # the addition of a truncation error estimate.
-        rk_coeffs = mk_float[1//2 0    2//3 0    -1//2;
-                             0    1//2 1//6 1//2  1   ;
-                             1//2 1//2 1//6 1//2 -1//2]
+        rk_coefs = mk_float[1//2 0    2//3 0    -1//2;
+                            0    1//2 1//6 1//2  1   ;
+                            1//2 1//2 1//6 1//2 -1//2]
         t_params.n_rk_stages[] = 4
         t_params.rk_order[] = 3
         t_params.adaptive[] = true
         t_params.low_storage[] = true
     elseif t_params.type == "Fekete4(2)"
         # Fekete 4-stage 2nd-order SSPRK (see comments in util/calculate_rk_coeffs.jl.
-        rk_coeffs = mk_float[2//3 0    0    1//4 -1//8 ;
-                             1//3 2//3 0    0     3//16;
-                             0    1//3 2//3 0     0    ;
-                             0    0    1//3 1//2  3//16;
-                             0    0    0    1//4 -1//4 ]
+        rk_coefs = mk_float[2//3 0    0    1//4 -1//8 ;
+                            1//3 2//3 0    0     3//16;
+                            0    1//3 2//3 0     0    ;
+                            0    0    1//3 1//2  3//16;
+                            0    0    0    1//4 -1//4 ]
         t_params.n_rk_stages[] = 4
         t_params.rk_order[] = 2
         t_params.adaptive[] = true
