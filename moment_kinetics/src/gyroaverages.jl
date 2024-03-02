@@ -136,7 +136,19 @@ function elementlist!(elist,coordlist,coord)
     ngyro = size(coordlist,1)
     nelement = coord.nelement_global
     xebs = coord.element_boundaries
+    bc = coord.bc
+    L = coord.L
     for i in 1:ngyro
+        if bc=="periodic"
+            x = coordlist[i]
+            # if x is outside the domain, shift x to the appropriate periodic copy within the domain
+            x0 = xebs[1] # the lower endpoint
+            y = x-x0
+            r = rem(y,L) + 0.5*L*(1.0 - sign(y)) # get the remainder of x - x0 w.r.t. the domain length L, noting that r should be r > 0
+            x = r + x0 # shift so that x is bounded below by x0
+            coordlist[i] = x # update coordlist for later use
+        end
+        # determine which element contains the position x
         x = coordlist[i]
         elist[i] = -1
         for j in 1:nelement

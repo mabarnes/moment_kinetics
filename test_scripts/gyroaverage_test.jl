@@ -37,7 +37,7 @@ function print_matrix(matrix,name::String,n::mk_int,m::mk_int)
     end
 
 
-function gyroaverage_test(;rhostar=0.1, pitch=0.5, ngrid=5, kr=2, kz=2, nelement=4, ngrid_vperp=3, nelement_vperp=1, Lvperp=3.0, ngrid_gyrophase=5, discretization="chebyshev_pseudospectral")
+function gyroaverage_test(;rhostar=0.1, pitch=0.5, ngrid=5, kr=2, kz=2, nelement=4, ngrid_vperp=3, nelement_vperp=1, Lvperp=3.0, ngrid_gyrophase=100, discretization="chebyshev_pseudospectral", r_bc="periodic", z_bc = "wall")
 
         #ngrid = 17
         #nelement = 4
@@ -45,16 +45,17 @@ function gyroaverage_test(;rhostar=0.1, pitch=0.5, ngrid=5, kr=2, kz=2, nelement
         r_nelement_local = nelement # number of elements per rank
         r_nelement_global = r_nelement_local # total number of elements 
         r_L = 1.0
-        
+
         z_ngrid = ngrid #number of points per element 
         z_nelement_local = nelement # number of elements per rank
         z_nelement_global = z_nelement_local # total number of elements 
         z_L = 1.0
-        
+
         vperp_ngrid = ngrid_vperp #number of points per element 
         vperp_nelement_local = nelement_vperp # number of elements per rank
         vperp_nelement_global = vperp_nelement_local # total number of elements 
         vperp_L = Lvperp
+        vperp_bc = "zero"
         
         gyrophase_ngrid = ngrid_gyrophase #number of points per element 
         gyrophase_nelement_local = 1 # number of elements per rank
@@ -62,7 +63,6 @@ function gyroaverage_test(;rhostar=0.1, pitch=0.5, ngrid=5, kr=2, kz=2, nelement
         gyrophase_discretization = "finite_difference"
         gyrophase_L = 2.0*pi
         
-        bc = "zero" 
         # fd_option and adv_input not actually used so given values unimportant
         fd_option = "fourth_order_centered"
         cheb_option = "matrix"
@@ -75,13 +75,13 @@ function gyroaverage_test(;rhostar=0.1, pitch=0.5, ngrid=5, kr=2, kz=2, nelement
         # coordinate
         
         r_input = grid_input("r", r_ngrid, r_nelement_global, r_nelement_local, 
-                nrank, irank, r_L, discretization, fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
+                nrank, irank, r_L, discretization, fd_option, cheb_option, r_bc, adv_input,comm,element_spacing_option)
         z_input = grid_input("z", z_ngrid, z_nelement_global, z_nelement_local, 
-                nrank, irank, z_L, discretization, fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
+                nrank, irank, z_L, discretization, fd_option, cheb_option, z_bc, adv_input,comm,element_spacing_option)
         vperp_input = grid_input("vperp", vperp_ngrid, vperp_nelement_global, vperp_nelement_local, 
-                nrank, irank, vperp_L, discretization, fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
+                nrank, irank, vperp_L, discretization, fd_option, cheb_option, vperp_bc, adv_input,comm,element_spacing_option)
         gyrophase_input = grid_input("gyrophase", gyrophase_ngrid, gyrophase_nelement_global, gyrophase_nelement_local, 
-                nrank, irank, gyrophase_L, gyrophase_discretization, fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
+                nrank, irank, gyrophase_L, gyrophase_discretization, fd_option, cheb_option, "periodic", adv_input,comm,element_spacing_option)
         
         # create the coordinate structs
         r, r_spectral = define_coordinate(r_input,init_YY=false)
