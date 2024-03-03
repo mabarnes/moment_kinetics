@@ -5,6 +5,7 @@ using Plots
 using LaTeXStrings
 using MPI
 using Measures
+using SpecialFunctions: besselj0
 
 import moment_kinetics
 using moment_kinetics.input_structs
@@ -37,7 +38,7 @@ function print_matrix(matrix,name::String,n::mk_int,m::mk_int)
     end
 
 
-function gyroaverage_test(;rhostar=0.1, pitch=0.5, ngrid=5, kr=2, kz=2, nelement=4, ngrid_vperp=3, nelement_vperp=1, Lvperp=3.0, ngrid_gyrophase=100, discretization="chebyshev_pseudospectral", r_bc="periodic", z_bc = "wall")
+function gyroaverage_test(;rhostar=0.1, pitch=0.5, ngrid=5, kr=2, kz=2, phaser=0.0, phasez=0.0, nelement=4, ngrid_vperp=3, nelement_vperp=1, Lvperp=3.0, ngrid_gyrophase=100, discretization="chebyshev_pseudospectral", r_bc="periodic", z_bc = "wall")
 
         #ngrid = 17
         #nelement = 4
@@ -111,29 +112,29 @@ function gyroaverage_test(;rhostar=0.1, pitch=0.5, ngrid=5, kr=2, kz=2, nelement
         # initialise the matrix for the gyroaverages
         gyro = init_gyro_operators(vperp,z,r,gyrophase,geometry,composition)
         # initialise a test field
-        #kr = 2
-        #kz = 2
         phi = allocate_float(z.n,r.n)
         gphi = allocate_float(vperp.n,z.n,r.n)
-        for ir in 1:r.n
-            for iz in 1:z.n
-                phi[iz,ir] = sin(2.0*pi*r.grid[ir]*kr/r.L)*sin(2.0*pi*z.grid[iz]*kz/z.L)
-            end
-        end
-        
-        for ir in 1:r.n
-            for iz in 1:z.n
-                for ivperp in 1:vperp.n
+        gphi_exact = allocate_float(vperp.n,z.n,r.n)
+        gphi_err = allocate_float(vperp.n,z.n,r.n)
+        fill_test_arrays!(phi,gphi_exact,vperp,z,r,geometry,kz,kr,phasez,phaser)
+        #for ir in 1:r.n
+        #    for iz in 1:z.n
+        #        for ivperp in 1:vperp.n
         #print_matrix(gyro.gyromatrix[:,:,vperp.n,Int(floor(z.n/2)),Int(floor(r.n/2))],"gmatrix",z.n,r.n)
                     #print_matrix(gyro.gyromatrix[:,:,ivperp,iz,ir],"gmatrix_ivperp_"*string(ivperp)*"_iz_"*string(iz)*"_ir_"*string(ir),z.n,r.n)
-                end
-            end
-        end
+        #        end
+        #    end
+        #end
         #println(maximum(abs.(gyro.gyromatrix)))
         #end
         
         # gyroaverage phi
         gyroaverage_field!(gphi,phi,gyro,vperp,z,r)
+        # compute errors
+        @. gphi_err = abs(gphi - gphi_exact)
+        for ivperp in 1:vperp.n
+            println("ivperp: ",ivperp," max(abs(gphi_err)): ",maximum(gphi_err[ivperp,:,:])," max(abs(gphi)): ",maximum(gphi[ivperp,:,:]))
+        end
         
         @views heatmap(r.grid, z.grid, phi[:,:], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
 			windowsize = (360,240), margin = 15pt)
@@ -176,9 +177,32 @@ function create_test_composition()
             mn_over_mi, me_over_mi, recycling_fraction, allocate_float(n_species))
 end
 
+function fill_test_arrays!(phi,gphi,vperp,z,r,geometry,kz,kr,phasez,phaser)
+   for ir in 1:r.n
+      for iz in 1:z.n
+         Bmag = geometry.Bmag[iz,ir] 
+         bzeta = geometry.bzeta[iz,ir] 
+         rhostar = geometry.rhostar 
+         # convert integer "wavenumbers" to actual wavenumbers 
+         kkr = 2.0*pi*kr/r.L
+         kkz = 2.0*pi*kz/z.L
+         kperp = sqrt(kkr^2 + (bzeta*kkz)^2)
+         
+         phi[iz,ir] = sin(r.grid[ir]*kkr + phaser)*sin(z.grid[iz]*kkz + phasez)
+         for ivperp in 1:vperp.n
+            krho = kperp*vperp.grid[ivperp]*rhostar/Bmag
+            # use that phi is a sum of Kronecker deltas in k space to write gphi
+            gphi[ivperp,iz,ir] = besselj0(krho)*phi[iz,ir]
+         end
+      end
+   end  
+   return nothing
+end
+
 if abspath(PROGRAM_FILE) == @__FILE__
     using Pkg
     Pkg.activate(".")
-
-    gyroaverage_test()
+    # example function call with arguments for a successful test
+    #gyroaverage_test()
+    gyroaverage_test(rhostar=0.01,pitch=0.5,kr=2,kz=3,phaser=0.25*pi,phasez=0.5*pi,ngrid=9,nelement=8,ngrid_vperp=5,nelement_vperp=3,Lvperp=18.0,ngrid_gyrophase=100,r_bc="periodic",z_bc="periodic")
 end
