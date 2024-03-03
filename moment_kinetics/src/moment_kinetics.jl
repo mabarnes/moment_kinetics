@@ -290,7 +290,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
         vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
         vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
-        drive_input, external_source_settings, num_diss_params,
+        gyroavs, drive_input, external_source_settings, num_diss_params,
         manufactured_solns_input = input
 
     # Create loop range variables for shared-memory-parallel loops
@@ -405,7 +405,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral,
             r_spectral, composition, drive_input, moments, t_input, collisions, species,
-            geometry, boundary_distributions, external_source_settings, num_diss_params,
+            geometry, gyroavs, boundary_distributions, external_source_settings, num_diss_params,
             manufactured_solns_input, restarting)
 
     # This is the closest we can get to the end time of the setup before writing it to the
@@ -432,7 +432,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
 
     return pdf, scratch, code_time, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
-           composition, collisions, geometry, boundary_distributions,
+           composition, collisions, geometry, gyroavs, boundary_distributions,
            external_source_settings, num_diss_params, advance, fp_arrays, scratch_dummy,
            manufactured_source_list, ascii_io, io_moments, io_dfns
 end

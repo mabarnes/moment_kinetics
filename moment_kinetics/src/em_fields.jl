@@ -14,21 +14,24 @@ using ..moment_kinetics_structs: em_fields_struct
 using ..velocity_moments: update_density!
 #using ..calculus: derivative!
 using ..derivatives: derivative_r!, derivative_z!
-
+using ..gyroaverages: gyro_operators, gyroaverage_field!
 """
 """
-function setup_em_fields(nz, nr, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
+function setup_em_fields(nvperp, nz, nr, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
     phi = allocate_shared_float(nz,nr)
     phi0 = allocate_shared_float(nz,nr)
     Er = allocate_shared_float(nz,nr)
     Ez = allocate_shared_float(nz,nr)
-    return em_fields_struct(phi, phi0, Er, Ez, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
+    gphi = allocate_shared_float(nvperp,nz,nr)
+    gEr = allocate_shared_float(nvperp,nz,nr)
+    gEz = allocate_shared_float(nvperp,nz,nr)
+    return em_fields_struct(phi, phi0, Er, Ez, gphi, gEr, gEz, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
 end
 
 """
 update_phi updates the electrostatic potential, phi
 """
-function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, scratch_dummy)
+function update_phi!(fields, fvec, vperp, z, r, composition, z_spectral, r_spectral, scratch_dummy, gyroavs::gyro_operators)
     n_ion_species = composition.n_ion_species
     @boundscheck size(fields.phi,1) == z.n || throw(BoundsError(fields.phi))
     @boundscheck size(fields.phi,2) == r.n || throw(BoundsError(fields.phi))
@@ -135,6 +138,20 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, sc
     else
         @serial_region begin
             fields.Ez[:,:] .= 0.0
+        end
+    end
+    
+    # get gyroaveraged field arrays for distribution function advance
+    gkions = composition.gyrokinetic_ions
+    if gkions
+        gyroaverage_field!(fields.gphi,fields.phi,gyroavs,vperp,z,r)
+        gyroaverage_field!(fields.gEz,fields.Ez,gyroavs,vperp,z,r)
+        gyroaverage_field!(fields.gEr,fields.Er,gyroavs,vperp,z,r)
+    else # use the drift-kinetic form of the fields in the kinetic equation
+        @loop_r_z_vperp ir iz ivperp begin
+            fields.gphi[ivperp,iz,ir] = fields.phi[iz,ir]
+            fields.gEz[ivperp,iz,ir] = fields.Ez[iz,ir]
+            fields.gEr[ivperp,iz,ir] = fields.Er[iz,ir]
         end
     end
 

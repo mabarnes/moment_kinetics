@@ -183,7 +183,7 @@ EM fields, and advection terms
 function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
                              vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
                              z_spectral, r_spectral, composition, drive_input, moments,
-                             t_input, collisions, species, geometry,
+                             t_input, collisions, species, geometry, gyroavs,
                              boundary_distributions, external_source_settings,
                              num_diss_params, manufactured_solns_input, restarting)
     # define some local variables for convenience/tidiness
@@ -218,10 +218,10 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     end
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
-    fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency, drive_input.force_Er_zero_at_wall)
+    fields = setup_em_fields(vperp.n, z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency, drive_input.force_Er_zero_at_wall)
     # initialize the electrostatic potential
     begin_serial_region()
-    update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral, scratch_dummy)
+    update_phi!(fields, scratch[1], vperp, z, r, composition, z_spectral, r_spectral, scratch_dummy, gyroavs)
     @serial_region begin
         # save the initial phi(z) for possible use later (e.g., if forcing phi)
         fields.phi0 .= fields.phi
@@ -385,10 +385,17 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
         # update moments in case they were affected by applying boundary conditions or
         # constraints to the pdf
         reset_moments_status!(moments)
-        update_moments!(moments, pdf.charged.norm, vpa, vperp, z, r, composition)
+        if composition.gyrokinetic_ions
+            gyroaverage_pdf!(pdf.charged.buffer,pdf.charged.norm,gyroavs,vpa,vperp,z,r,composition)
+        else
+            @loop_s_r_z_vperp_vpa begin 
+                pdf.charged.buffer[ivpa,ivperp,iz,ir,is] = pdf.charged.norm[ivpa,ivperp,iz,ir,is]
+            end
+        end
+        update_moments!(moments, pdf.charged.buffer, vpa, vperp, z, r, composition)
         # update the Chodura diagnostic -- note that the pdf should be the unnormalised one
         # so this will break for the split moments cases
-        update_chodura!(moments,pdf.charged.norm,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
+        update_chodura!(moments,pdf.charged.buffer,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
         # enforce boundary conditions in r and z on the neutral particle distribution function
         if n_neutral_species > 0
             # Note, so far vr and vzeta do not need advect objects, so pass `nothing` for
@@ -428,8 +435,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
         end
     end
 
-    update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral,
-                scratch_dummy)
+    update_phi!(fields, scratch[1], vperp, z, r, composition, z_spectral, r_spectral,
+                scratch_dummy, gyroavs)
     calculate_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, num_diss_params)
     calculate_moment_derivatives_neutral!(moments, scratch[1], scratch_dummy, z,
                                           z_spectral, num_diss_params)
@@ -821,7 +828,7 @@ time integrator can be used without severe CFL condition
 """
 function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
-           composition, collisions, geometry, boundary_distributions, 
+           composition, collisions, geometry, gyroavs, boundary_distributions, 
            external_source_settings, num_diss_params, advance, fp_arrays, scratch_dummy,
            manufactured_source_list, ascii_io, io_moments, io_dfns)
 
@@ -864,7 +871,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
         else
             time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
                 moments, fields, spectral_objects, advect_objects,
-                composition, collisions, geometry, boundary_distributions,
+                composition, collisions, geometry, gyroavs, boundary_distributions,
                 external_source_settings, num_diss_params, advance, fp_arrays,  scratch_dummy,
                 manufactured_source_list, i)
         end
@@ -1203,14 +1210,14 @@ end
 """
 function time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
-           composition, collisions, geometry, boundary_distributions,
+           composition, collisions, geometry, gyroavs, boundary_distributions,
            external_source_settings, num_diss_params, advance, fp_arrays, scratch_dummy,
            manufactured_source_list, istep)
 
     if t_input.n_rk_stages > 1
         ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
             moments, fields, spectral_objects, advect_objects, composition, collisions,
-            geometry, boundary_distributions, external_source_settings, num_diss_params,
+            geometry, gyroavs, boundary_distributions, external_source_settings, num_diss_params,
             advance, fp_arrays, scratch_dummy, manufactured_source_list, istep)
     else
         euler_time_advance!(scratch, scratch, pdf, fields, moments,
@@ -1234,7 +1241,7 @@ or update them by taking the appropriate velocity moment of the evolved pdf
 """
 function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr, vzeta,
                     vpa, vperp, z, r, spectral_objects, advect_objects, rk_coefs, istage, composition,
-                    geometry, num_diss_params, advance, scratch_dummy)
+                    geometry, gyroavs, num_diss_params, advance, scratch_dummy)
     begin_s_r_z_region()
 
     new_scratch = scratch[istage+1]
@@ -1373,7 +1380,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     end
 
     # update the electrostatic potential phi
-    update_phi!(fields, scratch[istage+1], z, r, composition, z_spectral, r_spectral, scratch_dummy)
+    update_phi!(fields, scratch[istage+1], vperp, z, r, composition, z_spectral, r_spectral, scratch_dummy, gyroavs)
     if !(( moments.evolve_upar || moments.evolve_ppar) &&
               istage == length(scratch)-1)
         # _block_synchronize() here because phi needs to be read on different ranks than
@@ -1484,7 +1491,7 @@ end
 """
 function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects, composition, collisions,
-           geometry, boundary_distributions, external_source_settings, num_diss_params,
+           geometry, gyroavs, boundary_distributions, external_source_settings, num_diss_params,
            advance, fp_arrays, scratch_dummy, manufactured_source_list,  istep)
 
     begin_s_r_z_region()
@@ -1534,7 +1541,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
         @views rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr,
                           vzeta, vpa, vperp, z, r, spectral_objects, advect_objects,
                           advance.rk_coefs[:,istage], istage, composition, geometry,
-                          num_diss_params, advance, scratch_dummy)
+                          gyroavs, num_diss_params, advance, scratch_dummy)
     end
 
     istage = n_rk_stages+1

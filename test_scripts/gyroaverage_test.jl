@@ -172,9 +172,10 @@ function create_test_composition()
     # The ion flux reaching the wall that is recycled as neutrals is reduced by
     # `recycling_fraction` to account for ions absorbed by the wall.
     recycling_fraction = 1.0
+    gyrokinetic_ions = true
     return composition = species_composition(n_species, n_ion_species, n_neutral_species,
             electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, Er_constant,
-            mn_over_mi, me_over_mi, recycling_fraction, allocate_float(n_species))
+            mn_over_mi, me_over_mi, recycling_fraction, gyrokinetic_ions, allocate_float(n_species))
 end
 
 function fill_test_arrays!(phi,gphi,vperp,z,r,geometry,kz,kr,phasez,phaser)

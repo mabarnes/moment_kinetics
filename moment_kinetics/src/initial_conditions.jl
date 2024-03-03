@@ -41,7 +41,7 @@ using MPI
 """
 struct pdf_substruct{n_distribution}
     norm::MPISharedArray{mk_float,n_distribution}
-    buffer::MPISharedArray{mk_float,n_distribution} # for collision operator terms when pdfs must be interpolated onto different velocity space grids
+    buffer::MPISharedArray{mk_float,n_distribution} # for collision operator terms when pdfs must be interpolated onto different velocity space grids, and for gyroaveraging
 end
 
 # struct of structs neatly contains i+n info?

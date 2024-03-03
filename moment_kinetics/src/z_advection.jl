@@ -107,7 +107,7 @@ function update_speed_z!(advect, upar, vth, evolve_upar, evolve_ppar, fields, vp
                 @. @views advect.speed[:,ivpa,ivperp,ir] = vpa.grid[ivpa]*bzed[:,ir]
                 # ExB drift
                 @. geofac = bzeta[:,ir]*jacobian[:,ir]/Bmag[:,ir]
-                @. @views advect.speed[:,ivpa,ivperp,ir] += ExBfac*geofac*fields.Er[:,ir]
+                @. @views advect.speed[:,ivpa,ivperp,ir] += ExBfac*geofac*fields.gEr[ivperp,:,ir]
                 # magnetic curvature drift
                 @. @views advect.speed[:,ivpa,ivperp,ir] += rhostar*(vpa.grid[ivpa]^2)*cvdriftz[:,ir]
                 # magnetic grad B drift
