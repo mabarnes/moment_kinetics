@@ -4265,8 +4265,8 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
     println("Making plots of ion distribution function at walls")
     flush(stdout)
 
-    has_rdim = any(ri !== nothing && ri.r.n > 1 for ri ∈ run_info_moments)
-    has_zdim = any(ri !== nothing && ri.z.n > 1 for ri ∈ run_info_moments)
+    has_rdim = any(ri !== nothing && ri.r.n > 1 for ri ∈ run_info)
+    has_zdim = any(ri !== nothing && ri.z.n > 1 for ri ∈ run_info)
     is_1V = all(ri !== nothing && ri.vperp.n == 1 for ri ∈ run_info)
     moment_kinetic = any(ri !== nothing
                          && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
@@ -4386,8 +4386,8 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
     println("Making plots of neutral distribution function at walls")
     flush(stdout)
 
-    has_rdim = any(ri !== nothing && ri.r.n > 1 for ri ∈ run_info_moments)
-    has_zdim = any(ri !== nothing && ri.z.n > 1 for ri ∈ run_info_moments)
+    has_rdim = any(ri !== nothing && ri.r.n > 1 for ri ∈ run_info)
+    has_zdim = any(ri !== nothing && ri.z.n > 1 for ri ∈ run_info)
     is_1V = all(ri !== nothing && ri.vzeta.n == 1 && ri.vr.n == 1 for ri ∈ run_info)
     moment_kinetic = any(ri !== nothing
                          && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
