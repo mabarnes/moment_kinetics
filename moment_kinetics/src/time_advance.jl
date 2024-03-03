@@ -1991,6 +1991,8 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
         scratch[1] = scratch_temp
 
         @serial_region begin
+            t_params.failure_counter[] += 1
+
             # If we were trying to take a step to the output timestep, dt will be smaller on
             # the re-try, so will not reach the output time.
             t_params.step_to_output[] = false
