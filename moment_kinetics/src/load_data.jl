@@ -530,9 +530,9 @@ end
 """
 Reload pdf and moments from an existing output file.
 """
-function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_prefix_iblock,
-                                 time_index, composition, geometry, r, z, vpa, vperp,
-                                 vzeta, vr, vz)
+function reload_evolving_fields!(pdf, moments, boundary_distributions, t_params,
+                                 restart_prefix_iblock, time_index, composition, geometry,
+                                 r, z, vpa, vperp, vzeta, vr, vz)
     code_time = 0.0
     previous_runs_info = nothing
     begin_serial_region()
@@ -1831,6 +1831,13 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                     load_neutral_boundary_pdf("pdf_rboundary_neutral_left", 1)
                 boundary_distributions.pdf_rboundary_neutral[:,:,:,:,2,:] .=
                     load_neutral_boundary_pdf("pdf_rboundary_neutral_right", r.n)
+
+                if t_params.adaptive[] && "dt" ∈ keys(dynamic)
+                    # If "dt" is not present, the file being restarted from is an older
+                    # one that did not have an adaptive timestep, so just leave the value
+                    # of "dt" from the input file.
+                    t_params.dt[] = load_slice(dynamic, "dt", :)
+                end
             end
         finally
             close(fid)

@@ -382,7 +382,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
 
         # Reload pdf and moments from an existing output file
         code_time, previous_runs_info, restart_time_index =
-            reload_evolving_fields!(pdf, moments, boundary_distributions,
+            reload_evolving_fields!(pdf, moments, boundary_distributions, t_params,
                                     backup_prefix_iblock, restart_time_index,
                                     composition, geometry, r, z, vpa, vperp, vzeta, vr,
                                     vz)
