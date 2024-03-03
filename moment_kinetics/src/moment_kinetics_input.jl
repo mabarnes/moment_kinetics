@@ -205,7 +205,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         atol=1.0e-16,
         atol_upar=nothing,
         step_update_prefactor=0.9,
-        max_increase_factor=1.5,
+        max_increase_factor=1.05,
         minimum_dt=0.0,
        )
     if timestepping_section["nwrite_dfns"] === nothing
