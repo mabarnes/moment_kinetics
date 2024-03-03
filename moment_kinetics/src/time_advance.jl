@@ -994,20 +994,20 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
     iwrite_moments = 2
     iwrite_dfns = 2
     finish_now = false
-    step_counter = 1
+    t_params.step_counter[] = 1
     while true
         if t_params.split_operators
             # MRH NOT SUPPORTED
             time_advance_split_operators!(pdf, scratch, t, t_params, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
                 composition, collisions, external_source_settings, num_diss_params,
-                advance, step_counter)
+                advance, t_params.step_counter[])
         else
             time_advance_no_splitting!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
                 moments, fields, spectral_objects, advect_objects,
                 composition, collisions, geometry, boundary_distributions,
                 external_source_settings, num_diss_params, advance, fp_arrays,  scratch_dummy,
-                manufactured_source_list, step_counter)
+                manufactured_source_list, t_params.step_counter[])
         end
         # update the time
         t += t_params.previous_dt[]
@@ -1098,7 +1098,8 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
             begin_serial_region()
             @serial_region begin
                 if global_rank[] == 0
-                    print("finished time step ", rpad(string(step_counter), 7),"  ",
+                    print("finished time step ",
+                          rpad(string(t_params.step_counter[]), 7), "  ",
                           Dates.format(now(), dateformat"H:MM:SS"))
                 end
             end
@@ -1107,7 +1108,7 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
                                 ascii_io)
             write_moments_data_to_binary(moments, fields, t, composition.n_ion_species,
                                          composition.n_neutral_species, io_moments,
-                                         iwrite_moments, time_for_run, step_counter, r, z)
+                                         iwrite_moments, time_for_run, t_params, r, z)
 
             if t_params.steady_state_residual
                 # Calculate some residuals to see how close simulation is to steady state
@@ -1179,16 +1180,17 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
             begin_serial_region()
             @serial_region begin
                 if global_rank[] == 0
-                    println("writing distribution functions at step ", step_counter,"  ",
-                                   Dates.format(now(), dateformat"H:MM:SS"))
+                    println("writing distribution functions at step ",
+                            t_params.step_counter[], "  ",
+                            Dates.format(now(), dateformat"H:MM:SS"))
                     flush(stdout)
                 end
             end
             write_dfns_data_to_binary(pdf.charged.norm, pdf.neutral.norm, moments, fields,
                                       t, composition.n_ion_species,
                                       composition.n_neutral_species, io_dfns, iwrite_dfns,
-                                      time_for_run, step_counter, r, z, vperp, vpa, vzeta,
-                                      vr, vz)
+                                      time_for_run, t_params, r, z, vperp, vpa, vzeta, vr,
+                                      vz)
             iwrite_dfns += 1
             begin_s_r_z_vperp_region()
             @debug_detect_redundant_block_synchronize begin
@@ -1205,12 +1207,12 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
                 break
             end
         else
-            if step_counter >= t_params.nstep
+            if t_params.step_counter[] >= t_params.nstep
                 break
             end
         end
 
-        step_counter += 1
+        t_params.step_counter[] += 1
     end
     return nothing
 end

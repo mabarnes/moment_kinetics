@@ -452,7 +452,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         _block_synchronize()
     end
     t_params = time_info(timestepping_input.nstep, dt_shared, previous_dt_shared,
-                         next_output_time, dt_before_output, step_to_output,
+                         next_output_time, dt_before_output, step_to_output, Ref(0),
                          timestepping_input.nwrite, timestepping_input.nwrite_dfns,
                          timestepping_input.type, Ref(0), Ref(0), Ref(false), Ref(true),
                          timestepping_input.rtol, timestepping_input.atol,

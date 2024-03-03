@@ -41,6 +41,7 @@ struct time_info
     next_output_time::MPISharedArray{mk_float,1}
     dt_before_output::MPISharedArray{mk_float,1}
     step_to_output::MPISharedArray{Bool,1}
+    step_counter::Ref{mk_int}
     nwrite_moments::mk_int
     nwrite_dfns::mk_int
     type::String
