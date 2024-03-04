@@ -52,7 +52,7 @@ test_input_finite_difference_1D1V = Dict(
     "timestepping" => Dict{String,Any}("nstep" => 3,
                                        "dt" => 1.0e-8,
                                        "nwrite" => 2,
-                                       "type" => "SSPRK2"
+                                       "type" => "SSPRK2",
                                        "split_operators" => false),
     "r_ngrid" => 1,
     "r_nelement" => 1,
