@@ -1592,7 +1592,8 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         # dt, in which case scratch[t_params.n_rk_stages+1] will be reset to the values
         # from the beginning of the timestep here.
         adaptive_timestep_update!(scratch, t, t_params, all_rk_coefs[:,end],
-                                  moments, composition.n_neutral_species; debug_print=(istep % 100 == 0))
+                                  moments, composition.n_neutral_species;
+                                  debug_print=(istep % 1000 == 0))
         # Re-do this in case adaptive_timestep_update re-arranged the `scratch` vector
         new_scratch = scratch[istage+1]
         old_scratch = scratch[istage]
@@ -2164,7 +2165,7 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
             max_error_variable_index = argmax(error_norms)
             t_params.failure_caused_by[max_error_variable_index] += 1
 
-            println("t=$t, timestep failed, error_norm=$error_norm, error_norms=$error_norms, decreasing timestep to ", t_params.dt[])
+            #println("t=$t, timestep failed, error_norm=$error_norm, error_norms=$error_norms, decreasing timestep to ", t_params.dt[])
         end
     else
         success = true
@@ -2193,8 +2194,8 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
 
                 # Prevent timestep from going below minimum_dt
                 t_params.dt[] = max(t_params.dt[], t_params.minimum_dt)
-                if debug_print
-                    println("t=$t, error_norm=$error_norm, error_norms=$error_norms, dt=", t_params.dt[])
+                if debug_print && global_rank[] == 0
+                    println("t=$t, error_norm=$error_norm, error_norms=$error_norms, nfail=", t_params.failure_counter[], ", dt=", t_params.dt[])
                 end
             end
         end
