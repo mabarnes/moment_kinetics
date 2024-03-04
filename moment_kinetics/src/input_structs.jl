@@ -43,6 +43,7 @@ struct time_info
     step_to_output::MPISharedArray{Bool,1}
     step_counter::Ref{mk_int}
     failure_counter::Ref{mk_int}
+    failure_caused_by::Vector{mk_int}
     nwrite_moments::mk_int
     nwrite_dfns::mk_int
     type::String

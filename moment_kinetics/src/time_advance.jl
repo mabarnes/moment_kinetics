@@ -193,6 +193,40 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     n_neutral_species = composition.n_neutral_species
     # create array containing coefficients needed for the Runge Kutta time advance
     rk_coefs = setup_runge_kutta_coefficients!(t_params)
+    if t_params.adaptive[]
+        # Make Vector that counts which variable caused timestep failures the right
+        # length:
+        # ion pdf
+        push!(t_params.failure_caused_by, 0)
+        if moments.evolve_density
+            # ion density
+            push!(t_params.failure_caused_by, 0)
+        end
+        if moments.evolve_upar
+            # ion flow
+            push!(t_params.failure_caused_by, 0)
+        end
+        if moments.evolve_ppar
+            # ion pressure
+            push!(t_params.failure_caused_by, 0)
+        end
+        if composition.n_neutral_species > 0
+            # neutral pdf
+            push!(t_params.failure_caused_by, 0)
+            if moments.evolve_density
+                # neutral density
+                push!(t_params.failure_caused_by, 0)
+            end
+            if moments.evolve_upar
+                # neutral flow
+                push!(t_params.failure_caused_by, 0)
+            end
+            if moments.evolve_ppar
+                # neutral pressure
+                push!(t_params.failure_caused_by, 0)
+            end
+        end
+    end
     # create the 'advance' struct to be used in later Euler advance to
     # indicate which parts of the equations are to be advanced concurrently.
     # if no splitting of operators, all terms advanced concurrently;
@@ -2124,6 +2158,11 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
 
             # Don't update the simulation time, as this step failed
             t_params.previous_dt[] = 0.0
+
+            # Call the 'cause' of the timestep failure the variable that has the biggest
+            # error norm here
+            max_error_variable_index = argmax(error_norms)
+            t_params.failure_caused_by[max_error_variable_index] += 1
 
             println("t=$t, timestep failed, error_norm=$error_norm, error_norms=$error_norms, decreasing timestep to ", t_params.dt[])
         end

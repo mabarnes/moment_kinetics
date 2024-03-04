@@ -55,7 +55,7 @@ moments & fields only
 """
 struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower,
                        Tchodura_upper, Texti1, Texti2, Texti3, Texti4,
-                       Texti5, Textn1, Textn2, Textn3, Textn4, Textn5, Tint}
+                       Texti5, Textn1, Textn2, Textn3, Textn4, Textn5, Tint, Tfailcause}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the time variable
@@ -111,6 +111,8 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower,
     dt::Ttime
     # cumulative number of timestep failures
     failure_counter::Tint
+    # cumulative count of which variable caused a timstep failure
+    failure_caused_by::Tfailcause
 
     # Use parallel I/O?
     parallel_io::Bool
@@ -886,6 +888,17 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
             dynamic, "failure_counter", mk_int; parallel_io=parallel_io,
             description="cumulative number of timestep failures for the run")
 
+        n_failure_vars = 1 + evolve_density + evolve_upar + evolve_ppar
+        if n_neutral_species > 0
+            n_failure_vars *= 2
+        end
+        # Abuse the n_ion_species argument here to create a Vector variable
+        io_failure_caused_by = create_dynamic_variable!(
+            dynamic, "failure_caused_by", mk_int; diagnostic_var_size=n_failure_vars,
+            parallel_io=parallel_io,
+            description="cumulative count of how many times each variable caused a "
+                        * "timestep failure for the run")
+
         return io_moments_info(fid, io_time, io_phi, io_Er, io_Ez, io_density, io_upar,
                                io_ppar, io_pperp, io_qpar, io_vth, io_dSdt, io_chodura_lower, io_chodura_upper, io_density_neutral, io_uz_neutral,
                                io_pz_neutral, io_qz_neutral, io_thermal_speed_neutral,
@@ -900,7 +913,7 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                external_source_neutral_pressure_amplitude,
                                external_source_neutral_controller_integral,
                                io_time_for_run, io_step_counter, io_dt,
-                               io_failure_counter,parallel_io)
+                               io_failure_counter, io_failure_caused_by, parallel_io)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -1070,7 +1083,8 @@ function reopen_moments_io(file_info)
                                getvar("external_source_neutral_pressure_amplitude"),
                                getvar("external_source_neutral_controller_integral"),
                                getvar("time_for_run"), getvar("step_counter"),
-                               getvar("dt"), getvar("failure_counter"), parallel_io)
+                               getvar("dt"), getvar("failure_counter"),
+                               getvar("failure_caused_by"), parallel_io)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -1172,7 +1186,7 @@ function reopen_dfns_io(file_info)
                                      getvar("external_source_neutral_controller_integral"),
                                      getvar("time_for_run"), getvar("step_counter"),
                                      getvar("dt"), getvar("failure_counter"),
-                                     parallel_io)
+                                     getvar("failure_caused_by"), parallel_io)
 
         return io_dfns_info(fid, getvar("f"), getvar("f_neutral"), parallel_io,
                             io_moments)
@@ -1343,6 +1357,9 @@ function write_moments_data_to_binary(moments, fields, t, n_ion_species,
         append_to_dynamic_var(io_moments.step_counter, t_params.step_counter[], t_idx, parallel_io)
         append_to_dynamic_var(io_moments.dt, t_params.dt_before_output[], t_idx, parallel_io)
         append_to_dynamic_var(io_moments.failure_counter, t_params.failure_counter[], t_idx, parallel_io)
+        append_to_dynamic_var(io_moments.failure_caused_by, t_params.failure_caused_by,
+                              t_idx, parallel_io, length(t_params.failure_caused_by);
+                              only_root=true)
 
         closefile && close(io_moments.fid)
     end
