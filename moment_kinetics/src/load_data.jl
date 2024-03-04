@@ -15,7 +15,7 @@ export load_rank_data
 export load_species_data
 export read_distributed_zr_data!
 
-using ..array_allocation: allocate_float
+using ..array_allocation: allocate_float, allocate_int
 using ..coordinates: coordinate, define_coordinate
 using ..file_io: check_io_implementation, get_group, get_subgroup_keys, get_variable_keys
 using ..krook_collisions: get_collision_frequency
@@ -2677,7 +2677,36 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                          for f ∈ run_info.files)
         nd = ndims(variable[1])
 
-        if nd == 3
+        if nd == 1
+            # Time-dependent scalar with dimensions (t)
+            # Might be an mk_int, so handle type carefully
+            dims = Vector{mk_int}()
+            !isa(it, mk_int) && push!(dims, nt)
+            vartype = typeof(variable[1][1])
+            if vartype == mk_int
+                result = allocate_int(dims...)
+            elseif vartype == mk_float
+                result = allocate_float(dims...)
+            else
+                error("Unsupported dtype for 1D variable $(variable.dtype)")
+            end
+        elseif nd == 2
+            # Time-dependent vector with dimensions (unique_dim,t).
+            # The dimension that is not time is not a coordinate, so do not give any
+            # option to slice it - always just return the full length.
+            # Might be an mk_int, so handle type carefully
+            dims = Vector{mk_int}()
+            push!(dims, size(variable[1], 1))
+            !isa(it, mk_int) && push!(dims, nt)
+            vartype = typeof(variable[1][1,1])
+            if vartype == mk_int
+                result = allocate_int(dims...)
+            elseif vartype == mk_float
+                result = allocate_float(dims...)
+            else
+                error("Unsupported dtype for 1D variable $(variable.dtype)")
+            end
+        elseif nd == 3
             # EM variable with dimensions (z,r,t)
             dims = Vector{mk_int}()
             !isa(iz, mk_int) && push!(dims, nz)
@@ -2752,7 +2781,11 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                           * "restart, should have finished already")
                 elseif tind <= local_nt
                     # tind is within this restart's time range, so get result
-                    if nd == 3
+                    if nd == 1
+                        result .= v[tind]
+                    elseif nd == 2
+                        result .= v[:,tind]
+                    elseif nd == 3
                         result .= v[iz,ir,tind]
                     elseif nd == 4
                         result .= v[iz,ir,is,tind]
@@ -2782,7 +2815,11 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                     tinds = tinds[begin]:tstep:tinds[end]
                     global_it_end = global_it_start + length(tinds) - 1
 
-                    if nd == 3
+                    if nd == 1
+                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[tinds]
+                    elseif nd == 2
+                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[:,tinds]
+                    elseif nd == 3
                         selectdim(result, ndims(result), global_it_start:global_it_end) .= v[iz,ir,tinds]
                     elseif nd == 4
                         selectdim(result, ndims(result), global_it_start:global_it_end) .= v[iz,ir,is,tinds]
@@ -2803,18 +2840,28 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
         end
     else
         # Use existing distributed I/O loading functions
+        diagnostic_variable = false
         if variable_name ∈ em_variables
             nd = 3
         elseif variable_name ∈ ion_dfn_variables
             nd = 6
         elseif variable_name ∈ neutral_dfn_variables
             nd = 7
-        else
+        elseif variable_name ∈ tuple(ion_moment_variables..., neutral_moment_variables...)
             # Ion or neutral moment variable
             nd = 4
+        else
+            # Diagnostic variable that does not depend on coordinates, and should be the
+            # same in every output file (so can just read from the first one).
+            diagnostic_variable = true
         end
 
-        if nd == 3
+        if diagnostic_variable
+            fid = open_readonly_output_file(run_info.files[1], run_info.ext, iblock=0)
+            group = get_group(fid, "dynamic_data")
+            result = load_variable(group, variable_name)
+            result = selectdim(result, ndims(result), global_it_start:global_it_end)
+        elseif nd == 3
             result = allocate_float(run_info.z.n, run_info.r.n, run_info.nt)
             read_distributed_zr_data!(result, variable_name, run_info.files,
                                       run_info.ext, run_info.nblocks, run_info.z_local.n,
