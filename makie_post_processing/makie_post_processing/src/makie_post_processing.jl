@@ -38,11 +38,12 @@ using moment_kinetics.looping: all_dimensions, ion_dimensions, neutral_dimension
 using moment_kinetics.manufactured_solns: manufactured_solutions,
                                           manufactured_electric_fields
 using moment_kinetics.load_data: close_run_info, get_run_info_no_setup, get_variable,
-                                 postproc_load_variable, em_variables,
-                                 ion_moment_variables, neutral_moment_variables,
-                                 all_moment_variables, ion_dfn_variables,
-                                 neutral_dfn_variables, all_dfn_variables, ion_variables,
-                                 neutral_variables, all_variables
+                                 postproc_load_variable, timestep_diagnostic_variables,
+                                 em_variables, ion_moment_variables,
+                                 neutral_moment_variables, all_moment_variables,
+                                 ion_dfn_variables, neutral_dfn_variables,
+                                 all_dfn_variables, ion_variables, neutral_variables,
+                                 all_variables
 using moment_kinetics.initial_conditions: vpagrid_to_dzdt
 using .shared_utils: calculate_and_write_frequencies, get_geometry_and_composition
 using moment_kinetics.type_definitions: mk_float, mk_int
@@ -245,6 +246,8 @@ function makie_post_process(run_dir::Union{String,Tuple},
             plot_prefix = joinpath(comparison_plot_dir, "compare_")
         end
     end
+
+    timestep_diagnostics(run_info; plot_prefix=plot_prefix)
 
     do_steady_state_residuals = any(input_dict[v]["steady_state_residual"]
                                     for v ∈ moment_variable_list)
@@ -716,6 +719,11 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         show_element_boundaries=this_input_dict["show_element_boundaries"],
        )
     sort!(this_input_dict["manufactured_solns"])
+
+    set_defaults_and_check_section!(
+        this_input_dict, "timestep_diagnostics";
+        plot=true,
+       )
 
     return nothing
 end
@@ -6394,6 +6402,130 @@ function manufactured_solutions_analysis_dfns(run_info; plot_prefix)
     end
 
     return nothing
+end
+
+"""
+    timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
+
+Plot a time-trace of some adaptive-timestep diagnostics: steps per output, timestep
+failures per output, and how many times per output each variable caused a timestep
+failure.
+
+If `plot_prefix` is passed, it gives the path and prefix for plots to be saved to. They
+will be saved with the format `plot_prefix_timestep_diagnostics.pdf`.
+
+`it` can be used to select a subset of the time points by passing a range.
+"""
+function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
+    try
+        if !isa(run_info, Tuple)
+            run_info = (run_info,)
+        end
+
+        println("Making timestep diagnostics plots")
+
+        input = Dict_to_NamedTuple(input_dict["timestep_diagnostics"])
+        if !input.plot
+            return nothing
+        end
+
+        fig, ax = get_1d_ax(; xlabel="time", ylabel="number of steps per output")
+        # Put failures a separate y-axis
+        ax_failures = Axis(fig[1, 1]; ylabel="number of failures per output",
+                           yaxisposition = :right)
+        hidespines!(ax_failures)
+        hidexdecorations!(ax_failures)
+        hideydecorations!(ax_failures; ticks=false, label=false, ticklabels=false)
+
+        for ri ∈ run_info
+            if length(run_info) == 1
+                prefix = ""
+            else
+                prefix = ri.run_name * " "
+            end
+
+            plot_1d(ri.time, get_variable(ri, "steps_per_output"; it=it);
+                    label=prefix * "steps", ax=ax)
+            # Fudge to create an invisible line on ax_failures that cycles the line colors
+            # and adds a label for "steps_per_output" to the plot because we create the
+            # legend from ax_failures.
+            plot_1d([ri.time[1]], [0]; label=prefix * "steps", ax=ax_failures)
+            plot_1d(ri.time, get_variable(ri, "failures_per_output"; it=it);
+                    label=prefix * "failures", ax=ax_failures)
+
+            failure_caused_by_per_output = get_variable(ri,
+                                                        "failure_caused_by_per_output";
+                                                        it=it)
+            counter = 0
+            # Ion pdf failure counter
+            counter += 1
+            plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                    label=prefix * "failures caused by f_ion", ax=ax_failures)
+            if ri.evolve_density
+                # Ion density failure counter
+                counter += 1
+                plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                        linestyle=:dash, label=prefix * "failures caused by n_ion",
+                        ax=ax_failures)
+            end
+            if ri.evolve_upar
+                # Ion flow failure counter
+                counter += 1
+                plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                        linestyle=:dash, label=prefix * "failures caused by u_ion",
+                        ax=ax_failures)
+            end
+            if ri.evolve_ppar
+                # Ion flow failure counter
+                counter += 1
+                plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                        linestyle=:dash, label=prefix * "failures caused by p_ion",
+                        ax=ax_failures)
+            end
+            if ri.n_neutral_species > 0
+                # Neutral pdf failure counter
+                counter += 1
+                plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                        label=prefix * "failures caused by f_neutral", ax=ax_failures)
+                if ri.evolve_density
+                    # Neutral density failure counter
+                    counter += 1
+                    plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                            linestyle=:dash,
+                            label=prefix * "failures caused by n_neutral", ax=ax_failures)
+                end
+                if ri.evolve_upar
+                    # Neutral flow failure counter
+                    counter += 1
+                    plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                            linestyle=:dash,
+                            label=prefix * "failures caused by u_neutral", ax=ax_failures)
+                end
+                if ri.evolve_ppar
+                    # Neutral flow failure counter
+                    counter += 1
+                    plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                            linestyle=:dash,
+                            label=prefix * "failures caused by p_neutral", ax=ax_failures)
+                end
+            end
+            if counter < size(failure_caused_by_per_output, 1)
+                error("Some variables in failure_caused_by_per_output not plotted. "
+                      * "Settings not understood correctly.")
+            end
+        end
+
+        put_legend_right(fig, ax_failures)
+
+        if plot_prefix !== nothing
+            outfile = plot_prefix * "timestep_diagnostics.pdf"
+            save(outfile, fig)
+        end
+
+        return fig
+    catch e
+        println("Error in timestep_diagnostics(). Error was ", e)
+    end
 end
 
 # Utility functions

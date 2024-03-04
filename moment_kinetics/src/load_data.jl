@@ -29,6 +29,10 @@ using Glob
 using HDF5
 using MPI
 
+const timestep_diagnostic_variables = ("time_for_run", "step_counter", "dt",
+                                       "failure_counter", "failure_caused_by",
+                                       "steps_per_output", "failures_per_output",
+                                       "failure_caused_by_per_output")
 const em_variables = ("phi", "Er", "Ez")
 const ion_moment_variables = ("density", "parallel_flow", "parallel_pressure",
                               "thermal_speed", "temperature", "parallel_heat_flux",
@@ -2946,6 +2950,24 @@ function get_variable(run_info, variable_name; kwargs...)
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
         cs = get_variable(run_info, "sound_speed"; kwargs...)
         variable = upar ./ cs
+    elseif variable_name == "steps_per_output"
+        steps_per_output = get_variable(run_info, "step_counter"; kwargs...)
+        for i ∈ length(steps_per_output):-1:2
+            steps_per_output[i] -= steps_per_output[i-1]
+        end
+        variable = steps_per_output
+    elseif variable_name == "failures_per_output"
+        failures_per_output = get_variable(run_info, "failure_counter"; kwargs...)
+        for i ∈ length(failures_per_output):-1:2
+            failures_per_output[i] -= failures_per_output[i-1]
+        end
+        variable = failures_per_output
+    elseif variable_name == "failure_caused_by_per_output"
+        failure_caused_by_per_output = get_variable(run_info, "failure_caused_by"; kwargs...)
+        for i ∈ size(failure_caused_by_per_output,2):-1:2
+            failure_caused_by_per_output[:,i] .-= failure_caused_by_per_output[:,i-1]
+        end
+        variable = failure_caused_by_per_output
     else
         variable = postproc_load_variable(run_info, variable_name; kwargs...)
     end
