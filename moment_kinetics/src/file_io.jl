@@ -611,13 +611,20 @@ end
 
 """
     create_dynamic_variable!(file_or_group, name, type, coords::coordinate...;
-                             nspecies=1, description=nothing, units=nothing)
+                             n_ion_species=1, n_neutral_species=1,
+                             diagnostic_var_size=nothing, description=nothing,
+                             units=nothing)
 
 Create a time-evolving variable in `file_or_group` named `name` of type `type`. `coords`
 are the coordinates corresponding to the dimensions of the array, in the order of the
 array dimensions. The species dimension does not have a `coordinate`, so the number of
 species is passed as `nspecies`. A description and/or units can be added with the keyword
 arguments.
+
+If a Tuple giving an array size is passed to `diagnostic_var_size`, a 'diagnostic'
+variable is created - i.e. one that does not depend on the coordinates, so is assumed to
+be the same on all processes and only needs to be written from the root process (for each
+output file).
 """
 function create_dynamic_variable! end
 
@@ -1176,13 +1183,17 @@ function reopen_dfns_io(file_info)
 end
 
 """
-    append_to_dynamic_var(io_var, data, t_idx, parallel_io, coords...)
+    append_to_dynamic_var(io_var, data, t_idx, parallel_io, coords...; only_root=false)
 
 Append `data` to the dynamic variable `io_var`. The time-index of the data being appended
 is `t_idx`. `parallel_io` indicates whether parallel I/O is being used. `coords...` is
 used to get the ranges to write from/to (needed for parallel I/O) - the entries in the
 `coords` tuple can be either `coordinate` instances or integers (for an integer `n` the
 range is `1:n`).
+
+If `only_root=true` is passed, the data is only written once - from the global root
+process if parallel I/O is being used (if parallel I/O is not used, this has no effect as
+each file is only written by one process).
 """
 function append_to_dynamic_var end
 
