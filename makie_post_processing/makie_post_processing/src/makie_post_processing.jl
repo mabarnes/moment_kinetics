@@ -14,7 +14,7 @@ export makie_post_process, generate_example_input_file, get_variable,
        setup_makie_post_processing_input!, get_run_info, close_run_info
 export animate_f_unnorm_vs_vpa, animate_f_unnorm_vs_vpa_z, get_1d_ax, get_2d_ax,
        irregular_heatmap, irregular_heatmap!, plot_f_unnorm_vs_vpa,
-       plot_f_unnorm_vs_vpa_z, positive_or_nan, postproc_load_variable, positive_or_nan,
+       plot_f_unnorm_vs_vpa_z, positive_or_nan, get_variable, positive_or_nan,
        put_legend_above, put_legend_below, put_legend_left, put_legend_right
 
 include("shared_utils.jl")
@@ -38,12 +38,11 @@ using moment_kinetics.looping: all_dimensions, ion_dimensions, neutral_dimension
 using moment_kinetics.manufactured_solns: manufactured_solutions,
                                           manufactured_electric_fields
 using moment_kinetics.load_data: close_run_info, get_run_info_no_setup, get_variable,
-                                 postproc_load_variable, timestep_diagnostic_variables,
-                                 em_variables, ion_moment_variables,
-                                 neutral_moment_variables, all_moment_variables,
-                                 ion_dfn_variables, neutral_dfn_variables,
-                                 all_dfn_variables, ion_variables, neutral_variables,
-                                 all_variables
+                                 timestep_diagnostic_variables, em_variables,
+                                 ion_moment_variables, neutral_moment_variables,
+                                 all_moment_variables, ion_dfn_variables,
+                                 neutral_dfn_variables, all_dfn_variables, ion_variables,
+                                 neutral_variables, all_variables
 using moment_kinetics.initial_conditions: vpagrid_to_dzdt
 using .shared_utils: calculate_and_write_frequencies, get_geometry_and_composition
 using moment_kinetics.type_definitions: mk_float, mk_int
@@ -812,8 +811,8 @@ function VariableCache(run_info, variable_name::String, t_chunk_size::mk_int;
     tinds_chunk = 1:t_chunk_size
     dim_slices = (is=is, iz=iz, ir=ir, ivperp=ivperp, ivpa=ivpa, ivzeta=ivzeta, ivr=ivr,
                   ivz=ivz)
-    data_chunk = postproc_load_variable(run_info, variable_name;
-                                        it=tinds_range_global[tinds_chunk], dim_slices...)
+    data_chunk = get_variable(run_info, variable_name; it=tinds_range_global[tinds_chunk],
+                              dim_slices...)
 
     return VariableCache(run_info, variable_name, t_chunk_size,
                          n_tinds, tinds_range_global, Ref(tinds_chunk),
@@ -836,9 +835,9 @@ function get_cache_slice(variable_cache::VariableCache, tind)
         variable_cache.tinds_chunk[] = new_chunk
         selectdim(variable_cache.data_chunk,
                   ndims(variable_cache.data_chunk), 1:length(new_chunk)) .=
-            postproc_load_variable(variable_cache.run_info, variable_cache.variable_name;
-                                   it=variable_cache.tinds_range_global[new_chunk],
-                                   variable_cache.dim_slices...)
+            get_variable(variable_cache.run_info, variable_cache.variable_name;
+                         it=variable_cache.tinds_range_global[new_chunk],
+                         variable_cache.dim_slices...)
         local_tind = findfirst(i->i==tind, new_chunk)
     end
 
@@ -1164,7 +1163,7 @@ function check_moment_constraints(run_info, is_neutral; input, plot_prefix)
     is = 1
 
     if is_neutral
-        fn = postproc_load_variable(run_info, "f_neutral")
+        fn = get_variable(run_info, "f_neutral")
         if run_info.evolve_density
             moment = zeros(run_info.z.n, run_info.r.n, run_info.nt)
             for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
@@ -1204,7 +1203,7 @@ function check_moment_constraints(run_info, is_neutral; input, plot_prefix)
                          outfile=plot_prefix * "parallel_pressure_moment_neutral_check.gif")
         end
     else
-        f = postproc_load_variable(run_info, "f")
+        f = get_variable(run_info, "f")
         if run_info.evolve_density
             moment = zeros(run_info.z.n, run_info.r.n, run_info.nt)
             for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
@@ -1397,7 +1396,7 @@ for dim ∈ one_dimension_combinations
                                                               ir=ir, iz=iz, ivperp=ivperp,
                                                               ivpa=ivpa, ivzeta=ivzeta,
                                                               ivr=ivr, ivz=ivz)
-                     data = postproc_load_variable(run_info, var_name; dim_slices...)
+                     data = get_variable(run_info, var_name; dim_slices...)
                  else
                      data = select_slice(data, $(QuoteNode(dim)); input=input, it=it,
                                          is=is, ir=ir, iz=iz, ivperp=ivperp, ivpa=ivpa,
@@ -1575,7 +1574,7 @@ for (dim1, dim2) ∈ two_dimension_combinations
                                                               ir=ir, iz=iz, ivperp=ivperp,
                                                               ivpa=ivpa, ivzeta=ivzeta,
                                                               ivr=ivr, ivz=ivz)
-                     data = postproc_load_variable(run_info, var_name; dim_slices...)
+                     data = get_variable(run_info, var_name; dim_slices...)
                  else
                      data = select_slice(data, $(QuoteNode(dim2)), $(QuoteNode(dim1));
                                          input=input, it=it, is=is, ir=ir, iz=iz,
@@ -3473,7 +3472,7 @@ function calculate_steady_state_residual(run_info, variable_name; is=1, data=not
                                          i_run=1)
 
     if data === nothing
-        data = postproc_load_variable(run_info, variable_name; is=is)
+        data = get_variable(run_info, variable_name; is=is)
     end
 
     t_dim = ndims(data)
@@ -3628,22 +3627,19 @@ function plot_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing, neutra
     end
 
     if neutral
-        f = postproc_load_variable(run_info, "f_neutral"; it=it, is=is, ir=input.ir0,
-                                   iz=iz, ivzeta=input.ivzeta0, ivr=input.ivr0)
-        density = postproc_load_variable(run_info, "density_neutral"; it=it, is=is,
-                                         ir=input.ir0, iz=iz)
-        upar = postproc_load_variable(run_info, "uz_neutral"; it=it, is=is, ir=input.ir0,
-                                      iz=iz)
-        vth = postproc_load_variable(run_info, "thermal_speed_neutral"; it=it, is=is,
-                                     ir=input.ir0, iz=iz)
+        f = get_variable(run_info, "f_neutral"; it=it, is=is, ir=input.ir0, iz=iz,
+                         ivzeta=input.ivzeta0, ivr=input.ivr0)
+        density = get_variable(run_info, "density_neutral"; it=it, is=is, ir=input.ir0,
+                               iz=iz)
+        upar = get_variable(run_info, "uz_neutral"; it=it, is=is, ir=input.ir0, iz=iz)
+        vth = get_variable(run_info, "thermal_speed_neutral"; it=it, is=is, ir=input.ir0,
+                           iz=iz)
     else
-        f = postproc_load_variable(run_info, "f"; it=it, is=is, ir=input.ir0, iz=iz,
-                                   ivperp=input.ivperp0)
-        density = postproc_load_variable(run_info, "density"; it=it, is=is, ir=input.ir0,
-                                         iz=iz)
-        upar = postproc_load_variable(run_info, "parallel_flow"; it=it, is=is, ir=input.ir0, iz=iz)
-        vth = postproc_load_variable(run_info, "thermal_speed"; it=it, is=is,
-                                     ir=input.ir0, iz=iz)
+        f = get_variable(run_info, "f"; it=it, is=is, ir=input.ir0, iz=iz,
+                         ivperp=input.ivperp0)
+        density = get_variable(run_info, "density"; it=it, is=is, ir=input.ir0, iz=iz)
+        upar = get_variable(run_info, "parallel_flow"; it=it, is=is, ir=input.ir0, iz=iz)
+        vth = get_variable(run_info, "thermal_speed"; it=it, is=is, ir=input.ir0, iz=iz)
     end
 
     f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(f, run_info.vpa.grid, density, upar, vth,
@@ -3798,21 +3794,17 @@ function plot_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, it=nothi
     end
 
     if neutral
-        f = postproc_load_variable(run_info, "f_neutral"; it=it, is=is, ir=input.ir0,
-                                   ivzeta=input.ivzeta0, ivr=input.ivr0)
-        density = postproc_load_variable(run_info, "density_neutral"; it=it, is=is,
-                                         ir=input.ir0)
-        upar = postproc_load_variable(run_info, "uz_neutral"; it=it, is=is, ir=input.ir0)
-        vth = postproc_load_variable(run_info, "thermal_speed_neutral"; it=it, is=is,
-                                     ir=input.ir0)
+        f = get_variable(run_info, "f_neutral"; it=it, is=is, ir=input.ir0,
+                         ivzeta=input.ivzeta0, ivr=input.ivr0)
+        density = get_variable(run_info, "density_neutral"; it=it, is=is, ir=input.ir0)
+        upar = get_variable(run_info, "uz_neutral"; it=it, is=is, ir=input.ir0)
+        vth = get_variable(run_info, "thermal_speed_neutral"; it=it, is=is, ir=input.ir0)
         vpa_grid = run_info.vz.grid
     else
-        f = postproc_load_variable(run_info, "f"; it=it, is=is, ir=input.ir0,
-                                   ivperp=input.ivperp0)
-        density = postproc_load_variable(run_info, "density"; it=it, is=is, ir=input.ir0)
-        upar = postproc_load_variable(run_info, "parallel_flow"; it=it, is=is, ir=input.ir0)
-        vth = postproc_load_variable(run_info, "thermal_speed"; it=it, is=is,
-                                     ir=input.ir0)
+        f = get_variable(run_info, "f"; it=it, is=is, ir=input.ir0, ivperp=input.ivperp0)
+        density = get_variable(run_info, "density"; it=it, is=is, ir=input.ir0)
+        upar = get_variable(run_info, "parallel_flow"; it=it, is=is, ir=input.ir0)
+        vth = get_variable(run_info, "thermal_speed"; it=it, is=is, ir=input.ir0)
         vpa_grid = run_info.vpa.grid
     end
 
@@ -3970,18 +3962,16 @@ function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
         f = VariableCache(run_info, "f_neutral", chunk_size_1d; it=nothing, is=is,
                           ir=input.ir0, iz=iz, ivperp=nothing, ivpa=nothing,
                           ivzeta=input.ivzeta0, ivr=input.ivr0, ivz=nothing)
-        density = postproc_load_variable(run_info, "density_neutral"; is=is, ir=input.ir0,
-                                         iz=iz)
-        upar = postproc_load_variable(run_info, "uz_neutral"; is=is, ir=input.ir0, iz=iz)
-        vth = postproc_load_variable(run_info, "thermal_speed_neutral"; is=is,
-                                     ir=input.ir0, iz=iz)
+        density = get_variable(run_info, "density_neutral"; is=is, ir=input.ir0, iz=iz)
+        upar = get_variable(run_info, "uz_neutral"; is=is, ir=input.ir0, iz=iz)
+        vth = get_variable(run_info, "thermal_speed_neutral"; is=is, ir=input.ir0, iz=iz)
     else
         f = VariableCache(run_info, "f", chunk_size_2d; it=nothing, is=is, ir=input.ir0, iz=iz,
                           ivperp=input.ivperp0, ivpa=nothing, ivzeta=nothing, ivr=nothing,
                           ivz=nothing)
-        density = postproc_load_variable(run_info, "density"; is=is, ir=input.ir0, iz=iz)
-        upar = postproc_load_variable(run_info, "parallel_flow"; is=is, ir=input.ir0, iz=iz)
-        vth = postproc_load_variable(run_info, "thermal_speed"; is=is, ir=input.ir0, iz=iz)
+        density = get_variable(run_info, "density"; is=is, ir=input.ir0, iz=iz)
+        upar = get_variable(run_info, "parallel_flow"; is=is, ir=input.ir0, iz=iz)
+        vth = get_variable(run_info, "thermal_speed"; is=is, ir=input.ir0, iz=iz)
     end
 
     function get_this_f_unnorm(it)
@@ -4688,12 +4678,12 @@ function Chodura_condition_plots(run_info; plot_prefix=nothing, axes=nothing)
     input = Dict_to_NamedTuple(input_dict_dfns["Chodura_condition"])
 
     time = run_info.time
-    density = postproc_load_variable(run_info, "density")
-    upar = postproc_load_variable(run_info, "parallel_flow")
-    vth = postproc_load_variable(run_info, "thermal_speed")
-    Er = postproc_load_variable(run_info, "Er")
-    f_lower = postproc_load_variable(run_info, "f", iz=1)
-    f_upper = postproc_load_variable(run_info, "f", iz=run_info.z.n_global)
+    density = get_variable(run_info, "density")
+    upar = get_variable(run_info, "parallel_flow")
+    vth = get_variable(run_info, "thermal_speed")
+    Er = get_variable(run_info, "Er")
+    f_lower = get_variable(run_info, "f", iz=1)
+    f_upper = get_variable(run_info, "f", iz=run_info.z.n_global)
 
     Chodura_ratio_lower, Chodura_ratio_upper =
         check_Chodura_condition(run_info.r_local, run_info.z_local, run_info.vperp,
@@ -4880,7 +4870,7 @@ function sound_wave_plots(run_info; outfile=nothing, ax=nothing, phi=nothing)
 
     # This analysis is only designed for 1D cases, so only use phi[:,ir0,:]
     if phi === nothing
-        phi = postproc_load_variable(run_info, "phi"; ir=input.ir0)
+        phi = get_variable(run_info, "phi"; ir=input.ir0)
     else
         select_slice(phi, :t, :z; input=input)
     end
@@ -5087,9 +5077,9 @@ function instability2D_plots(run_info, variable_name; plot_prefix, zind=nothing,
     time = run_info.time
 
     if variable_name == "temperature"
-        variable = postproc_load_variable(run_info, "thermal_speed").^2
+        variable = get_variable(run_info, "thermal_speed").^2
     else
-        variable = postproc_load_variable(run_info, variable_name)
+        variable = get_variable(run_info, variable_name)
     end
 
     if ndims(variable) == 4
@@ -5412,9 +5402,8 @@ function manufactured_solutions_get_field_and_field_sym(run_info, variable_name;
 
     variable_func = manufactured_funcs[func_name_lookup[variable_name]]
 
-    variable = postproc_load_variable(run_info, String(variable_name); it=tinds, is=1,
-                                      ir=ir, iz=iz, ivperp=ivperp, ivpa=ivpa,
-                                      ivzeta=ivzeta, ivr=ivr, ivz=ivz)
+    variable = get_variable(run_info, String(variable_name); it=tinds, is=1, ir=ir, iz=iz,
+                            ivperp=ivperp, ivpa=ivpa, ivzeta=ivzeta, ivr=ivr, ivz=ivz)
     variable_sym = similar(variable)
 
     time = run_info.time
