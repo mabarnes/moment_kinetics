@@ -55,10 +55,12 @@ https://docs.github.com/en/get-started/getting-started-with-git/about-remote-rep
     clusters 'generic-batch' can be used, but requires some manual setup (see
     `machines/generic-batch-template/README.md`).
 
-    For more information, see [`machine_setup` notes](@ref).
+    For more information, see
+    [`machine_setup` notes](https://mabarnes.github.io/moment_kinetics/dev/machine_setup_notes/).
 
     If you want or need to set up 'by hand' without using
-    `machines/machine_setup.sh`, see [Manual setup](@ref).
+    `machines/machine_setup.sh`, see
+    [Manual setup](https://mabarnes.github.io/moment_kinetics/dev/manual_setup/).
 
 Some other notes that might sometimes be useful:
 
@@ -130,7 +132,8 @@ Note that the middle character in `-O3` is a capital letter 'O', not a zero. (On
 HPC clusters, or if you selected the "set up separate packages for post
 processing" option from `machines/machine_setup.sh`, you should use `-O3
 --check-bounds=no` instead of just `-O3`, and the same in the
-[Restarting](@ref) section.)
+[Restarting](https://mabarnes.github.io/moment_kinetics/dev/getting_started/#Restarting)
+section.)
 
 Options are specified in a TOML file, e.g. `input.toml` here. The defaults are
 specified in `moment_kinetics_input.jl`.
@@ -272,7 +275,8 @@ interpolating variables from the old run onto the new grid.
   proportional to $\exp(-v_j^2)$ in the new dimension(s).
 
 When running in parallel, both the old and the new grids must be compatible
-with the distributed-MPI parallelisation. When not using [Parallel I/O](@ref),
+with the distributed-MPI parallelisation. When not using
+[Parallel I/O](https://mabarnes.github.io/moment_kinetics/dev/getting_started/#Parallel-I/O),
 the distributed-MPI domain decomposition must be identical in the old and new
 runs (as each block only reads from a single file).
 
@@ -280,12 +284,14 @@ runs (as each block only reads from a single file).
 
 The default post-processing module, written to be a bit more generic and
 flexible than the original Plots-based one, and able to be used interactively,
-is provided in `makie_post_processing`, see [Post processing](@ref).
+is provided in `makie_post_processing`, see
+[Post processing](https://mabarnes.github.io/moment_kinetics/dev/post_processing_notes/).
 
 On an HPC cluster, when you call `./submit-run.sh` or `./submit-restart.sh`, a
 job will (by default) be submitted to run
-[`makie_post_processing.makie_post_process`](@ref) or
-[`plots_post_processing.analyze_and_plot_data`](@ref) (depending on which you
+[`makie_post_processing.makie_post_process`](https://mabarnes.github.io/moment_kinetics/dev/zz_makie_post_processing/#makie_post_processing.makie_post_process-Tuple)
+or
+[`plots_post_processing.analyze_and_plot_data`](https://mabarnes.github.io/moment_kinetics/dev/zz_plots_post_processing/#plots_post_processing.analyze_and_plot_data-Tuple) (depending on which you
 have set up, or on whether you pass the `-o` argument when both are set up) on
 the output after the run is finished. You can skip this by passing the `-a`
 argument to `./submit-run.sh` or `./submit-restart.sh`.
@@ -325,7 +331,7 @@ is provided by a module - this is currently true on ARCHER2 - where the
 module-provided HDF5 is used).
 
 ## Running parameter scans
-Parameter scans (see [Parameter scans](@ref)) can be performed by running
+Parameter scans (see [Parameter scans](https://mabarnes.github.io/moment_kinetics/dev/parameter_scans/#Parameter-scans)) can be performed by running
 ```
 $ julia -O3 --project run_parameter_scan.jl path/to/scan/input.toml
 ```
@@ -364,7 +370,7 @@ There is a test suite in the `test/` subdirectory. It can be run in a few ways:
     The downside of this method is that it will cause `NCDatasets` to be
     installed if you did not install it already, which might sometimes cause
     linking errors (related to the HDF5 library, see [Optional
-    dependencies](@ref)).
+    dependencies](https://mabarnes.github.io/moment_kinetics/dev/developing/#Optional-dependencies)).
 
 By default the test suite should run fairly quickly (in a few minutes). To do
 so, it skips many cases. To run more comprehensive tests, you can activate the

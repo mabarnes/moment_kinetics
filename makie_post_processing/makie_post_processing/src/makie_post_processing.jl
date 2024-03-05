@@ -6235,6 +6235,9 @@ function compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
     if !has_zdim
         animate_dims = setdiff(animate_dims, (:z,))
     end
+    if !has_zdim
+        animate_dims = setdiff(animate_dims, (:z,))
+    end
     if is_1V
         animate_dims = setdiff(animate_dims, (:vzeta, :vr))
     end
