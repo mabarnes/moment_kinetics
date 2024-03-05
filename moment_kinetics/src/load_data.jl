@@ -16,6 +16,8 @@ export load_species_data
 export read_distributed_zr_data!
 
 using ..array_allocation: allocate_float, allocate_int
+using ..calculus: derivative!
+using ..communication: setup_distributed_memory_MPI
 using ..coordinates: coordinate, define_coordinate
 using ..file_io: check_io_implementation, get_group, get_subgroup_keys, get_variable_keys
 using ..krook_collisions: get_collision_frequency
@@ -23,7 +25,11 @@ using ..input_structs: advection_input, grid_input, hdf5, netcdf
 using ..interpolation: interpolate_to_grid_1d!
 using ..looping
 using ..moment_kinetics_input: mk_input
+using ..neutral_vz_advection: update_speed_neutral_vz!
+using ..neutral_z_advection: update_speed_neutral_z!
 using ..type_definitions: mk_float, mk_int
+using ..vpa_advection: update_speed_vpa!
+using ..z_advection: update_speed_z!
 
 using Glob
 using HDF5
@@ -277,8 +283,9 @@ function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=no
     end
     # Define input to create coordinate struct
     input = grid_input(name, ngrid, nelement_global, nelement_local, nrank, irank, L,
-                       discretization, fd_option, cheb_option, bc, advection_input("", 0.0, 0.0, 0.0),
-                       MPI.COMM_NULL, element_spacing_option)
+                       discretization, fd_option, cheb_option, bc,
+                       advection_input("default", 0.0, 0.0, 0.0), MPI.COMM_NULL,
+                       element_spacing_option)
 
     coord, spectral = define_coordinate(input, parallel_io)
 
@@ -2954,6 +2961,183 @@ function get_variable(run_info, variable_name; kwargs...)
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
         cs = get_variable(run_info, "sound_speed"; kwargs...)
         variable = upar ./ cs
+    elseif variable_name == "z_advect_speed"
+        upar = get_variable(run_info, "parallel_flow"; kwargs...)
+        vth = get_variable(run_info, "thermal_speed"; kwargs...)
+        nz, nr, nspecies, nt = size(upar)
+        nvperp = run_info.vperp.n
+        nvpa = run_info.vpa.n
+
+        speed = allocate_float(nz, nvpa, nvperp, nr, nspecies, nt)
+        Er = get_variable(run_info, "Er"; kwargs...)
+
+        setup_distributed_memory_MPI(1,1,1,1)
+        setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
+                           vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
+                           vr=run_info.vr.n, vz=run_info.vz.n)
+        for it ∈ 1:nt, is ∈ 1:nspecies
+            begin_serial_region()
+            # Only need some struct with a 'speed' variable
+            advect = (speed=@view(speed[:,:,:,:,is,it]),)
+            # Only need Er
+            fields = (Er=@view(Er[:,:,it]),)
+            @views update_speed_z!(advect, upar[:,:,is,it], vth[:,:,is,it],
+                                   run_info.evolve_upar, run_info.evolve_ppar, fields,
+                                   run_info.vpa, run_info.vperp, run_info.z, run_info.r,
+                                   run_info.time[it], run_info.geometry)
+        end
+
+        # Horrible hack so that we can get the speed back without rearranging the
+        # dimensions, if we want that to pass it to a utility function from the main code
+        # (e.g. to calculate a CFL limit).
+        if :normalize_advection_speed_shape ∈ keys(kwargs) && !(kwargs[:normalize_shape] == false)
+            variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
+            for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
+                variable[ivpa,ivperp,iz,ir,is,it] = speed[iz,ivpa,ivperp,ir,is,it]
+            end
+        else
+            variable = speed
+        end
+    elseif variable_name == "vpa_advect_speed"
+        Ez = get_variable(run_info, "Ez"; kwargs...)
+        density = get_variable(run_info, "density"; kwargs...)
+        upar = get_variable(run_info, "parallel_flow"; kwargs...)
+        ppar = get_variable(run_info, "parallel_pressure"; kwargs...)
+        density_neutral = get_variable(run_info, "density_neutral"; kwargs...)
+        uz_neutral = get_variable(run_info, "uz_neutral"; kwargs...)
+        pz_neutral = get_variable(run_info, "pz_neutral"; kwargs...)
+        vth = get_variable(run_info, "thermal_speed"; kwargs...)
+        dupar_dz = get_z_derivative(run_info, "parallel_flow"; kwargs...)
+        dppar_dz = get_z_derivative(run_info, "parallel_pressure"; kwargs...)
+        dvth_dz = get_z_derivative(run_info, "thermal_speed"; kwargs...)
+        dqpar_dz = get_z_derivative(run_info, "parallel_heat_flux"; kwargs...)
+        external_source_amplitude = get_variable(run_info, "external_source_amplitude"; kwargs...)
+
+        nz, nr, nspecies, nt = size(vth)
+        nvperp = run_info.vperp.n
+        nvpa = run_info.vpa.n
+
+        speed=allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
+        setup_distributed_memory_MPI(1,1,1,1)
+        setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
+                           vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
+                           vr=run_info.vr.n, vz=run_info.vz.n)
+        for it ∈ 1:nt
+            begin_serial_region()
+            # Only need some struct with a 'speed' variable
+            advect = [(speed=@view(speed[:,:,:,:,is,it]),) for is ∈ 1:nspecies]
+            # Only need Ez
+            fields = (Ez=@view(Ez[:,:,it]),)
+            @views moments = (charged=(dppar_dz=dppar_dz[:,:,:,it],
+                                       dupar_dz=dupar_dz[:,:,:,it],
+                                       dvth_dz=dvth_dz[:,:,:,it],
+                                       dqpar_dz=dqpar_dz[:,:,:,it],
+                                       vth=vth[:,:,:,it],
+                                       external_source_amplitude=external_source_amplitude[:,:,it]),
+                             evolve_density=run_info.evolve_density,
+                             evolve_upar=run_info.evolve_upar,
+                             evolve_ppar=run_info.evolve_ppar)
+            @views fvec = (density=density[:,:,:,it],
+                           upar=upar[:,:,:,it],
+                           ppar=ppar[:,:,:,it],
+                           density_neutral=density_neutral[:,:,:,it],
+                           uz_neutral=uz_neutral[:,:,:,it],
+                           pz_neutral=pz_neutral[:,:,:,it])
+            @views update_speed_vpa!(advect, fields, fvec, moments, run_info.vpa,
+                                     run_info.vperp, run_info.z, run_info.r,
+                                     run_info.composition, run_info.collisions,
+                                     run_info.external_source_settings.ion,
+                                     run_info.time[it], run_info.geometry)
+        end
+
+        variable = speed
+    elseif variable_name == "neutral_z_advect_speed"
+        uz = get_variable(run_info, "parallel_flow"; kwargs...)
+        vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
+        nz, nr, nspecies, nt = size(uz)
+        nvzeta = run_info.vzeta.n
+        nvr = run_info.vr.n
+        nvz = run_info.vz.n
+
+        speed = allocate_float(nz, nvz, nvr, nvzeta, nr, nspecies, nt)
+
+        setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
+                           vperp=run_info.vperp.n, vpa=run_info.vpa.n, vzeta=nvzeta,
+                           vr=nvr, vz=nvz)
+        for it ∈ 1:nt, isn ∈ 1:nspecies
+            begin_serial_region()
+            # Only need some struct with a 'speed' variable
+            advect = (speed=@view(speed[:,:,:,:,:,isn,it]),)
+            @views update_speed_neutral_z!(advect, uz[:,:,:,it], vth[:,:,:,it],
+                                           run_info.evolve_upar, run_info.evolve_ppar,
+                                           run_info.vz, run_info.vr, run_info.vzeta,
+                                           run_info.z, run_info.r, run_info.time[it])
+        end
+
+        # Horrible hack so that we can get the speed back without rearranging the
+        # dimensions, if we want that to pass it to a utility function from the main code
+        # (e.g. to calculate a CFL limit).
+        if :normalize_advection_speed_shape ∈ keys(kwargs) && !(kwargs[:normalize_shape] == false)
+            variable = allocate_float(nvz, nvr, nvzeta, nz, nr, nspecies, nt)
+            for it ∈ 1:nt, isn ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivzeta ∈ 1:nvzeta, ivr ∈ 1:nvr, ivz ∈ 1:nvz
+                variable[ivz,ivr,ivzeta,iz,ir,isn,it] = speed[iz,ivz,ivr,ivzeta,ir,isn,it]
+            end
+        else
+            variable = speed
+        end
+    elseif variable_name == "neutral_vz_advect_speed"
+        Ez = get_variable(run_info, "Ez"; kwargs...)
+        density = get_variable(run_info, "density"; kwargs...)
+        upar = get_variable(run_info, "parallel_flow"; kwargs...)
+        ppar = get_variable(run_info, "parallel_pressure"; kwargs...)
+        density_neutral = get_variable(run_info, "density_neutral"; kwargs...)
+        uz_neutral = get_variable(run_info, "uz_neutral"; kwargs...)
+        pz_neutral = get_variable(run_info, "pz_neutral"; kwargs...)
+        vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
+        duz_dz = get_z_derivative(run_info, "uz_neutral"; kwargs...)
+        dpz_dz = get_z_derivative(run_info, "pz_neutral"; kwargs...)
+        dvth_dz = get_z_derivative(run_info, "thermal_speed_neutral"; kwargs...)
+        dqz_dz = get_z_derivative(run_info, "qz_neutral"; kwargs...)
+        external_source_amplitude = get_variable(run_info, "external_source_amplitude"; kwargs...)
+
+        nz, nr, nspecies, nt = size(vth)
+        nvzeta = run_info.vzeta.n
+        nvr = run_info.vr.n
+        nvz = run_info.vz.n
+        speed = allocate_float(nvz, nvr, nvzeta, nz, nr, nspecies, nt)
+
+        setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
+                           vperp=run_info.vperp.n, vpa=run_info.vpa.n, vzeta=nvzeta,
+                           vr=nvr, vz=nvz)
+        for it ∈ 1:nt
+            begin_serial_region()
+            # Only need some struct with a 'speed' variable
+            advect = [(speed=@view(speed[:,:,:,:,:,isn,it]),) for isn ∈ 1:nspecies]
+            # Don't actually use `fields` at the moment
+            fields = nothing
+            @views fvec = (density=density[:,:,:,it],
+                           upar=upar[:,:,:,it],
+                           ppar=ppar[:,:,:,it],
+                           density_neutral=density_neutral[:,:,:,it],
+                           uz_neutral=uz_neutral[:,:,:,it],
+                           pz_neutral=pz_neutral[:,:,:,it])
+            @views moments = (neutral=(dpz_dz=dpz_dz[:,:,:,it],
+                                       duz_dz=duz_dz[:,:,:,it],
+                                       dvth_dz=dvth_dz[:,:,:,it],
+                                       dqz_dz=dqz_dz[:,:,:,it],
+                                       vth=vth[:,:,:,it],
+                                       external_source_amplitude=external_source_amplitude[:,:,it]),
+                             evolve_density=run_info.evolve_density,
+                             evolve_upar=run_info.evolve_upar,
+                             evolve_ppar=run_info.evolve_ppar)
+            @views update_speed_neutral_vz!(advect, fields, fvec, moments,
+                                            run_info.vz, run_info.vr, run_info.vzeta,
+                                            run_info.z, run_info.r, run_info.composition,
+                                            run_info.collisions,
+                                            run_info.external_source_settings.neutral)
+        end
+
+        variable = speed
     elseif variable_name == "steps_per_output"
         steps_per_output = get_variable(run_info, "step_counter"; kwargs...)
         for i ∈ length(steps_per_output):-1:2
@@ -2992,6 +3176,55 @@ function get_variable(run_info, variable_name; kwargs...)
     end
 
     return variable
+end
+
+"""
+    get_z_derivative(run_info, variable_name; kwargs...)
+
+Get (i.e. load or calculate) `variable_name` from `run_info` and calculate its
+z-derivative. Returns the z-derivative
+
+`kwargs...` are passed through to `get_variable()`.
+"""
+function get_z_derivative(run_info, variable_name; kwargs...)
+    variable = get_variable(run_info, variable_name; kwargs...)
+    z_deriv = similar(variable)
+
+    if ndims(variable) == 3
+        # EM field
+        nz, nr, nt = size(variable)
+        for it ∈ 1:nt, ir ∈ 1:nr
+            @views derivative!(z_deriv[:,ir,it], variable[:,ir,it], run_info.z,
+                               run_info.z_spectral)
+        end
+    elseif ndims(variable) == 4
+        # Moment variable (ion or neutral)
+        nz, nr, nspecies, nt = size(variable)
+        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr
+            @views derivative!(z_deriv[:,ir,is,it], variable[:,ir,is,it], run_info.z,
+                               run_info.z_spectral)
+        end
+    elseif ndims(variable) == 6
+        # Ion distribution function
+        nvpa, nvperp, nz, nr, nspecies, nt = size(variable)
+        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
+            @views derivative!(z_deriv[ivpa,ivperp,:,ir,is,it],
+                               variable[ivpa,ivperp,:,ir,is,it], run_info.z,
+                               run_info.z_spectral)
+        end
+    elseif ndims(variable) == 7
+        # Neutral distribution function
+        nvz, nvr, nvzeta, nz, nr, nspecies, nt = size(variable)
+        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, ivzeta ∈ 1:nvzeta, ivr ∈ 1:nvr, ivz ∈ 1:nvz
+            @views derivative!(z_deriv[ivz,ivr,ivzeta,:,ir,is,it],
+                               variable[ivz,ivr,ivzeta,:,ir,is,it], run_info.z,
+                               run_info.z_spectral)
+        end
+    else
+        error("Unsupported number of dimensions ($(ndims(variable))) for $variable_name")
+    end
+
+    return z_deriv
 end
 
 """
