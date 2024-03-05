@@ -32,7 +32,8 @@ using MPI
 const timestep_diagnostic_variables = ("time_for_run", "step_counter", "dt",
                                        "failure_counter", "failure_caused_by",
                                        "steps_per_output", "failures_per_output",
-                                       "failure_caused_by_per_output")
+                                       "failure_caused_by_per_output",
+                                       "average_successful_dt")
 const em_variables = ("phi", "Er", "Ez")
 const ion_moment_variables = ("density", "parallel_flow", "parallel_pressure",
                               "thermal_speed", "temperature", "parallel_heat_flux",
@@ -2969,6 +2970,21 @@ function get_variable(run_info, variable_name; kwargs...)
             failure_caused_by_per_output[:,i] .-= failure_caused_by_per_output[:,i-1]
         end
         variable = failure_caused_by_per_output
+    elseif variable_name == "average_successful_dt"
+        steps_per_output = get_variable(run_info, "steps_per_output"; kwargs...)
+        failures_per_output = get_variable(run_info, "failures_per_output"; kwargs...)
+        successful_steps_per_output = steps_per_output - failures_per_output
+
+        delta_t = copy(run_info.time)
+        for i ∈ length(delta_t):-1:2
+            delta_t[i] -= delta_t[i-1]
+        end
+
+        variable = delta_t ./ successful_steps_per_output
+        if successful_steps_per_output[1] == 0
+            # Don't want a meaningless Inf...
+            variable[1] = 0.0
+        end
     else
         variable = postproc_load_variable(run_info, variable_name; kwargs...)
     end

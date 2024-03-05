@@ -609,7 +609,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
     section_defaults = OrderedDict(k=>v for (k,v) ∈ this_input_dict
                                    if !isa(v, AbstractDict) &&
                                       !(k ∈ time_index_options))
-    for variable_name ∈ all_moment_variables
+    for variable_name ∈ tuple(all_moment_variables..., timestep_diagnostic_variables...)
         set_defaults_and_check_section!(
             this_input_dict, variable_name;
             OrderedDict(Symbol(k)=>v for (k,v) ∈ section_defaults)...)
@@ -6483,9 +6483,12 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
             return nothing
         end
 
-        fig, ax = get_1d_ax(; xlabel="time", ylabel="number of steps per output")
+        # Plot numbers of steps and numbers of failures
+        ###############################################
+
+        steps_fig, ax = get_1d_ax(; xlabel="time", ylabel="number of steps per output")
         # Put failures a separate y-axis
-        ax_failures = Axis(fig[1, 1]; ylabel="number of failures per output",
+        ax_failures = Axis(steps_fig[1, 1]; ylabel="number of failures per output",
                            yaxisposition = :right)
         hidespines!(ax_failures)
         hidexdecorations!(ax_failures)
@@ -6569,14 +6572,27 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
             end
         end
 
-        put_legend_right(fig, ax_failures)
+        put_legend_right(steps_fig, ax_failures)
+
+        # Plot average timesteps
+        ########################
+
+        if plot_prefix !== nothing
+            outfile = plot_prefix * "successful_dt.pdf"
+        else
+            outfile = nothing
+        end
+        dt_fig = plot_vs_t(run_info, "average_successful_dt"; outfile=outfile)
 
         if plot_prefix !== nothing
             outfile = plot_prefix * "timestep_diagnostics.pdf"
-            save(outfile, fig)
+            save(outfile, steps_fig)
+        else
+            display(steps_fig)
+            display(dt_fig)
         end
 
-        return fig
+        return steps_fig, dt_fig
     catch e
         println("Error in timestep_diagnostics(). Error was ", e)
     end
