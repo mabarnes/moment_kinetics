@@ -1332,6 +1332,21 @@ for dim ∈ one_dimension_combinations
                          data = Tuple(nothing for _ in run_info)
                      end
 
+                     if input === nothing
+                         if run_info[1].dfns
+                             if var_name ∈ keys(input_dict_dfns)
+                                 input = input_dict[var_name]
+                             else
+                                 input = input_dict_dfns
+                             end
+                         else
+                             if var_name ∈ keys(input_dict)
+                                 input = input_dict[var_name]
+                             else
+                                 input = input_dict
+                             end
+                         end
+                     end
                      if input isa AbstractDict
                          input = Dict_to_NamedTuple(input)
                      end
@@ -1381,9 +1396,17 @@ for dim ∈ one_dimension_combinations
                                      ivz=nothing, kwargs...)
                  if input === nothing
                      if run_info.dfns
-                         input = input_dict_dfns[var_name]
+                         if var_name ∈ keys(input_dict_dfns)
+                             input = input_dict[var_name]
+                         else
+                             input = input_dict_dfns
+                         end
                      else
-                         input = input_dict[var_name]
+                         if var_name ∈ keys(input_dict)
+                             input = input_dict[var_name]
+                         else
+                             input = input_dict
+                         end
                      end
                  end
                  if isa(input, AbstractDict)
@@ -1558,9 +1581,17 @@ for (dim1, dim2) ∈ two_dimension_combinations
                                      ivz=nothing, kwargs...)
                  if input === nothing
                      if run_info.dfns
-                         input = input_dict_dfns[var_name]
+                         if var_name ∈ keys(input_dict_dfns)
+                             input = input_dict[var_name]
+                         else
+                             input = input_dict_dfns
+                         end
                      else
-                         input = input_dict[var_name]
+                         if var_name ∈ keys(input_dict)
+                             input = input_dict[var_name]
+                         else
+                             input = input_dict
+                         end
                      end
                  end
                  if isa(input, AbstractDict)
@@ -1728,6 +1759,21 @@ for dim ∈ one_dimension_combinations_no_t
                          error("`outfile` is required for $($function_name_str)")
                      end
 
+                     if input === nothing
+                         if run_info[1].dfns
+                             if var_name ∈ keys(input_dict_dfns)
+                                 input = input_dict[var_name]
+                             else
+                                 input = input_dict_dfns
+                             end
+                         else
+                             if var_name ∈ keys(input_dict)
+                                 input = input_dict[var_name]
+                             else
+                                 input = input_dict
+                             end
+                         end
+                     end
                      if input isa AbstractDict
                          input = Dict_to_NamedTuple(input)
                      end
@@ -1794,9 +1840,17 @@ for dim ∈ one_dimension_combinations_no_t
                                      ivz=nothing, kwargs...)
                  if input === nothing
                      if run_info.dfns
-                         input = input_dict_dfns[var_name]
+                         if var_name ∈ keys(input_dict_dfns)
+                             input = input_dict[var_name]
+                         else
+                             input = input_dict_dfns
+                         end
                      else
-                         input = input_dict[var_name]
+                         if var_name ∈ keys(input_dict)
+                             input = input_dict[var_name]
+                         else
+                             input = input_dict
+                         end
                      end
                  end
                  if isa(input, AbstractDict)
@@ -2010,9 +2064,17 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                                      ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
                  if input === nothing
                      if run_info.dfns
-                         input = input_dict_dfns[var_name]
+                         if var_name ∈ keys(input_dict_dfns)
+                             input = input_dict[var_name]
+                         else
+                             input = input_dict_dfns
+                         end
                      else
-                         input = input_dict[var_name]
+                         if var_name ∈ keys(input_dict)
+                             input = input_dict[var_name]
+                         else
+                             input = input_dict
+                         end
                      end
                  end
                  if isa(input, AbstractDict)
