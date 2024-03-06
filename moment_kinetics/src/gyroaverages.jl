@@ -15,6 +15,9 @@ using ..array_allocation: allocate_int
 using ..looping
 
 struct gyro_operators
+    # matrix for applying a gyroaverage to a function F(r,vpa,vperp) at fixed r, with R = r - rhovec and rhovec = b x v / Omega
+    # the matrix can also be used ring-averaging a function F(R,vpa,vperp) at fixed R, since F(R,vpa,vperp) is independent of gyrophase
+    # other matrices are required for gyroaveraging functions that depend on gyrophase.
     gyromatrix::Array{mk_float,5}
 end
 
@@ -28,13 +31,15 @@ no contribution from outside of the domain
     but might be appropriate for domains with zero boundary conditions   
 """
 
-function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition)
+function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition;print_info=false)
     gkions = composition.gyrokinetic_ions
     if !gkions
         gyromatrix =  allocate_float(1,1,1,1,1)
         gyro = gyro_operators(gyromatrix)
     else
-       println("Begin: init_gyro_operators")
+       if print_info
+           println("Begin: init_gyro_operators")
+       end
        gyromatrix = allocate_float(z.n,r.n,vperp.n,z.n,r.n)
        
        # init the matrix!
@@ -82,6 +87,9 @@ function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition)
                    #continue
                    # if set to zero any <field> where the path exits the domain
                    @. gyromatrix[:,:,ivperp,iz,ir] = 0.0
+                   if z.bc == "periodic"
+                       print("ERROR: -1 in zelementlist")
+                   end
                    break
                end
                izmin, izmax = z.igrid_full[1,izel], z.igrid_full[z.ngrid,izel]
@@ -94,6 +102,9 @@ function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition)
                    #continue
                    # if set to zero any <field> where the path exits the domain
                    @. gyromatrix[:,:,ivperp,iz,ir] = 0.0
+                   if r.bc == "periodic"
+                       print("ERROR: -1 in relementlist")
+                   end
                    break
                end
                irmin, irmax = r.igrid_full[1,irel], r.igrid_full[r.ngrid,irel]
@@ -121,7 +132,9 @@ function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition)
        end
        
        gyro = gyro_operators(gyromatrix)
-       println("Finished: init_gyro_operators")
+       if print_info
+           println("Finished: init_gyro_operators")
+       end
     end
     return gyro
 end
@@ -143,7 +156,7 @@ for a given list of coordinate values, determine in which elements they are foun
 
 """
 function elementlist!(elist,coordlist,coord)
-    zero = 1.0e-8
+    zero = 1.0e-14
     ngyro = size(coordlist,1)
     nelement = coord.nelement_global
     xebs = coord.element_boundaries
@@ -167,10 +180,9 @@ function elementlist!(elist,coordlist,coord)
             if (x - xebs[j])*(xebs[j+1] - x) > zero
                 elist[i] = j
                 break
-            end
             # check element boundary 
             # (lower or upper, force a choice of element for boundary values)
-            if (abs(x-xebs[j]) < zero) || (abs(x-xebs[j+1]) < zero && j == nelement)
+            elseif (abs(x-xebs[j]) < 100*zero) || (abs(x-xebs[j+1]) < 100*zero && j == nelement)
                 elist[i] = j
                 break
             end            
