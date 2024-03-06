@@ -722,6 +722,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
     set_defaults_and_check_section!(
         this_input_dict, "timestep_diagnostics";
         plot=true,
+        animate_CFL=false,
        )
 
     return nothing
@@ -6479,120 +6480,178 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
         println("Making timestep diagnostics plots")
 
         input = Dict_to_NamedTuple(input_dict["timestep_diagnostics"])
-        if !input.plot
-            return nothing
-        end
 
-        # Plot numbers of steps and numbers of failures
-        ###############################################
+         steps_fig = nothing
+         dt_fig = nothing
+         CFL_fig = nothing
 
-        steps_fig, ax = get_1d_ax(; xlabel="time", ylabel="number of steps per output")
-        # Put failures a separate y-axis
-        ax_failures = Axis(steps_fig[1, 1]; ylabel="number of failures per output",
-                           yaxisposition = :right)
-        hidespines!(ax_failures)
-        hidexdecorations!(ax_failures)
-        hideydecorations!(ax_failures; ticks=false, label=false, ticklabels=false)
+        if input.plot
+            # Plot numbers of steps and numbers of failures
+            ###############################################
 
-        for ri ∈ run_info
-            if length(run_info) == 1
-                prefix = ""
-            else
-                prefix = ri.run_name * " "
-            end
+            steps_fig, ax = get_1d_ax(; xlabel="time", ylabel="number of steps per output")
+            # Put failures a separate y-axis
+            ax_failures = Axis(steps_fig[1, 1]; ylabel="number of failures per output",
+                               yaxisposition = :right)
+            hidespines!(ax_failures)
+            hidexdecorations!(ax_failures)
+            hideydecorations!(ax_failures; ticks=false, label=false, ticklabels=false)
 
-            plot_1d(ri.time, get_variable(ri, "steps_per_output"; it=it);
-                    label=prefix * "steps", ax=ax)
-            # Fudge to create an invisible line on ax_failures that cycles the line colors
-            # and adds a label for "steps_per_output" to the plot because we create the
-            # legend from ax_failures.
-            plot_1d([ri.time[1]], [0]; label=prefix * "steps", ax=ax_failures)
-            plot_1d(ri.time, get_variable(ri, "failures_per_output"; it=it);
-                    label=prefix * "failures", ax=ax_failures)
+            for ri ∈ run_info
+                if length(run_info) == 1
+                    prefix = ""
+                else
+                    prefix = ri.run_name * " "
+                end
 
-            failure_caused_by_per_output = get_variable(ri,
-                                                        "failure_caused_by_per_output";
-                                                        it=it)
-            counter = 0
-            # Ion pdf failure counter
-            counter += 1
-            plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
-                    label=prefix * "failures caused by f_ion", ax=ax_failures)
-            if ri.evolve_density
-                # Ion density failure counter
+                plot_1d(ri.time, get_variable(ri, "steps_per_output"; it=it);
+                        label=prefix * "steps", ax=ax)
+                # Fudge to create an invisible line on ax_failures that cycles the line colors
+                # and adds a label for "steps_per_output" to the plot because we create the
+                # legend from ax_failures.
+                plot_1d([ri.time[1]], [0]; label=prefix * "steps", ax=ax_failures)
+                plot_1d(ri.time, get_variable(ri, "failures_per_output"; it=it);
+                        label=prefix * "failures", ax=ax_failures)
+
+                failure_caused_by_per_output = get_variable(ri,
+                                                            "failure_caused_by_per_output";
+                                                            it=it)
+                counter = 0
+                # Ion pdf failure counter
                 counter += 1
                 plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
-                        linestyle=:dash, label=prefix * "failures caused by n_ion",
-                        ax=ax_failures)
-            end
-            if ri.evolve_upar
-                # Ion flow failure counter
-                counter += 1
-                plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
-                        linestyle=:dash, label=prefix * "failures caused by u_ion",
-                        ax=ax_failures)
-            end
-            if ri.evolve_ppar
-                # Ion flow failure counter
-                counter += 1
-                plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
-                        linestyle=:dash, label=prefix * "failures caused by p_ion",
-                        ax=ax_failures)
-            end
-            if ri.n_neutral_species > 0
-                # Neutral pdf failure counter
-                counter += 1
-                plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
-                        label=prefix * "failures caused by f_neutral", ax=ax_failures)
+                        label=prefix * "failures caused by f_ion", ax=ax_failures)
                 if ri.evolve_density
-                    # Neutral density failure counter
+                    # Ion density failure counter
                     counter += 1
                     plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
-                            linestyle=:dash,
-                            label=prefix * "failures caused by n_neutral", ax=ax_failures)
+                            linestyle=:dash, label=prefix * "failures caused by n_ion",
+                            ax=ax_failures)
                 end
                 if ri.evolve_upar
-                    # Neutral flow failure counter
+                    # Ion flow failure counter
                     counter += 1
                     plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
-                            linestyle=:dash,
-                            label=prefix * "failures caused by u_neutral", ax=ax_failures)
+                            linestyle=:dash, label=prefix * "failures caused by u_ion",
+                            ax=ax_failures)
                 end
                 if ri.evolve_ppar
-                    # Neutral flow failure counter
+                    # Ion flow failure counter
                     counter += 1
                     plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
-                            linestyle=:dash,
-                            label=prefix * "failures caused by p_neutral", ax=ax_failures)
+                            linestyle=:dash, label=prefix * "failures caused by p_ion",
+                            ax=ax_failures)
+                end
+                if ri.n_neutral_species > 0
+                    # Neutral pdf failure counter
+                    counter += 1
+                    plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                            label=prefix * "failures caused by f_neutral", ax=ax_failures)
+                    if ri.evolve_density
+                        # Neutral density failure counter
+                        counter += 1
+                        plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                                linestyle=:dash,
+                                label=prefix * "failures caused by n_neutral", ax=ax_failures)
+                    end
+                    if ri.evolve_upar
+                        # Neutral flow failure counter
+                        counter += 1
+                        plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                                linestyle=:dash,
+                                label=prefix * "failures caused by u_neutral", ax=ax_failures)
+                    end
+                    if ri.evolve_ppar
+                        # Neutral flow failure counter
+                        counter += 1
+                        plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                                linestyle=:dash,
+                                label=prefix * "failures caused by p_neutral", ax=ax_failures)
+                    end
+                end
+
+                if counter > size(failure_caused_by_per_output, 1)
+                    error("Tried to plot non-existent variables in "
+                          * "failure_caused_by_per_output. Settings not understood "
+                          * "correctly.")
+                end
+                if counter < size(failure_caused_by_per_output, 1)
+                    error("Some variables in failure_caused_by_per_output not plotted. "
+                          * "Settings not understood correctly.")
                 end
             end
-            if counter < size(failure_caused_by_per_output, 1)
-                error("Some variables in failure_caused_by_per_output not plotted. "
-                      * "Settings not understood correctly.")
+
+            put_legend_right(steps_fig, ax_failures)
+
+            # Plot average timesteps
+            ########################
+
+            if plot_prefix !== nothing
+                outfile = plot_prefix * "successful_dt.pdf"
+            else
+                outfile = nothing
+            end
+            dt_fig = plot_vs_t(run_info, "average_successful_dt"; outfile=outfile)
+
+            # PLot minimum CFL factors
+            ##########################
+
+            CFL_fig, ax = get_1d_ax(; xlabel="time", ylabel="(grid spacing) / speed")
+            for ri ∈ run_info
+                if length(run_info) == 1
+                    prefix = ""
+                else
+                    prefix = ri.run_name * " "
+                end
+                CFL_vars = ["minimum_CFL_ion_z", "minimum_CFL_ion_vpa"]
+                if ri.n_neutral_species > 0
+                    push!(CFL_vars, "minimum_CFL_neutral_z", "minimum_CFL_neutral_vz")
+                end
+                for varname ∈ CFL_vars
+                    var = get_variable(ri, varname)
+                    plot_1d(ri.time, var; ax=ax, label=prefix*varname)
+                end
+            end
+            put_legend_right(CFL_fig, ax)
+
+            if plot_prefix !== nothing
+                outfile = plot_prefix * "timestep_diagnostics.pdf"
+                save(outfile, steps_fig)
+
+                outfile = plot_prefix * "CFL_factors.pdf"
+                save(outfile, CFL_fig)
+            else
+                display(steps_fig)
+                display(dt_fig)
+                display(CFL_fig)
             end
         end
 
-        put_legend_right(steps_fig, ax_failures)
-
-        # Plot average timesteps
-        ########################
-
-        if plot_prefix !== nothing
-            outfile = plot_prefix * "successful_dt.pdf"
-        else
-            outfile = nothing
+        if input.animate_CFL
+            if plot_prefix === nothing
+                error("plot_prefix is required when animate_CFL=true")
+            end
+            animate_vs_vpa_z(run_info, "CFL_ion_z";
+                             outfile=plot_prefix * "CFL_ion_z_vs_vpa_z.gif",
+                             colorscale=log10,
+                             transform=x->positive_or_nan(x; epsilon=1.e-30))
+            animate_vs_vpa_z(run_info, "CFL_ion_vpa";
+                             outfile=plot_prefix * "CFL_ion_vpa_vs_vpa_z.gif",
+                             colorscale=log10,
+                             transform=x->positive_or_nan(x; epsilon=1.e-30))
+            if any(ri.n_neutral_species > 0 for ri ∈ run_info)
+                animate_vs_vz_z(run_info, "CFL_neutral_z";
+                                outfile=plot_prefix * "CFL_neutral_z_vs_vpa_z.gif",
+                                colorscale=log10,
+                                transform=x->positive_or_nan(x; epsilon=1.e-30))
+                animate_vs_vz_z(run_info, "CFL_neutral_vz";
+                                outfile=plot_prefix * "CFL_neutral_vz_vs_vpa_z.gif",
+                                colorscale=log10,
+                                transform=x->positive_or_nan(x; epsilon=1.e-30))
+            end
         end
-        dt_fig = plot_vs_t(run_info, "average_successful_dt"; outfile=outfile)
 
-        if plot_prefix !== nothing
-            outfile = plot_prefix * "timestep_diagnostics.pdf"
-            save(outfile, steps_fig)
-        else
-            display(steps_fig)
-            display(dt_fig)
-        end
-
-        return steps_fig, dt_fig
+        return steps_fig, dt_fig, CFL_fig
     catch e
         println("Error in timestep_diagnostics(). Error was ", e)
     end
