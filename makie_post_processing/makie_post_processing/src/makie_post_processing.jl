@@ -662,6 +662,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         this_input_dict, "wall_pdf";
         plot=false,
         animate=false,
+        advection_velocity=false,
         colormap=this_input_dict["colormap"],
         animation_ext=this_input_dict["animation_ext"],
        )
@@ -670,6 +671,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         this_input_dict, "wall_pdf_neutral";
         plot=false,
         animate=false,
+        advection_velocity=false,
         colormap=this_input_dict["colormap"],
         animation_ext=this_input_dict["animation_ext"],
        )
@@ -4306,7 +4308,7 @@ passed.
 """
 function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
     input = Dict_to_NamedTuple(input_dict_dfns["wall_pdf"])
-    if !(input.plot || input.animate)
+    if !(input.plot || input.animate || input.advection_velocity)
         # nothing to do
         return nothing
     end
@@ -4403,6 +4405,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
                                  outfile=plot_prefix * "pdf_$(label)_vs_vpa_r." * input.animation_ext)
             end
         end
+
+        if input.advection_velocity
+            animate_vs_vpa(run_info, "vpa_advect_speed"; is=1, input=f_input,
+                           outfile=plot_prefix * "vpa_advect_speed_$(label)_vs_vpa." * input.animation_ext)
+        end
     end
 
     return nothing
@@ -4427,7 +4434,7 @@ passed.
 """
 function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
     input = Dict_to_NamedTuple(input_dict_dfns["wall_pdf_neutral"])
-    if !(input.plot || input.animate)
+    if !(input.plot || input.animate || input.advection_velocity)
         # nothing to do
         return nothing
     end
@@ -4552,6 +4559,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
                                     outfile=plot_prefix * "pdf_neutral_$(label)_vs_vr_r." * input.animation_ext)
                 end
             end
+        end
+
+        if input.advection_velocity
+            animate_vs_vz(run_info, "neutral_vz_advect_speed"; is=1, input=f_neutral_input,
+                          outfile=plot_prefix * "neutral_vz_advect_speed_$(label)_vs_vz." * input.animation_ext)
         end
     end
 
