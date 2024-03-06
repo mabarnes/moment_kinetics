@@ -786,15 +786,15 @@ end
 
 const chunk_size_1d = 10000
 const chunk_size_2d = 100
-struct VariableCache{T1,T2,N}
+struct VariableCache{T1,T2,T3}
     run_info::T1
     variable_name::String
     t_chunk_size::mk_int
     n_tinds::mk_int
     tinds_range_global::Union{UnitRange{mk_int},StepRange{mk_int}}
     tinds_chunk::Union{Base.RefValue{UnitRange{mk_int}},Base.RefValue{StepRange{mk_int}}}
-    data_chunk::Array{mk_float,N}
-    dim_slices::T2
+    data_chunk::T2
+    dim_slices::T3
 end
 
 function VariableCache(run_info, variable_name::String, t_chunk_size::mk_int;
