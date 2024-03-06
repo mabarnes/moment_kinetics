@@ -20,7 +20,7 @@ using ..input_structs
 using ..numerical_dissipation: setup_numerical_dissipation
 using ..reference_parameters
 using ..geo: init_magnetic_geometry
-using ..gyroaverages: init_gyro_operators
+#using ..gyroaverages: init_gyro_operators
 
 using MPI
 using TOML
@@ -548,7 +548,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     end
     
     geometry = init_magnetic_geometry(geometry_in,z,r)
-    gyroavs = init_gyro_operators(vperp,z,r,gyrophase,geometry,composition)
+    #gyroavs = init_gyro_operators(vperp,z,r,gyrophase,geometry,composition)
     # check input (and initialized coordinate structs) to catch errors/unsupported options
     check_input(io, output_dir, nstep, dt, r, z, vpa, vperp, composition,
                 species_immutable, evolve_moments, num_diss_params, save_inputs_to_txt,
@@ -558,7 +558,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     all_inputs = (io_immutable, evolve_moments, t_input, z, z_spectral, r, r_spectral,
                   vpa, vpa_spectral, vperp, vperp_spectral, gyrophase, gyrophase_spectral,
                   vz, vz_spectral, vr, vr_spectral, vzeta, vzeta_spectral, composition,
-                  species_immutable, collisions, geometry, gyroavs, drive_immutable,
+                  species_immutable, collisions, geometry, drive_immutable,
                   external_source_settings, num_diss_params, manufactured_solns_input)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)

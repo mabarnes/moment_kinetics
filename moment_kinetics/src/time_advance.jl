@@ -55,6 +55,7 @@ using ..force_balance: force_balance!, neutral_force_balance!
 using ..energy_equation: energy_equation!, neutral_energy_equation!
 using ..em_fields: setup_em_fields, update_phi!
 using ..fokker_planck: init_fokker_planck_collisions_weak_form, explicit_fokker_planck_collisions_weak_form!
+using ..gyroaverages: init_gyro_operators, gyroaverage_pdf!
 using ..manufactured_solns: manufactured_sources
 using ..advection: advection_info
 using ..utils: to_minutes
@@ -180,10 +181,10 @@ this includes creating and populating structs
 for Chebyshev transforms, velocity space moments,
 EM fields, and advection terms
 """
-function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
+function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, gyrophase, vz_spectral,
                              vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
                              z_spectral, r_spectral, composition, drive_input, moments,
-                             t_input, collisions, species, geometry, gyroavs,
+                             t_input, collisions, species, geometry,
                              boundary_distributions, external_source_settings,
                              num_diss_params, manufactured_solns_input, restarting)
     # define some local variables for convenience/tidiness
@@ -216,6 +217,9 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     else
         fp_arrays = nothing
     end
+    # create gyroaverage matrix arrays
+    gyroavs = init_gyro_operators(vperp,z,r,gyrophase,geometry,composition)
+
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
     fields = setup_em_fields(vperp.n, z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency, drive_input.force_Er_zero_at_wall)
@@ -436,7 +440,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     _block_synchronize()
 
     return moments, fields, spectral_objects, advect_objects,
-    scratch, advance, fp_arrays, scratch_dummy, manufactured_source_list
+    scratch, advance, fp_arrays, gyroavs, scratch_dummy, manufactured_source_list
 end
 
 """
@@ -1283,7 +1287,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     end
     # update remaining velocity moments that are calculable from the evolved pdf
     update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
-        r_spectral, geometry, scratch_dummy, z_advect, diagnostic_moments)
+        r_spectral, geometry, gyroavs, scratch_dummy, z_advect, diagnostic_moments)
     
     calculate_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
                                   num_diss_params)
@@ -1418,7 +1422,7 @@ end
 update velocity moments that are calculable from the evolved charged pdf
 """
 function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
-    r_spectral, geometry, scratch_dummy, z_advect, diagnostic_moments)
+    r_spectral, geometry, gyroavs, scratch_dummy, z_advect, diagnostic_moments)
     
     ff = scratch_dummy.buffer_vpavperpzrs_1
     if composition.gyrokinetic_ions

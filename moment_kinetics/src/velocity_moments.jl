@@ -41,7 +41,7 @@ using ..communication
 using ..derivatives: derivative_z!
 using ..derivatives: derivative_r!
 using ..looping
-using ..gyroaverages: gyro_operators
+using ..gyroaverages: gyro_operators, gyroaverage_pdf!
 #global tmpsum1 = 0.0
 #global tmpsum2 = 0.0
 #global dens_hist = zeros(17,1)

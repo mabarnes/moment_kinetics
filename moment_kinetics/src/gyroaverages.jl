@@ -13,6 +13,7 @@ using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..array_allocation: allocate_int
 using ..looping
+#using ..communication
 
 struct gyro_operators
     # matrix for applying a gyroaverage to a function F(r,vpa,vperp) at fixed r, with R = r - rhovec and rhovec = b x v / Omega
