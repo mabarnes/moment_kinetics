@@ -6631,23 +6631,51 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
             if plot_prefix === nothing
                 error("plot_prefix is required when animate_CFL=true")
             end
-            animate_vs_vpa_z(run_info, "CFL_ion_z";
+            data = get_variable(run_info, "CFL_ion_z")
+            datamin = minimum(minimum(d) for d ∈ data)
+            animate_vs_vpa_z(run_info, "CFL_ion_z"; data=data,
                              outfile=plot_prefix * "CFL_ion_z_vs_vpa_z.gif",
                              colorscale=log10,
-                             transform=x->positive_or_nan(x; epsilon=1.e-30))
-            animate_vs_vpa_z(run_info, "CFL_ion_vpa";
+                             transform=x->positive_or_nan(x; epsilon=1.e-30),
+                             colorrange=(datamin, datamin * 1000.0),
+                             axis_args=Dict(:bottomspinevisible=>false,
+                                            :topspinevisible=>false,
+                                            :leftspinevisible=>false,
+                                            :rightspinevisible=>false))
+            data = get_variable(run_info, "CFL_ion_vpa")
+            datamin = minimum(minimum(d) for d ∈ data)
+            animate_vs_vpa_z(run_info, "CFL_ion_vpa"; data=data,
                              outfile=plot_prefix * "CFL_ion_vpa_vs_vpa_z.gif",
                              colorscale=log10,
-                             transform=x->positive_or_nan(x; epsilon=1.e-30))
+                             transform=x->positive_or_nan(x; epsilon=1.e-30),
+                             colorrange=(datamin, datamin * 1000.0),
+                             axis_args=Dict(:bottomspinevisible=>false,
+                                            :topspinevisible=>false,
+                                            :leftspinevisible=>false,
+                                            :rightspinevisible=>false))
             if any(ri.n_neutral_species > 0 for ri ∈ run_info)
-                animate_vs_vz_z(run_info, "CFL_neutral_z";
-                                outfile=plot_prefix * "CFL_neutral_z_vs_vpa_z.gif",
+                data = get_variable(run_info, "CFL_neutral_z")
+                datamin = minimum(minimum(d) for d ∈ data)
+                animate_vs_vz_z(run_info, "CFL_neutral_z"; data=data,
+                                outfile=plot_prefix * "CFL_neutral_z_vs_vz_z.gif",
                                 colorscale=log10,
-                                transform=x->positive_or_nan(x; epsilon=1.e-30))
-                animate_vs_vz_z(run_info, "CFL_neutral_vz";
-                                outfile=plot_prefix * "CFL_neutral_vz_vs_vpa_z.gif",
+                                transform=x->positive_or_nan(x; epsilon=1.e-30),
+                                colorrange=(datamin, datamin * 1000.0),
+                                axis_args=Dict(:bottomspinevisible=>false,
+                                               :topspinevisible=>false,
+                                               :leftspinevisible=>false,
+                                               :rightspinevisible=>false))
+                data = get_variable(run_info, "CFL_neutral_vz")
+                datamin = minimum(minimum(d) for d ∈ data)
+                animate_vs_vz_z(run_info, "CFL_neutral_vz"; data=data,
+                                outfile=plot_prefix * "CFL_neutral_vz_vs_vz_z.gif",
                                 colorscale=log10,
-                                transform=x->positive_or_nan(x; epsilon=1.e-30))
+                                transform=x->positive_or_nan(x; epsilon=1.e-30),
+                                colorrange=(datamin, datamin * 1000.0),
+                                axis_args=Dict(:bottomspinevisible=>false,
+                                               :topspinevisible=>false,
+                                               :leftspinevisible=>false,
+                                               :rightspinevisible=>false))
             end
         end
 
