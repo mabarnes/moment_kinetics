@@ -28,6 +28,8 @@ using ..moment_kinetics_input: mk_input
 using ..neutral_vz_advection: update_speed_neutral_vz!
 using ..neutral_z_advection: update_speed_neutral_z!
 using ..type_definitions: mk_float, mk_int
+using ..utils: get_CFL!, get_minimum_CFL_z, get_minimum_CFL_vpa, get_minimum_CFL_neutral_z,
+               get_minimum_CFL_neutral_vz
 using ..vpa_advection: update_speed_vpa!
 using ..z_advection: update_speed_z!
 
@@ -2936,7 +2938,78 @@ function get_variable(run_info::Tuple, variable_name; kwargs...)
     return Tuple(get_variable(ri, variable_name; kwargs...) for ri ∈ run_info)
 end
 
-function get_variable(run_info, variable_name; kwargs...)
+function get_variable(run_info, variable_name; normalize_advection_speed_shape=true,
+                      kwargs...)
+
+    # Select a slice of an time-series sized variable
+    function select_slice_of_variable(variable::AbstractVector; it=nothing,
+                                      is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                                      ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                                      ivz=nothing)
+        if it !== nothing
+            variable = selectdim(variable, 1, kwargs[:it])
+        end
+
+        return variable
+    end
+
+    # Select a slice of an ion distribution function sized variable
+    function select_slice_of_variable(variable::AbstractArray{T,6} where T; it=nothing,
+                                      is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                                      ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                                      ivz=nothing)
+        if it !== nothing
+            variable = selectdim(variable, 6, kwargs[:it])
+        end
+        if is !== nothing
+            variable = selectdim(variable, 5, kwargs[:is])
+        end
+        if ir !== nothing
+            variable = selectdim(variable, 4, kwargs[:ir])
+        end
+        if iz !== nothing
+            variable = selectdim(variable, 3, kwargs[:iz])
+        end
+        if ivperp !== nothing
+            variable = selectdim(variable, 2, kwargs[:ivperp])
+        end
+        if ivpa !== nothing
+            variable = selectdim(variable, 1, kwargs[:ivpa])
+        end
+
+        return variable
+    end
+
+    # Select a slice of a neutral distribution function sized variable
+    function select_slice_of_variable(variable::AbstractArray{T,7} where T; it=nothing,
+                                      is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                                      ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                                      ivz=nothing)
+        if it !== nothing
+            variable = selectdim(variable, 7, kwargs[:it])
+        end
+        if is !== nothing
+            variable = selectdim(variable, 6, kwargs[:is])
+        end
+        if ir !== nothing
+            variable = selectdim(variable, 5, kwargs[:ir])
+        end
+        if iz !== nothing
+            variable = selectdim(variable, 4, kwargs[:iz])
+        end
+        if ivzeta !== nothing
+            variable = selectdim(variable, 3, kwargs[:ivzeta])
+        end
+        if ivr !== nothing
+            variable = selectdim(variable, 2, kwargs[:ivr])
+        end
+        if ivz !== nothing
+            variable = selectdim(variable, 1, kwargs[:ivz])
+        end
+
+        return variable
+    end
+
     if variable_name == "temperature"
         vth = postproc_load_variable(run_info, "thermal_speed"; kwargs...)
         variable = vth.^2
@@ -2962,14 +3035,16 @@ function get_variable(run_info, variable_name; kwargs...)
         cs = get_variable(run_info, "sound_speed"; kwargs...)
         variable = upar ./ cs
     elseif variable_name == "z_advect_speed"
-        upar = get_variable(run_info, "parallel_flow"; kwargs...)
-        vth = get_variable(run_info, "thermal_speed"; kwargs...)
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        upar = get_variable(run_info, "parallel_flow")
+        vth = get_variable(run_info, "thermal_speed")
         nz, nr, nspecies, nt = size(upar)
         nvperp = run_info.vperp.n
         nvpa = run_info.vpa.n
 
         speed = allocate_float(nz, nvpa, nvperp, nr, nspecies, nt)
-        Er = get_variable(run_info, "Er"; kwargs...)
+        Er = get_variable(run_info, "Er")
 
         setup_distributed_memory_MPI(1,1,1,1)
         setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
@@ -2990,28 +3065,53 @@ function get_variable(run_info, variable_name; kwargs...)
         # Horrible hack so that we can get the speed back without rearranging the
         # dimensions, if we want that to pass it to a utility function from the main code
         # (e.g. to calculate a CFL limit).
-        if :normalize_advection_speed_shape ∈ keys(kwargs) && !(kwargs[:normalize_shape] == false)
+        if normalize_advection_speed_shape
             variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
             for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
                 variable[ivpa,ivperp,iz,ir,is,it] = speed[iz,ivpa,ivperp,ir,is,it]
             end
+            variable = select_slice_of_variable(variable; kwargs...)
         else
             variable = speed
+            if :it ∈ keys(kwargs)
+                variable = selectdim(variable, 6, kwargs[:it])
+            end
+            if :is ∈ keys(kwargs)
+                variable = selectdim(variable, 5, kwargs[:is])
+            end
+            if :ir ∈ keys(kwargs)
+                variable = selectdim(variable, 4, kwargs[:ir])
+            end
+            if :ivperp ∈ keys(kwargs)
+                variable = selectdim(variable, 3, kwargs[:ivperp])
+            end
+            if :ivpa ∈ keys(kwargs)
+                variable = selectdim(variable, 2, kwargs[:ivpa])
+            end
+            if :iz ∈ keys(kwargs)
+                variable = selectdim(variable, 1, kwargs[:iz])
+            end
         end
     elseif variable_name == "vpa_advect_speed"
-        Ez = get_variable(run_info, "Ez"; kwargs...)
-        density = get_variable(run_info, "density"; kwargs...)
-        upar = get_variable(run_info, "parallel_flow"; kwargs...)
-        ppar = get_variable(run_info, "parallel_pressure"; kwargs...)
-        density_neutral = get_variable(run_info, "density_neutral"; kwargs...)
-        uz_neutral = get_variable(run_info, "uz_neutral"; kwargs...)
-        pz_neutral = get_variable(run_info, "pz_neutral"; kwargs...)
-        vth = get_variable(run_info, "thermal_speed"; kwargs...)
-        dupar_dz = get_z_derivative(run_info, "parallel_flow"; kwargs...)
-        dppar_dz = get_z_derivative(run_info, "parallel_pressure"; kwargs...)
-        dvth_dz = get_z_derivative(run_info, "thermal_speed"; kwargs...)
-        dqpar_dz = get_z_derivative(run_info, "parallel_heat_flux"; kwargs...)
-        external_source_amplitude = get_variable(run_info, "external_source_amplitude"; kwargs...)
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        Ez = get_variable(run_info, "Ez")
+        density = get_variable(run_info, "density")
+        upar = get_variable(run_info, "parallel_flow")
+        ppar = get_variable(run_info, "parallel_pressure")
+        density_neutral = get_variable(run_info, "density_neutral")
+        uz_neutral = get_variable(run_info, "uz_neutral")
+        pz_neutral = get_variable(run_info, "pz_neutral")
+        vth = get_variable(run_info, "thermal_speed")
+        dupar_dz = get_z_derivative(run_info, "parallel_flow")
+        dppar_dz = get_z_derivative(run_info, "parallel_pressure")
+        dvth_dz = get_z_derivative(run_info, "thermal_speed")
+        dqpar_dz = get_z_derivative(run_info, "parallel_heat_flux")
+        if run_info.external_source_settings.ion.active
+            external_source_amplitude = get_variable(run_info, "external_source_amplitude")
+        else
+            external_source_amplitude = zeros(0,0,run_info.nt)
+        end
 
         nz, nr, nspecies, nt = size(vth)
         nvperp = run_info.vperp.n
@@ -3051,9 +3151,12 @@ function get_variable(run_info, variable_name; kwargs...)
         end
 
         variable = speed
+        variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == "neutral_z_advect_speed"
-        uz = get_variable(run_info, "parallel_flow"; kwargs...)
-        vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        uz = get_variable(run_info, "parallel_flow")
+        vth = get_variable(run_info, "thermal_speed_neutral")
         nz, nr, nspecies, nt = size(uz)
         nvzeta = run_info.vzeta.n
         nvr = run_info.vr.n
@@ -3077,28 +3180,56 @@ function get_variable(run_info, variable_name; kwargs...)
         # Horrible hack so that we can get the speed back without rearranging the
         # dimensions, if we want that to pass it to a utility function from the main code
         # (e.g. to calculate a CFL limit).
-        if :normalize_advection_speed_shape ∈ keys(kwargs) && !(kwargs[:normalize_shape] == false)
+        if normalize_advection_speed_shape
             variable = allocate_float(nvz, nvr, nvzeta, nz, nr, nspecies, nt)
             for it ∈ 1:nt, isn ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivzeta ∈ 1:nvzeta, ivr ∈ 1:nvr, ivz ∈ 1:nvz
                 variable[ivz,ivr,ivzeta,iz,ir,isn,it] = speed[iz,ivz,ivr,ivzeta,ir,isn,it]
             end
+            variable = select_slice_of_variable(variable; kwargs...)
         else
             variable = speed
+            if :it ∈ keys(kwargs)
+                variable = selectdim(variable, 7, kwargs[:it])
+            end
+            if :is ∈ keys(kwargs)
+                variable = selectdim(variable, 6, kwargs[:is])
+            end
+            if :ir ∈ keys(kwargs)
+                variable = selectdim(variable, 5, kwargs[:ir])
+            end
+            if :ivzeta ∈ keys(kwargs)
+                variable = selectdim(variable, 4, kwargs[:ivzeta])
+            end
+            if :ivr ∈ keys(kwargs)
+                variable = selectdim(variable, 3, kwargs[:ivr])
+            end
+            if :ivz ∈ keys(kwargs)
+                variable = selectdim(variable, 2, kwargs[:ivz])
+            end
+            if :iz ∈ keys(kwargs)
+                variable = selectdim(variable, 1, kwargs[:iz])
+            end
         end
     elseif variable_name == "neutral_vz_advect_speed"
-        Ez = get_variable(run_info, "Ez"; kwargs...)
-        density = get_variable(run_info, "density"; kwargs...)
-        upar = get_variable(run_info, "parallel_flow"; kwargs...)
-        ppar = get_variable(run_info, "parallel_pressure"; kwargs...)
-        density_neutral = get_variable(run_info, "density_neutral"; kwargs...)
-        uz_neutral = get_variable(run_info, "uz_neutral"; kwargs...)
-        pz_neutral = get_variable(run_info, "pz_neutral"; kwargs...)
-        vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
-        duz_dz = get_z_derivative(run_info, "uz_neutral"; kwargs...)
-        dpz_dz = get_z_derivative(run_info, "pz_neutral"; kwargs...)
-        dvth_dz = get_z_derivative(run_info, "thermal_speed_neutral"; kwargs...)
-        dqz_dz = get_z_derivative(run_info, "qz_neutral"; kwargs...)
-        external_source_amplitude = get_variable(run_info, "external_source_amplitude"; kwargs...)
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        Ez = get_variable(run_info, "Ez")
+        density = get_variable(run_info, "density")
+        upar = get_variable(run_info, "parallel_flow")
+        ppar = get_variable(run_info, "parallel_pressure")
+        density_neutral = get_variable(run_info, "density_neutral")
+        uz_neutral = get_variable(run_info, "uz_neutral")
+        pz_neutral = get_variable(run_info, "pz_neutral")
+        vth = get_variable(run_info, "thermal_speed_neutral")
+        duz_dz = get_z_derivative(run_info, "uz_neutral")
+        dpz_dz = get_z_derivative(run_info, "pz_neutral")
+        dvth_dz = get_z_derivative(run_info, "thermal_speed_neutral")
+        dqz_dz = get_z_derivative(run_info, "qz_neutral")
+        if run_info.external_source_settings.neutral.active
+            external_source_amplitude = get_variable(run_info, "external_source_neutral_amplitude")
+        else
+            external_source_amplitude = zeros(0,0,run_info.nt)
+        end
 
         nz, nr, nspecies, nt = size(vth)
         nvzeta = run_info.vzeta.n
@@ -3138,6 +3269,7 @@ function get_variable(run_info, variable_name; kwargs...)
         end
 
         variable = speed
+        variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == "steps_per_output"
         steps_per_output = get_variable(run_info, "step_counter"; kwargs...)
         for i ∈ length(steps_per_output):-1:2
@@ -3171,6 +3303,128 @@ function get_variable(run_info, variable_name; kwargs...)
             # Don't want a meaningless Inf...
             variable[1] = 0.0
         end
+    elseif variable_name == "CFL_ion_z"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "z_advect_speed";
+                             normalize_advection_speed_shape=false)
+        nz, nvpa, nvperp, nr, nspecies, nt = size(speed)
+        CFL = similar(speed)
+        for it ∈ 1:nt
+            @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.z)
+        end
+
+        variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
+        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
+            variable[ivpa,ivperp,iz,ir,is,it] = CFL[iz,ivpa,ivperp,ir,is,it]
+        end
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "CFL_ion_vpa"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "vpa_advect_speed")
+        nt = size(speed, 6)
+        CFL = similar(speed)
+        for it ∈ 1:nt
+            @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.vpa)
+        end
+
+        variable = CFL
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "CFL_neutral_z"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "neutral_z_advect_speed";
+                             normalize_advection_speed_shape=false)
+        nz, nvz, nvr, nvzeta, nr, nspecies, nt = size(speed)
+        CFL = similar(speed)
+        for it ∈ 1:nt
+            @views get_CFL!(CFL[:,:,:,:,:,:,it], speed[:,:,:,:,:,:,it], run_info.z)
+        end
+
+        variable = allocate_float(nvz, nvr, nvzeta, nz, nr, nspecies, nt)
+        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivzeta ∈ 1:nvzeta, ivr ∈ 1:nvr, ivz ∈ 1:nvz
+            variable[ivz,ivr,ivzeta,iz,ir,is,it] = CFL[iz,ivz,ivr,ivzeta,ir,is,it]
+        end
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "CFL_neutral_vz"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "neutral_vz_advect_speed")
+        nt = size(speed, 7)
+        CFL = similar(speed)
+        for it ∈ 1:nt
+            @views get_CFL!(CFL[:,:,:,:,:,:,it], speed[:,:,:,:,:,:,it], run_info.vz)
+        end
+
+        variable = CFL
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "minimum_CFL_ion_z"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "z_advect_speed";
+                             normalize_advection_speed_shape=false)
+        nt = size(speed, 6)
+        nspecies = size(speed, 5)
+        variable = allocate_float(nt)
+        begin_serial_region()
+        for it ∈ 1:nt
+            min_CFL = Inf
+            for is ∈ 1:nspecies
+                min_CFL = min(min_CFL, get_minimum_CFL_z(@view(speed[:,:,:,:,is,it]), run_info.z))
+            end
+            variable[it] = min_CFL
+        end
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "minimum_CFL_ion_vpa"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "vpa_advect_speed")
+        nt = size(speed, 6)
+        nspecies = size(speed, 5)
+        variable = allocate_float(nt)
+        begin_serial_region()
+        for it ∈ 1:nt
+            min_CFL = Inf
+            for is ∈ 1:nspecies
+                min_CFL = min(min_CFL, get_minimum_CFL_vpa(@view(speed[:,:,:,:,is,it]), run_info.vpa))
+            end
+            variable[it] = min_CFL
+        end
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "minimum_CFL_neutral_z"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "neutral_z_advect_speed";
+                             normalize_advection_speed_shape=false)
+        nt = size(speed, 7)
+        nspecies = size(speed, 6)
+        variable = allocate_float(nt)
+        begin_serial_region()
+        for it ∈ 1:nt
+            min_CFL = Inf
+            for isn ∈ 1:nspecies
+                min_CFL = min(min_CFL, get_minimum_CFL_neutral_z(@view(speed[:,:,:,:,:,isn,it]), run_info.z))
+            end
+            variable[it] = min_CFL
+        end
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "minimum_CFL_neutral_vz"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "neutral_vz_advect_speed")
+        nt = size(speed, 7)
+        nspecies = size(speed, 6)
+        variable = allocate_float(nt)
+        begin_serial_region()
+        for it ∈ 1:nt
+            min_CFL = Inf
+            for isn ∈ 1:nspecies
+                min_CFL = min(min_CFL, get_minimum_CFL_neutral_vz(@view(speed[:,:,:,:,:,isn,it]), run_info.vz))
+            end
+            variable[it] = min_CFL
+        end
+        variable = select_slice_of_variable(variable; kwargs...)
     else
         variable = postproc_load_variable(run_info, variable_name; kwargs...)
     end
