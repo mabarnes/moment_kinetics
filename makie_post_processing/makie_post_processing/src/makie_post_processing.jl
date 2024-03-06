@@ -3175,19 +3175,19 @@ function select_slice(variable::AbstractArray{T,6}, dims::Symbol...; input=nothi
     else
         iz0 = input.iz0
     end
-    if ivpa !== nothing
-        ivpa0 = ivpa
-    elseif input === nothing || :ivpa0 ∉ input
-        ivpa0 = max(size(variable, 2) ÷ 3, 1)
-    else
-        ivpa0 = input.ivpa0
-    end
     if ivperp !== nothing
         ivperp0 = ivperp
     elseif input === nothing || :ivperp0 ∉ input
-        ivperp0 = max(size(variable, 1) ÷ 3, 1)
+        ivperp0 = max(size(variable, 2) ÷ 3, 1)
     else
         ivperp0 = input.ivperp0
+    end
+    if ivpa !== nothing
+        ivpa0 = ivpa
+    elseif input === nothing || :ivpa0 ∉ input
+        ivpa0 = max(size(variable, 1) ÷ 3, 1)
+    else
+        ivpa0 = input.ivpa0
     end
 
     slice = variable
