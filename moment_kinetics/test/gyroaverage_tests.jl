@@ -25,45 +25,48 @@ function runtests()
     # functionality to change rhostar and vperp_max = Lvperp and the pitch = bzed is provided
     # the test could be sped up by moving lists of kz and kr inside the gyroaverage_test() function, 
     # so that the gyromatrix does not have to be reinitialised
-    @testset " - test real-space path-integral gyroaverage (periodic functions)" begin
-        ngrid_vperp = 3
-        ngrid = 5; nelement = 4; ngrid_gyrophase = 100
-        z_bc = "periodic"; r_bc = "periodic"
-        kr = 1; kz = 1; Lvperp = 3.0; pitch = 0.5; rhostar = 0.1; phaser = 0.0; phasez = 0.0
-        @testset "kr $kr kz $kz vperpmax $Lvperp rhostar $rhostar phaser $phaser phasez $phasez" begin
-            absolute_error = 2.0e-4
-            gyroaverage_test(absolute_error; rhostar=rhostar, pitch=pitch, ngrid=ngrid, kr=kr, kz=kz, phaser=phaser, phasez=phasez, nelement=nelement, ngrid_vperp=ngrid_vperp, nelement_vperp=1, Lvperp=Lvperp, ngrid_gyrophase=ngrid_gyrophase, discretization="chebyshev_pseudospectral", r_bc=r_bc, z_bc=z_bc)
-        end
-        kr = 1; kz = 3; Lvperp = 3.0; pitch = 0.5; rhostar = 0.1; phaser = 0.0; phasez = 0.0
-        @testset "kr $kr kz $kz vperpmax $Lvperp rhostar $rhostar phaser $phaser phasez $phasez" begin
-            absolute_error = 2.0e-2
-            gyroaverage_test(absolute_error; rhostar=rhostar, pitch=pitch, ngrid=ngrid, kr=kr, kz=kz, phaser=phaser, phasez=phasez, nelement=nelement, ngrid_vperp=ngrid_vperp, nelement_vperp=1, Lvperp=Lvperp, ngrid_gyrophase=ngrid_gyrophase, discretization="chebyshev_pseudospectral", r_bc=r_bc, z_bc=z_bc)
-        end
-        kr = 3; kz = 1; Lvperp = 3.0; pitch = 0.5; rhostar = 0.1; phaser = 0.0; phasez = 0.0
-        @testset "kr $kr kz $kz vperpmax $Lvperp rhostar $rhostar phaser $phaser phasez $phasez" begin
-            absolute_error = 2.0e-2
-            gyroaverage_test(absolute_error; rhostar=rhostar, pitch=pitch, ngrid=ngrid, kr=kr, kz=kz, phaser=phaser, phasez=phasez, nelement=nelement, ngrid_vperp=ngrid_vperp, nelement_vperp=1, Lvperp=Lvperp, ngrid_gyrophase=ngrid_gyrophase, discretization="chebyshev_pseudospectral", r_bc=r_bc, z_bc=z_bc)
-        end
-        ngrid = 5; nelement = 32; ngrid_gyrophase = 100
-        z_bc = "periodic"; r_bc = "periodic"
-        kr = 1; kz = 1; Lvperp = 3.0; pitch = 0.5; rhostar = 0.1; phaser = 0.0; phasez = 0.0
-        @testset "kr $kr kz $kz vperpmax $Lvperp rhostar $rhostar phaser $phaser phasez $phasez" begin
-            absolute_error = 2.0e-7
-            gyroaverage_test(absolute_error; rhostar=rhostar, pitch=pitch, ngrid=ngrid, kr=kr, kz=kz, phaser=phaser, phasez=phasez, nelement=nelement, ngrid_vperp=ngrid_vperp, nelement_vperp=1, Lvperp=Lvperp, ngrid_gyrophase=ngrid_gyrophase, discretization="chebyshev_pseudospectral", r_bc=r_bc, z_bc=z_bc)
-        end
-        ngrid = 5; nelement = 32; ngrid_gyrophase = 100
-        z_bc = "periodic"; r_bc = "periodic"
-        kr = 1; kz = 3; Lvperp = 3.0; pitch = 0.5; rhostar = 0.1; phaser = 0.0; phasez = 0.0
-        @testset "kr $kr kz $kz vperpmax $Lvperp rhostar $rhostar phaser $phaser phasez $phasez" begin
-            absolute_error = 5.0e-6
-            gyroaverage_test(absolute_error; rhostar=rhostar, pitch=pitch, ngrid=ngrid, kr=kr, kz=kz, phaser=phaser, phasez=phasez, nelement=nelement, ngrid_vperp=ngrid_vperp, nelement_vperp=1, Lvperp=Lvperp, ngrid_gyrophase=ngrid_gyrophase, discretization="chebyshev_pseudospectral", r_bc=r_bc, z_bc=z_bc)
-        end
-        ngrid = 5; nelement = 32; ngrid_gyrophase = 100
-        z_bc = "periodic"; r_bc = "periodic"
-        kr = 3; kz = 1; Lvperp = 3.0; pitch = 0.5; rhostar = 0.1; phaser = 0.0; phasez = 0.0
-        @testset "kr $kr kz $kz vperpmax $Lvperp rhostar $rhostar phaser $phaser phasez $phasez" begin
-            absolute_error = 5.0e-6
-            gyroaverage_test(absolute_error; rhostar=rhostar, pitch=pitch, ngrid=ngrid, kr=kr, kz=kz, phaser=phaser, phasez=phasez, nelement=nelement, ngrid_vperp=ngrid_vperp, nelement_vperp=1, Lvperp=Lvperp, ngrid_gyrophase=ngrid_gyrophase, discretization="chebyshev_pseudospectral", r_bc=r_bc, z_bc=z_bc)
+    @testset "Gyroaverage tests" verbose=use_verbose begin
+        println("Gyroaverages test")
+        @testset " - test real-space path-integral gyroaverage (periodic functions)" begin
+            ngrid_vperp = 3
+            ngrid = 5; nelement = 4; ngrid_gyrophase = 100
+            z_bc = "periodic"; r_bc = "periodic"
+            kr = 1; kz = 1; Lvperp = 3.0; pitch = 0.5; rhostar = 0.1; phaser = 0.0; phasez = 0.0
+            @testset "kr $kr kz $kz vperpmax $Lvperp rhostar $rhostar phaser $phaser phasez $phasez" begin
+                absolute_error = 2.0e-4
+                gyroaverage_test(absolute_error; rhostar=rhostar, pitch=pitch, ngrid=ngrid, kr=kr, kz=kz, phaser=phaser, phasez=phasez, nelement=nelement, ngrid_vperp=ngrid_vperp, nelement_vperp=1, Lvperp=Lvperp, ngrid_gyrophase=ngrid_gyrophase, discretization="chebyshev_pseudospectral", r_bc=r_bc, z_bc=z_bc)
+            end
+            kr = 1; kz = 3; Lvperp = 3.0; pitch = 0.5; rhostar = 0.1; phaser = 0.0; phasez = 0.0
+            @testset "kr $kr kz $kz vperpmax $Lvperp rhostar $rhostar phaser $phaser phasez $phasez" begin
+                absolute_error = 2.0e-2
+                gyroaverage_test(absolute_error; rhostar=rhostar, pitch=pitch, ngrid=ngrid, kr=kr, kz=kz, phaser=phaser, phasez=phasez, nelement=nelement, ngrid_vperp=ngrid_vperp, nelement_vperp=1, Lvperp=Lvperp, ngrid_gyrophase=ngrid_gyrophase, discretization="chebyshev_pseudospectral", r_bc=r_bc, z_bc=z_bc)
+            end
+            kr = 3; kz = 1; Lvperp = 3.0; pitch = 0.5; rhostar = 0.1; phaser = 0.0; phasez = 0.0
+            @testset "kr $kr kz $kz vperpmax $Lvperp rhostar $rhostar phaser $phaser phasez $phasez" begin
+                absolute_error = 2.0e-2
+                gyroaverage_test(absolute_error; rhostar=rhostar, pitch=pitch, ngrid=ngrid, kr=kr, kz=kz, phaser=phaser, phasez=phasez, nelement=nelement, ngrid_vperp=ngrid_vperp, nelement_vperp=1, Lvperp=Lvperp, ngrid_gyrophase=ngrid_gyrophase, discretization="chebyshev_pseudospectral", r_bc=r_bc, z_bc=z_bc)
+            end
+            ngrid = 5; nelement = 32; ngrid_gyrophase = 100
+            z_bc = "periodic"; r_bc = "periodic"
+            kr = 1; kz = 1; Lvperp = 3.0; pitch = 0.5; rhostar = 0.1; phaser = 0.0; phasez = 0.0
+            @testset "kr $kr kz $kz vperpmax $Lvperp rhostar $rhostar phaser $phaser phasez $phasez" begin
+                absolute_error = 2.0e-7
+                gyroaverage_test(absolute_error; rhostar=rhostar, pitch=pitch, ngrid=ngrid, kr=kr, kz=kz, phaser=phaser, phasez=phasez, nelement=nelement, ngrid_vperp=ngrid_vperp, nelement_vperp=1, Lvperp=Lvperp, ngrid_gyrophase=ngrid_gyrophase, discretization="chebyshev_pseudospectral", r_bc=r_bc, z_bc=z_bc)
+            end
+            ngrid = 5; nelement = 32; ngrid_gyrophase = 100
+            z_bc = "periodic"; r_bc = "periodic"
+            kr = 1; kz = 3; Lvperp = 3.0; pitch = 0.5; rhostar = 0.1; phaser = 0.0; phasez = 0.0
+            @testset "kr $kr kz $kz vperpmax $Lvperp rhostar $rhostar phaser $phaser phasez $phasez" begin
+                absolute_error = 5.0e-6
+                gyroaverage_test(absolute_error; rhostar=rhostar, pitch=pitch, ngrid=ngrid, kr=kr, kz=kz, phaser=phaser, phasez=phasez, nelement=nelement, ngrid_vperp=ngrid_vperp, nelement_vperp=1, Lvperp=Lvperp, ngrid_gyrophase=ngrid_gyrophase, discretization="chebyshev_pseudospectral", r_bc=r_bc, z_bc=z_bc)
+            end
+            ngrid = 5; nelement = 32; ngrid_gyrophase = 100
+            z_bc = "periodic"; r_bc = "periodic"
+            kr = 3; kz = 1; Lvperp = 3.0; pitch = 0.5; rhostar = 0.1; phaser = 0.0; phasez = 0.0
+            @testset "kr $kr kz $kz vperpmax $Lvperp rhostar $rhostar phaser $phaser phasez $phasez" begin
+                absolute_error = 5.0e-6
+                gyroaverage_test(absolute_error; rhostar=rhostar, pitch=pitch, ngrid=ngrid, kr=kr, kz=kz, phaser=phaser, phasez=phasez, nelement=nelement, ngrid_vperp=ngrid_vperp, nelement_vperp=1, Lvperp=Lvperp, ngrid_gyrophase=ngrid_gyrophase, discretization="chebyshev_pseudospectral", r_bc=r_bc, z_bc=z_bc)
+            end
         end
     end
 end
