@@ -2031,7 +2031,7 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                                       frame_index)
                          subtitles = nothing
                      end
-                     fig, ax, colorbar_places = get_2d_ax(length(run_info),
+                     fig, ax, colorbar_places = get_2d_ax(length(run_info);
                                                           title=title,
                                                           subtitles=subtitles,
                                                           axis_args...)
