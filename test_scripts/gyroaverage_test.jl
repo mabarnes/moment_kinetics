@@ -13,7 +13,8 @@ using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.geo: init_magnetic_geometry
 using moment_kinetics.communication
 using moment_kinetics.looping
-using moment_kinetics.array_allocation: allocate_float
+using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
+using moment_kinetics.gyroaverages: gyroaverage_pdf!
 using moment_kinetics.gyroaverages: gyroaverage_field!, init_gyro_operators
 using moment_kinetics.type_definitions: mk_float, mk_int
 
@@ -38,7 +39,7 @@ function print_matrix(matrix,name::String,n::mk_int,m::mk_int)
     end
 
 
-function gyroaverage_test(;rhostar=0.1, pitch=0.5, ngrid=5, kr=2, kz=2, phaser=0.0, phasez=0.0, nelement=4, ngrid_vperp=3, nelement_vperp=1, Lvperp=3.0, ngrid_gyrophase=100, discretization="chebyshev_pseudospectral", r_bc="periodic", z_bc = "wall")
+function gyroaverage_test(;rhostar=0.1, pitch=0.5, ngrid=5, kr=2, kz=2, phaser=0.0, phasez=0.0, nelement=4, ngrid_vperp=3, nelement_vperp=1, Lvperp=3.0, ngrid_gyrophase=100, discretization="chebyshev_pseudospectral", r_bc="periodic", z_bc = "wall", plot_test_results=false)
 
         #ngrid = 17
         #nelement = 4
@@ -57,6 +58,12 @@ function gyroaverage_test(;rhostar=0.1, pitch=0.5, ngrid=5, kr=2, kz=2, phaser=0
         vperp_nelement_global = vperp_nelement_local # total number of elements 
         vperp_L = Lvperp
         vperp_bc = "zero"
+        
+        vpa_ngrid = 1 #number of points per element 
+        vpa_nelement_local = 1 # number of elements per rank
+        vpa_nelement_global = vpa_nelement_local # total number of elements 
+        vpa_L = 1.0
+        vpa_bc = "" # should not be used
         
         gyrophase_ngrid = ngrid_gyrophase #number of points per element 
         gyrophase_nelement_local = 1 # number of elements per rank
@@ -81,6 +88,8 @@ function gyroaverage_test(;rhostar=0.1, pitch=0.5, ngrid=5, kr=2, kz=2, phaser=0
                 nrank, irank, z_L, discretization, fd_option, cheb_option, z_bc, adv_input,comm,element_spacing_option)
         vperp_input = grid_input("vperp", vperp_ngrid, vperp_nelement_global, vperp_nelement_local, 
                 nrank, irank, vperp_L, discretization, fd_option, cheb_option, vperp_bc, adv_input,comm,element_spacing_option)
+        vpa_input = grid_input("vpa", vpa_ngrid, vpa_nelement_global, vpa_nelement_local, 
+                nrank, irank, vpa_L, discretization, fd_option, cheb_option, vpa_bc, adv_input,comm,element_spacing_option)
         gyrophase_input = grid_input("gyrophase", gyrophase_ngrid, gyrophase_nelement_global, gyrophase_nelement_local, 
                 nrank, irank, gyrophase_L, gyrophase_discretization, fd_option, cheb_option, "periodic", adv_input,comm,element_spacing_option)
         
@@ -88,6 +97,7 @@ function gyroaverage_test(;rhostar=0.1, pitch=0.5, ngrid=5, kr=2, kz=2, phaser=0
         r, r_spectral = define_coordinate(r_input,init_YY=false)
         z, z_spectral = define_coordinate(z_input,init_YY=false)
         vperp, vperp_spectral = define_coordinate(vperp_input,init_YY=false)
+        vpa, vpa_spectral = define_coordinate(vpa_input,init_YY=false)
         gyrophase, gyrophase_spectral = define_coordinate(gyrophase_input,init_YY=false)
         
         # create test geometry
@@ -105,49 +115,80 @@ function gyroaverage_test(;rhostar=0.1, pitch=0.5, ngrid=5, kr=2, kz=2, phaser=0
         initialize_comms!()
         setup_distributed_memory_MPI(1,1,1,1)
         looping.setup_loop_ranges!(block_rank[], block_size[];
-                                       s=1, sn=1,
-                                       r=r.n, z=z.n, vperp=vperp.n, vpa=1,
+                                       s=composition.n_ion_species, sn=1,
+                                       r=r.n, z=z.n, vperp=vperp.n, vpa=vpa.n,
                                        vzeta=1, vr=1, vz=1)
                                        
         # initialise the matrix for the gyroaverages
         gyro = init_gyro_operators(vperp,z,r,gyrophase,geometry,composition)
         # initialise a test field
-        phi = allocate_float(z.n,r.n)
-        gphi = allocate_float(vperp.n,z.n,r.n)
+        phi = allocate_shared_float(z.n,r.n)
+        gphi = allocate_shared_float(vperp.n,z.n,r.n)
         gphi_exact = allocate_float(vperp.n,z.n,r.n)
         gphi_err = allocate_float(vperp.n,z.n,r.n)
-        fill_test_arrays!(phi,gphi_exact,vperp,z,r,geometry,kz,kr,phasez,phaser)
-        #for ir in 1:r.n
-        #    for iz in 1:z.n
-        #        for ivperp in 1:vperp.n
-        #print_matrix(gyro.gyromatrix[:,:,vperp.n,Int(floor(z.n/2)),Int(floor(r.n/2))],"gmatrix",z.n,r.n)
-                    #print_matrix(gyro.gyromatrix[:,:,ivperp,iz,ir],"gmatrix_ivperp_"*string(ivperp)*"_iz_"*string(iz)*"_ir_"*string(ir),z.n,r.n)
-        #        end
-        #    end
-        #end
-        #println(maximum(abs.(gyro.gyromatrix)))
-        #end
+        begin_serial_region()
+        @serial_region begin 
+            fill_test_arrays!(phi,gphi_exact,vperp,z,r,geometry,kz,kr,phasez,phaser)
+        end
         
         # gyroaverage phi
         gyroaverage_field!(gphi,phi,gyro,vperp,z,r)
+        
         # compute errors
-        @. gphi_err = abs(gphi - gphi_exact)
-        for ivperp in 1:vperp.n
-            println("ivperp: ",ivperp," max(abs(gphi_err)): ",maximum(gphi_err[ivperp,:,:])," max(abs(gphi)): ",maximum(gphi[ivperp,:,:]))
+        begin_serial_region()
+        @serial_region begin
+            @. gphi_err = abs(gphi - gphi_exact)
+            println("Test gyroaverage_field!()")
+            for ivperp in 1:vperp.n
+                println("ivperp: ",ivperp," max(abs(gphi_err)): ",maximum(gphi_err[ivperp,:,:])," max(abs(gphi)): ",maximum(gphi[ivperp,:,:]))
+            end
+            println("")
+            if plot_test_results
+                @views heatmap(r.grid, z.grid, phi[:,:], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
+                    windowsize = (360,240), margin = 15pt)
+                outfile = "phi_vs_r_z.pdf"
+                savefig(outfile)
+                println("Saved outfile: "*outfile)
+                for ivperp in 1:vperp.n
+                    @views heatmap(r.grid, z.grid, gphi[ivperp,:,:], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
+                        windowsize = (360,240), margin = 15pt)
+                    outfile = "gphi_ivperp_"*string(ivperp)*"_vs_r_z.pdf"
+                    savefig(outfile)
+                    println("Saved outfile: "*outfile)
+                end
+            end
         end
         
-        @views heatmap(r.grid, z.grid, phi[:,:], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
-			windowsize = (360,240), margin = 15pt)
-        outfile = "phi_vs_r_z.pdf"
-        savefig(outfile)
-        println("Saved outfile: "*outfile)
-        for ivperp in 1:vperp.n
-            @views heatmap(r.grid, z.grid, gphi[ivperp,:,:], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-            outfile = "gphi_ivperp_"*string(ivperp)*"_vs_r_z.pdf"
-            savefig(outfile)
-            println("Saved outfile: "*outfile)
+        # repeat the test for a pdf
+        # initialise a test field
+        nvpa = 1
+        n_ion_species = composition.n_ion_species
+        pdf = allocate_shared_float(nvpa,vperp.n,z.n,r.n,n_ion_species)
+        gpdf = allocate_shared_float(nvpa,vperp.n,z.n,r.n,n_ion_species)
+        gpdf_exact = allocate_float(nvpa,vperp.n,z.n,r.n,n_ion_species)
+        gpdf_err = allocate_float(nvpa,vperp.n,z.n,r.n,n_ion_species)
+        begin_serial_region()
+        @serial_region begin
+            fill_pdf_test_arrays!(pdf,gpdf_exact,vpa,vperp,z,r,composition,geometry,kz,kr,phasez,phaser)
         end
+        
+        gyroaverage_pdf!(gpdf,pdf,gyro,vpa,vperp,z,r,composition)
+        # compute errors
+        begin_serial_region()
+        @serial_region begin
+            @. gpdf_err = abs(gpdf - gpdf_exact)
+            println("Test gyroaverage_pdf!()")
+            for is in 1:n_ion_species
+                for ivperp in 1:vperp.n
+                    for ivpa in 1:nvpa
+                        println("ivpa: ",ivpa," ivperp: ",ivperp," is: ",is," max(abs(gphi_err)): ",maximum(gpdf_err[ivpa,ivperp,:,:,is]),
+                         " max(abs(gpdf)): ",maximum(gpdf[ivpa,ivperp,:,:,is]))
+                    end
+                end
+            end
+            println("")
+        end
+        
         finalize_comms!()
 end
 
@@ -196,6 +237,32 @@ function fill_test_arrays!(phi,gphi,vperp,z,r,geometry,kz,kr,phasez,phaser)
             gphi[ivperp,iz,ir] = besselj0(krho)*phi[iz,ir]
          end
       end
+   end  
+   return nothing
+end
+
+function fill_pdf_test_arrays!(pdf,gpdf,vpa,vperp,z,r,composition,geometry,kz,kr,phasez,phaser)
+   for is in 1:composition.n_ion_species
+       for ir in 1:r.n
+          for iz in 1:z.n
+             Bmag = geometry.Bmag[iz,ir] 
+             bzeta = geometry.bzeta[iz,ir] 
+             rhostar = geometry.rhostar 
+             # convert integer "wavenumbers" to actual wavenumbers 
+             kkr = 2.0*pi*kr/r.L
+             kkz = 2.0*pi*kz/z.L
+             kperp = sqrt(kkr^2 + (bzeta*kkz)^2)
+             
+             for ivperp in 1:vperp.n
+                for ivpa in 1:vpa.n
+                    pdf[ivpa,ivperp,iz,ir,is] = sin(r.grid[ir]*kkr + phaser)*sin(z.grid[iz]*kkz + phasez)
+                    krho = kperp*vperp.grid[ivperp]*rhostar/Bmag
+                    # use that pdf is a sum of Kronecker deltas in k space to write gpdf
+                    gpdf[ivpa,ivperp,iz,ir,is] = besselj0(krho)*pdf[ivpa,ivperp,iz,ir,is]
+                end
+             end
+          end
+       end
    end  
    return nothing
 end
