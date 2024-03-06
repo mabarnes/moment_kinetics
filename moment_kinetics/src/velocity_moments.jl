@@ -41,7 +41,7 @@ using ..communication
 using ..derivatives: derivative_z!
 using ..derivatives: derivative_r!
 using ..looping
-
+using ..gyroaverages: gyro_operators
 #global tmpsum1 = 0.0
 #global tmpsum2 = 0.0
 #global dens_hist = zeros(17,1)
@@ -486,8 +486,22 @@ end
 
 """
 calculate the updated density (dens) and parallel pressure (ppar) for all species
+this function is only used once after initialisation
+the function used to update moments at run time is update_derived_moments! in time_advance.jl
 """
-function update_moments!(moments, ff, vpa, vperp, z, r, composition)
+function update_moments!(moments, ff_in, gyroavs::gyro_operators, vpa, vperp, z, r, composition,
+        r_spectral, geometry, scratch_dummy, z_advect)
+    ff = scratch_dummy.buffer_vpavperpzs_1 # the buffer array for the charged pdf -> make sure not to reuse this array below
+    if composition.gyrokinetic_ions
+        # fill buffer with ring-averaged F (gyroaverage at fixed position)
+        gyroaverage_pdf!(ff,ff_in,gyroavs,vpa,vperp,z,r,composition)
+    else
+        # copy F into buffer (drift-kinetic)
+        begin_s_z_vperp_vpa_region()
+        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin 
+            ff[ivpa,ivperp,iz,ir,is] = ff_in[ivpa,ivperp,iz,ir,is]
+        end
+    end
     begin_s_r_z_region()
     n_species = size(ff,5)
     @boundscheck n_species == size(moments.charged.dens,3) || throw(BoundsError(moments))
@@ -529,6 +543,10 @@ function update_moments!(moments, ff, vpa, vperp, z, r, composition)
         end
     end
     update_vth!(moments.charged.vth, moments.charged.ppar, moments.charged.pperp, moments.charged.dens, vperp, z, r, composition)
+    # update the Chodura diagnostic -- note that the pdf should be the unnormalised one
+    # so this will break for the split moments cases
+    update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
+        
     return nothing
 end
 
@@ -850,8 +868,9 @@ in a single species plasma with Z = 1
 function update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
     @boundscheck composition.n_ion_species == size(ff, 5) || throw(BoundsError(ff))
     begin_s_z_vperp_vpa_region()
-    dffdr = scratch_dummy.buffer_vpavperpzrs_1
-    ff_dummy = scratch_dummy.buffer_vpavperpzrs_2
+    # use buffer_vpavperpzrs_2 here as buffer_vpavperpzrs_1 is in use storing ff
+    dffdr = scratch_dummy.buffer_vpavperpzrs_2 
+    ff_dummy = scratch_dummy.buffer_vpavperp_1
     if r.n > 1
     # first compute d f / d r using centred reconciliation and place in dummy array #1
     derivative_r!(dffdr, ff[:,:,:,:,:],
@@ -869,7 +888,7 @@ function update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometr
     if z.irank == 0
         @loop_s_r is ir begin
             @views moments.charged.chodura_integral_lower[ir,is] = update_chodura_integral_species!(ff[:,:,1,ir,is],dffdr[:,:,1,ir,is],
-            ff_dummy[:,:,1,ir,is],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[1,:,:,ir],moments.charged.dens[1,ir,is],del_vpa,1,ir)
+            ff_dummy[:,:],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[1,:,:,ir],moments.charged.dens[1,ir,is],del_vpa,1,ir)
         end
     else # we do not save this Chodura integral to the output file
         @loop_s_r is ir begin
@@ -879,7 +898,7 @@ function update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometr
     if z.irank == z.nrank - 1
         @loop_s_r is ir begin
             @views moments.charged.chodura_integral_upper[ir,is] = update_chodura_integral_species!(ff[:,:,end,ir,is],dffdr[:,:,end,ir,is],
-            ff_dummy[:,:,end,ir,is],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[end,:,:,ir],moments.charged.dens[end,ir,is],del_vpa,z.n,ir)
+            ff_dummy[:,:],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[end,:,:,ir],moments.charged.dens[end,ir,is],del_vpa,z.n,ir)
         end
     else # we do not save this Chodura integral to the output file
         @loop_s_r is ir begin

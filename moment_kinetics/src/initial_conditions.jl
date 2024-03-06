@@ -127,10 +127,12 @@ Allocate arrays for pdfs
 function create_pdf(composition, r, z, vperp, vpa, vzeta, vr, vz)
     # allocate pdf arrays
     pdf_charged_norm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, composition.n_ion_species)
+    # buffer array is for ion-neutral collisions, not for storing charged pdf
     pdf_charged_buffer = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, composition.n_neutral_species) # n.b. n_species is n_neutral_species here
     pdf_neutral_norm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, composition.n_neutral_species)
+    # buffer array is for neutral-ion collisions, not for storing neutral pdf
     pdf_neutral_buffer = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, composition.n_ion_species)
-
+    
     return pdf_struct(pdf_substruct(pdf_charged_norm, pdf_charged_buffer),
                       pdf_substruct(pdf_neutral_norm, pdf_neutral_buffer))
 

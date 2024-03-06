@@ -30,7 +30,7 @@ no contribution from outside of the domain
 
 function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition)
     gkions = composition.gyrokinetic_ions
-    if not gkions
+    if !gkions
         gyromatrix =  allocate_float(1,1,1,1,1)
         gyro = gyro_operators(gyromatrix)
     else
@@ -245,11 +245,11 @@ function gyroaverage_pdf!(gpdf_out,pdf_in,gyro,vpa,vperp,z,r,composition)
     
     begin_serial_region()
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-        gfield_out[ivpa,ivperp,iz,ir,is] = 0.0
+        gpdf_out[ivpa,ivperp,iz,ir,is] = 0.0
         # sum over all the contributions in the gyroaverage
         for irp in 1:nr
             for izp in 1:nz
-                gpdf_out[ivpa,ivperp,iz,ir,is] += gyromatrix[izp,irp,ivperp,iz,ir]*gpdf_in[ivpa,ivperp,izp,irp,is]
+                gpdf_out[ivpa,ivperp,iz,ir,is] += gyromatrix[izp,irp,ivperp,iz,ir]*pdf_in[ivpa,ivperp,izp,irp,is]
             end
         end
     end
