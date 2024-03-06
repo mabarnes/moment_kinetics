@@ -892,7 +892,6 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
         if n_neutral_species > 0
             n_failure_vars *= 2
         end
-        # Abuse the n_ion_species argument here to create a Vector variable
         io_failure_caused_by = create_dynamic_variable!(
             dynamic, "failure_caused_by", mk_int; diagnostic_var_size=n_failure_vars,
             parallel_io=parallel_io,

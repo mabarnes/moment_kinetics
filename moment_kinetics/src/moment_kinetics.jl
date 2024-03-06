@@ -60,10 +60,10 @@ include("force_balance.jl")
 include("source_terms.jl")
 include("numerical_dissipation.jl")
 include("moment_kinetics_input.jl")
+include("utils.jl")
 include("load_data.jl")
 include("parameter_scans.jl")
 include("analysis.jl")
-include("utils.jl")
 include("time_advance.jl")
 
 using TimerOutputs
