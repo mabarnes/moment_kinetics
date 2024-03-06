@@ -203,12 +203,13 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
 
         run_id = string(uuid4())
 
-        io_moments = setup_moments_io(out_prefix, io_input.binary_format, r, z,
-                                      composition, collisions, evolve_density,
-                                      evolve_upar, evolve_ppar, external_source_settings,
-                                      input_dict, io_input.parallel_io,
-                                      comm_inter_block[], run_id, restart_time_index,
-                                      previous_runs_info, time_for_setup)
+        io_moments = setup_moments_io(out_prefix, io_input.binary_format, vz, vr, vzeta,
+                                      vpa, vperp, r, z, composition, collisions,
+                                      evolve_density, evolve_upar, evolve_ppar,
+                                      external_source_settings, input_dict,
+                                      io_input.parallel_io, comm_inter_block[], run_id,
+                                      restart_time_index, previous_runs_info,
+                                      time_for_setup)
         io_dfns = setup_dfns_io(out_prefix, io_input.binary_format,
                                 boundary_distributions, r, z, vperp, vpa, vzeta, vr, vz,
                                 composition, collisions, evolve_density, evolve_upar,
@@ -442,9 +443,9 @@ end
 
 """
 Define coords group for coordinate information in the output file and write information
-about spatial coordinate grids
+about spatial and velocity space coordinate grids
 """
-function define_spatial_coordinates!(fid, z, r, parallel_io)
+function define_io_coordinates!(fid, vz, vr, vzeta, vpa, vperp, z, r, parallel_io)
     @serial_region begin
         # create the "coords" group that will contain coordinate information
         coords = create_io_group(fid, "coords")
@@ -481,18 +482,6 @@ function define_spatial_coordinates!(fid, z, r, parallel_io)
                                 parallel_io=parallel_io, description="number of zr blocks")
         end
 
-        return coords
-    end
-
-    # For processes other than the root process of each shared-memory group...
-    return nothing
-end
-
-"""
-Add to coords group in output file information about vspace coordinate grids
-"""
-function add_vspace_coordinates!(coords, vz, vr, vzeta, vpa, vperp, parallel_io)
-    @serial_region begin
         # create the "vz" sub-group of "coords" that will contain vz coordinate info,
         # including total number of grid points and grid point locations
         define_io_coordinate!(coords, vz, "vz", "velocity coordinate v_z", parallel_io)
@@ -1001,10 +990,11 @@ end
 """
 setup file i/o for moment variables
 """
-function setup_moments_io(prefix, binary_format, r, z, composition, collisions,
-                          evolve_density, evolve_upar, evolve_ppar,
-                          external_source_settings, input_dict, parallel_io, io_comm,
-                          run_id, restart_time_index, previous_runs_info, time_for_setup)
+function setup_moments_io(prefix, binary_format, vz, vr, vzeta, vpa, vperp, r, z,
+                          composition, collisions, evolve_density, evolve_upar,
+                          evolve_ppar, external_source_settings, input_dict, parallel_io,
+                          io_comm, run_id, restart_time_index, previous_runs_info,
+                          time_for_setup)
     @serial_region begin
         moments_prefix = string(prefix, ".moments")
         if !parallel_io
@@ -1027,7 +1017,7 @@ function setup_moments_io(prefix, binary_format, r, z, composition, collisions,
         write_input!(fid, input_dict, parallel_io)
 
         ### define coordinate dimensions ###
-        define_spatial_coordinates!(fid, z, r, parallel_io)
+        define_io_coordinates!(fid, vz, vr, vzeta, vpa, vperp, z, r, parallel_io)
 
         ### create variables for time-dependent quantities and store them ###
         ### in a struct for later access ###
@@ -1127,8 +1117,7 @@ function setup_dfns_io(prefix, binary_format, boundary_distributions, r, z, vper
                                       composition, z, vperp, vpa, vzeta, vr, vz)
 
         ### define coordinate dimensions ###
-        coords_group = define_spatial_coordinates!(fid, z, r, parallel_io)
-        add_vspace_coordinates!(coords_group, vz, vr, vzeta, vpa, vperp, parallel_io)
+        define_io_coordinates!(fid, vz, vr, vzeta, vpa, vperp, z, r, parallel_io)
 
         ### create variables for time-dependent quantities and store them ###
         ### in a struct for later access ###
@@ -1638,8 +1627,7 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
                            "This is a file containing debug output from the moment_kinetics code")
 
             ### define coordinate dimensions ###
-            coords_group = define_spatial_coordinates!(fid, z, r, false)
-            add_vspace_coordinates!(coords_group, vz, vr, vzeta, vpa, vperp, false)
+            define_io_coordinates!(fid, vz, vr, vzeta, vpa, vperp, z, r, false)
 
             ### create variables for time-dependent quantities and store them ###
             ### in a struct for later access ###

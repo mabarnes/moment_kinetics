@@ -2457,32 +2457,30 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         load_coordinate_data(file_final_restart, "r")
     r, r_spectral, z, z_spectral = construct_global_zr_coords(r_local, z_local)
 
-    if dfns
-        vperp, vperp_spectral, vperp_chunk_size =
-            load_coordinate_data(file_final_restart, "vperp")
-        vpa, vpa_spectral, vpa_chunk_size =
-            load_coordinate_data(file_final_restart, "vpa")
+    vperp, vperp_spectral, vperp_chunk_size =
+        load_coordinate_data(file_final_restart, "vperp")
+    vpa, vpa_spectral, vpa_chunk_size =
+        load_coordinate_data(file_final_restart, "vpa")
 
-        if n_neutral_species > 0
-            vzeta, vzeta_spectral, vzeta_chunk_size =
-                load_coordinate_data(file_final_restart, "vzeta")
-            vr, vr_spectral, vr_chunk_size =
-                load_coordinate_data(file_final_restart, "vr")
-            vz, vz_spectral, vz_chunk_size =
-                load_coordinate_data(file_final_restart, "vz")
-        else
-            dummy_adv_input = advection_input("default", 1.0, 0.0, 0.0)
-            dummy_comm = MPI.COMM_NULL
-            dummy_input = grid_input("dummy", 1, 1, 1, 1, 0, 1.0,
-                                     "chebyshev_pseudospectral", "", "", "periodic",
-                                     dummy_adv_input, dummy_comm, "uniform")
-            vzeta, vzeta_spectral = define_coordinate(dummy_input)
-            vzeta_chunk_size = 1
-            vr, vr_spectral = define_coordinate(dummy_input)
-            vr_chunk_size = 1
-            vz, vz_spectral = define_coordinate(dummy_input)
-            vz_chunk_size = 1
-        end
+    if n_neutral_species > 0
+        vzeta, vzeta_spectral, vzeta_chunk_size =
+            load_coordinate_data(file_final_restart, "vzeta")
+        vr, vr_spectral, vr_chunk_size =
+            load_coordinate_data(file_final_restart, "vr")
+        vz, vz_spectral, vz_chunk_size =
+            load_coordinate_data(file_final_restart, "vz")
+    else
+        dummy_adv_input = advection_input("default", 1.0, 0.0, 0.0)
+        dummy_comm = MPI.COMM_NULL
+        dummy_input = grid_input("dummy", 1, 1, 1, 1, 0, 1.0,
+                                 "chebyshev_pseudospectral", "", "", "periodic",
+                                 dummy_adv_input, dummy_comm, "uniform")
+        vzeta, vzeta_spectral = define_coordinate(dummy_input)
+        vzeta_chunk_size = 1
+        vr, vr_spectral = define_coordinate(dummy_input)
+        vr_chunk_size = 1
+        vz, vz_spectral = define_coordinate(dummy_input)
+        vz_chunk_size = 1
     end
 
     if parallel_io
@@ -2493,45 +2491,26 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         files = run_prefixes
     end
 
-    if dfns
-        run_info = (run_name=run_name, run_prefix=base_prefix, parallel_io=parallel_io,
-                    ext=ext, nblocks=nblocks, files=files, input=input,
-                    n_ion_species=n_ion_species, n_neutral_species=n_neutral_species,
-                    evolve_moments=evolve_moments, composition=composition,
-                    species=species, collisions=collisions, geometry=geometry,
-                    drive_input=drive_input, num_diss_params=num_diss_params,
-                    external_source_settings=external_source_settings,
-                    evolve_density=evolve_density, evolve_upar=evolve_upar,
-                    evolve_ppar=evolve_ppar,
-                    manufactured_solns_input=manufactured_solns_input, nt=nt,
-                    nt_unskipped=nt_unskipped, restarts_nt=restarts_nt,
-                    itime_min=itime_min, itime_skip=itime_skip, itime_max=itime_max,
-                    time=time, r=r, z=z, vperp=vperp, vpa=vpa, vzeta=vzeta, vr=vr, vz=vz,
-                    r_local=r_local, z_local=z_local, r_spectral=r_spectral,
-                    z_spectral=z_spectral, vperp_spectral=vperp_spectral,
-                    vpa_spectral=vpa_spectral, vzeta_spectral=vzeta_spectral,
-                    vr_spectral=vr_spectral, vz_spectral=vz_spectral,
-                    r_chunk_size=r_chunk_size, z_chunk_size=z_chunk_size,
-                    vperp_chunk_size=vperp_chunk_size, vpa_chunk_size=vpa_chunk_size,
-                    vzeta_chunk_size=vzeta_chunk_size, vr_chunk_size=vr_chunk_size,
-                    vz_chunk_size=vz_chunk_size, dfns=dfns)
-    else
-        run_info = (run_name=run_name, run_prefix=base_prefix, parallel_io=parallel_io,
-                    ext=ext, nblocks=nblocks, files=files, input=input,
-                    n_ion_species=n_ion_species, n_neutral_species=n_neutral_species,
-                    evolve_moments=evolve_moments, composition=composition,
-                    species=species, collisions=collisions, geometry=geometry,
-                    drive_input=drive_input, num_diss_params=num_diss_params,
-                    external_source_settings=external_source_settings,
-                    evolve_density=evolve_density, evolve_upar=evolve_upar,
-                    evolve_ppar=evolve_ppar,
-                    manufactured_solns_input=manufactured_solns_input, nt=nt,
-                    nt_unskipped=nt_unskipped, restarts_nt=restarts_nt,
-                    itime_min=itime_min, itime_skip=itime_skip, itime_max=itime_max,
-                    time=time, r=r, z=z, r_local=r_local, z_local=z_local,
-                    r_spectral=r_spectral, z_spectral=z_spectral,
-                    r_chunk_size=r_chunk_size, z_chunk_size=z_chunk_size, dfns=dfns)
-    end
+    run_info = (run_name=run_name, run_prefix=base_prefix, parallel_io=parallel_io,
+                ext=ext, nblocks=nblocks, files=files, input=input,
+                n_ion_species=n_ion_species, n_neutral_species=n_neutral_species,
+                evolve_moments=evolve_moments, composition=composition, species=species,
+                collisions=collisions, geometry=geometry, drive_input=drive_input,
+                num_diss_params=num_diss_params,
+                external_source_settings=external_source_settings,
+                evolve_density=evolve_density, evolve_upar=evolve_upar,
+                evolve_ppar=evolve_ppar,
+                manufactured_solns_input=manufactured_solns_input, nt=nt,
+                nt_unskipped=nt_unskipped, restarts_nt=restarts_nt, itime_min=itime_min,
+                itime_skip=itime_skip, itime_max=itime_max, time=time, r=r, z=z,
+                vperp=vperp, vpa=vpa, vzeta=vzeta, vr=vr, vz=vz, r_local=r_local,
+                z_local=z_local, r_spectral=r_spectral, z_spectral=z_spectral,
+                vperp_spectral=vperp_spectral, vpa_spectral=vpa_spectral,
+                vzeta_spectral=vzeta_spectral, vr_spectral=vr_spectral,
+                vz_spectral=vz_spectral, r_chunk_size=r_chunk_size,
+                z_chunk_size=z_chunk_size, vperp_chunk_size=vperp_chunk_size,
+                vpa_chunk_size=vpa_chunk_size, vzeta_chunk_size=vzeta_chunk_size,
+                vr_chunk_size=vr_chunk_size, vz_chunk_size=vz_chunk_size, dfns=dfns)
 
     return run_info
 end
