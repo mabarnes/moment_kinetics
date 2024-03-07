@@ -6475,8 +6475,8 @@ end
     timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
 
 Plot a time-trace of some adaptive-timestep diagnostics: steps per output, timestep
-failures per output, and how many times per output each variable caused a timestep
-failure.
+failures per output, how many times per output each variable caused a timestep failure,
+and which factor limited the length of successful timesteps (CFL, accuracy, max_timestep).
 
 If `plot_prefix` is passed, it gives the path and prefix for plots to be saved to. They
 will be saved with the format `plot_prefix_timestep_diagnostics.pdf`.
@@ -6626,16 +6626,85 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
             end
             put_legend_right(CFL_fig, ax)
 
+            limits_fig, ax = get_1d_ax(; xlabel="time", ylabel="number of limits per factor per output")
+
+            for ri ∈ run_info
+                if length(run_info) == 1
+                    prefix = ""
+                else
+                    prefix = ri.run_name * " "
+                end
+
+                limit_caused_by_per_output = get_variable(ri,
+                                                          "limit_caused_by_per_output";
+                                                          it=it)
+                counter = 0
+
+                # Accuracy limit counter
+                counter += 1
+                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                        label=prefix * "RK accuracy", ax=ax)
+
+                # Maximum timestep limit counter
+                counter += 1
+                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                        label=prefix * "max timestep", ax=ax)
+
+                # Minimum timestep limit counter
+                counter += 1
+                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                        label=prefix * "min timestep", ax=ax)
+
+                # Ion z advection
+                counter += 1
+                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                        label=prefix * "ion z advect", ax=ax)
+
+                # Ion vpa advection
+                counter += 1
+                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                        label=prefix * "ion vpa advect", ax=ax)
+
+                if ri.n_neutral_species > 0
+                    # Ion z advection
+                    counter += 1
+                    plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                            label=prefix * "neutral z advect", ax=ax)
+
+                    # Ion vpa advection
+                    counter += 1
+                    plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                            label=prefix * "neutral vz advect", ax=ax)
+                end
+
+                if counter > size(limit_caused_by_per_output, 1)
+                    error("Tried to plot non-existent variables in "
+                          * "limit_caused_by_per_output. Settings not understood "
+                          * "correctly.")
+                end
+                if counter < size(limit_caused_by_per_output, 1)
+                    error("Some variables in limit_caused_by_per_output not plotted. "
+                          * "Settings not understood correctly.")
+                end
+            end
+
+            put_legend_right(limits_fig, ax)
+
+
             if plot_prefix !== nothing
                 outfile = plot_prefix * "timestep_diagnostics.pdf"
                 save(outfile, steps_fig)
 
                 outfile = plot_prefix * "CFL_factors.pdf"
                 save(outfile, CFL_fig)
+
+                outfile = plot_prefix * "timestep_limits.pdf"
+                save(outfile, limits_fig)
             else
                 display(steps_fig)
                 display(dt_fig)
                 display(CFL_fig)
+                display(limits_fig)
             end
         end
 

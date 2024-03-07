@@ -3267,6 +3267,12 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             failure_caused_by_per_output[:,i] .-= failure_caused_by_per_output[:,i-1]
         end
         variable = failure_caused_by_per_output
+    elseif variable_name == "limit_caused_by_per_output"
+        limit_caused_by_per_output = get_variable(run_info, "limit_caused_by"; kwargs...)
+        for i ∈ size(limit_caused_by_per_output,2):-1:2
+            limit_caused_by_per_output[:,i] .-= limit_caused_by_per_output[:,i-1]
+        end
+        variable = limit_caused_by_per_output
     elseif variable_name == "average_successful_dt"
         steps_per_output = get_variable(run_info, "steps_per_output"; kwargs...)
         failures_per_output = get_variable(run_info, "failures_per_output"; kwargs...)
