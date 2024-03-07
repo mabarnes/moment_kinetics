@@ -203,7 +203,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         steady_state_residual=false,
         converged_residual_value=-1.0,
         rtol=1.0e-5,
-        atol=1.0e-16,
+        atol=1.0e-12,
         atol_upar=nothing,
         step_update_prefactor=0.9,
         max_increase_factor=1.05,
