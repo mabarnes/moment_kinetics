@@ -876,7 +876,7 @@ function setup_runge_kutta_coefficients!(t_params)
         t_params.adaptive[] = true
         t_params.low_storage[] = false
         if t_params.CFL_prefactor[] ≤ 0.0
-            t_params.CFL_prefactor[] = 4.0
+            t_params.CFL_prefactor[] = 12.0
         end
     elseif t_params.type == "Fekete6(4)"
         # Fekete 6-stage 4th-order SSPRK (see comments in util/calculate_rk_coeffs.jl.
@@ -902,7 +902,7 @@ function setup_runge_kutta_coefficients!(t_params)
         t_params.adaptive[] = true
         t_params.low_storage[] = false
         if t_params.CFL_prefactor[] ≤ 0.0
-            t_params.CFL_prefactor[] = 4.0
+            t_params.CFL_prefactor[] = 8.0
         end
     elseif t_params.type == "Fekete4(3)"
         # Fekete 4-stage, 3rd-order SSPRK (see comments in util/calculate_rk_coeffs.jl.
@@ -916,7 +916,7 @@ function setup_runge_kutta_coefficients!(t_params)
         t_params.adaptive[] = true
         t_params.low_storage[] = true
         if t_params.CFL_prefactor[] ≤ 0.0
-            t_params.CFL_prefactor[] = 4.0
+            t_params.CFL_prefactor[] = 6.0
         end
     elseif t_params.type == "Fekete4(2)"
         # Fekete 4-stage 2nd-order SSPRK (see comments in util/calculate_rk_coeffs.jl.
@@ -930,7 +930,7 @@ function setup_runge_kutta_coefficients!(t_params)
         t_params.adaptive[] = true
         t_params.low_storage[] = false
         if t_params.CFL_prefactor[] ≤ 0.0
-            t_params.CFL_prefactor[] = 4.0
+            t_params.CFL_prefactor[] = 7.0
         end
     elseif t_params.type == "SSPRK4"
         t_params.n_rk_stages[] = 4
