@@ -1658,7 +1658,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         adaptive_timestep_update!(scratch, t, t_params, all_rk_coefs[:,end], moments,
                                   fields, composition, collisions, geometry,
                                   external_source_settings, advect_objects, r, z, vperp,
-                                  vpa, vzeta, vr, vz; debug_print=(istep % 1000 == 0))
+                                  vpa, vzeta, vr, vz)
         # Re-do this in case adaptive_timestep_update re-arranged the `scratch` vector
         new_scratch = scratch[istage+1]
         old_scratch = scratch[istage]
@@ -1974,7 +1974,7 @@ appropriate.
 function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments, fields,
                                    composition, collisions, geometry,
                                    external_source_settings, advect_objects, r, z, vperp,
-                                   vpa, vzeta, vr, vz; debug_print=false)
+                                   vpa, vzeta, vr, vz)
     #error_norm_method = "Linf"
     error_norm_method = "L2"
 
@@ -2358,10 +2358,6 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments, fiel
                 end
 
                 t_params.limit_caused_by[this_limit_caused_by] += 1
-
-                if debug_print && global_rank[] == 0
-                    println("t=$t, error_norm=$error_norm, error_norms=$error_norms, nfail=", t_params.failure_counter[], ", dt=", t_params.dt[])
-                end
             end
         end
     end
