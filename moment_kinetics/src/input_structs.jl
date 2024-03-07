@@ -40,10 +40,12 @@ struct time_info
     previous_dt::MPISharedArray{mk_float,1}
     next_output_time::MPISharedArray{mk_float,1}
     dt_before_output::MPISharedArray{mk_float,1}
+    CFL_prefactor::Ref{mk_float}
     step_to_output::MPISharedArray{Bool,1}
     step_counter::Ref{mk_int}
     failure_counter::Ref{mk_int}
     failure_caused_by::Vector{mk_int}
+    limit_caused_by::Vector{mk_int}
     nwrite_moments::mk_int
     nwrite_dfns::mk_int
     type::String

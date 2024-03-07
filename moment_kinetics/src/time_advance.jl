@@ -58,7 +58,8 @@ using ..em_fields: setup_em_fields, update_phi!
 using ..fokker_planck: init_fokker_planck_collisions_weak_form, explicit_fokker_planck_collisions_weak_form!
 using ..manufactured_solns: manufactured_sources
 using ..advection: advection_info
-using ..utils: to_minutes
+using ..utils: to_minutes, get_minimum_CFL_z, get_minimum_CFL_vpa,
+               get_minimum_CFL_neutral_z, get_minimum_CFL_neutral_vz
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
 using Dates
@@ -194,9 +195,15 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     # create array containing coefficients needed for the Runge Kutta time advance
     rk_coefs = setup_runge_kutta_coefficients!(t_params)
     if t_params.adaptive[]
-        # Make Vector that counts which variable caused timestep failures the right
-        # length:
+        # Make Vectors that count which variable caused timestep limits and timestep
+        # failures the right length:
+
+        # Entries for limit by accuracy (which is an average over all variables),
+        # max_increase_factor and minimum_dt
+        push!(t_params.limit_caused_by, 0, 0, 0)
+
         # ion pdf
+        push!(t_params.limit_caused_by, 0, 0)
         push!(t_params.failure_caused_by, 0)
         if moments.evolve_density
             # ion density
@@ -212,6 +219,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
         end
         if composition.n_neutral_species > 0
             # neutral pdf
+            push!(t_params.limit_caused_by, 0, 0)
             push!(t_params.failure_caused_by, 0)
             if moments.evolve_density
                 # neutral density
@@ -834,6 +842,9 @@ function setup_runge_kutta_coefficients!(t_params)
         t_params.rk_order[] = 5
         t_params.adaptive[] = true
         t_params.low_storage[] = false
+        if t_params.CFL_prefactor[] ≤ 0.0
+            t_params.CFL_prefactor[] = 1.0
+        end
     elseif t_params.type == "Fekete10(4)"
         # Fekete 10-stage 4th-order SSPRK (see comments in util/calculate_rk_coeffs.jl.
         # Note that a 'low storage' implementation of the main method (if not the
@@ -864,6 +875,9 @@ function setup_runge_kutta_coefficients!(t_params)
         t_params.rk_order[] = 4
         t_params.adaptive[] = true
         t_params.low_storage[] = false
+        if t_params.CFL_prefactor[] ≤ 0.0
+            t_params.CFL_prefactor[] = 4.0
+        end
     elseif t_params.type == "Fekete6(4)"
         # Fekete 6-stage 4th-order SSPRK (see comments in util/calculate_rk_coeffs.jl.
         # Note Fekete et al. recommend the 10-stage method rather than this one.
@@ -887,6 +901,9 @@ function setup_runge_kutta_coefficients!(t_params)
         t_params.rk_order[] = 4
         t_params.adaptive[] = true
         t_params.low_storage[] = false
+        if t_params.CFL_prefactor[] ≤ 0.0
+            t_params.CFL_prefactor[] = 4.0
+        end
     elseif t_params.type == "Fekete4(3)"
         # Fekete 4-stage, 3rd-order SSPRK (see comments in util/calculate_rk_coeffs.jl.
         # Note this is the same as moment_kinetics original 4-stage SSPRK method, with
@@ -898,6 +915,9 @@ function setup_runge_kutta_coefficients!(t_params)
         t_params.rk_order[] = 3
         t_params.adaptive[] = true
         t_params.low_storage[] = true
+        if t_params.CFL_prefactor[] ≤ 0.0
+            t_params.CFL_prefactor[] = 4.0
+        end
     elseif t_params.type == "Fekete4(2)"
         # Fekete 4-stage 2nd-order SSPRK (see comments in util/calculate_rk_coeffs.jl.
         rk_coefs = mk_float[2//3 0    0    1//4 -1//8 ;
@@ -909,6 +929,9 @@ function setup_runge_kutta_coefficients!(t_params)
         t_params.rk_order[] = 2
         t_params.adaptive[] = true
         t_params.low_storage[] = false
+        if t_params.CFL_prefactor[] ≤ 0.0
+            t_params.CFL_prefactor[] = 4.0
+        end
     elseif t_params.type == "SSPRK4"
         t_params.n_rk_stages[] = 4
         rk_coefs = allocate_float(3, t_params.n_rk_stages[])
@@ -1448,8 +1471,9 @@ or update them by taking the appropriate velocity moment of the evolved pdf
 """
 function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr, vzeta,
                     vpa, vperp, z, r, spectral_objects, advect_objects, t, t_params,
-                    all_rk_coefs, istage, composition, geometry, num_diss_params, advance,
-                    scratch_dummy, istep)
+                    all_rk_coefs, istage, composition, collisions, geometry,
+                    external_source_settings, num_diss_params, advance, scratch_dummy,
+                    istep)
     begin_s_r_z_region()
 
     new_scratch = scratch[istage+1]
@@ -1507,7 +1531,8 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
 
     # update remaining velocity moments that are calculable from the evolved pdf
     # Note these may be needed for the boundary condition on the neutrals, so must be
-    # calculated before that is applied.
+    # calculated before that is applied. Also may be needed to calculate advection speeds
+    # for for CFL stability limit calculations in adaptive_timestep_update!().
     update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition)
     # update the diagnostic chodura condition
     # update_chodura!(moments,new_scratch.pdf,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
@@ -1584,6 +1609,37 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
                     new_scratch.pdf_neutral[:,:,:,iz,ir,isn], moments, vz)
             end
         end
+
+        # update remaining velocity moments that are calculable from the evolved pdf
+        update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z, r,
+                                        composition)
+        # update the thermal speed
+        begin_sn_r_z_region()
+        @loop_sn_r_z isn ir iz begin
+            moments.neutral.vth[iz,ir,isn] = sqrt(2.0*new_scratch.pz_neutral[iz,ir,isn]/new_scratch.density_neutral[iz,ir,isn])
+        end
+
+        # update the parallel heat flux
+        update_neutral_qz!(moments.neutral.qz, moments.neutral.qz_updated,
+                           new_scratch.density_neutral, new_scratch.uz_neutral,
+                           moments.neutral.vth, new_scratch.pdf_neutral, vz, vr, vzeta, z,
+                           r, composition, moments.evolve_density, moments.evolve_upar,
+                           moments.evolve_ppar)
+
+        calculate_moment_derivatives_neutral!(moments, new_scratch, scratch_dummy, z,
+                                              z_spectral, num_diss_params)
+    end
+
+    # update the electrostatic potential phi
+    update_phi!(fields, scratch[istage+1], z, r, composition, z_spectral, r_spectral, scratch_dummy)
+    if !(( moments.evolve_upar || moments.evolve_ppar) &&
+              istage == length(scratch)-1)
+        # _block_synchronize() here because phi needs to be read on different ranks than
+        # it was written on, even though the loop-type does not change here. However,
+        # after the final RK stage can skip if:
+        #  * evolving upar or ppar as synchronization will be triggered after moments
+        #    updates at the beginning of the next RK step
+        _block_synchronize()
     end
 
     if t_params.adaptive[] && istage == t_params.n_rk_stages[]
@@ -1591,9 +1647,10 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         # moment derivatives, because the timstep might need to be re-done with a smaller
         # dt, in which case scratch[t_params.n_rk_stages+1] will be reset to the values
         # from the beginning of the timestep here.
-        adaptive_timestep_update!(scratch, t, t_params, all_rk_coefs[:,end],
-                                  moments, composition.n_neutral_species;
-                                  debug_print=(istep % 1000 == 0))
+        adaptive_timestep_update!(scratch, t, t_params, all_rk_coefs[:,end], moments,
+                                  fields, composition, collisions, geometry,
+                                  external_source_settings, advect_objects, r, z, vperp,
+                                  vpa, vzeta, vr, vz; debug_print=(istep % 1000 == 0))
         # Re-do this in case adaptive_timestep_update re-arranged the `scratch` vector
         new_scratch = scratch[istage+1]
         old_scratch = scratch[istage]
@@ -1629,40 +1686,38 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
 
             calculate_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
                                           num_diss_params)
+
+            # update remaining velocity moments that are calculable from the evolved pdf
+            update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z, r,
+                                            composition)
+            # update the thermal speed
+            begin_sn_r_z_region()
+            @loop_sn_r_z isn ir iz begin
+                moments.neutral.vth[iz,ir,isn] = sqrt(2.0*new_scratch.pz_neutral[iz,ir,isn]/new_scratch.density_neutral[iz,ir,isn])
+            end
+
+            # update the parallel heat flux
+            update_neutral_qz!(moments.neutral.qz, moments.neutral.qz_updated,
+                               new_scratch.density_neutral, new_scratch.uz_neutral,
+                               moments.neutral.vth, new_scratch.pdf_neutral, vz, vr, vzeta, z,
+                               r, composition, moments.evolve_density, moments.evolve_upar,
+                               moments.evolve_ppar)
+
+            calculate_moment_derivatives_neutral!(moments, new_scratch, scratch_dummy, z,
+                                                  z_spectral, num_diss_params)
+
+            # update the electrostatic potential phi
+            update_phi!(fields, scratch[istage+1], z, r, composition, z_spectral, r_spectral, scratch_dummy)
+            if !(( moments.evolve_upar || moments.evolve_ppar) &&
+                      istage == length(scratch)-1)
+                # _block_synchronize() here because phi needs to be read on different ranks than
+                # it was written on, even though the loop-type does not change here. However,
+                # after the final RK stage can skip if:
+                #  * evolving upar or ppar as synchronization will be triggered after moments
+                #    updates at the beginning of the next RK step
+                _block_synchronize()
+            end
         end
-    end
-
-    if composition.n_neutral_species > 0
-        # update remaining velocity moments that are calculable from the evolved pdf
-        update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z, r,
-                                        composition)
-        # update the thermal speed
-        begin_sn_r_z_region()
-        @loop_sn_r_z isn ir iz begin
-            moments.neutral.vth[iz,ir,isn] = sqrt(2.0*new_scratch.pz_neutral[iz,ir,isn]/new_scratch.density_neutral[iz,ir,isn])
-        end
-
-        # update the parallel heat flux
-        update_neutral_qz!(moments.neutral.qz, moments.neutral.qz_updated,
-                           new_scratch.density_neutral, new_scratch.uz_neutral,
-                           moments.neutral.vth, new_scratch.pdf_neutral, vz, vr, vzeta, z,
-                           r, composition, moments.evolve_density, moments.evolve_upar,
-                           moments.evolve_ppar)
-
-        calculate_moment_derivatives_neutral!(moments, new_scratch, scratch_dummy, z,
-                                              z_spectral, num_diss_params)
-    end
-
-    # update the electrostatic potential phi
-    update_phi!(fields, scratch[istage+1], z, r, composition, z_spectral, r_spectral, scratch_dummy)
-    if !(( moments.evolve_upar || moments.evolve_ppar) &&
-              istage == length(scratch)-1)
-        # _block_synchronize() here because phi needs to be read on different ranks than
-        # it was written on, even though the loop-type does not change here. However,
-        # after the final RK stage can skip if:
-        #  * evolving upar or ppar as synchronization will be triggered after moments
-        #    updates at the beginning of the next RK step
-        _block_synchronize()
     end
 end
 
@@ -1908,8 +1963,10 @@ end
 Check the error estimate for the embedded RK method and adjust the timestep if
 appropriate.
 """
-function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
-                                   n_neutral_species; debug_print=false)
+function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments, fields,
+                                   composition, collisions, geometry,
+                                   external_source_settings, advect_objects, r, z, vperp,
+                                   vpa, vzeta, vr, vz; debug_print=false)
     #error_norm_method = "Linf"
     error_norm_method = "L2"
 
@@ -1920,6 +1977,12 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
         error("adaptive timestep needs a buffer scratch array")
     end
 
+    n_neutral_species = composition.n_neutral_species
+    vpa_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
+    neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
+    evolve_density, evolve_upar, evolve_ppar = moments.evolve_density, moments.evolve_upar, moments.evolve_ppar
+
+    CFL_limits = mk_float[]
     error_norms = mk_float[]
 
     # Read the current dt here, so we only need one _block_synchronize() call for this and
@@ -1927,11 +1990,42 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
     current_dt = t_params.dt[]
     _block_synchronize()
 
+    # Test CFL conditions for advection in kinetic equation to give stability limit for
+    # timestep
+    #
+    # ion z-advection
+    # No need to synchronize here, as we just called _block_synchronize()
+    # Don't parallelise over species here, because get_minimum_CFL_*() does an MPI
+    # reduction over the shared-memory block, so all processes must calculate the same
+    # species at the same time.
+    begin_r_z_vperp_vpa_region(; no_synchronize=true)
+    ion_z_CFL = Inf
+    @loop_s is begin
+        update_speed_z!(z_advect[is], moments.charged.upar, moments.charged.vth,
+                        evolve_upar, evolve_ppar, fields, vpa, vperp, z, r, t, geometry)
+        this_minimum = get_minimum_CFL_z(z_advect[is].speed, z)
+        @serial_region begin
+            ion_z_CFL = min(ion_z_CFL, this_minimum)
+        end
+    end
+    push!(CFL_limits, t_params.CFL_prefactor[] * ion_z_CFL)
+
+    # ion vpa-advection
+    ion_vpa_CFL = Inf
+    update_speed_vpa!(vpa_advect, fields, scratch[end], moments, vpa, vperp, z, r,
+                      composition, collisions, external_source_settings.ion, t,
+                      geometry)
+    @loop_s is begin
+        this_minimum = get_minimum_CFL_vpa(vpa_advect[is].speed, vpa)
+        @serial_region begin
+            ion_vpa_CFL = min(ion_vpa_CFL, this_minimum)
+        end
+    end
+    push!(CFL_limits, t_params.CFL_prefactor[] * ion_vpa_CFL)
+
     # Calculate error for ion distribution functions
     error = scratch[2].pdf
     n = length(error_coeffs)
-    # No need to synchronize here, as we just called _block_synchronize()
-    begin_s_r_z_vperp_vpa_region(; no_synchronize=true)
     if t_params.low_storage[]
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
             error[ivpa,ivperp,iz,ir,is] =
@@ -2009,6 +2103,36 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
     end
 
     if n_neutral_species > 0
+        # neutral z-advection
+        # Don't parallelise over species here, because get_minimum_CFL_*() does an MPI
+        # reduction over the shared-memory block, so all processes must calculate the same
+        # species at the same time.
+        begin_r_z_vzeta_vr_vz_region(; no_synchronize=true)
+        neutral_z_CFL = Inf
+        @loop_sn isn begin
+            update_speed_neutral_z!(neutral_z_advect[isn], moments.neutral.uz,
+                                    moments.neutral.vth, evolve_upar, evolve_ppar, vz, vr,
+                                    vzeta, z, r, t)
+            this_minimum = get_minimum_CFL_neutral_z(neutral_z_advect[isn].speed, z)
+            @serial_region begin
+                neutral_z_CFL = min(neutral_z_CFL, this_minimum)
+            end
+        end
+        push!(CFL_limits, t_params.CFL_prefactor[] * neutral_z_CFL)
+
+        # neutral vz-advection
+        neutral_vz_CFL = Inf
+        update_speed_neutral_vz!(neutral_vz_advect, fields, scratch[end],
+                                 moments, vz, vr, vzeta, z, r, composition,
+                                 collisions, external_source_settings.neutral)
+        @loop_sn isn begin
+            this_minimum = get_minimum_CFL_neutral_vz(neutral_vz_advect[isn].speed, vz)
+            @serial_region begin
+                neutral_vz_CFL = min(neutral_vz_CFL, this_minimum)
+            end
+        end
+        push!(CFL_limits, t_params.CFL_prefactor[] * neutral_vz_CFL)
+
         # Calculate error for neutral distribution functions
         error = scratch[2].pdf_neutral
         begin_sn_r_z_vzeta_vr_vz_region()
@@ -2091,6 +2215,19 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
                                           t_params.atol; method=error_norm_method)
             push!(error_norms, neut_p_err)
         end
+    end
+
+    # Get global minimum of CFL limits
+    CFL_limit = nothing
+    this_limit_caused_by = nothing
+    @serial_region begin
+        # Get maximum error over all blocks
+        CFL_limits = MPI.Allreduce(CFL_limits, min, comm_inter_block[])
+        CFL_limit_caused_by = argmin(CFL_limits)
+        CFL_limit = CFL_limits[CFL_limit_caused_by]
+        # Reserve first two entries of t_params.limit_caused_by for accuracy limit and
+        # max_increase_factor limit.
+        this_limit_caused_by = CFL_limit_caused_by + 3
     end
 
     if error_norm_method == "Linf"
@@ -2180,6 +2317,10 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
                 # the output time
                 t_params.dt[] = t_params.dt_before_output[]
                 t_params.step_to_output[] = false
+
+                if t_params.dt[] > CFL_limit
+                    t_params.dt[] = CFL_limit
+                end
             else
                 # Adjust timestep according to Fehlberg's suggestion
                 # (https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method).
@@ -2188,12 +2329,28 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments,
                 # 0.9.
                 t_params.dt[] *= t_params.step_update_prefactor * error_norm^(-1.0/t_params.rk_order[])
 
+                if t_params.dt[] > CFL_limit
+                    t_params.dt[] = CFL_limit
+                else
+                    this_limit_caused_by = 1
+                end
+
                 # Limit so timestep cannot increase by a large factor, which might lead to
                 # numerical instability in some cases.
-                t_params.dt[] = min(t_params.dt[], t_params.max_increase_factor * t_params.previous_dt[])
+                max_cap = t_params.max_increase_factor * t_params.previous_dt[]
+                if t_params.dt[] > max_cap
+                    t_params.dt[] = max_cap
+                    this_limit_caused_by = 2
+                end
 
                 # Prevent timestep from going below minimum_dt
-                t_params.dt[] = max(t_params.dt[], t_params.minimum_dt)
+                if t_params.dt[] < t_params.minimum_dt
+                    t_params.dt[] = t_params.minimum_dt
+                    this_limit_caused_by = 3
+                end
+
+                t_params.limit_caused_by[this_limit_caused_by] += 1
+
                 if debug_print && global_rank[] == 0
                     println("t=$t, error_norm=$error_norm, error_norms=$error_norms, nfail=", t_params.failure_counter[], ", dt=", t_params.dt[])
                 end
@@ -2313,8 +2470,9 @@ function ssp_rk!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyrophase
             external_source_settings, num_diss_params, advance, fp_arrays, istage)
         @views rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr,
                           vzeta, vpa, vperp, z, r, spectral_objects, advect_objects,
-                          t, t_params, advance.rk_coefs, istage, composition,
-                          geometry, num_diss_params, advance, scratch_dummy, istep)
+                          t, t_params, advance.rk_coefs, istage, composition, collisions,
+                          geometry, external_source_settings, num_diss_params, advance,
+                          scratch_dummy, istep)
     end
 
     istage = n_rk_stages+1
