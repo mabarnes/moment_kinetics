@@ -1084,8 +1084,8 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
         end
 
         if t ≥ moments_output_times[moments_output_counter] - epsilon
-            if moments_output_counter < length(moments_output_times)
-                moments_output_counter += 1
+            moments_output_counter += 1
+            if moments_output_counter ≤ length(moments_output_times)
                 @serial_region begin
                     t_params.next_output_time[] =
                         min(moments_output_times[moments_output_counter],
@@ -1097,8 +1097,8 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
             write_moments = false
         end
         if t ≥ dfns_output_times[dfns_output_counter] - epsilon
-            if dfns_output_counter < length(dfns_output_times)
-                dfns_output_counter += 1
+            dfns_output_counter += 1
+            if dfns_output_counter ≤ length(dfns_output_times)
                 @serial_region begin
                     t_params.next_output_time[] =
                         min(moments_output_times[moments_output_counter],
@@ -1156,9 +1156,15 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
             begin_serial_region()
             @serial_region begin
                 if global_rank[] == 0
-                    print("finished time step ",
-                          rpad(string(t_params.step_counter[]), 7), "  ",
-                          Dates.format(now(), dateformat"H:MM:SS"))
+                    print("writing moments output ",
+                          rpad(string(moments_output_counter - 1), 4), "  ",
+                          "t = ", rpad(string(round(t, sigdigits=6)), 7), "  ",
+                          "nstep = ", rpad(string(t_params.step_counter[]), 7), "  ")
+                    if t_params.adaptive[]
+                        print("nfail = ", rpad(string(t_params.failure_counter[]), 7), "  ",
+                              "dt = ", rpad(string(t_params.dt_before_output[]), 7), "  ")
+                    end
+                    print(Dates.format(now(), dateformat"H:MM:SS"))
                 end
             end
             write_data_to_ascii(moments, fields, vpa, vperp, z, r, t,
@@ -1238,8 +1244,10 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
             begin_serial_region()
             @serial_region begin
                 if global_rank[] == 0
-                    println("writing distribution functions at step ",
-                            t_params.step_counter[], "  ",
+                    println("writing distribution functions output ",
+                            rpad(string(dfns_output_counter  - 1), 4), "  ",
+                            "t = ", rpad(string(round(t, sigdigits=6)), 7), "  ",
+                            "nstep = ", rpad(string(t_params.step_counter[]), 7), "  ",
                             Dates.format(now(), dateformat"H:MM:SS"))
                     flush(stdout)
                 end
