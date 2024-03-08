@@ -194,47 +194,49 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     n_neutral_species = composition.n_neutral_species
     # create array containing coefficients needed for the Runge Kutta time advance
     rk_coefs = setup_runge_kutta_coefficients!(t_params)
-    if t_params.adaptive[]
-        # Make Vectors that count which variable caused timestep limits and timestep
-        # failures the right length:
 
-        # Entries for limit by accuracy (which is an average over all variables),
-        # max_increase_factor and minimum_dt
-        push!(t_params.limit_caused_by, 0, 0, 0)
+    # Make Vectors that count which variable caused timestep limits and timestep failures
+    # the right length. Do this setup even when not using adaptive timestepping, because
+    # it is easier than modifying the file I/O according to whether we are using adaptive
+    # timestepping.
+    #
+    # Entries for limit by accuracy (which is an average over all variables),
+    # max_increase_factor and minimum_dt
+    push!(t_params.limit_caused_by, 0, 0, 0)
 
-        # ion pdf
+    # ion pdf
+    push!(t_params.limit_caused_by, 0, 0)
+    push!(t_params.failure_caused_by, 0)
+    if moments.evolve_density
+        # ion density
+        push!(t_params.failure_caused_by, 0)
+    end
+    if moments.evolve_upar
+        # ion flow
+        push!(t_params.failure_caused_by, 0)
+    end
+    if moments.evolve_ppar
+        # ion pressure
+        push!(t_params.failure_caused_by, 0)
+    end
+    if composition.n_neutral_species > 0
+        # neutral pdf
         push!(t_params.limit_caused_by, 0, 0)
         push!(t_params.failure_caused_by, 0)
         if moments.evolve_density
-            # ion density
+            # neutral density
             push!(t_params.failure_caused_by, 0)
         end
         if moments.evolve_upar
-            # ion flow
+            # neutral flow
             push!(t_params.failure_caused_by, 0)
         end
         if moments.evolve_ppar
-            # ion pressure
+            # neutral pressure
             push!(t_params.failure_caused_by, 0)
-        end
-        if composition.n_neutral_species > 0
-            # neutral pdf
-            push!(t_params.limit_caused_by, 0, 0)
-            push!(t_params.failure_caused_by, 0)
-            if moments.evolve_density
-                # neutral density
-                push!(t_params.failure_caused_by, 0)
-            end
-            if moments.evolve_upar
-                # neutral flow
-                push!(t_params.failure_caused_by, 0)
-            end
-            if moments.evolve_ppar
-                # neutral pressure
-                push!(t_params.failure_caused_by, 0)
-            end
         end
     end
+
     # create the 'advance' struct to be used in later Euler advance to
     # indicate which parts of the equations are to be advanced concurrently.
     # if no splitting of operators, all terms advanced concurrently;
