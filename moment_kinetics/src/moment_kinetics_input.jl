@@ -209,7 +209,12 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         max_increase_factor=1.05,
         minimum_dt=0.0,
        )
+    if timestepping_section["nwrite"] > timestepping_section["nstep"]
+        timestepping_section["nwrite"] = timestepping_section["nstep"]
+    end
     if timestepping_section["nwrite_dfns"] === nothing
+        timestepping_section["nwrite_dfns"] = timestepping_section["nstep"]
+    elseif timestepping_section["nwrite_dfns"] > timestepping_section["nstep"]
         timestepping_section["nwrite_dfns"] = timestepping_section["nstep"]
     end
     if timestepping_section["atol_upar"] === nothing
