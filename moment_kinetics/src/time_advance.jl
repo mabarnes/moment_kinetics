@@ -2358,6 +2358,12 @@ function adaptive_timestep_update!(scratch, t, t_params, rk_coefs, moments, fiel
                 end
 
                 t_params.limit_caused_by[this_limit_caused_by] += 1
+
+                if (t_params.step_counter[] % 1000 == 0) && global_rank[] == 0
+                    println("step ", t_params.step_counter[], ": t=",
+                            round(t, sigdigits=6), ", nfail=", t_params.failure_counter[],
+                            ", dt=", t_params.dt[])
+                end
             end
         end
     end
