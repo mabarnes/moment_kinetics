@@ -1305,7 +1305,7 @@ end
 for dim ∈ one_dimension_combinations
     function_name_str = "plot_vs_$dim"
     function_name = Symbol(function_name_str)
-    spaces = " " ^ length(function_name_str)
+    spaces = " " ^ (length(function_name_str) + 1)
     dim_str = String(dim)
     if dim == :t
         dim_grid = :( run_info.time )
@@ -1317,17 +1317,17 @@ for dim ∈ one_dimension_combinations
              export $function_name
 
              """
-             function $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
-                      $($spaces)input=nothing, outfile=nothing, yscale=nothing,
-                      transform=identity, axis_args=Dict{Symbol,Any}(), it=nothing,
-                      $($spaces)ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
-                      $($spaces)ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
-             function $($function_name_str)(run_info, var_name; is=1, data=nothing,
-                      $($spaces)input=nothing, ax=nothing, label=nothing,
-                      $($spaces)outfile=nothing, yscale=nothing, transform=identity,
-                      $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing,
-                      $($spaces)iz=nothing, ivperp=nothing, ivpa=nothing, ivzeta=nothing,
-                      $($spaces)ivr=nothing, ivz=nothing, kwargs...)
+                 $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
+                 $($spaces)input=nothing, outfile=nothing, yscale=nothing,
+                 transform=identity, axis_args=Dict{Symbol,Any}(), it=nothing,
+                 $($spaces)ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
+                 $($spaces)ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                 $($function_name_str)(run_info, var_name; is=1, data=nothing,
+                 $($spaces)input=nothing, ax=nothing, label=nothing,
+                 $($spaces)outfile=nothing, yscale=nothing, transform=identity,
+                 $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing,
+                 $($spaces)iz=nothing, ivperp=nothing, ivpa=nothing, ivzeta=nothing,
+                 $($spaces)ivr=nothing, ivz=nothing, kwargs...)
 
              Plot `var_name` from the run(s) represented by `run_info` (as returned by
              [`get_run_info`](@ref)) vs $($dim_str).
@@ -1523,7 +1523,7 @@ end
 for (dim1, dim2) ∈ two_dimension_combinations
     function_name_str = "plot_vs_$(dim2)_$(dim1)"
     function_name = Symbol(function_name_str)
-    spaces = " " ^ length(function_name_str)
+    spaces = " " ^ (length(function_name_str) + 1)
     dim1_str = String(dim1)
     dim2_str = String(dim2)
     if dim1 == :t
@@ -1538,19 +1538,19 @@ for (dim1, dim2) ∈ two_dimension_combinations
              export $function_name
 
              """
-             function $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
-                      $($spaces)input=nothing, outfile=nothing, colorscale=identity,
-                      $($spaces)transform=identity, axis_args=Dict{Symbol,Any}(),
-                      $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
-                      $($spaces)ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing,
-                      $($spaces)kwargs...)
-             function $($function_name_str)(run_info, var_name; is=1, data=nothing,
-                      $($spaces)input=nothing, ax=nothing,
-                      $($spaces)colorbar_place=nothing, title=nothing,
-                      $($spaces)outfile=nothing, colorscale=identity, transform=identity,
-                      $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing,
-                      $($spaces)iz=nothing, ivperp=nothing, ivpa=nothing, ivzeta=nothing,
-                      $($spaces)ivr=nothing, ivz=nothing, kwargs...)
+                 $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
+                 $($spaces)input=nothing, outfile=nothing, colorscale=identity,
+                 $($spaces)transform=identity, axis_args=Dict{Symbol,Any}(),
+                 $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                 $($spaces)ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing,
+                 $($spaces)kwargs...)
+                 $($function_name_str)(run_info, var_name; is=1, data=nothing,
+                 $($spaces)input=nothing, ax=nothing,
+                 $($spaces)colorbar_place=nothing, title=nothing,
+                 $($spaces)outfile=nothing, colorscale=identity, transform=identity,
+                 $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing,
+                 $($spaces)iz=nothing, ivperp=nothing, ivpa=nothing, ivzeta=nothing,
+                 $($spaces)ivr=nothing, ivz=nothing, kwargs...)
 
              Plot `var_name` from the run(s) represented by `run_info` (as returned by
              [`get_run_info`](@ref))vs $($dim1_str) and $($dim2_str).
@@ -1730,7 +1730,7 @@ end
 for dim ∈ one_dimension_combinations_no_t
     function_name_str = "animate_vs_$dim"
     function_name = Symbol(function_name_str)
-    spaces = " " ^ length(function_name_str)
+    spaces = " " ^ (length(function_name_str) + 1)
     dim_str = String(dim)
     dim_grid = :( run_info.$dim.grid )
     idim = Symbol(:i, dim)
@@ -1738,19 +1738,19 @@ for dim ∈ one_dimension_combinations_no_t
              export $function_name
 
              """
-             function $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
-                      $($spaces)input=nothing, outfile=nothing, yscale=nothing,
-                      $($spaces)transform=identity, ylims=nothing,
-                      $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing, iz=nothing,
-                      $($spaces)ivperp=nothing, ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                      $($spaces)ivz=nothing, kwargs...)
-             function $($function_name_str)(run_info, var_name; is=1, data=nothing,
-                      $($spaces)input=nothing, frame_index=nothing, ax=nothing,
-                      $($spaces)fig=nothing, outfile=nothing, yscale=nothing,
-                      $($spaces)transform=identity, ylims=nothing,
-                      $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing, iz=nothing,
-                      $($spaces)ivperp=nothing, ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                      $($spaces)ivz=nothing, kwargs...)
+                 $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
+                 $($spaces)input=nothing, outfile=nothing, yscale=nothing,
+                 $($spaces)transform=identity, ylims=nothing,
+                 $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing, iz=nothing,
+                 $($spaces)ivperp=nothing, ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                 $($spaces)ivz=nothing, kwargs...)
+                 $($function_name_str)(run_info, var_name; is=1, data=nothing,
+                 $($spaces)input=nothing, frame_index=nothing, ax=nothing,
+                 $($spaces)fig=nothing, outfile=nothing, yscale=nothing,
+                 $($spaces)transform=identity, ylims=nothing,
+                 $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing, iz=nothing,
+                 $($spaces)ivperp=nothing, ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                 $($spaces)ivz=nothing, kwargs...)
 
              Animate `var_name` from the run(s) represented by `run_info` (as returned by
              [`get_run_info`](@ref))vs $($dim_str).
@@ -1986,7 +1986,7 @@ end
 for (dim1, dim2) ∈ two_dimension_combinations_no_t
     function_name_str = "animate_vs_$(dim2)_$(dim1)"
     function_name = Symbol(function_name_str)
-    spaces = " " ^ length(function_name_str)
+    spaces = " " ^ (length(function_name_str) + 1)
     dim1_str = String(dim1)
     dim2_str = String(dim2)
     dim1_grid = :( run_info.$dim1.grid )
@@ -1997,20 +1997,20 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
              export $function_name
 
              """
-             function $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
-                      $($spaces)input=nothing, outfile=nothing, colorscale=identity,
-                      $($spaces)transform=identity, axis_args=Dict{Symbol,Any}(),
-                      $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
-                      $($spaces)ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing,
-                      $($spaces)kwargs...)
-             function $($function_name_str)(run_info, var_name; is=1, data=nothing,
-                      $($spaces)input=nothing, frame_index=nothing, ax=nothing,
-                      $($spaces)fig=nothing, colorbar_place=colorbar_place,
-                      $($spaces)title=nothing, outfile=nothing, colorscale=identity,
-                      $($spaces)transform=identity, axis_args=Dict{Symbol,Any}(),
-                      $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
-                      $($spaces)ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing,
-                      $($spaces)kwargs...)
+                 $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
+                 $($spaces)input=nothing, outfile=nothing, colorscale=identity,
+                 $($spaces)transform=identity, axis_args=Dict{Symbol,Any}(),
+                 $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                 $($spaces)ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing,
+                 $($spaces)kwargs...)
+                 $($function_name_str)(run_info, var_name; is=1, data=nothing,
+                 $($spaces)input=nothing, frame_index=nothing, ax=nothing,
+                 $($spaces)fig=nothing, colorbar_place=colorbar_place,
+                 $($spaces)title=nothing, outfile=nothing, colorscale=identity,
+                 $($spaces)transform=identity, axis_args=Dict{Symbol,Any}(),
+                 $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                 $($spaces)ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing,
+                 $($spaces)kwargs...)
 
              Animate `var_name` from the run(s) represented by `run_info` (as returned by
              [`get_run_info`](@ref))vs $($dim1_str) and $($dim2_str).
