@@ -86,7 +86,7 @@ using .debugging
 using .external_sources
 using .input_structs
 using .initial_conditions: allocate_pdf_and_moments, init_pdf_and_moments!,
-                           initialize_scratch_arrays!
+                           initialize_scratch_arrays!, initialize_electrons!
 using .load_data: reload_evolving_fields!
 using .looping
 using .moment_constraints: hard_force_moment_constraints!
@@ -296,12 +296,14 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         backup_prefix_iblock = get_prefix_iblock_and_move_existing_file(restart_filename,
                                                                         io_input.output_dir)
 
+        # TMP FOR TESTING -- MAB
+        initialize_electrons_from_boltzmann = true                                                                
         # Reload pdf and moments from an existing output file
         code_time, previous_runs_info, restart_time_index =
             reload_evolving_fields!(pdf, moments, boundary_distributions,
                                     backup_prefix_iblock, restart_time_index,
                                     composition, geometry, r, z, vpa, vperp, vzeta, vr,
-                                    vz)
+                                    vz, initialize_electrons_from_boltzmann)
 
         # Re-initialize the source amplitude here instead of loading it from the restart
         # file so that we can change the settings between restarts.
@@ -310,6 +312,17 @@ function setup_moment_kinetics(input_dict::AbstractDict;
 
         # Copy the reloaded values into the `scratch` struct
         initialize_scratch_arrays!(scratch, moments, pdf, t_input.n_rk_stages)
+
+        if initialize_electrons_from_boltzmann
+            # If we are initializing kinetic electrons using info from a simulation
+            # where electrons have a Boltzmann distribution, there is missing information
+            # that still needs to be specified for the electrons
+            initialize_electrons!(pdf, moments, fields, geometry, composition, r, z,
+                                 vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral, vpa_spectral, 
+                                 collisions, external_source_settings,
+                                 scratch_dummy, scratch, t_input, num_diss_params, advection_structs,
+                                 io_input, input_dict, restart=true)
+        end
 
         _block_synchronize()
     end

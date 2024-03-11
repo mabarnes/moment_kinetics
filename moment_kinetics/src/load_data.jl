@@ -465,7 +465,7 @@ function load_ion_moments_data(fid; printout=false, extended_moments = false)
         println("done.")
     end
     if extended_moments
-        density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed, entropy_production
+        return density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed, entropy_production
     else
         return density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed
     end
@@ -542,7 +542,7 @@ Reload pdf and moments from an existing output file.
 """
 function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_prefix_iblock,
                                  time_index, composition, geometry, r, z, vpa, vperp,
-                                 vzeta, vr, vz)
+                                 vzeta, vr, vz, initialize_electrons_from_boltzmann=false)
     code_time = 0.0
     previous_runs_info = nothing
     begin_serial_region()
@@ -720,7 +720,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                 restart_electron_evolve_ppar = true, true, true
             electron_evolve_density, electron_evolve_upar, electron_evolve_ppar =
                 true, true, true
-            if pdf.electron !== nothing
+            if (pdf.electron !== nothing) && (initialize_electrons_from_boltzmann == false)
                 pdf.electron.norm .=
                     reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa,
                                         r_range, z_range, vperp_range, vpa_range,
