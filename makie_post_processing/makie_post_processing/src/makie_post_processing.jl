@@ -1654,7 +1654,7 @@ for dim ∈ one_dimension_combinations_no_t
                  $($function_name_str)(run_info, var_name; is=1, data=nothing,
                  $($spaces)input=nothing, frame_index=nothing, ax=nothing,
                  $($spaces)fig=nothing, outfile=nothing, yscale=nothing,
-                 $($spaces)transform=identity, ylims=nothing,
+                 $($spaces)transform=identity, ylims=nothing, label=nothing,
                  $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing, iz=nothing,
                  $($spaces)ivperp=nothing, ivpa=nothing, ivzeta=nothing, ivr=nothing,
                  $($spaces)ivz=nothing, kwargs...)
@@ -1688,6 +1688,9 @@ for dim ∈ one_dimension_combinations_no_t
 
              When a single `run_info` is passed, an `Axis` can be passed to `ax`. If it
              is, the plot will be added to `ax`.
+
+             When a single `run_info` is passed, `label` can be passed to set a custom
+             label for the line. By default the `run_info.run_name` is used.
 
              `outfile` is required for animations unless `ax` is passed. The animation
              will be saved to a file named `outfile`.  The suffix determines the file
@@ -1785,10 +1788,10 @@ for dim ∈ one_dimension_combinations_no_t
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, frame_index=nothing, ax=nothing,
                                      fig=nothing, outfile=nothing, yscale=nothing,
-                                     ylims=nothing, axis_args=Dict{Symbol,Any}(),
-                                     it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
-                                     ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                                     ivz=nothing, kwargs...)
+                                     ylims=nothing, label=nothing,
+                                     axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing,
+                                     iz=nothing, ivperp=nothing, ivpa=nothing,
+                                     ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
                  if input === nothing
                      if run_info.dfns
                          input = input_dict_dfns[var_name]
@@ -1827,13 +1830,16 @@ for dim ∈ one_dimension_combinations_no_t
                  else
                      fig = nothing
                  end
+                 if label === nothing
+                     label = run_info.run_name
+                 end
 
                  x = $dim_grid
                  if $idim !== nothing
                      x = x[$idim]
                  end
                  animate_1d(x, data; ax=ax, ylims=ylims, frame_index=ind,
-                            label=run_info.run_name, kwargs...)
+                            label=label, kwargs...)
 
                  if input.show_element_boundaries && fig !== nothing
                      element_boundary_inds =
