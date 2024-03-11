@@ -316,7 +316,6 @@ calculate the parallel component of the electron heat flux,
 defined as qpar = 2 * ppar * vth * int dwpa (pdf * wpa^3)
 """
 function calculate_electron_qpar_from_pdf!(qpar, ppar, vth, pdf, vpa)
-    begin_r_z_region()
     # specialise to 1D for now
     ivperp = 1
     @loop_r_z ir iz begin
