@@ -245,7 +245,6 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         end
     end
     # evolve (artificially) in time until the residual is less than the tolerance
-    try
     while !electron_pdf_converged && (iteration <= max_electron_pdf_iterations)
         #dt_energy = dt_electron * 10.0
 
@@ -426,9 +425,6 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
             break
         end
         iteration += 1
-    end
-    catch e
-        println("Error: $e")
     end
     # Update the 'scratch' arrays with the final result
     begin_r_z_vperp_vpa_region()
