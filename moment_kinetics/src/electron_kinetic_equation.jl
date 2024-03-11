@@ -325,19 +325,23 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         # enforce the boundary condition(s) on the electron pdf
         enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vperp, vpa,
                                                     vperp_spectral, vpa_spectral,
-                                                    vpa_advect,
+                                                    vpa_advect, moments,
                                                     num_diss_params.vpa_dissipation_coefficient > 0.0,
                                                     composition.me_over_mi)
         #println("A pdf 1 ", pdf[:,1,1,1])
         #println("A pdf end ", pdf[:,1,end,1])
 
         begin_r_z_region()
+        A = moments.electron.constraints_A_coefficient
+        B = moments.electron.constraints_B_coefficient
+        C = moments.electron.constraints_C_coefficient
         @loop_r_z ir iz begin
             if (iz == 1 && z.irank == 0) || (iz == z.n && z.irank == z.nrank - 1)
                 continue
             end
-            #@views hard_force_moment_constraints!(pdf[:,:,iz,ir], (evolve_density=true, evolve_upar=false, evolve_ppar=true), vpa)
-            @views hard_force_moment_constraints!(pdf[:,:,iz,ir], (evolve_density=true, evolve_upar=true, evolve_ppar=true), vpa)
+            (A[iz,ir], B[iz,ir], C[iz,ir]) =
+                #@views hard_force_moment_constraints!(pdf[:,:,iz,ir], (evolve_density=true, evolve_upar=false, evolve_ppar=true), vpa)
+                @views hard_force_moment_constraints!(pdf[:,:,iz,ir], (evolve_density=true, evolve_upar=true, evolve_ppar=true), vpa)
         end
         #println("B pdf 1 ", pdf[:,1,1,1])
         #println("B pdf end ", pdf[:,1,end,1])
@@ -492,7 +496,8 @@ end
 
 function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vperp, vpa,
                                                      vperp_spectral, vpa_spectral,
-                                                     vpa_adv, vpa_diffusion, me_over_mi)
+                                                     vpa_adv, moments, vpa_diffusion,
+                                                     me_over_mi)
     # Enforce velocity-space boundary conditions
     if vpa.n > 1
         begin_r_z_vperp_region()
@@ -652,6 +657,9 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vperp
         @. vpa.scratch3 = vpa.grid^2 * vpa.scratch2^2 * pdf[:,1,1,ir]
         vpa2_wpa2_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
         
+        normalisation_constant_A = 0.0
+        normalisation_constant_B = 0.0
+        normalisation_constant_C = 0.0
         if pdf_adjustment_option == "absvpa"
             # calculate int dwpa |vpa| * pdf = absvpa_moment
             @. vpa.scratch3 = pdf[:,1,1,ir] * abs(vpa.scratch2)
@@ -731,14 +739,18 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vperp
             @. pdf[:,1,1,ir] *= (normalisation_constant_A + exp(-afac * vpa.scratch2^2) * vpa.scratch2^2 * normalisation_constant_B 
                                 + exp(-bfac * vpa.scratch2^2) * vpa.scratch2^4 * normalisation_constant_C)
         elseif pdf_adjustment_option == "no1st_vpa2"
-            normalisation_constant_B = (1.0 - 0.5*zeroth_moment/wpa2_moment) /
+            normalisation_constant_C = (1.0 - 0.5*zeroth_moment/wpa2_moment) /
                                        (vpa2_moment - zeroth_moment*vpa2_wpa2_moment / wpa2_moment)
-            normalisation_constant_A = (0.5 - normalisation_constant_B*vpa2_wpa2_moment) / wpa2_moment
-            @. pdf[:,1,1,ir] *= (normalisation_constant_A + vpa.scratch2^2 * normalisation_constant_B)
+            normalisation_constant_A = (0.5 - normalisation_constant_C*vpa2_wpa2_moment) / wpa2_moment
+            @. pdf[:,1,1,ir] *= (normalisation_constant_A + vpa.scratch2^2 * normalisation_constant_C)
         else
             println("pdf_adjustment_option not recognised")
             stop()
         end
+
+        moments.electron.constraints_A_coefficient[1,ir] = normalisation_constant_A
+        moments.electron.constraints_B_coefficient[1,ir] = normalisation_constant_B
+        moments.electron.constraints_C_coefficient[1,ir] = normalisation_constant_C
 
         # smooth the pdf at the boundary
         #for ivpa ∈ 2:ivpa_max-1
@@ -893,6 +905,9 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vperp
         @. vpa.scratch3 = vpa.grid^2 * vpa.scratch2^2 * pdf[:,1,end,ir]
         vpa2_wpa2_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
         
+        normalisation_constant_A = 0.0
+        normalisation_constant_B = 0.0
+        normalisation_constant_C = 0.0
         if pdf_adjustment_option == "absvpa"
             # calculate int dwpa |vpa| * pdf = absvpa_moment
             @. vpa.scratch3 = pdf[:,1,end,ir] * abs(vpa.scratch2)
@@ -972,14 +987,18 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vperp
             @. pdf[:,1,end,ir] *= (normalisation_constant_A + exp(-afac * vpa.scratch2^2) * vpa.scratch2^2 * normalisation_constant_B 
                                 + exp(-bfac * vpa.scratch2^2) * vpa.scratch2^4 * normalisation_constant_C)
         elseif pdf_adjustment_option == "no1st_vpa2"
-            normalisation_constant_B = (1.0 - 0.5*zeroth_moment/wpa2_moment) /
+            normalisation_constant_C = (1.0 - 0.5*zeroth_moment/wpa2_moment) /
                                        (vpa2_moment - zeroth_moment*vpa2_wpa2_moment / wpa2_moment)
-            normalisation_constant_A = (0.5 - normalisation_constant_B*vpa2_wpa2_moment) / wpa2_moment
-            @. pdf[:,1,end,ir] *= (normalisation_constant_A + vpa.scratch2^2 * normalisation_constant_B)
+            normalisation_constant_A = (0.5 - normalisation_constant_C*vpa2_wpa2_moment) / wpa2_moment
+            @. pdf[:,1,end,ir] *= (normalisation_constant_A + vpa.scratch2^2 * normalisation_constant_C)
         else
             println("pdf_adjustment_option not recognised")
             stop()
         end
+
+        moments.electron.constraints_A_coefficient[end,ir] = normalisation_constant_A
+        moments.electron.constraints_B_coefficient[end,ir] = normalisation_constant_B
+        moments.electron.constraints_C_coefficient[end,ir] = normalisation_constant_C
 
         # smooth the pdf at the boundary
         #for ivpa ∈ ivpa_min+1:vpa.n-1

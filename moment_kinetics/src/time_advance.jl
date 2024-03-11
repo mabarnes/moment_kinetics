@@ -435,9 +435,15 @@ function setup_time_advance!(pdf, fields, scratch, vz, vr, vzeta, vpa, vperp, z,
             composition, scratch_dummy, advance.r_diffusion, advance.vpa_diffusion)
         # Ensure normalised pdf exactly obeys integral constraints if evolving moments
         begin_s_r_z_region()
-        @loop_s_r_z is ir iz begin
-            @views hard_force_moment_constraints!(pdf.ion.norm[:,:,iz,ir,is], moments,
-                                                  vpa)
+        if moments.evolve_density && moments.enforce_conservation
+            A = moments.ion.constraints_A_coefficient
+            B = moments.ion.constraints_B_coefficient
+            C = moments.ion.constraints_C_coefficient
+            @loop_s_r_z is ir iz begin
+                (A[iz,ir,is], B[iz,ir,is], C[iz,ir,is]) =
+                    @views hard_force_moment_constraints!(pdf.ion.norm[:,:,iz,ir,is],
+                                                          moments, vpa)
+            end
         end
         # update moments in case they were affected by applying boundary conditions or
         # constraints to the pdf
@@ -458,9 +464,15 @@ function setup_time_advance!(pdf, fields, scratch, vz, vr, vzeta, vpa, vperp, z,
                 nothing, neutral_vz_advect, r, z, vzeta, vr, vz, composition, geometry,
                 scratch_dummy, advance.r_diffusion, advance.vz_diffusion)
             begin_sn_r_z_region()
-            @loop_sn_r_z isn ir iz begin
-                @views hard_force_moment_constraints_neutral!(
-                    pdf.neutral.norm[:,:,:,iz,ir,isn], moments, vz)
+            if moments.evolve_density && moments.enforce_conservation
+                A = moments.neutral.constraints_A_coefficient
+                B = moments.neutral.constraints_B_coefficient
+                C = moments.neutral.constraints_C_coefficient
+                @loop_sn_r_z isn ir iz begin
+                    (A[iz,ir,isn], B[iz,ir,isn], C[iz,ir,isn]) =
+                        @views hard_force_moment_constraints_neutral!(
+                            pdf.neutral.norm[:,:,:,iz,ir,isn], moments, vz)
+                end
             end
             update_moments_neutral!(moments, pdf.neutral.norm, vz, vr, vzeta, z, r,
                                     composition)
@@ -1346,9 +1358,13 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
 
     if moments.evolve_density && moments.enforce_conservation
         begin_s_r_z_region()
+        A = moments.ion.constraints_A_coefficient
+        B = moments.ion.constraints_B_coefficient
+        C = moments.ion.constraints_C_coefficient
         @loop_s_r_z is ir iz begin
-            @views hard_force_moment_constraints!(new_scratch.pdf[:,:,iz,ir,is], moments,
-                                                  vpa)
+            (A[iz,ir,is], B[iz,ir,is], C[iz,ir,is]) =
+                @views hard_force_moment_constraints!(new_scratch.pdf[:,:,iz,ir,is],
+                                                     moments, vpa)
         end
     end
     # update remaining velocity moments that are calculable from the evolved pdf
@@ -1448,9 +1464,13 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
 
         if moments.evolve_density && moments.enforce_conservation
             begin_sn_r_z_region()
+            A = moments.neutral.constraints_A_coefficient
+            B = moments.neutral.constraints_B_coefficient
+            C = moments.neutral.constraints_C_coefficient
             @loop_sn_r_z isn ir iz begin
-                @views hard_force_moment_constraints_neutral!(
-                    new_scratch.pdf_neutral[:,:,:,iz,ir,isn], moments, vz)
+                (A[iz,ir,isn], B[iz,ir,isn], C[iz,ir,isn]) =
+                    @views hard_force_moment_constraints_neutral!(
+                        new_scratch.pdf_neutral[:,:,:,iz,ir,isn], moments, vz)
             end
         end
 

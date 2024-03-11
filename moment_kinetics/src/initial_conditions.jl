@@ -319,7 +319,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
         init_electron_pdf_over_density_and_boundary_phi!(
             pdf.electron.norm, fields.phi, moments.electron.dens, moments.electron.upar,
             moments.electron.vth, z, vpa, vperp, vperp_spectral, vpa_spectral,
-            [(speed=speed,)], num_diss_params,
+            [(speed=speed,)], moments, num_diss_params,
             composition.me_over_mi)
     end
     # calculate the electron parallel heat flux;
@@ -1234,7 +1234,8 @@ NB: as the electron pdf is obtained via a time-independent equation,
 this 'initital' value for the electron will just be the first guess in an iterative solution
 """
 function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upar, vth, z,
-        vpa, vperp, vperp_spectral, vpa_spectral, vpa_advect, num_diss_params, me_over_mi)
+        vpa, vperp, vperp_spectral, vpa_spectral, vpa_advect, moments, num_diss_params,
+        me_over_mi)
 
     if z.bc == "wall"
         begin_r_region()
@@ -1251,7 +1252,7 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
         # functions and boundary values of phi
         enforce_boundary_condition_on_electron_pdf!(pdf, phi, vth, upar, vperp, vpa,
                                                     vperp_spectral, vpa_spectral,
-                                                    vpa_advect,
+                                                    vpa_advect, moments,
                                                     num_diss_params.vpa_dissipation_coefficient > 0.0,
                                                     me_over_mi)
         begin_r_region()
