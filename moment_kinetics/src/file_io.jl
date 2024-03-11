@@ -54,7 +54,8 @@ moments & fields only
 """
 struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower,
                        Tchodura_upper, Texti1, Texti2, Texti3, Texti4,
-                       Texti5, Textn1, Textn2, Textn3, Textn4, Textn5, Tint, Tfailcause}
+                       Texti5, Textn1, Textn2, Textn3, Textn4, Textn5, Tconstri, Tconstrn,
+                       Tint, Tfailcause}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the time variable
@@ -101,6 +102,14 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower,
     external_source_neutral_momentum_amplitude::Textn3
     external_source_neutral_pressure_amplitude::Textn4
     external_source_neutral_controller_integral::Textn5
+
+    # handles for constraint coefficients
+    ion_constraints_A_coefficient::Tconstri
+    ion_constraints_B_coefficient::Tconstri
+    ion_constraints_C_coefficient::Tconstri
+    neutral_constraints_A_coefficient::Tconstrn
+    neutral_constraints_B_coefficient::Tconstrn
+    neutral_constraints_C_coefficient::Tconstrn
 
     # cumulative wall clock time taken by the run
     time_for_run::Ttime
@@ -629,13 +638,14 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                            description="simulation time")
 
         io_phi, io_Er, io_Ez =
-            define_dynamic_em_field_variables!(fid, r, z, parallel_io,
-                                               external_source_settings)
+            define_dynamic_em_field_variables!(fid, r, z, parallel_io)
 
         io_density, io_upar, io_ppar, io_pperp, io_qpar, io_vth, io_dSdt,
         external_source_amplitude, external_source_density_amplitude,
         external_source_momentum_amplitude, external_source_pressure_amplitude,
-        external_source_controller_integral, io_chodura_lower, io_chodura_upper =
+        external_source_controller_integral, io_chodura_lower, io_chodura_upper,
+        ion_constraints_A_coefficient, ion_constraints_B_coefficient,
+        ion_constraints_C_coefficient =
             define_dynamic_ion_moment_variables!(fid, n_ion_species, r, z, parallel_io,
                                                  external_source_settings, evolve_density,
                                                  evolve_upar, evolve_ppar)
@@ -645,7 +655,8 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
         external_source_neutral_density_amplitude,
         external_source_neutral_momentum_amplitude,
         external_source_neutral_pressure_amplitude,
-        external_source_neutral_controller_integral =
+        external_source_neutral_controller_integral, neutral_constraints_A_coefficient,
+        neutral_constraints_B_coefficient, neutral_constraints_C_coefficient =
             define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r, z,
                                                      parallel_io,
                                                      external_source_settings,
@@ -656,6 +667,42 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
             dynamic, "time_for_run", mk_float; parallel_io=parallel_io,
             description="cumulative wall clock time for run (excluding setup)",
             units="minutes")
+
+        io_step_counter = create_dynamic_variable!(
+            dynamic, "step_counter", mk_int; parallel_io=parallel_io,
+            description="cumulative number of timesteps for the run")
+
+        io_dt = create_dynamic_variable!(
+            dynamic, "dt", mk_float; parallel_io=parallel_io,
+            description="current timestep size")
+
+        io_failure_counter = create_dynamic_variable!(
+            dynamic, "failure_counter", mk_int; parallel_io=parallel_io,
+            description="cumulative number of timestep failures for the run")
+
+        n_failure_vars = 1 + evolve_density + evolve_upar + evolve_ppar
+        if n_neutral_species > 0
+            n_failure_vars *= 2
+        end
+        io_failure_caused_by = create_dynamic_variable!(
+            dynamic, "failure_caused_by", mk_int; diagnostic_var_size=n_failure_vars,
+            parallel_io=parallel_io,
+            description="cumulative count of how many times each variable caused a "
+                        * "timestep failure for the run")
+        n_limit_vars = 5 + 2
+        if n_neutral_species > 0
+            n_limit_vars += 2
+        end
+        io_limit_caused_by = create_dynamic_variable!(
+            dynamic, "limit_caused_by", mk_int; diagnostic_var_size=n_limit_vars,
+            parallel_io=parallel_io,
+            description="cumulative count of how many times each factor limited the "
+                        * "timestep for the run")
+
+        io_dt_before_last_fail = create_dynamic_variable!(
+            dynamic, "dt_before_last_fail", mk_float; parallel_io=parallel_io,
+            description="Last successful timestep before most recent timestep failure, "
+                        * "used by adaptve timestepping algorithm")
 
         return io_moments_info(fid, io_time, io_phi, io_Er, io_Ez, io_density, io_upar,
                                io_ppar, io_pperp, io_qpar, io_vth, io_dSdt, io_chodura_lower, io_chodura_upper,
@@ -671,7 +718,15 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                external_source_neutral_momentum_amplitude,
                                external_source_neutral_pressure_amplitude,
                                external_source_neutral_controller_integral,
-                               io_time_for_run, parallel_io)
+                               ion_constraints_A_coefficient,
+                               ion_constraints_B_coefficient,
+                               ion_constraints_C_coefficient,
+                               neutral_constraints_A_coefficient,
+                               neutral_constraints_B_coefficient,
+                               neutral_constraints_C_coefficient,
+                               io_time_for_run, io_step_counter, io_dt,
+                               io_failure_counter, io_failure_caused_by,
+                               io_limit_caused_by, io_dt_before_last_fail, parallel_io)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -839,10 +894,34 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
         io_chodura_upper = nothing
     end
 
+    if evolve_density || evolve_upar || evolve_ppar
+        ion_constraints_A_coefficient =
+            create_dynamic_variable!(dynamic, "ion_constraints_A_coefficient", mk_float, z, r;
+                                   n_ion_species=n_ion_species,
+                                   parallel_io=parallel_io,
+                                   description="'A' coefficient enforcing density constraint for ions")
+        ion_constraints_B_coefficient =
+            create_dynamic_variable!(dynamic, "ion_constraints_B_coefficient", mk_float, z, r;
+                                   n_ion_species=n_ion_species,
+                                   parallel_io=parallel_io,
+                                   description="'B' coefficient enforcing flow constraint for ions")
+        ion_constraints_C_coefficient =
+            create_dynamic_variable!(dynamic, "ion_constraints_C_coefficient", mk_float, z, r;
+                                   n_ion_species=n_ion_species,
+                                   parallel_io=parallel_io,
+                                   description="'C' coefficient enforcing pressure constraint for ions")
+    else
+           ion_constraints_A_coefficient = nothing
+           ion_constraints_B_coefficient = nothing
+           ion_constraints_C_coefficient = nothing
+    end
+
     return io_density, io_upar, io_ppar, io_pperp, io_qpar, io_vth, io_dSdt,
            external_source_amplitude, external_source_density_amplitude,
            external_source_momentum_amplitude, external_source_pressure_amplitude,
-           external_source_controller_integral, io_chodura_lower, io_chodura_upper
+           external_source_controller_integral, io_chodura_lower, io_chodura_upper,
+           ion_constraints_A_coefficient, ion_constraints_B_coefficient,
+           ion_constraints_C_coefficient
 end
 
 """
@@ -943,67 +1022,35 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
         external_source_neutral_controller_integral = nothing
     end
 
-        io_time_for_run = create_dynamic_variable!(
-            dynamic, "time_for_run", mk_float; parallel_io=parallel_io,
-            description="cumulative wall clock time for run (excluding setup)",
-            units="minutes")
-
-        io_step_counter = create_dynamic_variable!(
-            dynamic, "step_counter", mk_int; parallel_io=parallel_io,
-            description="cumulative number of timesteps for the run")
-
-        io_dt = create_dynamic_variable!(
-            dynamic, "dt", mk_float; parallel_io=parallel_io,
-            description="current timestep size")
-
-        io_failure_counter = create_dynamic_variable!(
-            dynamic, "failure_counter", mk_int; parallel_io=parallel_io,
-            description="cumulative number of timestep failures for the run")
-
-        n_failure_vars = 1 + evolve_density + evolve_upar + evolve_ppar
-        if n_neutral_species > 0
-            n_failure_vars *= 2
-        end
-        io_failure_caused_by = create_dynamic_variable!(
-            dynamic, "failure_caused_by", mk_int; diagnostic_var_size=n_failure_vars,
-            parallel_io=parallel_io,
-            description="cumulative count of how many times each variable caused a "
-                        * "timestep failure for the run")
-        n_limit_vars = 5 + 2
-        if n_neutral_species > 0
-            n_limit_vars += 2
-        end
-        io_limit_caused_by = create_dynamic_variable!(
-            dynamic, "limit_caused_by", mk_int; diagnostic_var_size=n_limit_vars,
-            parallel_io=parallel_io,
-            description="cumulative count of how many times each factor limited the "
-                        * "timestep for the run")
-
-        io_dt_before_last_fail = create_dynamic_variable!(
-            dynamic, "dt_before_last_fail", mk_float; parallel_io=parallel_io,
-            description="Last successful timestep before most recent timestep failure, "
-                        * "used by adaptve timestepping algorithm")
-
-        return io_moments_info(fid, io_time, io_phi, io_Er, io_Ez, io_density, io_upar,
-                               io_ppar, io_pperp, io_qpar, io_vth, io_dSdt, io_chodura_lower, io_chodura_upper, io_density_neutral, io_uz_neutral,
-                               io_pz_neutral, io_qz_neutral, io_thermal_speed_neutral,
-                               external_source_amplitude,
-                               external_source_density_amplitude,
-                               external_source_momentum_amplitude,
-                               external_source_pressure_amplitude,
-                               external_source_controller_integral,
-                               external_source_neutral_amplitude,
-                               external_source_neutral_density_amplitude,
-                               external_source_neutral_momentum_amplitude,
-                               external_source_neutral_pressure_amplitude,
-                               external_source_neutral_controller_integral,
-                               io_time_for_run, io_step_counter, io_dt,
-                               io_failure_counter, io_failure_caused_by,
-                               io_limit_caused_by, io_dt_before_last_fail, parallel_io)
+    if evolve_density || evolve_upar || evolve_ppar
+        neutral_constraints_A_coefficient =
+            create_dynamic_variable!(dynamic, "neutral_constraints_A_coefficient", mk_float, z, r;
+                                   n_neutral_species=n_neutral_species,
+                                   parallel_io=parallel_io,
+                                   description="'A' coefficient enforcing density constraint for neutrals")
+        neutral_constraints_B_coefficient =
+            create_dynamic_variable!(dynamic, "neutral_constraints_B_coefficient", mk_float, z, r;
+                                   n_neutral_species=n_neutral_species,
+                                   parallel_io=parallel_io,
+                                   description="'B' coefficient enforcing flow constraint for neutrals")
+        neutral_constraints_C_coefficient =
+            create_dynamic_variable!(dynamic, "neutral_constraints_C_coefficient", mk_float, z, r;
+                                   n_neutral_species=n_neutral_species,
+                                   parallel_io=parallel_io,
+                                   description="'C' coefficient enforcing pressure constraint for neutrals")
+    else
+           neutral_constraints_A_coefficient = nothing
+           neutral_constraints_B_coefficient = nothing
+           neutral_constraints_C_coefficient = nothing
     end
 
-    # For processes other than the root process of each shared-memory group...
-    return nothing
+    return io_density_neutral, io_uz_neutral, io_pz_neutral, io_qz_neutral,
+           io_thermal_speed_neutral, external_source_neutral_amplitude,
+           external_source_neutral_density_amplitude,
+           external_source_neutral_momentum_amplitude,
+           external_source_neutral_pressure_amplitude,
+           external_source_neutral_controller_integral, neutral_constraints_A_coefficient,
+           neutral_constraints_B_coefficient, neutral_constraints_C_coefficient
 end
 
 """
@@ -1169,6 +1216,12 @@ function reopen_moments_io(file_info)
                                getvar("external_source_neutral_momentum_amplitude"),
                                getvar("external_source_neutral_pressure_amplitude"),
                                getvar("external_source_neutral_controller_integral"),
+                               getvar("ion_constraints_A_coefficient"),
+                               getvar("ion_constraints_B_coefficient"),
+                               getvar("ion_constraints_C_coefficient"),
+                               getvar("neutral_constraints_A_coefficient"),
+                               getvar("neutral_constraints_B_coefficient"),
+                               getvar("neutral_constraints_C_coefficient"),
                                getvar("time_for_run"), getvar("step_counter"),
                                getvar("dt"), getvar("failure_counter"),
                                getvar("failure_caused_by"), getvar("limit_caused_by"),
@@ -1271,6 +1324,12 @@ function reopen_dfns_io(file_info)
                                      getvar("external_source_neutral_momentum_amplitude"),
                                      getvar("external_source_neutral_pressure_amplitude"),
                                      getvar("external_source_neutral_controller_integral"),
+                                     getvar("ion_constraints_A_coefficient"),
+                                     getvar("ion_constraints_B_coefficient"),
+                                     getvar("ion_constraints_C_coefficient"),
+                                     getvar("neutral_constraints_A_coefficient"),
+                                     getvar("neutral_constraints_B_coefficient"),
+                                     getvar("neutral_constraints_C_coefficient"),
                                      getvar("time_for_run"), getvar("step_counter"),
                                      getvar("dt"), getvar("failure_counter"),
                                      getvar("failure_caused_by"),
@@ -1328,15 +1387,26 @@ function write_all_moments_data_to_binary(moments, fields, t, n_ion_species,
         # add the time for this time slice to the hdf5 file
         append_to_dynamic_var(io_moments.time, t, t_idx, parallel_io)
 
-        write_em_fields_data_to_binary(fields, io_or_file_info_moments, t_idx, r, z)
+        write_em_fields_data_to_binary(fields, io_moments, t_idx, r, z)
 
-        write_ion_moments_data_to_binary(moments, n_ion_species, io_or_file_info_moments,
+        write_ion_moments_data_to_binary(moments, n_ion_species, io_moments,
                                          t_idx, r, z)
 
         write_neutral_moments_data_to_binary(moments, n_neutral_species,
-                                             io_or_file_info_moments, t_idx, r, z)
+                                             io_moments, t_idx, r, z)
 
         append_to_dynamic_var(io_moments.time_for_run, time_for_run, t_idx, parallel_io)
+        append_to_dynamic_var(io_moments.step_counter, t_params.step_counter[], t_idx, parallel_io)
+        append_to_dynamic_var(io_moments.dt, t_params.dt_before_output[], t_idx, parallel_io)
+        append_to_dynamic_var(io_moments.failure_counter, t_params.failure_counter[], t_idx, parallel_io)
+        append_to_dynamic_var(io_moments.failure_caused_by, t_params.failure_caused_by,
+                              t_idx, parallel_io, length(t_params.failure_caused_by);
+                              only_root=true)
+        append_to_dynamic_var(io_moments.limit_caused_by, t_params.limit_caused_by, t_idx,
+                              parallel_io, length(t_params.limit_caused_by);
+                              only_root=true)
+        append_to_dynamic_var(io_moments.dt_before_last_fail,
+                              t_params.dt_before_last_fail[], t_idx, parallel_io)
 
         closefile && close(io_moments.fid)
     end
@@ -1346,18 +1416,13 @@ end
 
 """
 write time-dependent EM fields data to the binary output file
+
+Note: should only be called from within a function that (re-)opens the output file.
 """
-function write_em_fields_data_to_binary(fields, io_or_file_info_moments, t_idx, r, z)
+function write_em_fields_data_to_binary(fields, io_moments::io_moments_info, t_idx,
+                                        r, z)
     @serial_region begin
         # Only read/write from first process in each 'block'
-
-        if isa(io_or_file_info_moments, io_moments_info)
-            io_moments = io_or_file_info_moments
-            closefile = false
-        else
-            io_moments = reopen_moments_io(io_or_file_info_moments)
-            closefile = true
-        end
 
         parallel_io = io_moments.parallel_io
 
@@ -1365,8 +1430,6 @@ function write_em_fields_data_to_binary(fields, io_or_file_info_moments, t_idx, 
         append_to_dynamic_var(io_moments.phi, fields.phi, t_idx, parallel_io, z, r)
         append_to_dynamic_var(io_moments.Er, fields.Er, t_idx, parallel_io, z, r)
         append_to_dynamic_var(io_moments.Ez, fields.Ez, t_idx, parallel_io, z, r)
-
-        closefile && close(io_moments.fid)
     end
 
     return nothing
@@ -1374,19 +1437,13 @@ end
 
 """
 write time-dependent moments data for ions to the binary output file
+
+Note: should only be called from within a function that (re-)opens the output file.
 """
-function write_ion_moments_data_to_binary(moments, n_ion_species, io_or_file_info_moments,
-                                          t_idx, r, z)
+function write_ion_moments_data_to_binary(moments, n_ion_species,
+                                          io_moments::io_moments_info, t_idx, r, z)
     @serial_region begin
         # Only read/write from first process in each 'block'
-
-        if isa(io_or_file_info_moments, io_moments_info)
-            io_moments = io_or_file_info_moments
-            closefile = false
-        else
-            io_moments = reopen_moments_io(io_or_file_info_moments)
-            closefile = true
-        end
 
         parallel_io = io_moments.parallel_io
 
@@ -1454,8 +1511,17 @@ function write_ion_moments_data_to_binary(moments, n_ion_species, io_or_file_inf
                                       t_idx, parallel_io, z, r)
             end
         end
-
-        closefile && close(io_moments.fid)
+        if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
+            append_to_dynamic_var(io_moments.ion_constraints_A_coefficient,
+                                  moments.ion.constraints_A_coefficient, t_idx,
+                                  parallel_io, z, r, n_ion_species)
+            append_to_dynamic_var(io_moments.ion_constraints_B_coefficient,
+                                  moments.ion.constraints_B_coefficient, t_idx,
+                                  parallel_io, z, r, n_ion_species)
+            append_to_dynamic_var(io_moments.ion_constraints_C_coefficient,
+                                  moments.ion.constraints_C_coefficient, t_idx,
+                                  parallel_io, z, r, n_ion_species)
+        end
     end
 
     return nothing
@@ -1463,23 +1529,17 @@ end
 
 """
 write time-dependent moments data for neutrals to the binary output file
+
+Note: should only be called from within a function that (re-)opens the output file.
 """
 function write_neutral_moments_data_to_binary(moments, n_neutral_species,
-                                              io_or_file_info_moments, t_idx, r, z)
+                                              io_moments::io_moments_info, t_idx, r, z)
     if n_neutral_species ≤ 0
         return nothing
     end
 
     @serial_region begin
         # Only read/write from first process in each 'block'
-
-        if isa(io_or_file_info_moments, io_moments_info)
-            io_moments = io_or_file_info_moments
-            closefile = false
-        else
-            io_moments = reopen_moments_io(io_or_file_info_moments)
-            closefile = true
-        end
 
         parallel_io = io_moments.parallel_io
 
@@ -1525,19 +1585,17 @@ function write_neutral_moments_data_to_binary(moments, n_neutral_species,
                                       t_idx, parallel_io, z, r)
             end
         end
-        append_to_dynamic_var(io_moments.step_counter, t_params.step_counter[], t_idx, parallel_io)
-        append_to_dynamic_var(io_moments.dt, t_params.dt_before_output[], t_idx, parallel_io)
-        append_to_dynamic_var(io_moments.failure_counter, t_params.failure_counter[], t_idx, parallel_io)
-        append_to_dynamic_var(io_moments.failure_caused_by, t_params.failure_caused_by,
-                              t_idx, parallel_io, length(t_params.failure_caused_by);
-                              only_root=true)
-        append_to_dynamic_var(io_moments.limit_caused_by, t_params.limit_caused_by, t_idx,
-                              parallel_io, length(t_params.limit_caused_by);
-                              only_root=true)
-        append_to_dynamic_var(io_moments.dt_before_last_fail,
-                              t_params.dt_before_last_fail[], t_idx, parallel_io)
-
-        closefile && close(io_moments.fid)
+        if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
+            append_to_dynamic_var(io_moments.neutral_constraints_A_coefficient,
+                                  moments.neutral.constraints_A_coefficient, t_idx,
+                                  parallel_io, z, r, n_neutral_species)
+            append_to_dynamic_var(io_moments.neutral_constraints_B_coefficient,
+                                  moments.neutral.constraints_B_coefficient, t_idx,
+                                  parallel_io, z, r, n_neutral_species)
+            append_to_dynamic_var(io_moments.neutral_constraints_C_coefficient,
+                                  moments.neutral.constraints_C_coefficient, t_idx,
+                                  parallel_io, z, r, n_neutral_species)
+        end
     end
 
     return nothing
@@ -1569,11 +1627,10 @@ function write_all_dfns_data_to_binary(pdf, moments, fields, t, n_ion_species,
                                          time_for_run, t_params, r, z)
 
         # add the distribution function data at this time slice to the output file
-        write_ion_dfns_data_to_binary(pdf.ion.norm, n_ion_species, io_or_file_info_dfns,
-                                      t_idx, r, z, vperp, vpa)
-        write_neutral_dfns_data_to_binary(pdf.neutral.norm, n_neutral_species,
-                                          io_or_file_info_dfns, t_idx, r, z, vzeta, vr,
-                                          vz)
+        write_ion_dfns_data_to_binary(pdf.ion.norm, n_ion_species, io_dfns, t_idx, r, z,
+                                      vperp, vpa)
+        write_neutral_dfns_data_to_binary(pdf.neutral.norm, n_neutral_species, io_dfns,
+                                          t_idx, r, z, vzeta, vr, vz)
 
         closefile && close(io_dfns.fid)
     end
@@ -1582,46 +1639,32 @@ end
 
 """
 write time-dependent distribution function data for ions to the binary output file
+
+Note: should only be called from within a function that (re-)opens the output file.
 """
-function write_ion_dfns_data_to_binary(ff, n_ion_species, io_or_file_info_dfns, t_idx, r,
-                                       z, vperp, vpa)
+function write_ion_dfns_data_to_binary(ff, n_ion_species, io_dfns::io_dfns_info,
+                                       t_idx, r, z, vperp, vpa)
     @serial_region begin
         # Only read/write from first process in each 'block'
-
-        if isa(io_or_file_info_dfns, io_dfns_info)
-            io_dfns = io_or_file_info_dfns
-            closefile = false
-        else
-            io_dfns = reopen_dfns_io(io_or_file_info_dfns)
-            closefile = true
-        end
 
         parallel_io = io_dfns.parallel_io
 
         append_to_dynamic_var(io_dfns.f, ff, t_idx, parallel_io, vpa, vperp, z, r,
                               n_ion_species)
-
-        closefile && close(io_dfns.fid)
     end
     return nothing
 end
 
 """
 write time-dependent distribution function data for neutrals to the binary output file
+
+Note: should only be called from within a function that (re-)opens the output file.
 """
 function write_neutral_dfns_data_to_binary(ff_neutral, n_neutral_species,
-                                           io_or_file_info_dfns, t_idx, r, z, vzeta, vr,
+                                           io_dfns::io_dfns_info, t_idx, r, z, vzeta, vr,
                                            vz)
     @serial_region begin
         # Only read/write from first process in each 'block'
-
-        if isa(io_or_file_info_dfns, io_dfns_info)
-            io_dfns = io_or_file_info_dfns
-            closefile = false
-        else
-            io_dfns = reopen_dfns_io(io_or_file_info_dfns)
-            closefile = true
-        end
 
         parallel_io = io_dfns.parallel_io
 
@@ -1629,8 +1672,6 @@ function write_neutral_dfns_data_to_binary(ff_neutral, n_neutral_species,
             append_to_dynamic_var(io_dfns.f_neutral, ff_neutral, t_idx, parallel_io, vz,
                                   vr, vzeta, z, r, n_neutral_species)
         end
-
-        closefile && close(io_dfns.fid)
     end
     return nothing
 end

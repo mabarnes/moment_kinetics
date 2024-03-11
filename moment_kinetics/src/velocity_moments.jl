@@ -126,6 +126,15 @@ struct moments_ion_substruct
     external_source_pressure_amplitude::MPISharedArray{mk_float,2}
     # Integral term for the PID controller of the external source term
     external_source_controller_integral::MPISharedArray{mk_float,2}
+    # Store coefficient 'A' from applying moment constraints so we can write it out as a
+    # diagnostic
+    constraints_A_coefficient::Union{MPISharedArray{mk_float,3},Nothing}
+    # Store coefficient 'B' from applying moment constraints so we can write it out as a
+    # diagnostic
+    constraints_B_coefficient::Union{MPISharedArray{mk_float,3},Nothing}
+    # Store coefficient 'C' from applying moment constraints so we can write it out as a
+    # diagnostic
+    constraints_C_coefficient::Union{MPISharedArray{mk_float,3},Nothing}
 end
 
 """
@@ -209,6 +218,15 @@ struct moments_neutral_substruct
     external_source_pressure_amplitude::MPISharedArray{mk_float,2}
     # Integral term for the PID controller of the external source term
     external_source_controller_integral::MPISharedArray{mk_float,2}
+    # Store coefficient 'A' from applying moment constraints so we can write it out as a
+    # diagnostic
+    constraints_A_coefficient::Union{MPISharedArray{mk_float,3},Nothing}
+    # Store coefficient 'B' from applying moment constraints so we can write it out as a
+    # diagnostic
+    constraints_B_coefficient::Union{MPISharedArray{mk_float,3},Nothing}
+    # Store coefficient 'C' from applying moment constraints so we can write it out as a
+    # diagnostic
+    constraints_C_coefficient::Union{MPISharedArray{mk_float,3},Nothing}
 end
 
 """
@@ -334,6 +352,16 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
         external_source_controller_integral = allocate_shared_float(1, 1)
     end
 
+    if evolve_density || evolve_upar || evolve_ppar
+        constraints_A_coefficient = allocate_shared_float(nz, nr, n_species)
+        constraints_B_coefficient = allocate_shared_float(nz, nr, n_species)
+        constraints_C_coefficient = allocate_shared_float(nz, nr, n_species)
+    else
+        constraints_A_coefficient = nothing
+        constraints_B_coefficient = nothing
+        constraints_C_coefficient = nothing
+    end
+
     # return struct containing arrays needed to update moments
     return moments_ion_substruct(density, density_updated, parallel_flow,
         parallel_flow_updated, parallel_pressure, parallel_pressure_updated,perpendicular_pressure,
@@ -343,7 +371,8 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
         dppar_dz, dppar_dz_upwind, d2ppar_dz2, dqpar_dz, dvth_dz, entropy_production,
         external_source_amplitude, external_source_density_amplitude,
         external_source_momentum_amplitude, external_source_pressure_amplitude,
-        external_source_controller_integral)
+        external_source_controller_integral, constraints_A_coefficient,
+        constraints_B_coefficient, constraints_C_coefficient)
 end
 
 # neutral particles have natural mean velocities 
@@ -470,6 +499,16 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
         external_source_controller_integral = allocate_shared_float(1, 1)
     end
 
+    if evolve_density || evolve_upar || evolve_ppar
+        constraints_A_coefficient = allocate_shared_float(nz, nr, n_species)
+        constraints_B_coefficient = allocate_shared_float(nz, nr, n_species)
+        constraints_C_coefficient = allocate_shared_float(nz, nr, n_species)
+    else
+        constraints_A_coefficient = nothing
+        constraints_B_coefficient = nothing
+        constraints_C_coefficient = nothing
+    end
+
     # return struct containing arrays needed to update moments
     return moments_neutral_substruct(density, density_updated, uz, uz_updated, ur,
         ur_updated, uzeta, uzeta_updated, pz, pz_updated, pr, pr_updated, pzeta,
@@ -477,7 +516,8 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
         d2dens_dz2, duz_dz, duz_dz_upwind, d2uz_dz2, dpz_dz, dpz_dz_upwind, d2pz_dz2,
         dqz_dz, dvth_dz, external_source_amplitude, external_source_density_amplitude,
         external_source_momentum_amplitude, external_source_pressure_amplitude,
-        external_source_controller_integral)
+        external_source_controller_integral, constraints_A_coefficient,
+        constraints_B_coefficient, constraints_C_coefficient)
 end
 
 """

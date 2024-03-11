@@ -308,6 +308,8 @@ function makie_post_process(run_dir::Union{String,Tuple},
         plot_neutral_pdf_2D_at_wall(run_info_dfns; plot_prefix=plot_prefix)
     end
 
+    constraints_plots(run_info; plot_prefix=plot_prefix)
+
     if has_rdim
         # Plots for 2D instability do not make sense for 1D simulations
         instability_input = input_dict["instability2D"]
@@ -682,6 +684,22 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         advection_velocity=false,
         colormap=this_input_dict["colormap"],
         animation_ext=this_input_dict["animation_ext"],
+       )
+
+    set_defaults_and_check_section!(
+        this_input_dict, "constraints";
+        plot=false,
+        animate=false,
+        it0=this_input_dict["it0"],
+        ir0=this_input_dict["ir0"],
+        iz0=this_input_dict["iz0"],
+        ivperp0=this_input_dict["ivperp0"],
+        ivpa0=this_input_dict["ivpa0"],
+        ivzeta0=this_input_dict["ivzeta0"],
+        ivr0=this_input_dict["ivr0"],
+        ivz0=this_input_dict["ivz0"],
+        animation_ext=this_input_dict["animation_ext"],
+        show_element_boundaries=this_input_dict["show_element_boundaries"],
        )
 
     set_defaults_and_check_section!(
@@ -4584,6 +4602,338 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
     end
 
     return nothing
+end
+
+"""
+    constraints_plots(run_info; plot_prefix=plot_prefix)
+
+Plot and/or animate the coefficients used to correct the normalised distribution
+function(s) (aka shape functions) to obey the moment constraints.
+
+If there were no discretisation errors, we would have \$A=1\$, \$B=0\$, \$C=0\$. The
+plots/animations show \$(A-1)\$ so that all three coefficients can be shown nicely on the
+same axes.
+"""
+function constraints_plots(run_info; plot_prefix=plot_prefix)
+    input = Dict_to_NamedTuple(input_dict["constraints"])
+
+    if !(input.plot || input.animate)
+        return nothing
+    end
+
+    try
+        println("Making plots of moment constraints coefficients")
+
+        if !isa(run_info, Tuple)
+            run_info = (run_info,)
+        end
+
+        it0 = input.it0
+        ir0 = input.ir0
+
+        if input.plot
+            if any(ri.evolve_density || ri.evolve_upar || ri.evolve_ppar
+                   for ri ∈ run_info)
+
+                # Ions
+                frame_index = Observable(1)
+                fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
+                for ri ∈ run_info
+                    if !(ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                        continue
+                    end
+                    nspecies = ri.n_ion_species
+                    for is ∈ 1:nspecies
+                        if length(run_info) > 1
+                            prefix = ri.run_name * ", "
+                        else
+                            prefix = ""
+                        end
+                        if nspecies > 1
+                            suffix = ", species $is"
+                        else
+                            suffix = ""
+                        end
+
+                        varname = "ion_constraints_A_coefficient"
+                        label = prefix * "(A-1)" * suffix
+                        data = get_variable(ri, varname; it=it0, is=is, ir=ir0)
+                        data .-= 1.0
+                        plot_vs_z(ri, varname; label=label, data=data, ax=ax, input=input)
+
+                        varname = "ion_constraints_B_coefficient"
+                        label = prefix * "B" * suffix
+                        plot_vs_z(ri, varname; label=label, ax=ax, it=it0, is=is, ir=ir0,
+                                  input=input)
+
+                        varname = "ion_constraints_C_coefficient"
+                        label = prefix * "C" * suffix
+                        plot_vs_z(ri, varname; label=label, ax=ax, it=it0, is=is, ir=ir0,
+                                  input=input)
+                    end
+                end
+                put_legend_right(fig, ax)
+                save(plot_prefix * "ion_constraints.pdf", fig)
+            end
+
+            # Neutrals
+            if any(ri.n_neutral_species > 1
+                   && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                   for ri ∈ run_info)
+
+                fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
+                for ri ∈ run_info
+                    if !(ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                        continue
+                    end
+                    nspecies = ri.n_neutral_species
+                    for is ∈ 1:nspecies
+                        if length(run_info) > 1
+                            prefix = ri.run_name * ", "
+                        else
+                            prefix = ""
+                        end
+                        if nspecies > 1
+                            suffix = ", species $is"
+                        else
+                            suffix = ""
+                        end
+
+                        varname = "neutral_constraints_A_coefficient"
+                        label = prefix * "(A-1)" * suffix
+                        data = get_variable(ri, varname; it=it0, is=is, ir=ir0)
+                        data .-= 1.0
+                        plot_vs_z(ri, varname; label=label, data=data, ax=ax, input=input)
+
+                        varname = "neutral_constraints_B_coefficient"
+                        label = prefix * "B" * suffix
+                        plot_vs_z(ri, varname; label=label, ax=ax, it=it0, is=is, ir=ir0,
+                                  input=input)
+
+                        varname = "neutral_constraints_C_coefficient"
+                        label = prefix * "C" * suffix
+                        plot_vs_z(ri, varname; label=label, ax=ax, it=it0, is=is, ir=ir0,
+                                  input=input)
+                    end
+                end
+                put_legend_right(fig, ax)
+                save(plot_prefix * "neutral_constraints.pdf", fig)
+            end
+
+            # Electrons
+            if any(ri.composition.electron_physics == kinetic_electrons for ri ∈ run_info)
+
+                fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        prefix = ri.run_name * ", "
+                    else
+                        prefix = ""
+                    end
+
+                    varname = "electron_constraints_A_coefficient"
+                    label = prefix * "(A-1)"
+                    data = get_variable(ri, varname; it=it0, ir=ir0)
+                    data .-= 1.0
+                    plot_vs_z(ri, varname; label=label, data=data, ax=ax, input=input)
+
+                    varname = "electron_constraints_B_coefficient"
+                    label = prefix * "B"
+                    plot_vs_z(ri, varname; label=label, ax=ax, it=it0, ir=ir0,
+                              input=input)
+
+                    varname = "electron_constraints_C_coefficient"
+                    label = prefix * "C"
+                    plot_vs_z(ri, varname; label=label, ax=ax, it=it0, ir=ir0,
+                              input=input)
+                end
+                put_legend_right(fig, ax)
+                save(plot_prefix * "electron_constraints.pdf", fig)
+            end
+        end
+
+        if input.animate
+            nt = minimum(ri.nt for ri ∈ run_info)
+
+            if any(ri.evolve_density || ri.evolve_upar || ri.evolve_ppar
+                   for ri ∈ run_info)
+
+                # Ions
+                frame_index = Observable(1)
+                fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
+
+                # Calculate plot limits manually so we can exclude the first time point, which
+                # often has a large value for (A-1) due to the way initialisation is done,
+                # which can make the subsequent values hard to see.
+                ymin = Inf
+                ymax = -Inf
+                for ri ∈ run_info
+                    if !(ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                        continue
+                    end
+                    nspecies = ri.n_ion_species
+                    for is ∈ 1:nspecies
+                        if length(run_info) > 1
+                            prefix = ri.run_name * ", "
+                        else
+                            prefix = ""
+                        end
+                        if nspecies > 1
+                            suffix = ", species $is"
+                        else
+                            suffix = ""
+                        end
+
+                        varname = "ion_constraints_A_coefficient"
+                        label = prefix * "(A-1)" * suffix
+                        data = get_variable(ri, varname; is=is, ir=ir0)
+                        data .-= 1.0
+                        ymin = min(ymin, minimum(data[:,2:end]))
+                        ymax = max(ymax, maximum(data[:,2:end]))
+                        animate_vs_z(ri, varname; label=label, data=data,
+                                     frame_index=frame_index, ax=ax, input=input)
+
+                        varname = "ion_constraints_B_coefficient"
+                        label = prefix * "B" * suffix
+                        data = get_variable(ri, varname; is=is, ir=ir0)
+                        ymin = min(ymin, minimum(data[:,2:end]))
+                        ymax = max(ymax, maximum(data[:,2:end]))
+                        animate_vs_z(ri, varname; label=label, data=data,
+                                     frame_index=frame_index, ax=ax, is=is, ir=ir0,
+                                     input=input)
+
+                        varname = "ion_constraints_C_coefficient"
+                        label = prefix * "C" * suffix
+                        data = get_variable(ri, varname; is=is, ir=ir0)
+                        ymin = min(ymin, minimum(data[:,2:end]))
+                        ymax = max(ymax, maximum(data[:,2:end]))
+                        animate_vs_z(ri, varname; label=label, data=data,
+                                     frame_index=frame_index, ax=ax, is=is, ir=ir0,
+                                     input=input)
+                    end
+                end
+                put_legend_right(fig, ax)
+                ylims!(ax, ymin, ymax)
+                save_animation(fig, frame_index, nt,
+                               plot_prefix * "ion_constraints." * input.animation_ext)
+            end
+
+            # Neutrals
+            if any(ri.n_neutral_species > 1
+                   && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                   for ri ∈ run_info)
+
+                frame_index = Observable(1)
+                fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
+
+                # Calculate plot limits manually so we can exclude the first time point, which
+                # often has a large value for (A-1) due to the way initialisation is done,
+                # which can make the subsequent values hard to see.
+                ymin = Inf
+                ymax = -Inf
+                for ri ∈ run_info
+                    if !(ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                        continue
+                    end
+                    nspecies = ri.n_neutral_species
+                    for is ∈ 1:nspecies
+                        if length(run_info) > 1
+                            prefix = ri.run_name * ", "
+                        else
+                            prefix = ""
+                        end
+                        if nspecies > 1
+                            suffix = ", species $is"
+                        else
+                            suffix = ""
+                        end
+
+                        varname = "neutral_constraints_A_coefficient"
+                        label = prefix * "(A-1)" * suffix
+                        data = get_variable(ri, varname; is=is, ir=ir0)
+                        data .-= 1.0
+                        ymin = min(ymin, minimum(data[:,2:end]))
+                        ymax = max(ymax, maximum(data[:,2:end]))
+                        animate_vs_z(ri, varname; label=label, data=data,
+                                     frame_index=frame_index, ax=ax, input=input)
+
+                        varname = "neutral_constraints_B_coefficient"
+                        label = prefix * "B" * suffix
+                        data = get_variable(ri, varname; is=is, ir=ir0)
+                        ymin = min(ymin, minimum(data[:,2:end]))
+                        ymax = max(ymax, maximum(data[:,2:end]))
+                        animate_vs_z(ri, varname; label=label, data=data,
+                                     frame_index=frame_index, ax=ax, is=is, ir=ir0,
+                                     input=input)
+
+                        varname = "neutral_constraints_C_coefficient"
+                        label = prefix * "C" * suffix
+                        data = get_variable(ri, varname; is=is, ir=ir0)
+                        ymin = min(ymin, minimum(data[:,2:end]))
+                        ymax = max(ymax, maximum(data[:,2:end]))
+                        animate_vs_z(ri, varname; label=label, data=data,
+                                     frame_index=frame_index, ax=ax, is=is, ir=ir0,
+                                     input=input)
+                    end
+                end
+                put_legend_right(fig, ax)
+                ylims!(ax, ymin, ymax)
+                save_animation(fig, frame_index, nt,
+                               plot_prefix * "neutral_constraints." * input.animation_ext)
+            end
+
+            # Electrons
+            if any(ri.composition.electron_physics == kinetic_electrons for ri ∈ run_info)
+
+                frame_index = Observable(1)
+                fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
+
+                # Calculate plot limits manually so we can exclude the first time point, which
+                # often has a large value for (A-1) due to the way initialisation is done,
+                # which can make the subsequent values hard to see.
+                ymin = Inf
+                ymax = -Inf
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        prefix = ri.run_name * ", "
+                    else
+                        prefix = ""
+                    end
+
+                    varname = "electron_constraints_A_coefficient"
+                    label = prefix * "(A-1)"
+                    data = get_variable(ri, varname; ir=ir0)
+                    data .-= 1.0
+                    ymin = min(ymin, minimum(data[:,2:end]))
+                    ymax = max(ymax, maximum(data[:,2:end]))
+                    animate_vs_z(ri, varname; label=label, data=data,
+                                 frame_index=frame_index, ax=ax, input=input)
+
+                    varname = "electron_constraints_B_coefficient"
+                    label = prefix * "B"
+                    data = get_variable(ri, varname; ir=ir0)
+                    ymin = min(ymin, minimum(data[:,2:end]))
+                    ymax = max(ymax, maximum(data[:,2:end]))
+                    animate_vs_z(ri, varname; label=label, data=data,
+                                 frame_index=frame_index, ax=ax, ir=ir0, input=input)
+
+                    varname = "electron_constraints_C_coefficient"
+                    label = prefix * "C"
+                    data = get_variable(ri, varname; ir=ir0)
+                    ymin = min(ymin, minimum(data[:,2:end]))
+                    ymax = max(ymax, maximum(data[:,2:end]))
+                    animate_vs_z(ri, varname; label=label, data=data,
+                                 frame_index=frame_index, ax=ax, ir=ir0, input=input)
+                end
+                put_legend_right(fig, ax)
+                ylims!(ax, ymin, ymax)
+                save_animation(fig, frame_index, nt,
+                               plot_prefix * "electron_constraints." * input.animation_ext)
+            end
+        end
+    catch e
+        println("Error in constraints_plots(). Error was ", e)
+    end
 end
 
 """

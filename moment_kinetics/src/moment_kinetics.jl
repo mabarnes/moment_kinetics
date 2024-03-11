@@ -428,9 +428,9 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     write_all_moments_data_to_binary(moments, fields, code_time,
         composition.n_ion_species, composition.n_neutral_species, io_moments, 1, 0.0, t_params, r,
         z)
-    write_all_dfns_data_to_binary(pdf.ion.norm, pdf.neutral.norm, moments, fields,
-        code_time, composition.n_ion_species, composition.n_neutral_species, io_dfns, 1,
-        0.0, t_params, r, z, vperp, vpa, vzeta, vr, vz)
+    write_all_dfns_data_to_binary(pdf, moments, fields, code_time,
+        composition.n_ion_species, composition.n_neutral_species, io_dfns, 1, 0.0,
+        t_params, r, z, vperp, vpa, vzeta, vr, vz)
 
     begin_s_r_z_vperp_region()
 
