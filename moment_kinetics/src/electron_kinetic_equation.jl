@@ -283,18 +283,18 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
             end
 
             # TMP FOR TESTING -- MAB
-            # #dt_energy = dt_electron
-            # electron_energy_equation!(ppar, dens, fvec, moments, collisions, dt_energy, composition, num_diss_params, z)
+            #dt_energy = dt_electron
+            electron_energy_equation!(ppar, dens, fvec, moments, collisions, dt_energy, composition, num_diss_params, z)
 
-            # # Apply same 'speed up' hack to ppar that we do to the distribution function,
-            # # but without the wpa dependence.
-            # @loop_r_z ir iz begin
-            #     zval = z.grid[iz]
-            #     znorm = 2.0*zval/z.L
-            #     ppar[iz,ir] = fvec.electron_ppar[iz,ir] +
-            #                   (ppar[iz,ir] - fvec.electron_ppar[iz,ir]) *
-            #                   (1.0 + z_speedup_fac*(1.0 - znorm^2))
-            # end
+            # Apply same 'speed up' hack to ppar that we do to the distribution function,
+            # but without the wpa dependence.
+            @loop_r_z ir iz begin
+                zval = z.grid[iz]
+                znorm = 2.0*zval/z.L
+                ppar[iz,ir] = fvec.electron_ppar[iz,ir] +
+                              (ppar[iz,ir] - fvec.electron_ppar[iz,ir]) *
+                              (1.0 + z_speedup_fac*(1.0 - znorm^2))
+            end
             begin_r_z_region()
             @loop_r_z ir iz begin
                 fvec.electron_ppar[iz,ir] = ppar[iz,ir]
