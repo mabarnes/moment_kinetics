@@ -426,7 +426,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         # TMP FOR TESTING
         #dqpar_dz .= 0.0
         # calculate the residual of the electron kinetic equation for the updated electron pdf
-        dt_electron = electron_kinetic_equation_residual!(residual, max_term, single_term, pdf, dens, upar, vthe, ppar, ddens_dz, upar_ion,
+        dt_electron = electron_kinetic_equation_residual!(residual, max_term, single_term, pdf, dens, upar, vthe, ppar, upar_ion, ddens_dz,
                                             dppar_dz, dqpar_dz, dvth_dz, 
                                             z, vperp, vpa, z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                                             collisions, num_diss_params, dt_max)
