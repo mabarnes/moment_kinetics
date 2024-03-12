@@ -274,10 +274,10 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
                                  z, r, composition)
 
     initialize_electrons!(pdf, moments, fields, geometry, composition, r, z,
-                          vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral, vpa_spectral, 
-                          collisions, external_source_settings,
-                          scratch_dummy, scratch, t_input, num_diss_params, advection_structs,
-                          io_input, input_dict)
+                          vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
+                          vperp_spectral, vpa_spectral, collisions,
+                          external_source_settings, scratch_dummy, scratch, t_input,
+                          num_diss_params, advection_structs, io_input, input_dict)
 
     # moments.electron.dens_updated[] = false
     # # initialise the electron density profile
@@ -357,10 +357,11 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
 end
 
 function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z,
-                               vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral, vpa_spectral, 
-                               collisions, external_source_settings,
-                               scratch_dummy, scratch, t_input, num_diss_params, advection_structs,
-                               io_input, input_dict; restart=false)
+                               vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
+                               vperp_spectral, vpa_spectral, collisions,
+                               external_source_settings, scratch_dummy, scratch, t_input,
+                               num_diss_params, advection_structs, io_input, input_dict;
+                               restart=false)
     
     moments.electron.dens_updated[] = false
     # initialise the electron density profile

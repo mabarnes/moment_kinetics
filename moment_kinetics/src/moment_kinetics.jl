@@ -318,10 +318,11 @@ function setup_moment_kinetics(input_dict::AbstractDict;
             # where electrons have a Boltzmann distribution, there is missing information
             # that still needs to be specified for the electrons
             initialize_electrons!(pdf, moments, fields, geometry, composition, r, z,
-                                 vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral, vpa_spectral, 
-                                 collisions, external_source_settings,
-                                 scratch_dummy, scratch, t_input, num_diss_params, advection_structs,
-                                 io_input, input_dict, restart=true)
+                                  vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
+                                  vperp_spectral, vpa_spectral, collisions,
+                                  external_source_settings, scratch_dummy, scratch,
+                                  t_input, num_diss_params, advection_structs, io_input,
+                                  input_dict, restart=true)
         end
 
         _block_synchronize()
