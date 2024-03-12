@@ -367,6 +367,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
     # initialise the electron density profile
     init_electron_density!(moments.electron.dens, moments.electron.dens_updated, moments.ion.dens)
     # initialise the electron parallel flow profile
+    moments.electron.upar_updated[] = false
     init_electron_upar!(moments.electron.upar, moments.electron.upar_updated, moments.electron.dens, 
         moments.ion.upar, moments.ion.dens, composition.electron_physics, r, z)
     # different choices for initialization of electron temperature/pressure/vth depending on whether
