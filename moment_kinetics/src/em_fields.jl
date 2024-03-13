@@ -17,14 +17,14 @@ using ..derivatives: derivative_r!, derivative_z!
 using ..gyroaverages: gyro_operators, gyroaverage_field!
 """
 """
-function setup_em_fields(nvperp, nz, nr, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
+function setup_em_fields(nvperp, nz, nr, n_ion_species, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
     phi = allocate_shared_float(nz,nr)
     phi0 = allocate_shared_float(nz,nr)
     Er = allocate_shared_float(nz,nr)
     Ez = allocate_shared_float(nz,nr)
-    gphi = allocate_shared_float(nvperp,nz,nr)
-    gEr = allocate_shared_float(nvperp,nz,nr)
-    gEz = allocate_shared_float(nvperp,nz,nr)
+    gphi = allocate_shared_float(nvperp,nz,nr,n_ion_species)
+    gEr = allocate_shared_float(nvperp,nz,nr,n_ion_species)
+    gEz = allocate_shared_float(nvperp,nz,nr,n_ion_species)
     return em_fields_struct(phi, phi0, Er, Ez, gphi, gEr, gEz, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
 end
 
@@ -144,14 +144,14 @@ function update_phi!(fields, fvec, vperp, z, r, composition, z_spectral, r_spect
     # get gyroaveraged field arrays for distribution function advance
     gkions = composition.gyrokinetic_ions
     if gkions
-        gyroaverage_field!(fields.gphi,fields.phi,gyroavs,vperp,z,r)
-        gyroaverage_field!(fields.gEz,fields.Ez,gyroavs,vperp,z,r)
-        gyroaverage_field!(fields.gEr,fields.Er,gyroavs,vperp,z,r)
+        gyroaverage_field!(fields.gphi,fields.phi,gyroavs,vperp,z,r,composition)
+        gyroaverage_field!(fields.gEz,fields.Ez,gyroavs,vperp,z,r,composition)
+        gyroaverage_field!(fields.gEr,fields.Er,gyroavs,vperp,z,r,composition)
     else # use the drift-kinetic form of the fields in the kinetic equation
-        @loop_r_z_vperp ir iz ivperp begin
-            fields.gphi[ivperp,iz,ir] = fields.phi[iz,ir]
-            fields.gEz[ivperp,iz,ir] = fields.Ez[iz,ir]
-            fields.gEr[ivperp,iz,ir] = fields.Er[iz,ir]
+        @loop_s_r_z_vperp is ir iz ivperp begin
+            fields.gphi[ivperp,iz,ir,is] = fields.phi[iz,ir]
+            fields.gEz[ivperp,iz,ir,is] = fields.Ez[iz,ir]
+            fields.gEr[ivperp,iz,ir,is] = fields.Er[iz,ir]
         end
     end
 

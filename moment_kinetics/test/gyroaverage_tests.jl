@@ -155,16 +155,16 @@ function gyroaverage_test(absolute_error; rhostar=0.1, pitch=0.5, ngrid=5, kr=2,
         gyro = init_gyro_operators(vperp,z,r,gyrophase,geometry,composition,print_info=print_test_results)
         # initialise a test field
         phi = allocate_shared_float(z.n,r.n)
-        gphi = allocate_shared_float(vperp.n,z.n,r.n)
-        gphi_exact = allocate_float(vperp.n,z.n,r.n)
+        gphi = allocate_shared_float(vperp.n,z.n,r.n,composition.n_ion_species)
+        gphi_exact = allocate_float(vperp.n,z.n,r.n,composition.n_ion_species)
         gphi_err = allocate_float(vperp.n,z.n,r.n)
         begin_serial_region()
         @serial_region begin 
-            fill_test_arrays!(phi,gphi_exact,vperp,z,r,geometry,kz,kr,phasez,phaser)
+            fill_test_arrays!(phi,gphi_exact,vperp,z,r,geometry,composition,kz,kr,phasez,phaser)
         end
         
         # gyroaverage phi
-        gyroaverage_field!(gphi,phi,gyro,vperp,z,r)
+        gyroaverage_field!(gphi,phi,gyro,vperp,z,r,composition)
         
         # compute errors
         begin_serial_region()
@@ -250,7 +250,8 @@ function create_test_composition()
             mn_over_mi, me_over_mi, recycling_fraction, gyrokinetic_ions, allocate_float(n_species))
 end
 
-function fill_test_arrays!(phi,gphi,vperp,z,r,geometry,kz,kr,phasez,phaser)
+function fill_test_arrays!(phi,gphi,vperp,z,r,geometry,composition,kz,kr,phasez,phaser)
+   n_ion_species = composition.n_ion_species
    for ir in 1:r.n
       for iz in 1:z.n
          Bmag = geometry.Bmag[iz,ir] 
@@ -262,10 +263,12 @@ function fill_test_arrays!(phi,gphi,vperp,z,r,geometry,kz,kr,phasez,phaser)
          kperp = sqrt(kkr^2 + (bzeta*kkz)^2)
          
          phi[iz,ir] = sin(r.grid[ir]*kkr + phaser)*sin(z.grid[iz]*kkz + phasez)
-         for ivperp in 1:vperp.n
-            krho = kperp*vperp.grid[ivperp]*rhostar/Bmag
-            # use that phi is a sum of Kronecker deltas in k space to write gphi
-            gphi[ivperp,iz,ir] = besselj0(krho)*phi[iz,ir]
+         for is in 1:n_ion_species
+             for ivperp in 1:vperp.n
+                krho = kperp*vperp.grid[ivperp]*rhostar/Bmag
+                # use that phi is a sum of Kronecker deltas in k space to write gphi
+                gphi[ivperp,iz,ir,is] = besselj0(krho)*phi[iz,ir]
+             end
          end
       end
    end  

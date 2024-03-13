@@ -222,7 +222,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, gyrophase, vz
 
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
-    fields = setup_em_fields(vperp.n, z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency, drive_input.force_Er_zero_at_wall)
+    fields = setup_em_fields(vperp.n, z.n, r.n, composition.n_ion_species, drive_input.force_phi,
+      drive_input.amplitude, drive_input.frequency, drive_input.force_Er_zero_at_wall)
     # initialize the electrostatic potential
     begin_serial_region()
     update_phi!(fields, scratch[1], vperp, z, r, composition, z_spectral, r_spectral, scratch_dummy, gyroavs)
@@ -254,7 +255,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, gyrophase, vz
         @loop_s is begin
             @views update_speed_r!(r_advect[is], moments.charged.upar[:,:,is],
                                    moments.charged.vth[:,:,is], fields, moments.evolve_upar,
-                                   moments.evolve_ppar, vpa, vperp, z, r, geometry)
+                                   moments.evolve_ppar, vpa, vperp, z, r, geometry, is)
         end
         # enforce prescribed boundary condition in r on the distribution function f
     end
@@ -271,7 +272,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, gyrophase, vz
             @views update_speed_z!(z_advect[is], moments.charged.upar[:,:,is],
                                    moments.charged.vth[:,:,is], moments.evolve_upar,
                                    moments.evolve_ppar, fields, vpa, vperp, z, r, 0.0,
-                                   geometry)
+                                   geometry, is)
         end
     end
     begin_serial_region()

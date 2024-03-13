@@ -13,13 +13,14 @@ using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..array_allocation: allocate_int
 using ..looping
+using ..communication: MPISharedArray
 #using ..communication
 
 struct gyro_operators
     # matrix for applying a gyroaverage to a function F(r,vpa,vperp) at fixed r, with R = r - rhovec and rhovec = b x v / Omega
     # the matrix can also be used ring-averaging a function F(R,vpa,vperp) at fixed R, since F(R,vpa,vperp) is independent of gyrophase
     # other matrices are required for gyroaveraging functions that depend on gyrophase.
-    gyromatrix::Array{mk_float,5}
+    gyromatrix::MPISharedArray{mk_float,6}
 end
 
 """
@@ -35,107 +36,109 @@ no contribution from outside of the domain
 function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition;print_info=false)
     gkions = composition.gyrokinetic_ions
     if !gkions
-        gyromatrix =  allocate_float(1,1,1,1,1)
+        gyromatrix =  allocate_shared_float(1,1,1,1,1,1)
         gyro = gyro_operators(gyromatrix)
     else
        if print_info
            println("Begin: init_gyro_operators")
        end
-       gyromatrix = allocate_float(z.n,r.n,vperp.n,z.n,r.n)
+       gyromatrix = allocate_shared_float(z.n,r.n,vperp.n,z.n,r.n,composition.n_ion_species)
        
        # init the matrix!
        # the first two indices are to be summed over
        # the other indices are the "field" positions of the resulting gyroaveraged quantity
        begin_serial_region()
-       zlist = allocate_float(gyrophase.n)
-       rlist = allocate_float(gyrophase.n)
-       zelementlist = allocate_int(gyrophase.n)
-       relementlist = allocate_int(gyrophase.n)
-       
-       @loop_r_z_vperp ir iz ivperp begin
-           #println("ivperp, iz, ir: ",ivperp," ",iz," ",ir)
-           r_val = r.grid[ir]
-           z_val = z.grid[iz]
-           vperp_val = vperp.grid[ivperp]
-           rhostar = geometry.rhostar
-           # Bmag at the centre of the gyroaveraged path
-           Bmag = geometry.Bmag[iz,ir]
-           # bzeta at the centre of the gyroaveraged path
-           bzeta = geometry.bzeta[iz,ir]
-           # rho at the centre of the gyroaveraged path 
-           # (modify to include different mass or reference temperatures)
-           rho_val = vperp_val*rhostar/Bmag
-           # convert these angles to a list of z'(gphase) r'(gphase)
-           zrcoordinatelist!(gyrophase,zlist,rlist,rho_val,r_val,z_val,bzeta)
-           # determine which elements contain these z', r'
-           elementlist!(zelementlist,zlist,z)
-           elementlist!(relementlist,rlist,r)
-           #println(z_val,zlist)
-           #println(r_val,rlist)
-           #println(zelementlist)
-           #println(relementlist)
-           # initialise matrix to zero
-           @. gyromatrix[:,:,ivperp,iz,ir] = 0.0
-           for igyro in 1:gyrophase.n
-               # integration weight from gyroaverage (1/2pi)* int d gyrophase
-               gyrowgt = gyrophase.wgts[igyro]/(2.0*pi)
-               # get information about contributing element
-               
-               izel = zelementlist[igyro]
-               if izel < 1
-                   # z' point is outside of the grid, skip this point
-                   # if simply ignore contributions from outside of the domain
-                   #continue
-                   # if set to zero any <field> where the path exits the domain
-                   @. gyromatrix[:,:,ivperp,iz,ir] = 0.0
-                   if z.bc == "periodic"
-                       print("ERROR: -1 in zelementlist")
+       @serial_region begin
+           zlist = allocate_float(gyrophase.n)
+           rlist = allocate_float(gyrophase.n)
+           zelementlist = allocate_int(gyrophase.n)
+           relementlist = allocate_int(gyrophase.n)
+           
+           @loop_s_r_z_vperp is ir iz ivperp begin
+               #println("ivperp, iz, ir: ",ivperp," ",iz," ",ir)
+               r_val = r.grid[ir]
+               z_val = z.grid[iz]
+               vperp_val = vperp.grid[ivperp]
+               rhostar = geometry.rhostar
+               # Bmag at the centre of the gyroaveraged path
+               Bmag = geometry.Bmag[iz,ir]
+               # bzeta at the centre of the gyroaveraged path
+               bzeta = geometry.bzeta[iz,ir]
+               # rho at the centre of the gyroaveraged path 
+               # (modify to include different mass or reference temperatures)
+               rho_val = vperp_val*rhostar/Bmag
+               # convert these angles to a list of z'(gphase) r'(gphase)
+               zrcoordinatelist!(gyrophase,zlist,rlist,rho_val,r_val,z_val,bzeta)
+               # determine which elements contain these z', r'
+               elementlist!(zelementlist,zlist,z)
+               elementlist!(relementlist,rlist,r)
+               #println(z_val,zlist)
+               #println(r_val,rlist)
+               #println(zelementlist)
+               #println(relementlist)
+               # initialise matrix to zero
+               @. gyromatrix[:,:,ivperp,iz,ir,is] = 0.0
+               for igyro in 1:gyrophase.n
+                   # integration weight from gyroaverage (1/2pi)* int d gyrophase
+                   gyrowgt = gyrophase.wgts[igyro]/(2.0*pi)
+                   # get information about contributing element
+                   
+                   izel = zelementlist[igyro]
+                   if izel < 1
+                       # z' point is outside of the grid, skip this point
+                       # if simply ignore contributions from outside of the domain
+                       #continue
+                       # if set to zero any <field> where the path exits the domain
+                       @. gyromatrix[:,:,ivperp,iz,ir,is] = 0.0
+                       if z.bc == "periodic"
+                           print("ERROR: -1 in zelementlist")
+                       end
+                       break
                    end
-                   break
-               end
-               izmin, izmax = z.igrid_full[1,izel], z.igrid_full[z.ngrid,izel]
-               znodes = z.grid[izmin:izmax]
-               
-               irel = relementlist[igyro]
-               if irel < 1
-                   # r' point is outside of the grid, skip this point
-                   # if simply ignore contributions from outside of the domain
-                   #continue
-                   # if set to zero any <field> where the path exits the domain
-                   @. gyromatrix[:,:,ivperp,iz,ir] = 0.0
-                   if r.bc == "periodic"
-                       print("ERROR: -1 in relementlist")
+                   izmin, izmax = z.igrid_full[1,izel], z.igrid_full[z.ngrid,izel]
+                   znodes = z.grid[izmin:izmax]
+                   
+                   irel = relementlist[igyro]
+                   if irel < 1
+                       # r' point is outside of the grid, skip this point
+                       # if simply ignore contributions from outside of the domain
+                       #continue
+                       # if set to zero any <field> where the path exits the domain
+                       @. gyromatrix[:,:,ivperp,iz,ir,is] = 0.0
+                       if r.bc == "periodic"
+                           print("ERROR: -1 in relementlist")
+                       end
+                       break
                    end
-                   break
-               end
-               irmin, irmax = r.igrid_full[1,irel], r.igrid_full[r.ngrid,irel]
-               rnodes = r.grid[irmin:irmax]
-               
-               #println("igyro ",igyro)
-               #println("izel ",izel," znodes ",znodes)
-               #println("irel ",irel," rnodes ",rnodes)
-               # sum over all contributing Lagrange polynomials from each
-               # collocation point in the element
-               icounter = 0
-               for irgrid in 1:r.ngrid
-                   irp = r.igrid_full[irgrid,irel]
-                   rpoly = lagrange_poly(irgrid,rnodes,rlist[igyro])
-                   for izgrid in 1:z.ngrid
-                       izp = z.igrid_full[izgrid,izel]
-                       zpoly = lagrange_poly(izgrid,znodes,zlist[igyro])
-                       # add the contribution from this z',r'
-                       gyromatrix[izp,irp,ivperp,iz,ir] += gyrowgt*rpoly*zpoly
-                       icounter +=1
+                   irmin, irmax = r.igrid_full[1,irel], r.igrid_full[r.ngrid,irel]
+                   rnodes = r.grid[irmin:irmax]
+                   
+                   #println("igyro ",igyro)
+                   #println("izel ",izel," znodes ",znodes)
+                   #println("irel ",irel," rnodes ",rnodes)
+                   # sum over all contributing Lagrange polynomials from each
+                   # collocation point in the element
+                   icounter = 0
+                   for irgrid in 1:r.ngrid
+                       irp = r.igrid_full[irgrid,irel]
+                       rpoly = lagrange_poly(irgrid,rnodes,rlist[igyro])
+                       for izgrid in 1:z.ngrid
+                           izp = z.igrid_full[izgrid,izel]
+                           zpoly = lagrange_poly(izgrid,znodes,zlist[igyro])
+                           # add the contribution from this z',r'
+                           gyromatrix[izp,irp,ivperp,iz,ir,is] += gyrowgt*rpoly*zpoly
+                           icounter +=1
+                       end
                    end
+                   #println("counter: ",icounter)
                end
-               #println("counter: ",icounter)
            end
-       end
-       
-       gyro = gyro_operators(gyromatrix)
-       if print_info
-           println("Finished: init_gyro_operators")
-       end
+           
+           gyro = gyro_operators(gyromatrix)
+           if print_info
+               println("Finished: init_gyro_operators")
+           end
+        end
     end
     return gyro
 end
@@ -216,24 +219,25 @@ function lagrange_poly(j,x_nodes,x)
     return poly
 end
 
-function gyroaverage_field!(gfield_out,field_in,gyro,vperp,z,r)
+function gyroaverage_field!(gfield_out,field_in,gyro,vperp,z,r,composition)
     @boundscheck z.n == size(field_in, 1) || throw(BoundsError(field_in))
     @boundscheck r.n == size(field_in, 2) || throw(BoundsError(field_in))
     @boundscheck vperp.n == size(gfield_out, 1) || throw(BoundsError(gfield))
     @boundscheck z.n == size(gfield_out, 2) || throw(BoundsError(gfield))
     @boundscheck r.n == size(gfield_out, 3) || throw(BoundsError(gfield))
+    @boundscheck composition.n_ion_species == size(gfield_out, 4) || throw(BoundsError(gfield))
     
     nr = r.n
     nz = z.n
     gyromatrix = gyro.gyromatrix
     
     begin_serial_region()
-    @loop_r_z_vperp ir iz ivperp begin
+    @loop_s_r_z_vperp is ir iz ivperp begin
         gfield_out[ivperp,iz,ir] = 0.0
         # sum over all the contributions in the gyroaverage
         for irp in 1:nr
             for izp in 1:nz
-                gfield_out[ivperp,iz,ir] += gyromatrix[izp,irp,ivperp,iz,ir]*field_in[izp,irp]
+                gfield_out[ivperp,iz,ir,is] += gyromatrix[izp,irp,ivperp,iz,ir,is]*field_in[izp,irp]
             end
         end
     end
@@ -262,7 +266,7 @@ function gyroaverage_pdf!(gpdf_out,pdf_in,gyro,vpa,vperp,z,r,composition)
         # sum over all the contributions in the gyroaverage
         for irp in 1:nr
             for izp in 1:nz
-                gpdf_out[ivpa,ivperp,iz,ir,is] += gyromatrix[izp,irp,ivperp,iz,ir]*pdf_in[ivpa,ivperp,izp,irp,is]
+                gpdf_out[ivpa,ivperp,iz,ir,is] += gyromatrix[izp,irp,ivperp,iz,ir,is]*pdf_in[ivpa,ivperp,izp,irp,is]
             end
         end
     end
