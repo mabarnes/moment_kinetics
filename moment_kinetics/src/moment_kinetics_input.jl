@@ -547,7 +547,9 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     end
     
     geometry = init_magnetic_geometry(geometry_in,z,r)
-    if any(geometry.dBdz .!= 0.0) && (evolve_density || evolve_upar || evolve_ppar)
+    if any(geometry.dBdz .!= 0.0) &&
+            (evolve_moments.density || evolve_moments.parallel_flow ||
+             evolve_moments.parallel_pressure)
         error("Mirror terms not yet implemented for moment-kinetic modes")
     end
 
