@@ -19,7 +19,7 @@ using ..finite_differences: fd_check_option
 using ..input_structs
 using ..numerical_dissipation: setup_numerical_dissipation
 using ..reference_parameters
-using ..geo: init_magnetic_geometry
+using ..geo: init_magnetic_geometry, setup_geometry_input
 
 using MPI
 using TOML
@@ -51,7 +51,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
 
     # Check for input options that used to exist, but do not any more. If these are
     # present, the user probably needs to update their input file.
-    removed_options_list = ("Bzed", "Bmag")
+    removed_options_list = ("Bzed", "Bmag", "rhostar", "geometry_option", "pitch", "DeltaB")
     for opt in removed_options_list
         if opt ∈ keys(scan_input)
             error("Option '$opt' is no longer used. Please update your input file. You "
@@ -73,7 +73,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     #   reference value using J_||e + J_||i = 0 at z = 0
     electron_physics = get(scan_input, "electron_physics", boltzmann_electron_response)
     
-    z, r, vpa, vperp, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions, geometry_in =
+    z, r, vpa, vperp, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions =
         load_defaults(n_ion_species, n_neutral_species, electron_physics)
 
     # this is the prefix for all output files associated with this run
@@ -113,10 +113,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     reference_params = setup_reference_parameters(scan_input)
 
     ## set geometry_input
-    geometry_in.option = get(scan_input, "geometry_option", "constant-helical") #"1D-mirror"
-    geometry_in.pitch = get(scan_input, "pitch", 1.0)
-    geometry_in.rhostar = get(scan_input, "rhostar", get_default_rhostar(reference_params))
-    geometry_in.DeltaB = get(scan_input, "DeltaB", 1.0)
+    geometry_in = setup_geometry_input(scan_input, get_default_rhostar(reference_params))
     
     ispecies = 1
     species.charged[1].z_IC.initialization_option = get(scan_input, "z_IC_option$ispecies", "gaussian")
@@ -1018,13 +1015,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     nuii = 0.0
     collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate,
                                   krook_collision_frequency_prefactor,"none", nuii)
-    rhostar = 0.0 #rhostar of ions for ExB drift
-    option = "constant-helical"
-    pitch = 1.0
-    DeltaB = 1.0
-    geometry_in = geometry_input(rhostar,option,pitch,DeltaB)
 
-    return z, r, vpa, vperp, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions, geometry_in
+    return z, r, vpa, vperp, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions
 end
 
 """

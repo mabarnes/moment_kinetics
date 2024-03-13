@@ -8,7 +8,6 @@ evolve_moments_parallel_pressure = false
 evolve_moments_conservation = false
 T_e = 1.0
 T_wall = 1.0
-rhostar = 1.0
 initial_density1 = 0.5
 initial_temperature1 = 1.0
 initial_density2 = 0.5
