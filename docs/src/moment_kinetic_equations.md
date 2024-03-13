@@ -10,23 +10,23 @@ The drift kinetic equation (DKE), marginalised over $v_{\perp}$, for ions is,
 adding ionization and a source term to the form in (TN-04;1),
 
 ```math
-\begin{equation}
+\begin{align}
   \frac{\partial f_{i}}{\partial t}
   +v_{\|}\frac{\partial f_{i}}{\partial z}
   -\frac{e}{m}\frac{\partial\phi}{\partial z}\frac{\partial f_{i}}{\partial v_{\|}}
-  = -R_{\mathrm{in}}\left(n_{n}f_{i}-n_{i}f_{n}\right)+R_{\mathrm{ion}}n_{i}f_{n}
+  &= -R_{\mathrm{in}}\left(n_{n}f_{i}-n_{i}f_{n}\right)+R_{\mathrm{ion}}n_{i}f_{n}
     + S_i,
-\end{equation}
+\end{align}
 ```
 
 and for neutrals, adding ionization and a source term to (TN-04;2)
 ```math
-\begin{equation}
+\begin{align}
   \frac{\partial f_{n}}{\partial t}
   +v_{\|}\frac{\partial f_{n}}{\partial z}
-  = -R_{\mathrm{in}}\left(n_{i}f_{n}-n_{n}f_{i}\right)-R_{\mathrm{ion}}n_{i}f_{n}
+  &= -R_{\mathrm{in}}\left(n_{i}f_{n}-n_{n}f_{i}\right)-R_{\mathrm{ion}}n_{i}f_{n}
     + S_n.
-\end{equation}
+\end{align}
 ```
 
 Using the normalizations (TN04;5-11)
@@ -49,27 +49,27 @@ with $c_{s}\doteq\sqrt{2T_{e}/m_{s}}$ where $L_{z}$, $N_{e}$ and $T_{e}$ are
 constant reference parameters, the ion DKE is
 
 ```math
-\begin{equation}
+\begin{align}
   \frac{\partial\tilde{f}_{i}}{\partial\tilde{t}}
   + \tilde{v}_{\|}\frac{\partial\tilde{f}_{i}}{\partial\tilde{z}}
   - \frac{1}{2}\frac{\partial\tilde{\phi}}{\partial\tilde{z}}
     \frac{\partial\tilde{f}_{i}}{\partial\tilde{v}_{\|}}
-  = -\tilde{R}_{in}\left(\tilde{n}_{n}\tilde{f}_{i}-\tilde{n}_{i}\tilde{f}_{n}\right)
+  &= -\tilde{R}_{in}\left(\tilde{n}_{n}\tilde{f}_{i}-\tilde{n}_{i}\tilde{f}_{n}\right)
     + \tilde{R}_{\mathrm{ion}}\tilde{n}_{i}\tilde{f}_{n}
     + \tilde{S}_i
-\end{equation}
+\end{align}
 ```
 
 and the neutral DKE is
 
 ```math
-\begin{equation}
+\begin{align}
   \frac{\partial\tilde{f}_{n}}{\partial\tilde{t}}
   + v_{\|}\frac{\partial\tilde{f}_{n}}{\partial\tilde{z}}
-  = -\tilde{R}_{in}\left(\tilde{n}_{i}\tilde{f}_{n}-\tilde{n}_{n}\tilde{f}_{i}\right)
+  &= -\tilde{R}_{in}\left(\tilde{n}_{i}\tilde{f}_{n}-\tilde{n}_{n}\tilde{f}_{i}\right)
     - \tilde{R}_{\mathrm{ion}}\tilde{n}_{i}\tilde{f}_{n}
     + \tilde{S}_n.
-\end{equation}
+\end{align}
 ```
 
 Moment equations
@@ -82,16 +82,16 @@ energy equation over $\tilde{v}_{\|}$ instead of $w_{\|}$,
 \begin{align}
   \tilde{n}_{s}
   & = \frac{1}{\sqrt{\pi}}\int d\tilde{v}_{\|}\tilde{f}_{s}\\
-
+%
   \tilde{n}_{s}\tilde{u}_{s}
   & = \frac{1}{\sqrt{\pi}}\int d\tilde{v}_{\|}\tilde{v}_{\|}\tilde{f}_{s}\\
-
+%
   \tilde{p}_{\|,s}
   & = \frac{1}{\sqrt{\pi}}\int d\tilde{v}_{\|}\left(\tilde{v}_{\|}
       - \tilde{u}_{s}\right)^{2}\tilde{f}_{s}
     = \int d\tilde{v}_{\|}\tilde{v}_{\|}^{2}\tilde{f}_{s}
       - \tilde{n}_{s}\tilde{u}_{s}^{2}\\
-
+%
   \tilde{q}_{\|,s}
   & = \frac{1}{\sqrt{\pi}}\int d\tilde{v}_{\|}
       \left(\tilde{v}_{\|}-\tilde{u}_{s}\right)^{3}\tilde{f}_{s}
@@ -110,7 +110,7 @@ energy equation over $\tilde{v}_{\|}$ instead of $w_{\|}$,
        - 3\tilde{u}_{s}\frac{1}{\sqrt{\pi}}\int dv_{\|}v_{\|}^{2}f_{s}
        + 3u_{s}^{2}\frac{1}{\sqrt{\pi}}\int dv_{\|}v_{\|}f_{s}
        - u_{s}^{3}\frac{1}{\sqrt{\pi}}\int dv_{\|}f_{s} \\
-
+%
    & = \frac{1}{\sqrt{\pi}}\int d\tilde{v}_{\|}\tilde{v}_{\|}^{3}\tilde{f}_{s}
        - 3\tilde{u}_{s}\left(\tilde{p}_{\|,s}+\tilde{n}_{s}\tilde{u}_{s}^{2}\right)
        + 3\tilde{u}_{s}^{2}\tilde{n}_{s}\tilde{u}_{s}-\tilde{u}_{s}^{3}\tilde{n}_{s}
@@ -121,12 +121,12 @@ energy equation over $\tilde{v}_{\|}$ instead of $w_{\|}$,
 ```
 
 ```math
-\begin{equation}
+\begin{align}
   \tilde{q}_{\|,s}
-    = \frac{1}{\sqrt{\pi}}\int d\tilde{v}_{\|}\tilde{v}_{\|}^{3}\tilde{f}_{s}
+    &= \frac{1}{\sqrt{\pi}}\int d\tilde{v}_{\|}\tilde{v}_{\|}^{3}\tilde{f}_{s}
        - 3\tilde{u}_{s}\tilde{p}_{\|,s}
        - \tilde{n}_{s}\tilde{u}_{s}^{3}
-\end{equation}
+\end{align}
 ```
 
 we can take moments of the ion DKE to give ion moment equations (dropping
@@ -137,18 +137,18 @@ tildes from here on)
   \frac{\partial n_{i}}{\partial t}+\frac{\partial\left(n_{i}u_{i}\right)}{\partial z}
   & = -R_{in}\left(n_{n}n_{i}-n_{i}n_{n}\right)+R_{\mathrm{ion}}n_{i}n_{n}
       + \int dv_\parallel S_i\\
-
+%
   & = R_{\mathrm{ion}}n_{i}n_{n} + \int dv_\parallel S_i
 \end{align}
 ```
 
 ```math
-\begin{equation}
+\begin{align}
   \frac{\partial\left(n_{i}u_{i}\right)}{\partial t} + \frac{\partial\left(p_{\|,i}
   + n_{i}u_{i}^{2}\right)}{\partial z} + \frac{1}{2}\frac{\partial\phi}{\partial z}n_{i}
-  = -R_{in}\left(n_{n}n_{i}u_{i} - n_{i}n_{n}u_{n}\right)
+  &= -R_{in}\left(n_{n}n_{i}u_{i} - n_{i}n_{n}u_{n}\right)
     + R_{\mathrm{ion}}n_{i}n_{n}u_{n} \\
-\end{equation}
+\end{align}
 ```
 
 ```@raw html
@@ -165,7 +165,7 @@ tildes from here on)
   + \frac{1}{2}\frac{\partial\phi}{\partial z}n_{i}
   & = -R_{in}\left(n_{n}n_{i}u_{i} - n_{i}n_{n}u_{n}\right)
       + R_{\mathrm{ion}}n_{i}n_{n}u_{n} \\
-
+%
   n_{i}\frac{\partial u_{i}}{\partial t}
   + u_{i}\left(R_{\mathrm{ion}}n_{i}n_{n} + \int dv_\parallel S_{i}\right)
   + \frac{\partial p_{\|,i}}{\partial z} + n_{i}u_{i}\frac{\partial u_{i}}{\partial z}
@@ -180,13 +180,13 @@ tildes from here on)
 ```
 
 ```math
-\begin{equation}
+\begin{align}
   \frac{\partial u_{i}}{\partial t} + \frac{1}{n_{i}}\frac{\partial p_{\|,i}}{\partial z}
   + u_{i}\frac{\partial u_{i}}{\partial z} + \frac{1}{2}\frac{\partial\phi}{\partial z}
-  = -R_{in}n_{n}\left(u_{i}-u_{n}\right)
+  &= -R_{in}n_{n}\left(u_{i}-u_{n}\right)
     + R_{\mathrm{ion}}\frac{n_{i}n_{n}}{n_{s}}\left(u_{n}-u_{i}\right)
     - \frac{u_{i}}{n_{i}} \int dv_\parallel S_{i}
-\end{equation}
+\end{align}
 ```
 
 ```math
@@ -217,7 +217,7 @@ tildes from here on)
                    - n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right)\right)
       + R_{\mathrm{ion}}n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right)
       + \int dv_\parallel v_\parallel^2 S_{i} \\
-
+%
   \frac{p_{\|,i}}{\partial t} + 2u_{i}\frac{\partial n_{i}u_{i}}{\partial t}
   - u_{i}^{2}\frac{\partial n_{i}}{\partial t} + \frac{\partial\left(q_{\|,i}
   + 3u_{i}p_{\|,i} + n_{i}u_{i}^{3}\right)}{\partial z}
@@ -226,7 +226,7 @@ tildes from here on)
       - n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right)\right)
       + R_{\mathrm{ion}}n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right)
       + \int dv_\parallel v_\parallel^2 S_{i} \\
-
+%
   \frac{\partial p_{\|,i}}{\partial t} + 2u_{i}\left(-\frac{\partial p_{\|,i}}{\partial z}
   - \frac{\partial\left(n_{i}u_{i}^{2}\right)}{\partial z}
   - \frac{1}{2}\frac{\partial\phi}{\partial z}n_{i}
@@ -242,7 +242,7 @@ tildes from here on)
       - n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right)\right)
       + R_{\mathrm{ion}}n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right)
       + \int dv_\parallel v_\parallel^2 S_{i} \\
-
+%
   \frac{\partial p_{\|,i}}{\partial t} + u_{i}\frac{\partial p_{\|,i}}{\partial z}
   + 3p_{\|,i}\frac{\partial u_{i}}{\partial z} + \frac{\partial q_{\|,i}}{\partial z}
   & = -R_{in}\left(n_{n}\left(p_{\|,i} + n_{i}u_{i}^{2}\right) - n_{i}\left(p_{\|,n}
@@ -250,7 +250,7 @@ tildes from here on)
       & \quad + R_{\mathrm{ion}}n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2} + n_{n}u_{i}^{2}
       - 2n_{n}u_{i}u_{n}\right)
       + \int dv_\parallel v_\parallel^2 S_{i} + u_{i}^2 \int dv_\parallel S_{i} \\
-
+%
   \frac{\partial p_{\|,i}}{\partial t} + u_{i}\frac{\partial p_{\|,i}}{\partial z}
   + 3p_{\|,i}\frac{\partial u_{i}}{\partial z} + \frac{\partial q_{\|,i}}{\partial z}
   & = -R_{in}\left(n_{n}p_{\|,i} - n_{i}p_{\|,n} - n_{i}n_{n}\left(u_{i}^{2} + u_{n}^{2}
@@ -282,18 +282,18 @@ and of the neutral DKE to give neutral moment equations
   \frac{\partial n_{n}}{\partial t} + \frac{\partial\left(n_{n}u_{n}\right)}{\partial z}
   & = -R_{i}\left(n_{i}n_{n} - n_{n}n_{i}\right) - R_{\mathrm{ion}}n_{i}n_{n}
       + \int dv_\parallel S_{n} \\
-
+%
   & =-R_{\mathrm{ion}}n_{i}n_{n} + \int dv_\parallel S_{n}
 \end{align}
 ```
 
 ```math
-\begin{equation}
+\begin{align}
   \frac{\partial\left(n_{n}u_{n}\right)}{\partial t}
   + \frac{\partial\left(p_{\|,n} + n_{n}u_{n}^{2}\right)}{\partial z}
-  = -R_{in}\left(n_{i}n_{n}u_{n} - n_{n}n_{i}u_{i}\right)
+  &= -R_{in}\left(n_{i}n_{n}u_{n} - n_{n}n_{i}u_{i}\right)
     - R_{\mathrm{ion}}n_{i}n_{n}u_{n} \\
-\end{equation}
+\end{align}
 ```
 
 ```@raw html
@@ -309,7 +309,7 @@ and of the neutral DKE to give neutral moment equations
   + n_{n}u_{n}\frac{\partial u_{n}}{\partial z}
   & = -R_{in}\left(n_{i}n_{n}u_{n} - n_{n}n_{i}u_{i}\right)
       - R_{\mathrm{ion}}n_{i}n_{n}u_{n} \\
-
+%
   n_{n}\frac{\partial u_{n}}{\partial t}
   + u_{n}\left(-R_{\mathrm{ion}}n_{i}n_{n} + \int dv_\parallel S_{n}\right)
   + \frac{\partial p_{\|,n}}{\partial z}
@@ -324,11 +324,11 @@ and of the neutral DKE to give neutral moment equations
 ```
 
 ```math
-\begin{equation}
+\begin{align}
   \frac{\partial u_{n}}{\partial t} + \frac{1}{n_{n}}\frac{\partial p_{\|,n}}{\partial z}
   + u_{n}\frac{\partial u_{n}}{\partial z}
-  = -R_{in}n_{i}\left(u_{n} - u_{i}\right) - \frac{u_{n}}{n_{n}} \int dv_\parallel S_{n}
-\end{equation}
+  &= -R_{in}n_{i}\left(u_{n} - u_{i}\right) - \frac{u_{n}}{n_{n}} \int dv_\parallel S_{n}
+\end{align}
 ```
 
 ```math
@@ -359,7 +359,7 @@ and of the neutral DKE to give neutral moment equations
       + n_{i}u_{i}^{2}\right)\right)
       - R_{\mathrm{ion}}n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right)
       + \int dv_\parallel v_\parallel^2 S_{n} \\
-
+%
   \frac{\partial p_{\|,n}}{\partial t} + 2u_{n}\frac{\partial n_{n}u_{n}}{\partial t}
   - u_{n}^{2}\frac{\partial n_{n}}{\partial t} + \frac{\partial\left(q_{\|,n}
   + 3u_{n}p_{\|,n} + n_{n}u_{n}^{3}\right)}{\partial z}
@@ -368,7 +368,7 @@ and of the neutral DKE to give neutral moment equations
       + n_{i}u_{i}^{2}\right)\right) - R_{\mathrm{ion}}n_{i}\left(p_{\|,n}
       + n_{n}u_{n}^{2}\right)
       + \int dv_\parallel v_\parallel^2 S_{n} \\
-
+%
   \frac{\partial p_{\|,n}}{\partial t}
   + 2u_{n}\left(-\frac{\partial p_{\|,n}}{\partial z}
   - \frac{\partial\left(n_{n}u_{n}^{2}\right)}{\partial z}
@@ -384,7 +384,7 @@ and of the neutral DKE to give neutral moment equations
   + n_{i}u_{i}^{2}\right)\right)
   - R_{\mathrm{ion}}n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right)
   + \int dv_\parallel v_\parallel^2 S_{n} \\
-
+%
   \frac{\partial p_{\|,n}}{\partial t} + u_{n}\frac{\partial p_{\|,n}}{\partial z}
   + 3p_{\|,n}\frac{\partial u_{n}}{\partial z} + \frac{\partial q_{\|,n}}{\partial z}
   & = -R_{in}\left(n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right) - n_{n}\left(p_{\|,i}
@@ -392,7 +392,7 @@ and of the neutral DKE to give neutral moment equations
       - n_{n}n_{i}u_{i}\right)\right) - R_{\mathrm{ion}}n_{i}\left(p_{\|,n}
       + n_{n}u_{n}^{2} + n_{n}u_{n}^{2} - 2n_{n}u_{n}u_{n}\right)
       + \int dv_\parallel v_\parallel^2 S_{n} + u_{n}^2\int dv_\parallel S_{n} \\
-
+%
   \frac{\partial p_{\|,n}}{\partial t} + u_{n}\frac{\partial p_{\|,n}}{\partial z}
   + 3p_{\|,n}\frac{\partial u_{n}}{\partial z} + \frac{\partial q_{\|,n}}{\partial z}
   & = -R_{in}\left(n_{i}p_{\|,n} - n_{n}p_{\|,i} - n_{n}n_{i}\left(u_{n}^{2} + u_{i}^{2}
@@ -421,17 +421,17 @@ Kinetic equation
 For the moment-kinetic equation for the normalized distribution function
 
 ```math
-\begin{equation}
-g_{s}(w_{\|,s})=\frac{v_{\mathrm{th},s}}{n_{s}}f_{s}(v_{\|}(w_{\|,s}))
-\end{equation}
+\begin{align}
+g_{s}(w_{\|,s}) &= \frac{v_{\mathrm{th},s}}{n_{s}}f_{s}(v_{\|}(w_{\|,s}))
+\end{align}
 ```
 
 we transform to the normalized velocity coordinate
 
 ```math
-\begin{equation}
-w_{\|,s}=\frac{v_{\|} - u_{s}}{v_{\mathrm{th},s}}
-\end{equation}
+\begin{align}
+w_{\|,s} &= \frac{v_{\|} - u_{s}}{v_{\mathrm{th},s}}
+\end{align}
 ```
 
 The derivatives transform as
@@ -442,12 +442,12 @@ The derivatives transform as
   & \rightarrow\left.\frac{\partial f_{s}}{\partial t}\right|_{z,w\|}
                - \frac{1}{v_{\mathrm{th},s}}\frac{\partial u_{s}}{\partial t}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}
                - \frac{w_{\|,s}}{v_{\mathrm{th},s}}\frac{\partial v_{\mathrm{th},s}}{\partial t}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}\\
-
+%
   \left.\frac{\partial f_{s}}{\partial z}\right|_{z,v\|}
   & \rightarrow\left.\frac{\partial f_{s}}{\partial z}\right|_{z,w\|}
                - \frac{1}{v_{\mathrm{th},s}}\frac{\partial u_{s}}{\partial z}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}
                - \frac{w_{\|,s}}{v_{\mathrm{th},s}}\frac{\partial v_{\mathrm{th},s}}{\partial z}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}\\
-
+%
   \left.\frac{\partial f_{s}}{\partial v_{\|}}\right|_{z,v\|}
   & \rightarrow\frac{1}{v_{\mathrm{th},s}}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}
 \end{align}
@@ -459,11 +459,11 @@ use
 ```math
 \begin{align}
   v_{\mathrm{th},s}^{2} & = 2\frac{p_{\|,s}}{n_{s}} \\
-
+%
   \Rightarrow v_{\mathrm{th},s}\frac{\partial v_{\mathrm{th},s}}{\partial t}
   & = \frac{1}{n_{s}}\frac{\partial p_{\|,s}}{\partial t}
       - \frac{p_{\|,s}}{n_{s}^{2}}\frac{\partial n_{s}}{\partial t}\\
-
+%
   v_{\mathrm{th},s}\frac{\partial v_{\mathrm{th},s}}{\partial z}
   & = \frac{1}{n_{s}}\frac{\partial p_{\|,s}}{\partial z}
       - \frac{p_{\|,s}}{n_{s}^{2}}\frac{\partial n_{s}}{\partial z}
@@ -479,23 +479,23 @@ to convert the transformations above to
     - \frac{1}{v_{\mathrm{th},s}}\frac{\partial u_{s}}{\partial t}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}
     - \frac{w_{\|,s}}{v_{\mathrm{th},s}^{2}}\left(\frac{1}{n_{s}}\frac{\partial p_{\|,s}}{\partial t}
     - \frac{p_{\|,s}}{n_{s}^{2}}\frac{\partial n_{s}}{\partial t}\right)\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}\\
-
+%
   & = \left.\frac{\partial f_{s}}{\partial t}\right|_{z,w\|}
       - \frac{1}{v_{\mathrm{th},s}}\frac{\partial u_{s}}{\partial t}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}
       - \frac{w_{\|,s}}{2}\left(\frac{1}{p_{\|,s}}\frac{\partial p_{\|,s}}{\partial t}
       - \frac{1}{n_{s}}\frac{\partial n_{s}}{\partial t}\right)\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}\\
-
+%
   \left.\frac{\partial f_{s}}{\partial z}\right|_{z,v\|}
   & \rightarrow\left.\frac{\partial f_{s}}{\partial z}\right|_{z,w\|}
     - \frac{1}{v_{\mathrm{th},s}}\frac{\partial u_{s}}{\partial z}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}
     - \frac{w_{\|,s}}{v_{\mathrm{th},s}^{2}}\left(\frac{1}{n_{s}}\frac{\partial p_{\|,s}}{\partial z}
     - \frac{p_{\|,s}}{n_{s}^{2}}\frac{\partial n_{s}}{\partial z}\right)\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}\\
-
+%
   & = \left.\frac{\partial f_{s}}{\partial z}\right|_{z,w\|}
       - \frac{1}{v_{\mathrm{th},s}}\frac{\partial u_{s}}{\partial z}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}
       - \frac{w_{\|,s}}{2}\left(\frac{1}{p_{\|,s}}\frac{\partial p_{\|,s}}{\partial z}
       - \frac{1}{n_{s}}\frac{\partial n_{s}}{\partial z}\right)\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}\\
-
+%
   \left.\frac{\partial f_{s}}{\partial v_{\|}}\right|_{z,v\|}
   & \rightarrow\frac{1}{v_{\mathrm{th},s}}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}
 \end{align}
@@ -538,7 +538,7 @@ equations for the moment)
   - \frac{1}{n_{i}}\frac{\partial n_{i}}{\partial z}\right)\frac{\partial f_{i}}{\partial w_{\|,i}}\right)
   - \frac{1}{2v_{\mathrm{th},i}}\frac{\partial\phi}{\partial z}\frac{\partial f_{i}}{\partial w_{\|,i}}
   & = -R_{in}\left(n_{n}f_{i} - n_{i}f_{n}\right) + R_{\mathrm{ion}}n_{i}f_{n} + S_{i} \\
-
+%
   \frac{\partial f_{i}}{\partial t} + \left(v_{\mathrm{th},i}w_{\|,i}
   + u_{i}\right)\frac{\partial f_{i}}{\partial z}
   + \left[-\frac{1}{v_{\mathrm{th},i}}\frac{\partial u_{i}}{\partial t}
@@ -606,7 +606,7 @@ and the neutral DKE
   - \frac{w_{\|,n}}{2}\left(\frac{1}{p_{\|,n}}\frac{\partial p_{\|,n}}{\partial z}
   - \frac{1}{n_{n}}\frac{\partial n_{n}}{\partial z}\right)\frac{\partial f_{n}}{\partial w_{\|,n}}\right)
   & = -R_{in}\left(n_{i}f_{n} - n_{n}f_{i}\right) - R_{\mathrm{ion}}n_{i}f_{n} + S_{n} \\
-
+%
   \frac{\partial f_{n}}{\partial t} + \left(v_{\mathrm{th},n}w_{\|,n}
   + u_{n}\right)\frac{\partial f_{n}}{\partial z}
   + \left[-\frac{1}{v_{\mathrm{th},n}}\frac{\partial u_{n}}{\partial t}
@@ -643,7 +643,7 @@ We also normalise $f$ and write the DKEs for
 ```math
 \begin{align}
   g_{s} & =\frac{v_{\mathrm{th,s}}}{n_{s}}f_{s} \\
-
+%
   \Rightarrow\frac{\partial f_{s}}{\partial t}
   & = \frac{n_{s}}{v_{\mathrm{th},s}}\frac{\partial g_{s}}{\partial t}
   + \frac{g_{s}}{v_{\mathrm{th},s}}\frac{\partial n_{s}}{\partial t}
@@ -663,7 +663,7 @@ We also normalise $f$ and write the DKEs for
       + \frac{g_{s}}{v_{\mathrm{th},s}}\frac{\partial n_{s}}{\partial t}
       - \frac{n_{s}g_{s}}{v_{\mathrm{th},s}^{3}}\left(\frac{1}{n_{s}}\frac{\partial p_{\|,s}}{\partial t}
       - \frac{p_{\|,s}}{n_{s}^{2}}\frac{\partial n_{s}}{\partial t}\right) \\
-
+%
   & = \frac{n_{s}}{v_{\mathrm{th},s}}\frac{\partial g_{s}}{\partial t}
       + \frac{g_{s}}{v_{\mathrm{th},s}}\frac{\partial n_{s}}{\partial t}
       - \frac{g_{s}n_{s}}{2v_{\mathrm{th},s}p_{\|,s}}\frac{\partial p_{\|,s}}{\partial t}
@@ -681,7 +681,7 @@ We also normalise $f$ and write the DKEs for
   & = \frac{n_{s}}{v_{\mathrm{th},s}}\frac{\partial g_{s}}{\partial t}
       + \frac{3g_{s}}{2v_{\mathrm{th},s}}\frac{\partial n_{s}}{\partial t}
       - \frac{g_{s}n_{s}}{2v_{\mathrm{th},s}p_{\|,s}}\frac{\partial p_{\|,s}}{\partial t} \\
-
+%
   \frac{\partial f_{s}}{\partial w_{\|,s}}
   & = \frac{n_{s}}{v_{\mathrm{th},s}}\frac{\partial g_{s}}{\partial w_{\|,s}},
 \end{align}
@@ -735,7 +735,7 @@ for the ion DKE and $-$'ve sign for the neutral DKE.
   & = -R_{ss'}n_{s'}\left(g_{s} - \frac{v_{\mathrm{th},s}}{v_{\mathrm{th},s'}}g_{s'}\right)
       \pm R_{\mathrm{ion}}\frac{v_{\mathrm{th},s}}{n_{s}}n_{i}\frac{n_{n}}{v_{\mathrm{th},n}}g_{n}
       + \frac{v_{\mathrm{th},s}}{n_{s}} S_{s} \\
-
+%
   \Rightarrow & \frac{\partial g_{s}}{\partial t}
   + \frac{v_{\mathrm{th},s}}{n_{s}}\left(v_{\mathrm{th},s}w_{\|,s}
   + u_{s}\right)\frac{\partial f_{s}}{\partial z}
@@ -860,7 +860,7 @@ So then if we use the moment equations we can rewrite the DKE as
   & = -R_{ss'}n_{s'}\left(g_{s} - \frac{v_{\mathrm{th},s}}{v_{\mathrm{th},s'}}g_{s'}\right)
       \pm R_{\mathrm{ion}}\frac{v_{\mathrm{th},s}}{n_{s}}n_{i}\frac{n_{n}}{v_{\mathrm{th},n}}g_{n}
       + \frac{v_{\mathrm{th},s}}{n_{s}} S_{s} \\
-
+%
   \Rightarrow & \frac{\partial g_{s}}{\partial t}
   + \frac{v_{\mathrm{th},s}}{n_{s}}\left(v_{\mathrm{th},s}w_{\|,s}
   + u_{s}\right)\frac{\partial f_{s}}{\partial z}
@@ -886,7 +886,7 @@ So then if we use the moment equations we can rewrite the DKE as
   & = -R_{ss'}n_{s'}\left(g_{s} - \frac{v_{\mathrm{th},s}}{v_{\mathrm{th},s'}}g_{s'}\right)
       \pm R_{\mathrm{ion}}\frac{v_{\mathrm{th},s}}{n_{s}}n_{i}\frac{n_{n}}{v_{\mathrm{th},n}}g_{n}
       + \frac{v_{\mathrm{th},s}}{n_{s}} S_{s}\\
-
+%
   \Rightarrow & \frac{\partial g_{s}}{\partial t}
   + \frac{v_{\mathrm{th},s}}{n_{s}}\left(v_{\mathrm{th},s}w_{\|,s}
   + u_{s}\right)\frac{\partial f_{s}}{\partial z}
