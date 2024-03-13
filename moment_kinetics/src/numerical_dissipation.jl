@@ -19,7 +19,7 @@ using ..type_definitions: mk_float
 Base.@kwdef struct numerical_dissipation_parameters
     vpa_boundary_buffer_damping_rate::mk_float = -1.0
     vpa_boundary_buffer_diffusion_coefficient::mk_float = -1.0
-    vpa_dissipation_coefficient::mk_float = -1.0
+    ion_vpa_dissipation_coefficient::mk_float = -1.0
     vz_dissipation_coefficient::mk_float = -1.0
     vperp_dissipation_coefficient::mk_float = -1.0
     z_dissipation_coefficient::mk_float = -1.0
@@ -29,12 +29,12 @@ Base.@kwdef struct numerical_dissipation_parameters
 end
 
 function setup_numerical_dissipation(input_section::Dict, is_1V)
-    if is_1V && "vpa_dissipation_coefficient" ∈ keys(input_section)
+    if is_1V && "ion_vpa_dissipation_coefficient" ∈ keys(input_section)
         # Set default for vz_dissipation_coefficient the same as
-        # vpa_dissipation_coefficient for 1V case
+        # ion_vpa_dissipation_coefficient for 1V case
         input_section["vz_dissipation_coefficient"] =
             get(input_section, "vz_dissipation_coefficient",
-                input_section["vpa_dissipation_coefficient"])
+                input_section["ion_vpa_dissipation_coefficient"])
     end
 
     input = Dict(Symbol(k)=>v for (k,v) in input_section)
@@ -243,9 +243,8 @@ vpa_dissipation_coefficient = 0.1
 ```
 """
 function vpa_dissipation!(f_out, f_in, vpa, spectral::T_spectral, dt,
-        num_diss_params::numerical_dissipation_parameters) where T_spectral
+        diffusion_coefficient) where T_spectral
 
-    diffusion_coefficient = num_diss_params.vpa_dissipation_coefficient
     if diffusion_coefficient <= 0.0 || vpa.n == 1
         return nothing
     end
@@ -534,7 +533,7 @@ function r_dissipation_neutral!(f_out, f_in, r, r_spectral::T_spectral, dt,
 end
 
 """
-    force_minimum_pdf_value!(f, num_diss_paras::numerical_dissipation_parameters)
+    force_minimum_pdf_value!(f, num_diss_params::numerical_dissipation_parameters)
 
 Set a minimum value for the pdf-sized array `f`. Any points less than the minimum are
 set to the minimum. By default, no minimum is applied. The minimum value can be set by

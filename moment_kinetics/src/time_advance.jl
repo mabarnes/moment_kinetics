@@ -685,7 +685,7 @@ function setup_advance_flags(moments, composition, t_input, collisions,
         # flag to determine if a d^2/dr^2 operator is present
         r_diffusion = (advance_numerical_dissipation && num_diss_params.r_dissipation_coefficient > 0.0)
         # flag to determine if a d^2/dvpa^2 operator is present
-        vpa_diffusion = ((advance_numerical_dissipation && num_diss_params.vpa_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
+        vpa_diffusion = ((advance_numerical_dissipation && num_diss_params.ion_vpa_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
         vz_diffusion = (advance_numerical_dissipation && num_diss_params.vz_dissipation_coefficient > 0.0)
     end
 
@@ -1863,7 +1863,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     # add numerical dissipation
     if advance.numerical_dissipation
         vpa_dissipation!(fvec_out.pdf, fvec_in.pdf, vpa, vpa_spectral, dt,
-                         num_diss_params)
+                         num_diss_params.ion_vpa_dissipation_coefficient)
         vperp_dissipation!(fvec_out.pdf, fvec_in.pdf, vperp, vperp_spectral, dt,
                          num_diss_params)
         z_dissipation!(fvec_out.pdf, fvec_in.pdf, z, z_spectral, dt,
