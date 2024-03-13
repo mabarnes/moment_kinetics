@@ -288,7 +288,10 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     begin_serial_region()
     vperp_advect = setup_advection(n_ion_species, vperp, vpa, z, r)
     # initialise the vperp advection speed
-    # note that z_advect and r_advect are arguments of update_speed_vperp!
+    # Note that z_advect and r_advect are arguments of update_speed_vperp!
+    # This means that z_advect[is].speed and r_advect[is].speed are used to determine
+    # vperp_advect[is].speed, so z_advect and r_advect must always be updated before
+    # vperp_advect is updated and used.
     if vperp.n > 1
         begin_serial_region()
         @serial_region begin
