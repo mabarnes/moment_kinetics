@@ -49,6 +49,17 @@ other situations (e.g. when post-processing).
 """
 function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
 
+    # Check for input options that used to exist, but do not any more. If these are
+    # present, the user probably needs to update their input file.
+    removed_options_list = ("Bzed", "Bmag")
+    for opt in removed_options_list
+        if opt ∈ keys(scan_input)
+            error("Option '$opt' is no longer used. Please update your input file. You "
+                  * "may need to set some new options to replicate the effect of the "
+                  * "removed ones.")
+        end
+    end
+
     # n_ion_species is the number of evolved ion species
     # currently only n_ion_species = 1 is supported
     n_ion_species = get(scan_input, "n_ion_species", 1)
@@ -102,18 +113,10 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     reference_params = setup_reference_parameters(scan_input)
 
     ## set geometry_input
-    #geometry.Bzed = get(scan_input, "Bzed", 1.0)
-    #geometry.Bmag = get(scan_input, "Bmag", 1.0)
-    #geometry.bzed = geometry.Bzed/geometry.Bmag
-    #geometry.bzeta = sqrt(1.0 - geometry.bzed^2.0)
-    #geometry.Bzeta = geometry.Bmag*geometry.bzeta
     geometry_in.option = get(scan_input, "geometry_option", "constant-helical") #"1D-mirror"
     geometry_in.pitch = get(scan_input, "pitch", 1.0)
     geometry_in.rhostar = get(scan_input, "rhostar", get_default_rhostar(reference_params))
     geometry_in.DeltaB = get(scan_input, "DeltaB", 1.0)
-    #println("Info: Bzed is ",geometry.Bzed)
-    #println("Info: Bmag is ",geometry.Bmag)
-    #println("Info: rhostar is ",geometry.rhostar)
     
     ispecies = 1
     species.charged[1].z_IC.initialization_option = get(scan_input, "z_IC_option$ispecies", "gaussian")
