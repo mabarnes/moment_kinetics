@@ -114,10 +114,15 @@ function gyroaverage_test(absolute_error; rhostar=0.1, pitch=0.5, ngrid=5, kr=2,
         # create the 'input' struct containing input info needed to create a
         # coordinate
         
+        # Set up MPI
+        initialize_comms!()
+        setup_distributed_memory_MPI(1,1,1,1)
+        irank_z, nrank_z, comm_sub_z, irank_r, nrank_r, comm_sub_r = setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelement_global,r_nelement_local)
+        
         r_input = grid_input("r", r_ngrid, r_nelement_global, r_nelement_local, 
-                nrank, irank, r_L, discretization, fd_option, cheb_option, r_bc, adv_input,comm,element_spacing_option)
+                nrank_r, irank_r, r_L, discretization, fd_option, cheb_option, r_bc, adv_input,comm_sub_r,element_spacing_option)
         z_input = grid_input("z", z_ngrid, z_nelement_global, z_nelement_local, 
-                nrank, irank, z_L, discretization, fd_option, cheb_option, z_bc, adv_input,comm,element_spacing_option)
+                nrank_z, irank_z, z_L, discretization, fd_option, cheb_option, z_bc, adv_input,comm_sub_z,element_spacing_option)
         vperp_input = grid_input("vperp", vperp_ngrid, vperp_nelement_global, vperp_nelement_local, 
                 nrank, irank, vperp_L, discretization, fd_option, cheb_option, vperp_bc, adv_input,comm,element_spacing_option)
         vpa_input = grid_input("vpa", vpa_ngrid, vpa_nelement_global, vpa_nelement_local, 
@@ -143,9 +148,7 @@ function gyroaverage_test(absolute_error; rhostar=0.1, pitch=0.5, ngrid=5, kr=2,
         # create test composition
         composition = create_test_composition()
             
-        # Set up MPI
-        initialize_comms!()
-        setup_distributed_memory_MPI(1,1,1,1)
+        # setup shared-memory MPI ranges
         looping.setup_loop_ranges!(block_rank[], block_size[];
                                        s=composition.n_ion_species, sn=1,
                                        r=r.n, z=z.n, vperp=vperp.n, vpa=vpa.n,

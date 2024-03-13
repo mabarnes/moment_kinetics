@@ -37,7 +37,6 @@ function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition;print_info
     gkions = composition.gyrokinetic_ions
     if !gkions
         gyromatrix =  allocate_shared_float(1,1,1,1,1,1)
-        gyro = gyro_operators(gyromatrix)
     else
        if print_info
            println("Begin: init_gyro_operators")
@@ -133,13 +132,12 @@ function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition;print_info
                    #println("counter: ",icounter)
                end
            end
-           
-           gyro = gyro_operators(gyromatrix)
            if print_info
                println("Finished: init_gyro_operators")
            end
         end
     end
+    gyro = gyro_operators(gyromatrix)
     return gyro
 end
 
@@ -231,7 +229,7 @@ function gyroaverage_field!(gfield_out,field_in,gyro,vperp,z,r,composition)
     nz = z.n
     gyromatrix = gyro.gyromatrix
     
-    begin_serial_region()
+    begin_s_r_z_vperp_region()
     @loop_s_r_z_vperp is ir iz ivperp begin
         gfield_out[ivperp,iz,ir] = 0.0
         # sum over all the contributions in the gyroaverage
@@ -260,7 +258,7 @@ function gyroaverage_pdf!(gpdf_out,pdf_in,gyro,vpa,vperp,z,r,composition)
     nz = z.n
     gyromatrix = gyro.gyromatrix
     
-    begin_serial_region()
+    begin_s_r_z_vperp_vpa_region()
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         gpdf_out[ivpa,ivperp,iz,ir,is] = 0.0
         # sum over all the contributions in the gyroaverage
