@@ -4,7 +4,7 @@ include("setup.jl")
 
 
 using MPI
-using LinearAlgebra: mul!
+using LinearAlgebra: mul!, ldiv!
 using moment_kinetics.communication
 using moment_kinetics.looping
 using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
@@ -117,8 +117,8 @@ function runtests()
             mul!(dfc,KKpar2D_with_BC_terms_sparse,fc)
             mul!(dgc,KKperp2D_with_BC_terms_sparse,fc)
             # invert mass matrix
-            d2fc_dvpa2 .= lu_obj_MM \ dfc
-            d2fc_dvperp2 .= lu_obj_MM \ dgc
+            ldiv!(d2fc_dvpa2, lu_obj_MM, dfc)
+            ldiv!(d2fc_dvperp2, lu_obj_MM, dgc)
             #print_vector(fc,"fc",nc_global)
             @serial_region begin 
                 d2fvpavperp_dvpa2_max, d2fvpavperp_dvpa2_L2 = print_test_data(d2fvpavperp_dvpa2_exact,d2fvpavperp_dvpa2_num,d2fvpavperp_dvpa2_err,"d2fdvpa2",vpa,vperp,dummy_array,print_to_screen=print_to_screen)

@@ -35,7 +35,7 @@ export fokker_planck_collision_operator_weak_form!
 using SpecialFunctions: ellipk, ellipe, erf
 using FastGaussQuadrature
 using Dates
-using LinearAlgebra: lu
+using LinearAlgebra: lu, ldiv!
 using MPI
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
@@ -326,7 +326,7 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
         sc = vec(CC)
         rhsc = vec(rhsvpavperp)
         # invert mass matrix and fill fc
-        sc .= lu_obj_MM \ rhsc
+        ldiv!(sc, lu_obj_MM, rhsc)
     end
     return nothing
 end
