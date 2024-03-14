@@ -16,13 +16,21 @@ form a right-handed orthonormal basis.
 Supported options
 ===============================================
 
-To choose the type of geometry, set the "geometry_option"
+To choose the type of geometry, set the value of "option" in the geometry namelist. The namelist will have the following appearance in the TOML file.
+```
+[geometry]
+option="constant-helical" # ( or "1D-mirror" )
+pitch = 1.0
+rhostar = 1.0
+DeltaB = 0.0
+```
+If `rhostar` is not set then it is computed from reference parameters.
 
-geometry_option = "constant-helical"
+[geometry] option = "constant-helical"
 ===============================================
 Here $b_\zeta = \sqrt{1 - b_z^2}$ is a constant, $b_z$ is a constant input parameter ("pitch") and $B$ is taken to be 1 with respect to the reference value $B_{\rm ref}$.
 
-geometry_option = "1D-mirror"
+[geometry] option = "1D-mirror"
 ===============================================
 Here $b_\zeta = \sqrt{1 - b_z^2}$ is a constant, $b_z$ is a constant input parameter ("pitch") and $B = B(z)$ is taken to be 
 the function 
