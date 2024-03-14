@@ -163,7 +163,7 @@ end
 a struct of dummy arrays and precalculated coefficients
 for the weak-form Fokker-Planck collision operator 
 """
-struct fokkerplanck_weakform_arrays_struct{N,M <: AbstractSparseArray{mk_float,mk_int,N}}
+struct fokkerplanck_weakform_arrays_struct{M <: AbstractSparseArray{mk_float,mk_int,N} where N}
     # boundary weights (Green's function) data
     bwgt::fokkerplanck_boundary_data_arrays_struct
     # dummy arrays for boundary data calculation
