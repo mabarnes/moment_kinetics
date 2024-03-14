@@ -79,7 +79,7 @@ function setup_geometry_input(toml_input::Dict, reference_rhostar)
         input_section["rhostar"] = get(input_section, "rhostar", reference_rhostar)
     end
     input = Dict(Symbol(k)=>v for (k,v) in input_section)
-    println(input)
+    #println(input)
     return geometry_input(; input...)
 end
 
