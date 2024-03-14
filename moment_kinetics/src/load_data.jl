@@ -257,7 +257,12 @@ function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=no
     L = load_variable(coord_group, "L")
     discretization = load_variable(coord_group, "discretization")
     fd_option = load_variable(coord_group, "fd_option")
-    cheb_option = load_variable(coord_group, "cheb_option")
+    if "cheb_option" ∈ keys(coord_group)
+        cheb_option = load_variable(coord_group, "cheb_option")
+    else
+        # Old output file
+        cheb_option = "FFT"
+    end
     bc = load_variable(coord_group, "bc")
     if "element_spacing_option" ∈ keys(coord_group)
         element_spacing_option = load_variable(coord_group, "element_spacing_option")
@@ -624,14 +629,8 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
 
             neutral_1V = (vzeta.n_global == 1 && vr.n_global == 1)
             restart_neutral_1V = (restart_vzeta.n_global == 1 && restart_vr.n_global == 1)
-            geo_condition = false 
-            for ir in 1:r.n
-                for iz in 1:z.n 
-                    geo_condition = geo_condition || (geometry.bzeta[iz,ir] != 0.0)
-                end
-            end
-            if geo_condition && ((neutral1V && !restart_neutral_1V) ||
-                                         (!neutral1V && restart_neutral_1V))
+            if any(geometry.bzeta .!= 0.0) && ((neutral_1V && !restart_neutral_1V) ||
+                                               (!neutral_1V && restart_neutral_1V))
                 # One but not the other of the run being restarted from and this run are
                 # 1V, but the interpolation below does not allow for vz and vpa being in
                 # different directions. Therefore interpolation between 1V and 3V cases
@@ -703,13 +702,21 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
             moments.charged.qpar .= load_moment("parallel_heat_flux")
             moments.charged.qpar_updated .= true
             moments.charged.vth .= load_moment("thermal_speed")
-            if parallel_io || z.irank == 0
-                moments.charged.chodura_integral_lower .= load_slice(dynamic, "chodura_integral_lower",
-                                                                     r_range, :, time_index)
+            if z.irank == 0
+                if "chodura_integral_lower" ∈ keys(dynamic)
+                    moments.charged.chodura_integral_lower .= load_slice(dynamic, "chodura_integral_lower",
+                                                                         r_range, :, time_index)
+                else
+                    moments.charged.chodura_integral_lower .= 0.0
+                end
             end
-            if parallel_io || z.irank == z.nrank - 1
-                moments.charged.chodura_integral_upper .= load_slice(dynamic, "chodura_integral_upper",
-                                                                     r_range, :, time_index)
+            if z.irank == z.nrank - 1
+                if "chodura_integral_upper" ∈ keys(dynamic)
+                    moments.charged.chodura_integral_upper .= load_slice(dynamic, "chodura_integral_upper",
+                                                                         r_range, :, time_index)
+                else
+                    moments.charged.chodura_integral_upper .= 0.0
+                end
             end
 
             if "external_source_controller_integral" ∈ get_variable_keys(dynamic) &&
@@ -985,18 +992,6 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
             end
 
             pdf.charged.norm .= load_charged_pdf()
-                if z.irank == 0
-                    moments.charged.chodura_integral_lower .= load_slice(dynamic, "chodura_integral_lower", :, :,
-                                                  time_index)
-                else
-                    moments.charged.chodura_integral_lower .= 0.0
-                end
-                if z.irank == z.nrank - 1
-                    moments.charged.chodura_integral_upper .= load_slice(dynamic, "chodura_integral_upper", :, :,
-                                                  time_index)
-                else
-                    moments.charged.chodura_integral_upper .= 0.0
-                end
             boundary_distributions_io = get_group(fid, "boundary_distributions")
 
             function load_charged_boundary_pdf(var_name, ir)
@@ -2874,14 +2869,14 @@ end
 
 function get_variable(run_info, variable_name; kwargs...)
     if variable_name == "temperature"
-        vth = postproc_load_variable(run_info, "thermal_speed")
+        vth = postproc_load_variable(run_info, "thermal_speed"; kwargs...)
         variable = vth.^2
     elseif variable_name == "collision_frequency"
-        n = postproc_load_variable(run_info, "density")
-        vth = postproc_load_variable(run_info, "thermal_speed")
+        n = postproc_load_variable(run_info, "density"; kwargs...)
+        vth = postproc_load_variable(run_info, "thermal_speed"; kwargs...)
         variable = get_collision_frequency(run_info.collisions, n, vth)
     elseif variable_name == "temperature_neutral"
-        vth = postproc_load_variable(run_info, "thermal_speed_neutral")
+        vth = postproc_load_variable(run_info, "thermal_speed_neutral"; kwargs...)
         variable = vth.^2
     elseif variable_name == "sound_speed"
         T_e = run_info.composition.T_e
@@ -2898,7 +2893,7 @@ function get_variable(run_info, variable_name; kwargs...)
         cs = get_variable(run_info, "sound_speed"; kwargs...)
         variable = upar ./ cs
     else
-        variable = postproc_load_variable(run_info, variable_name)
+        variable = postproc_load_variable(run_info, variable_name; kwargs...)
     end
 
     return variable

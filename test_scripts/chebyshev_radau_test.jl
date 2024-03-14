@@ -46,8 +46,6 @@ function chebyshevradau_test(; ngrid=5, L_in=3.0, discretization="chebyshev_pseu
     y_nelement_global = y_nelement_local # total number of elements 
     y_L = L_in
     bc = "zero" 
-    #discretization = "gausslegendre_pseudospectral"
-    #discretization = "chebyshev_pseudospectral"
     # fd_option and adv_input not actually used so given values unimportant
     fd_option = "fourth_order_centered"
     cheb_option = "matrix"
