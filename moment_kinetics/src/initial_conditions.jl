@@ -148,7 +148,7 @@ function init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
         init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z,
                                              r, composition.n_ion_species,
                                              composition.n_neutral_species,
-                                             geometry, composition, species,
+                                             geometry.input, composition, species,
                                              manufactured_solns_input)
     else
         n_ion_species = composition.n_ion_species
@@ -1134,8 +1134,8 @@ enforce boundary conditions in vpa and z on the evolved pdf;
 also enforce boundary conditions in z on all separately evolved velocity space moments of the pdf
 """
 function enforce_boundary_conditions!(f, f_r_bc, density, upar, ppar, moments, vpa_bc,
-        z_bc, r_bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral, vpa_adv, z_adv, r_adv, composition, scratch_dummy,
-        r_diffusion, vpa_diffusion)
+        z_bc, r_bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral, vpa_adv, vperp_adv, z_adv, r_adv, composition, scratch_dummy,
+        r_diffusion, vpa_diffusion, vperp_diffusion)
     if vpa.n > 1
         begin_s_r_z_vperp_region()
         @loop_s_r_z_vperp is ir iz ivperp begin
@@ -1148,7 +1148,8 @@ function enforce_boundary_conditions!(f, f_r_bc, density, upar, ppar, moments, v
     end
     if vperp.n > 1
         begin_s_r_z_vpa_region()
-        @views enforce_vperp_boundary_condition!(f, vperp.bc, vperp, vperp_spectral)
+        @views enforce_vperp_boundary_condition!(f, vperp.bc, vperp, vperp_spectral,
+                             vperp_adv, vperp_diffusion)
     end
     if z.n > 1
         begin_s_r_vperp_vpa_region()
@@ -1169,12 +1170,12 @@ function enforce_boundary_conditions!(f, f_r_bc, density, upar, ppar, moments, v
     end
 end
 function enforce_boundary_conditions!(fvec_out::scratch_pdf, moments, f_r_bc, vpa_bc,
-        z_bc, r_bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral, vpa_adv, z_adv, r_adv, composition, scratch_dummy,
-        r_diffusion, vpa_diffusion)
+        z_bc, r_bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral, vpa_adv, vperp_adv, z_adv, r_adv, composition, scratch_dummy,
+        r_diffusion, vpa_diffusion, vperp_diffusion)
     enforce_boundary_conditions!(fvec_out.pdf, f_r_bc, fvec_out.density, fvec_out.upar,
         fvec_out.ppar, moments, vpa_bc, z_bc, r_bc, vpa, vperp, z, r, 
-        vpa_spectral, vperp_spectral, vpa_adv, z_adv,
-        r_adv, composition, scratch_dummy, r_diffusion, vpa_diffusion)
+        vpa_spectral, vperp_spectral, vpa_adv, vperp_adv, z_adv,
+        r_adv, composition, scratch_dummy, r_diffusion, vpa_diffusion, vperp_diffusion)
 end
 
 """
@@ -1479,12 +1480,12 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
                 # Note, have already calculated moments of ion distribution function(s),
                 # so can use the moments here to get the flux
                 if z.irank == 0
-                    ion_flux_0 = -density_ion[1,ir,isn] * (upar_ion[1,ir,isn]*geometry.bzed - 0.5*geometry.rhostar*Er[1,ir])
+                    ion_flux_0 = -density_ion[1,ir,isn] * (upar_ion[1,ir,isn]*geometry.bzed[1,ir] - 0.5*geometry.rhostar*Er[1,ir])
                 else
                     ion_flux_0 = NaN
                 end
                 if z.irank == z.nrank - 1
-                    ion_flux_L = density_ion[end,ir,isn] * (upar_ion[end,ir,isn]*geometry.bzed - 0.5*geometry.rhostar*Er[end,ir])
+                    ion_flux_L = density_ion[end,ir,isn] * (upar_ion[end,ir,isn]*geometry.bzed[end,ir] - 0.5*geometry.rhostar*Er[end,ir])
                 else
                     ion_flux_L = NaN
                 end
@@ -2173,22 +2174,26 @@ end
 """
 enforce zero boundary condition at vperp -> infinity
 """
-function enforce_vperp_boundary_condition!(f, bc, vperp, vperp_spectral)
+function enforce_vperp_boundary_condition!(f, bc, vperp, vperp_spectral, vperp_advect, diffusion)
     if bc == "zero"
         nvperp = vperp.n
         ngrid = vperp.ngrid
         # set zero boundary condition
         @loop_s_r_z_vpa is ir iz ivpa begin
-            f[ivpa,nvperp,iz,ir,is] = 0.0
+            if diffusion || vperp_advect[is].speed[nvperp,ivpa,iz,ir] < 0.0
+                f[ivpa,nvperp,iz,ir,is] = 0.0
+            end
         end
         # set regularity condition d F / d vperp = 0 at vperp = 0
         if vperp.discretization == "gausslegendre_pseudospectral" || vperp.discretization == "chebyshev_pseudospectral"
             D0 = vperp_spectral.radau.D0
             buffer = @view vperp.scratch[1:ngrid-1]
             @loop_s_r_z_vpa is ir iz ivpa begin
-                # adjust F(vperp = 0) so that d F / d vperp = 0 at vperp = 0
-                @views @. buffer = D0[2:ngrid] * f[ivpa,2:ngrid,iz,ir,is]
-                f[ivpa,1,iz,ir,is] = -sum(buffer)/D0[1]
+                if diffusion || vperp_advect[is].speed[1,ivpa,iz,ir] > 0.0
+                    # adjust F(vperp = 0) so that d F / d vperp = 0 at vperp = 0
+                    @views @. buffer = D0[2:ngrid] * f[ivpa,2:ngrid,iz,ir,is]
+                    f[ivpa,1,iz,ir,is] = -sum(buffer)/D0[1]
+                end
             end
         else
             println("vperp.bc=\"$bc\" not supported by discretization "
