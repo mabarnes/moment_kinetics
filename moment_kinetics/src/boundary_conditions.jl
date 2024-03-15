@@ -36,25 +36,28 @@ function enforce_boundary_conditions!(f, f_r_bc, density, upar, ppar, moments, v
     end
     if vperp.n > 1
         begin_s_r_z_vpa_region()
-        @views enforce_vperp_boundary_condition!(f, vperp.bc, vperp, vperp_spectral,
+        enforce_vperp_boundary_condition!(f, vperp.bc, vperp, vperp_spectral,
                              vperp_adv, vperp_diffusion)
     end
     if z.n > 1
         begin_s_r_vperp_vpa_region()
         # enforce the z BC on the evolved velocity space moments of the pdf
-        @views enforce_z_boundary_condition_moments!(density, moments, z_bc)
-        @views enforce_z_boundary_condition!(f, density, upar, ppar, moments, z_bc, z_adv, z,
-                                             vperp, vpa, composition,
-                                             scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
-                                             scratch_dummy.buffer_vpavperprs_3, scratch_dummy.buffer_vpavperprs_4)
+        enforce_z_boundary_condition_moments!(density, moments, z_bc)
+        enforce_z_boundary_condition!(f, density, upar, ppar, moments, z_bc, z_adv, z,
+                                      vperp, vpa, composition,
+                                      scratch_dummy.buffer_vpavperprs_1,
+                                      scratch_dummy.buffer_vpavperprs_2,
+                                      scratch_dummy.buffer_vpavperprs_3,
+                                      scratch_dummy.buffer_vpavperprs_4)
 
     end
     if r.n > 1
         begin_s_z_vperp_vpa_region()
-        @views enforce_r_boundary_condition!(f, f_r_bc, r_bc, r_adv, vpa, vperp, z, r, composition,
-            scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
-            scratch_dummy.buffer_vpavperpzs_3, scratch_dummy.buffer_vpavperpzs_4,
-            r_diffusion)
+        enforce_r_boundary_condition!(f, f_r_bc, r_bc, r_adv, vpa, vperp, z, r,
+                                      composition, scratch_dummy.buffer_vpavperpzs_1,
+                                      scratch_dummy.buffer_vpavperpzs_2,
+                                      scratch_dummy.buffer_vpavperpzs_3,
+                                      scratch_dummy.buffer_vpavperpzs_4, r_diffusion)
     end
 end
 function enforce_boundary_conditions!(fvec_out::scratch_pdf, moments, f_r_bc, vpa_bc,
@@ -83,8 +86,7 @@ function enforce_r_boundary_condition!(f::AbstractArray{mk_float,5}, f_r_bc, bc:
             end1[ivpa,ivperp,iz,is] = f[ivpa,ivperp,iz,1,is]
             end2[ivpa,ivperp,iz,is] = f[ivpa,ivperp,iz,nr,is]
         end
-        @views reconcile_element_boundaries_MPI!(f,
-            end1, end2,	buffer1, buffer2, r)
+        reconcile_element_boundaries_MPI!(f, end1, end2, buffer1, buffer2, r)
     end
 
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
@@ -133,8 +135,7 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::St
             end2[ivpa,ivperp,ir,is] = pdf[ivpa,ivperp,nz,ir,is]
         end
         # check on periodic bc happens inside this call below
-        @views reconcile_element_boundaries_MPI!(pdf,
-            end1, end2,	buffer1, buffer2, z)
+        reconcile_element_boundaries_MPI!(pdf, end1, end2, buffer1, buffer2, z)
     end
     # define a zero that accounts for finite precision
     zero = 1.0e-14
@@ -233,7 +234,7 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_ion,
     # f_initial contains the initial condition for enforcing a fixed-boundary-value condition
     if z.n > 1
         begin_sn_r_vzeta_vr_vz_region()
-        @views enforce_neutral_z_boundary_condition!(f_neutral, density_neutral, uz_neutral,
+        enforce_neutral_z_boundary_condition!(f_neutral, density_neutral, uz_neutral,
             pz_neutral, moments, density_ion, upar_ion, Er, boundary_distributions,
             z_adv, z, vzeta, vr, vz, composition, geometry,
             scratch_dummy.buffer_vzvrvzetarsn_1, scratch_dummy.buffer_vzvrvzetarsn_2,
@@ -241,7 +242,7 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_ion,
     end
     if r.n > 1
         begin_sn_z_vzeta_vr_vz_region()
-        @views enforce_neutral_r_boundary_condition!(f_neutral, boundary_distributions.pdf_rboundary_neutral,
+        enforce_neutral_r_boundary_condition!(f_neutral, boundary_distributions.pdf_rboundary_neutral,
                                     r_adv, vz, vr, vzeta, z, r, composition,
                                     scratch_dummy.buffer_vzvrvzetazsn_1, scratch_dummy.buffer_vzvrvzetazsn_2,
                                     scratch_dummy.buffer_vzvrvzetazsn_3, scratch_dummy.buffer_vzvrvzetazsn_4,
@@ -265,8 +266,7 @@ function enforce_neutral_r_boundary_condition!(f::AbstractArray{mk_float,6},
             end1[ivz,ivr,ivzeta,iz,isn] = f[ivz,ivr,ivzeta,iz,1,isn]
             end2[ivz,ivr,ivzeta,iz,isn] = f[ivz,ivr,ivzeta,iz,nr,isn]
         end
-        @views reconcile_element_boundaries_MPI!(f,
-            end1, end2,	buffer1, buffer2, r)
+        reconcile_element_boundaries_MPI!(f, end1, end2, buffer1, buffer2, r)
     end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
     # local case only when no communication required
@@ -316,8 +316,7 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
             end2[ivz,ivr,ivzeta,ir,isn] = pdf[ivz,ivr,ivzeta,nz,ir,isn]
         end
         # check on periodic bc occurs within this call below
-        @views reconcile_element_boundaries_MPI!(pdf,
-            end1, end2,	buffer1, buffer2, z)
+        reconcile_element_boundaries_MPI!(pdf, end1, end2, buffer1, buffer2, z)
     end
 
     zero = 1.0e-14
