@@ -312,7 +312,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         # Copy the reloaded values into the `scratch` struct
         initialize_scratch_arrays!(scratch, moments, pdf, t_input.n_rk_stages)
 
-        if !restart_had_kinetic_electrons
+        if composition.electron_physics == kinetic_electrons && !restart_had_kinetic_electrons
             # If we are initializing kinetic electrons using info from a simulation
             # where electrons have a Boltzmann distribution, there is missing information
             # that still needs to be specified for the electrons
