@@ -6,6 +6,7 @@ export electron_energy_equation!
 export calculate_electron_qpar!
 export calculate_electron_parallel_friction_force!
 export calculate_electron_qpar_from_pdf!
+export update_electron_vth_temperature!
 
 using ..communication
 using ..looping
@@ -361,5 +362,19 @@ end
 #        ppar[end,ir] = ppar_i[end,ir,1]
 #    end
 #end
+
+function update_electron_vth_temperature!(moments, ppar, dens)
+    begin_r_z_region()
+
+    temp = moments.electron.temp
+    vth = moments.electron.vth
+    @loop_r_z ir iz begin
+        temp[iz,ir] = 2 * ppar[iz,ir] / dens[iz,ir]
+        vth[iz,ir] = sqrt(temp[iz,ir])
+    end
+    moments.electron.temp_updated[] = true
+
+    return nothing
+end
 
 end

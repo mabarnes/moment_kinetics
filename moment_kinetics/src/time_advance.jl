@@ -64,7 +64,7 @@ using ..electron_fluid_equations: calculate_electron_density!
 using ..electron_fluid_equations: calculate_electron_upar_from_charge_conservation!
 using ..electron_fluid_equations: calculate_electron_qpar!
 using ..electron_fluid_equations: calculate_electron_parallel_friction_force!
-using ..electron_fluid_equations: electron_energy_equation!
+using ..electron_fluid_equations: electron_energy_equation!, update_electron_vth_temperature!
 using ..input_structs: braginskii_fluid
 using ..derivatives: derivative_z!
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
@@ -1410,11 +1410,10 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     else
         @. new_scratch.electron_ppar = 0.5 * new_scratch.electron_density * moments.electron.vth^2
     end
-    @. moments.electron.temp = 2 * new_scratch.electron_ppar / new_scratch.electron_density
-    moments.electron.temp_updated[] = true
-    @. moments.electron.vth = sqrt(moments.electron.temp)
     # regardless of electron model, electron ppar is now updated
     moments.electron.ppar_updated[] = true
+    update_electron_vth_temperature!(moments, new_scratch.electron_ppar,
+                                     new_scratch.electron_density)
     # calculate the corresponding zed derivatives of the moments
     calculate_electron_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
                                            num_diss_params, composition.electron_physics)
