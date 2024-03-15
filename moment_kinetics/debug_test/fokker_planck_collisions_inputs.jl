@@ -29,7 +29,6 @@ test_input_full_f = Dict(
      "r_discretization" => "chebyshev_pseudospectral",
      "r_nelement" => 1,
      "r_ngrid" => 3,
-     "rhostar" => 1.0,
      "split_operators" => false,
      "vpa_L" => 6.0,
      "vpa_bc" => "zero",
