@@ -32,6 +32,7 @@ include("input_structs.jl")
 include("reference_parameters.jl")
 include("coordinates.jl")
 include("file_io.jl")
+include("geo.jl")
 include("velocity_moments.jl")
 include("velocity_grid_transforms.jl")
 include("electron_fluid_equations.jl")
@@ -134,7 +135,7 @@ function run_moment_kinetics(to::Union{TimerOutput,Nothing}, input_dict=Dict();
         # last 3 elements of mk_state are ascii_io, io_moments, and io_dfns
         cleanup_moment_kinetics!(mk_state[end-2:end]...)
 
-        if block_rank[] == 0 && to !== nothing
+        if global_rank[] == 0 && to !== nothing
             # Print the timing information if this is a performance test
             display(to)
             println()

@@ -185,7 +185,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
         init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z,
                                              r, composition.n_ion_species,
                                              composition.n_neutral_species,
-                                             geometry, composition, species,
+                                             geometry.input, composition, species,
                                              manufactured_solns_input)
     else
         n_ion_species = composition.n_ion_species

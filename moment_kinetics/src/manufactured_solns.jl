@@ -5,6 +5,7 @@ module manufactured_solns
 export manufactured_solutions
 export manufactured_sources
 export manufactured_electric_fields
+export manufactured_geometry
 
 using ..array_allocation: allocate_shared_float
 using ..looping
@@ -13,6 +14,7 @@ using ..type_definitions: mk_float, mk_int
 function manufactured_solutions end
 function manufactured_sources_setup end
 function manufactured_electric_fields end
+function manufactured_geometry end
 
 function __init__()
     try
@@ -41,7 +43,7 @@ function manufactured_sources(manufactured_solns_input, r_coord, z_coord, vperp_
 
         Source_i_array = allocate_shared_float(vpa_coord.n,vperp_coord.n,z_coord.n,r_coord.n)
         begin_s_r_z_region()
-        println("here loop thing ", looping.loop_ranges[].s)
+        #println("here loop thing ", looping.loop_ranges[].s)
         @loop_s is begin
             if is == 1
                 @loop_r_z_vperp_vpa ir iz ivperp ivpa begin

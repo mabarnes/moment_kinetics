@@ -41,7 +41,7 @@ using moment_kinetics.load_data: close_run_info, get_run_info_no_setup, get_vari
                                  neutral_dfn_variables, all_dfn_variables, ion_variables,
                                  neutral_variables, all_variables
 using moment_kinetics.initial_conditions: vpagrid_to_dzdt
-using .shared_utils: calculate_and_write_frequencies, get_geometry_and_composition
+using .shared_utils: calculate_and_write_frequencies
 using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.velocity_moments: integrate_over_vspace,
                                         integrate_over_neutral_vspace
@@ -5759,7 +5759,7 @@ function manufactured_solutions_get_field_and_field_sym(run_info, variable_name;
                             :density_neutral, :f, :f_neutral)
         manufactured_funcs =
             manufactured_solutions(run_info.manufactured_solns_input, Lr_in, run_info.z.L,
-                                   run_info.r.bc, run_info.z.bc, run_info.geometry,
+                                   run_info.r.bc, run_info.z.bc, run_info.geometry.input,
                                    run_info.composition, run_info.species, run_info.r.n,
                                    nvperp)
     end

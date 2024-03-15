@@ -57,13 +57,16 @@ using moment_kinetics.analysis: analyze_fields_data, analyze_moments_data,
                                 get_unnormalised_f_coords_2d
 using moment_kinetics.velocity_moments: integrate_over_vspace
 using moment_kinetics.manufactured_solns: manufactured_solutions,
-                                          manufactured_electric_fields
-using moment_kinetics.moment_kinetics_input: mk_input, get
+                                          manufactured_electric_fields,
+                                          manufactured_geometry
+using moment_kinetics.moment_kinetics_input: mk_input, get, get_default_rhostar
 using moment_kinetics.input_structs: geometry_input, grid_input, species_composition
 using moment_kinetics.input_structs: electron_physics_type, boltzmann_electron_response,
                                      boltzmann_electron_response_with_simple_sheath
+using moment_kinetics.reference_parameters
+using moment_kinetics.geo: init_magnetic_geometry
 using .post_processing_input: pp
-using .shared_utils: calculate_and_write_frequencies, get_geometry_and_composition
+using .shared_utils: calculate_and_write_frequencies, get_geometry, get_composition
 using TOML
 import Base: get
 
@@ -673,9 +676,10 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
         end
     end
 
-    geometry, composition =
-        get_tuple_of_return_values(get_geometry_and_composition, scan_input,
-                                   n_ion_species, n_neutral_species)
+    geometry =
+        get_tuple_of_return_values(get_geometry, scan_input, z, r)
+    composition =
+        get_tuple_of_return_values(get_composition, scan_input)
 
     # initialise the post-processing input options
     nwrite_movie, itime_min, itime_max, nwrite_movie_pdfs, itime_min_pdfs, itime_max_pdfs,
@@ -1112,6 +1116,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     manufactured_solns_test = manufactured_solns_input.use_for_advance && manufactured_solns_input.use_for_init
     # Plots compare density and density_symbolic at last timestep
     #if(manufactured_solns_test && nr > 1)
+    println("manufactured_solns_test: ",manufactured_solns_test)
     if(manufactured_solns_test)
         # avoid passing Lr = 0 into manufactured_solns functions
         if r_global.n > 1
@@ -1119,10 +1124,10 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
         else
             Lr_in = 1.0
         end
-
+        check_manufactured_solution_geometry(geometry,z_global,r_global)
         manufactured_solns_list = manufactured_solutions(manufactured_solns_input, Lr_in,
                                                          z_global.L, r_global.bc,
-                                                         z_global.bc, geometry,
+                                                         z_global.bc, geometry.input,
                                                          composition, species, r_global.n, vperp.n)
         dfni_func = manufactured_solns_list.dfni_func
         densi_func = manufactured_solns_list.densi_func
@@ -3615,6 +3620,41 @@ function plot_ion_pdf_2D_at_wall(run_name, run_name_label, r_global, z_global,
         end
     end
     println("done.")
+end
+
+function check_manufactured_solution_geometry(geometry,z,r)
+    Lz = z.L
+    nz = z.n
+    Lr = r.L
+    nr = r.n
+    
+    Bmag_num = geometry.Bmag
+    dBdz_num = geometry.dBdz
+    bzed_num = geometry.bzed
+    Bmag_sym = copy(Bmag_num)
+    bzed_sym = copy(bzed_num)
+    dBdz_sym = copy(dBdz_num)
+    
+    manufactured_geometry_list = manufactured_geometry(geometry.input,Lz,Lr,nr)
+    Bmag_func = manufactured_geometry_list.Bmag_func
+    bzed_func = manufactured_geometry_list.bzed_func
+    dBdz_func = manufactured_geometry_list.dBdz_func
+    for ir in 1:nr
+        for iz in 1:nz
+            Bmag_sym[iz,ir] = Bmag_func(z.grid[iz],r.grid[ir])
+            bzed_sym[iz,ir] = bzed_func(z.grid[iz],r.grid[ir])
+            dBdz_sym[iz,ir] = dBdz_func(z.grid[iz],r.grid[ir])
+        end
+    end
+    println("Geometry check")
+    Bmag_err = sqrt(sum((Bmag_sym .- Bmag_num).^2))
+    println("Bmag_err: ",Bmag_err)
+    bzed_err = sqrt(sum((bzed_sym .- bzed_num).^2))
+    println("bzed_err: ",bzed_err)
+    dBdz_err = sqrt(sum((dBdz_sym .- dBdz_num).^2))
+    println("dBdz_err: ",dBdz_err)
+    
+    return nothing
 end
 
 include("plot_MMS_sequence.jl")

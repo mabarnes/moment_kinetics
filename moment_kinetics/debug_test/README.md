@@ -23,6 +23,21 @@ something like
 julia --project --check-bounds=yes --compiled-modules=no debug_test/runtests.jl --debug 99
 ```
 
+Collision operator and 'anyv' region
+------------------------------------
+
+The collision operator uses a slightly hacky special set of functions for
+shared memory parallelism, to allow the outer loop over species and spatial
+dimensions to be parallelised, but also inner loops over `vperp`, `vpa` or
+`vperp` and `vpa` to be parallelised - changing the type of inner-loop
+parallelism within the outer loop. This happens within an 'anyv' region, which
+is started with the `begin_s_r_z_anyv_region()` function. The debug checks
+within an 'anyv' region only check for correctness on the sub-block
+communicator that parallelises over velocity space, so if there were errors due
+to incorrect species or spatial parallelism they would not (might not?) be
+detected. These errors should be unlikely as the collision operator only writes
+to a single species at a single spatial point.
+
 Finding race conditions
 -----------------------
 The code is parallelized using MPI with shared memory arrays. 'Race conditions'

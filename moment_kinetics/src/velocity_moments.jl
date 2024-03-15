@@ -802,7 +802,7 @@ function update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometr
     if z.irank == 0
         @loop_s_r is ir begin
             @views moments.ion.chodura_integral_lower[ir,is] = update_chodura_integral_species!(ff[:,:,1,ir,is],dffdr[:,:,1,ir,is],
-            ff_dummy[:,:,1,ir,is],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[1,:,:,ir],moments.ion.dens[1,ir,is],del_vpa)
+            ff_dummy[:,:,1,ir,is],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[1,:,:,ir],moments.ion.dens[1,ir,is],del_vpa,1,ir)
         end
     else # we do not save this Chodura integral to the output file
         @loop_s_r is ir begin
@@ -812,7 +812,7 @@ function update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometr
     if z.irank == z.nrank - 1
         @loop_s_r is ir begin
             @views moments.ion.chodura_integral_upper[ir,is] = update_chodura_integral_species!(ff[:,:,end,ir,is],dffdr[:,:,end,ir,is],
-            ff_dummy[:,:,end,ir,is],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[end,:,:,ir],moments.ion.dens[end,ir,is],del_vpa)
+            ff_dummy[:,:,end,ir,is],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[end,:,:,ir],moments.ion.dens[end,ir,is],del_vpa,z.n,ir)
         end
     else # we do not save this Chodura integral to the output file
         @loop_s_r is ir begin
@@ -835,7 +835,7 @@ Chodura condition
  to a single species plasma with Z = 1
 
 """
-function update_chodura_integral_species!(ff,dffdr,ff_dummy,vpa,vperp,z,r,composition,geometry,vz,dens,del_vpa)
+function update_chodura_integral_species!(ff,dffdr,ff_dummy,vpa,vperp,z,r,composition,geometry,vz,dens,del_vpa,iz,ir)
     @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
     @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck vpa.n == size(dffdr, 1) || throw(BoundsError(dffdr))
@@ -848,7 +848,7 @@ function update_chodura_integral_species!(ff,dffdr,ff_dummy,vpa,vperp,z,r,compos
         # we are more than a vpa mimimum grid spacing away from 
         # the vz(vpa,r) = 0 velocity boundary
         if abs(vz[ivpa,ivperp]) > 0.5*del_vpa
-            ff_dummy[ivpa,ivperp] = (ff[ivpa,ivperp]*bzed^2/(vz[ivpa,ivperp]^2) + 
+            ff_dummy[ivpa,ivperp] = (ff[ivpa,ivperp]*bzed[iz,ir]^2/(vz[ivpa,ivperp]^2) + 
                                 geometry.rhostar*dffdr[ivpa,ivperp]/vz[ivpa,ivperp])
         else
             ff_dummy[ivpa,ivperp] = 0.0
@@ -868,86 +868,84 @@ function calculate_moment_derivatives!(moments, scratch, scratch_dummy, z, z_spe
                                        numerical_dissipation)
     begin_s_r_region()
 
-    @loop_s is begin
-        density = @view scratch.density[:,:,is]
-        upar = @view scratch.upar[:,:,is]
-        ppar = @view scratch.ppar[:,:,is]
-        qpar = @view moments.ion.qpar[:,:,is]
-        vth = @view moments.ion.vth[:,:,is]
-        dummy_zr = @view scratch_dummy.dummy_zrs[:,:,is]
-        buffer_r_1 = @view scratch_dummy.buffer_rs_1[:,is]
-        buffer_r_2 = @view scratch_dummy.buffer_rs_2[:,is]
-        buffer_r_3 = @view scratch_dummy.buffer_rs_3[:,is]
-        buffer_r_4 = @view scratch_dummy.buffer_rs_4[:,is]
-        buffer_r_5 = @view scratch_dummy.buffer_rs_5[:,is]
-        buffer_r_6 = @view scratch_dummy.buffer_rs_6[:,is]
-        if moments.evolve_density
-            @views derivative_z!(moments.ion.ddens_dz[:,:,is], density, buffer_r_1,
-                                 buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
-            # Upwinded using upar as advection velocity, to be used in continuity equation
-            @loop_r_z ir iz begin
-                dummy_zr[iz,ir] = -upar[iz,ir]
-            end
-            @views derivative_z!(moments.ion.ddens_dz_upwind[:,:,is], density,
-                                 dummy_zr, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
-                                 buffer_r_5, buffer_r_6, z_spectral, z)
+    density = scratch.density
+    upar = scratch.upar
+    ppar = scratch.ppar
+    qpar = moments.ion.qpar
+    vth = moments.ion.vth
+    dummy_zrs = scratch_dummy.dummy_zrs
+    buffer_r_1 = scratch_dummy.buffer_rs_1
+    buffer_r_2 = scratch_dummy.buffer_rs_2
+    buffer_r_3 = scratch_dummy.buffer_rs_3
+    buffer_r_4 = scratch_dummy.buffer_rs_4
+    buffer_r_5 = scratch_dummy.buffer_rs_5
+    buffer_r_6 = scratch_dummy.buffer_rs_6
+    if moments.evolve_density
+        @views derivative_z!(moments.ion.ddens_dz, density, buffer_r_1,
+                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+        # Upwinded using upar as advection velocity, to be used in continuity equation
+        @loop_s_r_z is ir iz begin
+            dummy_zrs[iz,ir,is] = -upar[iz,ir,is]
         end
-        if moments.evolve_density &&
-                numerical_dissipation.moment_dissipation_coefficient > 0.0
+        @views derivative_z!(moments.ion.ddens_dz_upwind, density,
+                             dummy_zrs, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
+                             buffer_r_5, buffer_r_6, z_spectral, z)
+    end
+    if moments.evolve_density &&
+        numerical_dissipation.moment_dissipation_coefficient > 0.0
 
-            # centred second derivative for dissipation
-            @views derivative_z!(dummy_zr, density, buffer_r_1, buffer_r_2, buffer_r_3,
-                                 buffer_r_4, z_spectral, z)
-            @views derivative_z!(moments.ion.d2dens_dz2[:,:,is], dummy_zr, buffer_r_1,
-                                 buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+        # centred second derivative for dissipation
+        @views derivative_z!(dummy_zrs, density, buffer_r_1, buffer_r_2, buffer_r_3,
+                             buffer_r_4, z_spectral, z)
+        @views derivative_z!(moments.ion.d2dens_dz2, dummy_zrs, buffer_r_1,
+                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+    end
+    if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
+        @views derivative_z!(moments.ion.dupar_dz, upar, buffer_r_1,
+                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+    end
+    if moments.evolve_upar
+        # Upwinded using upar as advection velocity, to be used in force-balance
+        # equation
+        @loop_s_r_z is ir iz begin
+            dummy_zrs[iz,ir,is] = -upar[iz,ir,is]
         end
-        if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
-            @views derivative_z!(moments.ion.dupar_dz[:,:,is], upar, buffer_r_1,
-                                 buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
-        end
-        if moments.evolve_upar
-            # Upwinded using upar as advection velocity, to be used in force-balance
-            # equation
-            @loop_r_z ir iz begin
-                dummy_zr[iz,ir] = -upar[iz,ir]
-            end
-            @views derivative_z!(moments.ion.dupar_dz_upwind[:,:,is], upar, dummy_zr,
-                                 buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
-                                 buffer_r_5, buffer_r_6, z_spectral, z)
-        end
-        if moments.evolve_upar &&
-                numerical_dissipation.moment_dissipation_coefficient > 0.0
+        @views derivative_z!(moments.ion.dupar_dz_upwind, upar, dummy_zrs,
+                             buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
+                             buffer_r_5, buffer_r_6, z_spectral, z)
+    end
+    if moments.evolve_upar &&
+        numerical_dissipation.moment_dissipation_coefficient > 0.0
 
-            # centred second derivative for dissipation
-            @views derivative_z!(dummy_zr, upar, buffer_r_1, buffer_r_2, buffer_r_3,
-                                 buffer_r_4, z_spectral, z)
-            @views derivative_z!(moments.ion.d2upar_dz2[:,:,is], dummy_zr, buffer_r_1,
-                                 buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+        # centred second derivative for dissipation
+        @views derivative_z!(dummy_zrs, upar, buffer_r_1, buffer_r_2, buffer_r_3,
+                             buffer_r_4, z_spectral, z)
+        @views derivative_z!(moments.ion.d2upar_dz2, dummy_zrs, buffer_r_1,
+                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+    end
+    if moments.evolve_upar
+        @views derivative_z!(moments.ion.dppar_dz, ppar, buffer_r_1,
+                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+    end
+    if moments.evolve_ppar
+        # Upwinded using upar as advection velocity, to be used in energy equation
+        @loop_s_r_z is ir iz begin
+            dummy_zrs[iz,ir,is] = -upar[iz,ir,is]
         end
-        if moments.evolve_upar
-            @views derivative_z!(moments.ion.dppar_dz[:,:,is], ppar, buffer_r_1,
-                                 buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
-        end
-        if moments.evolve_ppar
-            # Upwinded using upar as advection velocity, to be used in energy equation
-            @loop_r_z ir iz begin
-                dummy_zr[iz,ir] = -upar[iz,ir]
-            end
-            @views derivative_z!(moments.ion.dppar_dz_upwind[:,:,is], ppar, dummy_zr,
-                                 buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
-                                 buffer_r_5, buffer_r_6, z_spectral, z)
+        @views derivative_z!(moments.ion.dppar_dz_upwind, ppar, dummy_zrs,
+                             buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
+                             buffer_r_5, buffer_r_6, z_spectral, z)
 
-            # centred second derivative for dissipation
-            @views derivative_z!(dummy_zr, ppar, buffer_r_1, buffer_r_2, buffer_r_3,
-                                 buffer_r_4, z_spectral, z)
-            @views derivative_z!(moments.ion.d2ppar_dz2[:,:,is], dummy_zr, buffer_r_1,
-                                 buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+        # centred second derivative for dissipation
+        @views derivative_z!(dummy_zrs, ppar, buffer_r_1, buffer_r_2, buffer_r_3,
+                             buffer_r_4, z_spectral, z)
+        @views derivative_z!(moments.ion.d2ppar_dz2, dummy_zrs, buffer_r_1,
+                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
 
-            @views derivative_z!(moments.ion.dqpar_dz[:,:,is], qpar, buffer_r_1,
-                                 buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
-            @views derivative_z!(moments.ion.dvth_dz[:,:,is], vth, buffer_r_1,
-                                 buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
-        end
+        @views derivative_z!(moments.ion.dqpar_dz, qpar, buffer_r_1,
+                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+        @views derivative_z!(moments.ion.dvth_dz, vth, buffer_r_1,
+                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
     end
 end
 
@@ -1484,87 +1482,91 @@ function calculate_moment_derivatives_neutral!(moments, scratch, scratch_dummy, 
                                                z_spectral, numerical_dissipation)
     begin_sn_r_region()
 
-    @loop_sn isn begin
-        density = @view scratch.density_neutral[:,:,isn]
-        uz = @view scratch.uz_neutral[:,:,isn]
-        pz = @view scratch.pz_neutral[:,:,isn]
-        qz = @view moments.neutral.qz[:,:,isn]
-        vth = @view moments.neutral.vth[:,:,isn]
-        dummy_zr = @view scratch_dummy.dummy_zrsn[:,:,isn]
-        buffer_r_1 = @view scratch_dummy.buffer_rsn_1[:,isn]
-        buffer_r_2 = @view scratch_dummy.buffer_rsn_2[:,isn]
-        buffer_r_3 = @view scratch_dummy.buffer_rsn_3[:,isn]
-        buffer_r_4 = @view scratch_dummy.buffer_rsn_4[:,isn]
-        buffer_r_5 = @view scratch_dummy.buffer_rsn_5[:,isn]
-        buffer_r_6 = @view scratch_dummy.buffer_rsn_6[:,isn]
-        if moments.evolve_density
-            @views derivative_z!(moments.neutral.ddens_dz[:,:,isn], density, buffer_r_1,
-                                 buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
-            # Upwinded using upar as advection velocity, to be used in continuity equation
-            @loop_r_z ir iz begin
-                dummy_zr[iz,ir] = -uz[iz,ir]
-            end
-            @views derivative_z!(moments.neutral.ddens_dz_upwind[:,:,isn], density,
-                                 dummy_zr, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
-                                 buffer_r_5, buffer_r_6, z_spectral, z)
+    density = scratch.density_neutral
+    uz = scratch.uz_neutral
+    pz = scratch.pz_neutral
+    qz = moments.neutral.qz
+    vth = moments.neutral.vth
+    dummy_zrsn = scratch_dummy.dummy_zrsn
+    buffer_r_1 = scratch_dummy.buffer_rsn_1
+    buffer_r_2 = scratch_dummy.buffer_rsn_2
+    buffer_r_3 = scratch_dummy.buffer_rsn_3
+    buffer_r_4 = scratch_dummy.buffer_rsn_4
+    buffer_r_5 = scratch_dummy.buffer_rsn_5
+    buffer_r_6 = scratch_dummy.buffer_rsn_6
+    if moments.evolve_density
+        @views derivative_z!(moments.neutral.ddens_dz, density, buffer_r_1,
+                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z;
+                             neutrals=true)
+        # Upwinded using upar as advection velocity, to be used in continuity equation
+        @loop_sn_r_z isn ir iz begin
+            dummy_zrsn[iz,ir,isn] = -uz[iz,ir,isn]
         end
-        if moments.evolve_density &&
-                numerical_dissipation.moment_dissipation_coefficient > 0.0
+        @views derivative_z!(moments.neutral.ddens_dz_upwind, density,
+                             dummy_zrsn, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
+                             buffer_r_5, buffer_r_6, z_spectral, z; neutrals=true)
+    end
+    if moments.evolve_density &&
+        numerical_dissipation.moment_dissipation_coefficient > 0.0
 
-            # centred second derivative for dissipation
-            @views derivative_z!(dummy_zr, density, buffer_r_1, buffer_r_2, buffer_r_3,
-                                 buffer_r_4, z_spectral, z)
-            @views derivative_z!(moments.neutral.d2dens_dz2[:,:,isn], dummy_zr,
-                                 buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
-                                 z_spectral, z)
+        # centred second derivative for dissipation
+        @views derivative_z!(dummy_zrsn, density, buffer_r_1, buffer_r_2, buffer_r_3,
+                             buffer_r_4, z_spectral, z; neutrals=true)
+        @views derivative_z!(moments.neutral.d2dens_dz2, dummy_zrsn,
+                             buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
+                             z_spectral, z; neutrals=true)
+    end
+    if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
+        @views derivative_z!(moments.neutral.duz_dz, uz, buffer_r_1,
+                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z;
+                             neutrals=true)
+    end
+    if moments.evolve_upar
+        # Upwinded using upar as advection velocity, to be used in force-balance
+        # equation
+        @loop_sn_r_z isn ir iz begin
+            dummy_zrsn[iz,ir,isn] = -uz[iz,ir,isn]
         end
-        if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
-            @views derivative_z!(moments.neutral.duz_dz[:,:,isn], uz, buffer_r_1,
-                                 buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
-        end
-        if moments.evolve_upar
-            # Upwinded using upar as advection velocity, to be used in force-balance
-            # equation
-            @loop_r_z ir iz begin
-                dummy_zr[iz,ir] = -uz[iz,ir]
-            end
-            @views derivative_z!(moments.neutral.duz_dz_upwind[:,:,isn], uz, dummy_zr,
-                                 buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
-                                 buffer_r_5, buffer_r_6, z_spectral, z)
-        end
-        if moments.evolve_upar &&
-                numerical_dissipation.moment_dissipation_coefficient > 0.0
+        @views derivative_z!(moments.neutral.duz_dz_upwind, uz, dummy_zrsn,
+                             buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
+                             buffer_r_5, buffer_r_6, z_spectral, z; neutrals=true)
+    end
+    if moments.evolve_upar &&
+        numerical_dissipation.moment_dissipation_coefficient > 0.0
 
-            # centred second derivative for dissipation
-            @views derivative_z!(dummy_zr, uz, buffer_r_1, buffer_r_2, buffer_r_3,
-                                 buffer_r_4, z_spectral, z)
-            @views derivative_z!(moments.neutral.d2uz_dz2[:,:,isn], dummy_zr, buffer_r_1,
-                                 buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+        # centred second derivative for dissipation
+        @views derivative_z!(dummy_zrsn, uz, buffer_r_1, buffer_r_2, buffer_r_3,
+                             buffer_r_4, z_spectral, z; neutrals=true)
+        @views derivative_z!(moments.neutral.d2uz_dz2, dummy_zrsn, buffer_r_1,
+                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+    end
+    if moments.evolve_upar
+        @views derivative_z!(moments.neutral.dpz_dz, pz, buffer_r_1,
+                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z;
+                             neutrals=true)
+    end
+    if moments.evolve_ppar
+        # Upwinded using upar as advection velocity, to be used in energy equation
+        @loop_sn_r_z isn ir iz begin
+            dummy_zrsn[iz,ir,isn] = -uz[iz,ir,isn]
         end
-        if moments.evolve_upar
-            @views derivative_z!(moments.neutral.dpz_dz[:,:,isn], pz, buffer_r_1,
-                                 buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
-        end
-        if moments.evolve_ppar
-            # Upwinded using upar as advection velocity, to be used in energy equation
-            @loop_r_z ir iz begin
-                dummy_zr[iz,ir] = -uz[iz,ir]
-            end
-            @views derivative_z!(moments.neutral.dpz_dz_upwind[:,:,isn], pz, dummy_zr,
-                                 buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
-                                 buffer_r_5, buffer_r_6, z_spectral, z)
+        @views derivative_z!(moments.neutral.dpz_dz_upwind, pz, dummy_zrsn,
+                             buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
+                             buffer_r_5, buffer_r_6, z_spectral, z; neutrals=true)
 
-            # centred second derivative for dissipation
-            @views derivative_z!(dummy_zr, pz, buffer_r_1, buffer_r_2, buffer_r_3,
-                                 buffer_r_4, z_spectral, z)
-            @views derivative_z!(moments.neutral.d2pz_dz2[:,:,isn], dummy_zr, buffer_r_1,
-                                 buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+        # centred second derivative for dissipation
+        @views derivative_z!(dummy_zrsn, pz, buffer_r_1, buffer_r_2, buffer_r_3,
+                             buffer_r_4, z_spectral, z; neutrals=true)
+        @views derivative_z!(moments.neutral.d2pz_dz2, dummy_zrsn, buffer_r_1,
+                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z;
+                             neutrals=true)
 
-            @views derivative_z!(moments.neutral.dqz_dz[:,:,isn], qz, buffer_r_1,
-                                 buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
-            @views derivative_z!(moments.neutral.dvth_dz[:,:,isn], vth, buffer_r_1,
-                                 buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
-        end
+        @views derivative_z!(moments.neutral.dqz_dz, qz, buffer_r_1,
+                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z;
+                             neutrals=true)
+        @views derivative_z!(moments.neutral.dvth_dz, vth, buffer_r_1,
+                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z;
+                             neutrals=true)
     end
 end
 
