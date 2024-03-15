@@ -156,7 +156,9 @@ function define_coordinate(input, parallel_io::Bool=false; ignore_MPI=false, ini
         scratch_shared .= NaN
         scratch_shared2 .= NaN
     end
-    _block_synchronize()
+    if !ignore_MPI
+        _block_synchronize()
+    end
     # scratch_2d is an array used for intermediate calculations requiring ngrid x nelement entries
     scratch_2d = allocate_float(input.ngrid, input.nelement_local)
     # struct containing the advection speed options/inputs for this coordinate
