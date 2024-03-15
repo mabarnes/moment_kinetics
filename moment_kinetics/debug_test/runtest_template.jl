@@ -1,7 +1,8 @@
 using moment_kinetics: setup_moment_kinetics, cleanup_moment_kinetics!
 using moment_kinetics.time_advance: time_advance!
 using moment_kinetics.communication
-using moment_kinetics.looping: dimension_combinations, anyv_dimension_combinations
+using moment_kinetics.looping: all_dimensions, dimension_combinations,
+                               anyv_dimension_combinations
 using moment_kinetics.Glob
 using moment_kinetics.Primes
 
@@ -71,8 +72,39 @@ function runtests(; restart=false)
             else
                 dims_to_test = debug_loop_type
             end
+            for d ∈ all_dimensions
+                nelement_name = "$(d)_nelement"
+                if nelement_name ∈ keys(input)
+                    nelement = input[nelement_name]
+                elseif d ∈ (:vperp, :vzeta, :vr)
+                    nelement = 1
+                else
+                    # Dummy value, here it only matters if this is 1 or greater than 1
+                    nelement = 2
+                end
+
+                ngrid_name = "$(d)_ngrid"
+                if ngrid_name ∈ keys(input)
+                    ngrid = input[ngrid_name]
+                elseif d ∈ (:vperp, :vzeta, :vr)
+                    ngrid = 1
+                else
+                    # Dummy value, here it only matters if this is 1 or greater than 1
+                    ngrid = 2
+                end
+
+                if nelement == 1 && ngrid == 1
+                    # Dimension has only one point, so cannot be parallelised - no need to
+                    # test
+                    dims_to_test = Tuple(x for x ∈ dims_to_test if x != d)
+                end
+            end
 
             ndims = length(dims_to_test)
+            if ndims == 0
+                # No dimensions to test here
+                continue
+            end
             for i ∈ 1:(ndims+n_factors-1)÷n_factors
                 debug_loop_parallel_dims =
                     dims_to_test[(i-1)*n_factors+1:min(i*n_factors, ndims)]
