@@ -1,4 +1,4 @@
-# cheap input file for a 0D2V relaxation with numerical diffusion terms d^2 F / dvpa^2 and d^2 F / vperp^2.
+# cheap input file for a 0D2V relaxation to a collisional Maxwellian distribution with self-ion collisions.
 n_ion_species = 1
 n_neutral_species = 0
 electron_physics = "boltzmann_electron_response"
@@ -29,11 +29,12 @@ z_IC_temperature_phase2 = 0.0
 charge_exchange_frequency = 0.0
 ionization_frequency = 0.0
 constant_ionization_rate = false
-nuii = 0.0
-nstep = 2000
+# nuii sets the normalised input C[F,F] Fokker-Planck collision frequency
+nuii = 1.0
+nstep = 200000
 dt = 1.0e-3
-nwrite = 2000
-nwrite_dfns = 2000
+nwrite = 50
+nwrite_dfns = 50
 use_semi_lagrange = false
 n_rk_stages = 4
 split_operators = false
@@ -48,18 +49,14 @@ r_nelement_local = 1
 r_bc = "periodic"
 r_discretization = "chebyshev_pseudospectral"
 vpa_ngrid = 5
-vpa_nelement = 16
+vpa_nelement = 8
 vpa_L = 6.0
 vpa_bc = "zero"
 vpa_discretization = "gausslegendre_pseudospectral"
 vperp_ngrid = 5
-vperp_nelement = 8
+vperp_nelement = 4
 vperp_L = 3.0
-vperp_bc = "zero"
 vperp_discretization = "gausslegendre_pseudospectral"
+# Fokker-Planck operator requires the "gausslegendre_pseudospectral
+# options for the vpa and vperp grids
 
-[numerical_dissipation]
-vpa_dissipation_coefficient = 0.1
-vperp_dissipation_coefficient = 0.1
-z_dissipation_coefficient = -1.0
-r_dissipation_coefficient = -1.0
