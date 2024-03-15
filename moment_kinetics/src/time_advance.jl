@@ -495,13 +495,18 @@ function setup_time_advance!(pdf, fields, scratch, vz, vr, vzeta, vpa, vperp, z,
         calculate_electron_upar_from_charge_conservation!(moments.electron.upar, moments.electron.upar_updated,
                                                           moments.electron.dens, moments.ion.upar, moments.ion.dens,
                                                           composition.electron_physics, r, z)
+        begin_serial_region()
         # compute the updated electron temperature
         # NB: not currently necessary, as initial vth is not directly dependent on ion quantities
-        @. moments.electron.temp = moments.electron.vth^2
+        @serial_region begin
+            @. moments.electron.temp = moments.electron.vth^2
+        end
         # as the electron temperature has now been updated, set the appropriate flag
         moments.electron.temp_updated[] = true
         # compute the updated electron parallel pressure
-        @. moments.electron.ppar = 0.5 * moments.electron.dens * moments.electron.temp
+        @serial_region begin
+            @. moments.electron.ppar = 0.5 * moments.electron.dens * moments.electron.temp
+        end
         # as the electron ppar has now been updated, set the appropriate flag
         moments.electron.ppar_updated[] = true
         # calculate the zed derivative of the initial electron temperature, potentially
@@ -1408,7 +1413,10 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
                 + rk_coefs[2]*old_scratch.electron_ppar[iz,ir] + rk_coefs[3]*new_scratch.electron_ppar[iz,ir])
         end
     else
-        @. new_scratch.electron_ppar = 0.5 * new_scratch.electron_density * moments.electron.vth^2
+        @loop_r_z ir iz begin
+            new_scratch.electron_ppar[iz,ir] = 0.5 * new_scratch.electron_density[iz,ir] *
+                                               moments.electron.vth[iz,ir]^2
+        end
     end
     # regardless of electron model, electron ppar is now updated
     moments.electron.ppar_updated[] = true

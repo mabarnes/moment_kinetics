@@ -373,16 +373,20 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
     # different choices for initialization of electron temperature/pressure/vth depending on whether
     # we are restarting from a previous simulation with Boltzmann electrons or not
     if restart_from_Boltzmann_electrons
-        # if restarting from a simulations where Boltzmann electrons were used, then the assumption is
-        # that the electron parallel temperature is constant along the field line and equal to T_e
-        moments.electron.temp .= composition.T_e
-        # the thermal speed is related to the temperature by vth_e / v_ref = sqrt((T_e/T_ref) / (m_e/m_ref))
-        moments.electron.vth .= sqrt(composition.T_e / composition.me_over_mi)
-        # ppar = 0.5 * n * T, so we can calculate the parallel pressure from the density and T_e
-        moments.electron.ppar .= 0.5 * moments.electron.dens * composition.T_e
+        begin_serial_region()
+        @serial_region begin
+            # if restarting from a simulations where Boltzmann electrons were used, then the assumption is
+            # that the electron parallel temperature is constant along the field line and equal to T_e
+            moments.electron.temp .= composition.T_e
+            # the thermal speed is related to the temperature by vth_e / v_ref = sqrt((T_e/T_ref) / (m_e/m_ref))
+            moments.electron.vth .= sqrt(composition.T_e / composition.me_over_mi)
+            # ppar = 0.5 * n * T, so we can calculate the parallel pressure from the density and T_e
+            moments.electron.ppar .= 0.5 * moments.electron.dens * composition.T_e
+        end
     else
         # initialise the electron thermal speed profile
         init_electron_vth!(moments.electron.vth, moments.ion.vth, composition.T_e, composition.me_over_mi, z.grid)
+        begin_r_z_region()
         # calculate the electron temperature from the thermal speed
         @loop_r_z ir iz begin
             moments.electron.temp[iz,ir] = composition.me_over_mi * moments.electron.vth[iz,ir]^2
@@ -732,8 +736,8 @@ function init_vth!(vth, z, r, spec, n_species)
                 end
             end
         end
-        @. vth = sqrt(vth)
     end
+    @. vth = sqrt(vth)
     return nothing
 end
 
@@ -936,6 +940,7 @@ for now the only initialisation option for the temperature is constant in z.
 returns vth0 = sqrt(2*Ts/Te)
 """
 function init_electron_vth!(vth_e, vth_i, T_e, me_over_mi, z)
+    begin_r_z_region()
     # @loop_r_z ir iz begin
     #     vth_e[iz,ir] = sqrt(T_e)
     # end

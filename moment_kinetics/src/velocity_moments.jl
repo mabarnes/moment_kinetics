@@ -253,6 +253,11 @@ function create_moments_electron(nz, nr, electron_model, numerical_dissipation)
     constraints_A_coefficient = allocate_shared_float(nz, nr)
     constraints_B_coefficient = allocate_shared_float(nz, nr)
     constraints_C_coefficient = allocate_shared_float(nz, nr)
+    @serial_region begin
+        constraints_A_coefficient .= 1.0
+        constraints_B_coefficient .= 0.0
+        constraints_C_coefficient .= 0.0
+    end
 
     # return struct containing arrays needed to update moments
     return moments_electron_substruct(density, density_updated, parallel_flow,
