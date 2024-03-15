@@ -361,7 +361,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
                                vperp_spectral, vpa_spectral, collisions,
                                external_source_settings, scratch_dummy, scratch, t_input,
                                num_diss_params, advection_structs, io_input, input_dict;
-                               restart=false)
+                               restart_from_Boltzmann_electrons=false)
     
     moments.electron.dens_updated[] = false
     # initialise the electron density profile
@@ -372,7 +372,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
         moments.ion.upar, moments.ion.dens, composition.electron_physics, r, z)
     # different choices for initialization of electron temperature/pressure/vth depending on whether
     # we are restarting from a previous simulation with Boltzmann electrons or not
-    if restart
+    if restart_from_Boltzmann_electrons
         # if restarting from a simulations where Boltzmann electrons were used, then the assumption is
         # that the electron parallel temperature is constant along the field line and equal to T_e
         moments.electron.temp .= composition.T_e
@@ -445,7 +445,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
     # arrays need to exist and be otherwise initialised in order to compute the initial
     # electron pdf. The electron arrays will be updated as necessary by
     # initialize_electron_pdf!().
-    if restart == false
+    if !restart_from_Boltzmann_electrons
         initialize_scratch_arrays!(scratch, moments, pdf, t_input.n_rk_stages)
         # get the initial electrostatic potential and parallel electric field
         update_phi!(fields, scratch[1], z, r, composition, collisions, moments, z_spectral, r_spectral, scratch_dummy)
@@ -457,8 +457,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
                              advection_structs.electron_z_advect,
                              advection_structs.electron_vpa_advect, scratch_dummy,
                              collisions, composition, geometry, external_source_settings,
-                             num_diss_params, t_input.dt, io_input, input_dict,
-                             restart_from_boltzmann=restart)
+                             num_diss_params, t_input.dt, io_input, input_dict)
 
     return nothing
 end
@@ -585,7 +584,7 @@ function initialize_electron_pdf!(fvec, pdf, moments, phi, r, z, vpa, vperp, vze
                                   vz, z_spectral, vperp_spectral, vpa_spectral, z_advect,
                                   vpa_advect, scratch_dummy, collisions, composition,
                                   geometry, external_source_settings, num_diss_params, dt,
-                                  io_input, input_dict; restart_from_boltzmann=false)
+                                  io_input, input_dict)
 
     # now that the initial electron pdf is given, the electron parallel heat flux should be updated
     # if using kinetic electrons
@@ -593,7 +592,7 @@ function initialize_electron_pdf!(fvec, pdf, moments, phi, r, z, vpa, vperp, vze
         begin_serial_region()
         restart_filename = get_default_restart_filename(io_input, "initial_electron";
                                                         error_if_no_file_found=false)
-        if restart_filename === nothing || restart_from_boltzmann
+        if restart_filename === nothing
             # No file to restart from
             previous_runs_info = nothing
             code_time = 0.0

@@ -542,9 +542,10 @@ Reload pdf and moments from an existing output file.
 """
 function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_prefix_iblock,
                                  time_index, composition, geometry, r, z, vpa, vperp,
-                                 vzeta, vr, vz, initialize_electrons_from_boltzmann=false)
+                                 vzeta, vr, vz)
     code_time = 0.0
     previous_runs_info = nothing
+    restart_had_kinetic_electrons = false
     begin_serial_region()
     @serial_region begin
         fid = open_readonly_output_file(restart_prefix_iblock[1], "dfns";
@@ -720,7 +721,8 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                 restart_electron_evolve_ppar = true, true, true
             electron_evolve_density, electron_evolve_upar, electron_evolve_ppar =
                 true, true, true
-            if (pdf.electron !== nothing) && (initialize_electrons_from_boltzmann == false)
+            restart_had_kinetic_electrons = ("f_electron" ∈ keys(dynamic))
+            if pdf.electron !== nothing && restart_had_kinetic_electrons
                 pdf.electron.norm .=
                     reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa,
                                         r_range, z_range, vperp_range, vpa_range,
@@ -817,7 +819,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
         end
     end
 
-    return code_time, previous_runs_info, time_index
+    return code_time, previous_runs_info, time_index, restart_had_kinetic_electrons
 end
 
 """
