@@ -23,7 +23,7 @@ using MPI
 """
 structure containing basic information related to coordinates
 """
-struct coordinate
+struct coordinate{T <: AbstractVector{mk_float}}
     # name is the name of the variable associated with this coordiante
     name::String
     # n_global is the total number of grid points associated with this coordinate
@@ -80,10 +80,10 @@ struct coordinate
     scratch3::Array{mk_float,1}
     # scratch_shared is a shared-memory array used for intermediate calculations requiring
     # n entries
-    scratch_shared::MPISharedArray{mk_float,1}
+    scratch_shared::T
     # scratch_shared2 is a shared-memory array used for intermediate calculations requiring
     # n entries
-    scratch_shared2::MPISharedArray{mk_float,1}
+    scratch_shared2::T
     # scratch_2d and scratch2_2d are arrays used for intermediate calculations requiring
     # ngrid x nelement entries
     scratch_2d::Array{mk_float,2}
