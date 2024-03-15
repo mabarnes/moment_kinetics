@@ -1346,82 +1346,57 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
 
     if z.bc == "wall"
         begin_r_region()
-        if restart_from_boltzmann
-            # initialize a Maxwellian of the form g = (n_0/n_e) / (sqrt(pi)*vth_e) * exp(-v^2/vth_e^2)
-            # and solve for the values of n_0 satisfies int dvpa g  = 1, given the boundary values of phi
-            # that were obtained from a simulation with Boltzmann electrons.
-            # note that the associated upar_e may not be consistent as a consequence.
-            @loop_r ir begin
-                # first initialize a Maxwellian for the normalized pdf
-                @loop_z iz begin
-                    @loop_vperp ivperp begin
-                        @. pdf[:,ivperp,iz,ir] = exp(-vpa.grid^2)
-                    end
-                end
-                # obtain the cutoff velocities at z_min and z_max
-                vpa_crit_zmin, vpa_crit_zmax = get_electron_critical_velocities(phi, vth, me_over_mi, z)
-                # next apply a density scale factor to ensure that the density at the boundaries is consistent with
-                # a cutoff Maxwellian with the appropriate cutoff velocities
-                density_scale_factor_zmin = 2 / (1 + erf(vpa_crit_zmin))
-                density_scale_factor_zmax = 2 / (1 + erf(vpa_crit_zmax))
+        @loop_r ir begin
+            # Initialise an unshifted Maxwellian as a first step
+            @loop_z iz begin
+                vpa_over_vth = @. vpa.scratch3 = vpa.grid + upar[iz,ir] / vth[iz,ir]
                 @loop_vperp ivperp begin
-                    @. pdf[:,ivperp,1,ir] *= density_scale_factor_zmin
-                    @. pdf[:,ivperp,end,ir] *= density_scale_factor_zmax
+                    @. pdf[:,ivperp,iz,ir] = exp(-vpa_over_vth^2)
                 end
             end
-        else
-            @loop_r ir begin
-                # Initialise an unshifted Maxwellian as a first step
-                @loop_z iz begin
-                    vpa_over_vth = @. vpa.scratch3 = vpa.grid + upar[iz,ir] / vth[iz,ir]
-                    @loop_vperp ivperp begin
-                        @. pdf[:,ivperp,iz,ir] = exp(-vpa_over_vth^2)
-                    end
-                end
+        end
+        # Apply the sheath boundary condition to get cut-off boundary distribution
+        # functions and boundary values of phi
+        enforce_boundary_condition_on_electron_pdf!(pdf, phi, vth, upar, vperp, vpa,
+                                                    vperp_spectral, vpa_spectral,
+                                                    vpa_advect, moments,
+                                                    num_diss_params.vpa_dissipation_coefficient > 0.0,
+                                                    me_over_mi)
+        begin_r_region()
+        @loop_r ir begin
+            # get critical velocities beyond which electrons are lost to the wall
+            #vpa_crit_zmin, vpa_crit_zmax = get_electron_critical_velocities(phi, vth, me_over_mi, z)
+            #println("vpa_crit_zmin = ", vpa_crit_zmin, " vpa_crit_zmax = ", vpa_crit_zmax)
+            # Blend boundary distribution function into bulk of domain to avoid
+            # discontinuities (as much as possible)
+            blend_fac = 100
+            if z.nrank > 1
+                error("Distributed MPI not supported in this init yet")
             end
-            # Apply the sheath boundary condition to get cut-off boundary distribution
-            # functions and boundary values of phi
-            enforce_boundary_condition_on_electron_pdf!(pdf, phi, vth, upar, vperp, vpa,
-                                                        vperp_spectral, vpa_spectral,
-                                                        vpa_advect, moments,
-                                                        num_diss_params.vpa_dissipation_coefficient > 0.0,
-                                                        me_over_mi)
-            begin_r_region()
-            @loop_r ir begin
-                # get critical velocities beyond which electrons are lost to the wall
-                #vpa_crit_zmin, vpa_crit_zmax = get_electron_critical_velocities(phi, vth, me_over_mi, z)
-                #println("vpa_crit_zmin = ", vpa_crit_zmin, " vpa_crit_zmax = ", vpa_crit_zmax)
-                # Blend boundary distribution function into bulk of domain to avoid
-                # discontinuities (as much as possible)
-                blend_fac = 100
-                if z.nrank > 1
-                    error("Distributed MPI not supported in this init yet")
-                end
-                @loop_z_vperp iz ivperp begin
-                    #@. pdf[:,ivperp,iz] = exp(-30*z.grid[iz]^2)
-                    #@. pdf[:,ivperp,iz] = (density[iz] / vth[iz]) *
-                    #@. pdf[:,ivperp,iz] = exp(-vpa.grid[:]^2)
-                    blend_fac_lower = exp(-blend_fac*(z.grid[iz] + 0.5*z.L)^2)
-                    blend_fac_upper = exp(-blend_fac*(z.grid[iz] - 0.5*z.L)^2)
-                    @. pdf[:,ivperp,iz,ir] = (1.0 - blend_fac_lower) * (1.0 - blend_fac_upper) * pdf[:,ivperp,iz,ir] +
-                                            blend_fac_lower * pdf[:,ivperp,1,ir] +
-                                            blend_fac_upper * pdf[:,ivperp,end,ir]
-                    #@. pdf[:,ivperp,iz,ir] = exp(-vpa.grid^2) * (
-                    #                         (1 - exp(-blend_fac*(z.grid[iz] - z.grid[1])^2) *
-                    #                          tanh(sharp_fac*(vpa.grid-vpa_crit_zmin))) *
-                    #                         (1 - exp(-blend_fac*(z.grid[iz] - z.grid[end])^2) *
-                    #                          tanh(-sharp_fac*(vpa.grid-vpa_crit_zmax)))) #/
-                                            #(1 - exp(-blend_fac*(z.grid[iz] - z.grid[1])^2) * tanh(-sharp_fac*vpa_crit_zmin)) /
-                                            #(1 - exp(-blend_fac*(z.grid[iz] - z.grid[end])^2) * tanh(sharp_fac*vpa_crit_zmax)))
-                                            #exp(-((vpa.grid[:] - upar[iz])^2) / vth[iz]^2)
-                                            #exp(-((vpa.grid - upar[iz])^2 + vperp.grid[ivperp]^2) / vth[iz]^2)
+            @loop_z_vperp iz ivperp begin
+                #@. pdf[:,ivperp,iz] = exp(-30*z.grid[iz]^2)
+                #@. pdf[:,ivperp,iz] = (density[iz] / vth[iz]) *
+                #@. pdf[:,ivperp,iz] = exp(-vpa.grid[:]^2)
+                blend_fac_lower = exp(-blend_fac*(z.grid[iz] + 0.5*z.L)^2)
+                blend_fac_upper = exp(-blend_fac*(z.grid[iz] - 0.5*z.L)^2)
+                @. pdf[:,ivperp,iz,ir] = (1.0 - blend_fac_lower) * (1.0 - blend_fac_upper) * pdf[:,ivperp,iz,ir] +
+                                        blend_fac_lower * pdf[:,ivperp,1,ir] +
+                                        blend_fac_upper * pdf[:,ivperp,end,ir]
+                #@. pdf[:,ivperp,iz,ir] = exp(-vpa.grid^2) * (
+                #                         (1 - exp(-blend_fac*(z.grid[iz] - z.grid[1])^2) *
+                #                          tanh(sharp_fac*(vpa.grid-vpa_crit_zmin))) *
+                #                         (1 - exp(-blend_fac*(z.grid[iz] - z.grid[end])^2) *
+                #                          tanh(-sharp_fac*(vpa.grid-vpa_crit_zmax)))) #/
+                                        #(1 - exp(-blend_fac*(z.grid[iz] - z.grid[1])^2) * tanh(-sharp_fac*vpa_crit_zmin)) /
+                                        #(1 - exp(-blend_fac*(z.grid[iz] - z.grid[end])^2) * tanh(sharp_fac*vpa_crit_zmax)))
+                                        #exp(-((vpa.grid[:] - upar[iz])^2) / vth[iz]^2)
+                                        #exp(-((vpa.grid - upar[iz])^2 + vperp.grid[ivperp]^2) / vth[iz]^2)
 
-                    # ensure that the normalised electron pdf integrates to unity
-                    norm_factor = integrate_over_vspace(pdf[:,ivperp,iz,ir], vpa.wgts)
-                    @. pdf[:,ivperp,iz,ir] /= norm_factor
-                    #println("TMP FOR TESTING -- init electron pdf")
-                    #@. pdf[:,ivperp,iz] = exp(-2*vpa.grid[:]^2)*exp(-z.grid[iz]^2)
-                end
+                # ensure that the normalised electron pdf integrates to unity
+                norm_factor = integrate_over_vspace(pdf[:,ivperp,iz,ir], vpa.wgts)
+                @. pdf[:,ivperp,iz,ir] /= norm_factor
+                #println("TMP FOR TESTING -- init electron pdf")
+                #@. pdf[:,ivperp,iz] = exp(-2*vpa.grid[:]^2)*exp(-z.grid[iz]^2)
             end
         end
     else
