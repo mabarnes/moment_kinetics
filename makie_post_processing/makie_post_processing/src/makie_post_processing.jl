@@ -674,7 +674,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
     set_defaults_and_check_section!(
         this_input_dict, "constraints";
         plot=false,
-        animate=true,
+        animate=false,
         it0=this_input_dict["it0"],
         ir0=this_input_dict["ir0"],
         iz0=this_input_dict["iz0"],
