@@ -138,8 +138,10 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
 
     # Convert keyword arguments to a unique name
     name = test_input["run_name"]
+    shortname = name
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
+        shortname = string(shortname, "_", (string(string(k)[1], v) for (k, v) in args)...)
 
         # Remove trailing "_"
         name = chop(name)
@@ -159,7 +161,7 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
     input["timestepping"] = merge(test_input["timestepping"],
                                   modified_timestepping_inputs)
 
-    input["run_name"] = name
+    input["run_name"] = shortname
 
     # Suppress console output while running
     phi_fit = undef
@@ -175,7 +177,7 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
             # Load and analyse output
             #########################
 
-            path = joinpath(realpath(input["base_directory"]), name, name)
+            path = joinpath(realpath(input["base_directory"]), shortname, shortname)
 
             # open the netcdf file and give it the handle 'fid'
             fid = open_readonly_output_file(path,"moments")
