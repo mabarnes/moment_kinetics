@@ -40,7 +40,7 @@ struct time_info
     previous_dt::MPISharedArray{mk_float,1}
     next_output_time::MPISharedArray{mk_float,1}
     dt_before_output::MPISharedArray{mk_float,1}
-    CFL_prefactor::Ref{mk_float}
+    CFL_prefactor::mk_float
     step_to_output::MPISharedArray{Bool,1}
     step_counter::Ref{mk_int}
     failure_counter::Ref{mk_int}
@@ -49,10 +49,11 @@ struct time_info
     nwrite_moments::mk_int
     nwrite_dfns::mk_int
     type::String
-    n_rk_stages::Ref{mk_int}
-    rk_order::Ref{mk_int}
-    adaptive::Ref{Bool}
-    low_storage::Ref{Bool}
+    rk_coefs::Array{mk_float,2}
+    n_rk_stages::mk_int
+    rk_order::mk_int
+    adaptive::Bool
+    low_storage::Bool
     rtol::mk_float
     atol::mk_float
     atol_upar::mk_float
@@ -93,7 +94,6 @@ mutable struct advance_info
     neutral_continuity::Bool
     neutral_force_balance::Bool
     neutral_energy::Bool
-    rk_coefs::Array{mk_float,2}
     manufactured_solns_test::Bool
     r_diffusion::Bool #flag to control how r bc is imposed when r diffusion terms are present
     vpa_diffusion::Bool #flag to control how vpa bc is imposed when vpa diffusion terms are present

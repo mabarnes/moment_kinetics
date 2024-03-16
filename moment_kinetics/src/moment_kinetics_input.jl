@@ -19,6 +19,7 @@ using ..finite_differences: fd_check_option
 using ..input_structs
 using ..numerical_dissipation: setup_numerical_dissipation
 using ..reference_parameters
+using ..runge_kutta: setup_runge_kutta_coefficients!
 
 using MPI
 using TOML
@@ -457,13 +458,18 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         end
         _block_synchronize()
     end
+    rk_coefs, n_rk_stages, rk_order, adaptive, low_storage, CFL_prefactor =
+        setup_runge_kutta_coefficients!(timestepping_input.type,
+                                        timestepping_input.CFL_prefactor,
+                                        timestepping_input.split_operators)
     t_params = time_info(timestepping_input.nstep, dt_shared, previous_dt_shared,
                          next_output_time, dt_before_output,
-                         Ref(timestepping_input.CFL_prefactor), step_to_output, Ref(0),
+                         CFL_prefactor, step_to_output, Ref(0),
                          Ref(0), mk_int[], mk_int[], timestepping_input.nwrite,
-                         timestepping_input.nwrite_dfns, timestepping_input.type, Ref(0),
-                         Ref(0), Ref(false), Ref(true), timestepping_input.rtol,
-                         timestepping_input.atol, timestepping_input.atol_upar,
+                         timestepping_input.nwrite_dfns, timestepping_input.type,
+                         rk_coefs, n_rk_stages, rk_order, adaptive, low_storage,
+                         timestepping_input.rtol, timestepping_input.atol,
+                         timestepping_input.atol_upar,
                          timestepping_input.step_update_prefactor,
                          timestepping_input.max_increase_factor,
                          timestepping_input.minimum_dt,

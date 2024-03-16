@@ -1,0 +1,204 @@
+"""
+Runge Kutta timestepping
+"""
+module runge_kutta
+
+export setup_runge_kutta_coefficients!
+
+using ..array_allocation: allocate_float
+using ..type_definitions: mk_float
+
+"""
+given the number of Runge Kutta stages that are requested,
+returns the needed Runge Kutta coefficients;
+e.g., if f is the function to be updated, then
+f^{n+1}[stage+1] = rk_coef[1,stage]*f^{n} + rk_coef[2,stage]*f^{n+1}[stage] + rk_coef[3,stage]*(f^{n}+dt*G[f^{n+1}[stage]]
+"""
+function setup_runge_kutta_coefficients!(type, input_CFL_prefactor, split_operators)
+    if type == "RKF5(4)"
+        # Embedded 5th order / 4th order Runge-Kutta-Fehlberg method.
+        # Note uses the 5th order solution for the time advance, even though the error
+        # estimate is for the 4th order solution.
+        #
+        # Coefficients originate here:
+        # https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method,
+        # 'COEFFICIENTS FOR RK4(5), FORMULA 2 Table III in Fehlberg'
+        #
+        # Coefficients converted to the format for moment_kinetics time-stepper using
+        # `util/calculate_rk_coeffs.jl`
+        rk_coefs = mk_float[3//4 5//8   10469//2197  115//324        121//240    641//1980  11//36   ;
+                            1//4 3//32  17328//2197  95//54          33//10      232//165   4//3     ;
+                            0    9//32 -32896//2197 -95744//29241   -1408//285  -512//171  -512//171 ;
+                            0    0      7296//2197   553475//233928  6591//1520  2197//836  2197//836;
+                            0    0      0           -845//4104      -77//40     -56//55    -1        ;
+                            0    0      0            0              -11//40      34//55     8//11    ;
+                            0    0      0            0               0           2//55     -1        ]
+        n_rk_stages = 6
+        rk_order = 5
+        adaptive = true
+        low_storage = false
+        if input_CFL_prefactor ≤ 0.0
+            CFL_prefactor = 1.0
+        else
+            CFL_prefactor = input_CFL_prefactor
+        end
+    elseif type == "Fekete10(4)"
+        # Fekete 10-stage 4th-order SSPRK (see comments in util/calculate_rk_coeffs.jl.
+        # Note that a 'low storage' implementation of the main method (if not the
+        # truncation error estimate) is possible [D.I. Ketcheson, Highly efficient strong
+        # stability-preserving Runge–Kutta methods with low-storage implementations, SIAM
+        # J. Sci. Comput. 30 (2008) 2113–2136, https://doi.org/10.1137/07070485X,
+        # https://www.davidketcheson.info/assets/papers/2008_explicit_ssp.pdf] but
+        # would require a particular implementation that does not fit in with the
+        # currently-implemented moment_kinetics 'low_storage' code, so we do not take
+        # advantage of it yet. If this timestepping scheme turns out to be particularly
+        # efficient, a low-storage version could be implemented (which might be
+        # particularly important given the large number of stages in this scheme which
+        # will lead to high memory usage), with one extra buffer for the truncation error
+        # estimate which would need to be updated incrementally at each stage, rather than
+        # calculated only at the end of the RK step.
+        rk_coefs = mk_float[5//6 0    0    0    3//5  0    0    0    0    -1//2  -1//5;
+                            1//6 5//6 0    0    0     0    0    0    0     0      6//5;
+                            0    1//6 5//6 0    0     0    0    0    0     0      0   ;
+                            0    0    1//6 5//6 0     0    0    0    0     0     -9//5;
+                            0    0    0    1//6 1//3  0    0    0    0     0      9//5;
+                            0    0    0    0    1//15 5//6 0    0    0     9//10  0   ;
+                            0    0    0    0    0     1//6 5//6 0    0     0     -6//5;
+                            0    0    0    0    0     0    1//6 5//6 0     0      6//5;
+                            0    0    0    0    0     0    0    1//6 5//6  0     -9//5;
+                            0    0    0    0    0     0    0    0    1//6  1//2   9//5;
+                            0    0    0    0    0     0    0    0    0     1//10 -1   ]
+        n_rk_stages = 10
+        rk_order = 4
+        adaptive = true
+        low_storage = false
+        if input_CFL_prefactor ≤ 0.0
+            CFL_prefactor = 12.0
+        else
+            CFL_prefactor = input_CFL_prefactor
+        end
+    elseif type == "Fekete6(4)"
+        # Fekete 6-stage 4th-order SSPRK (see comments in util/calculate_rk_coeffs.jl.
+        # Note Fekete et al. recommend the 10-stage method rather than this one.
+        #rk_coeffs = mk_float[0.6447024483081 0.2386994475333264  0.5474858792272213     0.3762853856474131     0.0                -0.18132326703443313    -0.0017300417984673078;
+        #                     0.3552975516919 0.4295138541066736 -6.461498003318411e-14 -1.1871059690804486e-13 0.0                 2.9254376698872875e-14 -0.18902907903375094  ;
+        #                     0.0             0.33178669836       0.25530138316744333   -3.352873534367973e-14  0.0                 0.2059808002676668      0.2504712436879622   ;
+        #                     0.0             0.0                 0.1972127376054        0.3518900216285391     0.0                 0.4792670116241715     -0.9397479180374522   ;
+        #                     0.0             0.0                 0.0                    0.2718245927242        0.5641843457422999  9.986456106503283e-14   1.1993626679930305   ;
+        #                     0.0             0.0                 0.0                    0.0                    0.4358156542577     0.3416567872695656     -0.5310335716309745   ;
+        #                     0.0             0.0                 0.0                    0.0                    0.0                 0.1544186678729         0.2117066988196524   ]
+        # Might as well set to 0 the entries that look like they should be 0 apart from
+        # rounding errors.
+        rk_coefs = mk_float[0.6447024483081 0.2386994475333264 0.5474858792272213  0.3762853856474131 0.0                -0.18132326703443313    -0.0017300417984673078;
+                            0.3552975516919 0.4295138541066736 0.0                 0.0                0.0                 0.0                    -0.18902907903375094  ;
+                            0.0             0.33178669836      0.25530138316744333 0.0                0.0                 0.2059808002676668      0.2504712436879622   ;
+                            0.0             0.0                0.1972127376054     0.3518900216285391 0.0                 0.4792670116241715     -0.9397479180374522   ;
+                            0.0             0.0                0.0                 0.2718245927242    0.5641843457422999  0.0                     1.1993626679930305   ;
+                            0.0             0.0                0.0                 0.0                0.4358156542577     0.3416567872695656     -0.5310335716309745   ;
+                            0.0             0.0                0.0                 0.0                0.0                 0.1544186678729         0.2117066988196524   ]
+        n_rk_stages = 6
+        rk_order = 4
+        adaptive = true
+        low_storage = false
+        if input_CFL_prefactor ≤ 0.0
+            CFL_prefactor = 8.0
+        else
+            CFL_prefactor = input_CFL_prefactor
+        end
+    elseif type == "Fekete4(3)"
+        # Fekete 4-stage, 3rd-order SSPRK (see comments in util/calculate_rk_coeffs.jl.
+        # Note this is the same as moment_kinetics original 4-stage SSPRK method, with
+        # the addition of a truncation error estimate.
+        rk_coefs = mk_float[1//2 0    2//3 0    -1//2;
+                            0    1//2 1//6 1//2  1   ;
+                            1//2 1//2 1//6 1//2 -1//2]
+        n_rk_stages = 4
+        rk_order = 3
+        adaptive = true
+        low_storage = true
+        if input_CFL_prefactor ≤ 0.0
+            CFL_prefactor = 6.0
+        else
+            CFL_prefactor = input_CFL_prefactor
+        end
+    elseif type == "Fekete4(2)"
+        # Fekete 4-stage 2nd-order SSPRK (see comments in util/calculate_rk_coeffs.jl.
+        rk_coefs = mk_float[2//3 0    0    1//4 -1//8 ;
+                            1//3 2//3 0    0     3//16;
+                            0    1//3 2//3 0     0    ;
+                            0    0    1//3 1//2  3//16;
+                            0    0    0    1//4 -1//4 ]
+        n_rk_stages = 4
+        rk_order = 2
+        adaptive = true
+        low_storage = false
+        if input_CFL_prefactor ≤ 0.0
+            CFL_prefactor = 7.0
+        else
+            CFL_prefactor = input_CFL_prefactor
+        end
+    elseif type == "SSPRK4"
+        n_rk_stages = 4
+        rk_coefs = allocate_float(3, n_rk_stages)
+        rk_coefs .= 0.0
+        rk_coefs[1,1] = 0.5
+        rk_coefs[3,1] = 0.5
+        rk_coefs[2,2] = 0.5
+        rk_coefs[3,2] = 0.5
+        rk_coefs[1,3] = 2.0/3.0
+        rk_coefs[2,3] = 1.0/6.0
+        rk_coefs[3,3] = 1.0/6.0
+        rk_coefs[2,4] = 0.5
+        rk_coefs[3,4] = 0.5
+        n_rk_stages = 4
+        rk_order = 3
+        adaptive = false
+        low_storage = true
+        CFL_prefactor = NaN
+    elseif type == "SSPRK3"
+        n_rk_stages = 3
+        rk_coefs = allocate_float(3, n_rk_stages)
+        rk_coefs .= 0.0
+        rk_coefs[3,1] = 1.0
+        rk_coefs[1,2] = 0.75
+        rk_coefs[3,2] = 0.25
+        rk_coefs[1,3] = 1.0/3.0
+        rk_coefs[3,3] = 2.0/3.0
+        rk_order = 3 # ? Not sure about this order
+        adaptive = false
+        low_storage = true
+        CFL_prefactor = NaN
+    elseif type == "SSPRK2"
+        n_rk_stages = 2
+        rk_coefs = allocate_float(3, n_rk_stages)
+        rk_coefs .= 0.0
+        rk_coefs[3,1] = 1.0
+        rk_coefs[1,2] = 0.5
+        rk_coefs[3,2] = 0.5
+        rk_order = 2
+        adaptive = false
+        low_storage = true
+        CFL_prefactor = NaN
+    elseif type == "SSPRK1"
+        n_rk_stages = 1
+        rk_coefs = allocate_float(3, n_rk_stages)
+        rk_coefs .= 0.0
+        rk_coefs[3,1] = 1.0
+        rk_order = 1
+        adaptive = false
+        low_storage = true
+        CFL_prefactor = NaN
+    else
+        error("Unsupported RK timestep method, type=$type\n"
+              * "Valid methods are: SSPRK4, SSPRK3, SSPRK2, SSPRK1, RKF5(4), Fekete10(4),"
+              * "Fekete6(4), Fekete4(3), Fekete4(2)")
+    end
+
+    if split_operators && adaptive
+        error("Adaptive timestepping not supported with operator splitting")
+    end
+
+    return rk_coefs, n_rk_stages, rk_order, adaptive, low_storage, CFL_prefactor
+end
+
+end # runge_kutta
