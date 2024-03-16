@@ -2022,6 +2022,10 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
             # Get maximum error over all blocks
             error_norms = MPI.Allreduce(error_norms, +, comm_inter_block[])
 
+            # So far `error_norms` is the sum of squares of the errors. Now that summation
+            # is finished, need to take square-root.
+            error_norms .= sqrt.(error_norms)
+
             # Weight the error from each variable equally by taking the mean, so the
             # larger number of points in the distribution functions does not mean that
             # error on the moments is ignored.
