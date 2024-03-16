@@ -3,9 +3,12 @@ Runge Kutta timestepping
 """
 module runge_kutta
 
-export setup_runge_kutta_coefficients!
+export setup_runge_kutta_coefficients!, rk_update_evolved_moments!,
+       rk_update_evolved_moments_electron!, rk_update_evolved_moments_neutral!,
+       rk_update_variable!
 
 using ..array_allocation: allocate_float
+using ..looping
 using ..type_definitions: mk_float
 
 """
@@ -199,6 +202,256 @@ function setup_runge_kutta_coefficients!(type, input_CFL_prefactor, split_operat
     end
 
     return rk_coefs, n_rk_stages, rk_order, adaptive, low_storage, CFL_prefactor
+end
+
+"""
+use Runge Kutta to update any ion velocity moments evolved separately from
+the pdf
+"""
+function rk_update_evolved_moments!(scratch, moments, t_params, istage)
+    # if separately evolving the particle density, update using RK
+    if moments.evolve_density
+        rk_update_variable!(scratch, :density, t_params, istage)
+    end
+
+    # if separately evolving the parallel flow, update using RK
+    if moments.evolve_upar
+        rk_update_variable!(scratch, :upar, t_params, istage)
+    end
+
+    # if separately evolving the parallel pressure, update using RK;
+    if moments.evolve_ppar
+        rk_update_variable!(scratch, :ppar, t_params, istage)
+    end
+end
+
+"""
+use Runge Kutta to update any electron velocity moments evolved separately from
+the pdf
+"""
+function rk_update_evolved_moments_electron!(scratch, moments, t_params, istage)
+    # For now, electrons always fully moment kinetic, and ppar is the only evolving moment
+    # (density and upar are calculated from quasineutrality and ambipolarity constraints).
+    rk_update_variable!(scratch, :ppar_electron, t_params, istage)
+end
+
+"""
+use Runge Kutta to update any neutral-particle velocity moments evolved separately from
+the pdf
+"""
+function rk_update_evolved_moments_neutral!(scratch, moments, t_params, istage)
+    # if separately evolving the particle density, update using RK
+    if moments.evolve_density
+        rk_update_variable!(scratch, :density_neutral, t_params, istage; neutrals=true)
+    end
+
+    # if separately evolving the parallel flow, update using RK
+    if moments.evolve_upar
+        rk_update_variable!(scratch, :uz_neutral, t_params, istage; neutrals=true)
+    end
+
+    # if separately evolving the parallel pressure, update using RK;
+    if moments.evolve_ppar
+        rk_update_variable!(scratch, :pz_neutral, t_params, istage; neutrals=true)
+    end
+end
+
+"""
+Update the variable named `var_symbol` in `scratch` to the current Runge-Kutta stage
+`istage`. The current value in `scratch[istage+1]` is the result of the forward-Euler
+update, which needs to be corrected using values from previous stages with the Runge-Kutta
+coefficients.
+"""
+function rk_update_variable!(scratch, var_symbol::Symbol, t_params, istage; neutrals=false)
+    if t_params.low_storage
+        var_arrays = (getfield(scratch[istage+1], var_symbol),
+                      getfield(scratch[istage], var_symbol),
+                      getfield(scratch[1], var_symbol))
+    else
+        var_arrays = Tuple(getfield(scratch[i], var_symbol) for i ∈ 1:istage+1)
+    end
+    rk_coefs = @view t_params.rk_coefs[:,istage]
+
+    if neutrals
+        if t_params.low_storage
+            rk_update_loop_neutrals_low_storage!(rk_coefs, var_arrays...)
+        else
+            rk_update_loop_neutrals!(rk_coefs, var_arrays)
+        end
+    else
+        if t_params.low_storage
+            rk_update_loop_low_storage!(rk_coefs, var_arrays...)
+        else
+            rk_update_loop!(rk_coefs, var_arrays)
+        end
+    end
+
+    return nothing
+end
+
+# Ion distribution function
+function rk_update_loop_low_storage!(rk_coefs, new::AbstractArray{mk_float,5},
+                                     old::AbstractArray{mk_float,5},
+                                     first::AbstractArray{mk_float,5})
+    @boundscheck length(rk_coefs) == 3
+
+    begin_s_r_z_vperp_vpa_region()
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        new[ivpa,ivperp,iz,ir,is] = rk_coefs[1]*first[ivpa,ivperp,iz,ir,is] +
+                                    rk_coefs[2]*old[ivpa,ivperp,iz,ir,is] +
+                                    rk_coefs[3]*new[ivpa,ivperp,iz,ir,is]
+    end
+
+    return nothing
+end
+function rk_update_loop!(rk_coefs,
+                         var_arrays::NTuple{N,AbstractArray{mk_float,5}}) where N
+    @boundscheck length(rk_coefs) ≥ N
+
+    begin_s_r_z_vperp_vpa_region()
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        var_arrays[N][ivpa,ivperp,iz,ir,is] =
+            sum(rk_coefs[i] * var_arrays[i][ivpa,ivperp,iz,ir,is] for i ∈ 1:N)
+    end
+
+    return nothing
+end
+
+# Ion moments
+function rk_update_loop_low_storage!(rk_coefs, new::AbstractArray{mk_float,3},
+                                     old::AbstractArray{mk_float,3},
+                                     first::AbstractArray{mk_float,3})
+    @boundscheck length(rk_coefs) == 3
+
+    begin_s_r_z_region()
+    @loop_s_r_z is ir iz begin
+        new[iz,ir,is] = rk_coefs[1]*first[iz,ir,is] +
+                        rk_coefs[2]*old[iz,ir,is] +
+                        rk_coefs[3]*new[iz,ir,is]
+    end
+
+    return nothing
+end
+function rk_update_loop!(rk_coefs,
+                         var_arrays::NTuple{N,AbstractArray{mk_float,3}}) where N
+    @boundscheck length(rk_coefs) ≥ N
+
+    begin_s_r_z_region()
+    @loop_s_r_z is ir iz begin
+        var_arrays[N][iz,ir,is] = sum(rk_coefs[i] * var_arrays[i][iz,ir,is] for i ∈ 1:N)
+    end
+
+    return nothing
+end
+
+# Electron distribution function
+function rk_update_loop_low_storage!(rk_coefs, new::AbstractArray{mk_float,4},
+                                     old::AbstractArray{mk_float,4},
+                                     first::AbstractArray{mk_float,4})
+    @boundscheck length(rk_coefs) == 3
+
+    begin_r_z_vperp_vpa_region()
+    @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+        new[ivpa,ivperp,iz,ir] = rk_coefs[1]*first[ivpa,ivperp,iz,ir] +
+                                 rk_coefs[2]*old[ivpa,ivperp,iz,ir] +
+                                 rk_coefs[3]*new[ivpa,ivperp,iz,ir]
+    end
+
+    return nothing
+end
+function rk_update_loop!(rk_coefs,
+                         var_arrays::NTuple{N,AbstractArray{mk_float,4}}) where N
+    @boundscheck length(rk_coefs) ≥ N
+
+    begin_r_z_vperp_vpa_region()
+    @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+        var_arrays[N][ivpa,ivperp,iz,ir] =
+            sum(rk_coefs[i] * var_arrays[i][ivpa,ivperp,iz,ir] for i ∈ 1:N)
+    end
+
+    return nothing
+end
+
+# Electron moments
+function rk_update_loop_low_storage!(rk_coefs, new::AbstractArray{mk_float,2},
+                                     old::AbstractArray{mk_float,2},
+                                     first::AbstractArray{mk_float,2})
+    @boundscheck length(rk_coefs) == 3
+
+    begin_r_z_region()
+    @loop_r_z ir iz begin
+        new[iz,ir] = rk_coefs[1]*first[iz,ir] +
+                     rk_coefs[2]*old[iz,ir] +
+                     rk_coefs[3]*new[iz,ir]
+    end
+
+    return nothing
+end
+function rk_update_loop!(rk_coefs,
+                         var_arrays::NTuple{N,AbstractArray{mk_float,2}}) where N
+    @boundscheck length(rk_coefs) ≥ N
+
+    begin_r_z_region()
+    @loop_r_z ir iz begin
+        var_arrays[N][iz,ir] = sum(rk_coefs[i] * var_arrays[i][iz,ir] for i ∈ 1:N)
+    end
+
+    return nothing
+end
+
+# Neutral distribution function
+function rk_update_loop_neutrals_low_storage!(rk_coefs, new::AbstractArray{mk_float,6},
+                                     old::AbstractArray{mk_float,6},
+                                     first::AbstractArray{mk_float,6})
+    @boundscheck length(rk_coefs) == 3
+
+    begin_sn_r_z_vzeta_vr_vz_region()
+    @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+        new[ivz,ivr,ivzeta,iz,ir,isn] = rk_coefs[1]*first[ivz,ivr,ivzeta,iz,ir,isn] +
+                                        rk_coefs[2]*old[ivz,ivr,ivzeta,iz,ir,isn] +
+                                        rk_coefs[3]*new[ivz,ivr,ivzeta,iz,ir,isn]
+    end
+
+    return nothing
+end
+function rk_update_loop_neutrals!(rk_coefs,
+                                  var_arrays::NTuple{N,AbstractArray{mk_float,6}}) where N
+    @boundscheck length(rk_coefs) ≥ N
+
+    begin_sn_r_z_vzeta_vr_vz_region()
+    @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+        var_arrays[N][ivz,ivr,ivzeta,iz,ir,isn] =
+            sum(rk_coefs[i] * var_arrays[i][ivz,ivr,ivzeta,iz,ir,isn] for i ∈ 1:N)
+    end
+
+    return nothing
+end
+
+# Neutral moments
+function rk_update_loop_neutrals_low_storage!(rk_coefs, new::AbstractArray{mk_float,3},
+                                              old::AbstractArray{mk_float,3},
+                                              first::AbstractArray{mk_float,3})
+    @boundscheck length(rk_coefs) == 3
+
+    begin_sn_r_z_region()
+    @loop_sn_r_z isn ir iz begin
+        new[iz,ir,isn] = rk_coefs[1]*first[iz,ir,isn] +
+                         rk_coefs[2]*old[iz,ir,isn] +
+                         rk_coefs[3]*new[iz,ir,isn]
+    end
+
+    return nothing
+end
+function rk_update_loop_neutrals!(rk_coefs,
+                                  var_arrays::NTuple{N,AbstractArray{mk_float,3}}) where N
+    @boundscheck length(rk_coefs) ≥ N
+
+    begin_sn_r_z_region()
+    @loop_sn_r_z isn ir iz begin
+        var_arrays[N][iz,ir,isn] = sum(rk_coefs[i] * var_arrays[i][iz,ir,isn] for i ∈ 1:N)
+    end
+
+    return nothing
 end
 
 end # runge_kutta

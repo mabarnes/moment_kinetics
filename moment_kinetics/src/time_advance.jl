@@ -56,6 +56,8 @@ using ..em_fields: setup_em_fields, update_phi!
 using ..fokker_planck: init_fokker_planck_collisions_weak_form, explicit_fokker_planck_collisions_weak_form!
 using ..manufactured_solns: manufactured_sources
 using ..advection: advection_info
+using ..runge_kutta: rk_update_evolved_moments!, rk_update_evolved_moments_neutral!,
+                     rk_update_variable!
 using ..utils: to_minutes, get_minimum_CFL_z, get_minimum_CFL_vpa,
                get_minimum_CFL_neutral_z, get_minimum_CFL_neutral_vz
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
@@ -1315,18 +1317,9 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     ##
     # here we seem to have duplicate arrays for storing n, u||, p||, etc, but not for vth
     # 'scratch' is for the multiple stages of time advanced quantities, but 'moments' can be updated directly at each stage
-    if t_params.low_storage
-        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-            new_scratch.pdf[ivpa,ivperp,iz,ir,is] = rk_coefs[1]*pdf.charged.norm[ivpa,ivperp,iz,ir,is] + rk_coefs[2]*old_scratch.pdf[ivpa,ivperp,iz,ir,is] + rk_coefs[3]*new_scratch.pdf[ivpa,ivperp,iz,ir,is]
-        end
-    else
-        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-            new_scratch.pdf[ivpa,ivperp,iz,ir,is] =
-                sum(rk_coefs[i]*scratch[i].pdf[ivpa,ivperp,iz,ir,is] for i ∈ 1:istage+1)
-        end
-    end
+    rk_update_variable!(scratch, :pdf, t_params, istage)
     # use Runge Kutta to update any velocity moments evolved separately from the pdf
-    rk_update_evolved_moments!(scratch, moments, rk_coefs, t_params.low_storage, istage)
+    rk_update_evolved_moments!(scratch, moments, t_params, istage)
 
     # Ensure there are no negative values in the pdf before applying boundary
     # conditions, so that negative deviations do not mess up the integral-constraint
@@ -1389,21 +1382,9 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         ##
         # update the neutral particle distribution and moments
         ##
-        begin_sn_r_z_region()
-        if t_params.low_storage
-            @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
-                new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = ( rk_coefs[1]*pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn]
-                 + rk_coefs[2]*old_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] + rk_coefs[3]*new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn])
-            end
-        else
-            @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
-                new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] =
-                    sum(rk_coefs[i]*scratch[i].pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] for i ∈ 1:istage+1)
-            end
-        end
+        rk_update_variable!(scratch, :pdf_neutral, t_params, istage; neutrals=true)
         # use Runge Kutta to update any velocity moments evolved separately from the pdf
-        rk_update_evolved_moments_neutral!(scratch, moments, rk_coefs, t_params.low_storage,
-                                           istage)
+        rk_update_evolved_moments_neutral!(scratch, moments, t_params, istage)
 
         # Ensure there are no negative values in the pdf before applying boundary
         # conditions, so that negative deviations do not mess up the integral-constraint
@@ -1540,104 +1521,6 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
                 #  * evolving upar or ppar as synchronization will be triggered after moments
                 #    updates at the beginning of the next RK step
                 _block_synchronize()
-            end
-        end
-    end
-end
-
-"""
-use Runge Kutta to update any charged-particle velocity moments evolved separately from
-the pdf
-"""
-function rk_update_evolved_moments!(scratch, moments, rk_coefs, low_storage, istage)
-    # if separately evolving the particle density, update using RK
-    new_scratch = scratch[istage+1]
-    old_scratch = scratch[istage]
-
-    if moments.evolve_density
-        if low_storage
-            @loop_s_r_z is ir iz begin
-                new_scratch.density[iz,ir,is] = rk_coefs[1]*moments.charged.dens[iz,ir,is] + rk_coefs[2]*old_scratch.density[iz,ir,is] + rk_coefs[3]*new_scratch.density[iz,ir,is]
-            end
-        else
-            @loop_s_r_z is ir iz begin
-                new_scratch.density[iz,ir,is] =
-                    sum(rk_coefs[i]*scratch[i].density[iz,ir,is] for i ∈ 1:istage+1)
-            end
-        end
-    end
-    # if separately evolving the parallel flow, update using RK
-    if moments.evolve_upar
-        if low_storage
-            @loop_s_r_z is ir iz begin
-                new_scratch.upar[iz,ir,is] = rk_coefs[1]*moments.charged.upar[iz,ir,is] + rk_coefs[2]*old_scratch.upar[iz,ir,is] + rk_coefs[3]*new_scratch.upar[iz,ir,is]
-            end
-        else
-            @loop_s_r_z is ir iz begin
-                new_scratch.upar[iz,ir,is] =
-                    sum(rk_coefs[i]*scratch[i].upar[iz,ir,is] for i ∈ 1:istage+1)
-            end
-        end
-    end
-    # if separately evolving the parallel pressure, update using RK;
-    if moments.evolve_ppar
-        if low_storage
-            @loop_s_r_z is ir iz begin
-                new_scratch.ppar[iz,ir,is] = rk_coefs[1]*moments.charged.ppar[iz,ir,is] + rk_coefs[2]*old_scratch.ppar[iz,ir,is] + rk_coefs[3]*new_scratch.ppar[iz,ir,is]
-            end
-        else
-            @loop_s_r_z is ir iz begin
-                new_scratch.ppar[iz,ir,is] =
-                    sum(rk_coefs[i]*scratch[i].ppar[iz,ir,is] for i ∈ 1:istage+1)
-            end
-        end
-    end
-end
-
-"""
-use Runge Kutta to update any neutral-particle velocity moments evolved separately from
-the pdf
-"""
-function rk_update_evolved_moments_neutral!(scratch, moments, rk_coefs, low_storage, istage)
-    # if separately evolving the particle density, update using RK
-    new_scratch = scratch[istage+1]
-    old_scratch = scratch[istage]
-
-    if moments.evolve_density
-        if low_storage
-            @loop_sn_r_z isn ir iz begin
-                new_scratch.density_neutral[iz,ir,isn] = rk_coefs[1]*moments.neutral.dens[iz,ir,isn] + rk_coefs[2]*old_scratch.density_neutral[iz,ir,isn] + rk_coefs[3]*new_scratch.density_neutral[iz,ir,isn]
-            end
-        else
-            @loop_sn_r_z isn ir iz begin
-                new_scratch.density_neutral[iz,ir,isn] =
-                    sum(rk_coefs[i]*scratch[i].density_neutral[iz,ir,isn] for i ∈ 1:istage+1)
-            end
-        end
-    end
-    # if separately evolving the parallel flow, update using RK
-    if moments.evolve_upar
-        if low_storage
-            @loop_sn_r_z isn ir iz begin
-                new_scratch.uz_neutral[iz,ir,isn] = rk_coefs[1]*moments.neutral.uz[iz,ir,isn] + rk_coefs[2]*old_scratch.uz_neutral[iz,ir,isn] + rk_coefs[3]*new_scratch.uz_neutral[iz,ir,isn]
-            end
-        else
-            @loop_sn_r_z isn ir iz begin
-                new_scratch.uz_neutral[iz,ir,isn] =
-                sum(rk_coefs[i]*scratch[i].uz_neutral[iz,ir,isn] for i ∈ 1:istage+1)
-            end
-        end
-    end
-    # if separately evolving the parallel pressure, update using RK;
-    if moments.evolve_ppar
-        if low_storage
-            @loop_sn_r_z isn ir iz begin
-                new_scratch.pz_neutral[iz,ir,isn] = rk_coefs[1]*moments.neutral.pz[iz,ir,isn] + rk_coefs[2]*old_scratch.pz_neutral[iz,ir,isn] + rk_coefs[3]*new_scratch.pz_neutral[iz,ir,isn]
-            end
-        else
-            @loop_sn_r_z isn ir iz begin
-                new_scratch.pz_neutral[iz,ir,isn] =
-                sum(rk_coefs[i]*scratch[i].pz_neutral[iz,ir,isn] for i ∈ 1:istage+1)
             end
         end
     end
