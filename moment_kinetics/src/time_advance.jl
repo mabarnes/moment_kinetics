@@ -854,19 +854,25 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
 
     start_time = now()
 
+    end_time = t + t_params.dt[] * t_params.nstep
+    epsilon = 1.e-11
     moments_output_counter = 1
     moments_output_times = [t + i*t_params.dt[]
                             for i ∈ t_params.nwrite_moments:t_params.nwrite_moments:t_params.nstep]
+    if moments_output_times[end] < end_time - epsilon
+        push!(moments_output_times, end_time)
+    end
     dfns_output_counter = 1
     dfns_output_times = [t + i*t_params.dt[]
                          for i ∈ t_params.nwrite_dfns:t_params.nwrite_dfns:t_params.nstep]
+    if dfns_output_times[end] < end_time - epsilon
+        push!(dfns_output_times, end_time)
+    end
     @serial_region begin
         t_params.next_output_time[] = min(moments_output_times[moments_output_counter],
                                          dfns_output_times[dfns_output_counter])
     end
     _block_synchronize()
-    end_time = t + t_params.dt[] * t_params.nstep
-    epsilon = 1.e-11
 
     # main time advance loop
     iwrite_moments = 2
