@@ -68,7 +68,6 @@ test_input = Dict("n_ion_species" => 1,
                   "timestepping" => Dict{String,Any}("nstep" => 1000,
                                                      "dt" => 1.0e-4,
                                                      "nwrite" => 1000,
-                                                     "high_precision_error_sum" => true,
                                                      "split_operators" => false),
                   "r_ngrid" => 1,
                   "r_nelement" => 1,
@@ -111,10 +110,61 @@ test_input_split3 = merge(test_input_split2,
 test_input_split3["timestepping"] = merge(test_input_split3["timestepping"],
                                            Dict("dt" => 1.0e-5))
 
+# default inputs for adaptive timestepping tests
+test_input_adaptive = merge(test_input,
+                            Dict{String,Any}("run_name" => "adaptive full-f",
+                                             "z_ngrid" => 5,
+                                             "z_nelement" => 16,
+                                             "vpa_ngrid" => 6,
+                                             "vpa_nelement" => 31,
+                                             "vz_ngrid" => 6,
+                                             "vz_nelement" => 31))
+# Note, use excessively conservative timestepping settings here, because
+# we want to avoid any timestep failures in the test. If failures
+# occur, the number or when exactly they occur could depend on the
+# round-off error, which could make the results less reproducible (even
+# though the difference should be negligible compared to the
+# discretization error of the simulation).
+test_input_adaptive["timestepping"] = merge(test_input_adaptive["timestepping"],
+                                            Dict{String,Any}("type" => "Fekete4(3)",
+                                                             "nstep" => 5000,
+                                                             "dt" => 1.0e-5,
+                                                             "minimum_dt" => 1.0e-5,
+                                                             "CFL_prefactor" => 1.0,
+                                                             "step_update_prefactor" => 0.5,
+                                                             "nwrite" => 1000,
+                                                             "high_precision_error_sum" => true,
+                                                             "split_operators" => false))
+
+test_input_adaptive_split1 = merge(test_input_adaptive,
+                                   Dict("run_name" => "adaptive split1",
+                                        "evolve_moments_density" => true,
+                                        "evolve_moments_conservation" => true))
+test_input_adaptive_split2 = merge(test_input_adaptive_split1,
+                                   Dict("run_name" => "adaptive split2",
+                                        "evolve_moments_parallel_flow" => true))
+test_input_adaptive_split2["timestepping"] = merge(test_input_adaptive_split2["timestepping"],
+                                                   Dict{String,Any}("step_update_prefactor" => 0.4))
+test_input_adaptive_split3 = merge(test_input_adaptive_split2,
+                                   Dict("run_name" => "adaptive split3",
+                                        "evolve_moments_parallel_pressure" => true,
+                                        "numerical_dissipation" => Dict{String,Any}("force_minimum_pdf_value" => 0.0,
+                                                                                    "vpa_dissipation_coefficient" => 1e-2)))
+# The initial conditions seem to make the split3 case hard to advance without any
+# failures. In a real simulation, would just set the minimum_dt higher to try to get
+# through this without crashing. For this test, want the timestep to adapt (not just sit
+# at minimum_dt), so just set a very small timestep.
+test_input_adaptive_split3["timestepping"] = merge(test_input_adaptive_split3["timestepping"],
+                                                   Dict{String,Any}("dt" => 1.0e-7,
+                                                                    "rtol" => 2.0e-4,
+                                                                    "atol" => 2.0e-10,
+                                                                    "minimum_dt" => 1.0e-7,
+                                                                    "step_update_prefactor" => 0.064))
+
 """
 Run a test for a single set of parameters
 """
-function run_test(test_input, expected_phi; args...)
+function run_test(test_input, expected_phi; rtol=4.e-14, atol=1.e-15, args...)
     # by passing keyword arguments to run_test, args becomes a Tuple of Pairs which can be
     # used to update the default inputs
 
@@ -175,7 +225,7 @@ function run_test(test_input, expected_phi; args...)
             println("data tested would be: ", actual_phi)
             @test false
         else
-            @test isapprox(actual_phi, expected_phi, rtol=4.e-14, atol=1.e-15)
+            @test isapprox(actual_phi, expected_phi, rtol=rtol, atol=atol)
         end
     end
 end
@@ -187,7 +237,7 @@ function runtests()
     @testset "Recycling fraction" verbose=use_verbose begin
         println("Recycling fraction tests")
 
-        @testset "Full-f" begin
+        @long @testset "Full-f" begin
             test_input["base_directory"] = test_output_directory
             run_test(test_input,
                      [-0.05499288668923642, -0.017610447066356092, -0.0014497230450292054,
@@ -199,7 +249,7 @@ function runtests()
                       0.002562353505582182, -6.33366212813045e-5, -0.00969571716777773,
                       -0.048688980279053266])
         end
-        @testset "Split 1" begin
+        @long @testset "Split 1" begin
             test_input_split1["base_directory"] = test_output_directory
             run_test(test_input_split1,
                      [-0.054793853738618496, -0.017535475032013862,
@@ -212,7 +262,7 @@ function runtests()
                       -0.00018703865529355897, -0.009661145065079906,
                       -0.0484483682752969])
         end
-        @testset "Split 2" begin
+        @long @testset "Split 2" begin
             test_input_split2["base_directory"] = test_output_directory
             run_test(test_input_split2,
                      [-0.05555568198447252, -0.020145183717956348, 0.001182118478411508,
@@ -224,7 +274,7 @@ function runtests()
                       0.0022755389057580316, 0.0016780234234311344, -0.008381041468024259,
                       -0.05005526194222513])
         end
-        @testset "Split 3" begin
+        @long @testset "Split 3" begin
             test_input_split3["base_directory"] = test_output_directory
             run_test(test_input_split3,
                      [-0.036205375991650725, -0.030483334021285433, -0.028961568619094404,
@@ -242,6 +292,74 @@ function runtests()
                       -0.015541799469166076, -0.021192018291797773, -0.022784703489569562,
                       -0.026873219344096318, -0.028749404798656616, -0.029220744790456707,
                       -0.032303083015072])
+        end
+
+        @testset "Adaptive timestep - full-f" begin
+            test_input_adaptive["base_directory"] = test_output_directory
+            run_test(test_input_adaptive,
+                     [-0.0440638810983187, -0.021804577592742472, -0.01261897866636822,
+                      -0.010636815255843361, -0.006914657999716591, -4.249944880749747e-5,
+                      0.006086779933068045, 0.01190043024535959, 0.019617322354987612,
+                      0.029847932036078002, 0.03944936313055367, 0.04251143549751657,
+                      0.031884499662286334, 0.02118429309190258, 0.015186796843450617,
+                      0.009232551395383617, 0.0011522268975610983, -0.005815896057890807,
+                      -0.009277831066572732, -0.011461822379560897, -0.02057695651221416,
+                      -0.03801829623432516])
+        end
+        @testset "Adaptive timestep - split 1" begin
+            test_input_adaptive_split1["base_directory"] = test_output_directory
+            run_test(test_input_adaptive_split1,
+                     [-0.044040657899710525, -0.02171631884930434, -0.012547515180557226,
+                      -0.010655908101276736, -0.0069170772573878304,
+                      -4.355393962794202e-5, 0.006086534259249292, 0.011901727290552297,
+                      0.019619284803989313, 0.029848807021314223, 0.03944756553690864,
+                      0.042513574213181055, 0.031888958551607754, 0.02118509026798706,
+                      0.015188240953123551, 0.00923342235524323, 0.0011506251426590692,
+                      -0.005819714223988892, -0.009273870379420018, -0.01155660020408171,
+                      -0.02040618061333261, -0.03800833501382964])
+        end
+        @testset "Adaptive timestep - split 2" begin
+            test_input_adaptive_split2["base_directory"] = test_output_directory
+            run_test(test_input_adaptive_split2,
+                     [-0.04458973581961622, -0.022746972290027208, -0.012948917687917337,
+                      -0.010874684145894823, -0.006983552559746659, -6.010006205129479e-5,
+                      0.006027491017442355, 0.011975929643130948, 0.019628146001631465,
+                      0.02987625619844453, 0.03947012098924943, 0.04249759681422653,
+                      0.03185107707012637, 0.021153660966099008, 0.01515958423642362,
+                      0.009165359600335187, 0.0011740543476613805, -0.005842751853425141,
+                      -0.009109262734493492, -0.01102014206733999, -0.020920404037822794,
+                      -0.03755374133774351])
+        end
+        @testset "Adaptive timestep - split 3" begin
+            test_input_adaptive_split3["base_directory"] = test_output_directory
+            run_test(test_input_adaptive_split3,
+                     [-0.034629893674047986, -0.03201102395873595, -0.027146091249773203,
+                      -0.020930812236513833, -0.010156481871961498, 0.0027832606290649417,
+                      0.012831753103965483, 0.02209013079063234, 0.033028487927273226,
+                      0.04152538920797391, 0.04537564199541445, 0.04623977802174481,
+                      0.04254552381541882, 0.03480879451618848, 0.027074396992535412,
+                      0.017880292949103555, 0.004778337433968685, -0.007768102112507204,
+                      -0.01629918332920463, -0.02414003022582283, -0.03156787896364437,
+                      -0.03417555449482148])
+        end
+
+        @long @testset "Check other timestep - $type" for
+                type ∈ ("RKF5(4)", "Fekete10(4)", "Fekete6(4)", "Fekete4(2)", "SSPRK3",
+                        "SSPRK2", "SSPRK1")
+
+            timestep_check_input = deepcopy(test_input_adaptive)
+            timestep_check_input["base_directory"] = test_output_directory
+            timestep_check_input["run_name"] = type
+            timestep_check_input["timestepping"]["type"] = type
+            run_test(timestep_check_input,
+                     [-0.0440638810983187, -0.021804577592742472, -0.01261897866636822,
+                      -0.010636815255843361, -0.006914657999716591, -4.249944880749747e-5,
+                      0.006086779933068045, 0.01190043024535959, 0.019617322354987612,
+                      0.029847932036078002, 0.03944936313055367, 0.04251143549751657,
+                      0.031884499662286334, 0.02118429309190258, 0.015186796843450617,
+                      0.009232551395383617, 0.0011522268975610983, -0.005815896057890807,
+                      -0.009277831066572732, -0.011461822379560897, -0.02057695651221416,
+                      -0.03801829623432516], rtol=8.e-4, atol=1.e-10)
         end
     end
 
