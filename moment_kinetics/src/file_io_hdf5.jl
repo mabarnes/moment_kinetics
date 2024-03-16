@@ -10,6 +10,11 @@ end
 function open_output_file_implementation(::Val{hdf5}, prefix, parallel_io, io_comm, mode="cw")
     # the hdf5 file will be given by output_dir/run_name with .h5 appended
     filename = string(prefix, ".h5")
+
+    if length(filename) > 255
+        error("Length of filename '$filename' is too long ($(length(filename)) "
+              * "characters), which will cause an error in HDF5.")
+    end
     # create the new HDF5 file
     if parallel_io
         # if a file with the requested name already exists, remove it
