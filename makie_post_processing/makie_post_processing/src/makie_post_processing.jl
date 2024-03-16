@@ -6609,6 +6609,7 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
             ##########################
 
             CFL_fig, ax = get_1d_ax(; xlabel="time", ylabel="(grid spacing) / speed")
+            maxval = Inf
             for ri ∈ run_info
                 if length(run_info) == 1
                     prefix = ""
@@ -6621,9 +6622,11 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                 end
                 for varname ∈ CFL_vars
                     var = get_variable(ri, varname)
+                    maxval = min(maxval, maximum(var))
                     plot_1d(ri.time, var; ax=ax, label=prefix*varname)
                 end
             end
+            ylims!(ax, 0.0, 4.0 * maxval)
             put_legend_right(CFL_fig, ax)
 
             limits_fig, ax = get_1d_ax(; xlabel="time", ylabel="number of limits per factor per output")
