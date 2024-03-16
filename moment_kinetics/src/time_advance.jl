@@ -1534,7 +1534,8 @@ end
 
 """
     local_error_norm(error, f, rtol, atol)
-    local_error_norm(error, f, rtol, atol, neutral=false)
+    local_error_norm(error, f, rtol, atol, neutral=false; method="Linf",
+                     skip_r_inner=false, skip_z_lower=false)
 
 Maximum error norm in the range owned by this MPI process, given by
 ```math
@@ -1543,11 +1544,19 @@ Maximum error norm in the range owned by this MPI process, given by
 
 3 dimensional arrays (which represent moments) are treated as ion moments unless
 `neutral=true` is passed.
+
+`method` can be "Linf" (to take the maximum error) or "L2" to take the root-mean-square
+(RMS) error.
+
+`skip_r_inner` and `skip_z_lower` can be set to true to skip the contribution from the
+inner/lower boundaries, to avoid double-counting those points when using
+distributed-memory MPI.
 """
 function local_maxiumum_abs end
 
 function local_error_norm(error::MPISharedArray{mk_float,2},
-                          f::MPISharedArray{mk_float,2}, rtol, atol; method="Linf")
+                          f::MPISharedArray{mk_float,2}, rtol, atol; method="Linf",
+                          skip_r_inner=false, skip_z_lower=false)
     if method == "Linf"
         f_max = -Inf
         @loop_r_z ir iz begin
@@ -1558,15 +1567,22 @@ function local_error_norm(error::MPISharedArray{mk_float,2},
     elseif method == "L2"
         L2sum = 0.0
         @loop_r_z ir iz begin
+            if (skip_r_inner && ir == 1) || (skip_z_lower && iz == 1)
+                continue
+            end
             error_norm = (error[iz,ir] / (rtol*abs(f[iz,ir]) + atol))^2
             L2sum += error_norm
         end
         # Will sum results from different processes in shared memory block after returning
-        # from this function. The error from points on block boundaries is duplicated, but
-        # so is the count in total_points so this should not be too important (although
-        # the timestep length chosen might be slightly different when changing the number
-        # or shape of shared-memory blocks used for a simulation).
-        total_points = length(error) * n_blocks[]
+        # from this function.
+        nz, nr = size(error)
+        if skip_r_inner
+            nr -= 1
+        end
+        if skip_z_lower
+            nz -= 1
+        end
+        total_points = nr * nz * n_blocks[]
         return L2sum / total_points
     else
         error("Unrecognized method '$method'")
@@ -1574,7 +1590,7 @@ function local_error_norm(error::MPISharedArray{mk_float,2},
 end
 function local_error_norm(error::MPISharedArray{mk_float,3},
                           f::MPISharedArray{mk_float,3}, rtol, atol, neutral=false;
-                          method="Linf")
+                          method="Linf", skip_r_inner=false, skip_z_lower=false)
     if method == "Linf"
         f_max = -Inf
         if neutral
@@ -1593,28 +1609,39 @@ function local_error_norm(error::MPISharedArray{mk_float,3},
         L2sum = 0.0
         if neutral
             @loop_sn_r_z isn ir iz begin
+                if (skip_r_inner && ir == 1) || (skip_z_lower && iz == 1)
+                    continue
+                end
                 error_norm = (error[iz,ir,isn] / (rtol*abs(f[iz,ir,isn]) + atol))^2
                 L2sum += error_norm
             end
         else
             @loop_s_r_z is ir iz begin
+                if (skip_r_inner && ir == 1) || (skip_z_lower && iz == 1)
+                    continue
+                end
                 error_norm = (error[iz,ir,is] / (rtol*abs(f[iz,ir,is]) + atol))^2
                 L2sum += error_norm
             end
         end
         # Will sum results from different processes in shared memory block after returning
-        # from this function. The error from points on block boundaries is duplicated, but
-        # so is the count in total_points so this should not be too important (although
-        # the timestep length chosen might be slightly different when changing the number
-        # or shape of shared-memory blocks used for a simulation).
-        total_points = length(error) * n_blocks[]
+        # from this function.
+        nz, nr, nspecies = size(error)
+        if skip_r_inner
+            nr -= 1
+        end
+        if skip_z_lower
+            nz -= 1
+        end
+        total_points = nz * nr * nspecies * n_blocks[]
         return L2sum / total_points
     else
         error("Unrecognized method '$method'")
     end
 end
 function local_error_norm(error::MPISharedArray{mk_float,5},
-                          f::MPISharedArray{mk_float,5}, rtol, atol; method="Linf")
+                          f::MPISharedArray{mk_float,5}, rtol, atol; method="Linf",
+                          skip_r_inner=false, skip_z_lower=false)
     if method == "Linf"
         f_max = -Inf
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
@@ -1626,23 +1653,31 @@ function local_error_norm(error::MPISharedArray{mk_float,5},
     elseif method == "L2"
         L2sum = 0.0
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+            if (skip_r_inner && ir == 1) || (skip_z_lower && iz == 1)
+                continue
+            end
             error_norm = (error[ivpa,ivperp,iz,ir,is] /
                           (rtol*abs(f[ivpa,ivperp,iz,ir,is]) + atol))^2
             L2sum += error_norm
         end
         # Will sum results from different processes in shared memory block after returning
-        # from this function. The error from points on block boundaries is duplicated, but
-        # so is the count in total_points so this should not be too important (although
-        # the timestep length chosen might be slightly different when changing the number
-        # or shape of shared-memory blocks used for a simulation).
-        total_points = length(error) * n_blocks[]
+        # from this function.
+        nvpa, nvperp, nz, nr, nspecies = size(error)
+        if skip_r_inner
+            nr -= 1
+        end
+        if skip_z_lower
+            nz -= 1
+        end
+        total_points = nvpa * nvperp * nz * nr * nspecies * n_blocks[]
         return L2sum / total_points
     else
         error("Unrecognized method '$method'")
     end
 end
 function local_error_norm(error::MPISharedArray{mk_float,6},
-                          f::MPISharedArray{mk_float,6}, rtol, atol; method="Linf")
+                          f::MPISharedArray{mk_float,6}, rtol, atol; method="Linf",
+                          skip_r_inner=false, skip_z_lower=false)
     if method == "Linf"
         f_max = -Inf
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
@@ -1654,16 +1689,23 @@ function local_error_norm(error::MPISharedArray{mk_float,6},
     elseif method == "L2"
         L2sum = 0.0
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+            if (skip_r_inner && ir == 1) || (skip_z_lower && iz == 1)
+                continue
+            end
             error_norm = (error[ivz,ivr,ivzeta,iz,ir,isn] /
                           (rtol*abs(f[ivz,ivr,ivzeta,iz,ir,isn]) + atol))^2
             L2sum += error_norm
         end
         # Will sum results from different processes in shared memory block after returning
-        # from this function. The error from points on block boundaries is duplicated, but
-        # so is the count in total_points so this should not be too important (although
-        # the timestep length chosen might be slightly different when changing the number
-        # or shape of shared-memory blocks used for a simulation).
-        total_points = length(error) * n_blocks[]
+        # from this function.
+        nvz, nvr, nvzeta, nz, nr, nspecies = size(error)
+        if skip_r_inner
+            nr -= 1
+        end
+        if skip_z_lower
+            nz -= 1
+        end
+        total_points = nvz * nvr * nvzeta * nz * nr * nspecies * n_blocks[]
         return L2sum / total_points
     else
         error("Unrecognized method '$method'")
@@ -1735,6 +1777,12 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
     end
     push!(CFL_limits, t_params.CFL_prefactor * ion_vpa_CFL)
 
+    # To avoid double counting points when we use distributed-memory MPI, skip the
+    # inner/lower point in r and z if this process is not the first block in that
+    # dimension.
+    skip_r_inner = r.irank != 0
+    skip_z_lower = z.irank != 0
+
     # Calculate error for ion distribution functions
     error = scratch[2].pdf
     n = length(error_coeffs)
@@ -1752,7 +1800,8 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         end
     end
     ion_pdf_err = local_error_norm(error, scratch[end].pdf, t_params.rtol, t_params.atol;
-                                   method=error_norm_method)
+                                   method=error_norm_method, skip_r_inner=skip_r_inner,
+                                   skip_z_lower=skip_z_lower)
     push!(error_norms, ion_pdf_err)
 
     # Calculate error for ion moments, if necessary
@@ -1772,7 +1821,8 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
             end
         end
         ion_n_err = local_error_norm(error, scratch[end].density, t_params.rtol,
-                                     t_params.atol; method=error_norm_method)
+                                     t_params.atol; method=error_norm_method,
+                                     skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower)
         push!(error_norms, ion_n_err)
     end
     if moments.evolve_upar
@@ -1791,7 +1841,8 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
             end
         end
         ion_u_err = local_error_norm(error, scratch[end].upar, t_params.rtol,
-                                     t_params.atol; method=error_norm_method)
+                                     t_params.atol; method=error_norm_method,
+                                     skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower)
         push!(error_norms, ion_u_err)
     end
     if moments.evolve_ppar
@@ -1810,7 +1861,8 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
             end
         end
         ion_p_err = local_error_norm(error, scratch[end].ppar, t_params.rtol,
-                                     t_params.atol; method=error_norm_method)
+                                     t_params.atol; method=error_norm_method,
+                                     skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower)
         push!(error_norms, ion_p_err)
     end
 
@@ -1863,7 +1915,9 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
             end
         end
         neut_pdf_err = local_error_norm(error, scratch[end].pdf_neutral, t_params.rtol,
-                                        t_params.atol; method=error_norm_method)
+                                        t_params.atol; method=error_norm_method,
+                                        skip_r_inner=skip_r_inner,
+                                        skip_z_lower=skip_z_lower)
         push!(error_norms, neut_pdf_err)
 
         # Calculate error for ion moments, if necessary
@@ -1884,7 +1938,9 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
                 end
             end
             neut_n_err = local_error_norm(error, scratch[end].density, t_params.rtol,
-                                          t_params.atol; method=error_norm_method)
+                                          t_params.atol; method=error_norm_method,
+                                          skip_r_inner=skip_r_inner,
+                                          skip_z_lower=skip_z_lower)
             push!(error_norms, neut_n_err)
         end
         if moments.evolve_upar
@@ -1904,7 +1960,9 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
                 end
             end
             neut_u_err = local_error_norm(error, scratch[end].uz_neutral, t_params.rtol,
-                                          t_params.atol; method=error_norm_method)
+                                          t_params.atol; method=error_norm_method,
+                                          skip_r_inner=skip_r_inner,
+                                          skip_z_lower=skip_z_lower)
             push!(error_norms, neut_u_err)
         end
         if moments.evolve_ppar
@@ -1924,7 +1982,9 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
                 end
             end
             neut_p_err = local_error_norm(error, scratch[end].pz_neutral, t_params.rtol,
-                                          t_params.atol; method=error_norm_method)
+                                          t_params.atol; method=error_norm_method,
+                                          skip_r_inner=skip_r_inner,
+                                          skip_z_lower=skip_z_lower)
             push!(error_norms, neut_p_err)
         end
     end
