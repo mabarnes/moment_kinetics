@@ -152,9 +152,9 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
 
     # Convert dict from symbol keys to String keys
     modified_inputs = Dict(String(k) => v for (k, v) in args
-                           if k ∉ keys(test_input["timestepping"]))
+                           if String(k) ∉ keys(test_input["timestepping"]))
     modified_timestepping_inputs = Dict(String(k) => v for (k, v) in args
-                                        if k ∈ keys(test_input["timestepping"]))
+                                        if String(k) ∈ keys(test_input["timestepping"]))
 
     # Update default inputs with values to be changed
     input = merge(test_input, modified_inputs)
