@@ -22,6 +22,7 @@ using ..reference_parameters
 using ..runge_kutta: setup_runge_kutta_coefficients!
 
 using MPI
+using Quadmath
 using TOML
 
 """
@@ -209,6 +210,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         step_update_prefactor=0.9,
         max_increase_factor=1.05,
         minimum_dt=0.0,
+        high_precision_error_sum=false,
        )
     if timestepping_section["nwrite"] > timestepping_section["nstep"]
         timestepping_section["nwrite"] = timestepping_section["nstep"]
@@ -462,6 +464,11 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         setup_runge_kutta_coefficients!(timestepping_input.type,
                                         timestepping_input.CFL_prefactor,
                                         timestepping_input.split_operators)
+    if timestepping_input.high_precision_error_sum
+        error_sum_zero = Float128(0.0)
+    else
+        error_sum_zero = 0.0
+    end
     t_params = time_info(timestepping_input.nstep, dt_shared, previous_dt_shared,
                          next_output_time, dt_before_output,
                          CFL_prefactor, step_to_output, Ref(0),
@@ -472,7 +479,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
                          timestepping_input.atol_upar,
                          timestepping_input.step_update_prefactor,
                          timestepping_input.max_increase_factor,
-                         timestepping_input.minimum_dt,
+                         timestepping_input.minimum_dt, error_sum_zero,
                          timestepping_input.split_operators,
                          timestepping_input.steady_state_residual,
                          timestepping_input.converged_residual_value,

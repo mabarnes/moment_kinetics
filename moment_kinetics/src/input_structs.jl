@@ -33,8 +33,11 @@ mutable struct evolve_moments_options
 end
 
 """
+`t_error_sum` is included so that a type which might be mk_float or Float128 can be set by
+an option but known at compile time when a `time_info` struct is passed as a function
+argument.
 """
-struct time_info
+struct time_info{Terrorsum <: Real}
     nstep::mk_int
     dt::MPISharedArray{mk_float,1}
     previous_dt::MPISharedArray{mk_float,1}
@@ -60,6 +63,7 @@ struct time_info
     step_update_prefactor::mk_float
     max_increase_factor::mk_float
     minimum_dt::mk_float
+    error_sum_zero::Terrorsum
     split_operators::Bool
     steady_state_residual::Bool
     converged_residual_value::mk_float

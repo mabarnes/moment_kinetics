@@ -8,7 +8,7 @@ export setup_dummy_and_buffer_arrays
 
 using MPI
 using StatsBase: mean
-using ..type_definitions: mk_float
+using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication
 using ..communication: _block_synchronize
@@ -1535,7 +1535,7 @@ end
 """
     local_error_norm(error, f, rtol, atol)
     local_error_norm(error, f, rtol, atol, neutral=false; method="Linf",
-                     skip_r_inner=false, skip_z_lower=false)
+                     skip_r_inner=false, skip_z_lower=false, error_sum_zero=0.0)
 
 Maximum error norm in the range owned by this MPI process, given by
 ```math
@@ -1551,12 +1551,22 @@ Maximum error norm in the range owned by this MPI process, given by
 `skip_r_inner` and `skip_z_lower` can be set to true to skip the contribution from the
 inner/lower boundaries, to avoid double-counting those points when using
 distributed-memory MPI.
+
+`error_sum_zero` should always have value 0.0, but is included so that different types can
+be used for L2sum. For testing, if we want consistency of results when using different
+numbers of processes (when the number of processes changes the order of operations in the
+sum is changed, which changes the rounding errors) then we have to use higher precision
+(i.e. use the Float128 type from the Quadmath package). The type of a 0.0 value can be set
+according to the `high_precision_error_sum` option in the `[timestepping]` section, and
+stored in a template-typed value in the `t_params` object - when that value is passed in
+as the argument to `error_sum_zero`, that type will be used for L2sum, and the type will
+    be known at compile time, allowing this function to be efficient.
 """
 function local_maxiumum_abs end
 
 function local_error_norm(error::MPISharedArray{mk_float,2},
                           f::MPISharedArray{mk_float,2}, rtol, atol; method="Linf",
-                          skip_r_inner=false, skip_z_lower=false)
+                          skip_r_inner=false, skip_z_lower=false, error_sum_zero=0.0)
     if method == "Linf"
         f_max = -Inf
         @loop_r_z ir iz begin
@@ -1565,7 +1575,7 @@ function local_error_norm(error::MPISharedArray{mk_float,2},
         end
         return f_max
     elseif method == "L2"
-        L2sum = 0.0
+        L2sum = error_sum_zero
         @loop_r_z ir iz begin
             if (skip_r_inner && ir == 1) || (skip_z_lower && iz == 1)
                 continue
@@ -1582,15 +1592,15 @@ function local_error_norm(error::MPISharedArray{mk_float,2},
         if skip_z_lower
             nz -= 1
         end
-        total_points = nr * nz * n_blocks[]
-        return L2sum / total_points
+        return L2sum
     else
         error("Unrecognized method '$method'")
     end
 end
 function local_error_norm(error::MPISharedArray{mk_float,3},
                           f::MPISharedArray{mk_float,3}, rtol, atol, neutral=false;
-                          method="Linf", skip_r_inner=false, skip_z_lower=false)
+                          method="Linf", skip_r_inner=false, skip_z_lower=false,
+                          error_sum_zero=0.0)
     if method == "Linf"
         f_max = -Inf
         if neutral
@@ -1606,7 +1616,7 @@ function local_error_norm(error::MPISharedArray{mk_float,3},
         end
         return f_max
     elseif method == "L2"
-        L2sum = 0.0
+        L2sum = error_sum_zero
         if neutral
             @loop_sn_r_z isn ir iz begin
                 if (skip_r_inner && ir == 1) || (skip_z_lower && iz == 1)
@@ -1633,15 +1643,14 @@ function local_error_norm(error::MPISharedArray{mk_float,3},
         if skip_z_lower
             nz -= 1
         end
-        total_points = nz * nr * nspecies * n_blocks[]
-        return L2sum / total_points
+        return L2sum
     else
         error("Unrecognized method '$method'")
     end
 end
 function local_error_norm(error::MPISharedArray{mk_float,5},
                           f::MPISharedArray{mk_float,5}, rtol, atol; method="Linf",
-                          skip_r_inner=false, skip_z_lower=false)
+                          skip_r_inner=false, skip_z_lower=false, error_sum_zero=0.0)
     if method == "Linf"
         f_max = -Inf
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
@@ -1651,7 +1660,7 @@ function local_error_norm(error::MPISharedArray{mk_float,5},
         end
         return f_max
     elseif method == "L2"
-        L2sum = 0.0
+        L2sum = error_sum_zero
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
             if (skip_r_inner && ir == 1) || (skip_z_lower && iz == 1)
                 continue
@@ -1669,15 +1678,14 @@ function local_error_norm(error::MPISharedArray{mk_float,5},
         if skip_z_lower
             nz -= 1
         end
-        total_points = nvpa * nvperp * nz * nr * nspecies * n_blocks[]
-        return L2sum / total_points
+        return L2sum
     else
         error("Unrecognized method '$method'")
     end
 end
 function local_error_norm(error::MPISharedArray{mk_float,6},
                           f::MPISharedArray{mk_float,6}, rtol, atol; method="Linf",
-                          skip_r_inner=false, skip_z_lower=false)
+                          skip_r_inner=false, skip_z_lower=false, error_sum_zero=0.0)
     if method == "Linf"
         f_max = -Inf
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
@@ -1687,7 +1695,7 @@ function local_error_norm(error::MPISharedArray{mk_float,6},
         end
         return f_max
     elseif method == "L2"
-        L2sum = 0.0
+        L2sum = error_sum_zero
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
             if (skip_r_inner && ir == 1) || (skip_z_lower && iz == 1)
                 continue
@@ -1698,15 +1706,7 @@ function local_error_norm(error::MPISharedArray{mk_float,6},
         end
         # Will sum results from different processes in shared memory block after returning
         # from this function.
-        nvz, nvr, nvzeta, nz, nr, nspecies = size(error)
-        if skip_r_inner
-            nr -= 1
-        end
-        if skip_z_lower
-            nz -= 1
-        end
-        total_points = nvz * nvr * nvzeta * nz * nr * nspecies * n_blocks[]
-        return L2sum / total_points
+        return L2sum
     else
         error("Unrecognized method '$method'")
     end
@@ -1731,13 +1731,16 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         error("adaptive timestep needs a buffer scratch array")
     end
 
+    n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
     vpa_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
     evolve_density, evolve_upar, evolve_ppar = moments.evolve_density, moments.evolve_upar, moments.evolve_ppar
 
     CFL_limits = mk_float[]
-    error_norms = mk_float[]
+    error_norm_type = typeof(t_params.error_sum_zero)
+    error_norms = error_norm_type[]
+    total_points = mk_int[]
 
     # Read the current dt here, so we only need one _block_synchronize() call for this and
     # the begin_s_r_z_vperp_vpa_region()
@@ -1799,10 +1802,13 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
                 sum(error_coeffs[i] * scratch[i].pdf[ivpa,ivperp,iz,ir,is] for i ∈ 1:n)
         end
     end
-    ion_pdf_err = local_error_norm(error, scratch[end].pdf, t_params.rtol, t_params.atol;
-                                   method=error_norm_method, skip_r_inner=skip_r_inner,
-                                   skip_z_lower=skip_z_lower)
-    push!(error_norms, ion_pdf_err)
+    ion_pdf_error = local_error_norm(error, scratch[end].pdf, t_params.rtol, t_params.atol;
+                                     method=error_norm_method, skip_r_inner=skip_r_inner,
+                                     skip_z_lower=skip_z_lower,
+                                     error_sum_zero=t_params.error_sum_zero)
+    push!(error_norms, ion_pdf_error)
+    push!(total_points,
+          vpa.n_global * vperp.n_global * z.n_global * r.n_global * n_ion_species)
 
     # Calculate error for ion moments, if necessary
     if moments.evolve_density
@@ -1822,8 +1828,10 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         end
         ion_n_err = local_error_norm(error, scratch[end].density, t_params.rtol,
                                      t_params.atol; method=error_norm_method,
-                                     skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower)
+                                     skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
+                                     error_sum_zero=t_params.error_sum_zero)
         push!(error_norms, ion_n_err)
+        push!(total_points, z.n_global * r.n_global * n_ion_species)
     end
     if moments.evolve_upar
         begin_s_r_z_region()
@@ -1842,8 +1850,10 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         end
         ion_u_err = local_error_norm(error, scratch[end].upar, t_params.rtol,
                                      t_params.atol; method=error_norm_method,
-                                     skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower)
+                                     skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
+                                     error_sum_zero=t_params.error_sum_zero)
         push!(error_norms, ion_u_err)
+        push!(total_points, z.n_global * r.n_global * n_ion_species)
     end
     if moments.evolve_ppar
         begin_s_r_z_region()
@@ -1862,8 +1872,10 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         end
         ion_p_err = local_error_norm(error, scratch[end].ppar, t_params.rtol,
                                      t_params.atol; method=error_norm_method,
-                                     skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower)
+                                     skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
+                                     error_sum_zero=t_params.error_sum_zero)
         push!(error_norms, ion_p_err)
+        push!(total_points, z.n_global * r.n_global * n_ion_species)
     end
 
     if n_neutral_species > 0
@@ -1914,11 +1926,15 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
                         for i ∈ 1:n)
             end
         end
-        neut_pdf_err = local_error_norm(error, scratch[end].pdf_neutral, t_params.rtol,
-                                        t_params.atol; method=error_norm_method,
-                                        skip_r_inner=skip_r_inner,
-                                        skip_z_lower=skip_z_lower)
-        push!(error_norms, neut_pdf_err)
+        neut_pdf_error = local_error_norm(error, scratch[end].pdf_neutral, t_params.rtol,
+                                          t_params.atol; method=error_norm_method,
+                                          skip_r_inner=skip_r_inner,
+                                          skip_z_lower=skip_z_lower,
+                                          error_sum_zero=t_params.error_sum_zero)
+        push!(error_norms, neut_pdf_error)
+        push!(total_points,
+              vz.n_global * vr.n_global * vzeta.n_global * z.n_global * r.n_global *
+              n_neutral_species)
 
         # Calculate error for ion moments, if necessary
         if moments.evolve_density
@@ -1940,8 +1956,10 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
             neut_n_err = local_error_norm(error, scratch[end].density, t_params.rtol,
                                           t_params.atol; method=error_norm_method,
                                           skip_r_inner=skip_r_inner,
-                                          skip_z_lower=skip_z_lower)
+                                          skip_z_lower=skip_z_lower,
+                                          error_sum_zero=t_params.error_sum_zero)
             push!(error_norms, neut_n_err)
+            push!(total_points, z.n_global * r.n_global * n_neutral_species)
         end
         if moments.evolve_upar
             begin_s_r_z_region()
@@ -1962,8 +1980,10 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
             neut_u_err = local_error_norm(error, scratch[end].uz_neutral, t_params.rtol,
                                           t_params.atol; method=error_norm_method,
                                           skip_r_inner=skip_r_inner,
-                                          skip_z_lower=skip_z_lower)
+                                          skip_z_lower=skip_z_lower,
+                                          error_sum_zero=t_params.error_sum_zero)
             push!(error_norms, neut_u_err)
+            push!(total_points, z.n_global * r.n_global * n_neutral_species)
         end
         if moments.evolve_ppar
             begin_s_r_z_region()
@@ -1984,8 +2004,10 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
             neut_p_err = local_error_norm(error, scratch[end].pz_neutral, t_params.rtol,
                                           t_params.atol; method=error_norm_method,
                                           skip_r_inner=skip_r_inner,
-                                          skip_z_lower=skip_z_lower)
+                                          skip_z_lower=skip_z_lower,
+                                          error_sum_zero=t_params.error_sum_zero)
             push!(error_norms, neut_p_err)
+            push!(total_points, z.n_global * r.n_global * n_neutral_species)
         end
     end
 
@@ -2023,8 +2045,14 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
             error_norms = MPI.Allreduce(error_norms, +, comm_inter_block[])
 
             # So far `error_norms` is the sum of squares of the errors. Now that summation
-            # is finished, need to take square-root.
-            error_norms .= sqrt.(error_norms)
+            # is finished, need to divide by total number of points and take square-root.
+            error_norms .= sqrt.(error_norms ./ total_points)
+            open("debug$(global_size[]).txt", "a") do io
+                for e in error_norms
+                    print(io, e, " ")
+                end
+                println(io, t_params.dt[], " ;")
+            end
 
             # Weight the error from each variable equally by taking the mean, so the
             # larger number of points in the distribution functions does not mean that
