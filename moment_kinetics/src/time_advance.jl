@@ -57,7 +57,7 @@ using ..fokker_planck: init_fokker_planck_collisions_weak_form, explicit_fokker_
 using ..manufactured_solns: manufactured_sources
 using ..advection: advection_info
 using ..runge_kutta: rk_update_evolved_moments!, rk_update_evolved_moments_neutral!,
-                     rk_update_variable!
+                     rk_update_variable!, rk_error_variable!
 using ..utils: to_minutes, get_minimum_CFL_z, get_minimum_CFL_vpa,
                get_minimum_CFL_neutral_z, get_minimum_CFL_neutral_vz
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
@@ -1787,24 +1787,11 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
     skip_z_lower = z.irank != 0
 
     # Calculate error for ion distribution functions
-    error = scratch[2].pdf
-    n = length(error_coeffs)
-    if t_params.low_storage
-        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-            error[ivpa,ivperp,iz,ir,is] =
-                error_coeffs[1] * scratch[1].pdf[ivpa,ivperp,iz,ir,is] +
-                error_coeffs[2] * scratch[end-1].pdf[ivpa,ivperp,iz,ir,is] +
-                error_coeffs[3] * scratch[end].pdf[ivpa,ivperp,iz,ir,is]
-        end
-    else
-        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-            error[ivpa,ivperp,iz,ir,is] =
-                sum(error_coeffs[i] * scratch[i].pdf[ivpa,ivperp,iz,ir,is] for i ∈ 1:n)
-        end
-    end
-    ion_pdf_error = local_error_norm(error, scratch[end].pdf, t_params.rtol, t_params.atol;
-                                     method=error_norm_method, skip_r_inner=skip_r_inner,
-                                     skip_z_lower=skip_z_lower,
+    # Note rk_error_variable!() stores the calculated error in `scratch[2]`.
+    rk_error_variable!(scratch, :pdf, t_params)
+    ion_pdf_error = local_error_norm(scratch[2].pdf, scratch[end].pdf, t_params.rtol,
+                                     t_params.atol; method=error_norm_method,
+                                     skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
                                      error_sum_zero=t_params.error_sum_zero)
     push!(error_norms, ion_pdf_error)
     push!(total_points,
@@ -1813,42 +1800,19 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
     # Calculate error for ion moments, if necessary
     if moments.evolve_density
         begin_s_r_z_region()
-        error = scratch[2].density
-        if t_params.low_storage
-            @loop_s_r_z is ir iz begin
-                error[iz,ir,is] = error_coeffs[1] * scratch[1].density[iz,ir,is] +
-                                  error_coeffs[2] * scratch[end-1].density[iz,ir,is] +
-                                  error_coeffs[3] * scratch[end].density[iz,ir,is]
-            end
-        else
-            @loop_s_r_z is ir iz begin
-                error[iz,ir,is] = sum(error_coeffs[i] * scratch[i].density[iz,ir,is]
-                                      for i ∈ 1:n)
-            end
-        end
-        ion_n_err = local_error_norm(error, scratch[end].density, t_params.rtol,
-                                     t_params.atol; method=error_norm_method,
-                                     skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
+        rk_error_variable!(scratch, :density, t_params)
+        ion_n_err = local_error_norm(scratch[2].density, scratch[end].density,
+                                     t_params.rtol, t_params.atol;
+                                     method=error_norm_method, skip_r_inner=skip_r_inner,
+                                     skip_z_lower=skip_z_lower,
                                      error_sum_zero=t_params.error_sum_zero)
         push!(error_norms, ion_n_err)
         push!(total_points, z.n_global * r.n_global * n_ion_species)
     end
     if moments.evolve_upar
         begin_s_r_z_region()
-        error = scratch[2].upar
-        if t_params.low_storage
-            @loop_s_r_z is ir iz begin
-                error[iz,ir,is] = error_coeffs[1] * scratch[1].upar[iz,ir,is] +
-                                  error_coeffs[2] * scratch[end-1].upar[iz,ir,is] +
-                                  error_coeffs[3] * scratch[end].upar[iz,ir,is]
-            end
-        else
-            @loop_s_r_z is ir iz begin
-                error[iz,ir,is] = sum(error_coeffs[i] * scratch[i].upar[iz,ir,is]
-                                      for i ∈ 1:n)
-            end
-        end
-        ion_u_err = local_error_norm(error, scratch[end].upar, t_params.rtol,
+        rk_error_variable!(scratch, :upar, t_params)
+        ion_u_err = local_error_norm(scratch[2].upar, scratch[end].upar, t_params.rtol,
                                      t_params.atol; method=error_norm_method,
                                      skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
                                      error_sum_zero=t_params.error_sum_zero)
@@ -1857,20 +1821,8 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
     end
     if moments.evolve_ppar
         begin_s_r_z_region()
-        error = scratch[2].ppar
-        if t_params.low_storage
-            @loop_s_r_z is ir iz begin
-                error[iz,ir,is] = error_coeffs[1] * scratch[1].ppar[iz,ir,is] +
-                                  error_coeffs[2] * scratch[end-1].ppar[iz,ir,is] +
-                                  error_coeffs[3] * scratch[end].ppar[iz,ir,is]
-            end
-        else
-            @loop_s_r_z is ir iz begin
-                error[iz,ir,is] = sum(error_coeffs[i] * scratch[i].ppar[iz,ir,is]
-                                      for i ∈ 1:n)
-            end
-        end
-        ion_p_err = local_error_norm(error, scratch[end].ppar, t_params.rtol,
+        rk_error_variable!(scratch, :ppar, t_params)
+        ion_p_err = local_error_norm(scratch[2].ppar, scratch[end].ppar, t_params.rtol,
                                      t_params.atol; method=error_norm_method,
                                      skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
                                      error_sum_zero=t_params.error_sum_zero)
@@ -1910,23 +1862,9 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         push!(CFL_limits, t_params.CFL_prefactor * neutral_vz_CFL)
 
         # Calculate error for neutral distribution functions
-        error = scratch[2].pdf_neutral
-        begin_sn_r_z_vzeta_vr_vz_region()
-        if t_params.low_storage
-            @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
-                error[ivz,ivr,ivzeta,iz,ir,isn] =
-                    error_coeffs[1] * scratch[1].pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] +
-                    error_coeffs[2] * scratch[end-1].pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] +
-                    error_coeffs[3] * scratch[end].pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
-            end
-        else
-            @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
-                error[ivz,ivr,ivzeta,iz,ir,isn] =
-                    sum(error_coeffs[i] * scratch[i].pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
-                        for i ∈ 1:n)
-            end
-        end
-        neut_pdf_error = local_error_norm(error, scratch[end].pdf_neutral, t_params.rtol,
+        rk_error_variable!(scratch, :pdf_neutral, t_params; neutrals=true)
+        neut_pdf_error = local_error_norm(scratch[2].pdf_neutral,
+                                          scratch[end].pdf_neutral, t_params.rtol,
                                           t_params.atol; method=error_norm_method,
                                           skip_r_inner=skip_r_inner,
                                           skip_z_lower=skip_z_lower,
@@ -1939,21 +1877,9 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         # Calculate error for ion moments, if necessary
         if moments.evolve_density
             begin_sn_r_z_region()
-            error = scratch[2].density_neutral
-            if t_params.low_storage
-                @loop_sn_r_z isn ir iz begin
-                    error[iz,ir,isn] = error_coeffs[1] * scratch[1].density_neutral[iz,ir,isn] +
-                                       error_coeffs[2] * scratch[end-1].density_neutral[iz,ir,isn] +
-                                       error_coeffs[3] * scratch[end].density_neutral[iz,ir,isn]
-                end
-            else
-                @loop_sn_r_z isn ir iz begin
-                    error[iz,ir,isn] = sum(error_coeffs[i] *
-                                           scratch[i].density_neutral[iz,ir,isn]
-                                           for i ∈ 1:n)
-                end
-            end
-            neut_n_err = local_error_norm(error, scratch[end].density, t_params.rtol,
+            rk_error_variable!(scratch, :density_neutral, t_params; neutrals=true)
+            neut_n_err = local_error_norm(scratch[2].density_neutral,
+                                          scratch[end].density, t_params.rtol,
                                           t_params.atol; method=error_norm_method,
                                           skip_r_inner=skip_r_inner,
                                           skip_z_lower=skip_z_lower,
@@ -1963,22 +1889,10 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         end
         if moments.evolve_upar
             begin_s_r_z_region()
-            error = scratch[2].uz_neutral
-            if t_params.low_storage
-                @loop_sn_r_z isn ir iz begin
-                    error[iz,ir,isn] = error_coeffs[1] * scratch[1].uz_neutral[iz,ir,isn] +
-                                       error_coeffs[2] * scratch[end-1].uz_neutral[iz,ir,isn] +
-                                       error_coeffs[3] * scratch[end].uz_neutral[iz,ir,isn]
-                end
-            else
-                @loop_sn_r_z isn ir iz begin
-                    error[iz,ir,isn] = sum(error_coeffs[i] *
-                                           scratch[i].uz_neutral[iz,ir,isn]
-                                           for i ∈ 1:n)
-                end
-            end
-            neut_u_err = local_error_norm(error, scratch[end].uz_neutral, t_params.rtol,
-                                          t_params.atol; method=error_norm_method,
+            rk_error_variable!(scratch, :uz_neutral, t_params; neutrals=true)
+            neut_u_err = local_error_norm(scratch[2].uz_neutral, scratch[end].uz_neutral,
+                                          t_params.rtol, t_params.atol;
+                                          method=error_norm_method,
                                           skip_r_inner=skip_r_inner,
                                           skip_z_lower=skip_z_lower,
                                           error_sum_zero=t_params.error_sum_zero)
@@ -1987,22 +1901,10 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         end
         if moments.evolve_ppar
             begin_s_r_z_region()
-            error = scratch[2].pz_neutral
-            if t_params.low_storage
-                @loop_sn_r_z isn ir iz begin
-                    error[iz,ir,isn] = error_coeffs[1] * scratch[1].pz_neutral[iz,ir,isn] +
-                                       error_coeffs[2] * scratch[end-1].pz_neutral[iz,ir,isn] +
-                                       error_coeffs[3] * scratch[end].pz_neutral[iz,ir,isn]
-                end
-            else
-                @loop_sn_r_z isn ir iz begin
-                    error[iz,ir,isn] = sum(error_coeffs[i] *
-                                           scratch[i].pz_neutral[iz,ir,isn]
-                                           for i ∈ 1:n)
-                end
-            end
-            neut_p_err = local_error_norm(error, scratch[end].pz_neutral, t_params.rtol,
-                                          t_params.atol; method=error_norm_method,
+            rk_error_variable!(scratch, :pz_neutral, t_params; neutrals=true)
+            neut_p_err = local_error_norm(scratch[2].pz_neutral, scratch[end].pz_neutral,
+                                          t_params.rtol, t_params.atol;
+                                          method=error_norm_method,
                                           skip_r_inner=skip_r_inner,
                                           skip_z_lower=skip_z_lower,
                                           error_sum_zero=t_params.error_sum_zero)

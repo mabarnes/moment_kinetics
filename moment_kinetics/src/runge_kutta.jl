@@ -5,7 +5,7 @@ module runge_kutta
 
 export setup_runge_kutta_coefficients!, rk_update_evolved_moments!,
        rk_update_evolved_moments_electron!, rk_update_evolved_moments_neutral!,
-       rk_update_variable!
+       rk_update_variable!, rk_error_variable!
 
 using ..array_allocation: allocate_float
 using ..looping
@@ -289,28 +289,74 @@ function rk_update_variable!(scratch, var_symbol::Symbol, t_params, istage; neut
     return nothing
 end
 
+"""
+Calculate the estimated truncation error for the variable named `var_symbol`, for adaptive
+timestepping methods.
+
+The calculated error is stored in `var_symbol` in `scratch[2]` (as this entry should not
+be needed again after the error is calculated).
+"""
+function rk_error_variable!(scratch, var_symbol::Symbol, t_params; neutrals=false)
+    if !t_params.adaptive
+        error("rk_error_variable!() should only be called when using adaptive "
+              * "timestepping")
+    end
+    if t_params.low_storage
+        var_arrays = (getfield(scratch[end], var_symbol),
+                      getfield(scratch[end-1], var_symbol),
+                      getfield(scratch[1], var_symbol))
+    else
+        var_arrays = Tuple(getfield(scratch[i], var_symbol) for i ∈ 1:length(scratch))
+    end
+
+    error_coefs = @view t_params.rk_coefs[:,end]
+
+    # The second element of `scratch` is not needed any more for the RK update, so we can
+    # overwrite it with the error estimate.
+    output = getfield(scratch[2], var_symbol)
+
+    if neutrals
+        if t_params.low_storage
+            rk_update_loop_neutrals_low_storage!(error_coefs, var_arrays...;
+                                                 output=output)
+        else
+            rk_update_loop_neutrals!(error_coefs, var_arrays; output=output)
+        end
+    else
+        if t_params.low_storage
+            rk_update_loop_low_storage!(error_coefs, var_arrays...;
+                                        output=output)
+        else
+            rk_update_loop!(error_coefs, var_arrays; output=output)
+        end
+    end
+
+    return nothing
+end
+
 # Ion distribution function
 function rk_update_loop_low_storage!(rk_coefs, new::AbstractArray{mk_float,5},
                                      old::AbstractArray{mk_float,5},
-                                     first::AbstractArray{mk_float,5})
+                                     first::AbstractArray{mk_float,5}; output=new)
     @boundscheck length(rk_coefs) == 3
 
     begin_s_r_z_vperp_vpa_region()
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-        new[ivpa,ivperp,iz,ir,is] = rk_coefs[1]*first[ivpa,ivperp,iz,ir,is] +
-                                    rk_coefs[2]*old[ivpa,ivperp,iz,ir,is] +
-                                    rk_coefs[3]*new[ivpa,ivperp,iz,ir,is]
+        output[ivpa,ivperp,iz,ir,is] = rk_coefs[1]*first[ivpa,ivperp,iz,ir,is] +
+                                       rk_coefs[2]*old[ivpa,ivperp,iz,ir,is] +
+                                       rk_coefs[3]*new[ivpa,ivperp,iz,ir,is]
     end
 
     return nothing
 end
 function rk_update_loop!(rk_coefs,
-                         var_arrays::NTuple{N,AbstractArray{mk_float,5}}) where N
+                         var_arrays::NTuple{N,AbstractArray{mk_float,5}};
+                         output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 
     begin_s_r_z_vperp_vpa_region()
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-        var_arrays[N][ivpa,ivperp,iz,ir,is] =
+        output[ivpa,ivperp,iz,ir,is] =
             sum(rk_coefs[i] * var_arrays[i][ivpa,ivperp,iz,ir,is] for i ∈ 1:N)
     end
 
@@ -320,25 +366,26 @@ end
 # Ion moments
 function rk_update_loop_low_storage!(rk_coefs, new::AbstractArray{mk_float,3},
                                      old::AbstractArray{mk_float,3},
-                                     first::AbstractArray{mk_float,3})
+                                     first::AbstractArray{mk_float,3}; output=new)
     @boundscheck length(rk_coefs) == 3
 
     begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
-        new[iz,ir,is] = rk_coefs[1]*first[iz,ir,is] +
-                        rk_coefs[2]*old[iz,ir,is] +
-                        rk_coefs[3]*new[iz,ir,is]
+        output[iz,ir,is] = rk_coefs[1]*first[iz,ir,is] +
+                           rk_coefs[2]*old[iz,ir,is] +
+                           rk_coefs[3]*new[iz,ir,is]
     end
 
     return nothing
 end
 function rk_update_loop!(rk_coefs,
-                         var_arrays::NTuple{N,AbstractArray{mk_float,3}}) where N
+                         var_arrays::NTuple{N,AbstractArray{mk_float,3}};
+                         output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 
     begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
-        var_arrays[N][iz,ir,is] = sum(rk_coefs[i] * var_arrays[i][iz,ir,is] for i ∈ 1:N)
+        output[iz,ir,is] = sum(rk_coefs[i] * var_arrays[i][iz,ir,is] for i ∈ 1:N)
     end
 
     return nothing
@@ -347,25 +394,26 @@ end
 # Electron distribution function
 function rk_update_loop_low_storage!(rk_coefs, new::AbstractArray{mk_float,4},
                                      old::AbstractArray{mk_float,4},
-                                     first::AbstractArray{mk_float,4})
+                                     first::AbstractArray{mk_float,4}; output=new)
     @boundscheck length(rk_coefs) == 3
 
     begin_r_z_vperp_vpa_region()
     @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-        new[ivpa,ivperp,iz,ir] = rk_coefs[1]*first[ivpa,ivperp,iz,ir] +
-                                 rk_coefs[2]*old[ivpa,ivperp,iz,ir] +
-                                 rk_coefs[3]*new[ivpa,ivperp,iz,ir]
+        output[ivpa,ivperp,iz,ir] = rk_coefs[1]*first[ivpa,ivperp,iz,ir] +
+                                    rk_coefs[2]*old[ivpa,ivperp,iz,ir] +
+                                    rk_coefs[3]*new[ivpa,ivperp,iz,ir]
     end
 
     return nothing
 end
 function rk_update_loop!(rk_coefs,
-                         var_arrays::NTuple{N,AbstractArray{mk_float,4}}) where N
+                         var_arrays::NTuple{N,AbstractArray{mk_float,4}};
+                         output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 
     begin_r_z_vperp_vpa_region()
     @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-        var_arrays[N][ivpa,ivperp,iz,ir] =
+        output[ivpa,ivperp,iz,ir] =
             sum(rk_coefs[i] * var_arrays[i][ivpa,ivperp,iz,ir] for i ∈ 1:N)
     end
 
@@ -375,25 +423,26 @@ end
 # Electron moments
 function rk_update_loop_low_storage!(rk_coefs, new::AbstractArray{mk_float,2},
                                      old::AbstractArray{mk_float,2},
-                                     first::AbstractArray{mk_float,2})
+                                     first::AbstractArray{mk_float,2}; output=new)
     @boundscheck length(rk_coefs) == 3
 
     begin_r_z_region()
     @loop_r_z ir iz begin
-        new[iz,ir] = rk_coefs[1]*first[iz,ir] +
-                     rk_coefs[2]*old[iz,ir] +
-                     rk_coefs[3]*new[iz,ir]
+        output[iz,ir] = rk_coefs[1]*first[iz,ir] +
+                        rk_coefs[2]*old[iz,ir] +
+                        rk_coefs[3]*new[iz,ir]
     end
 
     return nothing
 end
 function rk_update_loop!(rk_coefs,
-                         var_arrays::NTuple{N,AbstractArray{mk_float,2}}) where N
+                         var_arrays::NTuple{N,AbstractArray{mk_float,2}};
+                         output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 
     begin_r_z_region()
     @loop_r_z ir iz begin
-        var_arrays[N][iz,ir] = sum(rk_coefs[i] * var_arrays[i][iz,ir] for i ∈ 1:N)
+        output[iz,ir] = sum(rk_coefs[i] * var_arrays[i][iz,ir] for i ∈ 1:N)
     end
 
     return nothing
@@ -402,25 +451,26 @@ end
 # Neutral distribution function
 function rk_update_loop_neutrals_low_storage!(rk_coefs, new::AbstractArray{mk_float,6},
                                      old::AbstractArray{mk_float,6},
-                                     first::AbstractArray{mk_float,6})
+                                     first::AbstractArray{mk_float,6}; output=new)
     @boundscheck length(rk_coefs) == 3
 
     begin_sn_r_z_vzeta_vr_vz_region()
     @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
-        new[ivz,ivr,ivzeta,iz,ir,isn] = rk_coefs[1]*first[ivz,ivr,ivzeta,iz,ir,isn] +
-                                        rk_coefs[2]*old[ivz,ivr,ivzeta,iz,ir,isn] +
-                                        rk_coefs[3]*new[ivz,ivr,ivzeta,iz,ir,isn]
+        output[ivz,ivr,ivzeta,iz,ir,isn] = rk_coefs[1]*first[ivz,ivr,ivzeta,iz,ir,isn] +
+                                           rk_coefs[2]*old[ivz,ivr,ivzeta,iz,ir,isn] +
+                                           rk_coefs[3]*new[ivz,ivr,ivzeta,iz,ir,isn]
     end
 
     return nothing
 end
 function rk_update_loop_neutrals!(rk_coefs,
-                                  var_arrays::NTuple{N,AbstractArray{mk_float,6}}) where N
+                                  var_arrays::NTuple{N,AbstractArray{mk_float,6}};
+                                  output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 
     begin_sn_r_z_vzeta_vr_vz_region()
     @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
-        var_arrays[N][ivz,ivr,ivzeta,iz,ir,isn] =
+        output[ivz,ivr,ivzeta,iz,ir,isn] =
             sum(rk_coefs[i] * var_arrays[i][ivz,ivr,ivzeta,iz,ir,isn] for i ∈ 1:N)
     end
 
@@ -430,25 +480,27 @@ end
 # Neutral moments
 function rk_update_loop_neutrals_low_storage!(rk_coefs, new::AbstractArray{mk_float,3},
                                               old::AbstractArray{mk_float,3},
-                                              first::AbstractArray{mk_float,3})
+                                              first::AbstractArray{mk_float,3};
+                                              output=new)
     @boundscheck length(rk_coefs) == 3
 
     begin_sn_r_z_region()
     @loop_sn_r_z isn ir iz begin
-        new[iz,ir,isn] = rk_coefs[1]*first[iz,ir,isn] +
-                         rk_coefs[2]*old[iz,ir,isn] +
-                         rk_coefs[3]*new[iz,ir,isn]
+        output[iz,ir,isn] = rk_coefs[1]*first[iz,ir,isn] +
+                            rk_coefs[2]*old[iz,ir,isn] +
+                            rk_coefs[3]*new[iz,ir,isn]
     end
 
     return nothing
 end
 function rk_update_loop_neutrals!(rk_coefs,
-                                  var_arrays::NTuple{N,AbstractArray{mk_float,3}}) where N
+                                  var_arrays::NTuple{N,AbstractArray{mk_float,3}};
+                                  output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 
     begin_sn_r_z_region()
     @loop_sn_r_z isn ir iz begin
-        var_arrays[N][iz,ir,isn] = sum(rk_coefs[i] * var_arrays[i][iz,ir,isn] for i ∈ 1:N)
+        output[iz,ir,isn] = sum(rk_coefs[i] * var_arrays[i][iz,ir,isn] for i ∈ 1:N)
     end
 
     return nothing
