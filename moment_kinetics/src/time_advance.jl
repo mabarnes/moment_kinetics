@@ -1725,8 +1725,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
                                         vz, vr, vzeta, vpa, vperp, z, r, collisions, dt)
     end
     if advance.ionization_source
-        constant_ionization_source!(fvec_out.pdf, vpa, vperp, z, r, moments, composition,
-                                    collisions, dt)
+        constant_ionization_source!(fvec_out.pdf, fvec_in, vpa, vperp, z, r, moments,
+                                    composition, collisions, dt)
     end
 
     # Add Krook collision operator for ions

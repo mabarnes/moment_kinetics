@@ -105,6 +105,43 @@ end
 
 Internally, when the `begin_*_region()` functions need to change the region type (i.e. the requested region is not already active), they call `_block_synchronize()`, which calls `MPI.Barrier()`. They also switch over the `LoopRanges` struct contained in `looping.loop_ranges` as noted above. For optimization, the `_block_synchronize()` call can be skipped - when it is correct to do so - by passing the argument `no_synchronize=true` (or some more complicated conditional expression if synchronization is necessary when using some options but not for others).
 
+### Collision operator and `anyv` region
+
+The Fokker-Planck collision operator requires a special approach to
+shared-memory parallelisation. There is an outer loop over spatial points (and
+potentially over species). Inside that outer loop there are operations that can
+benefit from parallelisation over $v_{\perp}$, or over $v_{\parallel}$, or over
+both $v_{\perp}$ and $v_{\parallel}$, as well as some that do not parallelise
+over velocity space at all. To deal with this, it is beneficial to parallelise
+the outer loop over species and spatial dimensions as much as possible, and
+then within that allow changes between different ways of parallelizing over
+velocity space.
+
+The mechanism introduced to allow the type of parallelization just described is
+the 'anyv' (read any-$v$) region. Before the outer loop of the collision
+operator `begin_s_r_z_anyv_region()` is used to start the 'anyv'
+parallelization. Then within the `@loop is ir iz begin...` the functions
+`begin_anyv_region()` (for no parallelization over velocity space),
+`begin_anyv_vperp_region()`, `begin_anyv_vpa_region()` and
+`begin_anyv_vperp_vpa_region()` can be used to parallelize over neither
+velocity space dimension, either velocity space dimension individually, or over
+both velocity space dimensions together. This is possible because 'subblocks'
+of processes are defined. Each subblock shares the same range of species and
+spatial indices, which stay the same throughout the `begin_s_r_z_anyv_region()`
+section, and are not shared with any other subblock of processes. Because the
+subblock has an independent set of species- and spatial-indices, when changing
+the velocity-space parallelization only the processes in the sub-block need to
+be synchronized which is done by
+[`moment_kinetics.communication._anyv_subblock_synchronize`](@ref), which is
+called when necessary within the `begin_anyv*_region()` functions (the whole
+shared-memory block does not need to be synchronized at once, as would be done
+by [`moment_kinetics.communication._block_synchronize`](@ref)). The processes
+that share an anyv subblock are all part of the `comm_anyv_subblock[]`
+communicator (which is a subset of the processes in the full block, whose
+communicator is `comm_block[]`).
+
+See also notes on debugging the 'anyv' parallelisation: [Collision operator and
+'anyv' region](@ref).
 
 ## Package structure
 

@@ -1,7 +1,7 @@
 using moment_kinetics: setup_moment_kinetics, cleanup_moment_kinetics!
 using moment_kinetics.time_advance: time_advance!
 using moment_kinetics.communication
-using moment_kinetics.looping: dimension_combinations
+using moment_kinetics.looping: dimension_combinations, anyv_dimension_combinations
 using moment_kinetics.Glob
 using moment_kinetics.Primes
 
@@ -49,7 +49,8 @@ function runtests(; restart=false)
 
     # Only need to test dimension combinations that are actually used for parallel loops
     # in some part of the code
-    dimension_combinations_to_test = [c for c in dimension_combinations
+    dimension_combinations_to_test = [c for c in tuple(dimension_combinations...,
+                                                       anyv_dimension_combinations...)
                                       if dimension_combination_is_used(c)]
 
     @testset "$test_type" begin
@@ -64,10 +65,17 @@ function runtests(; restart=false)
                 # species is zero, as these would just be equivalent to running in serial
                 continue
             end
-            ndims = length(debug_loop_type)
+
+            if :anyv ∈ debug_loop_type
+                dims_to_test = debug_loop_type[2:end]
+            else
+                dims_to_test = debug_loop_type
+            end
+
+            ndims = length(dims_to_test)
             for i ∈ 1:(ndims+n_factors-1)÷n_factors
                 debug_loop_parallel_dims =
-                    debug_loop_type[(i-1)*n_factors+1:min(i*n_factors, ndims)]
+                    dims_to_test[(i-1)*n_factors+1:min(i*n_factors, ndims)]
                 run_test(input, debug_loop_type, debug_loop_parallel_dims; restart=restart)
             end
         end
