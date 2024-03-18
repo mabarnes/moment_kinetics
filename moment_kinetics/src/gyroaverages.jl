@@ -11,19 +11,18 @@ export gyroaverage_pdf!
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
-using ..array_allocation: allocate_int
+using ..array_allocation: allocate_int, allocate_shared_int
 using ..looping
-using ..communication: MPISharedArray, comm_block
-using MPI
+using ..communication: MPISharedArray, comm_block, _block_synchronize
 
 struct gyro_operators
     # matrix for applying a gyroaverage to a function F(r,vpa,vperp) at fixed r, with R = r - rhovec and rhovec = b x v / Omega
     # the matrix can also be used ring-averaging a function F(R,vpa,vperp) at fixed R, since F(R,vpa,vperp) is independent of gyrophase
     # other matrices are required for gyroaveraging functions that depend on gyrophase.
     gyromatrix::MPISharedArray{mk_float,6}
-    gyroloopsizes::Array{mk_int,4}
-    izpgyroindex::Array{Array{mk_int,1},4}
-    irpgyroindex::Array{Array{mk_int,1},4}
+    gyroloopsizes::MPISharedArray{mk_int,4}
+    izpgyroindex::MPISharedArray{mk_int,5}
+    irpgyroindex::MPISharedArray{mk_int,5}
 end
 
 """
@@ -40,16 +39,16 @@ function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition;print_info
     gkions = composition.gyrokinetic_ions
     if !gkions
         gyromatrix =  allocate_shared_float(1,1,1,1,1,1)
-        gyroloopsizes = allocate_int(1,1,1,1)
-        izpgyroindex = zeros.(mk_int,gyroloopsizes)
-        irpgyroindex = zeros.(mk_int,gyroloopsizes)
+        gyroloopsizes = allocate_shared_int(1,1,1,1)
+        izpgyroindex = allocate_shared_int(1,1,1,1,1)
+        irpgyroindex = allocate_shared_int(1,1,1,1,1)
     else
        if print_info
            println("Begin: init_gyro_operators")
        end
        gyromatrix = allocate_shared_float(z.n,r.n,vperp.n,z.n,r.n,composition.n_ion_species)
        # an array to store the value for the number of points in the z', r' sum for each gyroaveraged field index 
-       gyroloopsizes = allocate_int(vperp.n,z.n,r.n,composition.n_ion_species)
+       gyroloopsizes = allocate_shared_int(vperp.n,z.n,r.n,composition.n_ion_species)
        
        # init the matrix!
        # the first two indices are to be summed over
@@ -155,44 +154,35 @@ function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition;print_info
         end
            
         # Broadcast the values in gyroloopsizes across the shared-memory block
-        MPI.Bcast!(gyroloopsizes, 0, comm_block[])
-        # initialise the array of arrays containing the indexing information              
-        izpgyroindex = zeros.(mk_int,gyroloopsizes)
-        irpgyroindex = zeros.(mk_int,gyroloopsizes)
+        _block_synchronize()
+        # initialise the arrays containing the indexing information
+        # use the fact that the first index cannot be larger than the size of z.n*r.n
+        # and accept that we are storing undefined values in exchange for storing the useful
+        # data in shared-memory.
+        izpgyroindex = allocate_shared_int(z.n*r.n,vperp.n,z.n,r.n,composition.n_ion_species)
+        irpgyroindex = allocate_shared_int(z.n*r.n,vperp.n,z.n,r.n,composition.n_ion_species)
+
         # compute the indices on the root process  
         @serial_region begin
             zero = 1.0e-14  
             @loop_s_r_z_vperp is ir iz ivperp begin
-                # extract out the array of indices for this field point            
-                izpgyro = izpgyroindex[ivperp,iz,ir,is] 
-                irpgyro = irpgyroindex[ivperp,iz,ir,is]
                 # fill these arrays with the index locations using the same
                 # conditions as used to create the gyroloopsizes array
+                # note that values of the array only up to nsum = gyroloopsizes[ivperp,iz,ir,is] will be filled
+                # any access to unassigned values of izpgyroindex or irpgyroindex will result in undefined behaviour
                 isum = 0 
                 for irp in 1:r.n 
                     for izp in 1:z.n
                         if abs(gyromatrix[izp,irp,ivperp,iz,ir,is]) > zero
                             isum += 1
-                            izpgyro[isum] = izp
-                            irpgyro[isum] = irp
+                            izpgyroindex[isum,ivperp,iz,ir,is] = izp
+                            irpgyroindex[isum,ivperp,iz,ir,is] = irp
                         end
                     end                  
                 end
             end
         end
-        # Broadcast the results to the other processes in this shared-memory block
-        # Broadcast is not defined for the type Array{Array{mk_int,N},M} so Broadcast for each array separately
-        # avoid using shared-memory loop macro as we need to do this for every element of the array regardless
-        for is in 1:composition.n_ion_species
-            for ir in 1:r.n
-                for iz in 1:z.n
-                    for ivperp in 1:vperp.n
-                       MPI.Bcast!(izpgyroindex[ivperp,iz,ir,is], 0, comm_block[])
-                       MPI.Bcast!(irpgyroindex[ivperp,iz,ir,is], 0, comm_block[])
-                    end
-                end
-            end
-        end
+        _block_synchronize()
         if print_info
             println("Finished: init_gyro_operators")
         end
@@ -296,8 +286,8 @@ function gyroaverage_field!(gfield_out,field_in,gyro,vperp,z,r,composition)
     begin_s_r_z_vperp_region()
     @loop_s_r_z_vperp is ir iz ivperp begin
         nsum = gyroloopsizes[ivperp,iz,ir,is]
-        izplist = izpgyroindex[ivperp,iz,ir,is]        
-        irplist = irpgyroindex[ivperp,iz,ir,is]        
+        @views izplist = izpgyroindex[1:nsum,ivperp,iz,ir,is]
+        @views irplist = irpgyroindex[1:nsum,ivperp,iz,ir,is]
         
         gfield_out[ivperp,iz,ir] = 0.0
         # sum over all the contributions in the gyroaverage
@@ -333,8 +323,8 @@ function gyroaverage_pdf!(gpdf_out,pdf_in,gyro,vpa,vperp,z,r,composition)
     begin_s_r_z_vperp_vpa_region()
     @loop_s_r_z_vperp is ir iz ivperp begin
         nsum = gyroloopsizes[ivperp,iz,ir,is]
-        izplist = izpgyroindex[ivperp,iz,ir,is]        
-        irplist = irpgyroindex[ivperp,iz,ir,is]        
+        @views izplist = izpgyroindex[1:nsum,ivperp,iz,ir,is]
+        @views irplist = irpgyroindex[1:nsum,ivperp,iz,ir,is]
         @loop_vpa ivpa begin 
            gpdf_out[ivpa,ivperp,iz,ir,is] = 0.0
            # sum over all the contributions in the gyroaverage
