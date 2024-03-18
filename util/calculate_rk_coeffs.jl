@@ -6,134 +6,6 @@ into ones that we can use.
 
 using Symbolics
 
-#println("Coefficients for RK45 - Runge-Kutta-Fehlberg adaptive timestepping scheme")
-#
-# 'Standard form' of coefficients from
-# https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method,
-# 'COEFFICIENTS FOR RK4(5), FORMULA 2 Table III in Fehlberg'
-
-# Neglect the 'A' coefficients as we do not have an explicit time dependence in the RHS,
-# so do not use them.
-
-# Use `//` to get rational numbers to avoid round-off errors
-B = [ 0 0 0 0 0 0;
-      1//4 0 0 0 0 0;
-      3//32 9//32 0 0 0 0;
-      1932//2197 -7200//2197 7296//2197 0 0 0;
-      439//216 -8 3680//513 -845//4104 0 0;
-      -8//27 2 -3544//2565 1859//4104 -11//40 0]
-
-C = [ 25//216 0 1408//2565 2197//4104 -1//5 0 ]
-CH = [ 16//135 0 6656//12825 28561//56430 -9//50 2//55 ]
-# The following is the version from Wikipedia, it appears to have a typo in the 4th
-# element, as we should have CT=C-CH -- CT = [ -1//360 0 128//4275 2187//75240 -1//50 -2//55 ]
-CT = [ -1//360 0 128//4275 2197//75240 -1//50 -2//55 ]
-
-# 'COEFFICIENTS FOR Sarafyan's RK4(5), Table IV in Fehlberg'
-
-# Neglect the 'A' coefficients as we do not have an explicit time dependence in the RHS,
-# so do not use them.
-
-# Use `//` to get rational numbers to avoid round-off errors
-#B = [ 0 0 0 0 0 0;
-#      1//2 0 0 0 0 0;
-#      1//4 1//4 0 0 0 0;
-#      0 -1 2 0 0 0;
-#      7//27 10//27 0 1//27 0 0;
-#      28//625 -1//5 546//625 54//625 -378//625 0]
-#
-#C = [ 1//6 0 2//3 1//6 0 0 ]
-#CH = [ 1//24 0 0 5//48 27//56 125//336 ]
-#CT = [ 1//8 0 2//3 1//16 -27//56 -125//336 ]
-#
-## f is the RHS function: dy/dt = f(y)
-#
-## y1...y6, yout1...yout6, ylow, yhigh, yhigh_out, yerr are defined below
-## k1...k6 are as defined on the Wikipedia page
-## f1...f6 are h*f(y1)...h*f(y6)
-## h is the timestep
-#@variables y1 y2 y3 y4 y5 y6 yout1 yout2 yout3 yout4 yout5 yout6 ylow yhigh yhigh_out yerr k1 k2 k3 k4 k5 k6 f1 f2 f3 f4 f5 f6 h
-#y = [y1, y2, y3, y4, y5, y6, yhigh]
-#yout = [yout1, yout2, yout3, yout4, yout5, yout6, yhigh_out]
-#k = [k1, k2, k3, k4, k5, k6]
-#f = [f1, f2, f3, f4, f5, f6]
-#
-## From the Wikipedia page
-## k[i] = h*f(y1 + ∑_j<i B[i,j]*k[j])
-##
-## We define the argument of f() in that expression as y[i+1] so
-## k[i] = h*f(y[i+1])
-##
-## In moment_kinetics, we need to calculate each y[i] as a sum of the previous y[i] and the
-## result of the 'forward Euler step' (y1 + h*f(y[i-1]))
-#
-## y1 is the 'intial' state y(t)
-#k[1] = (y2 - y1) // B[2,1]
-#for i ∈ 2:5
-#    k[i] = (y[i+1] - y1 - sum(B[i+1,j]*k[j] for j ∈ 1:i-1)) // B[i+1,i]
-#    k[i] = simplify(expand(k[i]))
-#end
-#
-#yout[1] = y1
-#yout[2] = y1 + B[2,1]*f[1]
-#for i ∈ 3:6
-#    yout[i] = y1 + sum((B[i,j]*k[j] for j ∈ 1:i-2)) + B[i,i-1]*f[i-1]
-#    yout[i] = simplify(expand(yout[i]))
-#end
-#
-## y7 is the 5th order approximation to y(t+h)
-#yout[7] = y1 + sum((CH[j]*k[j] for j ∈ 1:5)) + CH[6]*f[6]
-#yout[7] = simplify(expand(yout[7]))
-#k[6] = (yhigh - y1 - sum((CH[j]*k[j] for j ∈ 1:5))) // CH[6]
-#k[6] = simplify(expand(k[6]))
-#
-## ylow is the 4th order approximation to y(t+h), not actually used?
-#ylow = y1 + sum((C[j]*k[j] for j ∈ 1:5))
-#ylow = simplify(expand(ylow))
-#
-#println("CT ", CT)
-#yerr = sum((CT[j]*k[j] for j ∈ 1:6))
-#yerr = simplify(expand(yerr))
-#
-#rk_coeffs = zeros(Rational{Int64}, 7, 7)
-#for i ∈ 1:6
-#    f_coeff = Symbolics.coeff(yout[i+1], f[i])
-#    rk_coeffs[1,i] = Symbolics.coeff(yout[i+1], y1) - f_coeff # Subtract 1 because 1 lot of y1 is included in the 'forward Euler step'
-#    for j ∈ 2:i
-#        rk_coeffs[j,i] = Symbolics.coeff(yout[i+1], y[j])
-#    end
-#
-#    # Coefficient of the result of the 'forward Euler step' (y1 + h*f(y[i])
-#    rk_coeffs[i+1,i] = f_coeff
-#end
-#
-## Use final column of rk_coeffs to store the coefficients used to calculate the truncation
-## error estimate
-#for j ∈ 1:7
-#    rk_coeffs[j,7] = Symbolics.coeff(yerr, y[j])
-#end
-#
-#for i ∈ 1:6
-#    println("k$i = ", k[i])
-#end
-#for i ∈ 1:6
-#    println("yout$i = ", yout[i])
-#end
-#println("ylow = $ylow")
-#println("yhigh_out = ", yout[end])
-#println("yerr = $yerr")
-#println("diff = ", simplify(expand(ylow - y[7])))
-#for i ∈ 1:7
-#    println("rk_coeffs[:,$i] = ", rk_coeffs[:,i])
-#end
-#
-#println("\nrk_coeffs matrix:")
-#display(rk_coeffs)
-#println(rk_coeffs)
-#for i ∈ 1:7
-#    println("i=$i, sum=", sum(rk_coeffs[:,i]))
-#end
-
 """
     convert_butcher_tableau_for_moment_kinetics(a, b)
 
@@ -338,16 +210,27 @@ function convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=true)
 end
 
 function convert_rk_coeffs_to_butcher_tableau(rkcoeffs::AbstractArray{T,N}) where {T,N}
-    n_rk_stages = size(rkcoeffs, 1) - 1
-    adaptive = (size(rkcoeffs, 2) == n_rk_stages + 1)
+    adaptive = (abs(sum(rkcoeffs[:,end])) < 1.0e-13)
+    low_storage = size(rkcoeffs, 1) == 3
+    if adaptive
+        n_rk_stages = size(rkcoeffs, 2) - 1
+    else
+        n_rk_stages = size(rkcoeffs, 2)
+    end
 
     @variables y[1:n_rk_stages+1] y_out[1:n_rk_stages+1] k[1:n_rk_stages] k_subs[1:n_rk_stages]
     y = Symbolics.scalarize(y)
     k = Symbolics.scalarize(k)
 
-    for i ∈ 1:n_rk_stages
-        y[i+1] = sum(rkcoeffs[j,i]*y[j] for j ∈ 1:i) + rkcoeffs[i+1,i]*(y[i] + k[i])
-        y[i+1] = simplify(expand(y[i+1]))
+    if low_storage
+        for i ∈ 1:n_rk_stages
+            y[i+1] = rkcoeffs[1,i]*y[1] + rkcoeffs[2,i]*y[i] + rkcoeffs[3,i]*(y[i] + k[i])
+        end
+    else
+        for i ∈ 1:n_rk_stages
+            y[i+1] = sum(rkcoeffs[j,i]*y[j] for j ∈ 1:i) + rkcoeffs[i+1,i]*(y[i] + k[i])
+            y[i+1] = simplify(expand(y[i+1]))
+        end
     end
     #for i ∈ 1:n_rk_stages+1
     #    println("i=$i, y[$i]=", y[i])
@@ -363,7 +246,13 @@ function convert_rk_coeffs_to_butcher_tableau(rkcoeffs::AbstractArray{T,N}) wher
         b[1, j] = Symbolics.coeff(y[n_rk_stages+1], k[j])
     end
     if adaptive
-        yerr = sum(rkcoeffs[j,n_rk_stages+1]*y[j] for j ∈ 1:n_rk_stages+1)
+        if low_storage
+            yerr = rkcoeffs[1,n_rk_stages+1]*y[1] +
+                   rkcoeffs[2,n_rk_stages+1]*y[n_rk_stages] +
+                   rkcoeffs[3,n_rk_stages+1]*y[n_rk_stages+1]
+        else
+            yerr = sum(rkcoeffs[j,n_rk_stages+1]*y[j] for j ∈ 1:n_rk_stages+1)
+        end
         error_coeffs = zeros(T, n_rk_stages)
         for j ∈ 1:n_rk_stages
             error_coeffs[j] = Symbolics.coeff(yerr, k[j])
@@ -383,133 +272,159 @@ function convert_rk_coeffs_to_butcher_tableau(rkcoeffs::AbstractArray{T,N}) wher
     return a, b
 end
 
-println("\nRKF5(4)")
+function convert_and_check_butcher_tableau(name, a, b; low_storage=true)
+    println(name)
+    rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=low_storage)
+    print("a="); display(a)
+    print("b="); display(b)
+    print("rk_coeffs="); display(rk_coeffs)
+    println("a=$a")
+    println("b=$b")
+    println("rk_coeffs=$rk_coeffs")
+    println()
+
+    check_end = size(rk_coeffs, 2)
+    if size(b, 1) > 1
+        # Adaptive timestep
+        if abs(sum(rk_coeffs[:,end])) > 1.0e-13
+            error("Sum of error coefficients should be 0")
+        end
+        check_end -= 1
+    end
+    for i ∈ 1:check_end
+        if abs(sum(rk_coeffs[:,i]) - 1) > 1.0e-13
+            error("Sum of RK coefficients should be 1 for each stage")
+        end
+    end
+
+    # Consistency check: converting back should give the original a, b.
+    a_check, b_check = convert_rk_coeffs_to_butcher_tableau(rk_coeffs)
+    #println("check?? ", a_check, " ", b_check)
+
+    if isa(a[1], Real)
+        if maximum(abs.(a_check .- a)) > 1.0e-13
+            error("Converting rk_coeffs back to Butcher tableau gives different 'a':\n"
+                  * "Original: $a\n"
+                  * "New:      $a_check")
+        end
+        if maximum(abs.(b_check .- b)) > 1.0e-13
+            error("Converting rk_coeffs back to Butcher tableau gives different 'b':\n"
+                  * "Original: $b\n"
+                  * "New:      $b_check")
+        end
+    else
+        if a_check != a
+            error("Converting rk_coeffs back to Butcher tableau gives different 'a':\n"
+                  * "Original: $a\n"
+                  * "New:      $a_check")
+        end
+        if b_check != b
+            error("Converting rk_coeffs back to Butcher tableau gives different 'b':\n"
+                  * "Original: $b\n"
+                  * "New:      $b_check")
+        end
+    end
+end
+
+function convert_and_check_rk_coeffs(name, rk_coeffs)
+    println(name)
+
+    print("rk_coeffs="); display(rk_coeffs)
+    a, b = convert_rk_coeffs_to_butcher_tableau(rk_coeffs)
+    print("a="); display(a)
+    print("b="); display(b)
+    println("a=$a")
+    println("b=$b")
+    println()
+end
+
+# 'Standard form' of coefficients from
+# https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method,
+# 'COEFFICIENTS FOR RK4(5), FORMULA 2 Table III in Fehlberg'
+
+# Neglect the 'A' coefficients as we do not have an explicit time dependence in the RHS,
+# so do not use them.
+
+# Use `//` to get rational numbers to avoid round-off errors
+B = [ 0 0 0 0 0 0;
+      1//4 0 0 0 0 0;
+      3//32 9//32 0 0 0 0;
+      1932//2197 -7200//2197 7296//2197 0 0 0;
+      439//216 -8 3680//513 -845//4104 0 0;
+      -8//27 2 -3544//2565 1859//4104 -11//40 0]
+
+C = [ 25//216 0 1408//2565 2197//4104 -1//5 0 ]
+CH = [ 16//135 0 6656//12825 28561//56430 -9//50 2//55 ]
+# The following is the version from Wikipedia, it appears to have a typo in the 4th
+# element, as we should have CT=C-CH -- CT = [ -1//360 0 128//4275 2187//75240 -1//50 -2//55 ]
+CT = [ -1//360 0 128//4275 2197//75240 -1//50 -2//55 ]
+
+# 'COEFFICIENTS FOR Sarafyan's RK4(5), Table IV in Fehlberg'
+
+# Neglect the 'A' coefficients as we do not have an explicit time dependence in the RHS,
+# so do not use them.
+
+# Use `//` to get rational numbers to avoid round-off errors
+#B = [ 0 0 0 0 0 0;
+#      1//2 0 0 0 0 0;
+#      1//4 1//4 0 0 0 0;
+#      0 -1 2 0 0 0;
+#      7//27 10//27 0 1//27 0 0;
+#      28//625 -1//5 546//625 54//625 -378//625 0]
+#
+#C = [ 1//6 0 2//3 1//6 0 0 ]
+#CH = [ 1//24 0 0 5//48 27//56 125//336 ]
+#CT = [ 1//8 0 2//3 1//16 -27//56 -125//336 ]
 a = B
 b = vcat(CH,C)
-rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=false)
-print("a="); display(a)
-print("b="); display(b)
-print("rk_coeffs="); display(rk_coeffs)
-println("a=$a")
-println("b=$b")
-println("rk_coeffs=$rk_coeffs")
-for i ∈ 1:size(rk_coeffs, 2)
-    println("i=$i, sum=", sum(rk_coeffs[:,i]))
-end
-println("convert back:")
-a, b = convert_rk_coeffs_to_butcher_tableau(rk_coeffs)
-print("a="); display(a)
-print("b="); display(b)
+convert_and_check_butcher_tableau("RKF5(4)", a, b; low_storage=false)
+println("done rkf")
 
-println("\nSSPRK3")
-# From https://en.wikipedia.org/wiki/List_of_Runge%E2%80%93Kutta_methods
-a = [0 0 0;
+convert_and_check_butcher_tableau(
+    "SSPRK3",
+    # From https://en.wikipedia.org/wiki/List_of_Runge%E2%80%93Kutta_methods
+    [0 0 0;
      1 0 0;
-     1//4 1//4 0]
-b = [1//6 1//6 2//3]
-rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b)
-print("a="); display(a)
-print("b="); display(b)
-print("a="); println(a)
-print("b="); println(b)
-print("rk_coeffs="); display(rk_coeffs)
-println("a=$a")
-println("b=$b")
-println("rk_coeffs=$rk_coeffs")
-for i ∈ 1:size(rk_coeffs, 2)
-    println("i=$i, sum=", sum(rk_coeffs[:,i]))
-end
-println("convert back:")
-a, b = convert_rk_coeffs_to_butcher_tableau(rk_coeffs)
-print("a="); display(a)
-print("b="); display(b)
+     1//4 1//4 0],
+    [1//6 1//6 2//3],
+   )
 
-println("\nHeun's method SSPRK2")
-# From https://en.wikipedia.org/wiki/List_of_Runge%E2%80%93Kutta_methods
-a = [0 0;
-     1 0]
-b = [1//2 1//2]
-rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b)
-print("a="); display(a)
-print("b="); display(b)
-display(rk_coeffs)
-println("a=$a")
-println("b=$b")
-println("rk_coeffs=$rk_coeffs")
-for i ∈ 1:size(rk_coeffs, 2)
-    println("i=$i, sum=", sum(rk_coeffs[:,i]))
-end
-println("convert back:")
-a, b = convert_rk_coeffs_to_butcher_tableau(rk_coeffs)
-print("a="); display(a)
-print("b="); display(b)
+convert_and_check_butcher_tableau(
+    "Heun's method SSPRK2",
+    # From https://en.wikipedia.org/wiki/List_of_Runge%E2%80%93Kutta_methods
+    [0    0;
+     1//1 0],
+    [1//2 1//2],
+   )
 
-println("\nGottlieb et al 4-stage 3rd order")
-# From https://en.wikipedia.org/wiki/List_of_Runge%E2%80%93Kutta_methods
-a = [0 0 0;
+convert_and_check_butcher_tableau(
+    "Gottlieb et al 4-stage 3rd order",
+    # From https://en.wikipedia.org/wiki/List_of_Runge%E2%80%93Kutta_methods
+    [0 0 0;
      1 0 0;
-     1//2 1//2 0]
-b = [1//6 1//6 2//3]
-rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b)
-print("a="); display(a)
-print("b="); display(b)
-print("rk_coeffs="); display(rk_coeffs)
-println("a=$a")
-println("b=$b")
-println("rk_coeffs=$rk_coeffs")
-for i ∈ 1:size(rk_coeffs, 2)
-    println("i=$i, sum=", sum(rk_coeffs[:,i]))
-end
-println("convert back:")
-a, b = convert_rk_coeffs_to_butcher_tableau(rk_coeffs)
-print("a="); display(a)
-print("b="); display(b)
+     1//2 1//2 0],
+    [1//6 1//6 2//3],
+   )
 
-println("\nRK4")
-# From https://en.wikipedia.org/wiki/List_of_Runge%E2%80%93Kutta_methods
-a = [0 0 0 0;
+convert_and_check_butcher_tableau(
+    "RK4",
+    # From https://en.wikipedia.org/wiki/List_of_Runge%E2%80%93Kutta_methods
+    [0 0 0 0;
      1//2 0 0 0;
      0 1//2 0 0;
-     0 0 1 0]
-b = [1//6 1//3 1//3 1//6]
-rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=false)
-print("a="); display(a)
-print("b="); display(b)
-print("rk_coeffs="); display(rk_coeffs)
-println("a=$a")
-println("b=$b")
-println("rk_coeffs=$rk_coeffs")
-for i ∈ 1:size(rk_coeffs, 2)
-    println("i=$i, sum=", sum(rk_coeffs[:,i]))
-end
-println("convert back:")
-a, b = convert_rk_coeffs_to_butcher_tableau(rk_coeffs)
-print("a="); display(a)
-print("b="); display(b)
+     0 0 1 0],
+    [1//6 1//3 1//3 1//6];
+    low_storage=false,
+   )
 
-println("\nmk's ssprk3")
-mk_ssprk3 = [1//2 0    2//3 0   ;
-             1//2 1//2 0    0   ;
-             0    1//2 1//6 0   ;
-             0    0    1//6 1//2;
-             0    0    0    1//2]
-print("rk_coeffs="); display(mk_ssprk3)
-println("convert back:")
-a, b = convert_rk_coeffs_to_butcher_tableau(mk_ssprk3 )
-print("a="); display(a)
-print("b="); display(b)
-println("a=$a")
-println("b=$b")
-
-println("\nFekete 10(4)")
-"""
-Optimal 4th order strong-stability preserving embedded Runge-Kutta method with 10 stages,
-from [Fekete, Conde and Shadid, "Embedded pairs for optimal explicit strong stability
-preserving Runge-Kutta methods", Journal of Computational and Applied Mathematics 421
-(2022) 114325, https://doi.org/10.1016/j.cam.2022.114325]. This methods is from section
-2.3, with the '\$\\tilde{b}^T_4\$' embedded pair, which is recommended in the conclusions.
-"""
-a = [0     0     0     0     0     0    0    0    0    0;
+#Optimal 4th order strong-stability preserving embedded Runge-Kutta method with 10 stages,
+#from [Fekete, Conde and Shadid, "Embedded pairs for optimal explicit strong stability
+#preserving Runge-Kutta methods", Journal of Computational and Applied Mathematics 421
+#(2022) 114325, https://doi.org/10.1016/j.cam.2022.114325]. This methods is from section
+#2.3, with the '\$\\tilde{b}^T_4\$' embedded pair, which is recommended in the conclusions.
+convert_and_check_butcher_tableau(
+    "Fekete 10(4)",
+    [0     0     0     0     0     0    0    0    0    0;
      1//6  0     0     0     0     0    0    0    0    0;
      1//6  1//6  0     0     0     0    0    0    0    0;
      1//6  1//6  1//6  0     0     0    0    0    0    0;
@@ -519,8 +434,8 @@ a = [0     0     0     0     0     0    0    0    0    0;
      1//15 1//15 1//15 1//15 1//15 1//6 1//6 0    0    0;
      1//15 1//15 1//15 1//15 1//15 1//6 1//6 1//6 0    0;
      1//15 1//15 1//15 1//15 1//15 1//6 1//6 1//6 1//6 0;
-    ]
-b = [1//10 1//10 1//10 1//10 1//10 1//10 1//10 1//10 1//10 1//10;
+    ],
+    [1//10 1//10 1//10 1//10 1//10 1//10 1//10 1//10 1//10 1//10;
      #0     3//8  0     1//8  0     0     0     3//8  0     1//8 ]
      #3//14 0     0     2//7  0     0     0     3//7  0     1//14]
      #0     2//9  0     0     5//18 1//3  0     0     0     1//6 ]
@@ -529,53 +444,26 @@ b = [1//10 1//10 1//10 1//10 1//10 1//10 1//10 1//10 1//10 1//10;
      #1//6  0     0     0     1//3  5//18 0     0     2//9  0    ]
      #0     2//5  0     1//10 0     0     0     1//5  3//10 0    ]
      #1//7  0     5//14 0     0     0     0     3//14 2//7 0    ]
-rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=false)
-print("a="); display(a)
-print("b="); display(b)
-print("rk_coeffs="); display(rk_coeffs)
-println("a=$a")
-println("b=$b")
-println("rk_coeffs=$rk_coeffs")
-for i ∈ 1:size(rk_coeffs, 2)
-    println("i=$i, sum=", sum(rk_coeffs[:,i]))
-end
-println("convert back:")
-a, b = convert_rk_coeffs_to_butcher_tableau(rk_coeffs)
-print("a="); display(a)
-print("b="); display(b)
+    ; low_storage=false)
 
-println("\nFekete 6(4)")
-"""
-6-stage, 4th order strong-stability preserving embedded Runge-Kutta method from [Fekete,
-Conde and Shadid, "Embedded pairs for optimal explicit strong stability preserving
-Runge-Kutta methods", Journal of Computational and Applied Mathematics 421 (2022) 114325,
-https://doi.org/10.1016/j.cam.2022.114325]. This method is from section 2.3. Provided
-because it has fewer stages than the 10-stage 4th-order method, but not recommended by
-Fekete et al.
-"""
-a = [0               0               0               0               0               0;
+#6-stage, 4th order strong-stability preserving embedded Runge-Kutta method from [Fekete,
+#Conde and Shadid, "Embedded pairs for optimal explicit strong stability preserving
+#Runge-Kutta methods", Journal of Computational and Applied Mathematics 421 (2022) 114325,
+#https://doi.org/10.1016/j.cam.2022.114325]. This method is from section 2.3. Provided
+#because it has fewer stages than the 10-stage 4th-order method, but not recommended by
+#Fekete et al.
+convert_and_check_butcher_tableau(
+    "Fekete 6(4)",
+    [0               0               0               0               0               0;
      0.3552975516919 0               0               0               0               0;
      0.2704882223931 0.3317866983600 0               0               0               0;
      0.1223997401356 0.1501381660925 0.1972127376054 0               0               0;
      0.0763425067155 0.0936433683640 0.1230044665810 0.2718245927242 0               0;
      0.0763425067155 0.0936433683640 0.1230044665810 0.2718245927242 0.4358156542577 0;
-    ]
-b = [0.1522491819555 0.1867521364225 0.1555370561501 0.1348455085546 0.2161974490441 0.1544186678729;
-     0.1210663237182 0.2308844004550 0.0853424972752 0.3450614904457 0.0305351538213 0.1871101342844]
-rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=false)
-print("a="); display(a)
-print("b="); display(b)
-print("rk_coeffs="); display(rk_coeffs)
-println("a=$a")
-println("b=$b")
-println("rk_coeffs=$rk_coeffs")
-for i ∈ 1:size(rk_coeffs, 2)
-    println("i=$i, sum=", sum(rk_coeffs[:,i]))
-end
-println("convert back:")
-a, b = convert_rk_coeffs_to_butcher_tableau(rk_coeffs)
-print("a="); display(a)
-print("b="); display(b)
+    ],
+    [0.1522491819555 0.1867521364225 0.1555370561501 0.1348455085546 0.2161974490441 0.1544186678729;
+     0.1210663237182 0.2308844004550 0.0853424972752 0.3450614904457 0.0305351538213 0.1871101342844];
+    low_storage=false)
 
 """
     construct_fekete_3rd_order(nstage)
@@ -622,22 +510,10 @@ function construct_fekete_3rd_order(nstage)
     return a, b
 end
 
-println("\nFekete 4(3)")
-a, b = construct_fekete_3rd_order(4)
-rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b)
-print("a="); display(a)
-print("b="); display(b)
-print("rk_coeffs="); display(rk_coeffs)
-println("a=$a")
-println("b=$b")
-println("rk_coeffs=$rk_coeffs")
-for i ∈ 1:size(rk_coeffs, 2)
-    println("i=$i, sum=", sum(rk_coeffs[:,i]))
-end
-println("convert back:")
-a, b = convert_rk_coeffs_to_butcher_tableau(rk_coeffs)
-print("a="); display(a)
-print("b="); display(b)
+convert_and_check_butcher_tableau(
+    "Fekete 4(3)",
+    construct_fekete_3rd_order(4)...
+   )
 
 """
     construct_fekete_2nd_order(nstage)
@@ -669,92 +545,43 @@ function construct_fekete_2nd_order(nstage)
     return a, b
 end
 
-println("\nFekete 4(2)")
-a, b = construct_fekete_2nd_order(4)
-rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=false)
-print("a="); display(a)
-print("b="); display(b)
-print("rk_coeffs="); display(rk_coeffs)
-println("a=$a")
-println("b=$b")
-println("rk_coeffs=$rk_coeffs")
-for i ∈ 1:size(rk_coeffs, 2)
-    println("i=$i, sum=", sum(rk_coeffs[:,i]))
-end
-println("convert back:")
-a, b = convert_rk_coeffs_to_butcher_tableau(rk_coeffs)
-print("a="); display(a)
-print("b="); display(b)
+convert_and_check_butcher_tableau(
+    "Fekete 4(2)",
+    construct_fekete_2nd_order(4)...;
+    low_storage=false,
+   )
 
-println("\nFekete 3(2)")
-a, b = construct_fekete_2nd_order(3)
-rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=false)
-print("a="); display(a)
-print("b="); display(b)
-print("rk_coeffs="); display(rk_coeffs)
-println("a=$a")
-println("b=$b")
-println("rk_coeffs=$rk_coeffs")
-for i ∈ 1:size(rk_coeffs, 2)
-    println("i=$i, sum=", sum(rk_coeffs[:,i]))
-end
-println("convert back:")
-a, b = convert_rk_coeffs_to_butcher_tableau(rk_coeffs)
-print("a="); display(a)
-print("b="); display(b)
+convert_and_check_butcher_tableau(
+    "Fekete 3(2)",
+    construct_fekete_2nd_order(3)...;
+    low_storage=false,
+   )
 
-println("\nFekete 2(2)")
-a, b = construct_fekete_2nd_order(2)
-rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b)
-print("a="); display(a)
-print("b="); display(b)
-print("rk_coeffs="); display(rk_coeffs)
-println("a=$a")
-println("b=$b")
-println("rk_coeffs=$rk_coeffs")
-for i ∈ 1:size(rk_coeffs, 2)
-    println("i=$i, sum=", sum(rk_coeffs[:,i]))
-end
-println("convert back:")
-a, b = convert_rk_coeffs_to_butcher_tableau(rk_coeffs)
-print("a="); display(a)
-print("b="); display(b)
+convert_and_check_butcher_tableau(
+    "Fekete 2(2)",
+    construct_fekete_2nd_order(2)...
+   )
 
-println("\nmk's ssprk3")
-mk_ssprk3 = [0  3//4 1//3;
-             1  0    0   ;
-             0  1//4 0   ;
-             0  0    2//3]
-print("rk_coeffs="); display(mk_ssprk3)
-println("convert back:")
-a, b = convert_rk_coeffs_to_butcher_tableau(mk_ssprk3)
-print("a="); display(a)
-print("b="); display(b)
-println("a=$a")
-println("b=$b")
+convert_and_check_rk_coeffs(
+    "mk's ssprk4",
+    [1//2 0    2//3 0   ;
+     1//2 1//2 0    0   ;
+     0    1//2 1//6 0   ;
+     0    0    1//6 1//2;
+     0    0    0    1//2],
+   )
 
-println("\nmk's ssprk4")
-mk_ssprk4 = [1//2 0    2//3 0   ;
-             1//2 1//2 0    0   ;
-             0    1//2 1//6 0   ;
-             0    0    1//6 1//2;
-             0    0    0    1//2]
-print("rk_coeffs="); display(mk_ssprk4)
-println("convert back:")
-a, b = convert_rk_coeffs_to_butcher_tableau(mk_ssprk4)
-print("a="); display(a)
-print("b="); display(b)
-println("a=$a")
-println("b=$b")
+convert_and_check_rk_coeffs(
+    "mk's ssprk3",
+    [0  3//4 1//3;
+     1  0    0   ;
+     0  1//4 0   ;
+     0  0    2//3],
+   )
 
-println("\nmk's ssprk2")
-mk_ssprk2 = [0.0 0.5 0.0;
-             1.0 0.0 0.0;
-             0.0 0.5 0.0]
-print("rk_coeffs="); display(mk_ssprk2)
-println("convert back:")
-a, b = convert_rk_coeffs_to_butcher_tableau(mk_ssprk2)
-print("a="); display(a)
-print("b="); display(b)
-println("a=$a")
-println("b=$b")
+convert_and_check_rk_coeffs(
+    "mk's ssprk2",
+    [0 1//2 0;
+     1 0    0;
+     0 1//2 0],
+   )
