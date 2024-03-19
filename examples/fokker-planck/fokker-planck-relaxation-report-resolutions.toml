@@ -31,6 +31,13 @@ ionization_frequency = 0.0
 constant_ionization_rate = false
 # nuii sets the normalised input C[F,F] Fokker-Planck collision frequency
 nuii = 1.0
+nstep = 200000
+dt = 1.0e-3
+nwrite = 50
+nwrite_dfns = 50
+use_semi_lagrange = false
+n_rk_stages = 4
+split_operators = false
 z_ngrid = 1
 z_nelement = 1
 z_nelement_local = 1
@@ -41,21 +48,15 @@ r_nelement = 1
 r_nelement_local = 1
 r_bc = "periodic"
 r_discretization = "chebyshev_pseudospectral"
-vpa_ngrid = 3
-vpa_nelement = 6
+vpa_ngrid = 5
+vpa_nelement = 8
 vpa_L = 6.0
 vpa_bc = "zero"
 vpa_discretization = "gausslegendre_pseudospectral"
-vperp_ngrid = 3
-vperp_nelement = 3
+vperp_ngrid = 5
+vperp_nelement = 4
 vperp_L = 3.0
 vperp_discretization = "gausslegendre_pseudospectral"
 # Fokker-Planck operator requires the "gausslegendre_pseudospectral
 # options for the vpa and vperp grids
 
-[timestepping]
-nstep = 5000
-dt = 1.0e-2
-nwrite = 5000
-nwrite_dfns = 5000
-split_operators = false

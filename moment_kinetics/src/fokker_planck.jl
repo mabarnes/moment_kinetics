@@ -18,9 +18,16 @@ compute the Rosenbluth potentials everywhere in vpa, vperp
 by direct integration of the Green's functions. These functions are 
 supported for the purposes of testing and debugging.
 
+Lower-level routines are provided by functions from
+[`moment_kinetics.fokker_planck_calculus`](@ref).
+
+Parallelisation of the collision operator uses a special 'anyv' region type, see
+[Collision operator and `anyv` region](@ref).
 """
 module fokker_planck
 
+# Import moment_kinetics so that we can refer to it in docstrings
+import moment_kinetics
 
 export init_fokker_planck_collisions, fokkerplanck_arrays_struct
 export init_fokker_planck_collisions_weak_form
@@ -35,7 +42,7 @@ export fokker_planck_collision_operator_weak_form!
 using SpecialFunctions: ellipk, ellipe, erf
 using FastGaussQuadrature
 using Dates
-using LinearAlgebra: lu
+using LinearAlgebra: lu, ldiv!
 using MPI
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
@@ -113,9 +120,10 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
     # collision operator for a single species at a single spatial point. They are
     # shared-memory arrays. The `comm` argument to `allocate_shared_float()` is used to
     # set up the shared-memory arrays so that they are shared only by the processes on
-    # `comm_anyv_subblock[]` rather than on the full `comm_block[]`. This means that
-    # different subblocks that are calculating the collision operator at different
-    # spatial points do not interfere with each others' buffer arrays.
+    # `comm_anyv_subblock[]` rather than on the full `comm_block[]` (see also the
+    # "Collision operator and anyv region" section of the "Developing" page of the docs.
+    # This means that different subblocks that are calculating the collision operator at
+    # different spatial points do not interfere with each others' buffer arrays.
     nvpa, nvperp = vpa.n, vperp.n
     S_dummy = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     Q_dummy = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
@@ -323,10 +331,12 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
     # solve the collision operator matrix eq
     begin_anyv_region()
     @anyv_serial_region begin
+        # sc and rhsc are 1D views of the data in CC and rhsc, created so that we can use
+        # the 'matrix solve' functionality of ldiv!() from the LinearAlgebra package
         sc = vec(CC)
         rhsc = vec(rhsvpavperp)
         # invert mass matrix and fill fc
-        sc .= lu_obj_MM \ rhsc
+        ldiv!(sc, lu_obj_MM, rhsc)
     end
     return nothing
 end

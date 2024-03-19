@@ -331,11 +331,15 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     begin_serial_region()
     vperp_advect = setup_advection(n_ion_species, vperp, vpa, z, r)
     # initialise the vperp advection speed
+    # Note that z_advect and r_advect are arguments of update_speed_vperp!
+    # This means that z_advect[is].speed and r_advect[is].speed are used to determine
+    # vperp_advect[is].speed, so z_advect and r_advect must always be updated before
+    # vperp_advect is updated and used.
     if vperp.n > 1
         begin_serial_region()
         @serial_region begin
             for is ∈ 1:n_ion_species
-                @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r)
+                @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r, z_advect[is], r_advect[is], geometry)
             end
         end
     end
@@ -398,7 +402,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     if(advance.manufactured_solns_test)
         manufactured_source_list = manufactured_sources(manufactured_solns_input, r, z,
                                                         vperp, vpa, vzeta, vr, vz,
-                                                        composition, geometry, collisions,
+                                                        composition, geometry.input, collisions,
                                                         num_diss_params, species)
     else
         manufactured_source_list = false # dummy Bool to be passed as argument instead of list
@@ -415,8 +419,9 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             pdf.charged.norm, boundary_distributions.pdf_rboundary_charged,
             moments.charged.dens, moments.charged.upar, moments.charged.ppar, moments,
             vpa.bc, z.bc, r.bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral,
-            vpa_advect, z_advect, r_advect,
-            composition, scratch_dummy, advance.r_diffusion, advance.vpa_diffusion)
+            vpa_advect, vperp_advect, z_advect, r_advect,
+            composition, scratch_dummy, advance.r_diffusion,
+            advance.vpa_diffusion, advance.vperp_diffusion)
         # Ensure normalised pdf exactly obeys integral constraints if evolving moments
         begin_s_r_z_region()
         @loop_s_r_z is ir iz begin
@@ -493,6 +498,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
                              manufactured_solns_input, r, z, vperp, vpa, vzeta, vr, vz)
     # default is not to concurrently advance different operators
     advance_vpa_advection = false
+    advance_vperp_advection = false
     advance_z_advection = false
     advance_r_advection = false
     advance_cx_1V = false
@@ -517,15 +523,17 @@ function setup_advance_flags(moments, composition, t_params, collisions,
     advance_neutral_energy = false
     r_diffusion = false
     vpa_diffusion = false
+    vperp_diffusion = false
     vz_diffusion = false
     explicit_weakform_fp_collisions = false
     # all advance flags remain false if using operator-splitting
     # otherwise, check to see if the flags need to be set to true
     if !t_params.split_operators
         # default for non-split operators is to include both vpa and z advection together
-        advance_vpa_advection = true && vpa.n > 1 && z.n > 1
-        advance_z_advection = true && z.n > 1
-        advance_r_advection = true && r.n > 1
+        advance_vpa_advection = vpa.n > 1 && z.n > 1
+        advance_vperp_advection = vperp.n > 1 && z.n > 1
+        advance_z_advection = z.n > 1
+        advance_r_advection = r.n > 1
         if collisions.nuii > 0.0 && vperp.n > 1
             explicit_weakform_fp_collisions = true
         else
@@ -620,12 +628,13 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         r_diffusion = (advance_numerical_dissipation && num_diss_params.r_dissipation_coefficient > 0.0)
         # flag to determine if a d^2/dvpa^2 operator is present
         vpa_diffusion = ((advance_numerical_dissipation && num_diss_params.vpa_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
+        vperp_diffusion = ((advance_numerical_dissipation && num_diss_params.vperp_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
         vz_diffusion = (advance_numerical_dissipation && num_diss_params.vz_dissipation_coefficient > 0.0)
     end
 
     manufactured_solns_test = manufactured_solns_input.use_for_advance
 
-    return advance_info(advance_vpa_advection, advance_z_advection, advance_r_advection,
+    return advance_info(advance_vpa_advection, advance_vperp_advection, advance_z_advection, advance_r_advection,
                         advance_neutral_z_advection, advance_neutral_r_advection,
                         advance_neutral_vz_advection, advance_cx, advance_cx_1V,
                         advance_ionization, advance_ionization_1V,
@@ -636,7 +645,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
                         advance_energy, advance_neutral_external_source,
                         advance_neutral_sources, advance_neutral_continuity,
                         advance_neutral_force_balance, advance_neutral_energy,
-                        manufactured_solns_test, r_diffusion, vpa_diffusion, vz_diffusion)
+                        manufactured_solns_test, r_diffusion, vpa_diffusion, vperp_diffusion, vz_diffusion)
 end
 
 function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies_ion,nspecies_neutral)
@@ -1315,7 +1324,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
 
     z_spectral, r_spectral, vpa_spectral, vperp_spectral = spectral_objects.z_spectral, spectral_objects.r_spectral, spectral_objects.vpa_spectral, spectral_objects.vperp_spectral
     vzeta_spectral, vr_spectral, vz_spectral = spectral_objects.vzeta_spectral, spectral_objects.vr_spectral, spectral_objects.vz_spectral
-    vpa_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
+    vpa_advect, vperp_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.vperp_advect, advect_objects.r_advect, advect_objects.z_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
     ##
@@ -1342,8 +1351,8 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     enforce_boundary_conditions!(new_scratch, moments,
         boundary_distributions.pdf_rboundary_charged, vpa.bc, z.bc, r.bc, vpa, vperp, z,
         r, vpa_spectral, vperp_spectral, 
-        vpa_advect, z_advect, r_advect, composition, scratch_dummy,
-        advance.r_diffusion, advance.vpa_diffusion)
+        vpa_advect, vperp_advect, z_advect, r_advect, composition, scratch_dummy,
+        advance.r_diffusion, advance.vpa_diffusion, advance.vperp_diffusion)
 
     if moments.evolve_density && moments.enforce_conservation
         begin_s_r_z_region()
@@ -2273,7 +2282,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
 
     vpa_spectral, vperp_spectral, r_spectral, z_spectral = spectral_objects.vpa_spectral, spectral_objects.vperp_spectral, spectral_objects.r_spectral, spectral_objects.z_spectral
     vz_spectral, vr_spectral, vzeta_spectral = spectral_objects.vz_spectral, spectral_objects.vr_spectral, spectral_objects.vzeta_spectral
-    vpa_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
+    vpa_advect, vperp_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.vperp_advect, advect_objects.r_advect, advect_objects.z_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
     if advance.external_source
@@ -2303,10 +2312,12 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
         r_advection!(fvec_out.pdf, fvec_in, moments, fields, r_advect, r, z, vperp, vpa,
                      dt, r_spectral, composition, geometry, scratch_dummy)
     end
-
-    #if advance.vperp_advection
-    # PLACEHOLDER
-    #end
+    # vperp_advection requires information about z and r advection
+    # so call vperp_advection! only after z and r advection routines
+    if advance.vperp_advection
+        vperp_advection!(fvec_out.pdf, fvec_in, vperp_advect, r, z, vperp, vpa,
+                      dt, vperp_spectral, composition, z_advect, r_advect, geometry)
+    end
 
     if advance.source_terms
         source_terms!(fvec_out.pdf, fvec_in, moments, vpa, z, r, dt, z_spectral,

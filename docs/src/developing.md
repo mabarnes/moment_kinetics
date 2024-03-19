@@ -135,7 +135,10 @@ be synchronized which is done by
 [`moment_kinetics.communication._anyv_subblock_synchronize`](@ref), which is
 called when necessary within the `begin_anyv*_region()` functions (the whole
 shared-memory block does not need to be synchronized at once, as would be done
-by [`moment_kinetics.communication._block_synchronize`](@ref)).
+by [`moment_kinetics.communication._block_synchronize`](@ref)). The processes
+that share an anyv subblock are all part of the `comm_anyv_subblock[]`
+communicator (which is a subset of the processes in the full block, whose
+communicator is `comm_block[]`).
 
 See also notes on debugging the 'anyv' parallelisation: [Collision operator and
 'anyv' region](@ref).

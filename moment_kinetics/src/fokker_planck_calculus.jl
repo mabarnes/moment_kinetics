@@ -3,7 +3,10 @@ module for functions used
 in calculating the integrals and doing 
 the numerical differentiation for 
 the implementation of the 
-the Full-F Fokker-Planck Collision Operator
+the Full-F Fokker-Planck Collision Operator [`moment_kinetics.fokker_planck`](@ref).
+
+Parallelisation of the collision operator uses a special 'anyv' region type, see
+[Collision operator and `anyv` region](@ref).
 """
 module fokker_planck_calculus
 
@@ -26,6 +29,9 @@ export enforce_zero_bc!
 export allocate_rosenbluth_potential_boundary_data
 export calculate_rosenbluth_potential_boundary_data_exact!
 export test_rosenbluth_potential_boundary_data
+
+# Import moment_kinetics so that we can refer to it in docstrings
+import moment_kinetics
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
@@ -163,7 +169,7 @@ end
 a struct of dummy arrays and precalculated coefficients
 for the weak-form Fokker-Planck collision operator 
 """
-struct fokkerplanck_weakform_arrays_struct{N,M <: AbstractSparseArray{mk_float,mk_int,N}}
+struct fokkerplanck_weakform_arrays_struct{M <: AbstractSparseArray{mk_float,mk_int,N} where N}
     # boundary weights (Green's function) data
     bwgt::fokkerplanck_boundary_data_arrays_struct
     # dummy arrays for boundary data calculation
@@ -1227,7 +1233,7 @@ function enforce_zero_bc!(fvpavperp,vpa,vperp;impose_BC_at_zero_vperp=false)
     end
 end
 
-function enforce_dirichlet_bc!(fvpavperp,vpa,vperp,f_bc;dirichlet_vperp_BC=false)
+function enforce_dirichlet_bc!(fvpavperp,vpa,vperp,f_bc;dirichlet_vperp_lower_boundary=false)
     # lower vpa boundary
     for ivperp ∈ 1:vperp.n
         fvpavperp[1,ivperp] = f_bc[1,ivperp]
@@ -1238,8 +1244,8 @@ function enforce_dirichlet_bc!(fvpavperp,vpa,vperp,f_bc;dirichlet_vperp_BC=false
         fvpavperp[end,ivperp] = f_bc[end,ivperp]
     end
     
-    if dirichlet_vperp_BC
-        # upper vperp boundary
+    if dirichlet_vperp_lower_boundary
+        # lower vperp boundary
         for ivpa ∈ 1:vpa.n
             fvpavperp[ivpa,1] = f_bc[ivpa,1]
         end
@@ -2120,6 +2126,9 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
     end
 
     # Can run the following three solves in parallel
+    # The solves run on ranks 0, 1 and 2 of the subblock respectively, but modulo the size
+    # of the subblock (to ensure that the ranks doing work are never outside the
+    # subblock, if the size of the subblock is less than 3).
     begin_anyv_region()
     if anyv_subblock_rank[] == 0 % anyv_subblock_size[]
         elliptic_solve!(HH, S_dummy, rpbd.H_data, lu_obj_LP, MM2D_sparse, rhsvpavperp,
@@ -2140,8 +2149,12 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
     end
 
     # The following four solves can be done in parallel. Note: do the two that are always
-    # done on ranks 0 and 1 and the first optional one that actually needs doing on rank 3
-    # to maximise the chances that all solves get run on separate processes.
+    # done on ranks 0 and 1 of the subblock and the first optional one that actually needs
+    # doing on rank 3 to maximise the chances that all solves get run on separate
+    # processes (i.e. they will be on separate processes as long as there are at least 2
+    # ranks in the subblock if both conditions calculate_GG and calculate_dGdvperp are
+    # false; at least 3 ranks if only one of the conditions is true; and at least 4 ranks
+    # if both conditions are true).
     begin_anyv_region()
     if calculate_GG
         if anyv_subblock_rank[] == 2 % anyv_subblock_size[]

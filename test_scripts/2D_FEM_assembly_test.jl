@@ -27,16 +27,29 @@ using moment_kinetics.fokker_planck_test: F_Maxwellian, G_Maxwellian, H_Maxwelli
 using moment_kinetics.fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperp2_Maxwellian, d2Gdvperpdvpa_Maxwellian, dGdvperp_Maxwellian
 using moment_kinetics.fokker_planck_test: dHdvperp_Maxwellian, dHdvpa_Maxwellian
 using moment_kinetics.fokker_planck_test: Cssp_Maxwellian_inputs
-using moment_kinetics.fokker_planck_test: print_test_data, plot_test_data, fkpl_error_data, allocate_error_data
+using moment_kinetics.fokker_planck_test: print_test_data, fkpl_error_data, allocate_error_data
 
-using moment_kinetics.fokker_planck_calculus: elliptic_solve!, ravel_c_to_vpavperp!, ravel_vpavperp_to_c!, ravel_c_to_vpavperp_parallel!
+using moment_kinetics.fokker_planck_calculus: elliptic_solve!
 using moment_kinetics.fokker_planck_calculus: enforce_zero_bc!, allocate_rosenbluth_potential_boundary_data
 using moment_kinetics.fokker_planck_calculus: calculate_rosenbluth_potential_boundary_data!, calculate_rosenbluth_potential_boundary_data_exact!
 using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary_data, enforce_vpavperp_BCs!
 using moment_kinetics.fokker_planck_calculus: calculate_rosenbluth_potentials_via_elliptic_solve!
 
-
-
+function plot_test_data(func_exact,func_num,func_err,func_name,vpa,vperp)
+    @views heatmap(vperp.grid, vpa.grid, func_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string(func_name*"_num.pdf")
+                savefig(outfile)
+    @views heatmap(vperp.grid, vpa.grid, func_exact[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string(func_name*"_exact.pdf")
+                savefig(outfile)
+    @views heatmap(vperp.grid, vpa.grid, func_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string(func_name*"_err.pdf")
+                savefig(outfile)
+    return nothing
+end
     
     function print_matrix(matrix,name::String,n::mk_int,m::mk_int)
         println("\n ",name," \n")
@@ -143,24 +156,17 @@ using moment_kinetics.fokker_planck_calculus: calculate_rosenbluth_potentials_vi
             end
         end
         
-        # fill fc with fvpavperp
-        ravel_vpavperp_to_c!(fc,fvpavperp,vpa.n,vperp.n)
-        ravel_c_to_vpavperp!(fvpavperp_test,fc,nc_global,vpa.n)
-        @. fvpavperp_err = abs(fvpavperp - fvpavperp_test)
-        @serial_region begin
-            println("max(ravel_err)",maximum(fvpavperp_err))
-        end
-        #print_vector(fc,"fc",nc_global)
+        # get 1d views of fvpavperp
+        fc = vec(fvpavperp)
+        d2fc_dvpa2 = vec(d2fvpavperp_dvpa2_num)
+        d2fc_dvperp2 = vec(d2fvpavperp_dvperp2_num)
+
         # multiply by KKpar2D and fill dfc
         mul!(dfc,KKpar2D_with_BC_terms_sparse,fc)
         mul!(dgc,KKperp2D_with_BC_terms_sparse,fc)
         # invert mass matrix and fill fc
-        fc = lu_obj_MM \ dfc
-        gc = lu_obj_MM \ dgc
-        #print_vector(fc,"fc",nc_global)
-        # unravel
-        ravel_c_to_vpavperp!(d2fvpavperp_dvpa2_num,fc,nc_global,vpa.n)
-        ravel_c_to_vpavperp!(d2fvpavperp_dvperp2_num,gc,nc_global,vpa.n)
+        d2fc_dvpa2 .= lu_obj_MM \ dfc
+        d2fc_dvperp2 .= lu_obj_MM \ dgc
         @serial_region begin 
             if nc_global < 30
                 print_matrix(d2fvpavperp_dvpa2_num,"d2fvpavperp_dvpa2_num",vpa.n,vperp.n)
@@ -241,6 +247,9 @@ using moment_kinetics.fokker_planck_calculus: calculate_rosenbluth_potentials_vi
             end
         end
         rpbd_exact = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
+
+        begin_s_r_z_anyv_region()
+
         # use known test function to provide exact data
         calculate_rosenbluth_potential_boundary_data_exact!(rpbd_exact,
               H_M_exact,dHdvpa_M_exact,dHdvperp_M_exact,G_M_exact,
