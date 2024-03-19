@@ -378,7 +378,6 @@ CT = [ -1//360 0 128//4275 2197//75240 -1//50 -2//55 ]
 a = B
 b = vcat(CH,C)
 convert_and_check_butcher_tableau("RKF5(4)", a, b; low_storage=false)
-println("done rkf")
 
 convert_and_check_butcher_tableau(
     "SSPRK3",
@@ -581,7 +580,7 @@ convert_and_check_rk_coeffs(
 
 convert_and_check_rk_coeffs(
     "mk's ssprk2",
-    [0 1//2 0;
-     1 0    0;
-     0 1//2 0],
+    [0 1//2;
+     0 0   ;
+     1 1//2],
    )
