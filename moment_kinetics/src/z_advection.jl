@@ -93,10 +93,24 @@ function update_speed_z!(advect, upar, vth, evolve_upar, evolve_ppar, fields, vp
     if z.advection.option == "default"
         # bzed = B_z/B only used for z.advection.option == "default"
         bzed = geometry.bzed
-        ExBfac = -0.5*geometry.rhostar
+        Bmag = geometry.Bmag
+        bzeta = geometry.bzeta
+        jacobian = geometry.jacobian
+        rhostar = geometry.rhostar
+        ExBfac = -0.5*rhostar
+        geofac = z.scratch
+        cvdriftz = geometry.cvdriftz
+        gbdriftz = geometry.gbdriftz
         @inbounds begin
             @loop_r_vperp_vpa ir ivperp ivpa begin
-                @. @views advect.speed[:,ivpa,ivperp,ir] = vpa.grid[ivpa]*bzed + ExBfac*fields.Er[:,ir]
+                # vpa bzed
+                @. @views advect.speed[:,ivpa,ivperp,ir] = vpa.grid[ivpa]*bzed[:,ir]
+                # ExB drift
+                @. @views advect.speed[:,ivpa,ivperp,ir] += ExBfac*bzeta[:,ir]*jacobian[:,ir]/Bmag[:,ir]*fields.Er[:,ir]
+                # magnetic curvature drift
+                @. @views advect.speed[:,ivpa,ivperp,ir] += rhostar*(vpa.grid[ivpa]^2)*cvdriftz[:,ir]
+                # magnetic grad B drift
+                @. @views advect.speed[:,ivpa,ivperp,ir] += 0.5*rhostar*(vperp.grid[ivperp]^2)*gbdriftz[:,ir]
             end
             if evolve_ppar
                 @loop_r_vperp_vpa ir ivperp ivpa begin

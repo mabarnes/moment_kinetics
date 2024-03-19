@@ -15,7 +15,7 @@ sheath edge. So at the lower boundary $z=-L_z/2$
 \end{align}
 ```
 
-and at the upper boundary $z=L_z/2
+and at the upper boundary $z=L_z/2$
 
 ```math
 \begin{align}

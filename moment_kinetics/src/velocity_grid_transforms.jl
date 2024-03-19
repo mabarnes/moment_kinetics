@@ -25,13 +25,15 @@ function vzvrvzeta_to_vpavperp!(f_out,f_in,vz,vr,vzeta,vpa,vperp,gyrophase,z,r,g
 
     begin_sn_r_z_region()
     @loop_sn_r_z isn ir iz begin
+        bzed = geometry.bzed[iz,ir]
+        bzeta = geometry.bzeta[iz,ir]
         @views vzvrvzeta_to_vpavperp_species!(f_out[:,:,iz,ir,isn],f_in[:,:,:,iz,ir,isn],
-                                vz,vr,vzeta,vpa,vperp,gyrophase,geometry)
+                                vz,vr,vzeta,vpa,vperp,gyrophase,bzed,bzeta)
     end
 
 end
 
-function vzvrvzeta_to_vpavperp_species!(f_out,f_in,vz,vr,vzeta,vpa,vperp,gyrophase,geometry)
+function vzvrvzeta_to_vpavperp_species!(f_out,f_in,vz,vr,vzeta,vpa,vperp,gyrophase,bzed,bzeta)
     @boundscheck vz.n == size(f_in, 1) || throw(BoundsError(f_in))
     @boundscheck vr.n == size(f_in, 2) || throw(BoundsError(f_in))
     @boundscheck vzeta.n == size(f_in, 3) || throw(BoundsError(f_in))
@@ -41,10 +43,7 @@ function vzvrvzeta_to_vpavperp_species!(f_out,f_in,vz,vr,vzeta,vpa,vperp,gyropha
     pdf_interp = linear_interpolation((vz.grid,vr.grid,vzeta.grid),f_in,extrapolation_bc = 0.0)
     # pdf_interp( vz_val, vr_val, vzeta_val) is interpolated value of f_in
     # extrapolation_bc = 0.0 makes pdf_interp = 0.0 for |vx| > vx.L/2 (x = z,r,zeta)
-    
-    bzed = geometry.bzed
-    bzeta = geometry.bzeta
-    
+
     @loop_vperp_vpa ivperp ivpa begin
         # for each ivpa, ivperp, compute gyroaverage of f_in
         # use 
@@ -78,14 +77,16 @@ function vpavperp_to_vzvrvzeta!(f_out,f_in,vz,vr,vzeta,vpa,vperp,z,r,geometry,co
     
     begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
+        bzed = geometry.bzed[iz,ir]
+        bzeta = geometry.bzeta[iz,ir]
         @views vpavperp_to_vzvrvzeta_species!(f_out[:,:,:,iz,ir,is],f_in[:,:,iz,ir,is],
-                                vz,vr,vzeta,vpa,vperp,geometry)
+                                vz,vr,vzeta,vpa,vperp,bzed,bzeta)
     end
 
 end
 
 
-function vpavperp_to_vzvrvzeta_species!(f_out,f_in,vz,vr,vzeta,vpa,vperp,geometry)
+function vpavperp_to_vzvrvzeta_species!(f_out,f_in,vz,vr,vzeta,vpa,vperp,bzed,bzeta)
     @boundscheck vz.n == size(f_out, 1) || throw(BoundsError(f_out))
     @boundscheck vr.n == size(f_out, 2) || throw(BoundsError(f_out))
     @boundscheck vzeta.n == size(f_out, 3) || throw(BoundsError(f_out))
@@ -95,10 +96,6 @@ function vpavperp_to_vzvrvzeta_species!(f_out,f_in,vz,vr,vzeta,vpa,vperp,geometr
     pdf_interp = linear_interpolation((vpa.grid,vperp.grid),f_in,extrapolation_bc = 0.0)
     # pdf_interp( vz_val, vr_val, vzeta_val) is interpolated value of f_in
     # extrapolation_bc = 0.0 makes pdf_interp = 0.0 for |vpa| > vpa.L/2 and vperp > vperp.L
-    
-    bzed = geometry.bzed
-    bzeta = geometry.bzeta
-    
     @loop_vzeta_vr_vz ivzeta ivr ivz begin
         # for each ivzeta, ivr, ivz interpolate f_in onto f_out
         # use 

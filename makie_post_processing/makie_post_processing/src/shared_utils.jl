@@ -1,15 +1,19 @@
 module shared_utils
 
-export calculate_and_write_frequencies, get_geometry_and_composition
+export calculate_and_write_frequencies, get_geometry, get_composition
 
 using moment_kinetics.analysis: fit_delta_phi_mode
 using moment_kinetics.array_allocation: allocate_float
 using moment_kinetics.coordinates: define_coordinate
+using moment_kinetics.geo: init_magnetic_geometry
 using moment_kinetics.input_structs: boltzmann_electron_response,
                                      boltzmann_electron_response_with_simple_sheath,
                                      grid_input, geometry_input, species_composition
+using moment_kinetics.moment_kinetics_input: get_default_rhostar, setup_reference_parameters
 using moment_kinetics.type_definitions: mk_float, mk_int
-
+using moment_kinetics.reference_parameters: setup_reference_parameters
+using moment_kinetics.moment_kinetics_input: get_default_rhostar
+using moment_kinetics.geo: init_magnetic_geometry
 using MPI
 
 """
@@ -61,23 +65,15 @@ end
 
 """
 """
-function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
-    # set geometry_input
-    # MRH need to get this in way that does not duplicate code
-    # MRH from moment_kinetics_input.jl
-    Bzed = get(scan_input, "Bzed", 1.0)
-    Bmag = get(scan_input, "Bmag", 1.0)
-    bzed = Bzed/Bmag
-    bzeta = sqrt(1.0 - bzed^2.0)
-    Bzeta = Bmag*bzeta
-    rhostar = get(scan_input, "rhostar", 0.0)
-    geometry = geometry_input(Bzed,Bmag,bzed,bzeta,Bzeta,rhostar)
-
+function get_composition(scan_input)
+    reference_params = setup_reference_parameters(scan_input)
     # set composition input
     # MRH need to get this in way that does not duplicate code
     # MRH from moment_kinetics_input.jl
     electron_physics = get(scan_input, "electron_physics", boltzmann_electron_response)
 
+    n_ion_species = get(scan_input, "n_ion_species", 1)
+    n_neutral_species = get(scan_input, "n_neutral_species", 1)
     if electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
         n_species = n_ion_species + n_neutral_species
     else
@@ -111,7 +107,23 @@ function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
         electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, Er_constant,
         mn_over_mi, me_over_mi, recycling_fraction, allocate_float(n_species))
-    return geometry, composition
+    return composition
+
+end
+
+function get_geometry(scan_input,z,r)
+    reference_params = setup_reference_parameters(scan_input)
+    # set geometry_input
+    # MRH need to get this in way that does not duplicate code
+    # MRH from moment_kinetics_input.jl
+    option = get(scan_input, "geometry_option", "constant-helical") #"1D-mirror"
+    pitch = get(scan_input, "pitch", 1.0)
+    rhostar = get(scan_input, "rhostar", get_default_rhostar(reference_params))
+    DeltaB = get(scan_input, "DeltaB", 1.0)
+    geo_in = geometry_input(rhostar,option,pitch,DeltaB)
+    geometry = init_magnetic_geometry(geo_in,z,r)
+    
+    return geometry
 
 end
 

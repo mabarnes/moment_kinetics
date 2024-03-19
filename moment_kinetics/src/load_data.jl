@@ -268,7 +268,12 @@ function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=no
     L = load_variable(coord_group, "L")
     discretization = load_variable(coord_group, "discretization")
     fd_option = load_variable(coord_group, "fd_option")
-    cheb_option = load_variable(coord_group, "cheb_option")
+    if "cheb_option" ∈ keys(coord_group)
+        cheb_option = load_variable(coord_group, "cheb_option")
+    else
+        # Old output file
+        cheb_option = "FFT"
+    end
     bc = load_variable(coord_group, "bc")
     if "element_spacing_option" ∈ keys(coord_group)
         element_spacing_option = load_variable(coord_group, "element_spacing_option")
@@ -465,7 +470,7 @@ function load_ion_moments_data(fid; printout=false, extended_moments = false)
         println("done.")
     end
     if extended_moments
-        density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed, entropy_production
+        return density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed, entropy_production
     else
         return density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed
     end
@@ -545,6 +550,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                                  vzeta, vr, vz)
     code_time = 0.0
     previous_runs_info = nothing
+    restart_had_kinetic_electrons = false
     begin_serial_region()
     @serial_region begin
         fid = open_readonly_output_file(restart_prefix_iblock[1], "dfns";
@@ -578,8 +584,8 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
 
             neutral_1V = (vzeta.n_global == 1 && vr.n_global == 1)
             restart_neutral_1V = (restart_vzeta.n_global == 1 && restart_vr.n_global == 1)
-            if geometry.bzeta != 0.0 && ((neutral1V && !restart_neutral_1V) ||
-                                         (!neutral1V && restart_neutral_1V))
+            if any(geometry.bzeta .!= 0.0) && ((neutral1V && !restart_neutral_1V) ||
+                                               (!neutral1V && restart_neutral_1V))
                 # One but not the other of the run being restarted from and this run are
                 # 1V, but the interpolation below does not allow for vz and vpa being in
                 # different directions. Therefore interpolation between 1V and 3V cases
@@ -618,13 +624,21 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                                              r_range, z_range, restart_r,
                                              restart_r_spectral, restart_z,
                                              restart_z_spectral, interpolation_needed)
-            if parallel_io || z.irank == 0
-                moments.ion.chodura_integral_lower .= load_slice(dynamic, "chodura_integral_lower",
-                                                                 r_range, :, time_index)
+            if z.irank == 0
+                if "chodura_integral_lower" ∈ keys(dynamic)
+                    moments.ion.chodura_integral_lower .= load_slice(dynamic, "chodura_integral_lower",
+                                                                     r_range, :, time_index)
+                else
+                    moments.ion.chodura_integral_lower .= 0.0
+                end
             end
-            if parallel_io || z.irank == z.nrank - 1
-                moments.ion.chodura_integral_upper .= load_slice(dynamic, "chodura_integral_upper",
-                                                                 r_range, :, time_index)
+            if z.irank == z.nrank - 1
+                if "chodura_integral_upper" ∈ keys(dynamic)
+                    moments.ion.chodura_integral_upper .= load_slice(dynamic, "chodura_integral_upper",
+                                                                     r_range, :, time_index)
+                else
+                    moments.ion.chodura_integral_upper .= 0.0
+                end
             end
 
             if "external_source_controller_integral" ∈ get_variable_keys(dynamic) &&
@@ -647,18 +661,6 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                                            restart_vpa_spectral, interpolation_needed,
                                            restart_evolve_density, restart_evolve_upar,
                                            restart_evolve_ppar)
-            if z.irank == 0
-                moments.ion.chodura_integral_lower .= load_slice(dynamic, "chodura_integral_lower", :, :,
-                                                                 time_index)
-            else
-                moments.ion.chodura_integral_lower .= 0.0
-            end
-            if z.irank == z.nrank - 1
-                moments.ion.chodura_integral_upper .= load_slice(dynamic, "chodura_integral_upper", :, :,
-                                                                 time_index)
-            else
-                moments.ion.chodura_integral_upper .= 0.0
-            end
             boundary_distributions_io = get_group(fid, "boundary_distributions")
 
             boundary_distributions.pdf_rboundary_ion[:,:,:,1,:] .=
@@ -720,7 +722,8 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                 restart_electron_evolve_ppar = true, true, true
             electron_evolve_density, electron_evolve_upar, electron_evolve_ppar =
                 true, true, true
-            if pdf.electron !== nothing
+            restart_had_kinetic_electrons = ("f_electron" ∈ keys(dynamic))
+            if pdf.electron !== nothing && restart_had_kinetic_electrons
                 pdf.electron.norm .=
                     reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa,
                                         r_range, z_range, vperp_range, vpa_range,
@@ -817,7 +820,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
         end
     end
 
-    return code_time, previous_runs_info, time_index
+    return code_time, previous_runs_info, time_index, restart_had_kinetic_electrons
 end
 
 """
