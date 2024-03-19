@@ -109,7 +109,7 @@ function setup_runge_kutta_coefficients!(type, input_CFL_prefactor, split_operat
             CFL_prefactor = input_CFL_prefactor
         end
     elseif type == "Fekete4(3)"
-        # Fekete 4-stage, 3rd-order SSPRK (see comments in util/calculate_rk_coeffs.jl.
+        # Fekete 4-stage, 3rd-order SSPRK (see comments in util/calculate_rk_coeffs.jl).
         # Note this is the same as moment_kinetics original 4-stage SSPRK method, with
         # the addition of a truncation error estimate.
         rk_coefs = mk_float[1//2 0    2//3 0    -1//2;

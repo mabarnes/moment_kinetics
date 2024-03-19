@@ -1569,9 +1569,9 @@ sum is changed, which changes the rounding errors) then we have to use higher pr
 according to the `high_precision_error_sum` option in the `[timestepping]` section, and
 stored in a template-typed value in the `t_params` object - when that value is passed in
 as the argument to `error_sum_zero`, that type will be used for L2sum, and the type will
-    be known at compile time, allowing this function to be efficient.
+be known at compile time, allowing this function to be efficient.
 """
-function local_maxiumum_abs end
+function local_error_norm end
 
 function local_error_norm(error::MPISharedArray{mk_float,2},
                           f::MPISharedArray{mk_float,2}, rtol, atol; method="Linf",
