@@ -429,6 +429,13 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         irank_z = irank_r = 0
         nrank_z = nrank_r = 1
         comm_sub_z = comm_sub_r = MPI.COMM_NULL
+        r.nelement_local = r.nelement_global
+        z.nelement_local = z.nelement_global
+        vperp.nelement_local = vperp.nelement_global
+        vpa.nelement_local = vpa.nelement_global
+        vzeta.nelement_local = vzeta.nelement_global
+        vr.nelement_local = vr.nelement_global
+        vz.nelement_local = vz.nelement_global
     else
         irank_z, nrank_z, comm_sub_z, irank_r, nrank_r, comm_sub_r = setup_distributed_memory_MPI(z.nelement_global,z.nelement_local,r.nelement_global,r.nelement_local)
     end
