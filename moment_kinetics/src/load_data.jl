@@ -1851,7 +1851,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, t_params,
                     # If "dt" is not present, the file being restarted from is an older
                     # one that did not have an adaptive timestep, so just leave the value
                     # of "dt" from the input file.
-                    t_params.dt[] = load_slice(dynamic, "dt", :)
+                    t_params.dt[] = load_slice(dynamic, "dt", time_index)
                 end
             end
         finally
