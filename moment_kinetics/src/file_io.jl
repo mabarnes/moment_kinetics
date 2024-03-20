@@ -888,7 +888,7 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
             parallel_io=parallel_io,
             description="cumulative count of how many times each variable caused a "
                         * "timestep failure for the run")
-        n_limit_vars = 3 + 2
+        n_limit_vars = 4 + 2
         if n_neutral_species > 0
             n_limit_vars += 2
         end

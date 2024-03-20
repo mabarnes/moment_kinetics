@@ -199,8 +199,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     # timestepping.
     #
     # Entries for limit by accuracy (which is an average over all variables),
-    # max_increase_factor and minimum_dt
-    push!(t_params.limit_caused_by, 0, 0, 0)
+    # max_increase_factor, minimum_dt and maximum_dt
+    push!(t_params.limit_caused_by, 0, 0, 0, 0)
 
     # ion pdf
     push!(t_params.limit_caused_by, 0, 0)
@@ -1932,7 +1932,7 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         CFL_limit = CFL_limits[CFL_limit_caused_by]
         # Reserve first two entries of t_params.limit_caused_by for accuracy limit and
         # max_increase_factor limit.
-        this_limit_caused_by = CFL_limit_caused_by + 3
+        this_limit_caused_by = CFL_limit_caused_by + 4
     end
 
     if error_norm_method == "Linf"
@@ -2062,6 +2062,12 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
                 if t_params.dt[] < t_params.minimum_dt
                     t_params.dt[] = t_params.minimum_dt
                     this_limit_caused_by = 3
+                end
+
+                # Prevent timestep from going above maximum_dt
+                if t_params.dt[] > t_params.maximum_dt
+                    t_params.dt[] = t_params.maximum_dt
+                    this_limit_caused_by = 4
                 end
 
                 t_params.limit_caused_by[this_limit_caused_by] += 1

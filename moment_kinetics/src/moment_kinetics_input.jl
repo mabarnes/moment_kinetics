@@ -215,6 +215,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         step_update_prefactor=0.9,
         max_increase_factor=1.05,
         minimum_dt=0.0,
+        maximum_dt=Inf,
         high_precision_error_sum=false,
        )
     if timestepping_section["nwrite"] > timestepping_section["nstep"]
@@ -236,6 +237,13 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     if timestepping_input.max_increase_factor ≤ 1.0
         error("max_increase_factor=$(timestepping_input.max_increase_factor) must "
               * "be greater than 1.0.")
+    end
+    if timestepping_input.minimum_dt > timestepping_input.maximum_dt
+        error("minimum_dt=$(timestepping_input.minimum_dt) must be less than "
+              * "maximum_dt=$(timestepping_input.maximum_dt)")
+    end
+    if timestepping_input.maximum_dt ≤ 0.0
+        error("maximum_dt=$(timestepping_input.maximum_dt) must be positive")
     end
 
     use_for_init_is_default = !(("manufactured_solns" ∈ keys(scan_input)) &&
@@ -491,8 +499,8 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
                          timestepping_input.atol_upar,
                          timestepping_input.step_update_prefactor,
                          timestepping_input.max_increase_factor,
-                         timestepping_input.minimum_dt, error_sum_zero,
-                         timestepping_input.split_operators,
+                         timestepping_input.minimum_dt, timestepping_input.maximum_dt,
+                         error_sum_zero, timestepping_input.split_operators,
                          timestepping_input.steady_state_residual,
                          timestepping_input.converged_residual_value,
                          manufactured_solns_input.use_for_advance,

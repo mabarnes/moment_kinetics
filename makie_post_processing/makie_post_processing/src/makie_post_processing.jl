@@ -6648,15 +6648,20 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                 plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
                         label=prefix * "RK accuracy", ax=ax)
 
-                # Maximum timestep limit counter
+                # Maximum timestep increase limit counter
                 counter += 1
                 plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
-                        label=prefix * "max timestep", ax=ax)
+                        label=prefix * "max timestep increase", ax=ax)
 
                 # Minimum timestep limit counter
                 counter += 1
                 plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
                         label=prefix * "min timestep", ax=ax)
+
+                # Maximum timestep limit counter
+                counter += 1
+                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                        label=prefix * "max timestep", ax=ax)
 
                 # Ion z advection
                 counter += 1

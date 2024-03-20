@@ -63,6 +63,7 @@ struct time_info{Terrorsum <: Real}
     step_update_prefactor::mk_float
     max_increase_factor::mk_float
     minimum_dt::mk_float
+    maximum_dt::mk_float
     error_sum_zero::Terrorsum
     split_operators::Bool
     steady_state_residual::Bool
