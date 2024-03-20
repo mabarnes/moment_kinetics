@@ -497,7 +497,7 @@ function update_moments!(moments, ff_in, gyroavs::gyro_operators, vpa, vperp, z,
         gyroaverage_pdf!(ff,ff_in,gyroavs,vpa,vperp,z,r,composition)
     else
         # copy F into buffer (drift-kinetic)
-        begin_s_z_vperp_vpa_region()
+        begin_s_r_z_vperp_vpa_region()
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin 
             ff[ivpa,ivperp,iz,ir,is] = ff_in[ivpa,ivperp,iz,ir,is]
         end
@@ -542,6 +542,7 @@ function update_moments!(moments, ff_in, gyroavs::gyro_operators, vpa, vperp, z,
             moments.charged.qpar_updated[is] = true
         end
     end
+
     update_vth!(moments.charged.vth, moments.charged.ppar, moments.charged.pperp, moments.charged.dens, vperp, z, r, composition)
     # update the Chodura diagnostic -- note that the pdf should be the unnormalised one
     # so this will break for the split moments cases
@@ -870,7 +871,7 @@ function update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometr
     begin_s_z_vperp_vpa_region()
     # use buffer_vpavperpzrs_2 here as buffer_vpavperpzrs_1 is in use storing ff
     dffdr = scratch_dummy.buffer_vpavperpzrs_2 
-    ff_dummy = scratch_dummy.buffer_vpavperp_1
+    ff_dummy = scratch_dummy.dummy_vpavperp
     if r.n > 1
     # first compute d f / d r using centred reconciliation and place in dummy array #1
     derivative_r!(dffdr, ff[:,:,:,:,:],

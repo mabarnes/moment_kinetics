@@ -1434,7 +1434,7 @@ function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composi
         gyroaverage_pdf!(ff,new_scratch.pdf,gyroavs,vpa,vperp,z,r,composition)
     else
         # copy F into buffer (drift-kinetic)
-        begin_s_z_vperp_vpa_region()
+        begin_s_r_z_vperp_vpa_region()
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin 
             ff[ivpa,ivperp,iz,ir,is] = new_scratch.pdf[ivpa,ivperp,iz,ir,is]
         end
