@@ -115,6 +115,9 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower,
     failure_caused_by::Tfailcause
     # cumulative count of which factors limited the timestep at each step
     limit_caused_by::Tfailcause
+    # Last successful timestep before most recent timestep failure, used by adaptve
+    # timestepping algorithm
+    dt_before_last_fail::Ttime
 
     # Use parallel I/O?
     parallel_io::Bool
@@ -888,7 +891,7 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
             parallel_io=parallel_io,
             description="cumulative count of how many times each variable caused a "
                         * "timestep failure for the run")
-        n_limit_vars = 4 + 2
+        n_limit_vars = 5 + 2
         if n_neutral_species > 0
             n_limit_vars += 2
         end
@@ -897,6 +900,11 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
             parallel_io=parallel_io,
             description="cumulative count of how many times each factor limited the "
                         * "timestep for the run")
+
+        io_dt_before_last_fail = create_dynamic_variable!(
+            dynamic, "dt_before_last_fail", mk_float; parallel_io=parallel_io,
+            description="Last successful timestep before most recent timestep failure, "
+                        * "used by adaptve timestepping algorithm")
 
         return io_moments_info(fid, io_time, io_phi, io_Er, io_Ez, io_density, io_upar,
                                io_ppar, io_pperp, io_qpar, io_vth, io_dSdt, io_chodura_lower, io_chodura_upper, io_density_neutral, io_uz_neutral,
@@ -913,7 +921,7 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                external_source_neutral_controller_integral,
                                io_time_for_run, io_step_counter, io_dt,
                                io_failure_counter, io_failure_caused_by,
-                               io_limit_caused_by, parallel_io)
+                               io_limit_caused_by, io_dt_before_last_fail, parallel_io)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -1086,7 +1094,7 @@ function reopen_moments_io(file_info)
                                getvar("time_for_run"), getvar("step_counter"),
                                getvar("dt"), getvar("failure_counter"),
                                getvar("failure_caused_by"), getvar("limit_caused_by"),
-                               parallel_io)
+                               getvar("dt_before_last_fail"), parallel_io)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -1188,7 +1196,8 @@ function reopen_dfns_io(file_info)
                                      getvar("time_for_run"), getvar("step_counter"),
                                      getvar("dt"), getvar("failure_counter"),
                                      getvar("failure_caused_by"),
-                                     getvar("limit_caused_by"), parallel_io)
+                                     getvar("limit_caused_by"),
+                                     getvar("dt_before_last_fail"), parallel_io)
 
         return io_dfns_info(fid, getvar("f"), getvar("f_neutral"), parallel_io,
                             io_moments)
@@ -1365,6 +1374,8 @@ function write_moments_data_to_binary(moments, fields, t, n_ion_species,
         append_to_dynamic_var(io_moments.limit_caused_by, t_params.limit_caused_by, t_idx,
                               parallel_io, length(t_params.limit_caused_by);
                               only_root=true)
+        append_to_dynamic_var(io_moments.dt_before_last_fail,
+                              t_params.dt_before_last_fail[], t_idx, parallel_io)
 
         closefile && close(io_moments.fid)
     end

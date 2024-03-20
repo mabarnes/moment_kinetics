@@ -60,6 +60,8 @@ seems to require a significantly smaller timestep to be stable than the SSP
 methods from Fekete et al., but might be useful if very high accuracy is
 required as it is a 5th-order accurate method. It uses 6 stages per step.
 
+### Algorithm for choosing the next timestep
+
 These adaptive timestepping methods use several criteria to set or limit the
 timestep:
 * Truncation error, which is estimated by the difference between the higher and
@@ -103,10 +105,10 @@ timestep:
   the simulation does not crash).
 
 The estimates and limits just described are controlled by various tuning
-parameters, described in the next subsection, that may need to be set
-appropriately to get good performance from the adaptive timestepping methods.
-The timestep achievable may be limited by accuracy or by stability. If the
-`CFL_prefactor` is set too high (or the relevant CFL limit is not being
+parameters, described in [timestepping-input-parameters](@ref), that may need
+to be set appropriately to get good performance from the adaptive timestepping
+methods.  The timestep achievable may be limited by accuracy or by stability.
+If the `CFL_prefactor` is set too high (or the relevant CFL limit is not being
 checked) then the timestep will try to increase too high for stability - when
 this happens, the step will also become inaccurate, causing timestep failures
 and reducing the timestep. So the simulation should continue without crashing,
@@ -128,7 +130,67 @@ where output is to be written, the timestep is set instead to take the
 simulation to the output time. Then output is written and the timestep is reset
 to the last full timestep value from before the output.
 
-### [Input parameters](@id timestepping-input-parameters)
+### Alternative algorithm for choosing the next timestep
+
+It might turn out that the particular CFL limits that are included in the
+algorithm described in [Algorithm for choosing the next timestep](@ref) are not
+a complete set of the things that set the stability limit for the explicit RK
+timestep. If that is the case, it may be useful to have a more generic
+algorithm that can still fairly robustly choose a good timestep size, without a
+large number of timestep failures. One option is described in this subsection.
+For the parameters discussed, see again [timestepping-input-parameters](@ref).
+
+If we assume that `dt` that last failed the timestep truncation error test is a
+good estimate of the `dt` that is the boundary between stable and unstable
+timstep values, then it makes sense to try to keep timesteps close to that (to
+avoid failures), although we also want to allow the timestep to increase past
+that value in case it was a bad estimate (e.g. during some sort of transient)
+or because the stability limits have changed (e.g. parallel gradients in the
+simulation have changed significantly). We would like to stay close to a
+marginally stable (rather than marginally unstable) timestep, so take as the
+estimate the last successful timestep before the most recent failed timestep
+(this is stored in the code as `t_params.dt_before_last_fail[]`). When `dt` is
+within a factor `last_fail_proximity_factor` of this value, we limit the
+increase in timestep to `max_increase_factor_near_last_fail`, rather than
+`max_increase_factor`. Suggested setup (which of course is likely to need
+adjusting depending on the simulation!):
+* Set `max_increase_factor_near_last_fail` to a value very close to 1, say
+  1.001. This means that the timestep can only very slowly approach and exceed
+  `t_params.dt_before_last_fail[]`. Setting this value closer to 1 should
+  decrease the number of timestep failures.
+* Set `max_increase_factor` to a relatively large value, say 1.5 or 2, so that
+  when a timestep does fail, `dt` quickly recovers to a value close to the last
+  successful value before the failure.
+* Set `step_update_prefactor` to a relatively small value, say 0.5.
+  `step_update_prefactor` controls how far `dt` is set below the value needed
+  to comply with the requested tolerances. Setting a smallish value (so a large
+  margin below the value that would trigger a timestep failure) seems to help -
+  current guess (JTO 20/3/2024) is that: when `dt` is close to (or maybe just
+  above) the value that would be unstable, the error starts to grow; with some
+  margin, and with the factor by which `dt` increases limited to a small value,
+  so that `dt` is at worst very marginally unstable, the truncation error
+  estimate can feel the error and decrease `dt` (modestly) back to a stable
+  value, before the error becomes big enough to cause a timestep failure. Once
+  `dt` has been decreased (but not too much) it is again only allowed to
+  increase slowly, so as long as these decreases happen often enough, `dt` can
+  stay around the stability boundary without causing timestep failures.
+  Decreasing this value should decrease the number of timestep failures.
+* `last_fail_proximity_factor` - current guess (JTO 20/3/2024) is that the
+  default value of 1.05 is reasonable. Increasing this value should decrease
+  the number of timestep failures, but will also increase the number of steps
+  needed before the timestep can increase past a too-low value (from a bad
+  estimate, transient, changed simulation conditions, etc.).
+* As a rough guideline, more than one timestep failures on average per 100
+  timesteps is probably too many to be efficient, while around or less than
+  this many is probably acceptable. If there are too many failures, try
+  tweaking parameters as indicated above.
+
+In at least one case JTO has been able to use this method to get a simulation
+to run without imposing CFL restrictions explicitly, in a similar number of
+steps as when using (well-tuned) explicit CFL restrictions.
+
+[Input parameters](@id timestepping-input-parameters)
+------------------
 
 | Option name | Default value | Description |
 | :---------- | :------------ | :---------- |
@@ -147,6 +209,8 @@ to the last full timestep value from before the output.
 | `atol_upar` | `1.0e-2*rtol` | Absolute tolerance used parallel flow moment variables in the truncation error metric. This is separate from `atol` as the flow moments are expected to pass through zero somewhere, unlike distribution functions, densities, or pressures that should always be positive. |
 | `step_update_prefactor` | `0.9` | When timestep is limited by accuracy (rather than something else), it is set to `step_update_prefactor` times the estimated timestep which would give an RMS error metric `$\epsilon$` of 1 at the next step. This value should always be less than 1. Smaller values give a bigger margin under the failure threshold, so may help reduce the number of timestep failures. |
 | `max_increase_factor` | `1.05` | Timestep can be increased by at most this factor at each step. |
+| `max_increase_factor_near_last_fail` | `Inf` | If set to finite value, replaces `max_increase_factor` when the timestep is near the last failed `dt` value (defined as within `last_fail_proximity_factor` of the last successful `dt` value before a timestep failure). If set, must be less than `max_increase_factor`. |
+| `last_fail_proximity_factor` | `1.05` | Defines the range considered 'near to' the last failed `dt` value: `dt_before_last_fail/last_fail_proximity_factor < dt < dt_before_last_fail*last_fail_proximity_factor`. |
 | `minimum_dt` | `0.0` | Timestep is not allowed to decrease below this value, regardless of accuracy or stability limits. |
 | `maximum_dt` | `Inf` | Timestep is not allowed to increase above this value. |
 | `high_precision_error_sum` | `false` | If this is set to `true`, then quad-precision values (`Float128` from the `Quadmath` package) are used to calculate the sum in the truncation error estimates. When different numbers of processes are used, the sums are calculated in different orders, so the rounding errors will be different. When adaptive timestepping is used this means that different timesteps will be used when different numbers of processes are used, so results will not be exactly the same (although they should be consistent within the timestepper tolerances and discretisation errors). When comparing 'identical' simulations run on different numbers of processes (e.g. for debugging), these differences can be inconvenient. The differences can be avoided (or at least massively reduced) by using a higher precision for the sum, so that the order of the addition operations does not matter (at least until there are so many contributions to the sum that the rounding errors reduce the precision of the quad-precision result to less than double-precision, which would take a very large number!). This feature was originally added in an attempt to make adaptive-timestepping tests give consistent results (at a level $\sim 10^{-14}$) on the CI servers. However, rounding errors change randomly on different systems (operating system, compiler, hardware, etc.), not only because of the different order of terms in the sum in the truncation error norm, so consistency is not possible between different systems even with this feature. |

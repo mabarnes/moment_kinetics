@@ -214,6 +214,8 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         atol_upar=nothing,
         step_update_prefactor=0.9,
         max_increase_factor=1.05,
+        max_increase_factor_near_last_fail=Inf,
+        last_fail_proximity_factor=1.05,
         minimum_dt=0.0,
         maximum_dt=Inf,
         high_precision_error_sum=false,
@@ -237,6 +239,23 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     if timestepping_input.max_increase_factor ≤ 1.0
         error("max_increase_factor=$(timestepping_input.max_increase_factor) must "
               * "be greater than 1.0.")
+    end
+    if timestepping_input.max_increase_factor_near_last_fail ≤ 1.0
+        error("max_increase_factor_near_last_fail="
+              * "$(timestepping_input.max_increase_factor_near_last_fail) must be "
+              * "greater than 1.0.")
+    end
+    if !isinf(timestepping_input.max_increase_factor_near_last_fail) &&
+            timestepping_input.max_increase_factor_near_last_fail > timestepping_input.max_increase_factor
+        error("max_increase_factor_near_last_fail="
+              * "$(timestepping_input.max_increase_factor_near_last_fail) should be "
+              * "less than max_increase_factor="
+              * "$(timestepping_input.max_increase_factor).")
+    end
+    if timestepping_input.last_fail_proximity_factor ≤ 1.0
+        error("last_fail_proximity_factor="
+              * "$(timestepping_input.last_fail_proximity_factor) must be "
+              * "greater than 1.0.")
     end
     if timestepping_input.minimum_dt > timestepping_input.maximum_dt
         error("minimum_dt=$(timestepping_input.minimum_dt) must be less than "
@@ -459,23 +478,27 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         previous_dt_shared = allocate_float(1)
         next_output_time = allocate_float(1)
         dt_before_output = allocate_float(1)
+        dt_before_last_fail = allocate_float(1)
         step_to_output = allocate_bool(1)
         dt_shared[] = timestepping_input.dt
         previous_dt_shared[] = timestepping_input.dt
         next_output_time[] = 0.0
         dt_before_output[] = timestepping_input.dt
+        dt_before_last_fail[] = Inf
         step_to_output[] = false
     else
         dt_shared = allocate_shared_float(1)
         previous_dt_shared = allocate_shared_float(1)
         next_output_time = allocate_shared_float(1)
         dt_before_output = allocate_shared_float(1)
+        dt_before_last_fail = allocate_shared_float(1)
         step_to_output = allocate_shared_bool(1)
         if block_rank[] == 0
             dt_shared[] = timestepping_input.dt
             previous_dt_shared[] = timestepping_input.dt
             next_output_time[] = 0.0
             dt_before_output[] = timestepping_input.dt
+            dt_before_last_fail[] = Inf
             step_to_output[] = false
         end
         _block_synchronize()
@@ -490,7 +513,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         error_sum_zero = 0.0
     end
     t_params = time_info(timestepping_input.nstep, dt_shared, previous_dt_shared,
-                         next_output_time, dt_before_output,
+                         next_output_time, dt_before_output, dt_before_last_fail,
                          CFL_prefactor, step_to_output, Ref(0),
                          Ref(0), mk_int[], mk_int[], timestepping_input.nwrite,
                          timestepping_input.nwrite_dfns, timestepping_input.type,
@@ -499,6 +522,8 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
                          timestepping_input.atol_upar,
                          timestepping_input.step_update_prefactor,
                          timestepping_input.max_increase_factor,
+                         timestepping_input.max_increase_factor_near_last_fail,
+                         timestepping_input.last_fail_proximity_factor,
                          timestepping_input.minimum_dt, timestepping_input.maximum_dt,
                          error_sum_zero, timestepping_input.split_operators,
                          timestepping_input.steady_state_residual,

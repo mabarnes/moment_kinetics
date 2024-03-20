@@ -43,6 +43,7 @@ struct time_info{Terrorsum <: Real}
     previous_dt::MPISharedArray{mk_float,1}
     next_output_time::MPISharedArray{mk_float,1}
     dt_before_output::MPISharedArray{mk_float,1}
+    dt_before_last_fail::MPISharedArray{mk_float,1}
     CFL_prefactor::mk_float
     step_to_output::MPISharedArray{Bool,1}
     step_counter::Ref{mk_int}
@@ -62,6 +63,8 @@ struct time_info{Terrorsum <: Real}
     atol_upar::mk_float
     step_update_prefactor::mk_float
     max_increase_factor::mk_float
+    max_increase_factor_near_last_fail::mk_float
+    last_fail_proximity_factor::mk_float
     minimum_dt::mk_float
     maximum_dt::mk_float
     error_sum_zero::Terrorsum

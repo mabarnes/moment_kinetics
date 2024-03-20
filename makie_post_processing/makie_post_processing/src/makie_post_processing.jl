@@ -6653,6 +6653,11 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                 plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
                         label=prefix * "max timestep increase", ax=ax)
 
+                # Slower maximum timestep increase near last failure limit counter
+                counter += 1
+                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                        label=prefix * "max timestep increase near last fail", ax=ax)
+
                 # Minimum timestep limit counter
                 counter += 1
                 plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];

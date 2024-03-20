@@ -200,7 +200,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     #
     # Entries for limit by accuracy (which is an average over all variables),
     # max_increase_factor, minimum_dt and maximum_dt
-    push!(t_params.limit_caused_by, 0, 0, 0, 0)
+    push!(t_params.limit_caused_by, 0, 0, 0, 0, 0)
 
     # ion pdf
     push!(t_params.limit_caused_by, 0, 0)
@@ -1932,7 +1932,7 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         CFL_limit = CFL_limits[CFL_limit_caused_by]
         # Reserve first two entries of t_params.limit_caused_by for accuracy limit and
         # max_increase_factor limit.
-        this_limit_caused_by = CFL_limit_caused_by + 4
+        this_limit_caused_by = CFL_limit_caused_by + 5
     end
 
     if error_norm_method == "Linf"
@@ -1990,6 +1990,12 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
 
         @serial_region begin
             t_params.failure_counter[] += 1
+
+            if t_params.previous_dt[] > 0.0
+                # If previous_dt=0, the previous step was also a failure so only update
+                # dt_before_last_fail when previous_dt>0
+                t_params.dt_before_last_fail[] = t_params.previous_dt[]
+            end
 
             # If we were trying to take a step to the output timestep, dt will be smaller on
             # the re-try, so will not reach the output time.
@@ -2052,22 +2058,41 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
 
                 # Limit so timestep cannot increase by a large factor, which might lead to
                 # numerical instability in some cases.
-                max_cap = t_params.max_increase_factor * t_params.previous_dt[]
+                max_cap_limit_caused_by = 2
+                if isinf(t_params.max_increase_factor_near_last_fail)
+                    # Not using special timestep limiting near last failed dt value
+                    max_cap = t_params.max_increase_factor * t_params.previous_dt[]
+                else
+                    max_cap = t_params.max_increase_factor * t_params.previous_dt[]
+                    slow_increase_threshold = t_params.dt_before_last_fail[] / t_params.last_fail_proximity_factor
+                    if t_params.previous_dt[] > t_params.dt_before_last_fail[] * t_params.last_fail_proximity_factor
+                        # dt has successfully exceeded the last failed value, so allow it
+                        # to increase more quickly again
+                        t_params.dt_before_last_fail[] = Inf
+                    elseif max_cap > slow_increase_threshold
+                        # dt is getting close to last failed value, so increase more
+                        # slowly
+                        max_cap = max(slow_increase_threshold,
+                                      t_params.max_increase_factor_near_last_fail *
+                                      t_params.previous_dt[])
+                        max_cap_limit_caused_by = 3
+                    end
+                end
                 if t_params.dt[] > max_cap
                     t_params.dt[] = max_cap
-                    this_limit_caused_by = 2
+                    this_limit_caused_by = max_cap_limit_caused_by
                 end
 
                 # Prevent timestep from going below minimum_dt
                 if t_params.dt[] < t_params.minimum_dt
                     t_params.dt[] = t_params.minimum_dt
-                    this_limit_caused_by = 3
+                    this_limit_caused_by = 4
                 end
 
                 # Prevent timestep from going above maximum_dt
                 if t_params.dt[] > t_params.maximum_dt
                     t_params.dt[] = t_params.maximum_dt
-                    this_limit_caused_by = 4
+                    this_limit_caused_by = 5
                 end
 
                 t_params.limit_caused_by[this_limit_caused_by] += 1

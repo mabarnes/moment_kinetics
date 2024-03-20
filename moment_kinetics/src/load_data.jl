@@ -1847,11 +1847,21 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, t_params,
                 boundary_distributions.pdf_rboundary_neutral[:,:,:,:,2,:] .=
                     load_neutral_boundary_pdf("pdf_rboundary_neutral_right", r.n)
 
-                if t_params.adaptive[] && "dt" ∈ keys(dynamic)
-                    # If "dt" is not present, the file being restarted from is an older
-                    # one that did not have an adaptive timestep, so just leave the value
-                    # of "dt" from the input file.
-                    t_params.dt[] = load_slice(dynamic, "dt", time_index)
+                if t_params.adaptive[]
+                    if "dt" ∈ keys(dynamic)
+                        # If "dt" is not present, the file being restarted from is an older
+                        # one that did not have an adaptive timestep, so just leave the value
+                        # of "dt" from the input file.
+                        t_params.dt[] = load_slice(dynamic, "dt", time_index)
+                    end
+                    if "dt_before_last_fail" ∈ keys(dynamic)
+                        # If "dt_before_last_fail" is not present, the file being
+                        # restarted from is an older one that did not have an adaptive
+                        # timestep, so just leave the value of "dt_before_last_fail" from
+                        # the input file.
+                        t_params.dt_before_last_fail[] =
+                            load_slice(dynamic, "dt_before_last_fail", time_index)
+                    end
                 end
             end
         finally
