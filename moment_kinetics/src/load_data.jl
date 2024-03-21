@@ -2322,7 +2322,11 @@ end
 
 Get file handles and other info for a single run
 
-`run_dir` is the directory to read output from.
+`run_dir` is either the directory to read output from (whose name should be the
+`run_name`), or a moment_kinetics binary output file. If a file is passed, it is only used
+to infer the directory and `run_name`, so it is possible for example to pass a
+`.moments.h5` output file and also `dfns=true` and the `.dfns.h5` file will be the one
+actually opened (as long as it exists).
 
 `restart_index` can be given by passing a Tuple, e.g. `("runs/example", 42)` as the
 positional argument. It specifies which restart to read if there are multiple restarts. If
@@ -2375,15 +2379,30 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
               * "`(String, Nothing)`. Got $run_dir")
     end
 
-    if !isdir(this_run_dir)
-        error("$this_run_dir is not a directory")
+    if isfile(this_run_dir)
+        # this_run_dir is actually a filename. Assume it is a moment_kinetics output file
+        # and infer the directory and the run_name from the filename.
+
+        filename = basename(this_run_dir)
+        this_run_dir = dirname(this_run_dir)
+
+        if occursin(".moments.", filename)
+            run_name = split(filename, ".moments.")[1]
+        elseif occursin(".dfns.", filename)
+            run_name = split(filename, ".dfns.")[1]
+        else
+            error("Cannot recognise '$this_run_dir' as a moment_kinetics output file")
+        end
+    elseif isdir(this_run_dir)
+        # Normalise by removing any trailing slash - with a slash basename() would return an
+        # empty string
+        this_run_dir = rstrip(this_run_dir, '/')
+
+        run_name = basename(this_run_dir)
+    else
+        error("$this_run_dir does not exist")
     end
 
-    # Normalise by removing any trailing slash - with a slash basename() would return an
-    # empty string
-    this_run_dir = rstrip(this_run_dir, '/')
-
-    run_name = basename(this_run_dir)
     base_prefix = joinpath(this_run_dir, run_name)
     if restart_index === nothing
         # Find output files from all restarts in the directory

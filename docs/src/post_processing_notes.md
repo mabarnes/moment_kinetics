@@ -33,6 +33,14 @@ If there is output from several restarts of the same run in a directory, by
 default they will all be read and plotted. A single restart can be started by
 passing the `restart_id` argument to `makie_post_process()`.
 
+It is also possible to pass an output file (`*.moments.h5` or `*.dfns.h5`)
+instead of a directory. The file name is just used to find the directory and
+`run_name` (which is the prefix of the file name), so for example you can pass
+a `*.moments.h5` file and ask for distribution function plots (as long as the
+corresponding `*.dfns.h5` file exists). This is useful if some output files
+were moved to a different directory, or the run directory was renamed (e.g. for
+backup, or to compare some different input options or code versions).
+
 To see all the options that can be set,
 [`makie_post_processing.generate_example_input_file`](@ref) can be used to
 create an example file containing all the options with their default values.

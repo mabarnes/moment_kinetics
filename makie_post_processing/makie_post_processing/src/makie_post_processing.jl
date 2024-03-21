@@ -98,7 +98,11 @@ const two_dimension_combinations = Tuple(
 Run post processing with input read from a TOML file
 
 `run_dir...` is the path to the directory to plot from. If more than one `run_dir` is
-given, plots comparing the runs in `run_dir...`.
+given, plots comparing the runs in `run_dir...` are made.
+A moment_kinetics binary output file can also be passed as `run_dir`, in which case the
+filename is only used to infer the directory and `run_name`, so it is possible for example
+to pass a `.moments.h5` output file and still make distribution function plots (as long as
+the corresponding `.dfns.h5` file exists).
 
 `restart_index` specifies which restart to read if there are multiple restarts. The
 default (`nothing`) reads all restarts and concatenates them. An integer value reads the
@@ -136,8 +140,12 @@ end
 
 Run post prossing, with (non-default) input given in a Dict
 
-`run_dir` is the path to an output directory, or (to make comparison plots) a tuple of
-paths to output directories.
+`run_dir...` is the path to the directory to plot from. If more than one `run_dir` is
+given, plots comparing the runs in `run_dir...` are made.
+A moment_kinetics binary output file can also be passed as `run_dir`, in which case the
+filename is only used to infer the directory and `run_name`, so it is possible for example
+to pass a `.moments.h5` output file and still make distribution function plots (as long as
+the corresponding `.dfns.h5` file exists).
 
 `input_dict` is a dictionary containing settings for the post-processing.
 
@@ -738,7 +746,11 @@ end
 
 Get file handles and other info for a single run
 
-`run_dir` is the directory to read output from.
+`run_dir` is either the directory to read output from (whose name should be the
+`run_name`), or a moment_kinetics binary output file. If a file is passed, it is only used
+to infer the directory and `run_name`, so it is possible for example to pass a
+`.moments.h5` output file and also `dfns=true` and the `.dfns.h5` file will be the one
+actually opened (as long as it exists).
 
 `restart_index` can be given by passing a Tuple, e.g. `("runs/example", 42)` as the
 positional argument. It specifies which restart to read if there are multiple restarts. If
