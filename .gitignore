@@ -27,4 +27,5 @@ plots_postproc.so
 precompile-temp
 post_processing_input.toml
 .DS_Store
+.DS_Store_fake_logs_that_I_invented_and_dont_exist
 
