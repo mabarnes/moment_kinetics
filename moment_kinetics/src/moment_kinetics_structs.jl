@@ -132,15 +132,6 @@ struct moments_ion_substruct
     external_source_pressure_amplitude::MPISharedArray{mk_float,2}
     # Integral term for the PID controller of the external source term
     external_source_controller_integral::MPISharedArray{mk_float,2}
-    # Store coefficient 'A' from applying moment constraints so we can write it out as a
-    # diagnostic
-    constraints_A_coefficient::Union{MPISharedArray{mk_float,3},Nothing}
-    # Store coefficient 'B' from applying moment constraints so we can write it out as a
-    # diagnostic
-    constraints_B_coefficient::Union{MPISharedArray{mk_float,3},Nothing}
-    # Store coefficient 'C' from applying moment constraints so we can write it out as a
-    # diagnostic
-    constraints_C_coefficient::Union{MPISharedArray{mk_float,3},Nothing}
 end
 
 """
@@ -196,15 +187,6 @@ struct moments_electron_substruct
     dT_dz_upwind::Union{MPISharedArray{mk_float,2},Nothing}
     # this is the z-derivative of the electron thermal speed vth = sqrt(2*Tpar/m)
     dvth_dz::Union{MPISharedArray{mk_float,2},Nothing}
-    # Store coefficient 'A' from applying moment constraints so we can write it out as a
-    # diagnostic
-    constraints_A_coefficient::Union{MPISharedArray{mk_float,2},Nothing}
-    # Store coefficient 'B' from applying moment constraints so we can write it out as a
-    # diagnostic
-    constraints_B_coefficient::Union{MPISharedArray{mk_float,2},Nothing}
-    # Store coefficient 'C' from applying moment constraints so we can write it out as a
-    # diagnostic
-    constraints_C_coefficient::Union{MPISharedArray{mk_float,2},Nothing}
 end
 
 """
@@ -288,15 +270,6 @@ struct moments_neutral_substruct
     external_source_pressure_amplitude::MPISharedArray{mk_float,2}
     # Integral term for the PID controller of the external source term
     external_source_controller_integral::MPISharedArray{mk_float,2}
-    # Store coefficient 'A' from applying moment constraints so we can write it out as a
-    # diagnostic
-    constraints_A_coefficient::Union{MPISharedArray{mk_float,3},Nothing}
-    # Store coefficient 'B' from applying moment constraints so we can write it out as a
-    # diagnostic
-    constraints_B_coefficient::Union{MPISharedArray{mk_float,3},Nothing}
-    # Store coefficient 'C' from applying moment constraints so we can write it out as a
-    # diagnostic
-    constraints_C_coefficient::Union{MPISharedArray{mk_float,3},Nothing}
 end
 
 """

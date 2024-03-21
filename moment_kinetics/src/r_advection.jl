@@ -93,23 +93,10 @@ function update_speed_r!(advect, upar, vth, fields, evolve_upar, evolve_ppar, vp
         error("r_advection is not compatible with evolve_upar or evolve_ppar")
     end
     if r.advection.option == "default" && r.n > 1
-        Bmag = geometry.Bmag
-        rhostar = geometry.rhostar
-        ExBfac = 0.5*rhostar
-        bzeta = geometry.bzeta
-        jacobian = geometry.jacobian
-        geofac = r.scratch
-        cvdriftr = geometry.cvdriftr
-        gbdriftr = geometry.gbdriftr
+        ExBfac = 0.5*geometry.rhostar
         @inbounds begin
             @loop_z_vperp_vpa iz ivperp ivpa begin
-                # ExB drift
-                @. geofac = bzeta[iz,:]*jacobian[iz,:]/Bmag[iz,:]
-                @views @. advect.speed[:,ivpa,ivperp,iz] = ExBfac*geofac*fields.Ez[iz,:]
-                # magnetic curvature drift
-                @. @views advect.speed[:,ivpa,ivperp,iz] += rhostar*(vpa.grid[ivpa]^2)*cvdriftr[iz,:]
-                # magnetic grad B drift
-                @. @views advect.speed[:,ivpa,ivperp,iz] += 0.5*rhostar*(vperp.grid[ivperp]^2)*gbdriftr[iz,:]
+                @views advect.speed[:,ivpa,ivperp,iz] .= ExBfac*fields.Ez[iz,:]
             end
         end
     elseif r.advection.option == "default" && r.n == 1

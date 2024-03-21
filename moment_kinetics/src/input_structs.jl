@@ -50,7 +50,6 @@ end
 """
 mutable struct advance_info
     vpa_advection::Bool
-    vperp_advection::Bool
     z_advection::Bool
     r_advection::Bool
     neutral_z_advection::Bool
@@ -79,7 +78,6 @@ mutable struct advance_info
     manufactured_solns_test::Bool
     r_diffusion::Bool #flag to control how r bc is imposed when r diffusion terms are present
     vpa_diffusion::Bool #flag to control how vpa bc is imposed when vpa diffusion terms are present
-    vperp_diffusion::Bool #flag to control how vperp bc is imposed when vperp diffusion terms are present
     vz_diffusion::Bool #flag to control how vz bc is imposed when vz diffusion terms are present
 end
 
@@ -349,15 +347,19 @@ end
 
 """
 """
-Base.@kwdef struct geometry_input
+mutable struct geometry_input
+    # Bz/Bref
+    Bzed::mk_float
+    # Btot/Bref
+    Bmag::mk_float
+    # bz -- unit vector component in z direction
+    bzed::mk_float
+    # bz -- unit vector component in zeta direction
+    bzeta::mk_float
+    # Bzeta/Bref
+    Bzeta::mk_float
     # rhostar ion (ref)
-    rhostar::mk_float = 0.0 #used to premultiply ExB drift terms
-    # magnetic geometry option
-    option::String = "constant-helical" # "1D-mirror"
-    # pitch ( = Bzed/Bmag if geometry_option == "constant-helical")
-    pitch::mk_float = 1.0
-    # DeltaB ( = (Bzed(z=L/2) - Bzed(0))/Bref if geometry_option == "1D-mirror")
-    DeltaB::mk_float = 0.0
+    rhostar::mk_float #used to premultiply ExB drift terms
 end
 
 @enum binary_format_type hdf5 netcdf

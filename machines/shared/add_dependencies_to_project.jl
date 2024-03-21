@@ -3,7 +3,6 @@ using Pkg, TOML
 if abspath(PROGRAM_FILE) == @__FILE__
     prompt_for_hdf5 = true
     repo_dir = dirname(Pkg.project().path)
-    project_dir = repo_dir
     local_preferences_filename = joinpath(repo_dir, "LocalPreferences.toml")
     local_preferences = TOML.parsefile(local_preferences_filename)
     mk_preferences = local_preferences["moment_kinetics"]
@@ -178,17 +177,11 @@ elseif machine_settings["hdf5_library_setting"] == "prompt"
 
     # Reload local_preferences and mk_preferences as they may have been modified by MPI
     # setup
-    local_preferences_filename = joinpath(project_dir, "LocalPreferences.toml")
+    local_preferences_filename = joinpath(repo_dir, "LocalPreferences.toml")
     local_preferences = TOML.parsefile(local_preferences_filename)
-    if abspath(PROGRAM_FILE) == @__FILE__
-        # Only need to do this for the top-level project. When adding dependencies to
-        # makie_post_processing or plots_post_processing, do not need to set "hdf5_dir" in
-        # `mk_preferences` to go in the `moment_kinetics` section - this only needs to be
-        # done for the top-level project.
-        mk_preferences = local_preferences["moment_kinetics"]
+    mk_preferences = local_preferences["moment_kinetics"]
 
-        mk_preferences["hdf5_dir"] = hdf5_dir
-    end
+    mk_preferences["hdf5_dir"] = hdf5_dir
 
     # Delete any existing preferences for HDF5 and HDF5.jll because they may prevent
     # `using HDF5` if the libraries do not exist.

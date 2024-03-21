@@ -26,7 +26,7 @@ function force_balance!(pflx, density_out, fvec, moments, fields, collisions, dt
                          dt*(moments.ion.dppar_dz[iz,ir,is] +
                              upar[iz,ir,is]*upar[iz,ir,is]*moments.ion.ddens_dz_upwind[iz,ir,is] +
                              2.0*density[iz,ir,is]*upar[iz,ir,is]*moments.ion.dupar_dz_upwind[iz,ir,is] -
-                             0.5*geometry.bzed[iz,ir]*fields.Ez[iz,ir]*density[iz,ir,is])
+                             0.5*geometry.bzed*fields.Ez[iz,ir]*density[iz,ir,is])
     end
 
     if ion_source_settings.active && false

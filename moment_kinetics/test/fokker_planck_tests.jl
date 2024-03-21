@@ -4,7 +4,8 @@ include("setup.jl")
 
 
 using MPI
-using LinearAlgebra: mul!, ldiv!
+using moment_kinetics.fokker_planck_calculus: ravel_c_to_vpavperp!, ravel_vpavperp_to_c!, ravel_c_to_vpavperp_parallel!
+using LinearAlgebra: mul!
 using moment_kinetics.communication
 using moment_kinetics.looping
 using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
@@ -72,8 +73,6 @@ function runtests()
         
         @testset " - test weak-form 2D differentiation" begin
         # tests the correct definition of mass and stiffness matrices in 2D
-            println(" - test weak-form 2D differentiation")
-
             ngrid = 9
             nelement_vpa = 8
             nelement_vperp = 4
@@ -97,7 +96,9 @@ function runtests()
             d2fvpavperp_dvperp2_exact = allocate_float(vpa.n,vperp.n)
             d2fvpavperp_dvperp2_err = allocate_float(vpa.n,vperp.n)
             d2fvpavperp_dvperp2_num = allocate_float(vpa.n,vperp.n)
+            fc = allocate_float(nc_global)
             dfc = allocate_float(nc_global)
+            gc = allocate_float(nc_global)
             dgc = allocate_float(nc_global)
             for ivperp in 1:vperp.n
                 for ivpa in 1:vpa.n
@@ -107,19 +108,28 @@ function runtests()
                 end
             end
             
-            # Make 1d views
-            fc = vec(fvpavperp)
-            d2fc_dvpa2 = vec(d2fvpavperp_dvpa2_num)
-            d2fc_dvperp2 = vec(d2fvpavperp_dvperp2_num)
-
+            # fill fc with fvpavperp
+            ravel_vpavperp_to_c!(fc,fvpavperp,vpa.n,vperp.n)
+            ravel_c_to_vpavperp!(fvpavperp_test,fc,nc_global,vpa.n)
+            @. fvpavperp_err = abs(fvpavperp - fvpavperp_test)
+            max_ravel_err = maximum(fvpavperp_err)
+            @serial_region begin
+                if print_to_screen 
+                    println("max(ravel_err)",max_ravel_err)
+                end
+                @test max_ravel_err < 1.0e-15
+            end
             #print_vector(fc,"fc",nc_global)
             # multiply by KKpar2D and fill dfc
             mul!(dfc,KKpar2D_with_BC_terms_sparse,fc)
             mul!(dgc,KKperp2D_with_BC_terms_sparse,fc)
-            # invert mass matrix
-            ldiv!(d2fc_dvpa2, lu_obj_MM, dfc)
-            ldiv!(d2fc_dvperp2, lu_obj_MM, dgc)
+            # invert mass matrix and fill fc
+            fc = lu_obj_MM \ dfc
+            gc = lu_obj_MM \ dgc
             #print_vector(fc,"fc",nc_global)
+            # unravel
+            ravel_c_to_vpavperp!(d2fvpavperp_dvpa2_num,fc,nc_global,vpa.n)
+            ravel_c_to_vpavperp!(d2fvpavperp_dvperp2_num,gc,nc_global,vpa.n)
             @serial_region begin 
                 d2fvpavperp_dvpa2_max, d2fvpavperp_dvpa2_L2 = print_test_data(d2fvpavperp_dvpa2_exact,d2fvpavperp_dvpa2_num,d2fvpavperp_dvpa2_err,"d2fdvpa2",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
                 @test d2fvpavperp_dvpa2_max < 1.0e-7
@@ -136,7 +146,6 @@ function runtests()
         end
         
         @testset " - test weak-form Rosenbluth potential calculation: elliptic solve" begin
-            println(" - test weak-form Rosenbluth potential calculation: elliptic solve")
             ngrid = 9
             nelement_vpa = 8
             nelement_vperp = 4
@@ -190,18 +199,15 @@ function runtests()
             end
             rpbd_exact = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
             # use known test function to provide exact data
-            begin_s_r_z_anyv_region()
             calculate_rosenbluth_potential_boundary_data_exact!(rpbd_exact,
                   H_M_exact,dHdvpa_M_exact,dHdvperp_M_exact,G_M_exact,
                   dGdvperp_M_exact,d2Gdvperp2_M_exact,
                   d2Gdvperpdvpa_M_exact,d2Gdvpa2_M_exact,vpa,vperp)
             # calculate the potentials numerically
-            calculate_rosenbluth_potentials_via_elliptic_solve!(
-                 fkpl_arrays.GG, fkpl_arrays.HH, fkpl_arrays.dHdvpa, fkpl_arrays.dHdvperp,
-                 fkpl_arrays.d2Gdvpa2, fkpl_arrays.dGdvperp, fkpl_arrays.d2Gdvperpdvpa,
-                 fkpl_arrays.d2Gdvperp2, F_M, vpa, vperp, vpa_spectral, vperp_spectral,
-                 fkpl_arrays; algebraic_solve_for_d2Gdvperp2=false,
-                 calculate_GG=true, calculate_dGdvperp=true)
+            calculate_rosenbluth_potentials_via_elliptic_solve!(fkpl_arrays.GG,fkpl_arrays.HH,fkpl_arrays.dHdvpa,fkpl_arrays.dHdvperp,
+                 fkpl_arrays.d2Gdvpa2,fkpl_arrays.dGdvperp,fkpl_arrays.d2Gdvperpdvpa,fkpl_arrays.d2Gdvperp2,F_M,
+                 vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays;
+                 algebraic_solve_for_d2Gdvperp2=false,calculate_GG=true,calculate_dGdvperp=true)
             # extract C[Fs,Fs'] result
             # and Rosenbluth potentials for testing
             begin_vperp_vpa_region()
@@ -222,21 +228,21 @@ function runtests()
                 max_dHdvperp_boundary_data_err, max_G_boundary_data_err,
                 max_dGdvperp_boundary_data_err, max_d2Gdvperp2_boundary_data_err, 
                 max_d2Gdvperpdvpa_boundary_data_err, max_d2Gdvpa2_boundary_data_err = test_rosenbluth_potential_boundary_data(fkpl_arrays.rpbd,rpbd_exact,vpa,vperp,print_to_screen=print_to_screen)
-                atol_max = 2.0e-12
+                atol_max = 2.0e-13
                 @test max_H_boundary_data_err < atol_max
-                atol_max = 2.0e-11
+                atol_max = 2.0e-12
                 @test max_dHdvpa_boundary_data_err < atol_max
-                atol_max = 6.0e-9
+                atol_max = 3.0e-9
                 @test max_dHdvperp_boundary_data_err < atol_max
-                atol_max = 1.0e-11
+                atol_max = 7.0e-12
                 @test max_G_boundary_data_err < atol_max
                 atol_max = 2.0e-7
                 @test max_dGdvperp_boundary_data_err < atol_max
-                atol_max = 5.0e-8
+                atol_max = 2.0e-8
                 @test max_d2Gdvperp2_boundary_data_err < atol_max
                 atol_max = 2.0e-8
                 @test max_d2Gdvperpdvpa_boundary_data_err < atol_max
-                atol_max = 1.0e-11
+                atol_max = 7.0e-12
                 @test max_d2Gdvpa2_boundary_data_err < atol_max
                 # test the elliptic solvers
                 H_M_max, H_M_L2 = print_test_data(H_M_exact,H_M_num,H_M_err,"H_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
@@ -284,7 +290,6 @@ function runtests()
         end
         
         @testset " - test weak-form collision operator calculation" begin
-            println(" - test weak-form collision operator calculation")
             ngrid = 9
             nelement_vpa = 8
             nelement_vperp = 4
@@ -329,7 +334,6 @@ function runtests()
                                                                         nussp,vpa,vperp,ivpa,ivperp)
                     end
                 end
-                begin_s_r_z_anyv_region()
                 fokker_planck_collision_operator_weak_form!(Fs_M,F_M,ms,msp,nussp,
                                                  fkpl_arrays,
                                                  vperp, vpa, vperp_spectral, vpa_spectral,
@@ -342,7 +346,7 @@ function runtests()
                     # enforce the boundary conditions on CC before it is used for timestepping
                     enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
                     # make ad-hoc conserving corrections
-                    conserving_corrections!(fkpl_arrays.CC,Fs_M,vpa,vperp,dummy_array)
+                    conserving_corrections!(fkpl_arrays.CC,Fs_M,vpa,vperp,dummy_array)            
                 end
                 # extract C[Fs,Fs'] result
                 begin_vperp_vpa_region()
@@ -441,7 +445,6 @@ function runtests()
         end
         
         @testset " - test weak-form Rosenbluth potential calculation: direct integration" begin
-            println(" - test weak-form Rosenbluth potential calculation: direct integration")
             ngrid = 5 # chosen for a quick test -- direct integration is slow!
             nelement_vpa = 8
             nelement_vperp = 4
@@ -492,7 +495,6 @@ function runtests()
                 end
             end
             # calculate the potentials numerically
-            begin_s_r_z_anyv_region()
             calculate_rosenbluth_potentials_via_direct_integration!(G_M_num,H_M_num,dHdvpa_M_num,dHdvperp_M_num,
              d2Gdvpa2_M_num,dGdvperp_M_num,d2Gdvperpdvpa_M_num,d2Gdvperp2_M_num,F_M,
              vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays)

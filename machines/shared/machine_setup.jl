@@ -301,7 +301,7 @@ function machine_setup_moment_kinetics(machine::String; no_force_exit::Bool=fals
     bindir = joinpath(repo_dir, "bin")
     mkpath(bindir)
     julia_executable_name = joinpath(bindir, "julia")
-    if batch_system || (julia_directory == "" && mk_preferences["use_plots"] == "n")
+    if batch_system || julia_directory == ""
         # Make a local link to the Julia binary so scripts in the repo can find it
         println("\n** Making a symlink to the julia executable at bin/julia\n")
         islink(julia_executable_name) && rm(julia_executable_name)
@@ -311,9 +311,7 @@ function machine_setup_moment_kinetics(machine::String; no_force_exit::Bool=fals
         # needing the julia.env setup
         open(julia_executable_name, "w") do io
             println(io, "#!/usr/bin/env bash")
-            if julia_directory != ""
-                println(io, "export JULIA_DEPOT_PATH=$julia_directory")
-            end
+            println(io, "export JULIA_DEPOT_PATH=$julia_directory")
             julia_path = joinpath(Sys.BINDIR, "julia")
             println(io, "$julia_path \"\$@\"")
         end

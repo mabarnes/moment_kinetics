@@ -12,7 +12,6 @@ if mk_preferences["use_plots"] == "y"
     if batch_system || mk_preferences["separate_postproc_projects"] == "y"
         touch(joinpath("plots_post_processing", "Project.toml"))
         Pkg.activate("plots_post_processing")
-        project_dir = dirname(Pkg.project().path)
 
         include("add_dependencies_to_project.jl")
         Pkg.add("Plots")

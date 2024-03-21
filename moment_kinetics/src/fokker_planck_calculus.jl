@@ -22,7 +22,8 @@ export calculate_rosenbluth_potentials_via_elliptic_solve!
 
 # testing
 export calculate_rosenbluth_potential_boundary_data_exact!
-export enforce_zero_bc!
+export ravel_c_to_vpavperp!, ravel_vpavperp_to_c!
+export enforce_zero_bc!, ravel_c_to_vpavperp_parallel!
 export allocate_rosenbluth_potential_boundary_data
 export calculate_rosenbluth_potential_boundary_data_exact!
 export test_rosenbluth_potential_boundary_data
@@ -38,7 +39,7 @@ using Dates
 using SpecialFunctions: ellipk, ellipe
 using SparseArrays: sparse, AbstractSparseArray
 using SuiteSparse
-using LinearAlgebra: ldiv!, mul!, LU
+using LinearAlgebra: mul!, LU
 using FastGaussQuadrature
 using Printf
 
@@ -163,25 +164,25 @@ end
 a struct of dummy arrays and precalculated coefficients
 for the weak-form Fokker-Planck collision operator 
 """
-struct fokkerplanck_weakform_arrays_struct{M <: AbstractSparseArray{mk_float,mk_int,N} where N}
+struct fokkerplanck_weakform_arrays_struct{N}
     # boundary weights (Green's function) data
     bwgt::fokkerplanck_boundary_data_arrays_struct
     # dummy arrays for boundary data calculation
     rpbd::rosenbluth_potential_boundary_data
     # assembled 2D weak-form matrices
-    MM2D_sparse::M
-    KKpar2D_sparse::M
-    KKperp2D_sparse::M
-    KKpar2D_with_BC_terms_sparse::M
-    KKperp2D_with_BC_terms_sparse::M
-    LP2D_sparse::M
-    LV2D_sparse::M
-    LB2D_sparse::M
-    PUperp2D_sparse::M
-    PPparPUperp2D_sparse::M
-    PPpar2D_sparse::M
-    MMparMNperp2D_sparse::M
-    KPperp2D_sparse::M
+    MM2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    KKpar2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    KKperp2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    KKpar2D_with_BC_terms_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    KKperp2D_with_BC_terms_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    LP2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    LV2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    LB2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    PUperp2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    PPparPUperp2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    PPpar2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    MMparMNperp2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    KPperp2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
     # lu decomposition objects
     lu_obj_MM::SuiteSparse.UMFPACK.UmfpackLU{mk_float,mk_int}
     lu_obj_LP::SuiteSparse.UMFPACK.UmfpackLU{mk_float,mk_int}
@@ -193,9 +194,10 @@ struct fokkerplanck_weakform_arrays_struct{M <: AbstractSparseArray{mk_float,mk_
     S_dummy::MPISharedArray{mk_float,2}
     Q_dummy::MPISharedArray{mk_float,2}
     rhsvpavperp::MPISharedArray{mk_float,2}
-    rhsvpavperp_copy1::MPISharedArray{mk_float,2}
-    rhsvpavperp_copy2::MPISharedArray{mk_float,2}
-    rhsvpavperp_copy3::MPISharedArray{mk_float,2}
+    rhsc::MPISharedArray{mk_float,1}
+    rhqc::MPISharedArray{mk_float,1}
+    sc::MPISharedArray{mk_float,1}
+    qc::MPISharedArray{mk_float,1}
     # dummy array for the result of the calculation
     CC::MPISharedArray{mk_float,2}
     # dummy arrays for storing Rosenbluth potentials
@@ -229,22 +231,11 @@ function allocate_boundary_integration_weights(vpa,vperp)
     H1_weights = allocate_boundary_integration_weight(vpa,vperp)
     H2_weights = allocate_boundary_integration_weight(vpa,vperp)
     H3_weights = allocate_boundary_integration_weight(vpa,vperp)
-
-    # The following velocity-space-sized buffer arrays are used to evaluate the
-    # collision operator for a single species at a single spatial point. They are
-    # shared-memory arrays. The `comm` argument to `allocate_shared_float()` is used to
-    # set up the shared-memory arrays so that they are shared only by the processes on
-    # `comm_anyv_subblock[]` rather than on the full `comm_block[]`. This means that
-    # different subblocks that are calculating the collision operator at different
-    # spatial points do not interfere with each others' buffer arrays.
-    # Note that the 'weights' allocated above are read-only and therefore can be used
-    # simultaneously by different subblocks. They are shared over the full
-    # `comm_block[]` in order to save memory and setup time.
     nvpa = vpa.n
     nvperp = vperp.n
-    dfdvpa = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
-    d2fdvperpdvpa = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
-    dfdvperp = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    dfdvpa = allocate_shared_float(nvpa,nvperp)
+    d2fdvperpdvpa = allocate_shared_float(nvpa,nvperp)
+    dfdvperp = allocate_shared_float(nvpa,nvperp)
     return fokkerplanck_boundary_data_arrays_struct(G0_weights,
             G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
             dfdvpa,d2fdvperpdvpa,dfdvperp)
@@ -754,7 +745,7 @@ function loop_over_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weights,H2_
         vpa_nodes = get_nodes(vpa,ielement_vpap)
         vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
         nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
-        local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+        @views local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                     nquad_vpa,ielement_vpap,vpa_nodes,vpa,
                     nquad_vperp,ielement_vperpp,vperp_nodes,vperp,
                     x_vpa, w_vpa, x_vperp, w_vperp, 
@@ -768,7 +759,7 @@ function loop_over_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weights,H2_
         vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
         #nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
         nquad_vpa = get_scaled_x_w_with_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, x_laguerre, w_laguerre, vpa_min, vpa_max, vpa_nodes, igrid_vpa, vpa_val)
-        local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+        @views local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                     nquad_vpa,ielement_vpap,vpa_nodes,vpa,
                     nquad_vperp,ielement_vperpp,vperp_nodes,vperp,
                     x_vpa, w_vpa, x_vperp, w_vperp, 
@@ -780,7 +771,7 @@ function loop_over_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weights,H2_
         vpa_nodes = get_nodes(vpa,ielement_vpap)
         vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
         nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
-        local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+        @views local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                     nquad_vpa,ielement_vpap,vpa_nodes,vpa,
                     nquad_vperp,ielement_vperpp,vperp_nodes,vperp,
                     x_vpa, w_vpa, x_vperp, w_vperp, 
@@ -801,7 +792,7 @@ function loop_over_vpa_elements_no_divergences!(G0_weights,G1_weights,H0_weights
         vpa_nodes = get_nodes(vpa,ielement_vpap)
         vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
         nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
-        local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+        @views local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                     nquad_vpa,ielement_vpap,vpa_nodes,vpa,
                     nquad_vperp,ielement_vperpp,vperp_nodes,vperp,
                     x_vpa, w_vpa, x_vperp, w_vperp, 
@@ -823,7 +814,7 @@ function loop_over_vperp_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weigh
         vperp_max = vperp_nodes[end]
         vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,vperp.nelement_local) 
         nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
-        loop_over_vpa_elements_no_divergences!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+        @views loop_over_vpa_elements_no_divergences!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                 vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                 nquad_vperp,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
                 x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
@@ -837,7 +828,7 @@ function loop_over_vperp_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weigh
         #vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,vperp.nelement_local) 
         #nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
         #nquad_vperp = get_scaled_x_w_with_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_nodes, igrid_vperp, vperp_val)
-        loop_over_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+        @views loop_over_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                 vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                 vperp,ielement_vperpp, # info about primed vperp grids
                 x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
@@ -850,7 +841,7 @@ function loop_over_vperp_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weigh
         vperp_max = vperp_nodes[end]
         vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,vperp.nelement_local) 
         nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
-        loop_over_vpa_elements_no_divergences!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+        @views loop_over_vpa_elements_no_divergences!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                 vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                 nquad_vperp,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
                 x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
@@ -877,7 +868,7 @@ function loop_over_vperp_vpa_elements_no_divergences!(G0_weights,G1_weights,H0_w
         vperp_max = vperp_nodes[end]
         vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,nelement_vperp) 
         nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
-        loop_over_vpa_elements_no_divergences!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+        @views loop_over_vpa_elements_no_divergences!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                 vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                 nquad_vperp,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
                 x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
@@ -888,48 +879,58 @@ function loop_over_vperp_vpa_elements_no_divergences!(G0_weights,G1_weights,H0_w
 end 
 
 
-"""
-    ic_func(ivpa::mk_int,ivperp::mk_int,nvpa::mk_int)
-
-Get the 'linear index' corresponding to `ivpa` and `ivperp`. Defined so that the linear
-index corresponds to the underlying layout in memory of a 2d array indexed by
-`[ivpa,ivperp]`, i.e. for a 2d array `f2d`:
-* `size(f2d) == (vpa.n, vperp.n)`
-* For a reference to `f2d` that is reshaped to a vector (a 1d array) `f1d = vec(f2d)` than
-  for any `ivpa` and `ivperp` it is true that `f1d[ic_func(ivpa,ivperp)] ==
-  f2d[ivpa,ivperp]`.
-"""
+# Array indices for compound 1D form 
 function ic_func(ivpa::mk_int,ivperp::mk_int,nvpa::mk_int)
     return ivpa + nvpa*(ivperp-1)
 end
-
-"""
-    ivperp_func(ic::mk_int,nvpa::mk_int)
-
-Get the `vperp` index `ivperp` that corresponds to a 'linear index' `ic` that spans a 2d
-velocity space.
-
-Defined so that `ivperp_func(inc_func(ivpa,ivperp,nvpa), nvpa) == ivperp`.
-
-See also [`ic_func`](@ref), [`ivpa_func`](@ref).
-"""
 function ivperp_func(ic::mk_int,nvpa::mk_int)
     return floor(Int64,(ic-1)/nvpa) + 1
 end
-
-"""
-    ivpa_func(ic::mk_int,nvpa::mk_int)
-
-Get the `vpa` index `ivpa` that corresponds to a 'linear index' `ic` that spans a 2d
-velocity space.
-
-Defined so that `ivpa_func(inc_func(ivpa,ivperp,nvpa), nvpa) == ivpa`.
-
-See also [`ic_func`](@ref), [`ivperp_func`](@ref).
-"""
 function ivpa_func(ic::mk_int,nvpa::mk_int)
     ivpa = ic - nvpa*(ivperp_func(ic,nvpa) - 1)
     return ivpa
+end
+
+function ravel_vpavperp_to_c!(pdf_c,pdf_vpavperp,nvpa::mk_int,nvperp::mk_int)
+    for ivperp in 1:nvperp
+        for ivpa in 1:nvpa
+            ic = ic_func(ivpa,ivperp,nvpa)
+            pdf_c[ic] = pdf_vpavperp[ivpa,ivperp]
+        end
+    end
+    return nothing
+end
+
+function ravel_vpavperp_to_c_parallel!(pdf_c,pdf_vpavperp,nvpa::mk_int)
+    begin_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin 
+        ic = ic_func(ivpa,ivperp,nvpa)
+        pdf_c[ic] = pdf_vpavperp[ivpa,ivperp]
+    end
+    return nothing
+end
+
+function ravel_c_to_vpavperp!(pdf_vpavperp,pdf_c,nc::mk_int,nvpa::mk_int)
+    for ic in 1:nc
+        ivpa = ivpa_func(ic,nvpa)
+        ivperp = ivperp_func(ic,nvpa)
+        pdf_vpavperp[ivpa,ivperp] = pdf_c[ic]
+    end
+    return nothing
+end
+
+function ravel_c_to_vpavperp_parallel!(pdf_vpavperp,pdf_c,nvpa::mk_int)
+    begin_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        ic = ic_func(ivpa,ivperp,nvpa) 
+        pdf_vpavperp[ivpa,ivperp] = pdf_c[ic]
+    end
+    return nothing
+end
+
+function ivpa_global_func(ivpa_local::mk_int,ielement_vpa::mk_int,ngrid_vpa::mk_int)
+    ivpa_global = ivpa_local + (ielement_vpa - 1)*(ngrid_vpa - 1)
+    return ivpa_global
 end
 
 # function that returns the sparse matrix index
@@ -989,16 +990,9 @@ function create_sparse_matrix(data::sparse_matrix_constructor)
 end
 
 function allocate_boundary_data(vpa,vperp)
-    # The following velocity-space-sized buffer arrays are used to evaluate the
-    # collision operator for a single species at a single spatial point. They are
-    # shared-memory arrays. The `comm` argument to `allocate_shared_float()` is used to
-    # set up the shared-memory arrays so that they are shared only by the processes on
-    # `comm_anyv_subblock[]` rather than on the full `comm_block[]`. This means that
-    # different subblocks that are calculating the collision operator at different
-    # spatial points do not interfere with each others' buffer arrays.
-    lower_boundary_vpa = allocate_shared_float(vperp.n; comm=comm_anyv_subblock[])
-    upper_boundary_vpa = allocate_shared_float(vperp.n; comm=comm_anyv_subblock[])
-    upper_boundary_vperp = allocate_shared_float(vpa.n; comm=comm_anyv_subblock[])
+    lower_boundary_vpa = allocate_shared_float(vperp.n)
+    upper_boundary_vpa = allocate_shared_float(vperp.n)
+    upper_boundary_vperp = allocate_shared_float(vpa.n)
     return vpa_vperp_boundary_data(lower_boundary_vpa,
             upper_boundary_vpa,upper_boundary_vperp)
 end
@@ -1006,10 +1000,10 @@ end
 
 function assign_exact_boundary_data!(func_data::vpa_vperp_boundary_data,
                                         func_exact,vpa,vperp)
-    begin_anyv_region()
+    begin_serial_region()
     nvpa = vpa.n
     nvperp = vperp.n
-    @anyv_serial_region begin
+    @serial_region begin
         for ivperp in 1:nvperp
             func_data.lower_boundary_vpa[ivperp] = func_exact[1,ivperp]
             func_data.upper_boundary_vpa[ivperp] = func_exact[nvpa,ivperp]
@@ -1052,10 +1046,11 @@ end
 
 
 function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
-                                  weight::MPISharedArray{mk_float,4},func_input,vpa,vperp)
+                                        weight::MPISharedArray{mk_float,4},func_input,vpa,vperp)
     nvpa = vpa.n
     nvperp = vperp.n
-    begin_anyv_vperp_region(no_synchronize=true)
+    #for ivperp in 1:nvperp
+    begin_vperp_region()
     @loop_vperp ivperp begin
         func_data.lower_boundary_vpa[ivperp] = 0.0
         func_data.upper_boundary_vpa[ivperp] = 0.0
@@ -1067,7 +1062,7 @@ function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
         end
     end
     #for ivpa in 1:nvpa
-    begin_anyv_vpa_region(no_synchronize=true)
+    begin_vpa_region()
     @loop_vpa ivpa begin
         func_data.upper_boundary_vperp[ivpa] = 0.0
         for ivperpp in 1:nvperp
@@ -1076,6 +1071,8 @@ function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
             end
         end
     end
+    # return to serial parallelisation
+    begin_serial_region()
     return nothing
 end
 
@@ -1084,7 +1081,8 @@ function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
                                   func_input,vpa,vperp)
     nvpa = vpa.n
     nvperp = vperp.n
-    begin_anyv_vperp_region(no_synchronize=true)
+    #for ivperp in 1:nvperp
+    begin_vperp_region()
     @loop_vperp ivperp begin
         func_data.lower_boundary_vpa[ivperp] = 0.0
         func_data.upper_boundary_vpa[ivperp] = 0.0
@@ -1096,7 +1094,7 @@ function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
         end
     end
     #for ivpa in 1:nvpa
-    begin_anyv_vpa_region(no_synchronize=true)
+    begin_vpa_region()
     @loop_vpa ivpa begin
         func_data.upper_boundary_vperp[ivpa] = 0.0
         for ivperpp in 1:nvperp
@@ -1106,6 +1104,7 @@ function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
         end
     end
     # return to serial parallelisation
+    begin_serial_region()
     return nothing
 end
 
@@ -1117,18 +1116,21 @@ function calculate_rosenbluth_potential_boundary_data!(rpbd::rosenbluth_potentia
     dfdvpa = fkpl.dfdvpa
     d2fdvperpdvpa = fkpl.d2fdvperpdvpa
     #for ivpa in 1:vpa.n
-    begin_anyv_vpa_region()
+    begin_vpa_region()
     @loop_vpa ivpa begin
-        @views derivative!(dfdvperp[ivpa,:], pdf[ivpa,:], vperp, vperp_spectral)
+        @views derivative!(vperp.scratch, pdf[ivpa,:], vperp, vperp_spectral)
+        @. dfdvperp[ivpa,:] = vperp.scratch
     end
-    begin_anyv_vperp_region()
+    begin_vperp_region()
     @loop_vperp ivperp begin
     #for ivperp in 1:vperp.n
-        @views derivative!(dfdvpa[:,ivperp], pdf[:,ivperp], vpa, vpa_spectral)
-        @views derivative!(d2fdvperpdvpa[:,ivperp], dfdvperp[:,ivperp], vpa, vpa_spectral)
+        @views derivative!(vpa.scratch, pdf[:,ivperp], vpa, vpa_spectral)
+        @. dfdvpa[:,ivperp] = vpa.scratch
+        @views derivative!(vpa.scratch, dfdvperp[:,ivperp], vpa, vpa_spectral)
+        @. d2fdvperpdvpa[:,ivperp] = vpa.scratch
     end
     # ensure data is synchronized
-    _anyv_subblock_synchronize()
+    begin_serial_region()
     # carry out the numerical integration 
     calculate_boundary_data!(rpbd.H_data,fkpl.H0_weights,pdf,vpa,vperp)
     calculate_boundary_data!(rpbd.dHdvpa_data,fkpl.H0_weights,dfdvpa,vpa,vperp)
@@ -1168,11 +1170,11 @@ function test_boundary_data(func,func_exact,func_name,vpa,vperp,buffer_vpa,buffe
     nvpa = vpa.n
     nvperp = vperp.n
     for ivperp in 1:nvperp
-        buffer_vperp_1[ivperp] = abs(func.lower_boundary_vpa[ivperp] - func_exact.lower_boundary_vpa[ivperp])
-        buffer_vperp_2[ivperp] = abs(func.upper_boundary_vpa[ivperp] - func_exact.upper_boundary_vpa[ivperp])
+        buffer_vperp_1 = abs(func.lower_boundary_vpa[ivperp] - func_exact.lower_boundary_vpa[ivperp])
+        buffer_vperp_2 = abs(func.upper_boundary_vpa[ivperp] - func_exact.upper_boundary_vpa[ivperp])
     end
     for ivpa in 1:nvpa
-        buffer_vpa[ivpa] = abs(func.upper_boundary_vperp[ivpa] - func_exact.upper_boundary_vperp[ivpa])
+        buffer_vpa = abs(func.upper_boundary_vperp[ivpa] - func_exact.upper_boundary_vperp[ivpa])
     end
     max_lower_vpa_err = maximum(buffer_vperp_1)
     max_upper_vpa_err = maximum(buffer_vperp_2)
@@ -1187,84 +1189,131 @@ function test_boundary_data(func,func_exact,func_name,vpa,vperp,buffer_vpa,buffe
     return max_err
 end
 
-"""
-    get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-
-For local (within the single element specified by `ielement_vpa` and `ielement_vperp`)
-indices `ivpa_local` and `ivperp_local`, get the global index in the 'linear-indexed' 2d
-space of size `(vperp.n, vpa.n)` (as returned by [`ic_func`](@ref)).
-"""
 function get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
     # global indices on the grids
     ivpa_global = vpa.igrid_full[ivpa_local,ielement_vpa]
     ivperp_global = vperp.igrid_full[ivperp_local,ielement_vperp]
     # global compound index
     ic_global = ic_func(ivpa_global,ivperp_global,vpa.n)
-    return ic_global
+    return ic_global, ivpa_global, ivperp_global
 end
-
-function enforce_zero_bc!(fvpavperp,vpa,vperp;impose_BC_at_zero_vperp=false)
+function enforce_zero_bc!(fc,vpa,vperp;impose_BC_at_zero_vperp=false)
     # lower vpa boundary
-    @loop_vperp ivperp begin
-        fvpavperp[1,ivperp] = 0.0
+    ielement_vpa = 1
+    ivpa_local = 1
+    for ielement_vperp in 1:vperp.nelement_local
+        for ivperp_local in 1:vperp.ngrid
+            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+            fc[ic_global] = 0.0
+        end
     end
     
     # upper vpa boundary
-    @loop_vperp ivperp begin
-        fvpavperp[end,ivperp] = 0.0
+    ielement_vpa = vpa.nelement_local
+    ivpa_local = vpa.ngrid
+    for ielement_vperp in 1:vperp.nelement_local
+        for ivperp_local in 1:vperp.ngrid
+            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+            fc[ic_global] = 0.0
+        end
     end
     
     if impose_BC_at_zero_vperp
         # lower vperp boundary
-        @loop_vpa ivpa begin
-            fvpavperp[ivpa,1] = 0.0
+        ielement_vperp = 1
+        ivperp_local = 1
+        for ielement_vpa in 1:vpa.nelement_local
+            for ivpa_local in 1:vpa.ngrid
+                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                fc[ic_global] = 0.0
+            end
         end
     end
     
     # upper vperp boundary
-    @loop_vpa ivpa begin
-        fvpavperp[ivpa,end] = 0.0
+    ielement_vperp = vperp.nelement_local
+    ivperp_local = vperp.ngrid
+    for ielement_vpa in 1:vpa.nelement_local
+        for ivpa_local in 1:vpa.ngrid
+            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+            fc[ic_global] = 0.0
+        end
     end
 end
 
-function enforce_dirichlet_bc!(fvpavperp,vpa,vperp,f_bc;dirichlet_vperp_lower_boundary=false)
+function enforce_dirichlet_bc!(fc,vpa,vperp,f_bc;dirichlet_vperp_BC=false)
     # lower vpa boundary
-    for ivperp ∈ 1:vperp.n
-        fvpavperp[1,ivperp] = f_bc[1,ivperp]
+    ielement_vpa = 1
+    ivpa_local = 1
+    for ielement_vperp in 1:vperp.nelement_local
+        for ivperp_local in 1:vperp.ngrid
+            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+            fc[ic_global] = f_bc[ivpa_global,ivperp_global]
+        end
     end
     
     # upper vpa boundary
-    for ivperp ∈ 1:vperp.n
-        fvpavperp[end,ivperp] = f_bc[end,ivperp]
+    ielement_vpa = vpa.nelement_local
+    ivpa_local = vpa.ngrid
+    for ielement_vperp in 1:vperp.nelement_local
+        for ivperp_local in 1:vperp.ngrid
+            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+            fc[ic_global] = f_bc[ivpa_global,ivperp_global]
+        end
     end
     
-    if dirichlet_vperp_lower_boundary
-        # lower vperp boundary
-        for ivpa ∈ 1:vpa.n
-            fvpavperp[ivpa,1] = f_bc[ivpa,1]
+    if dirichlet_vperp_BC
+        # upper vperp boundary
+        ielement_vperp = 1
+        ivperp_local = 1
+        for ielement_vpa in 1:vpa.nelement_local
+            for ivpa_local in 1:vpa.ngrid
+                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                fc[ic_global] = f_bc[ivpa_global,ivperp_global]
+            end
         end
     end
     
     # upper vperp boundary
-    for ivpa ∈ 1:vpa.n
-        fvpavperp[ivpa,end] = f_bc[ivpa,end]
+    ielement_vperp = vperp.nelement_local
+    ivperp_local = vperp.ngrid
+    for ielement_vpa in 1:vpa.nelement_local
+        for ivpa_local in 1:vpa.ngrid
+            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+            fc[ic_global] = f_bc[ivpa_global,ivperp_global]
+        end
     end
 end
 
-function enforce_dirichlet_bc!(fvpavperp,vpa,vperp,f_bc::vpa_vperp_boundary_data)
+function enforce_dirichlet_bc!(fc,vpa,vperp,f_bc::vpa_vperp_boundary_data)
     # lower vpa boundary
-    for ivperp ∈ 1:vperp.n
-        fvpavperp[1,ivperp] = f_bc.lower_boundary_vpa[ivperp]
+    ielement_vpa = 1
+    ivpa_local = 1
+    for ielement_vperp in 1:vperp.nelement_local
+        for ivperp_local in 1:vperp.ngrid
+            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+            fc[ic_global] = f_bc.lower_boundary_vpa[ivperp_global]
+        end
     end
     
     # upper vpa boundary
-    for ivperp ∈ 1:vperp.n
-        fvpavperp[end,ivperp] = f_bc.upper_boundary_vpa[ivperp]
+    ielement_vpa = vpa.nelement_local
+    ivpa_local = vpa.ngrid
+    for ielement_vperp in 1:vperp.nelement_local
+        for ivperp_local in 1:vperp.ngrid
+            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+            fc[ic_global] = f_bc.upper_boundary_vpa[ivperp_global]
+        end
     end
             
     # upper vperp boundary
-    for ivpa ∈ 1:vpa.n
-        fvpavperp[ivpa,end] = f_bc.upper_boundary_vperp[ivpa]
+    ielement_vperp = vperp.nelement_local
+    ivperp_local = vperp.ngrid
+    for ielement_vpa in 1:vpa.nelement_local
+        for ivpa_local in 1:vpa.ngrid
+            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+            fc[ic_global] = f_bc.upper_boundary_vperp[ivpa_global]
+        end
     end
     return nothing
 end
@@ -1357,8 +1406,8 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
                 for ivperp_local in 1:vperp.ngrid
                     for ivpap_local in 1:vpa.ngrid
                         for ivpa_local in 1:vpa.ngrid
-                            ic_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-                            icp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpap_local,ivperpp_local) #get_indices(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivpap_local,ivperp_local,ivperpp_local)
+                            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                            icp_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpap_local,ivperpp_local) #get_indices(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivpap_local,ivperp_local,ivperpp_local)
                             #println("ielement_vpa: ",ielement_vpa," ielement_vperp: ",ielement_vperp)
                             #println("ivpa_local: ",ivpa_local," ivpap_local: ",ivpap_local)
                             #println("ivperp_local: ",ivperp_local," ivperpp_local: ",ivperpp_local)
@@ -1573,8 +1622,8 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
                 for ivperp_local in 1:ngrid_vperp
                     for ivpap_local in 1:ngrid_vpa
                         for ivpa_local in 1:ngrid_vpa
-                            ic_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-                            icp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpap_local,ivperpp_local) #get_indices(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivpap_local,ivperp_local,ivperpp_local)
+                            ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                            icp_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpap_local,ivperpp_local) #get_indices(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivpap_local,ivperp_local,ivperpp_local)
                             icsc = icsc_func(ivpa_local,ivpap_local,ielement_vpa::mk_int,
                                            ngrid_vpa,nelement_vpa,
                                            ivperp_local,ivperpp_local,
@@ -1758,13 +1807,12 @@ function calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
                                         YY0par,YY1par,YY2par,YY3par)
 end
 
-function assemble_explicit_collision_operator_rhs_serial!(rhsvpavperp,pdfs,d2Gspdvpa2,d2Gspdvperpdvpa,
+function assemble_explicit_collision_operator_rhs_serial!(rhsc,pdfs,d2Gspdvpa2,d2Gspdvperpdvpa,
     d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp,
     vpa,vperp,YY_arrays::YY_collision_operator_arrays)
-    begin_anyv_region()
-    @anyv_serial_region begin
+    begin_serial_region()
+    @serial_region begin
         # assemble RHS of collision operator
-        rhsc = vec(rhsvpavperp)
         @. rhsc = 0.0
         
         # loop over elements
@@ -1783,7 +1831,7 @@ function assemble_explicit_collision_operator_rhs_serial!(rhsvpavperp,pdfs,d2Gsp
                 # loop over field positions in each element
                 for ivperp_local in 1:vperp.ngrid
                     for ivpa_local in 1:vpa.ngrid
-                        ic_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                        ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
                         # carry out the matrix sum on each 2D element
                         for jvperpp_local in 1:vperp.ngrid
                             jvperpp = vperp.igrid_full[jvperpp_local,ielement_vperp]
@@ -1818,179 +1866,129 @@ function assemble_explicit_collision_operator_rhs_serial!(rhsvpavperp,pdfs,d2Gsp
     return nothing
 end
 
-function assemble_explicit_collision_operator_rhs_parallel!(rhsvpavperp,pdfs,d2Gspdvpa2,d2Gspdvperpdvpa,
+function assemble_explicit_collision_operator_rhs_parallel!(rhsc,rhsvpavperp,pdfs,d2Gspdvpa2,d2Gspdvperpdvpa,
     d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp,
     vpa,vperp,YY_arrays::YY_collision_operator_arrays)
     # assemble RHS of collision operator
-    begin_anyv_vperp_vpa_region()
+    begin_vperp_vpa_region() 
     @loop_vperp_vpa ivperp ivpa begin
         rhsvpavperp[ivpa,ivperp] = 0.0
     end
 
     # loop over collocation points to benefit from shared-memory parallelism
     ngrid_vpa, ngrid_vperp = vpa.ngrid, vperp.ngrid
-    vperp_igrid_full = vperp.igrid_full
-    vpa_igrid_full = vpa.igrid_full
     @loop_vperp_vpa ivperp_global ivpa_global begin
         igrid_vpa, ielement_vpax, ielement_vpa_low, ielement_vpa_hi, igrid_vperp, ielement_vperpx, ielement_vperp_low, ielement_vperp_hi = get_element_limit_indices(ivpa_global,ivperp_global,vpa,vperp)
         # loop over elements belonging to this collocation point
         for ielement_vperp in ielement_vperp_low:ielement_vperp_hi
             # correct local ivperp in the case that we on a boundary point
             ivperp_local = igrid_vperp + (ielement_vperp - ielement_vperp_low)*(1-ngrid_vperp)
-            @views YY0perp = YY_arrays.YY0perp[:,:,ivperp_local,ielement_vperp]
-            @views YY1perp = YY_arrays.YY1perp[:,:,ivperp_local,ielement_vperp]
-            @views YY2perp = YY_arrays.YY2perp[:,:,ivperp_local,ielement_vperp]
-            @views YY3perp = YY_arrays.YY3perp[:,:,ivperp_local,ielement_vperp]
-            vperp_igrid_full_view = @view vperp_igrid_full[:,ielement_vperp]
+            @views YY0perp = YY_arrays.YY0perp[:,:,:,ielement_vperp]
+            @views YY1perp = YY_arrays.YY1perp[:,:,:,ielement_vperp]
+            @views YY2perp = YY_arrays.YY2perp[:,:,:,ielement_vperp]
+            @views YY3perp = YY_arrays.YY3perp[:,:,:,ielement_vperp]
             
             for ielement_vpa in ielement_vpa_low:ielement_vpa_hi
                 # correct local ivpa in the case that we on a boundary point
                 ivpa_local = igrid_vpa + (ielement_vpa - ielement_vpa_low)*(1-ngrid_vpa)
-                @views YY0par = YY_arrays.YY0par[:,:,ivpa_local,ielement_vpa]
-                @views YY1par = YY_arrays.YY1par[:,:,ivpa_local,ielement_vpa]
-                @views YY2par = YY_arrays.YY2par[:,:,ivpa_local,ielement_vpa]
-                @views YY3par = YY_arrays.YY3par[:,:,ivpa_local,ielement_vpa]
-                vpa_igrid_full_view = @view vpa_igrid_full[:,ielement_vpa]
+                @views YY0par = YY_arrays.YY0par[:,:,:,ielement_vpa]
+                @views YY1par = YY_arrays.YY1par[:,:,:,ielement_vpa]
+                @views YY2par = YY_arrays.YY2par[:,:,:,ielement_vpa]
+                @views YY3par = YY_arrays.YY3par[:,:,:,ielement_vpa]
                 
                 # carry out the matrix sum on each 2D element
-                rhsvpavperp[ivpa_global,ivperp_global] +=
-                    assemble_explicit_collision_operator_rhs_parallel_inner_loop(
-                        nussp, ms, msp, YY0perp, YY0par, YY1perp, YY1par, YY2perp, YY2par,
-                        YY3perp, YY3par, pdfs, d2Gspdvpa2, d2Gspdvperpdvpa, d2Gspdvperp2,
-                        dHspdvpa, dHspdvperp, ngrid_vperp, vperp_igrid_full_view,
-                        ngrid_vpa, vpa_igrid_full_view)
-            end
+                for jvperpp_local in 1:vperp.ngrid
+                    jvperpp = vperp.igrid_full[jvperpp_local,ielement_vperp]
+                    for kvperpp_local in 1:vperp.ngrid
+                        kvperpp = vperp.igrid_full[kvperpp_local,ielement_vperp]
+                        for jvpap_local in 1:vpa.ngrid
+                            jvpap = vpa.igrid_full[jvpap_local,ielement_vpa]
+                            pdfjj = pdfs[jvpap,jvperpp]
+                            for kvpap_local in 1:vpa.ngrid
+                                kvpap = vpa.igrid_full[kvpap_local,ielement_vpa]
+                                # first three lines represent parallel flux terms
+                                # second three lines represent perpendicular flux terms
+                                rhsvpavperp[ivpa_global,ivperp_global] += -nussp*(YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY2par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvpa2[kvpap,kvperpp] +
+                                                    YY3perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperpdvpa[kvpap,kvperpp] - 
+                                                    2.0*(ms/msp)*YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*dHspdvpa[kvpap,kvperpp] +
+                                                    # end parallel flux, start of perpendicular flux
+                                                    YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY3par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperpdvpa[kvpap,kvperpp] + 
+                                                    YY2perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperp2[kvpap,kvperpp] - 
+                                                    2.0*(ms/msp)*YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*dHspdvperp[kvpap,kvperpp])
+                            end
+                        end
+                    end
+                end
+             end
         end
     end
+    # ravel to compound index
+    #begin_serial_region()
+    #ravel_vpavperp_to_c!(rhsc,rhsvpavperp,vpa.n,vperp.n)
+    ravel_vpavperp_to_c_parallel!(rhsc,rhsvpavperp,vpa.n)
     return nothing
 end
 
-function assemble_explicit_collision_operator_rhs_parallel_inner_loop(
-        nussp, ms, msp, YY0perp, YY0par, YY1perp, YY1par, YY2perp, YY2par, YY3perp,
-        YY3par, pdfs, d2Gspdvpa2, d2Gspdvperpdvpa, d2Gspdvperp2, dHspdvpa, dHspdvperp,
-        ngrid_vperp, vperp_igrid_full_view, ngrid_vpa, vpa_igrid_full_view)
-    # carry out the matrix sum on each 2D element
-    result = 0.0
-    for jvperpp_local in 1:ngrid_vperp
-        jvperpp = vperp_igrid_full_view[jvperpp_local]
-        for kvperpp_local in 1:ngrid_vperp
-            kvperpp = vperp_igrid_full_view[kvperpp_local]
-            YY0perp_kj = YY0perp[kvperpp_local,jvperpp_local]
-            YY1perp_kj = YY1perp[kvperpp_local,jvperpp_local]
-            YY2perp_kj = YY2perp[kvperpp_local,jvperpp_local]
-            YY3perp_kj = YY3perp[kvperpp_local,jvperpp_local]
-            for jvpap_local in 1:ngrid_vpa
-                jvpap = vpa_igrid_full_view[jvpap_local]
-                pdfjj = pdfs[jvpap,jvperpp]
-                for kvpap_local in 1:ngrid_vpa
-                    kvpap = vpa_igrid_full_view[kvpap_local]
-                    YY0par_kj = YY0par[kvpap_local,jvpap_local]
-                    YY1par_kj = YY1par[kvpap_local,jvpap_local]
-                    d2Gspdvperpdvpa_kk = d2Gspdvperpdvpa[kvpap,kvperpp]
-                    # first three lines represent parallel flux terms
-                    # second three lines represent perpendicular flux terms
-                    result += -nussp*(YY0perp_kj*YY2par[kvpap_local,jvpap_local]*pdfjj*d2Gspdvpa2[kvpap,kvperpp] +
-                                        YY3perp_kj*YY1par_kj*pdfjj*d2Gspdvperpdvpa_kk -
-                                        2.0*(ms/msp)*YY0perp_kj*YY1par_kj*pdfjj*dHspdvpa[kvpap,kvperpp] +
-                                        # end parallel flux, start of perpendicular flux
-                                        YY1perp_kj*YY3par[kvpap_local,jvpap_local]*pdfjj*d2Gspdvperpdvpa_kk +
-                                        YY2perp_kj*YY0par_kj*pdfjj*d2Gspdvperp2[kvpap,kvperpp] -
-                                        2.0*(ms/msp)*YY1perp_kj*YY0par_kj*pdfjj*dHspdvperp[kvpap,kvperpp])
-                end
-            end
-        end
-    end
-
-    return result
-end
-
-function assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!(rhsvpavperp,pdfs,dpdfsdvpa,dpdfsdvperp,d2Gspdvpa2,d2Gspdvperpdvpa,
+function assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!(rhsc,rhsvpavperp,pdfs,dpdfsdvpa,dpdfsdvperp,d2Gspdvpa2,d2Gspdvperpdvpa,
     d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp,
     vpa,vperp,YY_arrays::YY_collision_operator_arrays)
     # assemble RHS of collision operator
-    begin_anyv_vperp_vpa_region()
+    begin_vperp_vpa_region() 
     @loop_vperp_vpa ivperp ivpa begin
         rhsvpavperp[ivpa,ivperp] = 0.0
     end
 
     # loop over collocation points to benefit from shared-memory parallelism
     ngrid_vpa, ngrid_vperp = vpa.ngrid, vperp.ngrid
-    vperp_igrid_full = vperp.igrid_full
-    vpa_igrid_full = vpa.igrid_full
     @loop_vperp_vpa ivperp_global ivpa_global begin
         igrid_vpa, ielement_vpax, ielement_vpa_low, ielement_vpa_hi, igrid_vperp, ielement_vperpx, ielement_vperp_low, ielement_vperp_hi = get_element_limit_indices(ivpa_global,ivperp_global,vpa,vperp)
         # loop over elements belonging to this collocation point
         for ielement_vperp in ielement_vperp_low:ielement_vperp_hi
             # correct local ivperp in the case that we on a boundary point
             ivperp_local = igrid_vperp + (ielement_vperp - ielement_vperp_low)*(1-ngrid_vperp)
-            @views YY0perp = YY_arrays.YY0perp[:,:,ivperp_local,ielement_vperp]
-            @views YY1perp = YY_arrays.YY1perp[:,:,ivperp_local,ielement_vperp]
-            @views YY2perp = YY_arrays.YY2perp[:,:,ivperp_local,ielement_vperp]
-            @views YY3perp = YY_arrays.YY3perp[:,:,ivperp_local,ielement_vperp]
-            vperp_igrid_full_view = @view vperp_igrid_full[:,ielement_vperp]
+            @views YY0perp = YY_arrays.YY0perp[:,:,:,ielement_vperp]
+            @views YY1perp = YY_arrays.YY1perp[:,:,:,ielement_vperp]
+            @views YY2perp = YY_arrays.YY2perp[:,:,:,ielement_vperp]
+            @views YY3perp = YY_arrays.YY3perp[:,:,:,ielement_vperp]
             
             for ielement_vpa in ielement_vpa_low:ielement_vpa_hi
                 # correct local ivpa in the case that we on a boundary point
                 ivpa_local = igrid_vpa + (ielement_vpa - ielement_vpa_low)*(1-ngrid_vpa)
-                @views YY0par = YY_arrays.YY0par[:,:,ivpa_local,ielement_vpa]
-                @views YY1par = YY_arrays.YY1par[:,:,ivpa_local,ielement_vpa]
-                @views YY2par = YY_arrays.YY2par[:,:,ivpa_local,ielement_vpa]
-                @views YY3par = YY_arrays.YY3par[:,:,ivpa_local,ielement_vpa]
-                vpa_igrid_full_view = @view vpa_igrid_full[:,ielement_vpa]
+                @views YY0par = YY_arrays.YY0par[:,:,:,ielement_vpa]
+                @views YY1par = YY_arrays.YY1par[:,:,:,ielement_vpa]
+                @views YY2par = YY_arrays.YY2par[:,:,:,ielement_vpa]
+                @views YY3par = YY_arrays.YY3par[:,:,:,ielement_vpa]
                 
                 # carry out the matrix sum on each 2D element
-                rhsvpavperp[ivpa_global,ivperp_global] +=
-                    assemble_explicit_collision_operator_rhs_parallel_analytical_inputs_inner_loop(
-                        nussp, ms, msp, pdfs, dpdfsdvpa, dpdfsdvperp, d2Gspdvperp2,
-                        d2Gspdvpa2, d2Gspdvperpdvpa, dHspdvperp, dHspdvpa, YY0perp,
-                        YY0par, YY1perp, YY1par, ngrid_vperp, vperp_igrid_full_view,
-                        ngrid_vpa, vpa_igrid_full_view)
-            end
-        end
-    end
-    return nothing
-end
-
-# Separate function for inner loop, possible optimization??
-function assemble_explicit_collision_operator_rhs_parallel_analytical_inputs_inner_loop(
-        nussp, ms, msp, pdfs, dpdfsdvpa, dpdfsdvperp, d2Gspdvperp2,
-        d2Gspdvpa2, d2Gspdvperpdvpa, dHspdvperp, dHspdvpa, YY0perp, YY0par, YY1perp,
-        YY1par, ngrid_vperp, vperp_igrid_full_view, ngrid_vpa, vpa_igrid_full_view)
-
-    # carry out the matrix sum on each 2D element
-    result = 0.0
-    for jvperpp_local in 1:ngrid_vperp
-        jvperpp = vperp_igrid_full_view[jvperpp_local]
-        for kvperpp_local in 1:ngrid_vperp
-            kvperpp = vperp_igrid_full_view[kvperpp_local]
-            YY0perp_kj = YY0perp[kvperpp_local,jvperpp_local]
-            YY1perp_kj = YY1perp[kvperpp_local,jvperpp_local]
-            for jvpap_local in 1:ngrid_vpa
-                jvpap = vpa_igrid_full_view[jvpap_local]
-                pdfs_jj = pdfs[jvpap,jvperpp]
-                dpdfsdvperp_jj = dpdfsdvperp[jvpap,jvperpp]
-                dpdfsdvpa_jj = dpdfsdvpa[jvpap,jvperpp]
-                for kvpap_local in 1:ngrid_vpa
-                    kvpap = vpa_igrid_full_view[kvpap_local]
-                    YY0par_kj = YY0par[kvpap_local,jvpap_local]
-                    YY1par_kj = YY1par[kvpap_local,jvpap_local]
-                    d2Gspdvperpdvpa_kk = d2Gspdvperpdvpa[kvpap,kvperpp]
-                    # first three lines represent parallel flux terms
-                    # second three lines represent perpendicular flux terms
-                    result +=
-                        -nussp*(YY0perp_kj*YY1par_kj*dpdfsdvpa_jj*d2Gspdvpa2[kvpap,kvperpp] +
-                                YY0perp_kj*YY1par_kj*dpdfsdvperp_jj*d2Gspdvperpdvpa_kk -
-                                2.0*(ms/msp)*YY0perp_kj*YY1par_kj*pdfs_jj*dHspdvpa[kvpap,kvperpp] +
-                                # end parallel flux, start of perpendicular flux
-                                YY1perp_kj*YY0par_kj*dpdfsdvpa_jj*d2Gspdvperpdvpa_kk +
-                                YY1perp_kj*YY0par_kj*dpdfsdvperp_jj*d2Gspdvperp2[kvpap,kvperpp] -
-                                2.0*(ms/msp)*YY1perp_kj*YY0par_kj*pdfs_jj*dHspdvperp[kvpap,kvperpp])
+                for jvperpp_local in 1:vperp.ngrid
+                    jvperpp = vperp.igrid_full[jvperpp_local,ielement_vperp]
+                    for kvperpp_local in 1:vperp.ngrid
+                        kvperpp = vperp.igrid_full[kvperpp_local,ielement_vperp]
+                        for jvpap_local in 1:vpa.ngrid
+                            jvpap = vpa.igrid_full[jvpap_local,ielement_vpa]
+                            for kvpap_local in 1:vpa.ngrid
+                                kvpap = vpa.igrid_full[kvpap_local,ielement_vpa]
+                                # first three lines represent parallel flux terms
+                                # second three lines represent perpendicular flux terms
+                                rhsvpavperp[ivpa_global,ivperp_global] += -nussp*(YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*dpdfsdvpa[jvpap,jvperpp]*d2Gspdvpa2[kvpap,kvperpp] +
+                                                    YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*dpdfsdvperp[jvpap,jvperpp]*d2Gspdvperpdvpa[kvpap,kvperpp] - 
+                                                    2.0*(ms/msp)*YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*pdfs[jvpap,jvperpp]*dHspdvpa[kvpap,kvperpp] +
+                                                    # end parallel flux, start of perpendicular flux
+                                                    YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*dpdfsdvpa[jvpap,jvperpp]*d2Gspdvperpdvpa[kvpap,kvperpp] + 
+                                                    YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*dpdfsdvperp[jvpap,jvperpp]*d2Gspdvperp2[kvpap,kvperpp] - 
+                                                    2.0*(ms/msp)*YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*pdfs[jvpap,jvperpp]*dHspdvperp[kvpap,kvperpp])
+                            end
+                        end
+                    end
                 end
-            end
+             end
         end
     end
-
-    return result
+    # ravel to compound index
+    #begin_serial_region()
+    #ravel_vpavperp_to_c!(rhsc,rhsvpavperp,vpa.n,vperp.n)
+    ravel_vpavperp_to_c_parallel!(rhsc,rhsvpavperp,vpa.n)
+    return nothing
 end
 
 
@@ -2000,51 +1998,57 @@ end
 # boundary data: the known values of field at infinity
 # lu_object_lhs: the object for the differential operator that defines field
 # matrix_rhs: the weak matrix acting on the source vector
+# rhsc, sc: dummy arrays in the compound index (assumed MPISharedArray or SubArray type)
 # vpa, vperp: coordinate structs
-#
-# Note: all variants of `elliptic_solve!()` run only in serial. They do not handle
-# shared-memory parallelism themselves. The calling site must ensure that
-# `elliptic_solve!()` is only called by one process in a shared-memory block.
 function elliptic_solve!(field,source,boundary_data::vpa_vperp_boundary_data,
-            lu_object_lhs,matrix_rhs,rhsvpavperp,vpa,vperp)
-    # assemble the rhs of the weak system
-
+            lu_object_lhs,matrix_rhs,rhsc,sc,vpa,vperp)
     # get data into the compound index format
-    sc = vec(source)
-    fc = vec(field)
-    rhsc = vec(rhsvpavperp)
-    mul!(rhsc,matrix_rhs,sc)
-    # enforce the boundary conditions
-    enforce_dirichlet_bc!(rhsvpavperp,vpa,vperp,boundary_data)
-    # solve the linear system
-    ldiv!(fc, lu_object_lhs, rhsc)
-
+    begin_vperp_vpa_region()
+    ravel_vpavperp_to_c_parallel!(sc,source,vpa.n)
+    # assemble the rhs of the weak system
+    begin_serial_region()
+    @serial_region begin
+        mul!(rhsc,matrix_rhs,sc)
+        # enforce the boundary conditions
+        enforce_dirichlet_bc!(rhsc,vpa,vperp,boundary_data)
+        # solve the linear system
+        sc .= lu_object_lhs \ rhsc
+    end
+    # get data into the vpa vperp indices format
+    begin_vperp_vpa_region()
+    ravel_c_to_vpavperp_parallel!(field,sc,vpa.n)
     return nothing
 end
 # same as above but source is made of two different terms
 # with different weak matrices
 function elliptic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_boundary_data,
-            lu_object_lhs,matrix_rhs_1,matrix_rhs_2,rhs,vpa,vperp)
+            lu_object_lhs,matrix_rhs_1,matrix_rhs_2,rhsc_1,rhsc_2,sc_1,sc_2,vpa,vperp)
+    # get data into the compound index format
+    begin_vperp_vpa_region()
+    ravel_vpavperp_to_c_parallel!(sc_1,source_1,vpa.n)
+    ravel_vpavperp_to_c_parallel!(sc_2,source_2,vpa.n)
     
     # assemble the rhs of the weak system
-
-    # get data into the compound index format
-    sc_1 = vec(source_1)
-    sc_2 = vec(source_2)
-    rhsc = vec(rhs)
-    fc = vec(field)
-
-    # Do  rhsc = matrix_rhs_1*sc_1
-    mul!(rhsc, matrix_rhs_1, sc_1)
-
-    # Do rhsc = matrix_rhs_2*sc_2 + rhsc
-    mul!(rhsc, matrix_rhs_2, sc_2, 1.0, 1.0)
-
-    # enforce the boundary conditions
-    enforce_dirichlet_bc!(rhs,vpa,vperp,boundary_data)
-    # solve the linear system
-    ldiv!(fc, lu_object_lhs, rhsc)
-
+    begin_serial_region()
+    @serial_region begin
+        mul!(rhsc_1,matrix_rhs_1,sc_1)
+        mul!(rhsc_2,matrix_rhs_2,sc_2)
+    end
+    begin_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        ic = ic_func(ivpa,ivperp,vpa.n)
+        rhsc_1[ic] += rhsc_2[ic]
+    end
+    begin_serial_region()
+    @serial_region begin
+        # enforce the boundary conditions
+        enforce_dirichlet_bc!(rhsc_1,vpa,vperp,boundary_data)
+        # solve the linear system
+        sc_1 .= lu_object_lhs \ rhsc_1
+    end
+    # get data into the vpa vperp indices format
+    begin_vperp_vpa_region()
+    ravel_c_to_vpavperp_parallel!(field,sc_1,vpa.n)
     return nothing
 end
 
@@ -2052,30 +2056,32 @@ end
 # because the function is only used where the lu_object_lhs is derived from a mass matrix.
 # The source is made of two different terms with different weak matrices
 # because of the form of the only algebraic equation that we consider.
-#
-# Note: `algebraic_solve!()` run only in serial. They do not handle shared-memory
-# parallelism themselves. The calling site must ensure that `algebraic_solve!()` is only
-# called by one process in a shared-memory block.
 function algebraic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_boundary_data,
-            lu_object_lhs,matrix_rhs_1,matrix_rhs_2,rhs,vpa,vperp)
+            lu_object_lhs,matrix_rhs_1,matrix_rhs_2,rhsc_1,rhsc_2,sc_1,sc_2,vpa,vperp)
+    # get data into the compound index format
+    begin_vperp_vpa_region()
+    ravel_vpavperp_to_c_parallel!(sc_1,source_1,vpa.n)
+    ravel_vpavperp_to_c_parallel!(sc_2,source_2,vpa.n)
     
     # assemble the rhs of the weak system
-
-    # get data into the compound index format
-    sc_1 = vec(source_1)
-    sc_2 = vec(source_2)
-    rhsc = vec(rhs)
-    fc = vec(field)
-
-    # Do  rhsc = matrix_rhs_1*sc_1
-    mul!(rhsc, matrix_rhs_1, sc_1)
-
-    # Do rhsc = matrix_rhs_2*sc_2 + rhsc
-    mul!(rhsc, matrix_rhs_2, sc_2, 1.0, 1.0)
-
-    # solve the linear system
-    ldiv!(fc, lu_object_lhs, rhsc)
-
+    begin_serial_region()
+    @serial_region begin
+        mul!(rhsc_1,matrix_rhs_1,sc_1)
+        mul!(rhsc_2,matrix_rhs_2,sc_2)
+    end
+    begin_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        ic = ic_func(ivpa,ivperp,vpa.n)
+        rhsc_1[ic] += rhsc_2[ic]
+    end
+    begin_serial_region()
+    @serial_region begin
+        # solve the linear system
+        sc_1 .= lu_object_lhs \ rhsc_1
+    end
+    # get data into the vpa vperp indices format
+    begin_vperp_vpa_region()
+    ravel_c_to_vpavperp_parallel!(field,sc_1,vpa.n)
     return nothing
 end
 
@@ -2105,102 +2111,68 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
     
     S_dummy = fkpl_arrays.S_dummy
     Q_dummy = fkpl_arrays.Q_dummy
-    rhsvpavperp = fkpl_arrays.rhsvpavperp
-    rhsvpavperp_copy1 = fkpl_arrays.rhsvpavperp_copy1
-    rhsvpavperp_copy2 = fkpl_arrays.rhsvpavperp_copy2
-    rhsvpavperp_copy3 = fkpl_arrays.rhsvpavperp_copy3
+    rhsc = fkpl_arrays.rhsc
+    rhqc = fkpl_arrays.rhqc
+    sc = fkpl_arrays.sc
+    qc = fkpl_arrays.qc
     
     # calculate the boundary data
-    calculate_rosenbluth_potential_boundary_data!(rpbd,bwgt,ffsp_in,vpa,vperp,vpa_spectral,vperp_spectral,
+    calculate_rosenbluth_potential_boundary_data!(rpbd,bwgt,@view(ffsp_in[:,:]),vpa,vperp,vpa_spectral,vperp_spectral,
       calculate_GG=calculate_GG,calculate_dGdvperp=(calculate_dGdvperp||algebraic_solve_for_d2Gdvperp2))
     # carry out the elliptic solves required
-    begin_anyv_vperp_vpa_region()
+    begin_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
         S_dummy[ivpa,ivperp] = -(4.0/sqrt(pi))*ffsp_in[ivpa,ivperp]
     end
-
-    # Can run the following three solves in parallel
-    # The solves run on ranks 0, 1 and 2 of the subblock respectively, but modulo the size
-    # of the subblock (to ensure that the ranks doing work are never outside the
-    # subblock, if the size of the subblock is less than 3).
-    begin_anyv_region()
-    if anyv_subblock_rank[] == 0 % anyv_subblock_size[]
-        elliptic_solve!(HH, S_dummy, rpbd.H_data, lu_obj_LP, MM2D_sparse, rhsvpavperp,
-                        vpa, vperp)
-    end
-    if anyv_subblock_rank[] == 1 % anyv_subblock_size[]
-        elliptic_solve!(dHdvpa, S_dummy, rpbd.dHdvpa_data, lu_obj_LP, PPpar2D_sparse,
-                        rhsvpavperp_copy1, vpa, vperp)
-    end
-    if anyv_subblock_rank[] == 2 % anyv_subblock_size[]
-        elliptic_solve!(dHdvperp, S_dummy, rpbd.dHdvperp_data, lu_obj_LV, PUperp2D_sparse,
-                        rhsvpavperp_copy2, vpa, vperp)
-    end
+    elliptic_solve!(HH,S_dummy,rpbd.H_data,
+                lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
+    elliptic_solve!(dHdvpa,S_dummy,rpbd.dHdvpa_data,
+                lu_obj_LP,PPpar2D_sparse,rhsc,sc,vpa,vperp)
+    elliptic_solve!(dHdvperp,S_dummy,rpbd.dHdvperp_data,
+                lu_obj_LV,PUperp2D_sparse,rhsc,sc,vpa,vperp)
     
-    begin_anyv_vperp_vpa_region()
+    begin_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
         S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp]
+    
     end
-
-    # The following four solves can be done in parallel. Note: do the two that are always
-    # done on ranks 0 and 1 of the subblock and the first optional one that actually needs
-    # doing on rank 3 to maximise the chances that all solves get run on separate
-    # processes (i.e. they will be on separate processes as long as there are at least 2
-    # ranks in the subblock if both conditions calculate_GG and calculate_dGdvperp are
-    # false; at least 3 ranks if only one of the conditions is true; and at least 4 ranks
-    # if both conditions are true).
-    begin_anyv_region()
     if calculate_GG
-        if anyv_subblock_rank[] == 2 % anyv_subblock_size[]
-            elliptic_solve!(GG, S_dummy, rpbd.G_data, lu_obj_LP, MM2D_sparse,
-                            rhsvpavperp_copy2, vpa, vperp)
-        end
+        elliptic_solve!(GG,S_dummy,rpbd.G_data,
+                    lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
     end
     if calculate_dGdvperp || algebraic_solve_for_d2Gdvperp2
-        if anyv_subblock_rank[] == (calculate_GG ? 3 : 2) % anyv_subblock_size[]
-            elliptic_solve!(dGdvperp, S_dummy, rpbd.dGdvperp_data, lu_obj_LV,
-                            PUperp2D_sparse, rhsvpavperp_copy3, vpa, vperp)
-        end
+        elliptic_solve!(dGdvperp,S_dummy,rpbd.dGdvperp_data,
+                    lu_obj_LV,PUperp2D_sparse,rhsc,sc,vpa,vperp)
     end
-    if anyv_subblock_rank[] == 0 % anyv_subblock_size[]
-        elliptic_solve!(d2Gdvpa2, S_dummy, rpbd.d2Gdvpa2_data, lu_obj_LP, KKpar2D_sparse,
-                        rhsvpavperp, vpa, vperp)
-    end
-    if anyv_subblock_rank[] == 1 % anyv_subblock_size[]
-        elliptic_solve!(d2Gdvperpdvpa, S_dummy, rpbd.d2Gdvperpdvpa_data, lu_obj_LV,
-                        PPparPUperp2D_sparse, rhsvpavperp_copy1, vpa, vperp)
-    end
+    elliptic_solve!(d2Gdvpa2,S_dummy,rpbd.d2Gdvpa2_data,
+                lu_obj_LP,KKpar2D_sparse,rhsc,sc,vpa,vperp)
+    elliptic_solve!(d2Gdvperpdvpa,S_dummy,rpbd.d2Gdvperpdvpa_data,
+                lu_obj_LV,PPparPUperp2D_sparse,rhsc,sc,vpa,vperp)
     
     if algebraic_solve_for_d2Gdvperp2
-        begin_anyv_vperp_vpa_region()
+        begin_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
             S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp] - d2Gdvpa2[ivpa,ivperp]
             Q_dummy[ivpa,ivperp] = -dGdvperp[ivpa,ivperp]
         end
-        begin_anyv_region()
-        @anyv_serial_region begin
-            # use the algebraic solve function to find
-            # d2Gdvperp2 = 2H - d2Gdvpa2 - (1/vperp)dGdvperp
-            # using a weak form
-            algebraic_solve!(d2Gdvperp2, S_dummy, Q_dummy, rpbd.d2Gdvperp2_data,
-                             lu_obj_MM, MM2D_sparse, MMparMNperp2D_sparse, rhsvpavperp,
-                             vpa, vperp)
-        end
+        # use the algebraic solve function to find
+        # d2Gdvperp2 = 2H - d2Gdvpa2 - (1/vperp)dGdvperp
+        # using a weak form
+        algebraic_solve!(d2Gdvperp2,S_dummy,Q_dummy,rpbd.d2Gdvperp2_data,
+                    lu_obj_MM,MM2D_sparse,MMparMNperp2D_sparse,
+                    rhsc,rhqc,sc,qc,vpa,vperp)
     else
         # solve a weak-form PDE for d2Gdvperp2
-        begin_anyv_vperp_vpa_region()
+        begin_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
-            #S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp] # <- this is already the value of
-                                                        #    S_dummy calculated above
+            S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp]
             Q_dummy[ivpa,ivperp] = 2.0*d2Gdvpa2[ivpa,ivperp]
         end
-        begin_anyv_region()
-        @anyv_serial_region begin
-            elliptic_solve!(d2Gdvperp2, S_dummy, Q_dummy, rpbd.d2Gdvperp2_data, lu_obj_LB,
-                            KPperp2D_sparse, MMparMNperp2D_sparse, rhsvpavperp, vpa,
-                            vperp)
-        end
+        elliptic_solve!(d2Gdvperp2,S_dummy,Q_dummy,rpbd.d2Gdvperp2_data,
+                    lu_obj_LB,KPperp2D_sparse,MMparMNperp2D_sparse,
+                    rhsc,rhqc,sc,qc,vpa,vperp)
     end
+    begin_serial_region()
     return nothing
 end
 
@@ -2221,14 +2193,17 @@ function calculate_rosenbluth_potentials_via_direct_integration!(GG,HH,dHdvpa,dH
     H2_weights = fkpl_arrays.H2_weights
     H3_weights = fkpl_arrays.H3_weights
     # first compute the derivatives of fs' (the integration weights assume d fs' dvpa and d fs' dvperp are known)
-    begin_anyv_vperp_region()
+    begin_vperp_region()
     @loop_vperp ivperp begin
-        @views derivative!(dfdvpa[:,ivperp], ffsp_in[:,ivperp], vpa, vpa_spectral)
+        @views derivative!(vpa.scratch, ffsp_in[:,ivperp], vpa, vpa_spectral)
+        @. dfdvpa[:,ivperp] = vpa.scratch
     end
-    begin_anyv_vpa_region()
+    begin_vpa_region()
     @loop_vpa ivpa begin
-        @views derivative!(dfdvperp[ivpa,:], ffsp_in[ivpa,:], vperp, vperp_spectral)
-        @views derivative!(d2fdvperpdvpa[ivpa,:], dfdvpa[ivpa,:], vperp, vperp_spectral)
+        @views derivative!(vperp.scratch, ffsp_in[ivpa,:], vperp, vperp_spectral)
+        @. dfdvperp[ivpa,:] = vperp.scratch
+        @views derivative!(vperp.scratch, dfdvpa[ivpa,:], vperp, vperp_spectral)
+        @. d2fdvperpdvpa[ivpa,:] = vperp.scratch
     end
     # with the integrands calculated, compute the integrals
     calculate_rosenbluth_integrals!(GG,d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,
@@ -2254,7 +2229,7 @@ function calculate_rosenbluth_integrals!(GG,d2Gspdvpa2,dGspdvperp,d2Gspdvperpdvp
                                         fsp,dfspdvpa,dfspdvperp,d2fspdvperpdvpa,
                                         G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                                         nvpa,nvperp)
-    begin_anyv_vperp_vpa_region()
+    begin_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
         GG[ivpa,ivperp] = 0.0
         d2Gspdvpa2[ivpa,ivperp] = 0.0
@@ -2293,7 +2268,7 @@ function enforce_vpavperp_BCs!(pdf,vpa,vperp,vpa_spectral,vperp_spectral)
     D0 = vperp_spectral.radau.D0
     # vpa boundary conditions
     # zero at infinity
-    begin_anyv_vperp_region()
+    begin_vperp_region()
     @loop_vperp ivperp begin
         pdf[1,ivperp] = 0.0
         pdf[nvpa,ivperp] = 0.0
@@ -2302,12 +2277,10 @@ function enforce_vpavperp_BCs!(pdf,vpa,vperp,vpa_spectral,vperp_spectral)
     # zero boundary condition at infinity
     # set regularity condition d F / d vperp = 0 at vperp = 0
     # adjust F(vperp = 0) so that d F / d vperp = 0 at vperp = 0
-    begin_anyv_vpa_region()
-    buffer = @view vperp.scratch[1:ngrid_vperp-1]
+    begin_vpa_region()
     @loop_vpa ivpa begin
         pdf[ivpa,nvperp] = 0.0
-        @views @. buffer = D0[2:ngrid_vperp] * pdf[ivpa,2:ngrid_vperp]
-        pdf[ivpa,1] = -sum(buffer)/D0[1]
+        pdf[ivpa,1] = -sum(D0[2:ngrid_vperp].*pdf[ivpa,2:ngrid_vperp])/D0[1]
     end
 end
 

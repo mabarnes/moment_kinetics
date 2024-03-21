@@ -24,7 +24,7 @@ dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 """
 
 #df/dr
-#2D version for f[z,r] -> Er, Ez, phi
+#2D version for f[z,r] -> Er, Ez, phi, & moments n, u, T etc (species indexing taken outside this loop)
 function derivative_r!(dfdr::AbstractArray{mk_float,2}, f::AbstractArray{mk_float,2},
         dfdr_lower_endpoints::AbstractArray{mk_float,1},
         dfdr_upper_endpoints::AbstractArray{mk_float,1},
@@ -51,45 +51,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
 end
 
 #df/dr
-#3D version for f[s,z,r] -> moments n, u, T etc
-function derivative_r!(dfdr::AbstractArray{mk_float,3}, f::AbstractArray{mk_float,3},
-        dfdr_lower_endpoints::AbstractArray{mk_float,2},
-        dfdr_upper_endpoints::AbstractArray{mk_float,2},
-        r_receive_buffer1::AbstractArray{mk_float,2},
-        r_receive_buffer2::AbstractArray{mk_float,2}, r_spectral, r; neutrals=false)
-
-    # differentiate f w.r.t r
-    if neutrals
-	@loop_sn_z isn iz begin
-		@views derivative!(dfdr[iz,:,isn], f[iz,:,isn], r, r_spectral)
-		# get external endpoints to reconcile via MPI
-		dfdr_lower_endpoints[iz,isn] = r.scratch_2d[1,1]
-		dfdr_upper_endpoints[iz,isn] = r.scratch_2d[end,end]
-	end
-    else
-	@loop_s_z is iz begin
-		@views derivative!(dfdr[iz,:,is], f[iz,:,is], r, r_spectral)
-		# get external endpoints to reconcile via MPI
-		dfdr_lower_endpoints[iz,is] = r.scratch_2d[1,1]
-		dfdr_upper_endpoints[iz,is] = r.scratch_2d[end,end]
-	end
-    end
-
-    # Sometimes an array might contain no data (e.g. if n_neutral_species=0). Then don't
-    # need to reconcile boundaries
-    if length(dfdr) > 0
-	# now reconcile element boundaries across
-	# processes with large message involving all other dimensions
-	if r.nelement_local < r.nelement_global
-		reconcile_element_boundaries_MPI!(dfdr,
-		 dfdr_lower_endpoints,dfdr_upper_endpoints,
-		 r_receive_buffer1, r_receive_buffer2, r)
-	end
-    end
-end
-
-#df/dr
-#5D version for f[vpa,vperp,z,r,s] -> ion particle dfn
+#5D version for f[vpa,vperp,z,r,s] -> ion particle dfn (species indexing taken outside this loop)
 function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
         dfdr_lower_endpoints::AbstractArray{mk_float,4},
         dfdr_upper_endpoints::AbstractArray{mk_float,4},
@@ -176,45 +138,7 @@ function derivative_z!(dfdz::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
 	
 end
 
-#df/dz
-#3D version for f[z,r] -> moments n, u, T etc
-function derivative_z!(dfdz::AbstractArray{mk_float,3}, f::AbstractArray{mk_float,3},
-        dfdz_lower_endpoints::AbstractArray{mk_float,2},
-        dfdz_upper_endpoints::AbstractArray{mk_float,2},
-        z_send_buffer::AbstractArray{mk_float,2},
-        z_receive_buffer::AbstractArray{mk_float,2}, z_spectral, z; neutrals=false)
-
-    # differentiate f w.r.t z
-    if neutrals
-	@loop_sn_r isn ir begin
-		@views derivative!(dfdz[:,ir,isn], f[:,ir,isn], z, z_spectral)
-		# get external endpoints to reconcile via MPI
-		dfdz_lower_endpoints[ir,isn] = z.scratch_2d[1,1]
-		dfdz_upper_endpoints[ir,isn] = z.scratch_2d[end,end]
-	end
-    else
-	@loop_s_r is ir begin
-		@views derivative!(dfdz[:,ir,is], f[:,ir,is], z, z_spectral)
-		# get external endpoints to reconcile via MPI
-		dfdz_lower_endpoints[ir,is] = z.scratch_2d[1,1]
-		dfdz_upper_endpoints[ir,is] = z.scratch_2d[end,end]
-	end
-    end
-
-    # Sometimes an array might contain no data (e.g. if n_neutral_species=0). Then don't
-    # need to reconcile boundaries
-    if length(dfdz) > 0
-	# now reconcile element boundaries across
-	# processes with large message involving all y
-	if z.nelement_local < z.nelement_global
-		reconcile_element_boundaries_MPI!(dfdz,
-		 dfdz_lower_endpoints,dfdz_upper_endpoints,
-		 z_send_buffer, z_receive_buffer, z)
-	end
-    end
-end
-
-#5D version for f[vpa,vperp,z,r,s] -> dfn ions
+#5D version for f[vpa,vperp,z,r,s] -> dfn ion particles
 function derivative_z!(dfdz::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
         dfdz_lower_endpoints::AbstractArray{mk_float,4},
         dfdz_upper_endpoints::AbstractArray{mk_float,4},
@@ -301,7 +225,7 @@ dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 """
 
 #df/dr
-#2D version for f[z,r] -> Er, Ez, phi
+#2D version for f[z,r] -> Er, Ez, phi, & moments n, u, T etc (species indexing taken outside this loop)
 function derivative_r!(dfdr::AbstractArray{mk_float,2}, f::AbstractArray{mk_float,2},
         adv_fac, adv_fac_lower_buffer::AbstractArray{mk_float,1},
         adv_fac_upper_buffer::AbstractArray{mk_float,1},
@@ -331,51 +255,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
 end
 
 #df/dr
-#3D version for f[z,r,s] -> moments n, u, T etc
-function derivative_r!(dfdr::AbstractArray{mk_float,3}, f::AbstractArray{mk_float,3},
-        adv_fac, adv_fac_lower_buffer::AbstractArray{mk_float,2},
-        adv_fac_upper_buffer::AbstractArray{mk_float,2},
-        dfdr_lower_endpoints::AbstractArray{mk_float,2},
-        dfdr_upper_endpoints::AbstractArray{mk_float,2},
-        r_receive_buffer1::AbstractArray{mk_float,2},
-        r_receive_buffer2::AbstractArray{mk_float,2}, r_spectral, r; neutrals=false)
-
-    # differentiate f w.r.t r
-    if neutrals
-        @loop_sn_z isn iz begin
-            @views derivative!(dfdr[iz,:,isn], f[iz,:,isn], r, adv_fac[:,iz,isn], r_spectral)
-            # get external endpoints to reconcile via MPI
-            dfdr_lower_endpoints[iz,isn] = r.scratch_2d[1,1]
-            dfdr_upper_endpoints[iz,isn] = r.scratch_2d[end,end]
-            adv_fac_lower_buffer[iz,isn] = adv_fac[1,iz,isn]
-            adv_fac_upper_buffer[iz,isn] = adv_fac[end,iz,isn]
-        end
-    else
-        @loop_s_z is iz begin
-            @views derivative!(dfdr[iz,:,is], f[iz,:,is], r, adv_fac[:,iz,is], r_spectral)
-            # get external endpoints to reconcile via MPI
-            dfdr_lower_endpoints[iz,is] = r.scratch_2d[1,1]
-            dfdr_upper_endpoints[iz,is] = r.scratch_2d[end,end]
-            adv_fac_lower_buffer[iz,is] = adv_fac[1,iz,is]
-            adv_fac_upper_buffer[iz,is] = adv_fac[end,iz,is]
-        end
-    end
-
-    # Sometimes an array might contain no data (e.g. if n_neutral_species=0). Then don't
-    # need to reconcile boundaries
-    if length(dfdr) > 0
-        # now reconcile element boundaries across
-        # processes with large message involving all other dimensions
-        if r.nelement_local < r.nelement_global
-            reconcile_element_boundaries_MPI!(
-                dfdr, adv_fac_lower_buffer, adv_fac_upper_buffer, dfdr_lower_endpoints,
-                dfdr_upper_endpoints, r_receive_buffer1, r_receive_buffer2, r)
-        end
-    end
-end
-
-#df/dr
-#5D version for f[vpa,vperp,z,r,s] -> ion particle dfn
+#5D version for f[vpa,vperp,z,r,s] -> ion particle dfn (species indexing taken outside this loop)
 function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
         advect, adv_fac_lower_buffer::AbstractArray{mk_float,4},
         adv_fac_upper_buffer::AbstractArray{mk_float,4},
@@ -446,7 +326,7 @@ dfns (ion) -> [vpa,vperp,z,r,s]
 dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 """
 
-#2D version for f[z,r] -> Er, Ez, phi
+#2D version for f[z,r] -> Er, Ez, phi, & moments n, u, T etc (species indexing taken outside this loop)
 function derivative_z!(dfdz::AbstractArray{mk_float,2}, f::AbstractArray{mk_float,2},
         adv_fac, adv_fac_lower_buffer::AbstractArray{mk_float,1},
         adv_fac_upper_buffer::AbstractArray{mk_float,1},
@@ -472,49 +352,6 @@ function derivative_z!(dfdz::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
         reconcile_element_boundaries_MPI!(
             dfdz, adv_fac_lower_buffer, adv_fac_upper_buffer,
             dfdz_lower_endpoints,dfdz_upper_endpoints, z_send_buffer, z_receive_buffer, z)
-    end
-end
-
-#3D version for f[z,r] -> moments n, u, T etc
-function derivative_z!(dfdz::AbstractArray{mk_float,3}, f::AbstractArray{mk_float,3},
-        adv_fac, adv_fac_lower_buffer::AbstractArray{mk_float,2},
-        adv_fac_upper_buffer::AbstractArray{mk_float,2},
-        dfdz_lower_endpoints::AbstractArray{mk_float,2},
-        dfdz_upper_endpoints::AbstractArray{mk_float,2},
-        z_send_buffer::AbstractArray{mk_float,2},
-        z_receive_buffer::AbstractArray{mk_float,2}, z_spectral, z; neutrals=false)
-
-    # differentiate f w.r.t z
-    if neutrals
-        @loop_sn_r isn ir begin
-            @views derivative!(dfdz[:,ir,isn], f[:,ir,isn], z, adv_fac[:,ir,isn], z_spectral)
-            # get external endpoints to reconcile via MPI
-            dfdz_lower_endpoints[ir,isn] = z.scratch_2d[1,1]
-            dfdz_upper_endpoints[ir,isn] = z.scratch_2d[end,end]
-            adv_fac_lower_buffer[ir,isn] = adv_fac[1,ir,isn]
-            adv_fac_upper_buffer[ir,isn] = adv_fac[end,ir,isn]
-        end
-    else
-        @loop_s_r is ir begin
-            @views derivative!(dfdz[:,ir,is], f[:,ir,is], z, adv_fac[:,ir,is], z_spectral)
-            # get external endpoints to reconcile via MPI
-            dfdz_lower_endpoints[ir,is] = z.scratch_2d[1,1]
-            dfdz_upper_endpoints[ir,is] = z.scratch_2d[end,end]
-            adv_fac_lower_buffer[ir,is] = adv_fac[1,ir,is]
-            adv_fac_upper_buffer[ir,is] = adv_fac[end,ir,is]
-        end
-    end
-
-    # Sometimes an array might contain no data (e.g. if n_neutral_species=0). Then don't
-    # need to reconcile boundaries
-    if length(dfdz) > 0
-        # now reconcile element boundaries across
-        # processes with large message
-        if z.nelement_local < z.nelement_global
-            reconcile_element_boundaries_MPI!(
-                dfdz, adv_fac_lower_buffer, adv_fac_upper_buffer,
-                dfdz_lower_endpoints,dfdz_upper_endpoints, z_send_buffer, z_receive_buffer, z)
-        end
     end
 end
 

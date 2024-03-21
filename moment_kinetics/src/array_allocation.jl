@@ -19,8 +19,8 @@ end
 """
 variant where array is in shared memory for all processors in the 'block'
 """
-function allocate_shared_bool(dims...; comm=nothing)
-    return array = allocate_shared(Bool, dims; comm=comm)
+function allocate_shared_bool(dims...)
+    return array = allocate_shared(Bool, dims)
 end
 
 """
@@ -33,8 +33,8 @@ end
 """
 variant where array is in shared memory for all processors in the 'block'
 """
-function allocate_shared_int(dims...; comm=nothing)
-    return array = allocate_shared(mk_int, dims; comm=comm)
+function allocate_shared_int(dims...)
+    return array = allocate_shared(mk_int, dims)
 end
 
 """
@@ -51,8 +51,8 @@ end
 """
 variant where array is in shared memory for all processors in the 'block'
 """
-function allocate_shared_float(dims...; comm=nothing)
-    array = allocate_shared(mk_float, dims; comm=comm)
+function allocate_shared_float(dims...)
+    array = allocate_shared(mk_float, dims)
     @debug_initialize_NaN begin
         # Initialize as NaN to try and catch use of uninitialized values
         if block_rank[] == 0
@@ -81,8 +81,8 @@ end
 """
 variant where array is in shared memory for all processors in the 'block'
 """
-function allocate_shared_complex(dims...; comm=nothing)
-    array = allocate_shared(Complex{mk_float}, dims; comm=comm)
+function allocate_shared_complex(dims...)
+    array = allocate_shared(Complex{mk_float}, dims)
     @debug_initialize_NaN begin
         # Initialize as NaN to try and catch use of uninitialized values
         if block_rank[] == 0

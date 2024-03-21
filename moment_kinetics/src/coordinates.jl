@@ -23,7 +23,7 @@ using MPI
 """
 structure containing basic information related to coordinates
 """
-struct coordinate{T <: AbstractVector{mk_float}}
+struct coordinate
     # name is the name of the variable associated with this coordiante
     name::String
     # n_global is the total number of grid points associated with this coordinate
@@ -80,10 +80,10 @@ struct coordinate{T <: AbstractVector{mk_float}}
     scratch3::Array{mk_float,1}
     # scratch_shared is a shared-memory array used for intermediate calculations requiring
     # n entries
-    scratch_shared::T
+    scratch_shared::MPISharedArray{mk_float,1}
     # scratch_shared2 is a shared-memory array used for intermediate calculations requiring
     # n entries
-    scratch_shared2::T
+    scratch_shared2::MPISharedArray{mk_float,1}
     # scratch_2d and scratch2_2d are arrays used for intermediate calculations requiring
     # ngrid x nelement entries
     scratch_2d::Array{mk_float,2}
@@ -149,15 +149,6 @@ function define_coordinate(input, parallel_io::Bool=false; ignore_MPI=false, ini
     else
         scratch_shared = allocate_shared_float(n_local)
         scratch_shared2 = allocate_shared_float(n_local)
-    end
-    # Initialise scratch_shared and scratch_shared2 so that the debug checks do not
-    # complain when they get printed by `println(io, all_inputs)` in mk_input().
-    if block_rank[] == 0
-        scratch_shared .= NaN
-        scratch_shared2 .= NaN
-    end
-    if !ignore_MPI
-        _block_synchronize()
     end
     # scratch_2d is an array used for intermediate calculations requiring ngrid x nelement entries
     scratch_2d = allocate_float(input.ngrid, input.nelement_local)

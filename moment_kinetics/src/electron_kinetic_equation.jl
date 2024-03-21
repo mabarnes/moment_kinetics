@@ -165,11 +165,11 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
 
     #dt_electron = dt * sqrt(composition.me_over_mi)
     #dt_max = 3.0e-8
-    dt_max = 2.0e-8
+    dt_max = 1.0e-8
     #dt_max = 2.5e-9
 
     #dt_energy = 1.0e-7
-    dt_energy = 2.0e-8
+    dt_energy = 1.0e-8
     #dt_energy = 2.5e-9
     #n_ppar_subcycles = 1000
     #n_ppar_subcycles = 200
@@ -245,6 +245,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         end
     end
     # evolve (artificially) in time until the residual is less than the tolerance
+    try
     while !electron_pdf_converged && (iteration <= max_electron_pdf_iterations)
         #dt_energy = dt_electron * 10.0
 
@@ -282,7 +283,6 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
                 end
             end
 
-            # TMP FOR TESTING -- MAB
             #dt_energy = dt_electron
             electron_energy_equation!(ppar, dens, fvec, moments, collisions, dt_energy, composition, num_diss_params, z)
 
@@ -326,23 +326,19 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         # enforce the boundary condition(s) on the electron pdf
         enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vperp, vpa,
                                                     vperp_spectral, vpa_spectral,
-                                                    vpa_advect, moments,
+                                                    vpa_advect,
                                                     num_diss_params.vpa_dissipation_coefficient > 0.0,
                                                     composition.me_over_mi)
         #println("A pdf 1 ", pdf[:,1,1,1])
         #println("A pdf end ", pdf[:,1,end,1])
 
         begin_r_z_region()
-        A = moments.electron.constraints_A_coefficient
-        B = moments.electron.constraints_B_coefficient
-        C = moments.electron.constraints_C_coefficient
         @loop_r_z ir iz begin
             if (iz == 1 && z.irank == 0) || (iz == z.n && z.irank == z.nrank - 1)
                 continue
             end
-            (A[iz,ir], B[iz,ir], C[iz,ir]) =
-                #@views hard_force_moment_constraints!(pdf[:,:,iz,ir], (evolve_density=true, evolve_upar=false, evolve_ppar=true), vpa)
-                @views hard_force_moment_constraints!(pdf[:,:,iz,ir], (evolve_density=true, evolve_upar=true, evolve_ppar=true), vpa)
+            #@views hard_force_moment_constraints!(pdf[:,:,iz,ir], (evolve_density=true, evolve_upar=false, evolve_ppar=true), vpa)
+            @views hard_force_moment_constraints!(pdf[:,:,iz,ir], (evolve_density=true, evolve_upar=true, evolve_ppar=true), vpa)
         end
         #println("B pdf 1 ", pdf[:,1,1,1])
         #println("B pdf end ", pdf[:,1,end,1])
@@ -393,15 +389,6 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         if (mod(iteration,output_interval) == 0)
             begin_serial_region()
             @serial_region begin
-                if (mod(iteration,100*output_interval) == 0)
-                    @loop_vpa ivpa begin
-                        @loop_z iz begin
-                            println(io_pdf, "z: ", z.grid[iz], " wpa: ", vpa.grid[ivpa], " pdf: ", pdf[ivpa, 1, iz, 1], " time: ", time, " residual: ", residual[ivpa, 1, iz, 1])
-                        end
-                        println(io_pdf,"")
-                    end
-                    println(io_pdf,"")
-                end
                 @loop_z iz begin
                     println(io_upar, "z: ", z.grid[iz], " upar: ", upar[iz,1], " dupar_dz: ", moments.electron.dupar_dz[iz,1], " time: ", time, " iteration: ", iteration)
                     println(io_qpar, "z: ", z.grid[iz], " qpar: ", qpar[iz,1], " dqpar_dz: ", dqpar_dz[iz,1], " time: ", time, " iteration: ", iteration)
@@ -426,7 +413,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         # TMP FOR TESTING
         #dqpar_dz .= 0.0
         # calculate the residual of the electron kinetic equation for the updated electron pdf
-        dt_electron = electron_kinetic_equation_residual!(residual, max_term, single_term, pdf, dens, upar, vthe, ppar, upar_ion, ddens_dz,
+        dt_electron = electron_kinetic_equation_residual!(residual, max_term, single_term, pdf, dens, upar, vthe, ppar, ddens_dz, upar_ion,
                                             dppar_dz, dqpar_dz, dvth_dz, 
                                             z, vperp, vpa, z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                                             collisions, num_diss_params, dt_max)
@@ -439,6 +426,9 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
             break
         end
         iteration += 1
+    end
+    catch e
+        println("Error: $e")
     end
     # Update the 'scratch' arrays with the final result
     begin_r_z_vperp_vpa_region()
@@ -506,8 +496,7 @@ end
 
 function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vperp, vpa,
                                                      vperp_spectral, vpa_spectral,
-                                                     vpa_adv, moments, vpa_diffusion,
-                                                     me_over_mi)
+                                                     vpa_adv, vpa_diffusion, me_over_mi)
     # Enforce velocity-space boundary conditions
     if vpa.n > 1
         begin_r_z_vperp_region()
@@ -525,7 +514,7 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vperp
     end
 
     # first enforce the boundary condition at z_min.
-    # this involves forcing the pdf to be zero for electrons travelling faster than the max speed
+    # this involves forcing the pdf to be zero for electron travelling faster than the max speed
     # they could attain by accelerating in the electric field between the wall and the simulation boundary;
     # for electrons with positive velocities less than this critical value, they must have the same
     # pdf as electrons with negative velocities of the same magnitude.
@@ -567,9 +556,8 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vperp
         #  wpa(+vpa) as we are using a 'moment kinetic' approach.]
         # Need to reverse vpa.grid because the grid passed as the second argument of
         # interpolate_to_grid_1d!() needs to be sorted in increasing order.
-        #reversed_wpa_of_minus_vpa = vpa.scratch2 .= .-reverse(vpa.grid) .- 2.0 * upar[1,ir] / vthe[1,ir]
+        reversed_wpa_of_minus_vpa = vpa.scratch2 .= .-reverse(vpa.grid) .- 2.0 * upar[1,ir] / vthe[1,ir]
         #reversed_wpa_of_minus_vpa = vpa.scratch2 .= .-reverse(vpa.grid) .- 1.5 * upar[1,ir] / vthe[1,ir]
-        reversed_wpa_of_minus_vpa = vpa.scratch2 .= .-reverse(vpa.grid)
         # interpolate the pdf onto this grid
         #@views interpolate_to_grid_1d!(interpolated_pdf, wpa_values, pdf[:,1,1,ir], vpa, vpa_spectral)
         @views interpolate_to_grid_1d!(reversed_pdf, reversed_wpa_of_minus_vpa, pdf[:,1,1,ir], vpa, vpa_spectral) # Could make this more efficient by only interpolating to the points needed below, by taking an appropriate view of wpa_of_minus_vpa. Also, in the element containing vpa=0, this interpolation depends on the values that will be replaced by the reflected, interpolated values, which is not ideal (maybe this element should be treated specially first?).
@@ -668,9 +656,6 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vperp
         @. vpa.scratch3 = vpa.grid^2 * vpa.scratch2^2 * pdf[:,1,1,ir]
         vpa2_wpa2_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
         
-        normalisation_constant_A = 0.0
-        normalisation_constant_B = 0.0
-        normalisation_constant_C = 0.0
         if pdf_adjustment_option == "absvpa"
             # calculate int dwpa |vpa| * pdf = absvpa_moment
             @. vpa.scratch3 = pdf[:,1,1,ir] * abs(vpa.scratch2)
@@ -750,18 +735,14 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vperp
             @. pdf[:,1,1,ir] *= (normalisation_constant_A + exp(-afac * vpa.scratch2^2) * vpa.scratch2^2 * normalisation_constant_B 
                                 + exp(-bfac * vpa.scratch2^2) * vpa.scratch2^4 * normalisation_constant_C)
         elseif pdf_adjustment_option == "no1st_vpa2"
-            normalisation_constant_C = (1.0 - 0.5*zeroth_moment/wpa2_moment) /
+            normalisation_constant_B = (1.0 - 0.5*zeroth_moment/wpa2_moment) /
                                        (vpa2_moment - zeroth_moment*vpa2_wpa2_moment / wpa2_moment)
-            normalisation_constant_A = (0.5 - normalisation_constant_C*vpa2_wpa2_moment) / wpa2_moment
-            @. pdf[:,1,1,ir] *= (normalisation_constant_A + vpa.scratch2^2 * normalisation_constant_C)
+            normalisation_constant_A = (0.5 - normalisation_constant_B*vpa2_wpa2_moment) / wpa2_moment
+            @. pdf[:,1,1,ir] *= (normalisation_constant_A + vpa.scratch2^2 * normalisation_constant_B)
         else
             println("pdf_adjustment_option not recognised")
             stop()
         end
-
-        moments.electron.constraints_A_coefficient[1,ir] = normalisation_constant_A
-        moments.electron.constraints_B_coefficient[1,ir] = normalisation_constant_B
-        moments.electron.constraints_C_coefficient[1,ir] = normalisation_constant_C
 
         # smooth the pdf at the boundary
         #for ivpa ∈ 2:ivpa_max-1
@@ -799,9 +780,8 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vperp
         #  wpa(+vpa) as we are using a 'moment kinetic' approach.]
         # Need to reverse vpa.grid because the grid passed as the second argument of
         # interpolate_to_grid_1d!() needs to be sorted in increasing order.
-        #reversed_wpa_of_minus_vpa = vpa.scratch2 .= .-reverse(vpa.grid) .- 2.0 * upar[end,ir] / vthe[end,ir]
+        reversed_wpa_of_minus_vpa = vpa.scratch2 .= .-reverse(vpa.grid) .- 2.0 * upar[end,ir] / vthe[end,ir]
         #reversed_wpa_of_minus_vpa = vpa.scratch2 .= .-reverse(vpa.grid) .- 1.5 * upar[end,ir] / vthe[end,ir]
-        reversed_wpa_of_minus_vpa = vpa.scratch2 .= .-reverse(vpa.grid)
         # interpolate the pdf onto this grid
         #@views interpolate_to_grid_1d!(interpolated_pdf, wpa_values, pdf[:,1,end,ir], vpa, vpa_spectral)
         @views interpolate_to_grid_1d!(reversed_pdf, reversed_wpa_of_minus_vpa, pdf[:,1,end,ir], vpa, vpa_spectral) # Could make this more efficient by only interpolating to the points needed below, by taking an appropriate view of wpa_of_minus_vpa. Also, in the element containing vpa=0, this interpolation depends on the values that will be replaced by the reflected, interpolated values, which is not ideal (maybe this element should be treated specially first?).
@@ -917,9 +897,6 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vperp
         @. vpa.scratch3 = vpa.grid^2 * vpa.scratch2^2 * pdf[:,1,end,ir]
         vpa2_wpa2_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
         
-        normalisation_constant_A = 0.0
-        normalisation_constant_B = 0.0
-        normalisation_constant_C = 0.0
         if pdf_adjustment_option == "absvpa"
             # calculate int dwpa |vpa| * pdf = absvpa_moment
             @. vpa.scratch3 = pdf[:,1,end,ir] * abs(vpa.scratch2)
@@ -999,18 +976,14 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vperp
             @. pdf[:,1,end,ir] *= (normalisation_constant_A + exp(-afac * vpa.scratch2^2) * vpa.scratch2^2 * normalisation_constant_B 
                                 + exp(-bfac * vpa.scratch2^2) * vpa.scratch2^4 * normalisation_constant_C)
         elseif pdf_adjustment_option == "no1st_vpa2"
-            normalisation_constant_C = (1.0 - 0.5*zeroth_moment/wpa2_moment) /
+            normalisation_constant_B = (1.0 - 0.5*zeroth_moment/wpa2_moment) /
                                        (vpa2_moment - zeroth_moment*vpa2_wpa2_moment / wpa2_moment)
-            normalisation_constant_A = (0.5 - normalisation_constant_C*vpa2_wpa2_moment) / wpa2_moment
-            @. pdf[:,1,end,ir] *= (normalisation_constant_A + vpa.scratch2^2 * normalisation_constant_C)
+            normalisation_constant_A = (0.5 - normalisation_constant_B*vpa2_wpa2_moment) / wpa2_moment
+            @. pdf[:,1,end,ir] *= (normalisation_constant_A + vpa.scratch2^2 * normalisation_constant_B)
         else
             println("pdf_adjustment_option not recognised")
             stop()
         end
-
-        moments.electron.constraints_A_coefficient[end,ir] = normalisation_constant_A
-        moments.electron.constraints_B_coefficient[end,ir] = normalisation_constant_B
-        moments.electron.constraints_C_coefficient[end,ir] = normalisation_constant_C
 
         # smooth the pdf at the boundary
         #for ivpa ∈ ivpa_min+1:vpa.n-1
@@ -1292,7 +1265,7 @@ function electron_kinetic_equation_residual!(residual, max_term, single_term, pd
     #calculate_contribution_from_z_advection!(residual, pdf, vth, z, vpa.grid, z_spectral, scratch_dummy)
     # add in the contribution to the residual from the wpa advection term
     electron_vpa_advection!(residual, pdf, ppar, vth, dppar_dz, dqpar_dz, dvth_dz, 
-                            vpa_advect, vpa, vpa_spectral, scratch_dummy)#, z)
+                            vpa_advect, vpa, vpa_spectral, scratch_dummy)
     #dt_max_vadv = simple_vpa_advection!(residual, pdf, ppar, vth, dppar_dz, dqpar_dz, dvth_dz, vpa, dt_electron)
     #@. single_term = residual - single_term
     #max_term .= max.(max_term, abs.(single_term))
@@ -1743,9 +1716,7 @@ function check_electron_pdf_convergence(residual, pdf, upar, vthe, z, vpa)
         end
         @loop_vperp ivperp begin
             sum_residual += sum(abs.(@view residual[iv0_start:iv0_end,ivperp,iz,ir]))
-            # account for the fact that we want dg/dt << vthe/L * g, but 
-            # residual is normalized by c_ref/L_ref * g
-            sum_pdf += sum(abs.(@view pdf[iv0_start:iv0_end,ivperp,iz,ir]) * vthe[iz,ir])
+            sum_pdf += sum(abs.(@view pdf[iv0_start:iv0_end,ivperp,iz,ir]))
         end
     end
     sum_residual, sum_pdf = MPI.Allreduce([sum_residual, sum_pdf], +, comm_world)

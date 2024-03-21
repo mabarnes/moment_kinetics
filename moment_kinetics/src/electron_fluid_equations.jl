@@ -6,7 +6,6 @@ export electron_energy_equation!
 export calculate_electron_qpar!
 export calculate_electron_parallel_friction_force!
 export calculate_electron_qpar_from_pdf!
-export update_electron_vth_temperature!
 
 using ..communication
 using ..looping
@@ -305,13 +304,6 @@ function calculate_electron_qpar!(qpar_e, qpar_updated, pdf, ppar_e, upar_e, vth
                 electron_pdf = pdf
             end
             calculate_electron_qpar_from_pdf!(qpar_e, ppar_e, vth_e, electron_pdf, vpa)
-        else
-            begin_r_z_region()
-            # qpar_e is not used. Initialize to 0.0 to avoid failure of
-            # @debug_track_initialized check
-            @loop_r_z ir iz begin
-                qpar_e[iz,ir] = 0.0
-            end
         end
     end
     # qpar has been updated
@@ -324,8 +316,8 @@ calculate the parallel component of the electron heat flux,
 defined as qpar = 2 * ppar * vth * int dwpa (pdf * wpa^3)
 """
 function calculate_electron_qpar_from_pdf!(qpar, ppar, vth, pdf, vpa)
-    # specialise to 1D for now
     begin_r_z_region()
+    # specialise to 1D for now
     ivperp = 1
     @loop_r_z ir iz begin
         @views qpar[iz, ir] = 2*ppar[iz,ir]*vth[iz,ir]*integrate_over_vspace(pdf[:, ivperp, iz, ir], vpa.grid.^3, vpa.wgts)
@@ -370,19 +362,5 @@ end
 #        ppar[end,ir] = ppar_i[end,ir,1]
 #    end
 #end
-
-function update_electron_vth_temperature!(moments, ppar, dens)
-    begin_r_z_region()
-
-    temp = moments.electron.temp
-    vth = moments.electron.vth
-    @loop_r_z ir iz begin
-        temp[iz,ir] = 2 * ppar[iz,ir] / dens[iz,ir]
-        vth[iz,ir] = sqrt(temp[iz,ir])
-    end
-    moments.electron.temp_updated[] = true
-
-    return nothing
-end
 
 end

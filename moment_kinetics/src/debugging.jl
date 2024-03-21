@@ -20,6 +20,9 @@ module debugging
 macronames = [
     ("debug_initialize_NaN", 1, "Initialize arrays with NaN."),
 
+    ("debug_error_stop_all", 1,
+    "Use MPI.Allgather to stop all processes following an error on any process."),
+
     ("debug_shared_array", 2,
      "Check for incorrect reads/writes to shared-memory arrays"),
 

@@ -226,7 +226,7 @@ function run_test(test_input, rtol, atol; args...)
             # load velocity moments data
             n_ion_zrst, upar_ion_zrst, ppar_ion_zrst, qpar_ion_zrst, v_t_ion_zrst = load_ion_moments_data(fid)
             n_neutral_zrst, upar_neutral_zrst, ppar_neutral_zrst, qpar_neutral_zrst, v_t_neutral_zrst = load_neutral_particle_moments_data(fid)
-            z, z_spectral = load_coordinate_data(fid, "z"; ignore_MPI=true)
+            z, z_spectral = load_coordinate_data(fid, "z")
 
             close(fid)
             
@@ -236,7 +236,7 @@ function run_test(test_input, rtol, atol; args...)
             # load particle distribution function (pdf) data
             f_ion_vpavperpzrst = load_pdf_data(fid)
             f_neutral_vzvrvzetazrst = load_neutral_pdf_data(fid)
-            vpa, vpa_spectral = load_coordinate_data(fid, "vpa"; ignore_MPI=true)
+            vpa, vpa_spectral = load_coordinate_data(fid, "vpa")
 
             close(fid)
             

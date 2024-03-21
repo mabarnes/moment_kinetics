@@ -14,7 +14,7 @@ export H_Maxwellian, G_Maxwellian
 
 export Cssp_fully_expanded_form, calculate_collisional_fluxes
 
-export print_test_data, fkpl_error_data, allocate_error_data
+export print_test_data, fkpl_error_data, allocate_error_data #, plot_test_data
 
 #using Plots
 #using LaTeXStrings
@@ -275,6 +275,24 @@ end
 """
 Below are functions which are used for storing and printing data from the tests 
 """
+
+# This function would need to be moved to the plots_post_processing package somewhere, to
+# avoid the need for `using Plots` in `moment_kinetics`.
+#function plot_test_data(func_exact,func_num,func_err,func_name,vpa,vperp)
+#    @views heatmap(vperp.grid, vpa.grid, func_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+#                windowsize = (360,240), margin = 15pt)
+#                outfile = string(func_name*"_num.pdf")
+#                savefig(outfile)
+#    @views heatmap(vperp.grid, vpa.grid, func_exact[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+#                windowsize = (360,240), margin = 15pt)
+#                outfile = string(func_name*"_exact.pdf")
+#                savefig(outfile)
+#    @views heatmap(vperp.grid, vpa.grid, func_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+#                windowsize = (360,240), margin = 15pt)
+#                outfile = string(func_name*"_err.pdf")
+#                savefig(outfile)
+#    return nothing
+#end
 
 function print_test_data(func_exact,func_num,func_err,func_name)
     @. func_err = abs(func_num - func_exact)

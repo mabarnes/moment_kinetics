@@ -55,8 +55,7 @@ moments & fields only
 """
 struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
                        Tchodura_upper, Texti1, Texti2, Texti3, Texti4,
-                       Texti5, Textn1, Textn2, Textn3, Textn4, Textn5, Tconstri, Tconstrn,
-                       Tconstre}
+                       Texti5, Textn1, Textn2, Textn3, Textn4, Textn5}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the time variable
@@ -115,17 +114,6 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
     external_source_neutral_pressure_amplitude::Textn4
     external_source_neutral_controller_integral::Textn5
 
-    # handles for constraint coefficients
-    ion_constraints_A_coefficient::Tconstri
-    ion_constraints_B_coefficient::Tconstri
-    ion_constraints_C_coefficient::Tconstri
-    neutral_constraints_A_coefficient::Tconstrn
-    neutral_constraints_B_coefficient::Tconstrn
-    neutral_constraints_C_coefficient::Tconstrn
-    electron_constraints_A_coefficient::Tconstre
-    electron_constraints_B_coefficient::Tconstre
-    electron_constraints_C_coefficient::Tconstre
-
     # cumulative wall clock time taken by the run
     time_for_run
 
@@ -158,7 +146,7 @@ end
 structure containing the data/metadata needed for binary file i/o
 for electron initialization
 """
-struct io_initial_electron_info{Tfile, Ttime, Tfe, Tmom, Tconstr}
+struct io_initial_electron_info{Tfile, Ttime, Tfe, Tmom}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the pseudotime variable
@@ -175,10 +163,6 @@ struct io_initial_electron_info{Tfile, Ttime, Tfe, Tmom, Tconstr}
     electron_parallel_heat_flux::Tmom
     # handle for the electron thermal speed variable
     electron_thermal_speed::Tmom
-    # handles for constraint coefficients
-    electron_constraints_A_coefficient::Tconstr
-    electron_constraints_B_coefficient::Tconstr
-    electron_constraints_C_coefficient::Tconstr
 
     # Use parallel I/O?
     parallel_io::Bool
@@ -362,11 +346,7 @@ function reopen_initial_electron_io(file_info)
                                         getvar("electron_parallel_flow"),
                                         getvar("electron_parallel_pressure"),
                                         getvar("electron_parallel_heat_flux"),
-                                        getvar("electron_thermal_speed"),
-                                        getvar("electron_constraints_A_coefficient"),
-                                        getvar("electron_constraints_B_coefficient"),
-                                        getvar("electron_constraints_C_coefficient"),
-                                        parallel_io)
+                                        getvar("electron_thermal_speed"), parallel_io)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -794,16 +774,13 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
         io_density, io_upar, io_ppar, io_pperp, io_qpar, io_vth, io_dSdt,
         external_source_amplitude, external_source_density_amplitude,
         external_source_momentum_amplitude, external_source_pressure_amplitude,
-        external_source_controller_integral, io_chodura_lower, io_chodura_upper,
-        ion_constraints_A_coefficient, ion_constraints_B_coefficient,
-        ion_constraints_C_coefficient =
+        external_source_controller_integral, io_chodura_lower, io_chodura_upper =
             define_dynamic_ion_moment_variables!(fid, n_ion_species, r, z, parallel_io,
                                                  external_source_settings, evolve_density,
                                                  evolve_upar, evolve_ppar)
 
         io_electron_density, io_electron_upar, io_electron_ppar, io_electron_qpar,
-        io_electron_vth, electron_constraints_A_coefficient,
-        electron_constraints_B_coefficient, electron_constraints_C_coefficient =
+        io_electron_vth =
             define_dynamic_electron_moment_variables!(fid, r, z, parallel_io,
                                                       external_source_settings,
                                                       evolve_density, evolve_upar,
@@ -814,8 +791,7 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
         external_source_neutral_density_amplitude,
         external_source_neutral_momentum_amplitude,
         external_source_neutral_pressure_amplitude,
-        external_source_neutral_controller_integral, neutral_constraints_A_coefficient,
-        neutral_constraints_B_coefficient, neutral_constraints_C_coefficient =
+        external_source_neutral_controller_integral =
             define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r, z,
                                                      parallel_io,
                                                      external_source_settings,
@@ -842,15 +818,6 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                external_source_neutral_momentum_amplitude,
                                external_source_neutral_pressure_amplitude,
                                external_source_neutral_controller_integral,
-                               ion_constraints_A_coefficient,
-                               ion_constraints_B_coefficient,
-                               ion_constraints_C_coefficient,
-                               neutral_constraints_A_coefficient,
-                               neutral_constraints_B_coefficient,
-                               neutral_constraints_C_coefficient,
-                               electron_constraints_A_coefficient,
-                               electron_constraints_B_coefficient,
-                               electron_constraints_C_coefficient,
                                io_time_for_run, parallel_io)
     end
 
@@ -1019,34 +986,10 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
         io_chodura_upper = nothing
     end
 
-    if evolve_density || evolve_upar || evolve_ppar
-        ion_constraints_A_coefficient =
-            create_dynamic_variable!(dynamic, "ion_constraints_A_coefficient", mk_float, z, r;
-                                   n_ion_species=n_ion_species,
-                                   parallel_io=parallel_io,
-                                   description="'A' coefficient enforcing density constraint for ions")
-        ion_constraints_B_coefficient =
-            create_dynamic_variable!(dynamic, "ion_constraints_B_coefficient", mk_float, z, r;
-                                   n_ion_species=n_ion_species,
-                                   parallel_io=parallel_io,
-                                   description="'B' coefficient enforcing flow constraint for ions")
-        ion_constraints_C_coefficient =
-            create_dynamic_variable!(dynamic, "ion_constraints_C_coefficient", mk_float, z, r;
-                                   n_ion_species=n_ion_species,
-                                   parallel_io=parallel_io,
-                                   description="'C' coefficient enforcing pressure constraint for ions")
-    else
-           ion_constraints_A_coefficient = nothing
-           ion_constraints_B_coefficient = nothing
-           ion_constraints_C_coefficient = nothing
-    end
-
     return io_density, io_upar, io_ppar, io_pperp, io_qpar, io_vth, io_dSdt,
            external_source_amplitude, external_source_density_amplitude,
            external_source_momentum_amplitude, external_source_pressure_amplitude,
-           external_source_controller_integral, io_chodura_lower, io_chodura_upper,
-           ion_constraints_A_coefficient, ion_constraints_B_coefficient,
-           ion_constraints_C_coefficient
+           external_source_controller_integral, io_chodura_lower, io_chodura_upper
 end
 
 """
@@ -1087,22 +1030,8 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
                                       description="electron species thermal speed",
                                       units="c_ref")
 
-    electron_constraints_A_coefficient =
-        create_dynamic_variable!(dynamic, "electron_constraints_A_coefficient", mk_float, z, r;
-                               parallel_io=parallel_io,
-                               description="'A' coefficient enforcing density constraint for electrons")
-    electron_constraints_B_coefficient =
-        create_dynamic_variable!(dynamic, "electron_constraints_B_coefficient", mk_float, z, r;
-                               parallel_io=parallel_io,
-                               description="'B' coefficient enforcing flow constraint for electrons")
-    electron_constraints_C_coefficient =
-        create_dynamic_variable!(dynamic, "electron_constraints_C_coefficient", mk_float, z, r;
-                               parallel_io=parallel_io,
-                               description="'C' coefficient enforcing pressure constraint for electrons")
-
     return io_electron_density, io_electron_upar, io_electron_ppar, io_electron_qpar,
-           io_electron_vth, electron_constraints_A_coefficient, electron_constraints_B_coefficient,
-           electron_constraints_C_coefficient
+           io_electron_vth
 end
 
 """
@@ -1203,35 +1132,12 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
         external_source_neutral_controller_integral = nothing
     end
 
-    if evolve_density || evolve_upar || evolve_ppar
-        neutral_constraints_A_coefficient =
-            create_dynamic_variable!(dynamic, "neutral_constraints_A_coefficient", mk_float, z, r;
-                                   n_neutral_species=n_neutral_species,
-                                   parallel_io=parallel_io,
-                                   description="'A' coefficient enforcing density constraint for neutrals")
-        neutral_constraints_B_coefficient =
-            create_dynamic_variable!(dynamic, "neutral_constraints_B_coefficient", mk_float, z, r;
-                                   n_neutral_species=n_neutral_species,
-                                   parallel_io=parallel_io,
-                                   description="'B' coefficient enforcing flow constraint for neutrals")
-        neutral_constraints_C_coefficient =
-            create_dynamic_variable!(dynamic, "neutral_constraints_C_coefficient", mk_float, z, r;
-                                   n_neutral_species=n_neutral_species,
-                                   parallel_io=parallel_io,
-                                   description="'C' coefficient enforcing pressure constraint for neutrals")
-    else
-           neutral_constraints_A_coefficient = nothing
-           neutral_constraints_B_coefficient = nothing
-           neutral_constraints_C_coefficient = nothing
-    end
-
     return io_density_neutral, io_uz_neutral, io_pz_neutral, io_qz_neutral,
            io_thermal_speed_neutral, external_source_neutral_amplitude,
            external_source_neutral_density_amplitude,
            external_source_neutral_momentum_amplitude,
            external_source_neutral_pressure_amplitude,
-           external_source_neutral_controller_integral, neutral_constraints_A_coefficient,
-           neutral_constraints_B_coefficient, neutral_constraints_C_coefficient
+           external_source_neutral_controller_integral
 end
 
 """
@@ -1411,15 +1317,6 @@ function reopen_moments_io(file_info)
                                getvar("external_source_neutral_momentum_amplitude"),
                                getvar("external_source_neutral_pressure_amplitude"),
                                getvar("external_source_neutral_controller_integral"),
-                               getvar("ion_constraints_A_coefficient"),
-                               getvar("ion_constraints_B_coefficient"),
-                               getvar("ion_constraints_C_coefficient"),
-                               getvar("neutral_constraints_A_coefficient"),
-                               getvar("neutral_constraints_B_coefficient"),
-                               getvar("neutral_constraints_C_coefficient"),
-                               getvar("electron_constraints_A_coefficient"),
-                               getvar("electron_constraints_B_coefficient"),
-                               getvar("electron_constraints_C_coefficient"),
                                getvar("time_for_run"), parallel_io)
     end
 
@@ -1524,15 +1421,6 @@ function reopen_dfns_io(file_info)
                                      getvar("external_source_neutral_momentum_amplitude"),
                                      getvar("external_source_neutral_pressure_amplitude"),
                                      getvar("external_source_neutral_controller_integral"),
-                                     getvar("ion_constraints_A_coefficient"),
-                                     getvar("ion_constraints_B_coefficient"),
-                                     getvar("ion_constraints_C_coefficient"),
-                                     getvar("neutral_constraints_A_coefficient"),
-                                     getvar("neutral_constraints_B_coefficient"),
-                                     getvar("neutral_constraints_C_coefficient"),
-                                     getvar("electron_constraints_A_coefficient"),
-                                     getvar("electron_constraints_B_coefficient"),
-                                     getvar("electron_constraints_C_coefficient"),
                                      getvar("time_for_run"),
                                      parallel_io)
 
@@ -1697,17 +1585,6 @@ function write_ion_moments_data_to_binary(moments, n_ion_species,
                                       t_idx, parallel_io, z, r)
             end
         end
-        if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
-            append_to_dynamic_var(io_moments.ion_constraints_A_coefficient,
-                                  moments.ion.constraints_A_coefficient, t_idx,
-                                  parallel_io, z, r, n_ion_species)
-            append_to_dynamic_var(io_moments.ion_constraints_B_coefficient,
-                                  moments.ion.constraints_B_coefficient, t_idx,
-                                  parallel_io, z, r, n_ion_species)
-            append_to_dynamic_var(io_moments.ion_constraints_C_coefficient,
-                                  moments.ion.constraints_C_coefficient, t_idx,
-                                  parallel_io, z, r, n_ion_species)
-        end
     end
 
     return nothing
@@ -1736,15 +1613,6 @@ function write_electron_moments_data_to_binary(moments,
                               moments.electron.qpar, t_idx, parallel_io, z, r)
         append_to_dynamic_var(io_moments.electron_thermal_speed, moments.electron.vth,
                               t_idx, parallel_io, z, r)
-        append_to_dynamic_var(io_moments.electron_constraints_A_coefficient,
-                              moments.electron.constraints_A_coefficient, t_idx,
-                              parallel_io, z, r)
-        append_to_dynamic_var(io_moments.electron_constraints_B_coefficient,
-                              moments.electron.constraints_B_coefficient, t_idx,
-                              parallel_io, z, r)
-        append_to_dynamic_var(io_moments.electron_constraints_C_coefficient,
-                              moments.electron.constraints_C_coefficient, t_idx,
-                              parallel_io, z, r)
     end
 
     return nothing
@@ -1807,17 +1675,6 @@ function write_neutral_moments_data_to_binary(moments, n_neutral_species,
                                       moments.neutral.external_source_controller_integral,
                                       t_idx, parallel_io, z, r)
             end
-        end
-        if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
-            append_to_dynamic_var(io_moments.neutral_constraints_A_coefficient,
-                                  moments.neutral.constraints_A_coefficient, t_idx,
-                                  parallel_io, z, r, n_neutral_species)
-            append_to_dynamic_var(io_moments.neutral_constraints_B_coefficient,
-                                  moments.neutral.constraints_B_coefficient, t_idx,
-                                  parallel_io, z, r, n_neutral_species)
-            append_to_dynamic_var(io_moments.neutral_constraints_C_coefficient,
-                                  moments.neutral.constraints_C_coefficient, t_idx,
-                                  parallel_io, z, r, n_neutral_species)
         end
     end
 

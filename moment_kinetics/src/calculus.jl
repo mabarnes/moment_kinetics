@@ -360,9 +360,6 @@ function assign_endpoint!(df1d::AbstractArray{mk_float,Ndims},
 	if coord.name == "z" && Ndims==2
 		df1d[j,:] .= receive_buffer[:]
 		#println("ASSIGNING DATA")
-        elseif coord.name == "z" && Ndims==3
-		df1d[j,:,:] .= receive_buffer[:,:]
-		#println("ASSIGNING DATA")
 	elseif coord.name == "z" && Ndims==5
 		df1d[:,:,j,:,:] .= receive_buffer[:,:,:,:]
 		#println("ASSIGNING DATA")
@@ -371,9 +368,6 @@ function assign_endpoint!(df1d::AbstractArray{mk_float,Ndims},
 		#println("ASSIGNING DATA")
 	elseif coord.name == "r" && Ndims==2
 		df1d[:,j] .= receive_buffer[:]
-		#println("ASSIGNING DATA")
-	elseif coord.name == "r" && Ndims==3
-		df1d[:,j,:] .= receive_buffer[:,:]
 		#println("ASSIGNING DATA")
 	elseif coord.name == "r" && Ndims==5
 		df1d[:,:,:,j,:] .= receive_buffer[:,:,:,:]

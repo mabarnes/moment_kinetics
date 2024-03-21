@@ -10,7 +10,7 @@ const context = 2
 # Use DEPOT path to get the path julia base/stdlib and to installed packages,
 # as suggested here:
 # https://discourse.julialang.org/t/get-path-to-julia-install/65315
-results = analyze_malloc([[".", joinpath("..", "moment_kinetics", "src")]; [x for x in DEPOT_PATH if isdir(x)]])
+results = analyze_malloc([[".", joinpath("..", "src")]; [x for x in DEPOT_PATH if isdir(x)]])
 n_results = length(results)
 
 """

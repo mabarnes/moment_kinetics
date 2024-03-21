@@ -68,18 +68,12 @@ function hard_force_moment_constraints!(f, moments, vpa)
         B = -A*I1/I2
 
         @. f1d = A*f1d + B*vpa.grid*f1d
-
-        C = NaN
     elseif moments.evolve_density
         I0 = integrate_over_vspace(f1d, vpa.wgts)
-        A = 1.0 / I0
-        @. f1d = A * f1d
-
-        B = NaN
-        C = NaN
+        @. f1d = f1d / I0
     end
 
-    return A, B, C
+    return nothing
 end
 
 """
@@ -118,18 +112,12 @@ function hard_force_moment_constraints_neutral!(f, moments, vz)
         B = -A*I1/I2
 
         @. f1d = A*f1d + B*vz.grid*f1d
-
-        C = NaN
     elseif moments.evolve_density
         I0 = integrate_over_vspace(f1d, vz.wgts)
-        A = 1.0 / I0
-        @. f1d = A * f1d
-
-        B = NaN
-        C = NaN
+        @. f1d = f1d / I0
     end
 
-    return A, B, C
+    return nothing
 end
 
 end
