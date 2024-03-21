@@ -26,13 +26,15 @@ struct gyro_operators
 end
 
 """
-initialise the gyroaverage matrix
-currently the matrix for single field (z,r)
-is supported. Gyroaverages are assumed to have 
-no contribution from outside of the domain 
- -- this should be modified if we support periodic or
-    other nonzero boundary conditions for the z and r domains,
-    but might be appropriate for domains with zero boundary conditions   
+Function to initialise the gyroaverage matrix.
+Gyroaverages are assumed to have 
+no contribution from outside of the domain for
+non-periodic boundary conditions. Periodic boundary
+conditions are supported by taking data from the 
+the appropriate part of the domain, determined by
+the path of the particle into a periodic copy of the domain. 
+This behaviour should be modified if we aim to support 
+other nonzero boundary conditions for the z and r domains.
 """
 
 function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition;print_info=false)
@@ -268,6 +270,10 @@ function lagrange_poly(j,x_nodes,x)
     return poly
 end
 
+"""
+function for gyroaveraging a field of shape (z,r)
+and filling the result into an array of shape (vperp,z,r,s)
+"""
 function gyroaverage_field!(gfield_out,field_in,gyro,vperp,z,r,composition)
     @boundscheck z.n == size(field_in, 1) || throw(BoundsError(field_in))
     @boundscheck r.n == size(field_in, 2) || throw(BoundsError(field_in))
@@ -301,6 +307,10 @@ function gyroaverage_field!(gfield_out,field_in,gyro,vperp,z,r,composition)
 
 end
 
+"""
+function for gyroaveraging a charge particle pdf of shape (vpa,vperp,z,r,s)
+and filling the result into an of the same shape
+"""
 function gyroaverage_pdf!(gpdf_out,pdf_in,gyro,vpa,vperp,z,r,composition)
     @boundscheck vpa.n == size(pdf_in, 1) || throw(BoundsError(pdf_in))
     @boundscheck vperp.n == size(pdf_in, 2) || throw(BoundsError(pdf_in))
