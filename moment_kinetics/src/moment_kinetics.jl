@@ -286,7 +286,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     input = mk_input(input_dict; save_inputs_to_txt=true, ignore_MPI=false)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
-    io_input, evolve_moments, t_params, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
+    io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
         vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
         vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
         drive_input, external_source_settings, num_diss_params,
@@ -328,6 +328,8 @@ function setup_moment_kinetics(input_dict::AbstractDict;
                               external_source_settings, manufactured_solns_input)
         # initialize time variable
         code_time = 0.
+        dt = nothing
+        dt_before_last_fail = nothing
         previous_runs_info = nothing
     else
         restarting = true
@@ -383,8 +385,8 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         MPI.Barrier(comm_world)
 
         # Reload pdf and moments from an existing output file
-        code_time, previous_runs_info, restart_time_index =
-            reload_evolving_fields!(pdf, moments, boundary_distributions, t_params,
+        code_time, dt, dt_before_last_fail, previous_runs_info, restart_time_index =
+            reload_evolving_fields!(pdf, moments, boundary_distributions,
                                     backup_prefix_iblock, restart_time_index,
                                     composition, geometry, r, z, vpa, vperp, vzeta, vr,
                                     vz)
@@ -400,12 +402,13 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     # the main time advance loop -- including normalisation of f by density if requested
 
     moments, fields, spectral_objects, advect_objects,
-    scratch, advance, fp_arrays, scratch_dummy, manufactured_source_list =
+    scratch, advance, t_params, fp_arrays, scratch_dummy, manufactured_source_list =
         setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral,
-            r_spectral, composition, drive_input, moments, t_params, collisions, species,
-            geometry, boundary_distributions, external_source_settings, num_diss_params,
-            manufactured_solns_input, restarting)
+            r_spectral, composition, drive_input, moments, t_input, code_time, dt,
+            dt_before_last_fail, collisions, species, geometry, boundary_distributions,
+            external_source_settings, num_diss_params, manufactured_solns_input,
+            restarting)
 
     # This is the closest we can get to the end time of the setup before writing it to the
     # output file

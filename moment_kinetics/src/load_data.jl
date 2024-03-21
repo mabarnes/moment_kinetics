@@ -549,10 +549,12 @@ end
 """
 Reload pdf and moments from an existing output file.
 """
-function reload_evolving_fields!(pdf, moments, boundary_distributions, t_params,
+function reload_evolving_fields!(pdf, moments, boundary_distributions,
                                  restart_prefix_iblock, time_index, composition, geometry,
                                  r, z, vpa, vperp, vzeta, vr, vz)
     code_time = 0.0
+    dt = nothing
+    dt_before_last_fail = nothing
     previous_runs_info = nothing
     begin_serial_region()
     @serial_region begin
@@ -1846,30 +1848,28 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, t_params,
                     load_neutral_boundary_pdf("pdf_rboundary_neutral_left", 1)
                 boundary_distributions.pdf_rboundary_neutral[:,:,:,:,2,:] .=
                     load_neutral_boundary_pdf("pdf_rboundary_neutral_right", r.n)
+            end
 
-                if t_params.adaptive[]
-                    if "dt" ∈ keys(dynamic)
-                        # If "dt" is not present, the file being restarted from is an older
-                        # one that did not have an adaptive timestep, so just leave the value
-                        # of "dt" from the input file.
-                        t_params.dt[] = load_slice(dynamic, "dt", time_index)
-                    end
-                    if "dt_before_last_fail" ∈ keys(dynamic)
-                        # If "dt_before_last_fail" is not present, the file being
-                        # restarted from is an older one that did not have an adaptive
-                        # timestep, so just leave the value of "dt_before_last_fail" from
-                        # the input file.
-                        t_params.dt_before_last_fail[] =
-                            load_slice(dynamic, "dt_before_last_fail", time_index)
-                    end
-                end
+            if "dt" ∈ keys(dynamic)
+                # If "dt" is not present, the file being restarted from is an older
+                # one that did not have an adaptive timestep, so just leave the value
+                # of "dt" from the input file.
+                dt = load_slice(dynamic, "dt", time_index)
+            end
+            if "dt_before_last_fail" ∈ keys(dynamic)
+                # If "dt_before_last_fail" is not present, the file being
+                # restarted from is an older one that did not have an adaptive
+                # timestep, so just leave the value of "dt_before_last_fail" from
+                # the input file.
+                dt_before_last_fail = load_slice(dynamic, "dt_before_last_fail",
+                                                 time_index)
             end
         finally
             close(fid)
         end
     end
 
-    return code_time, previous_runs_info, time_index
+    return code_time, dt, dt_before_last_fail, previous_runs_info, time_index
 end
 
 """
@@ -2473,7 +2473,7 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
 
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
-    io_input, evolve_moments, t_params, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
+    io_input, evolve_moments, t_input, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
         composition, species, collisions, geometry, drive_input, external_source_settings,
         num_diss_params, manufactured_solns_input = mk_input(input)
 

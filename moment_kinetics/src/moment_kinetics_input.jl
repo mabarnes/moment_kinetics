@@ -9,8 +9,7 @@ export read_input_file
 export get_default_rhostar
 
 using ..type_definitions: mk_float, mk_int
-using ..array_allocation: allocate_float, allocate_bool, allocate_shared_float,
-                          allocate_shared_bool
+using ..array_allocation: allocate_float
 using ..communication
 using ..coordinates: define_coordinate
 using ..external_sources
@@ -20,7 +19,6 @@ using ..finite_differences: fd_check_option
 using ..input_structs
 using ..numerical_dissipation: setup_numerical_dissipation
 using ..reference_parameters
-using ..runge_kutta: setup_runge_kutta_coefficients!
 using ..geo: init_magnetic_geometry, setup_geometry_input
 
 using MPI
@@ -473,63 +471,6 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     #irank_z = 0
     #nrank_z = 0
 
-    if ignore_MPI
-        dt_shared = allocate_float(1)
-        previous_dt_shared = allocate_float(1)
-        next_output_time = allocate_float(1)
-        dt_before_output = allocate_float(1)
-        dt_before_last_fail = allocate_float(1)
-        step_to_output = allocate_bool(1)
-        dt_shared[] = timestepping_input.dt
-        previous_dt_shared[] = timestepping_input.dt
-        next_output_time[] = 0.0
-        dt_before_output[] = timestepping_input.dt
-        dt_before_last_fail[] = Inf
-        step_to_output[] = false
-    else
-        dt_shared = allocate_shared_float(1)
-        previous_dt_shared = allocate_shared_float(1)
-        next_output_time = allocate_shared_float(1)
-        dt_before_output = allocate_shared_float(1)
-        dt_before_last_fail = allocate_shared_float(1)
-        step_to_output = allocate_shared_bool(1)
-        if block_rank[] == 0
-            dt_shared[] = timestepping_input.dt
-            previous_dt_shared[] = timestepping_input.dt
-            next_output_time[] = 0.0
-            dt_before_output[] = timestepping_input.dt
-            dt_before_last_fail[] = Inf
-            step_to_output[] = false
-        end
-        _block_synchronize()
-    end
-    rk_coefs, n_rk_stages, rk_order, adaptive, low_storage, CFL_prefactor =
-        setup_runge_kutta_coefficients!(timestepping_input.type,
-                                        timestepping_input.CFL_prefactor,
-                                        timestepping_input.split_operators)
-    if timestepping_input.high_precision_error_sum
-        error_sum_zero = Float128(0.0)
-    else
-        error_sum_zero = 0.0
-    end
-    t_params = time_info(timestepping_input.nstep, dt_shared, previous_dt_shared,
-                         next_output_time, dt_before_output, dt_before_last_fail,
-                         CFL_prefactor, step_to_output, Ref(0),
-                         Ref(0), mk_int[], mk_int[], timestepping_input.nwrite,
-                         timestepping_input.nwrite_dfns, timestepping_input.type,
-                         rk_coefs, n_rk_stages, rk_order, adaptive, low_storage,
-                         timestepping_input.rtol, timestepping_input.atol,
-                         timestepping_input.atol_upar,
-                         timestepping_input.step_update_prefactor,
-                         timestepping_input.max_increase_factor,
-                         timestepping_input.max_increase_factor_near_last_fail,
-                         timestepping_input.last_fail_proximity_factor,
-                         timestepping_input.minimum_dt, timestepping_input.maximum_dt,
-                         error_sum_zero, timestepping_input.split_operators,
-                         timestepping_input.steady_state_residual,
-                         timestepping_input.converged_residual_value,
-                         manufactured_solns_input.use_for_advance,
-                         timestepping_input.stopfile_name)
     # replace mutable structures with immutable ones to optimize performance
     # and avoid possible misunderstandings	
 	z_advection_immutable = advection_input(z.advection.option, z.advection.constant_speed,
@@ -671,16 +612,17 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     end
 
     # check input (and initialized coordinate structs) to catch errors/unsupported options
-    check_input(io, output_dir, t_params.nstep, t_params.dt[], r, z, vpa, vperp, composition,
-                species_immutable, evolve_moments, num_diss_params, save_inputs_to_txt,
-                collisions)
+    check_input(io, output_dir, timestepping_input.nstep, timestepping_input.dt, r, z,
+                vpa, vperp, composition, species_immutable, evolve_moments,
+                num_diss_params, save_inputs_to_txt, collisions)
 
     # return immutable structs for z, vpa, species and composition
-    all_inputs = (io_immutable, evolve_moments, t_params, z, z_spectral, r, r_spectral,
-                  vpa, vpa_spectral, vperp, vperp_spectral, gyrophase, gyrophase_spectral,
-                  vz, vz_spectral, vr, vr_spectral, vzeta, vzeta_spectral, composition,
-                  species_immutable, collisions, geometry, drive_immutable,
-                  external_source_settings, num_diss_params, manufactured_solns_input)
+    all_inputs = (io_immutable, evolve_moments, timestepping_input, z, z_spectral, r,
+                  r_spectral, vpa, vpa_spectral, vperp, vperp_spectral, gyrophase,
+                  gyrophase_spectral, vz, vz_spectral, vr, vr_spectral, vzeta,
+                  vzeta_spectral, composition, species_immutable, collisions, geometry,
+                  drive_immutable, external_source_settings, num_diss_params,
+                  manufactured_solns_input)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
     close(io)

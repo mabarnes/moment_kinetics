@@ -39,6 +39,7 @@ argument.
 """
 struct time_info{Terrorsum <: Real}
     nstep::mk_int
+    end_time::mk_float
     dt::MPISharedArray{mk_float,1}
     previous_dt::MPISharedArray{mk_float,1}
     next_output_time::MPISharedArray{mk_float,1}
@@ -50,8 +51,8 @@ struct time_info{Terrorsum <: Real}
     failure_counter::Ref{mk_int}
     failure_caused_by::Vector{mk_int}
     limit_caused_by::Vector{mk_int}
-    nwrite_moments::mk_int
-    nwrite_dfns::mk_int
+    moments_output_times::Vector{mk_float}
+    dfns_output_times::Vector{mk_float}
     type::String
     rk_coefs::Array{mk_float,2}
     n_rk_stages::mk_int

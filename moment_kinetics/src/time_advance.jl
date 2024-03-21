@@ -9,7 +9,7 @@ export setup_dummy_and_buffer_arrays
 using MPI
 using StatsBase: mean
 using ..type_definitions: mk_float, mk_int
-using ..array_allocation: allocate_float, allocate_shared_float
+using ..array_allocation: allocate_float, allocate_shared_float, allocate_shared_bool
 using ..communication
 using ..communication: _block_synchronize
 using ..debugging
@@ -57,7 +57,8 @@ using ..fokker_planck: init_fokker_planck_collisions_weak_form, explicit_fokker_
 using ..manufactured_solns: manufactured_sources
 using ..advection: advection_info
 using ..runge_kutta: rk_update_evolved_moments!, rk_update_evolved_moments_neutral!,
-                     rk_update_variable!, rk_error_variable!
+                     rk_update_variable!, rk_error_variable!,
+                     setup_runge_kutta_coefficients!
 using ..utils: to_minutes, get_minimum_CFL_z, get_minimum_CFL_vpa,
                get_minimum_CFL_neutral_z, get_minimum_CFL_neutral_vz
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
@@ -185,13 +186,64 @@ EM fields, and advection terms
 function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
                              vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
                              z_spectral, r_spectral, composition, drive_input, moments,
-                             t_params, collisions, species, geometry,
-                             boundary_distributions, external_source_settings,
-                             num_diss_params, manufactured_solns_input, restarting)
+                             t_input, code_time, dt_reload, dt_before_last_fail_reload,
+                             collisions, species, geometry, boundary_distributions,
+                             external_source_settings, num_diss_params,
+                             manufactured_solns_input, restarting)
     # define some local variables for convenience/tidiness
     n_species = composition.n_species
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
+
+    dt_shared = allocate_shared_float(1)
+    previous_dt_shared = allocate_shared_float(1)
+    next_output_time = allocate_shared_float(1)
+    dt_before_output = allocate_shared_float(1)
+    dt_before_last_fail = allocate_shared_float(1)
+    step_to_output = allocate_shared_bool(1)
+    if block_rank[] == 0
+        dt_shared[] = dt_reload === nothing ? t_input.dt : dt_reload
+        previous_dt_shared[] = dt_reload === nothing ? t_input.dt : dt_reload
+        next_output_time[] = 0.0
+        dt_before_output[] = dt_reload === nothing ? t_input.dt : dt_reload
+        dt_before_last_fail[] = dt_before_last_fail_reload === nothing ? Inf : dt_before_last_fail_reload
+        step_to_output[] = false
+    end
+    _block_synchronize()
+
+    end_time = code_time + t_input.dt * t_input.nstep
+    epsilon = 1.e-11
+    moments_output_times = [code_time + i*t_input.dt
+                            for i ∈ t_input.nwrite:t_input.nwrite:t_input.nstep]
+    if moments_output_times[end] < end_time - epsilon
+        push!(moments_output_times, end_time)
+    end
+    dfns_output_times = [code_time + i*t_input.dt
+                         for i ∈ t_input.nwrite_dfns:t_input.nwrite_dfns:t_input.nstep]
+    if dfns_output_times[end] < end_time - epsilon
+        push!(dfns_output_times, end_time)
+    end
+    rk_coefs, n_rk_stages, rk_order, adaptive, low_storage, CFL_prefactor =
+        setup_runge_kutta_coefficients!(t_input.type,
+                                        t_input.CFL_prefactor,
+                                        t_input.split_operators)
+    if t_input.high_precision_error_sum
+        error_sum_zero = Float128(0.0)
+    else
+        error_sum_zero = 0.0
+    end
+    t_params = time_info(t_input.nstep, end_time, dt_shared, previous_dt_shared, next_output_time,
+                         dt_before_output, dt_before_last_fail, CFL_prefactor,
+                         step_to_output, Ref(0), Ref(0), mk_int[], mk_int[],
+                         moments_output_times, dfns_output_times, t_input.type, rk_coefs,
+                         n_rk_stages, rk_order, adaptive, low_storage, t_input.rtol,
+                         t_input.atol, t_input.atol_upar, t_input.step_update_prefactor,
+                         t_input.max_increase_factor,
+                         t_input.max_increase_factor_near_last_fail,
+                         t_input.last_fail_proximity_factor, t_input.minimum_dt,
+                         t_input.maximum_dt, error_sum_zero, t_input.split_operators,
+                         t_input.steady_state_residual, t_input.converged_residual_value,
+                         manufactured_solns_input.use_for_advance, t_input.stopfile_name)
 
     # Make Vectors that count which variable caused timestep limits and timestep failures
     # the right length. Do this setup even when not using adaptive timestepping, because
@@ -484,7 +536,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     _block_synchronize()
 
     return moments, fields, spectral_objects, advect_objects,
-    scratch, advance, fp_arrays, scratch_dummy, manufactured_source_list
+    scratch, advance, t_params, fp_arrays, scratch_dummy, manufactured_source_list
 end
 
 """
@@ -863,23 +915,13 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
 
     start_time = now()
 
-    end_time = t + t_params.dt[] * t_params.nstep
     epsilon = 1.e-11
     moments_output_counter = 1
-    moments_output_times = [t + i*t_params.dt[]
-                            for i ∈ t_params.nwrite_moments:t_params.nwrite_moments:t_params.nstep]
-    if moments_output_times[end] < end_time - epsilon
-        push!(moments_output_times, end_time)
-    end
     dfns_output_counter = 1
-    dfns_output_times = [t + i*t_params.dt[]
-                         for i ∈ t_params.nwrite_dfns:t_params.nwrite_dfns:t_params.nstep]
-    if dfns_output_times[end] < end_time - epsilon
-        push!(dfns_output_times, end_time)
-    end
     @serial_region begin
-        t_params.next_output_time[] = min(moments_output_times[moments_output_counter],
-                                         dfns_output_times[dfns_output_counter])
+        t_params.next_output_time[] =
+            min(t_params.moments_output_times[moments_output_counter],
+                t_params.dfns_output_times[dfns_output_counter])
     end
     _block_synchronize()
 
@@ -905,7 +947,7 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
         # update the time
         t += t_params.previous_dt[]
 
-        if t ≥ end_time - epsilon || t_params.dt[] < 0.0
+        if t ≥ t_params.end_time - epsilon || t_params.dt[] < 0.0
             # Ensure all output is written at the final step
             # Negative t_params.dt[] indicates the time stepping has failed, so stop and
             # write output.
@@ -918,26 +960,26 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
             finish_now = true
         end
 
-        if t ≥ moments_output_times[moments_output_counter] - epsilon
+        if t ≥ t_params.moments_output_times[moments_output_counter] - epsilon
             moments_output_counter += 1
-            if moments_output_counter ≤ length(moments_output_times)
+            if moments_output_counter ≤ length(t_params.moments_output_times)
                 @serial_region begin
                     t_params.next_output_time[] =
-                        min(moments_output_times[moments_output_counter],
-                            dfns_output_times[dfns_output_counter])
+                        min(t_params.moments_output_times[moments_output_counter],
+                            t_params.dfns_output_times[dfns_output_counter])
                 end
             end
             write_moments = true
         else
             write_moments = false
         end
-        if t ≥ dfns_output_times[dfns_output_counter] - epsilon
+        if t ≥ t_params.dfns_output_times[dfns_output_counter] - epsilon
             dfns_output_counter += 1
-            if dfns_output_counter ≤ length(dfns_output_times)
+            if dfns_output_counter ≤ length(t_params.dfns_output_times)
                 @serial_region begin
                     t_params.next_output_time[] =
-                        min(moments_output_times[moments_output_counter],
-                            dfns_output_times[dfns_output_counter])
+                        min(t_params.moments_output_times[moments_output_counter],
+                            t_params.dfns_output_times[dfns_output_counter])
                 end
             end
             write_dfns = true
@@ -981,7 +1023,7 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
 
             time_for_run = to_minutes(now() - start_time)
         end
-        # write moments data to file every nwrite_moments time steps
+        # write moments data to file
         if write_moments || finish_now
             @debug_detect_redundant_block_synchronize begin
                 # Skip check for redundant _block_synchronize() during file I/O because
@@ -1104,7 +1146,7 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
             break
         end
         if t_params.adaptive
-            if t >= end_time - epsilon
+            if t >= t_params.end_time - epsilon
                 break
             end
         else
