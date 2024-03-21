@@ -3022,7 +3022,7 @@ function irregular_heatmap!(ax, xs, ys, zs; kwargs...)
 
     vertices, faces, colors = curvilinear_grid_mesh(xs, ys, zeros(nx, ny), zs)
 
-    return mesh!(ax, vertices, faces; color = colors, shading = false, kwargs...)
+    return mesh!(ax, vertices, faces; color = colors, shading = NoShading, kwargs...)
 end
 
 """
