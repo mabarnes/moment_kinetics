@@ -13,7 +13,9 @@ export load_rank_data
 export load_species_data
 export read_distributed_zr_data!
 
-using ..array_allocation: allocate_float
+using ..array_allocation: allocate_float, allocate_int
+using ..calculus: derivative!
+using ..communication: setup_distributed_memory_MPI
 using ..coordinates: coordinate, define_coordinate
 using ..file_io: check_io_implementation, get_group, get_subgroup_keys, get_variable_keys
 using ..input_structs: advection_input, grid_input, hdf5, netcdf
@@ -21,12 +23,23 @@ using ..interpolation: interpolate_to_grid_1d!
 using ..krook_collisions
 using ..looping
 using ..moment_kinetics_input: mk_input
+using ..neutral_vz_advection: update_speed_neutral_vz!
+using ..neutral_z_advection: update_speed_neutral_z!
 using ..type_definitions: mk_float, mk_int
+using ..utils: get_CFL!, get_minimum_CFL_z, get_minimum_CFL_vpa, get_minimum_CFL_neutral_z,
+               get_minimum_CFL_neutral_vz
+using ..vpa_advection: update_speed_vpa!
+using ..z_advection: update_speed_z!
 
 using Glob
 using HDF5
 using MPI
 
+const timestep_diagnostic_variables = ("time_for_run", "step_counter", "dt",
+                                       "failure_counter", "failure_caused_by",
+                                       "steps_per_output", "failures_per_output",
+                                       "failure_caused_by_per_output",
+                                       "average_successful_dt")
 const em_variables = ("phi", "Er", "Ez")
 const ion_moment_variables = ("density", "parallel_flow", "parallel_pressure",
                               "thermal_speed", "temperature", "parallel_heat_flux",
@@ -282,8 +295,9 @@ function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=no
     end
     # Define input to create coordinate struct
     input = grid_input(name, ngrid, nelement_global, nelement_local, nrank, irank, L,
-                       discretization, fd_option, cheb_option, bc, advection_input("", 0.0, 0.0, 0.0),
-                       MPI.COMM_NULL, element_spacing_option)
+                       discretization, fd_option, cheb_option, bc,
+                       advection_input("default", 0.0, 0.0, 0.0), MPI.COMM_NULL,
+                       element_spacing_option)
 
     coord, spectral = define_coordinate(input, parallel_io; ignore_MPI=ignore_MPI)
 
@@ -545,10 +559,12 @@ end
 """
 Reload pdf and moments from an existing output file.
 """
-function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_prefix_iblock,
-                                 time_index, composition, geometry, r, z, vpa, vperp,
-                                 vzeta, vr, vz)
+function reload_evolving_fields!(pdf, moments, boundary_distributions,
+                                 restart_prefix_iblock, time_index, composition, geometry,
+                                 r, z, vpa, vperp, vzeta, vr, vz)
     code_time = 0.0
+    dt = nothing
+    dt_before_last_fail = nothing
     previous_runs_info = nothing
     restart_had_kinetic_electrons = false
     begin_serial_region()
@@ -815,12 +831,27 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                                                 restart_evolve_density,
                                                 restart_evolve_upar, restart_evolve_ppar)
             end
+
+            if "dt" ∈ keys(dynamic)
+                # If "dt" is not present, the file being restarted from is an older
+                # one that did not have an adaptive timestep, so just leave the value
+                # of "dt" from the input file.
+                dt = load_slice(dynamic, "dt", time_index)
+            end
+            if "dt_before_last_fail" ∈ keys(dynamic)
+                # If "dt_before_last_fail" is not present, the file being
+                # restarted from is an older one that did not have an adaptive
+                # timestep, so just leave the value of "dt_before_last_fail" from
+                # the input file.
+                dt_before_last_fail = load_slice(dynamic, "dt_before_last_fail",
+                                                time_index)
+            end
         finally
             close(fid)
         end
     end
 
-    return code_time, previous_runs_info, time_index, restart_had_kinetic_electrons
+    return code_time, dt, dt_before_last_fail, previous_runs_info, time_index, restart_had_kinetic_electrons
 end
 
 """
@@ -919,6 +950,7 @@ function reload_electron_data!(pdf, moments, restart_prefix_iblock, time_index, 
                                     restart_vpa_spectral, interpolation_needed,
                                     restart_evolve_density, restart_evolve_upar,
                                     restart_evolve_ppar)
+
         finally
             close(fid)
         end
@@ -3084,7 +3116,11 @@ end
 
 Get file handles and other info for a single run
 
-`run_dir` is the directory to read output from.
+`run_dir` is either the directory to read output from (whose name should be the
+`run_name`), or a moment_kinetics binary output file. If a file is passed, it is only used
+to infer the directory and `run_name`, so it is possible for example to pass a
+`.moments.h5` output file and also `dfns=true` and the `.dfns.h5` file will be the one
+actually opened (as long as it exists).
 
 `restart_index` can be given by passing a Tuple, e.g. `("runs/example", 42)` as the
 positional argument. It specifies which restart to read if there are multiple restarts. If
@@ -3143,15 +3179,30 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
               * "`(String, Nothing)`. Got $run_dir")
     end
 
-    if !isdir(this_run_dir)
-        error("$this_run_dir is not a directory")
+    if isfile(this_run_dir)
+        # this_run_dir is actually a filename. Assume it is a moment_kinetics output file
+        # and infer the directory and the run_name from the filename.
+
+        filename = basename(this_run_dir)
+        this_run_dir = dirname(this_run_dir)
+
+        if occursin(".moments.", filename)
+            run_name = split(filename, ".moments.")[1]
+        elseif occursin(".dfns.", filename)
+            run_name = split(filename, ".dfns.")[1]
+        else
+            error("Cannot recognise '$this_run_dir' as a moment_kinetics output file")
+        end
+    elseif isdir(this_run_dir)
+        # Normalise by removing any trailing slash - with a slash basename() would return an
+        # empty string
+        this_run_dir = rstrip(this_run_dir, '/')
+
+        run_name = basename(this_run_dir)
+    else
+        error("$this_run_dir does not exist")
     end
 
-    # Normalise by removing any trailing slash - with a slash basename() would return an
-    # empty string
-    this_run_dir = rstrip(this_run_dir, '/')
-
-    run_name = basename(this_run_dir)
     base_prefix = joinpath(this_run_dir, run_name)
     if restart_index === nothing
         # Find output files from all restarts in the directory
@@ -3238,32 +3289,30 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
     r, r_spectral, z, z_spectral = construct_global_zr_coords(r_local, z_local;
                                                               ignore_MPI=true)
 
-    if dfns
-        vperp, vperp_spectral, vperp_chunk_size =
-            load_coordinate_data(file_final_restart, "vperp"; ignore_MPI=true)
-        vpa, vpa_spectral, vpa_chunk_size =
-            load_coordinate_data(file_final_restart, "vpa"; ignore_MPI=true)
+    vperp, vperp_spectral, vperp_chunk_size =
+        load_coordinate_data(file_final_restart, "vperp"; ignore_MPI=true)
+    vpa, vpa_spectral, vpa_chunk_size =
+        load_coordinate_data(file_final_restart, "vpa"; ignore_MPI=true)
 
-        if n_neutral_species > 0
-            vzeta, vzeta_spectral, vzeta_chunk_size =
-                load_coordinate_data(file_final_restart, "vzeta"; ignore_MPI=true)
-            vr, vr_spectral, vr_chunk_size =
-                load_coordinate_data(file_final_restart, "vr"; ignore_MPI=true)
-            vz, vz_spectral, vz_chunk_size =
-                load_coordinate_data(file_final_restart, "vz"; ignore_MPI=true)
-        else
-            dummy_adv_input = advection_input("default", 1.0, 0.0, 0.0)
-            dummy_comm = MPI.COMM_NULL
-            dummy_input = grid_input("dummy", 1, 1, 1, 1, 0, 1.0,
-                                     "chebyshev_pseudospectral", "", "", "periodic",
-                                     dummy_adv_input, dummy_comm, "uniform")
-            vzeta, vzeta_spectral = define_coordinate(dummy_input)
-            vzeta_chunk_size = 1
-            vr, vr_spectral = define_coordinate(dummy_input)
-            vr_chunk_size = 1
-            vz, vz_spectral = define_coordinate(dummy_input)
-            vz_chunk_size = 1
-        end
+    if n_neutral_species > 0
+        vzeta, vzeta_spectral, vzeta_chunk_size =
+            load_coordinate_data(file_final_restart, "vzeta"; ignore_MPI=true)
+        vr, vr_spectral, vr_chunk_size =
+            load_coordinate_data(file_final_restart, "vr"; ignore_MPI=true)
+        vz, vz_spectral, vz_chunk_size =
+            load_coordinate_data(file_final_restart, "vz"; ignore_MPI=true)
+    else
+        dummy_adv_input = advection_input("default", 1.0, 0.0, 0.0)
+        dummy_comm = MPI.COMM_NULL
+        dummy_input = grid_input("dummy", 1, 1, 1, 1, 0, 1.0,
+                                 "chebyshev_pseudospectral", "", "", "periodic",
+                                 dummy_adv_input, dummy_comm, "uniform")
+        vzeta, vzeta_spectral = define_coordinate(dummy_input)
+        vzeta_chunk_size = 1
+        vr, vr_spectral = define_coordinate(dummy_input)
+        vr_chunk_size = 1
+        vz, vz_spectral = define_coordinate(dummy_input)
+        vz_chunk_size = 1
     end
 
     if parallel_io
@@ -3274,43 +3323,26 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         files = run_prefixes
     end
 
-    if dfns
-        run_info = (run_name=run_name, run_prefix=base_prefix, parallel_io=parallel_io,
-                    ext=ext, nblocks=nblocks, files=files, input=input,
-                    n_ion_species=n_ion_species, n_neutral_species=n_neutral_species,
-                    evolve_moments=evolve_moments, composition=composition,
-                    species=species, collisions=collisions, geometry=geometry,
-                    drive_input=drive_input, num_diss_params=num_diss_params,
-                    evolve_density=evolve_density, evolve_upar=evolve_upar,
-                    evolve_ppar=evolve_ppar,
-                    manufactured_solns_input=manufactured_solns_input, nt=nt,
-                    nt_unskipped=nt_unskipped, restarts_nt=restarts_nt,
-                    itime_min=itime_min, itime_skip=itime_skip, itime_max=itime_max,
-                    time=time, r=r, z=z, vperp=vperp, vpa=vpa, vzeta=vzeta, vr=vr, vz=vz,
-                    r_local=r_local, z_local=z_local, r_spectral=r_spectral,
-                    z_spectral=z_spectral, vperp_spectral=vperp_spectral,
-                    vpa_spectral=vpa_spectral, vzeta_spectral=vzeta_spectral,
-                    vr_spectral=vr_spectral, vz_spectral=vz_spectral,
-                    r_chunk_size=r_chunk_size, z_chunk_size=z_chunk_size,
-                    vperp_chunk_size=vperp_chunk_size, vpa_chunk_size=vpa_chunk_size,
-                    vzeta_chunk_size=vzeta_chunk_size, vr_chunk_size=vr_chunk_size,
-                    vz_chunk_size=vz_chunk_size, dfns=dfns)
-    else
-        run_info = (run_name=run_name, run_prefix=base_prefix, parallel_io=parallel_io,
-                    ext=ext, nblocks=nblocks, files=files, input=input,
-                    n_ion_species=n_ion_species, n_neutral_species=n_neutral_species,
-                    evolve_moments=evolve_moments, composition=composition,
-                    species=species, collisions=collisions, geometry=geometry,
-                    drive_input=drive_input, num_diss_params=num_diss_params,
-                    evolve_density=evolve_density, evolve_upar=evolve_upar,
-                    evolve_ppar=evolve_ppar,
-                    manufactured_solns_input=manufactured_solns_input, nt=nt,
-                    nt_unskipped=nt_unskipped, restarts_nt=restarts_nt,
-                    itime_min=itime_min, itime_skip=itime_skip, itime_max=itime_max,
-                    time=time, r=r, z=z, r_local=r_local, z_local=z_local,
-                    r_spectral=r_spectral, z_spectral=z_spectral,
-                    r_chunk_size=r_chunk_size, z_chunk_size=z_chunk_size, dfns=dfns)
-    end
+    run_info = (run_name=run_name, run_prefix=base_prefix, parallel_io=parallel_io,
+                ext=ext, nblocks=nblocks, files=files, input=input,
+                n_ion_species=n_ion_species, n_neutral_species=n_neutral_species,
+                evolve_moments=evolve_moments, composition=composition, species=species,
+                collisions=collisions, geometry=geometry, drive_input=drive_input,
+                num_diss_params=num_diss_params,
+                external_source_settings=external_source_settings,
+                evolve_density=evolve_density, evolve_upar=evolve_upar,
+                evolve_ppar=evolve_ppar,
+                manufactured_solns_input=manufactured_solns_input, nt=nt,
+                nt_unskipped=nt_unskipped, restarts_nt=restarts_nt, itime_min=itime_min,
+                itime_skip=itime_skip, itime_max=itime_max, time=time, r=r, z=z,
+                vperp=vperp, vpa=vpa, vzeta=vzeta, vr=vr, vz=vz, r_local=r_local,
+                z_local=z_local, r_spectral=r_spectral, z_spectral=z_spectral,
+                vperp_spectral=vperp_spectral, vpa_spectral=vpa_spectral,
+                vzeta_spectral=vzeta_spectral, vr_spectral=vr_spectral,
+                vz_spectral=vz_spectral, r_chunk_size=r_chunk_size,
+                z_chunk_size=z_chunk_size, vperp_chunk_size=vperp_chunk_size,
+                vpa_chunk_size=vpa_chunk_size, vzeta_chunk_size=vzeta_chunk_size,
+                vr_chunk_size=vr_chunk_size, vz_chunk_size=vz_chunk_size, dfns=dfns)
 
     return run_info
 end
@@ -3473,7 +3505,36 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                          for f ∈ run_info.files)
         nd = ndims(variable[1])
 
-        if nd == 3
+        if nd == 1
+            # Time-dependent scalar with dimensions (t)
+            # Might be an mk_int, so handle type carefully
+            dims = Vector{mk_int}()
+            !isa(it, mk_int) && push!(dims, nt)
+            vartype = typeof(variable[1][1])
+            if vartype == mk_int
+                result = allocate_int(dims...)
+            elseif vartype == mk_float
+                result = allocate_float(dims...)
+            else
+                error("Unsupported dtype for 1D variable $(variable.dtype)")
+            end
+        elseif nd == 2
+            # Time-dependent vector with dimensions (unique_dim,t).
+            # The dimension that is not time is not a coordinate, so do not give any
+            # option to slice it - always just return the full length.
+            # Might be an mk_int, so handle type carefully
+            dims = Vector{mk_int}()
+            push!(dims, size(variable[1], 1))
+            !isa(it, mk_int) && push!(dims, nt)
+            vartype = typeof(variable[1][1,1])
+            if vartype == mk_int
+                result = allocate_int(dims...)
+            elseif vartype == mk_float
+                result = allocate_float(dims...)
+            else
+                error("Unsupported dtype for 1D variable $(variable.dtype)")
+            end
+        elseif nd == 3
             # EM variable with dimensions (z,r,t)
             dims = Vector{mk_int}()
             !isa(iz, mk_int) && push!(dims, nz)
@@ -3557,7 +3618,11 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                           * "restart, should have finished already")
                 elseif tind <= local_nt
                     # tind is within this restart's time range, so get result
-                    if nd == 3
+                    if nd == 1
+                        result .= v[tind]
+                    elseif nd == 2
+                        result .= v[:,tind]
+                    elseif nd == 3
                         result .= v[iz,ir,tind]
                     elseif nd == 4
                         result .= v[iz,ir,is,tind]
@@ -3589,7 +3654,11 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                     tinds = tinds[begin]:tstep:tinds[end]
                     global_it_end = global_it_start + length(tinds) - 1
 
-                    if nd == 3
+                    if nd == 1
+                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[tinds]
+                    elseif nd == 2
+                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[:,tinds]
+                    elseif nd == 3
                         selectdim(result, ndims(result), global_it_start:global_it_end) .= v[iz,ir,tinds]
                     elseif nd == 4
                         selectdim(result, ndims(result), global_it_start:global_it_end) .= v[iz,ir,is,tinds]
@@ -3612,6 +3681,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
         end
     else
         # Use existing distributed I/O loading functions
+        diagnostic_variable = false
         if variable_name ∈ em_variables
             nd = 3
         elseif variable_name ∈ electron_dfn_variables
@@ -3620,12 +3690,21 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             nd = 6
         elseif variable_name ∈ neutral_dfn_variables
             nd = 7
-        else
+        elseif variable_name ∈ tuple(ion_moment_variables..., neutral_moment_variables...)
             # Ion or neutral moment variable
             nd = 4
+        else
+            # Diagnostic variable that does not depend on coordinates, and should be the
+            # same in every output file (so can just read from the first one).
+            diagnostic_variable = true
         end
 
-        if nd == 3
+        if diagnostic_variable
+            fid = open_readonly_output_file(run_info.files[1], run_info.ext, iblock=0)
+            group = get_group(fid, "dynamic_data")
+            result = load_variable(group, variable_name)
+            result = selectdim(result, ndims(result), global_it_start:global_it_end)
+        elseif nd == 3
             result = allocate_float(run_info.z.n, run_info.r.n, run_info.nt)
             read_distributed_zr_data!(result, variable_name, run_info.files,
                                       run_info.ext, run_info.nblocks, run_info.z_local.n,
@@ -3691,7 +3770,78 @@ function get_variable(run_info::Tuple, variable_name; kwargs...)
     return Tuple(get_variable(ri, variable_name; kwargs...) for ri ∈ run_info)
 end
 
-function get_variable(run_info, variable_name; kwargs...)
+function get_variable(run_info, variable_name; normalize_advection_speed_shape=true,
+                      kwargs...)
+
+    # Select a slice of an time-series sized variable
+    function select_slice_of_variable(variable::AbstractVector; it=nothing,
+                                      is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                                      ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                                      ivz=nothing)
+        if it !== nothing
+            variable = selectdim(variable, 1, kwargs[:it])
+        end
+
+        return variable
+    end
+
+    # Select a slice of an ion distribution function sized variable
+    function select_slice_of_variable(variable::AbstractArray{T,6} where T; it=nothing,
+                                      is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                                      ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                                      ivz=nothing)
+        if it !== nothing
+            variable = selectdim(variable, 6, kwargs[:it])
+        end
+        if is !== nothing
+            variable = selectdim(variable, 5, kwargs[:is])
+        end
+        if ir !== nothing
+            variable = selectdim(variable, 4, kwargs[:ir])
+        end
+        if iz !== nothing
+            variable = selectdim(variable, 3, kwargs[:iz])
+        end
+        if ivperp !== nothing
+            variable = selectdim(variable, 2, kwargs[:ivperp])
+        end
+        if ivpa !== nothing
+            variable = selectdim(variable, 1, kwargs[:ivpa])
+        end
+
+        return variable
+    end
+
+    # Select a slice of a neutral distribution function sized variable
+    function select_slice_of_variable(variable::AbstractArray{T,7} where T; it=nothing,
+                                      is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                                      ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                                      ivz=nothing)
+        if it !== nothing
+            variable = selectdim(variable, 7, kwargs[:it])
+        end
+        if is !== nothing
+            variable = selectdim(variable, 6, kwargs[:is])
+        end
+        if ir !== nothing
+            variable = selectdim(variable, 5, kwargs[:ir])
+        end
+        if iz !== nothing
+            variable = selectdim(variable, 4, kwargs[:iz])
+        end
+        if ivzeta !== nothing
+            variable = selectdim(variable, 3, kwargs[:ivzeta])
+        end
+        if ivr !== nothing
+            variable = selectdim(variable, 2, kwargs[:ivr])
+        end
+        if ivz !== nothing
+            variable = selectdim(variable, 1, kwargs[:ivz])
+        end
+
+        return variable
+    end
+
     if variable_name == "temperature"
         vth = postproc_load_variable(run_info, "thermal_speed"; kwargs...)
         variable = vth.^2
@@ -3724,11 +3874,457 @@ function get_variable(run_info, variable_name; kwargs...)
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
         cs = get_variable(run_info, "sound_speed"; kwargs...)
         variable = upar ./ cs
+    elseif variable_name == "z_advect_speed"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        upar = get_variable(run_info, "parallel_flow")
+        vth = get_variable(run_info, "thermal_speed")
+        nz, nr, nspecies, nt = size(upar)
+        nvperp = run_info.vperp.n
+        nvpa = run_info.vpa.n
+
+        speed = allocate_float(nz, nvpa, nvperp, nr, nspecies, nt)
+        Er = get_variable(run_info, "Er")
+
+        setup_distributed_memory_MPI(1,1,1,1)
+        setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
+                           vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
+                           vr=run_info.vr.n, vz=run_info.vz.n)
+        for it ∈ 1:nt, is ∈ 1:nspecies
+            begin_serial_region()
+            # Only need some struct with a 'speed' variable
+            advect = (speed=@view(speed[:,:,:,:,is,it]),)
+            # Only need Er
+            fields = (Er=@view(Er[:,:,it]),)
+            @views update_speed_z!(advect, upar[:,:,is,it], vth[:,:,is,it],
+                                   run_info.evolve_upar, run_info.evolve_ppar, fields,
+                                   run_info.vpa, run_info.vperp, run_info.z, run_info.r,
+                                   run_info.time[it], run_info.geometry)
+        end
+
+        # Horrible hack so that we can get the speed back without rearranging the
+        # dimensions, if we want that to pass it to a utility function from the main code
+        # (e.g. to calculate a CFL limit).
+        if normalize_advection_speed_shape
+            variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
+            for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
+                variable[ivpa,ivperp,iz,ir,is,it] = speed[iz,ivpa,ivperp,ir,is,it]
+            end
+            variable = select_slice_of_variable(variable; kwargs...)
+        else
+            variable = speed
+            if :it ∈ keys(kwargs)
+                variable = selectdim(variable, 6, kwargs[:it])
+            end
+            if :is ∈ keys(kwargs)
+                variable = selectdim(variable, 5, kwargs[:is])
+            end
+            if :ir ∈ keys(kwargs)
+                variable = selectdim(variable, 4, kwargs[:ir])
+            end
+            if :ivperp ∈ keys(kwargs)
+                variable = selectdim(variable, 3, kwargs[:ivperp])
+            end
+            if :ivpa ∈ keys(kwargs)
+                variable = selectdim(variable, 2, kwargs[:ivpa])
+            end
+            if :iz ∈ keys(kwargs)
+                variable = selectdim(variable, 1, kwargs[:iz])
+            end
+        end
+    elseif variable_name == "vpa_advect_speed"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        Ez = get_variable(run_info, "Ez")
+        density = get_variable(run_info, "density")
+        upar = get_variable(run_info, "parallel_flow")
+        ppar = get_variable(run_info, "parallel_pressure")
+        density_neutral = get_variable(run_info, "density_neutral")
+        uz_neutral = get_variable(run_info, "uz_neutral")
+        pz_neutral = get_variable(run_info, "pz_neutral")
+        vth = get_variable(run_info, "thermal_speed")
+        dupar_dz = get_z_derivative(run_info, "parallel_flow")
+        dppar_dz = get_z_derivative(run_info, "parallel_pressure")
+        dvth_dz = get_z_derivative(run_info, "thermal_speed")
+        dqpar_dz = get_z_derivative(run_info, "parallel_heat_flux")
+        if run_info.external_source_settings.ion.active
+            external_source_amplitude = get_variable(run_info, "external_source_amplitude")
+        else
+            external_source_amplitude = zeros(0,0,run_info.nt)
+        end
+
+        nz, nr, nspecies, nt = size(vth)
+        nvperp = run_info.vperp.n
+        nvpa = run_info.vpa.n
+
+        speed=allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
+        setup_distributed_memory_MPI(1,1,1,1)
+        setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
+                           vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
+                           vr=run_info.vr.n, vz=run_info.vz.n)
+        for it ∈ 1:nt
+            begin_serial_region()
+            # Only need some struct with a 'speed' variable
+            advect = [(speed=@view(speed[:,:,:,:,is,it]),) for is ∈ 1:nspecies]
+            # Only need Ez
+            fields = (Ez=@view(Ez[:,:,it]),)
+            @views moments = (ion=(dppar_dz=dppar_dz[:,:,:,it],
+                                   dupar_dz=dupar_dz[:,:,:,it],
+                                   dvth_dz=dvth_dz[:,:,:,it],
+                                   dqpar_dz=dqpar_dz[:,:,:,it],
+                                   vth=vth[:,:,:,it],
+                                   external_source_amplitude=external_source_amplitude[:,:,it]),
+                             evolve_density=run_info.evolve_density,
+                             evolve_upar=run_info.evolve_upar,
+                             evolve_ppar=run_info.evolve_ppar)
+            @views fvec = (density=density[:,:,:,it],
+                           upar=upar[:,:,:,it],
+                           ppar=ppar[:,:,:,it],
+                           density_neutral=density_neutral[:,:,:,it],
+                           uz_neutral=uz_neutral[:,:,:,it],
+                           pz_neutral=pz_neutral[:,:,:,it])
+            @views update_speed_vpa!(advect, fields, fvec, moments, run_info.vpa,
+                                     run_info.vperp, run_info.z, run_info.r,
+                                     run_info.composition, run_info.collisions,
+                                     run_info.external_source_settings.ion,
+                                     run_info.time[it], run_info.geometry)
+        end
+
+        variable = speed
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "neutral_z_advect_speed"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        uz = get_variable(run_info, "parallel_flow")
+        vth = get_variable(run_info, "thermal_speed_neutral")
+        nz, nr, nspecies, nt = size(uz)
+        nvzeta = run_info.vzeta.n
+        nvr = run_info.vr.n
+        nvz = run_info.vz.n
+
+        speed = allocate_float(nz, nvz, nvr, nvzeta, nr, nspecies, nt)
+
+        setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
+                           vperp=run_info.vperp.n, vpa=run_info.vpa.n, vzeta=nvzeta,
+                           vr=nvr, vz=nvz)
+        for it ∈ 1:nt, isn ∈ 1:nspecies
+            begin_serial_region()
+            # Only need some struct with a 'speed' variable
+            advect = (speed=@view(speed[:,:,:,:,:,isn,it]),)
+            @views update_speed_neutral_z!(advect, uz[:,:,:,it], vth[:,:,:,it],
+                                           run_info.evolve_upar, run_info.evolve_ppar,
+                                           run_info.vz, run_info.vr, run_info.vzeta,
+                                           run_info.z, run_info.r, run_info.time[it])
+        end
+
+        # Horrible hack so that we can get the speed back without rearranging the
+        # dimensions, if we want that to pass it to a utility function from the main code
+        # (e.g. to calculate a CFL limit).
+        if normalize_advection_speed_shape
+            variable = allocate_float(nvz, nvr, nvzeta, nz, nr, nspecies, nt)
+            for it ∈ 1:nt, isn ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivzeta ∈ 1:nvzeta, ivr ∈ 1:nvr, ivz ∈ 1:nvz
+                variable[ivz,ivr,ivzeta,iz,ir,isn,it] = speed[iz,ivz,ivr,ivzeta,ir,isn,it]
+            end
+            variable = select_slice_of_variable(variable; kwargs...)
+        else
+            variable = speed
+            if :it ∈ keys(kwargs)
+                variable = selectdim(variable, 7, kwargs[:it])
+            end
+            if :is ∈ keys(kwargs)
+                variable = selectdim(variable, 6, kwargs[:is])
+            end
+            if :ir ∈ keys(kwargs)
+                variable = selectdim(variable, 5, kwargs[:ir])
+            end
+            if :ivzeta ∈ keys(kwargs)
+                variable = selectdim(variable, 4, kwargs[:ivzeta])
+            end
+            if :ivr ∈ keys(kwargs)
+                variable = selectdim(variable, 3, kwargs[:ivr])
+            end
+            if :ivz ∈ keys(kwargs)
+                variable = selectdim(variable, 2, kwargs[:ivz])
+            end
+            if :iz ∈ keys(kwargs)
+                variable = selectdim(variable, 1, kwargs[:iz])
+            end
+        end
+    elseif variable_name == "neutral_vz_advect_speed"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        Ez = get_variable(run_info, "Ez")
+        density = get_variable(run_info, "density")
+        upar = get_variable(run_info, "parallel_flow")
+        ppar = get_variable(run_info, "parallel_pressure")
+        density_neutral = get_variable(run_info, "density_neutral")
+        uz_neutral = get_variable(run_info, "uz_neutral")
+        pz_neutral = get_variable(run_info, "pz_neutral")
+        vth = get_variable(run_info, "thermal_speed_neutral")
+        duz_dz = get_z_derivative(run_info, "uz_neutral")
+        dpz_dz = get_z_derivative(run_info, "pz_neutral")
+        dvth_dz = get_z_derivative(run_info, "thermal_speed_neutral")
+        dqz_dz = get_z_derivative(run_info, "qz_neutral")
+        if run_info.external_source_settings.neutral.active
+            external_source_amplitude = get_variable(run_info, "external_source_neutral_amplitude")
+        else
+            external_source_amplitude = zeros(0,0,run_info.nt)
+        end
+
+        nz, nr, nspecies, nt = size(vth)
+        nvzeta = run_info.vzeta.n
+        nvr = run_info.vr.n
+        nvz = run_info.vz.n
+        speed = allocate_float(nvz, nvr, nvzeta, nz, nr, nspecies, nt)
+
+        setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
+                           vperp=run_info.vperp.n, vpa=run_info.vpa.n, vzeta=nvzeta,
+                           vr=nvr, vz=nvz)
+        for it ∈ 1:nt
+            begin_serial_region()
+            # Only need some struct with a 'speed' variable
+            advect = [(speed=@view(speed[:,:,:,:,:,isn,it]),) for isn ∈ 1:nspecies]
+            # Don't actually use `fields` at the moment
+            fields = nothing
+            @views fvec = (density=density[:,:,:,it],
+                           upar=upar[:,:,:,it],
+                           ppar=ppar[:,:,:,it],
+                           density_neutral=density_neutral[:,:,:,it],
+                           uz_neutral=uz_neutral[:,:,:,it],
+                           pz_neutral=pz_neutral[:,:,:,it])
+            @views moments = (neutral=(dpz_dz=dpz_dz[:,:,:,it],
+                                       duz_dz=duz_dz[:,:,:,it],
+                                       dvth_dz=dvth_dz[:,:,:,it],
+                                       dqz_dz=dqz_dz[:,:,:,it],
+                                       vth=vth[:,:,:,it],
+                                       external_source_amplitude=external_source_amplitude[:,:,it]),
+                             evolve_density=run_info.evolve_density,
+                             evolve_upar=run_info.evolve_upar,
+                             evolve_ppar=run_info.evolve_ppar)
+            @views update_speed_neutral_vz!(advect, fields, fvec, moments,
+                                            run_info.vz, run_info.vr, run_info.vzeta,
+                                            run_info.z, run_info.r, run_info.composition,
+                                            run_info.collisions,
+                                            run_info.external_source_settings.neutral)
+        end
+
+        variable = speed
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "steps_per_output"
+        steps_per_output = get_variable(run_info, "step_counter"; kwargs...)
+        for i ∈ length(steps_per_output):-1:2
+            steps_per_output[i] -= steps_per_output[i-1]
+        end
+        variable = steps_per_output
+    elseif variable_name == "failures_per_output"
+        failures_per_output = get_variable(run_info, "failure_counter"; kwargs...)
+        for i ∈ length(failures_per_output):-1:2
+            failures_per_output[i] -= failures_per_output[i-1]
+        end
+        variable = failures_per_output
+    elseif variable_name == "failure_caused_by_per_output"
+        failure_caused_by_per_output = get_variable(run_info, "failure_caused_by"; kwargs...)
+        for i ∈ size(failure_caused_by_per_output,2):-1:2
+            failure_caused_by_per_output[:,i] .-= failure_caused_by_per_output[:,i-1]
+        end
+        variable = failure_caused_by_per_output
+    elseif variable_name == "limit_caused_by_per_output"
+        limit_caused_by_per_output = get_variable(run_info, "limit_caused_by"; kwargs...)
+        for i ∈ size(limit_caused_by_per_output,2):-1:2
+            limit_caused_by_per_output[:,i] .-= limit_caused_by_per_output[:,i-1]
+        end
+        variable = limit_caused_by_per_output
+    elseif variable_name == "average_successful_dt"
+        steps_per_output = get_variable(run_info, "steps_per_output"; kwargs...)
+        failures_per_output = get_variable(run_info, "failures_per_output"; kwargs...)
+        successful_steps_per_output = steps_per_output - failures_per_output
+
+        delta_t = copy(run_info.time)
+        for i ∈ length(delta_t):-1:2
+            delta_t[i] -= delta_t[i-1]
+        end
+
+        variable = delta_t ./ successful_steps_per_output
+        if successful_steps_per_output[1] == 0
+            # Don't want a meaningless Inf...
+            variable[1] = 0.0
+        end
+    elseif variable_name == "CFL_ion_z"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "z_advect_speed";
+                             normalize_advection_speed_shape=false)
+        nz, nvpa, nvperp, nr, nspecies, nt = size(speed)
+        CFL = similar(speed)
+        for it ∈ 1:nt
+            @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.z)
+        end
+
+        variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
+        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
+            variable[ivpa,ivperp,iz,ir,is,it] = CFL[iz,ivpa,ivperp,ir,is,it]
+        end
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "CFL_ion_vpa"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "vpa_advect_speed")
+        nt = size(speed, 6)
+        CFL = similar(speed)
+        for it ∈ 1:nt
+            @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.vpa)
+        end
+
+        variable = CFL
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "CFL_neutral_z"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "neutral_z_advect_speed";
+                             normalize_advection_speed_shape=false)
+        nz, nvz, nvr, nvzeta, nr, nspecies, nt = size(speed)
+        CFL = similar(speed)
+        for it ∈ 1:nt
+            @views get_CFL!(CFL[:,:,:,:,:,:,it], speed[:,:,:,:,:,:,it], run_info.z)
+        end
+
+        variable = allocate_float(nvz, nvr, nvzeta, nz, nr, nspecies, nt)
+        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivzeta ∈ 1:nvzeta, ivr ∈ 1:nvr, ivz ∈ 1:nvz
+            variable[ivz,ivr,ivzeta,iz,ir,is,it] = CFL[iz,ivz,ivr,ivzeta,ir,is,it]
+        end
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "CFL_neutral_vz"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "neutral_vz_advect_speed")
+        nt = size(speed, 7)
+        CFL = similar(speed)
+        for it ∈ 1:nt
+            @views get_CFL!(CFL[:,:,:,:,:,:,it], speed[:,:,:,:,:,:,it], run_info.vz)
+        end
+
+        variable = CFL
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "minimum_CFL_ion_z"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "z_advect_speed";
+                             normalize_advection_speed_shape=false)
+        nt = size(speed, 6)
+        nspecies = size(speed, 5)
+        variable = allocate_float(nt)
+        begin_serial_region()
+        for it ∈ 1:nt
+            min_CFL = Inf
+            for is ∈ 1:nspecies
+                min_CFL = min(min_CFL, get_minimum_CFL_z(@view(speed[:,:,:,:,is,it]), run_info.z))
+            end
+            variable[it] = min_CFL
+        end
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "minimum_CFL_ion_vpa"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "vpa_advect_speed")
+        nt = size(speed, 6)
+        nspecies = size(speed, 5)
+        variable = allocate_float(nt)
+        begin_serial_region()
+        for it ∈ 1:nt
+            min_CFL = Inf
+            for is ∈ 1:nspecies
+                min_CFL = min(min_CFL, get_minimum_CFL_vpa(@view(speed[:,:,:,:,is,it]), run_info.vpa))
+            end
+            variable[it] = min_CFL
+        end
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "minimum_CFL_neutral_z"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "neutral_z_advect_speed";
+                             normalize_advection_speed_shape=false)
+        nt = size(speed, 7)
+        nspecies = size(speed, 6)
+        variable = allocate_float(nt)
+        begin_serial_region()
+        for it ∈ 1:nt
+            min_CFL = Inf
+            for isn ∈ 1:nspecies
+                min_CFL = min(min_CFL, get_minimum_CFL_neutral_z(@view(speed[:,:,:,:,:,isn,it]), run_info.z))
+            end
+            variable[it] = min_CFL
+        end
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "minimum_CFL_neutral_vz"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "neutral_vz_advect_speed")
+        nt = size(speed, 7)
+        nspecies = size(speed, 6)
+        variable = allocate_float(nt)
+        begin_serial_region()
+        for it ∈ 1:nt
+            min_CFL = Inf
+            for isn ∈ 1:nspecies
+                min_CFL = min(min_CFL, get_minimum_CFL_neutral_vz(@view(speed[:,:,:,:,:,isn,it]), run_info.vz))
+            end
+            variable[it] = min_CFL
+        end
+        variable = select_slice_of_variable(variable; kwargs...)
     else
         variable = postproc_load_variable(run_info, variable_name; kwargs...)
     end
 
     return variable
+end
+
+"""
+    get_z_derivative(run_info, variable_name; kwargs...)
+
+Get (i.e. load or calculate) `variable_name` from `run_info` and calculate its
+z-derivative. Returns the z-derivative
+
+`kwargs...` are passed through to `get_variable()`.
+"""
+function get_z_derivative(run_info, variable_name; kwargs...)
+    variable = get_variable(run_info, variable_name; kwargs...)
+    z_deriv = similar(variable)
+
+    if ndims(variable) == 3
+        # EM field
+        nz, nr, nt = size(variable)
+        for it ∈ 1:nt, ir ∈ 1:nr
+            @views derivative!(z_deriv[:,ir,it], variable[:,ir,it], run_info.z,
+                               run_info.z_spectral)
+        end
+    elseif ndims(variable) == 4
+        # Moment variable (ion or neutral)
+        nz, nr, nspecies, nt = size(variable)
+        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr
+            @views derivative!(z_deriv[:,ir,is,it], variable[:,ir,is,it], run_info.z,
+                               run_info.z_spectral)
+        end
+    elseif ndims(variable) == 6
+        # Ion distribution function
+        nvpa, nvperp, nz, nr, nspecies, nt = size(variable)
+        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
+            @views derivative!(z_deriv[ivpa,ivperp,:,ir,is,it],
+                               variable[ivpa,ivperp,:,ir,is,it], run_info.z,
+                               run_info.z_spectral)
+        end
+    elseif ndims(variable) == 7
+        # Neutral distribution function
+        nvz, nvr, nvzeta, nz, nr, nspecies, nt = size(variable)
+        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, ivzeta ∈ 1:nvzeta, ivr ∈ 1:nvr, ivz ∈ 1:nvz
+            @views derivative!(z_deriv[ivz,ivr,ivzeta,:,ir,is,it],
+                               variable[ivz,ivr,ivzeta,:,ir,is,it], run_info.z,
+                               run_info.z_spectral)
+        end
+    else
+        error("Unsupported number of dimensions ($(ndims(variable))) for $variable_name")
+    end
+
+    return z_deriv
 end
 
 """

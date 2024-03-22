@@ -23,9 +23,9 @@ using moment_kinetics.type_definitions: mk_float
 include("nonlinear_sound_wave_inputs_and_expected_data.jl")
 
 base_input = copy(test_input_chebyshev)
-base_input["nstep"] = 50
-base_input["nwrite"] = 50
-base_input["nwrite_dfns"] = 50
+base_input["timestepping"]["nstep"] = 50
+base_input["timestepping"]["nwrite"] = 50
+base_input["timestepping"]["nwrite_dfns"] = 50
 if global_size[] > 1 && global_size[] % 2 == 0
     # Test using distributed-memory
     base_input["z_nelement_local"] = base_input["z_nelement"] ÷ 2
@@ -287,7 +287,9 @@ function runtests()
 
         parallel_io = base_input["output"]["parallel_io"]
 
-        base_input_full_f = merge(base_input, Dict("nstep" => nstep))
+        base_input_full_f = deepcopy(base_input)
+        base_input_full_f["timestepping"] = merge(base_input["timestepping"],
+                                                  Dict("nstep" => nstep))
         base_input_evolve_density = merge(base_input_full_f,
                                           Dict("evolve_moments_density" => true))
         base_input_evolve_upar = merge(base_input_evolve_density,

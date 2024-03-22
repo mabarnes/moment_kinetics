@@ -89,61 +89,7 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
     boundary_distributions = create_boundary_distributions(vz, vr, vzeta, vpa, vperp, z,
                                                            composition)
 
-    # create an array of structs containing scratch arrays for the pdf and low-order moments
-    # that may be evolved separately via fluid equations
-    scratch = allocate_scratch_arrays(moments, pdf, t_input.n_rk_stages)
-
-    return pdf, moments, boundary_distributions, scratch
-end
-
-function allocate_scratch_arrays(moments, pdf, n_rk_stages)
-    # create n_rk_stages+1 structs, each of which will contain one pdf,
-    # one density, and one parallel flow array
-    scratch = Vector{scratch_pdf{5,3,4,2,6,3}}(undef, n_rk_stages+1)
-    pdf_dims = size(pdf.ion.norm)
-    moment_ion_dims = size(moments.ion.dens)
-    if pdf.electron === nothing
-        pdf_electron_dims = (0,0,0,0)
-    else
-        pdf_electron_dims = size(pdf.electron.norm)
-    end
-    moment_electron_dims = size(moments.electron.dens)
-    pdf_neutral_dims = size(pdf.neutral.norm)
-    moment_neutral_dims = size(moments.neutral.dens)
-    # populate each of the structs
-    for istage ∈ 1:n_rk_stages+1
-        # Allocate arrays in temporary variables so that we can identify them
-        # by source line when using @debug_shared_array
-
-        # these are the pdf and moment arrays for the ion species
-        pdf_array = allocate_shared_float(pdf_dims...)
-        density_array = allocate_shared_float(moment_ion_dims...)
-        upar_array = allocate_shared_float(moment_ion_dims...)
-        ppar_array = allocate_shared_float(moment_ion_dims...)
-        pperp_array = allocate_shared_float(moment_ion_dims...)
-        temp_z_s_array = allocate_shared_float(moment_ion_dims...)
-        # these are the pdf and moment arrays for the electron species
-        pdf_electron_array = allocate_shared_float(pdf_electron_dims...)
-        electron_density_array = allocate_shared_float(moment_electron_dims...)
-        electron_upar_array = allocate_shared_float(moment_electron_dims...)
-        electron_ppar_array = allocate_shared_float(moment_electron_dims...)
-        electron_pperp_array = allocate_shared_float(moment_electron_dims...)
-        electron_temp_array = allocate_shared_float(moment_electron_dims...)
-        # these are the pdf and moment arrays for the neutral species
-        pdf_neutral_array = allocate_shared_float(pdf_neutral_dims...)
-        density_neutral_array = allocate_shared_float(moment_neutral_dims...)
-        uz_neutral_array = allocate_shared_float(moment_neutral_dims...)
-        pz_neutral_array = allocate_shared_float(moment_neutral_dims...)
-        # construct the (uninitialized) scratch struct for this stage in the RK solve
-        scratch[istage] = scratch_pdf(pdf_array, density_array, upar_array, ppar_array,
-                                      pperp_array, temp_z_s_array, pdf_electron_array,
-                                      electron_density_array, electron_upar_array,
-                                      electron_ppar_array, electron_pperp_array,
-                                      electron_temp_array, pdf_neutral_array,
-                                      density_neutral_array, uz_neutral_array,
-                                      pz_neutral_array)
-    end
-    return scratch
+    return pdf, moments, boundary_distributions
 end
 
 """
@@ -179,7 +125,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
                                vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
                                vperp_spectral, vpa_spectral, vz_spectral, species,
                                collisions, external_source_settings,
-                               manufactured_solns_input, scratch_dummy, scratch, t_input,
+                               manufactured_solns_input, scratch_dummy, t_input,
                                num_diss_params, advection_structs, io_input, input_dict)
     if manufactured_solns_input.use_for_init
         init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z,

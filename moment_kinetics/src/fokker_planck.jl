@@ -18,9 +18,16 @@ compute the Rosenbluth potentials everywhere in vpa, vperp
 by direct integration of the Green's functions. These functions are 
 supported for the purposes of testing and debugging.
 
+Lower-level routines are provided by functions from
+[`moment_kinetics.fokker_planck_calculus`](@ref).
+
+Parallelisation of the collision operator uses a special 'anyv' region type, see
+[Collision operator and `anyv` region](@ref).
 """
 module fokker_planck
 
+# Import moment_kinetics so that we can refer to it in docstrings
+import moment_kinetics
 
 export init_fokker_planck_collisions, fokkerplanck_arrays_struct
 export init_fokker_planck_collisions_weak_form

@@ -29,6 +29,7 @@ include("quadrature.jl")
 include("hermite_spline_interpolation.jl")
 include("derivatives.jl")
 include("input_structs.jl")
+include("runge_kutta.jl")
 include("reference_parameters.jl")
 include("coordinates.jl")
 include("file_io.jl")
@@ -87,7 +88,7 @@ using .debugging
 using .external_sources
 using .input_structs
 using .initial_conditions: allocate_pdf_and_moments, init_pdf_and_moments!,
-                           initialize_scratch_arrays!, initialize_electrons!
+                           initialize_electrons!
 using .load_data: reload_evolving_fields!
 using .looping
 using .moment_constraints: hard_force_moment_constraints!
@@ -257,7 +258,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
                              drive_input.frequency, drive_input.force_Er_zero_at_wall)
 
     # Allocate arrays and create the pdf and moments structs
-    pdf, moments, boundary_distributions, scratch =
+    pdf, moments, boundary_distributions =
         allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
                                  evolve_moments, collisions, external_source_settings,
                                  num_diss_params, t_input)
@@ -280,10 +281,12 @@ function setup_moment_kinetics(input_dict::AbstractDict;
                               composition, r, z, vperp, vpa, vzeta, vr, vz,
                               z_spectral, r_spectral, vperp_spectral, vpa_spectral,
                               vz_spectral, species, collisions, external_source_settings,
-                              manufactured_solns_input, scratch_dummy, scratch, t_input,
+                              manufactured_solns_input, scratch_dummy, t_input,
                               num_diss_params, advection_structs, io_input, input_dict)
         # initialize time variable
         code_time = 0.
+        dt = nothing
+        dt_before_last_fail = nothing
         previous_runs_info = nothing
     else
         restarting = true
@@ -298,7 +301,8 @@ function setup_moment_kinetics(input_dict::AbstractDict;
                                                                         io_input.output_dir)
 
         # Reload pdf and moments from an existing output file
-        code_time, previous_runs_info, restart_time_index, restart_had_kinetic_electrons =
+        code_time, dt, dt_before_last_fail, previous_runs_info, restart_time_index,
+        restart_had_kinetic_electrons =
             reload_evolving_fields!(pdf, moments, boundary_distributions,
                                     backup_prefix_iblock, restart_time_index,
                                     composition, geometry, r, z, vpa, vperp, vzeta, vr,
@@ -308,9 +312,6 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         # file so that we can change the settings between restarts.
         initialize_external_source_amplitude!(moments, external_source_settings, vperp,
                                               vzeta, vr, composition.n_neutral_species)
-
-        # Copy the reloaded values into the `scratch` struct
-        initialize_scratch_arrays!(scratch, moments, pdf, t_input.n_rk_stages)
 
         if composition.electron_physics == kinetic_electrons && !restart_had_kinetic_electrons
             # If we are initializing kinetic electrons using info from a simulation
@@ -334,11 +335,12 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
 
-    moments, fields, spectral_objects, advance, fp_arrays, manufactured_source_list =
-        setup_time_advance!(pdf, fields, scratch, vz, vr, vzeta, vpa, vperp, z, r,
-            vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
-            z_spectral, r_spectral, composition, drive_input, moments, t_input,
-            collisions, species, geometry, boundary_distributions,
+    moments, fields, spectral_objects, scratch, advance, t_params, fp_arrays,
+    manufactured_source_list =
+        setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
+            vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral,
+            r_spectral, composition, drive_input, moments, t_input, code_time, dt,
+            dt_before_last_fail, collisions, species, geometry, boundary_distributions,
             external_source_settings, num_diss_params, manufactured_solns_input,
             advection_structs, scratch_dummy, restarting)
 
@@ -357,15 +359,15 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     # write initial data to binary files
 
     write_all_moments_data_to_binary(moments, fields, code_time,
-        composition.n_ion_species, composition.n_neutral_species, io_moments, 1, 0.0, r,
-        z)
+        composition.n_ion_species, composition.n_neutral_species, io_moments, 1, 0.0,
+        t_params, r, z)
     write_all_dfns_data_to_binary(pdf, moments, fields, code_time,
-        composition.n_ion_species, composition.n_neutral_species, io_dfns, 1, 0.0, r, z,
-        vperp, vpa, vzeta, vr, vz)
+        composition.n_ion_species, composition.n_neutral_species, io_dfns, 1, 0.0,
+        t_params, r, z, vperp, vpa, vzeta, vr, vz)
 
     begin_s_r_z_vperp_region()
 
-    return pdf, scratch, code_time, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
+    return pdf, scratch, code_time, t_params, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advection_structs,
            composition, collisions, geometry, boundary_distributions,
            external_source_settings, num_diss_params, advance, fp_arrays, scratch_dummy,

@@ -9,6 +9,7 @@ export get_unnormalized_parameters, print_unnormalized_parameters, to_seconds, t
 using ..communication
 using ..constants
 using ..input_structs
+using ..looping
 using ..moment_kinetics_input: mk_input
 using ..reference_parameters
 
@@ -34,7 +35,7 @@ Get many parameters for the simulation setup given by `input` or in the file
 """
 function get_unnormalized_parameters end
 function get_unnormalized_parameters(input::Dict)
-    io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
+    io_input, evolve_moments, t_params, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
         vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
         vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
         drive_input, external_source_settings, num_diss_params, manufactured_solns_input =
@@ -63,10 +64,10 @@ function get_unnormalized_parameters(input::Dict)
 
     parameters["cs0"] = cnorm
 
-    dt = t_input.dt * timenorm
+    dt = t_params.dt * timenorm
     parameters["dt"] = dt
-    parameters["output time step"] = dt * t_input.nwrite
-    parameters["total simulated time"] = dt * t_input.nstep
+    parameters["output time step"] = dt * t_params.nwrite
+    parameters["total simulated time"] = dt * t_params.nstep
 
     parameters["T_e"] = Tnorm * composition.T_e
     parameters["T_wall"] = Tnorm * composition.T_wall
@@ -274,6 +275,155 @@ function get_prefix_iblock_and_move_existing_file(restart_filename, output_dir)
     MPI.Barrier(comm_world)
 
     return backup_prefix_iblock
+end
+
+# Utility functions for timestepping
+
+"""
+    get_minimum_CFL_z(speed, z)
+
+Calculate the minimum (over a shared-memory block) of the CFL factor 'speed/(grid
+spacing)' (with no prefactor) corresponding to advection speed `speed` for advection in
+the z direction.
+
+Reduces the result over the shared-memory block (handling distributed parallelism is left
+to the calling site). The result is only to be used on rank-0 of the shared-memory block.
+"""
+function get_minimum_CFL_z(speed::AbstractArray{T,4} where T, z)
+    min_CFL = Inf
+
+    dz = z.cell_width
+    nz = z.n
+    @loop_r_vperp_vpa ir ivperp ivpa begin
+        for iz ∈ 1:nz
+            min_CFL = min(min_CFL, abs(dz[iz] / speed[iz,ivpa,ivperp,ir]))
+        end
+    end
+
+    if comm_block[] !== MPI.COMM_NULL
+        min_CFL = MPI.Reduce(min_CFL, min, comm_block[]; root=0)
+    end
+
+    return min_CFL
+end
+
+"""
+    get_minimum_CFL_vpa(speed, vpa)
+
+Calculate the minimum (over a shared-memory block) of the CFL factor 'speed/(grid
+spacing)' (with no prefactor) corresponding to advection speed `speed` for advection in
+the vpa direction.
+
+Reduces the result over the shared-memory block (handling distributed parallelism is left
+to the calling site). The result is only to be used on rank-0 of the shared-memory block.
+"""
+function get_minimum_CFL_vpa(speed::AbstractArray{T,4} where T, vpa)
+    min_CFL = Inf
+
+    dvpa = vpa.cell_width
+    nvpa = vpa.n
+    @loop_r_z_vperp ir iz ivperp begin
+        for ivpa ∈ 1:nvpa
+            min_CFL = min(min_CFL, abs(dvpa[ivpa] / speed[ivpa,ivperp,iz,ir]))
+        end
+    end
+
+    if comm_block[] !== MPI.COMM_NULL
+        min_CFL = MPI.Reduce(min_CFL, min, comm_block[]; root=0)
+    end
+
+    return min_CFL
+end
+
+"""
+    get_minimum_CFL_neutral_z(speed, z)
+
+Calculate the minimum (over a shared-memory block) of the CFL factor 'speed/(grid
+spacing)' (with no prefactor) corresponding to advection speed `speed` for advection of
+neutrals in the z direction.
+
+Reduces the result over the shared-memory block (handling distributed parallelism is left
+to the calling site). The result is only to be used on rank-0 of the shared-memory block.
+"""
+function get_minimum_CFL_neutral_z(speed::AbstractArray{T,5} where T, z)
+    min_CFL = Inf
+
+    dz = z.cell_width
+    nz = z.n
+    @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
+        for iz ∈ 1:nz
+            min_CFL = min(min_CFL, abs(dz[iz] / speed[iz,ivz,ivr,ivzeta,ir]))
+        end
+    end
+
+    if comm_block[] !== MPI.COMM_NULL
+        min_CFL = MPI.Reduce(min_CFL, min, comm_block[]; root=0)
+    end
+
+    return min_CFL
+end
+
+"""
+    get_minimum_CFL_neutral_vz(speed, vz)
+
+Calculate the minimum (over a shared-memory block) of the CFL factor 'speed/(grid
+spacing)' (with no prefactor) corresponding to advection speed `speed` for advection of
+neutrals in the vz direction.
+
+Reduces the result over the shared-memory block (handling distributed parallelism is left
+to the calling site). The result is only to be used on rank-0 of the shared-memory block.
+"""
+function get_minimum_CFL_neutral_vz(speed::AbstractArray{T,5} where T, vz)
+    min_CFL = Inf
+
+    dvz = vz.cell_width
+    nvz = vz.n
+    @loop_r_z_vzeta_vr ir iz ivzeta ivr begin
+        for ivz ∈ 1:nvz
+            min_CFL = min(min_CFL, abs(dvz[ivz] / speed[ivz,ivr,ivzeta,iz,ir]))
+        end
+    end
+
+    if comm_block[] !== MPI.COMM_NULL
+        min_CFL = MPI.Reduce(min_CFL, min, comm_block[]; root=0)
+    end
+
+    return min_CFL
+end
+
+"""
+    get_CFL!(CFL, speed, coord)
+
+Calculate the CFL factor 'speed/(grid spacing)' (with no prefactor) corresponding to
+advection speed `speed` for advection. Note that moment_kinetics is set up so that
+dimension in which advection happens is the first dimension of `speed` - `coord` is the
+coordinate corresponding to this dimension.
+
+The result is written in `CFL`. This function is only intended to be used in
+post-processing.
+"""
+function get_CFL end
+
+function get_CFL!(CFL::AbstractArray{T,5}, speed::AbstractArray{T,5}, coord) where T
+
+    nmain, n2, n3, n4, n5 = size(speed)
+
+    for i5 ∈ 1:n5, i4 ∈ 1:n4, i3 ∈ 1:n3, i2 ∈ 1:n2, imain ∈ 1:nmain
+        CFL[imain,i2,i3,i4,i5] = abs(coord.cell_width[imain] / speed[imain,i2,i3,i4,i5])
+    end
+
+    return CFL
+end
+
+function get_CFL!(CFL::AbstractArray{T,6}, speed::AbstractArray{T,6}, coord) where T
+
+    nmain, n2, n3, n4, n5, n6 = size(speed)
+
+    for i6 ∈ 1:n6, i5 ∈ 1:n5, i4 ∈ 1:n4, i3 ∈ 1:n3, i2 ∈ 1:n2, imain ∈ 1:nmain
+        CFL[imain,i2,i3,i4,i5,i6] = abs(coord.cell_width[imain] / speed[imain,i2,i3,i4,i5,i6])
+    end
+
+    return CFL
 end
 
 end #utils

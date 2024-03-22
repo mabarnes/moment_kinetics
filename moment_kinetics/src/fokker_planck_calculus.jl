@@ -3,7 +3,10 @@ module for functions used
 in calculating the integrals and doing 
 the numerical differentiation for 
 the implementation of the 
-the Full-F Fokker-Planck Collision Operator
+the Full-F Fokker-Planck Collision Operator [`moment_kinetics.fokker_planck`](@ref).
+
+Parallelisation of the collision operator uses a special 'anyv' region type, see
+[Collision operator and `anyv` region](@ref).
 """
 module fokker_planck_calculus
 
@@ -26,6 +29,9 @@ export enforce_zero_bc!
 export allocate_rosenbluth_potential_boundary_data
 export calculate_rosenbluth_potential_boundary_data_exact!
 export test_rosenbluth_potential_boundary_data
+
+# Import moment_kinetics so that we can refer to it in docstrings
+import moment_kinetics
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float

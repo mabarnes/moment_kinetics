@@ -56,7 +56,7 @@ moments & fields only
 struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
                        Tchodura_upper, Texti1, Texti2, Texti3, Texti4,
                        Texti5, Textn1, Textn2, Textn3, Textn4, Textn5, Tconstri, Tconstrn,
-                       Tconstre}
+                       Tconstre, Tint, Tfailcause}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the time variable
@@ -127,7 +127,20 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
     electron_constraints_C_coefficient::Tconstre
 
     # cumulative wall clock time taken by the run
-    time_for_run
+    time_for_run::Ttime
+    # cumulative number of timesteps taken
+    step_counter::Tint
+    # current timestep size
+    dt::Ttime
+    # cumulative number of timestep failures
+    failure_counter::Tint
+    # cumulative count of which variable caused a timstep failure
+    failure_caused_by::Tfailcause
+    # cumulative count of which factors limited the timestep at each step
+    limit_caused_by::Tfailcause
+    # Last successful timestep before most recent timestep failure, used by adaptve
+    # timestepping algorithm
+    dt_before_last_fail::Ttime
 
     # Use parallel I/O?
     parallel_io::Bool
@@ -251,12 +264,13 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
 
         run_id = io_input.run_id
 
-        io_moments = setup_moments_io(out_prefix, io_input.binary_format, r, z,
-                                      composition, collisions, evolve_density,
-                                      evolve_upar, evolve_ppar, external_source_settings,
-                                      input_dict, io_input.parallel_io,
-                                      comm_inter_block[], run_id, restart_time_index,
-                                      previous_runs_info, time_for_setup)
+        io_moments = setup_moments_io(out_prefix, io_input.binary_format, vz, vr, vzeta,
+                                      vpa, vperp, r, z, composition, collisions,
+                                      evolve_density, evolve_upar, evolve_ppar,
+                                      external_source_settings, input_dict,
+                                      io_input.parallel_io, comm_inter_block[], run_id,
+                                      restart_time_index, previous_runs_info,
+                                      time_for_setup)
         io_dfns = setup_dfns_io(out_prefix, io_input.binary_format,
                                 boundary_distributions, r, z, vperp, vpa, vzeta, vr, vz,
                                 composition, collisions, evolve_density, evolve_upar,
@@ -313,8 +327,7 @@ function setup_initial_electron_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, co
         write_input!(fid, input_dict, parallel_io)
 
         ### define coordinate dimensions ###
-        coords_group = define_spatial_coordinates!(fid, z, r, parallel_io)
-        add_vspace_coordinates!(coords_group, vz, vr, vzeta, vpa, vperp, parallel_io)
+        define_io_coordinates!(fid, vz, vr, vzeta, vpa, vperp, z, r, parallel_io)
 
         ### create variables for time-dependent quantities ###
         dynamic = create_io_group(fid, "dynamic_data", description="time evolving variables")
@@ -594,9 +607,9 @@ end
 
 """
 Define coords group for coordinate information in the output file and write information
-about spatial coordinate grids
+about spatial and velocity space coordinate grids
 """
-function define_spatial_coordinates!(fid, z, r, parallel_io)
+function define_io_coordinates!(fid, vz, vr, vzeta, vpa, vperp, z, r, parallel_io)
     @serial_region begin
         # create the "coords" group that will contain coordinate information
         coords = create_io_group(fid, "coords")
@@ -633,18 +646,6 @@ function define_spatial_coordinates!(fid, z, r, parallel_io)
                                 parallel_io=parallel_io, description="number of zr blocks")
         end
 
-        return coords
-    end
-
-    # For processes other than the root process of each shared-memory group...
-    return nothing
-end
-
-"""
-Add to coords group in output file information about vspace coordinate grids
-"""
-function add_vspace_coordinates!(coords, vz, vr, vzeta, vpa, vperp, parallel_io)
-    @serial_region begin
         # create the "vz" sub-group of "coords" that will contain vz coordinate info,
         # including total number of grid points and grid point locations
         define_io_coordinate!(coords, vz, "vz", "velocity coordinate v_z", parallel_io)
@@ -765,13 +766,20 @@ end
 
 """
     create_dynamic_variable!(file_or_group, name, type, coords::coordinate...;
-                             nspecies=1, description=nothing, units=nothing)
+                             n_ion_species=1, n_neutral_species=1,
+                             diagnostic_var_size=nothing, description=nothing,
+                             units=nothing)
 
 Create a time-evolving variable in `file_or_group` named `name` of type `type`. `coords`
 are the coordinates corresponding to the dimensions of the array, in the order of the
 array dimensions. The species dimension does not have a `coordinate`, so the number of
 species is passed as `nspecies`. A description and/or units can be added with the keyword
 arguments.
+
+If a Tuple giving an array size is passed to `diagnostic_var_size`, a 'diagnostic'
+variable is created - i.e. one that does not depend on the coordinates, so is assumed to
+be the same on all processes and only needs to be written from the root process (for each
+output file).
 """
 function create_dynamic_variable! end
 
@@ -827,6 +835,42 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
             description="cumulative wall clock time for run (excluding setup)",
             units="minutes")
 
+        io_step_counter = create_dynamic_variable!(
+            dynamic, "step_counter", mk_int; parallel_io=parallel_io,
+            description="cumulative number of timesteps for the run")
+
+        io_dt = create_dynamic_variable!(
+            dynamic, "dt", mk_float; parallel_io=parallel_io,
+            description="current timestep size")
+
+        io_failure_counter = create_dynamic_variable!(
+            dynamic, "failure_counter", mk_int; parallel_io=parallel_io,
+            description="cumulative number of timestep failures for the run")
+
+        n_failure_vars = 1 + evolve_density + evolve_upar + evolve_ppar
+        if n_neutral_species > 0
+            n_failure_vars *= 2
+        end
+        io_failure_caused_by = create_dynamic_variable!(
+            dynamic, "failure_caused_by", mk_int; diagnostic_var_size=n_failure_vars,
+            parallel_io=parallel_io,
+            description="cumulative count of how many times each variable caused a "
+                        * "timestep failure for the run")
+        n_limit_vars = 5 + 2
+        if n_neutral_species > 0
+            n_limit_vars += 2
+        end
+        io_limit_caused_by = create_dynamic_variable!(
+            dynamic, "limit_caused_by", mk_int; diagnostic_var_size=n_limit_vars,
+            parallel_io=parallel_io,
+            description="cumulative count of how many times each factor limited the "
+                        * "timestep for the run")
+
+        io_dt_before_last_fail = create_dynamic_variable!(
+            dynamic, "dt_before_last_fail", mk_float; parallel_io=parallel_io,
+            description="Last successful timestep before most recent timestep failure, "
+                        * "used by adaptve timestepping algorithm")
+
         return io_moments_info(fid, io_time, io_phi, io_Er, io_Ez, io_density, io_upar,
                                io_ppar, io_pperp, io_qpar, io_vth, io_dSdt, io_chodura_lower, io_chodura_upper,
                                io_electron_density, io_electron_upar, io_electron_ppar, io_electron_qpar, io_electron_vth,
@@ -851,7 +895,9 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                electron_constraints_A_coefficient,
                                electron_constraints_B_coefficient,
                                electron_constraints_C_coefficient,
-                               io_time_for_run, parallel_io)
+                               io_time_for_run, io_step_counter, io_dt,
+                               io_failure_counter, io_failure_caused_by,
+                               io_limit_caused_by, io_dt_before_last_fail, parallel_io)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -1325,10 +1371,11 @@ end
 """
 setup file i/o for moment variables
 """
-function setup_moments_io(prefix, binary_format, r, z, composition, collisions,
-                          evolve_density, evolve_upar, evolve_ppar,
-                          external_source_settings, input_dict, parallel_io, io_comm,
-                          run_id, restart_time_index, previous_runs_info, time_for_setup)
+function setup_moments_io(prefix, binary_format, vz, vr, vzeta, vpa, vperp, r, z,
+                          composition, collisions, evolve_density, evolve_upar,
+                          evolve_ppar, external_source_settings, input_dict, parallel_io,
+                          io_comm, run_id, restart_time_index, previous_runs_info,
+                          time_for_setup)
     @serial_region begin
         moments_prefix = string(prefix, ".moments")
         if !parallel_io
@@ -1351,7 +1398,7 @@ function setup_moments_io(prefix, binary_format, r, z, composition, collisions,
         write_input!(fid, input_dict, parallel_io)
 
         ### define coordinate dimensions ###
-        define_spatial_coordinates!(fid, z, r, parallel_io)
+        define_io_coordinates!(fid, vz, vr, vzeta, vpa, vperp, z, r, parallel_io)
 
         ### create variables for time-dependent quantities and store them ###
         ### in a struct for later access ###
@@ -1420,7 +1467,10 @@ function reopen_moments_io(file_info)
                                getvar("electron_constraints_A_coefficient"),
                                getvar("electron_constraints_B_coefficient"),
                                getvar("electron_constraints_C_coefficient"),
-                               getvar("time_for_run"), parallel_io)
+                               getvar("time_for_run"), getvar("step_counter"),
+                               getvar("dt"), getvar("failure_counter"),
+                               getvar("failure_caused_by"), getvar("limit_caused_by"),
+                               getvar("dt_before_last_fail"), parallel_io)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -1464,8 +1514,7 @@ function setup_dfns_io(prefix, binary_format, boundary_distributions, r, z, vper
                                       composition, z, vperp, vpa, vzeta, vr, vz)
 
         ### define coordinate dimensions ###
-        coords_group = define_spatial_coordinates!(fid, z, r, parallel_io)
-        add_vspace_coordinates!(coords_group, vz, vr, vzeta, vpa, vperp, parallel_io)
+        define_io_coordinates!(fid, vz, vr, vzeta, vpa, vperp, z, r, parallel_io)
 
         ### create variables for time-dependent quantities and store them ###
         ### in a struct for later access ###
@@ -1533,8 +1582,11 @@ function reopen_dfns_io(file_info)
                                      getvar("electron_constraints_A_coefficient"),
                                      getvar("electron_constraints_B_coefficient"),
                                      getvar("electron_constraints_C_coefficient"),
-                                     getvar("time_for_run"),
-                                     parallel_io)
+                                     getvar("time_for_run"), getvar("step_counter"),
+                                     getvar("dt"), getvar("failure_counter"),
+                                     getvar("failure_caused_by"),
+                                     getvar("limit_caused_by"),
+                                     getvar("dt_before_last_fail"), parallel_io)
 
         return io_dfns_info(fid, getvar("f"), getvar("f_electron"), getvar("f_neutral"),
                             parallel_io, io_moments)
@@ -1545,13 +1597,17 @@ function reopen_dfns_io(file_info)
 end
 
 """
-    append_to_dynamic_var(io_var, data, t_idx, parallel_io, coords...)
+    append_to_dynamic_var(io_var, data, t_idx, parallel_io, coords...; only_root=false)
 
 Append `data` to the dynamic variable `io_var`. The time-index of the data being appended
 is `t_idx`. `parallel_io` indicates whether parallel I/O is being used. `coords...` is
 used to get the ranges to write from/to (needed for parallel I/O) - the entries in the
 `coords` tuple can be either `coordinate` instances or integers (for an integer `n` the
 range is `1:n`).
+
+If `only_root=true` is passed, the data is only written once - from the global root
+process if parallel I/O is being used (if parallel I/O is not used, this has no effect as
+each file is only written by one process).
 """
 function append_to_dynamic_var end
 
@@ -1567,7 +1623,7 @@ file
 """
 function write_all_moments_data_to_binary(moments, fields, t, n_ion_species,
                                           n_neutral_species, io_or_file_info_moments,
-                                          t_idx, time_for_run, r, z)
+                                          t_idx, time_for_run, t_params, r, z)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -1594,6 +1650,17 @@ function write_all_moments_data_to_binary(moments, fields, t, n_ion_species,
                                              t_idx, r, z)
 
         append_to_dynamic_var(io_moments.time_for_run, time_for_run, t_idx, parallel_io)
+        append_to_dynamic_var(io_moments.step_counter, t_params.step_counter[], t_idx, parallel_io)
+        append_to_dynamic_var(io_moments.dt, t_params.dt_before_output[], t_idx, parallel_io)
+        append_to_dynamic_var(io_moments.failure_counter, t_params.failure_counter[], t_idx, parallel_io)
+        append_to_dynamic_var(io_moments.failure_caused_by, t_params.failure_caused_by,
+                              t_idx, parallel_io, length(t_params.failure_caused_by);
+                              only_root=true)
+        append_to_dynamic_var(io_moments.limit_caused_by, t_params.limit_caused_by, t_idx,
+                              parallel_io, length(t_params.limit_caused_by);
+                              only_root=true)
+        append_to_dynamic_var(io_moments.dt_before_last_fail,
+                              t_params.dt_before_last_fail[], t_idx, parallel_io)
 
         closefile && close(io_moments.fid)
     end
@@ -1776,7 +1843,6 @@ function write_neutral_moments_data_to_binary(moments, n_neutral_species,
                               parallel_io, z, r, n_neutral_species)
         append_to_dynamic_var(io_moments.thermal_speed_neutral, moments.neutral.vth,
                               t_idx, parallel_io, z, r, n_neutral_species)
-
         if io_moments.external_source_neutral_amplitude !== nothing
             append_to_dynamic_var(io_moments.external_source_neutral_amplitude,
                                   moments.neutral.external_source_amplitude, t_idx,
@@ -1830,7 +1896,8 @@ binary output file
 """
 function write_all_dfns_data_to_binary(pdf, moments, fields, t, n_ion_species,
                                        n_neutral_species, io_or_file_info_dfns, t_idx,
-                                       time_for_run, r, z, vperp, vpa, vzeta, vr, vz)
+                                       time_for_run, t_params, r, z, vperp, vpa, vzeta,
+                                        vr, vz)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -1846,7 +1913,7 @@ function write_all_dfns_data_to_binary(pdf, moments, fields, t, n_ion_species,
         # This also updates the time.
         write_all_moments_data_to_binary(moments, fields, t, n_ion_species,
                                          n_neutral_species, io_dfns.io_moments, t_idx,
-                                         time_for_run, r, z)
+                                         time_for_run, t_params, r, z)
 
         # add the distribution function data at this time slice to the output file
         write_ion_dfns_data_to_binary(pdf.ion.norm, n_ion_species, io_dfns, t_idx, r, z,
@@ -2235,8 +2302,7 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
                            "This is a file containing debug output from the moment_kinetics code")
 
             ### define coordinate dimensions ###
-            coords_group = define_spatial_coordinates!(fid, z, r, false)
-            add_vspace_coordinates!(coords_group, vz, vr, vzeta, vpa, vperp, false)
+            define_io_coordinates!(fid, vz, vr, vzeta, vpa, vperp, z, r, false)
 
             ### create variables for time-dependent quantities and store them ###
             ### in a struct for later access ###
