@@ -13,9 +13,6 @@ test_input = Dict(
     "evolve_moments_conservation" => false,
     "T_e" => 1.0,
     "T_wall" => 1.0,
-    "Bzed" => 0.5,
-    "Bmag" => 1.0,
-    "rhostar" => 1.0,
     "initial_density1" => 0.5,
     "initial_temperature1" => 1.0,
     "initial_density2" => 0.5,
@@ -74,6 +71,7 @@ test_input = Dict(
     "vzeta_L" => 12.0,
     "vzeta_bc" => "none",
     "vzeta_discretization" => "chebyshev_pseudospectral",
+    "geometry" => Dict{String,Any}("rhostar" => 1.0,),
 )
 
 test_input_list = [

@@ -198,7 +198,8 @@ function makie_post_process(run_dir::Union{String,Tuple},
     setup_makie_post_processing_input!(new_input_dict, run_info_moments=run_info_moments,
                                        run_info_dfns=run_info_dfns)
 
-    is_1D = all(ri !== nothing && ri.r.n == 1 for ri ∈ run_info_moments)
+    has_rdim = any(ri !== nothing && ri.r.n > 1 for ri ∈ run_info_moments)
+    has_zdim = any(ri !== nothing && ri.z.n > 1 for ri ∈ run_info_moments)
 
     # Only plot neutral stuff if all runs have neutrals
     if any(ri !== nothing for ri ∈ run_info_moments)
@@ -270,8 +271,8 @@ function makie_post_process(run_dir::Union{String,Tuple},
     end
 
     for variable_name ∈ moment_variable_list
-        plots_for_variable(run_info, variable_name; plot_prefix=plot_prefix, is_1D=is_1D,
-                           is_1V=is_1V,
+        plots_for_variable(run_info, variable_name; plot_prefix=plot_prefix,
+                           has_rdim=has_rdim, has_zdim=has_zdim, is_1V=is_1V,
                            steady_state_residual_fig_axes=steady_state_residual_fig_axes)
     end
 
@@ -288,7 +289,7 @@ function makie_post_process(run_dir::Union{String,Tuple},
         end
         for variable_name ∈ dfn_variable_list
             plots_for_dfn_variable(run_info_dfns, variable_name; plot_prefix=plot_prefix,
-                                   is_1D=is_1D, is_1V=is_1V)
+                                   has_rdim=has_rdim, has_zdim=has_zdim, is_1V=is_1V)
         end
     end
 
@@ -297,7 +298,7 @@ function makie_post_process(run_dir::Union{String,Tuple},
         plot_neutral_pdf_2D_at_wall(run_info_dfns; plot_prefix=plot_prefix)
     end
 
-    if !is_1D
+    if has_rdim
         # Plots for 2D instability do not make sense for 1D simulations
         instability_input = input_dict["instability2D"]
         if any((instability_input["plot_1d"], instability_input["plot_2d"],
@@ -852,8 +853,9 @@ function variable_cache_extrema(variable_cache::VariableCache; transform=identit
 end
 
 """
-    plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
-                       is_1V=false, steady_state_residual_fig_axes=nothing)
+    plots_for_variable(run_info, variable_name; plot_prefix, has_rdim=true,
+                       has_zdim=true, is_1V=false,
+                       steady_state_residual_fig_axes=nothing)
 
 Make plots for the EM field or moment variable `variable_name`.
 
@@ -866,14 +868,15 @@ heading is the variable name.
 will be saved with the format `plot_prefix<some_identifying_string>.pdf` for plots and
 `plot_prefix<some_identifying_string>.gif`, etc. for animations.
 
-`is_1D` and/or `is_1V` can be passed to allow the function to skip some plots that do not
-make sense for 1D or 1V simulations (regardless of the settings).
+`has_rdim`, `has_zdim` and/or `is_1V` can be passed to allow the function to skip some
+plots that do not make sense for 0D/1D or 1V simulations (regardless of the settings).
 
 `steady_state_residual_fig_axes` contains the figure, axes and legend places for steady
 state residual plots.
 """
-function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
-                            is_1V=false, steady_state_residual_fig_axes=nothing)
+function plots_for_variable(run_info, variable_name; plot_prefix, has_rdim=true,
+                            has_zdim=true, is_1V=false,
+                            steady_state_residual_fig_axes=nothing)
     input = Dict_to_NamedTuple(input_dict[variable_name])
 
     # test if any plot is needed
@@ -883,7 +886,9 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
         return nothing
     end
 
-    if is_1D && variable_name == "Er"
+    if !has_rdim && variable_name == "Er"
+        return nothing
+    elseif !has_zdim && variable_name == "Ez"
         return nothing
     elseif variable_name == "collision_frequency" &&
             all(ri.collisions.krook_collisions_option == "none" for ri ∈ run_info)
@@ -912,39 +917,43 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
             variable_prefix = plot_prefix * variable_name * "_"
             log_variable_prefix = plot_prefix * "log" * variable_name * "_"
         end
-        if variable_name == "Er" && is_1D
+        if variable_name == "Er" && !has_rdim
             # Skip if there is no r-dimension
             continue
         end
-        if !is_1D && input.plot_vs_r_t
+        if variable_name == "Ez" && !has_zdim
+            # Skip if there is no r-dimension
+            continue
+        end
+        if has_rdim && input.plot_vs_r_t
             plot_vs_r_t(run_info, variable_name, is=is, data=variable, input=input,
                         outfile=variable_prefix * "vs_r_t.pdf")
         end
-        if input.plot_vs_z_t
+        if has_zdim && input.plot_vs_z_t
             plot_vs_z_t(run_info, variable_name, is=is, data=variable, input=input,
                         outfile=variable_prefix * "vs_z_t.pdf")
         end
-        if !is_1D && input.plot_vs_r
+        if has_rdim && input.plot_vs_r
             plot_vs_r(run_info, variable_name, is=is, data=variable, input=input,
                       outfile=variable_prefix * "vs_r.pdf")
         end
-        if input.plot_vs_z
+        if has_zdim && input.plot_vs_z
             plot_vs_z(run_info, variable_name, is=is, data=variable, input=input,
                       outfile=variable_prefix * "vs_z.pdf")
         end
-        if !is_1D && input.plot_vs_z_r
+        if has_rdim && has_zdim && input.plot_vs_z_r
             plot_vs_z_r(run_info, variable_name, is=is, data=variable, input=input,
                         outfile=variable_prefix * "vs_z_r.pdf")
         end
-        if input.animate_vs_z
+        if has_zdim && input.animate_vs_z
             animate_vs_z(run_info, variable_name, is=is, data=variable, input=input,
                          outfile=variable_prefix * "vs_z." * input.animation_ext)
         end
-        if !is_1D && input.animate_vs_r
+        if has_rdim && input.animate_vs_r
             animate_vs_r(run_info, variable_name, is=is, data=variable, input=input,
                          outfile=variable_prefix * "vs_r." * input.animation_ext)
         end
-        if !is_1D && input.animate_vs_z_r
+        if has_rdim && has_zdim && input.animate_vs_z_r
             animate_vs_z_r(run_info, variable_name, is=is, data=variable, input=input,
                            outfile=variable_prefix * "vs_r." * input.animation_ext)
         end
@@ -958,8 +967,8 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
 end
 
 """
-    plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=false,
-                           is_1V=false)
+    plots_for_dfn_variable(run_info, variable_name; plot_prefix, has_rdim=true,
+                           has_zdim=true, is_1V=false)
 
 Make plots for the distribution function variable `variable_name`.
 
@@ -974,11 +983,11 @@ the distribution functions are being read.
 will be saved with the format `plot_prefix<some_identifying_string>.pdf` for plots and
 `plot_prefix<some_identifying_string>.gif`, etc. for animations.
 
-`is_1D` and/or `is_1V` can be passed to allow the function to skip some plots that do not
-make sense for 1D or 1V simulations (regardless of the settings).
+`has_rdim`, `has_zdim` and/or `is_1V` can be passed to allow the function to skip some
+plots that do not make sense for 0D/1D or 1V simulations (regardless of the settings).
 """
-function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=false,
-                                is_1V=false)
+function plots_for_dfn_variable(run_info, variable_name; plot_prefix, has_rdim=true,
+                                has_zdim=true, is_1V=false)
     input = Dict_to_NamedTuple(input_dict_dfns[variable_name])
 
     is_neutral = variable_name ∈ neutral_dfn_variables
@@ -994,8 +1003,11 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
             animate_dims = setdiff(animate_dims, (:vperp,))
         end
     end
-    if is_1D
+    if !has_rdim
         animate_dims = setdiff(animate_dims, (:r,))
+    end
+    if !has_zdim
+        animate_dims = setdiff(animate_dims, (:z,))
     end
     plot_dims = tuple(:t, animate_dims...)
 
@@ -1074,7 +1086,7 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                         plot_f_unnorm_vs_vpa(run_info; input=input, neutral=true, is=is,
                                              outfile=outfile, yscale=yscale, transform=transform)
                     end
-                    if input[Symbol(:plot, log, :_unnorm_vs_vz_z)]
+                    if has_zdim && input[Symbol(:plot, log, :_unnorm_vs_vz_z)]
                         outfile = var_prefix * "unnorm_vs_vz_z.pdf"
                         plot_f_unnorm_vs_vpa_z(run_info; input=input, neutral=true, is=is,
                                                outfile=outfile, colorscale=yscale,
@@ -1086,7 +1098,7 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                                                 outfile=outfile, yscale=yscale,
                                                 transform=transform)
                     end
-                    if input[Symbol(:animate, log, :_unnorm_vs_vz_z)]
+                    if has_zdim && input[Symbol(:animate, log, :_unnorm_vs_vz_z)]
                         outfile = var_prefix * "unnorm_vs_vz_z." * input.animation_ext
                         animate_f_unnorm_vs_vpa_z(run_info; input=input, neutral=true, is=is,
                                                   outfile=outfile, colorscale=yscale,
@@ -1098,7 +1110,7 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                         plot_f_unnorm_vs_vpa(run_info; input=input, is=is, outfile=outfile,
                                              yscale=yscale, transform=transform)
                     end
-                    if input[Symbol(:plot, log, :_unnorm_vs_vpa_z)]
+                    if has_zdim && input[Symbol(:plot, log, :_unnorm_vs_vpa_z)]
                         outfile = var_prefix * "unnorm_vs_vpa_z.pdf"
                         plot_f_unnorm_vs_vpa_z(run_info; input=input, is=is, outfile=outfile,
                                                colorscale=yscale, transform=transform)
@@ -1108,7 +1120,7 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                         animate_f_unnorm_vs_vpa(run_info; input=input, is=is, outfile=outfile,
                                                 yscale=yscale, transform=transform)
                     end
-                    if input[Symbol(:animate, log, :_unnorm_vs_vpa_z)]
+                    if has_zdim && input[Symbol(:animate, log, :_unnorm_vs_vpa_z)]
                         outfile = var_prefix * "unnorm_vs_vpa_z." * input.animation_ext
                         animate_f_unnorm_vs_vpa_z(run_info; input=input, is=is, outfile=outfile,
                                                   colorscale=yscale, transform=transform)
@@ -3387,11 +3399,15 @@ end
 # Utility method to avoid code duplication when saving the calculate_steady_state_residual
 # plots
 function _save_residual_plots(fig_axes, plot_prefix)
-    for (key, fa) ∈ fig_axes
-        for (ax, lp) ∈ zip(fa[2], fa[3])
-            Legend(lp, ax)
+    try
+        for (key, fa) ∈ fig_axes
+            for (ax, lp) ∈ zip(fa[2], fa[3])
+                Legend(lp, ax)
+            end
+            save(plot_prefix * replace(key, " "=>"_") * ".pdf", fa[1])
         end
-        save(plot_prefix * replace(key, " "=>"_") * ".pdf", fa[1])
+    catch e
+        println("Error in _save_residual_plots(). Error was ", e)
     end
 end
 
@@ -4249,7 +4265,8 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
     println("Making plots of ion distribution function at walls")
     flush(stdout)
 
-    is_1D = all(ri !== nothing && ri.r.n == 1 for ri ∈ run_info)
+    has_rdim = any(ri !== nothing && ri.r.n > 1 for ri ∈ run_info_moments)
+    has_zdim = any(ri !== nothing && ri.z.n > 1 for ri ∈ run_info_moments)
     is_1V = all(ri !== nothing && ri.vperp.n == 1 for ri ∈ run_info)
     moment_kinetic = any(ri !== nothing
                          && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
@@ -4277,13 +4294,17 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
                                   outfile=plot_prefix * "pdf_$(label)_vs_vpa_vperp.pdf")
             end
 
-            plot_vs_vpa_z(run_info, "f"; is=1, input=f_input, iz=z_range,
-                          outfile=plot_prefix * "pdf_$(label)_vs_vpa_z.pdf")
+            if has_zdim
+                plot_vs_vpa_z(run_info, "f"; is=1, input=f_input, iz=z_range,
+                              outfile=plot_prefix * "pdf_$(label)_vs_vpa_z.pdf")
+            end
 
-            if !is_1D
+            if has_rdim && has_zdim
                 plot_vs_z_r(run_info, "f"; is=1, input=f_input, iz=z_range,
                             outfile=plot_prefix * "pdf_$(label)_vs_z_r.pdf")
+            end
 
+            if has_rdim
                 plot_vs_vpa_r(run_info, "f"; is=1, input=f_input,
                               outfile=plot_prefix * "pdf_$(label)_vs_vpa_r.pdf")
             end
@@ -4306,13 +4327,17 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
                                      outfile=plot_prefix * "pdf_$(label)_vs_vpa_vperp." * input.animation_ext)
             end
 
-            animate_vs_vpa_z(run_info, "f"; is=1, input=f_input, iz=z_range,
-                             outfile=plot_prefix * "pdf_$(label)_vs_vpa_z." * input.animation_ext)
+            if has_zdim
+                animate_vs_vpa_z(run_info, "f"; is=1, input=f_input, iz=z_range,
+                                 outfile=plot_prefix * "pdf_$(label)_vs_vpa_z." * input.animation_ext)
+            end
 
-            if !is_1D
+            if has_rdim && has_zdim
                 animate_vs_z_r(run_info, "f"; is=1, input=f_input, iz=z_range,
                                outfile=plot_prefix * "pdf_$(label)_vs_z_r." * input.animation_ext)
+            end
 
+            if has_rdim
                 animate_vs_vpa_r(run_info, "f"; is=1, input=f_input,
                                  outfile=plot_prefix * "pdf_$(label)_vs_vpa_r." * input.animation_ext)
             end
@@ -4361,7 +4386,8 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
     println("Making plots of neutral distribution function at walls")
     flush(stdout)
 
-    is_1D = all(ri !== nothing && ri.r.n == 1 for ri ∈ run_info)
+    has_rdim = any(ri !== nothing && ri.r.n > 1 for ri ∈ run_info_moments)
+    has_zdim = any(ri !== nothing && ri.z.n > 1 for ri ∈ run_info_moments)
     is_1V = all(ri !== nothing && ri.vzeta.n == 1 && ri.vr.n == 1 for ri ∈ run_info)
     moment_kinetic = any(ri !== nothing
                          && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
@@ -4390,20 +4416,24 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
                               outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz_vr.pdf")
             end
 
-            plot_vs_vz_z(run_info, "f_neutral"; is=1, input=f_neutral_input, iz=z_range,
-                         outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz_z.pdf")
+            if has_zdim
+                plot_vs_vz_z(run_info, "f_neutral"; is=1, input=f_neutral_input, iz=z_range,
+                             outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz_z.pdf")
+            end
 
-            if !is_1V
+            if has_zdim && !is_1V
                 plot_vs_vzeta_z(run_info, "f_neutral"; is=1, input=f_neutral_input, iz=z_range,
                                 outfile=plot_prefix * "pdf_neutral_$(label)_vs_vzeta_z.pdf")
                 plot_vs_vr_z(run_info, "f_neutral"; is=1, input=f_neutral_input, iz=z_range,
                              outfile=plot_prefix * "pdf_neutral_$(label)_vs_vr_z.pdf")
             end
 
-            if !is_1D
+            if has_rdim && has_zdim
                 plot_vs_z_r(run_info, "f_neutral"; is=1, input=f_neutral_input, iz=z_range,
                             outfile=plot_prefix * "pdf_neutral_$(label)_vs_z_r.pdf")
+            end
 
+            if has_rdim
                 plot_vs_vz_r(run_info, "f_neutral"; is=1, input=f_neutral_input,
                              outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz_r.pdf")
                 if !is_1V
@@ -4434,20 +4464,24 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
                                  outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz_vr." * input.animation_ext)
             end
 
-            animate_vs_vz_z(run_info, "f_neutral"; is=1, input=f_neutral_input, iz=z_range,
-                            outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz_z." * input.animation_ext)
+            if has_zdim
+                animate_vs_vz_z(run_info, "f_neutral"; is=1, input=f_neutral_input, iz=z_range,
+                                outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz_z." * input.animation_ext)
+            end
 
-            if !is_1V
+            if has_zdim && !is_1V
                 animate_vs_vzeta_z(run_info, "f_neutral"; is=1, input=f_neutral_input, iz=z_range,
                                    outfile=plot_prefix * "pdf_neutral_$(label)_vs_vzeta_z." * input.animation_ext)
                 animate_vs_vr_z(run_info, "f_neutral"; is=1, input=f_neutral_input, iz=z_range,
                                 outfile=plot_prefix * "pdf_neutral_$(label)_vs_vr_z." * input.animation_ext)
             end
 
-            if !is_1D
+            if has_rdim && has_zdim
                 animate_vs_z_r(run_info, "f_neutral"; is=1, input=f_neutral_input, iz=z_range,
                                outfile=plot_prefix * "pdf_neutral_$(label)_vs_z_r." * input.animation_ext)
+            end
 
+            if has_rdim
                 animate_vs_vz_r(run_info, "f_neutral"; is=1, input=f_neutral_input,
                                 outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz_r." * input.animation_ext)
                 if !is_1V
@@ -5492,9 +5526,10 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
                   outfile=plot_prefix*variable_name*"_norm_vs_t.pdf")
     end
 
-    is_1D = (r.n == 1)
+    has_rdim = (r.n > 1)
+    has_zdim = (z.n > 1)
 
-    if !is_1D && input.wall_plots
+    if has_rdim && input.wall_plots
         # plot last (by default) timestep field vs r at z_wall
 
         fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
@@ -5535,7 +5570,7 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
         outfile = plot_prefix * "MMS_" * variable_name * "_vs_t.pdf"
         save(outfile, fig)
     end
-    if !is_1D && input.plot_vs_r
+    if has_rdim && input.plot_vs_r
         fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
         plot_1d(r.grid, select_slice(field, :r; input=input), xlabel=L"r",
                 ylabel=field_label, label=field_label, ax=ax[1])
@@ -5548,7 +5583,7 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
         outfile = plot_prefix * "MMS_" * variable_name * "_vs_r.pdf"
         save(outfile, fig)
     end
-    if input.plot_vs_z
+    if has_zdim && input.plot_vs_z
         fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
         plot_1d(z.grid, select_slice(field, :z; input=input), xlabel=L"z",
                 ylabel=field_label, label=field_label, ax=ax[1])
@@ -5561,7 +5596,7 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
         outfile = plot_prefix * "MMS_" * variable_name * "_vs_z.pdf"
         save(outfile, fig)
     end
-    if !is_1D && input.plot_vs_r_t
+    if has_rdim && input.plot_vs_r_t
         fig, ax, colorbar_place = get_2d_ax(3)
         plot_2d(r.grid, time, select_slice(field, :t, :r; input=input), title=field_label,
                 xlabel=L"r", ylabel=L"t", ax=ax[1], colorbar_place=colorbar_place[1])
@@ -5573,7 +5608,7 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
         outfile = plot_prefix * "MMS_" * variable_name * "_vs_r_t.pdf"
         save(outfile, fig)
     end
-    if input.plot_vs_z_t
+    if has_zdim && input.plot_vs_z_t
         fig, ax, colorbar_place = get_2d_ax(3)
         plot_2d(z.grid, time, select_slice(field, :t, :z; input=input), title=field_label,
                 xlabel=L"z", ylabel=L"t", ax=ax[1], colorbar_place=colorbar_place[1])
@@ -5585,7 +5620,7 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
         outfile = plot_prefix * "MMS_" * variable_name * "_vs_z_t.pdf"
         save(outfile, fig)
     end
-    if !is_1D && input.plot_vs_z_r
+    if has_rdim && has_zdim && input.plot_vs_z_r
         fig, ax, colorbar_place = get_2d_ax(3)
         plot_2d(z.grid, r.grid, select_slice(field, :r, :z; input=input),
                 title=field_label, xlabel=L"z", ylabel=L"r", ax=ax[1],
@@ -5599,7 +5634,7 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
         outfile = plot_prefix * "MMS_" * variable_name * "_vs_z_r.pdf"
         save(outfile, fig)
     end
-    if !is_1D && input.animate_vs_r
+    if has_rdim && input.animate_vs_r
         fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
         frame_index = Observable(1)
         animate_1d(r.grid, select_slice(field, :t, :r; input=input),
@@ -5614,7 +5649,7 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
         outfile = plot_prefix * "MMS_" * variable_name * "_vs_r." * input.animation_ext
         save_animation(fig, frame_index, nt, outfile)
     end
-    if input.animate_vs_z
+    if has_zdim && input.animate_vs_z
         fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
         frame_index = Observable(1)
         animate_1d(z.grid, select_slice(field, :t, :z; input=input),
@@ -5629,7 +5664,7 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
         outfile = plot_prefix * "MMS_" * variable_name * "_vs_z." * input.animation_ext
         save_animation(fig, frame_index, nt, outfile)
     end
-    if !is_1D && input.animate_vs_z_r
+    if has_rdim && has_zdim && input.animate_vs_z_r
         fig, ax, colorbar_place = get_2d_ax(3)
         frame_index = Observable(1)
         animate_2d(z.grid, r.grid, select_slice(field, :t, :r, :z; input=input),
@@ -5899,7 +5934,8 @@ function compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
                   outfile=plot_prefix*"f_norm_vs_t.pdf")
     end
 
-    is_1D = (r.n == 1)
+    has_rdim = (r.n > 1)
+    has_zdim = (z.n > 1)
     is_1V = (vperp.n == 1)
 
     if input.wall_plots
@@ -5923,7 +5959,7 @@ function compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
             outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vpa.pdf"
             save(outfile, fig)
 
-            if !is_1D
+            if has_rdim
                 f, f_sym =
                 manufactured_solutions_get_field_and_field_sym(
                     run_info, variable_name; nvperp=run_info.vperp.n, it=input.it0, iz=iz,
@@ -5973,8 +6009,11 @@ function compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
     end
 
     animate_dims = setdiff(ion_dimensions, (:s,))
-    if is_1D
+    if !has_rdim
         animate_dims = setdiff(animate_dims, (:r,))
+    end
+    if !has_zdim
+        animate_dims = setdiff(animate_dims, (:z,))
     end
     if is_1V
         animate_dims = setdiff(animate_dims, (:vperp,))
@@ -6084,7 +6123,8 @@ function compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
                   outfile=plot_prefix*variable_name*"_norm_vs_t.pdf")
     end
 
-    is_1D = (r.n == 1)
+    has_rdim = (r.n > 1)
+    has_zdim = (z.n > 1)
     is_1V = (vzeta.n == 1 && vr.n == 1)
 
     if input.wall_plots
@@ -6108,7 +6148,7 @@ function compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
             outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vz.pdf"
             save(outfile, fig)
 
-            if !is_1D
+            if has_rdim
                 f, f_sym =
                 manufactured_solutions_get_field_and_field_sym(
                     run_info, variable_name; nvperp=run_info.vperp.n, it=input.it0, iz=iz,
@@ -6181,8 +6221,11 @@ function compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
     end
 
     animate_dims = setdiff(neutral_dimensions, (:sn,))
-    if is_1D
+    if !has_rdim
         animate_dims = setdiff(animate_dims, (:r,))
+    end
+    if !has_zdim
+        animate_dims = setdiff(animate_dims, (:z,))
     end
     if is_1V
         animate_dims = setdiff(animate_dims, (:vzeta, :vr))

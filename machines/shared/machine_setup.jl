@@ -301,7 +301,6 @@ function machine_setup_moment_kinetics(machine::String; no_force_exit::Bool=fals
     bindir = joinpath(repo_dir, "bin")
     mkpath(bindir)
     julia_executable_name = joinpath(bindir, "julia")
-    println("check use_plots=", mk_preferences["use_plots"], " ", mk_preferences["use_plots"] == "n")
     if batch_system || (julia_directory == "" && mk_preferences["use_plots"] == "n")
         # Make a local link to the Julia binary so scripts in the repo can find it
         println("\n** Making a symlink to the julia executable at bin/julia\n")

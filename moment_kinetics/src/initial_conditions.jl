@@ -2213,10 +2213,12 @@ function enforce_vperp_boundary_condition!(f, bc, vperp, vperp_spectral, vperp_a
         # set regularity condition d F / d vperp = 0 at vperp = 0
         if vperp.discretization == "gausslegendre_pseudospectral" || vperp.discretization == "chebyshev_pseudospectral"
             D0 = vperp_spectral.radau.D0
+            buffer = @view vperp.scratch[1:ngrid-1]
             @loop_s_r_z_vpa is ir iz ivpa begin
                 if diffusion || vperp_advect[is].speed[1,ivpa,iz,ir] > 0.0
                     # adjust F(vperp = 0) so that d F / d vperp = 0 at vperp = 0
-                    f[ivpa,1,iz,ir,is] = -sum(D0[2:ngrid].*f[ivpa,2:ngrid,iz,ir,is])/D0[1]
+                    @views @. buffer = D0[2:ngrid] * f[ivpa,2:ngrid,iz,ir,is]
+                    f[ivpa,1,iz,ir,is] = -sum(buffer)/D0[1]
                 end
             end
         else

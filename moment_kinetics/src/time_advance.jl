@@ -288,7 +288,10 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     begin_serial_region()
     vperp_advect = setup_advection(n_ion_species, vperp, vpa, z, r)
     # initialise the vperp advection speed
-    # note that z_advect and r_advect are arguments of update_speed_vperp!
+    # Note that z_advect and r_advect are arguments of update_speed_vperp!
+    # This means that z_advect[is].speed and r_advect[is].speed are used to determine
+    # vperp_advect[is].speed, so z_advect and r_advect must always be updated before
+    # vperp_advect is updated and used.
     if vperp.n > 1
         begin_serial_region()
         @serial_region begin
@@ -485,10 +488,10 @@ function setup_advance_flags(moments, composition, t_input, collisions,
     # otherwise, check to see if the flags need to be set to true
     if !t_input.split_operators
         # default for non-split operators is to include both vpa and z advection together
-        advance_vpa_advection = true && vpa.n > 1 && z.n > 1
-        advance_vperp_advection = true && vperp.n > 1 && z.n > 1
-        advance_z_advection = true && z.n > 1
-        advance_r_advection = true && r.n > 1
+        advance_vpa_advection = vpa.n > 1 && z.n > 1
+        advance_vperp_advection = vperp.n > 1 && z.n > 1
+        advance_z_advection = z.n > 1
+        advance_r_advection = r.n > 1
         if collisions.nuii > 0.0 && vperp.n > 1
             explicit_weakform_fp_collisions = true
         else
@@ -1722,8 +1725,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
                                         vz, vr, vzeta, vpa, vperp, z, r, collisions, dt)
     end
     if advance.ionization_source
-        constant_ionization_source!(fvec_out.pdf, vpa, vperp, z, r, moments, composition,
-                                    collisions, dt)
+        constant_ionization_source!(fvec_out.pdf, fvec_in, vpa, vperp, z, r, moments,
+                                    composition, collisions, dt)
     end
 
     # Add Krook collision operator for ions

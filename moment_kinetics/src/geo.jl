@@ -6,11 +6,13 @@ coordinate and r the radial coordinate
 module geo
 
 export init_magnetic_geometry
+export setup_geometry_input
 
 using ..input_structs: geometry_input
 using ..file_io: input_option_error
 using ..array_allocation: allocate_float
 using ..type_definitions: mk_float, mk_int
+
 
 """
 struct containing the geometric data necessary for 
@@ -56,6 +58,29 @@ cvdriftz::Array{mk_float,2}
 gbdriftr::Array{mk_float,2}
 # gbdriftz = (b/B^2) x grad B . grad z
 gbdriftz::Array{mk_float,2}
+end
+
+"""
+function to read the geometry input data from the TOML file
+
+the TOML namelist should be structured like
+
+[geometry]
+pitch = 1.0
+rhostar = 1.0
+DeltaB = 0.0
+option = ""
+
+"""
+function setup_geometry_input(toml_input::Dict, reference_rhostar)
+    input_section = get(toml_input, "geometry", Dict{String,Any}())
+    if !("rhostar" ∈ keys(input_section))
+        # Set default rhostar with reference value
+        input_section["rhostar"] = get(input_section, "rhostar", reference_rhostar)
+    end
+    input = Dict(Symbol(k)=>v for (k,v) in input_section)
+    #println(input)
+    return geometry_input(; input...)
 end
 
 """
