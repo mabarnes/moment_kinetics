@@ -117,7 +117,9 @@ const global_Win_store = Vector{MPI.Win}(undef, 0)
 """
 """
 function __init__()
-    MPI.Init()
+    if !MPI.Initialized()
+        MPI.Init()
+    end
 
     comm_world.val = MPI.COMM_WORLD.val
 
