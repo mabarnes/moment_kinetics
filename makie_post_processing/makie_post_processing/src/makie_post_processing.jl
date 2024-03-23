@@ -1390,7 +1390,7 @@ for dim ∈ one_dimension_combinations
                      if input === nothing
                          if run_info[1].dfns
                              if var_name ∈ keys(input_dict_dfns)
-                                 input = input_dict[var_name]
+                                 input = input_dict_dfns[var_name]
                              else
                                  input = input_dict_dfns
                              end
@@ -1452,7 +1452,7 @@ for dim ∈ one_dimension_combinations
                  if input === nothing
                      if run_info.dfns
                          if var_name ∈ keys(input_dict_dfns)
-                             input = input_dict[var_name]
+                             input = input_dict_dfns[var_name]
                          else
                              input = input_dict_dfns
                          end
@@ -1637,7 +1637,7 @@ for (dim1, dim2) ∈ two_dimension_combinations
                  if input === nothing
                      if run_info.dfns
                          if var_name ∈ keys(input_dict_dfns)
-                             input = input_dict[var_name]
+                             input = input_dict_dfns[var_name]
                          else
                              input = input_dict_dfns
                          end
@@ -1820,7 +1820,7 @@ for dim ∈ one_dimension_combinations_no_t
                      if input === nothing
                          if run_info[1].dfns
                              if var_name ∈ keys(input_dict_dfns)
-                                 input = input_dict[var_name]
+                                 input = input_dict_dfns[var_name]
                              else
                                  input = input_dict_dfns
                              end
@@ -1901,7 +1901,7 @@ for dim ∈ one_dimension_combinations_no_t
                  if input === nothing
                      if run_info.dfns
                          if var_name ∈ keys(input_dict_dfns)
-                             input = input_dict[var_name]
+                             input = input_dict_dfns[var_name]
                          else
                              input = input_dict_dfns
                          end
@@ -2131,7 +2131,7 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                  if input === nothing
                      if run_info.dfns
                          if var_name ∈ keys(input_dict_dfns)
-                             input = input_dict[var_name]
+                             input = input_dict_dfns[var_name]
                          else
                              input = input_dict_dfns
                          end
