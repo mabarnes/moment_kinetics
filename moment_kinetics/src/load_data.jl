@@ -17,6 +17,8 @@ using ..array_allocation: allocate_float, allocate_int
 using ..calculus: derivative!
 using ..communication: setup_distributed_memory_MPI
 using ..coordinates: coordinate, define_coordinate
+using ..electron_vpa_advection: update_electron_speed_vpa!
+using ..electron_z_advection: update_electron_speed_z!
 using ..file_io: check_io_implementation, get_group, get_subgroup_keys, get_variable_keys
 using ..input_structs: advection_input, grid_input, hdf5, netcdf
 using ..interpolation: interpolate_to_grid_1d!
@@ -39,7 +41,13 @@ const timestep_diagnostic_variables = ("time_for_run", "step_counter", "dt",
                                        "failure_counter", "failure_caused_by",
                                        "steps_per_output", "failures_per_output",
                                        "failure_caused_by_per_output",
-                                       "average_successful_dt")
+                                       "average_successful_dt", "electron_step_counter",
+                                       "electron_dt", "electron_failure_counter",
+                                       "electron_failure_caused_by",
+                                       "electron_steps_per_output",
+                                       "electron_failures_per_output",
+                                       "electron_failure_caused_by_per_output",
+                                       "electron_average_successful_dt")
 const em_variables = ("phi", "Er", "Ez")
 const ion_moment_variables = ("density", "parallel_flow", "parallel_pressure",
                               "thermal_speed", "temperature", "parallel_heat_flux",
@@ -4018,6 +4026,85 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
 
         variable = speed
         variable = select_slice_of_variable(variable; kwargs...)
+     elseif variable_name == "electron_z_advect_speed"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        upar = get_variable(run_info, "electron_parallel_flow")
+        vth = get_variable(run_info, "electron_thermal_speed")
+        nz, nr, nt = size(upar)
+        nvperp = run_info.vperp.n
+        nvpa = run_info.vpa.n
+
+        speed = allocate_float(nz, nvpa, nvperp, nr, nt)
+
+        setup_distributed_memory_MPI(1,1,1,1)
+        setup_loop_ranges!(0, 1; s=run_info.n_ion_species, sn=run_info.n_neutral_species,
+                           r=nr, z=nz, vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
+                           vr=run_info.vr.n, vz=run_info.vz.n)
+        for it ∈ 1:nt
+            begin_serial_region()
+            # Only need some struct with a 'speed' variable
+            advect = (speed=@view(speed[:,:,:,:,it]),)
+            @views update_electron_speed_z!(advect, upar[:,:,it], vth[:,:,it],
+                                            run_info.vpa.grid)
+        end
+
+        # Horrible hack so that we can get the speed back without rearranging the
+        # dimensions, if we want that to pass it to a utility function from the main code
+        # (e.g. to calculate a CFL limit).
+        if normalize_advection_speed_shape
+            variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
+            for it ∈ 1:nt, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
+                variable[ivpa,ivperp,iz,ir,it] = speed[iz,ivpa,ivperp,ir,it]
+            end
+            variable = select_slice_of_variable(variable; kwargs...)
+        else
+            variable = speed
+            if :it ∈ keys(kwargs)
+                variable = selectdim(variable, 5, kwargs[:it])
+            end
+            if :ir ∈ keys(kwargs)
+                variable = selectdim(variable, 4, kwargs[:ir])
+            end
+            if :ivperp ∈ keys(kwargs)
+                variable = selectdim(variable, 3, kwargs[:ivperp])
+            end
+            if :ivpa ∈ keys(kwargs)
+                variable = selectdim(variable, 2, kwargs[:ivpa])
+            end
+            if :iz ∈ keys(kwargs)
+                variable = selectdim(variable, 1, kwargs[:iz])
+            end
+        end
+    elseif variable_name == "electron_vpa_advect_speed"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        ppar = get_variable(run_info, "electron_parallel_pressure")
+        vth = get_variable(run_info, "electron_thermal_speed")
+        dppar_dz = get_z_derivative(run_info, "electron_parallel_pressure")
+        dvth_dz = get_z_derivative(run_info, "electron_thermal_speed")
+        dqpar_dz = get_z_derivative(run_info, "electron_parallel_heat_flux")
+
+        nz, nr, nt = size(vth)
+        nvperp = run_info.vperp.n
+        nvpa = run_info.vpa.n
+
+        speed=allocate_float(nvpa, nvperp, nz, nr, nt)
+        setup_distributed_memory_MPI(1,1,1,1)
+        setup_loop_ranges!(0, 1; s=run_info.n_ion_species, sn=run_info.n_neutral_species,
+                           r=nr, z=nz, vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
+                           vr=run_info.vr.n, vz=run_info.vz.n)
+        for it ∈ 1:nt
+            begin_serial_region()
+            # Only need some struct with a 'speed' variable
+            advect = (speed=@view(speed[:,:,:,:,it]),)
+            @views update_electron_speed_vpa!(advect, ppar[:,:,it], vth[:,:,it],
+                                              dppar_dz[:,:,it], dqpar_dz[:,:,it],
+                                              dvth_dz[:,:,it], run_info.vpa.grid)
+        end
+
+        variable = speed
+        variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == "neutral_z_advect_speed"
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
@@ -4175,6 +4262,45 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             # Don't want a meaningless Inf...
             variable[1] = 0.0
         end
+    elseif variable_name == "electron_steps_per_output"
+        electron_steps_per_output = get_variable(run_info, "electron_step_counter"; kwargs...)
+        for i ∈ length(electron_steps_per_output):-1:2
+            electron_steps_per_output[i] -= electron_steps_per_output[i-1]
+        end
+        variable = electron_steps_per_output
+    elseif variable_name == "electron_failures_per_output"
+        electron_failures_per_output = get_variable(run_info, "electron_failure_counter"; kwargs...)
+        for i ∈ length(electron_failures_per_output):-1:2
+            electron_failures_per_output[i] -= electron_failures_per_output[i-1]
+        end
+        variable = electron_failures_per_output
+    elseif variable_name == "electron_failure_caused_by_per_output"
+        electron_failure_caused_by_per_output = get_variable(run_info, "electron_failure_caused_by"; kwargs...)
+        for i ∈ size(electron_failure_caused_by_per_output,2):-1:2
+            electron_failure_caused_by_per_output[:,i] .-= electron_failure_caused_by_per_output[:,i-1]
+        end
+        variable = electron_failure_caused_by_per_output
+    elseif variable_name == "electron_limit_caused_by_per_output"
+        electron_limit_caused_by_per_output = get_variable(run_info, "electron_limit_caused_by"; kwargs...)
+        for i ∈ size(electron_limit_caused_by_per_output,2):-1:2
+            electron_limit_caused_by_per_output[:,i] .-= electron_limit_caused_by_per_output[:,i-1]
+        end
+        variable = electron_limit_caused_by_per_output
+    elseif variable_name == "electron_average_successful_dt"
+        electron_steps_per_output = get_variable(run_info, "electron_steps_per_output"; kwargs...)
+        electron_failures_per_output = get_variable(run_info, "electron_failures_per_output"; kwargs...)
+        electron_successful_steps_per_output = electron_steps_per_output - electron_failures_per_output
+
+        delta_t = copy(run_info.time)
+        for i ∈ length(delta_t):-1:2
+            delta_t[i] -= delta_t[i-1]
+        end
+
+        variable = delta_t ./ electron_successful_steps_per_output
+        if electron_successful_steps_per_output[1] == 0
+            # Don't want a meaningless Inf...
+            variable[1] = 0.0
+        end
     elseif variable_name == "CFL_ion_z"
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
@@ -4199,6 +4325,34 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         CFL = similar(speed)
         for it ∈ 1:nt
             @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.vpa)
+        end
+
+        variable = CFL
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "CFL_electron_z"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "electron_z_advect_speed";
+                             normalize_advection_speed_shape=false)
+        nz, nvpa, nvperp, nr, nt = size(speed)
+        CFL = similar(speed)
+        for it ∈ 1:nt
+            @views get_CFL!(CFL[:,:,:,:,it], speed[:,:,:,:,it], run_info.z)
+        end
+
+        variable = allocate_float(nvpa, nvperp, nz, nr, nt)
+        for it ∈ 1:nt, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
+            variable[ivpa,ivperp,iz,ir,it] = CFL[iz,ivpa,ivperp,ir,it]
+        end
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "CFL_electron_vpa"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "electron_vpa_advect_speed")
+        nt = size(speed, 5)
+        CFL = similar(speed)
+        for it ∈ 1:nt
+            @views get_CFL!(CFL[:,:,:,:,it], speed[:,:,:,:,it], run_info.vpa)
         end
 
         variable = CFL
@@ -4261,6 +4415,31 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             for is ∈ 1:nspecies
                 min_CFL = min(min_CFL, get_minimum_CFL_vpa(@view(speed[:,:,:,:,is,it]), run_info.vpa))
             end
+            variable[it] = min_CFL
+        end
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "minimum_CFL_electron_z"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "electron_z_advect_speed";
+                             normalize_advection_speed_shape=false)
+        nt = size(speed, 5)
+        variable = allocate_float(nt)
+        begin_serial_region()
+        for it ∈ 1:nt
+            min_CFL = get_minimum_CFL_z(@view(speed[:,:,:,:,it]), run_info.z)
+            variable[it] = min_CFL
+        end
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "minimum_CFL_electron_vpa"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "electron_vpa_advect_speed")
+        nt = size(speed, 5)
+        variable = allocate_float(nt)
+        begin_serial_region()
+        for it ∈ 1:nt
+            min_CFL = get_minimum_CFL_vpa(@view(speed[:,:,:,:,it]), run_info.vpa)
             variable[it] = min_CFL
         end
         variable = select_slice_of_variable(variable; kwargs...)

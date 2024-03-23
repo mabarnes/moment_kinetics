@@ -404,6 +404,17 @@ post-processing.
 """
 function get_CFL end
 
+function get_CFL!(CFL::AbstractArray{T,4}, speed::AbstractArray{T,4}, coord) where T
+
+    nmain, n2, n3, n4 = size(speed)
+
+    for i4 ∈ 1:n4, i3 ∈ 1:n3, i2 ∈ 1:n2, imain ∈ 1:nmain
+        CFL[imain,i2,i3,i4] = abs(coord.cell_width[imain] / speed[imain,i2,i3,i4])
+    end
+
+    return CFL
+end
+
 function get_CFL!(CFL::AbstractArray{T,5}, speed::AbstractArray{T,5}, coord) where T
 
     nmain, n2, n3, n4, n5 = size(speed)

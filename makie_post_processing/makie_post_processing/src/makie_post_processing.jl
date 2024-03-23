@@ -6918,7 +6918,7 @@ will be saved with the format `plot_prefix_timestep_diagnostics.pdf`.
 
 `it` can be used to select a subset of the time points by passing a range.
 """
-function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
+function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing, electron=false)
     try
         if !isa(run_info, Tuple)
             run_info = (run_info,)
@@ -6928,9 +6928,15 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
 
         input = Dict_to_NamedTuple(input_dict["timestep_diagnostics"])
 
-         steps_fig = nothing
-         dt_fig = nothing
-         CFL_fig = nothing
+        steps_fig = nothing
+        dt_fig = nothing
+        CFL_fig = nothing
+
+        if electron
+            electron_prefix = "electron_"
+        else
+            electron_prefix = ""
+        end
 
         if input.plot
             # Plot numbers of steps and numbers of failures
@@ -6951,67 +6957,86 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                     prefix = ri.run_name * " "
                 end
 
-                plot_1d(ri.time, get_variable(ri, "steps_per_output"; it=it);
-                        label=prefix * "steps", ax=ax)
+                if it !== nothing
+                    time = ri.time[it]
+                else
+                    time = ri.time
+                end
+                plot_1d(time, get_variable(ri, "$(electron_prefix)steps_per_output";
+                                              it=it); label=prefix * "steps", ax=ax)
                 # Fudge to create an invisible line on ax_failures that cycles the line colors
                 # and adds a label for "steps_per_output" to the plot because we create the
                 # legend from ax_failures.
                 plot_1d([ri.time[1]], [0]; label=prefix * "steps", ax=ax_failures)
-                plot_1d(ri.time, get_variable(ri, "failures_per_output"; it=it);
+                plot_1d(time,
+                        get_variable(ri, "$(electron_prefix)failures_per_output"; it=it);
                         label=prefix * "failures", ax=ax_failures)
 
-                failure_caused_by_per_output = get_variable(ri,
-                                                            "failure_caused_by_per_output";
-                                                            it=it)
+                failure_caused_by_per_output =
+                    get_variable(ri, "$(electron_prefix)failure_caused_by_per_output";
+                                 it=it)
                 counter = 0
-                # Ion pdf failure counter
+                # pdf failure counter
                 counter += 1
-                plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
-                        label=prefix * "failures caused by f_ion", ax=ax_failures)
-                if ri.evolve_density
+                if electron
+                    label = prefix * "failures caused by f_electron"
+                else
+                    label = prefix * "failures caused by f_ion"
+                end
+                plot_1d(time, @view failure_caused_by_per_output[counter,:];
+                        label=label, ax=ax_failures)
+                if !electron && ri.evolve_density
                     # Ion density failure counter
                     counter += 1
-                    plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                    plot_1d(time, @view failure_caused_by_per_output[counter,:];
                             linestyle=:dash, label=prefix * "failures caused by n_ion",
                             ax=ax_failures)
                 end
-                if ri.evolve_upar
+                if !electron && ri.evolve_upar
                     # Ion flow failure counter
                     counter += 1
-                    plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                    plot_1d(time, @view failure_caused_by_per_output[counter,:];
                             linestyle=:dash, label=prefix * "failures caused by u_ion",
                             ax=ax_failures)
                 end
-                if ri.evolve_ppar
-                    # Ion flow failure counter
+                if !electron && ri.evolve_ppar
+                    # Ion parallel pressure failure counter
                     counter += 1
-                    plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                    plot_1d(time, @view failure_caused_by_per_output[counter,:];
                             linestyle=:dash, label=prefix * "failures caused by p_ion",
                             ax=ax_failures)
                 end
-                if ri.n_neutral_species > 0
+                if electron || ri.composition.electron_physics ∈ (braginskii_fluid,
+                                                                  kinetic_electrons)
+                    # Electron parallel pressure failure counter
+                    counter += 1
+                    plot_1d(time, @view failure_caused_by_per_output[counter,:];
+                            linestyle=:dash, label=prefix * "failures caused by p_electron",
+                            ax=ax_failures)
+                end
+                if !electron && ri.n_neutral_species > 0
                     # Neutral pdf failure counter
                     counter += 1
-                    plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                    plot_1d(time, @view failure_caused_by_per_output[counter,:];
                             label=prefix * "failures caused by f_neutral", ax=ax_failures)
                     if ri.evolve_density
                         # Neutral density failure counter
                         counter += 1
-                        plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                        plot_1d(time, @view failure_caused_by_per_output[counter,:];
                                 linestyle=:dash,
                                 label=prefix * "failures caused by n_neutral", ax=ax_failures)
                     end
                     if ri.evolve_upar
                         # Neutral flow failure counter
                         counter += 1
-                        plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                        plot_1d(time, @view failure_caused_by_per_output[counter,:];
                                 linestyle=:dash,
                                 label=prefix * "failures caused by u_neutral", ax=ax_failures)
                     end
                     if ri.evolve_ppar
                         # Neutral flow failure counter
                         counter += 1
-                        plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                        plot_1d(time, @view failure_caused_by_per_output[counter,:];
                                 linestyle=:dash,
                                 label=prefix * "failures caused by p_neutral", ax=ax_failures)
                     end
@@ -7034,11 +7059,11 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
             ########################
 
             if plot_prefix !== nothing
-                outfile = plot_prefix * "successful_dt.pdf"
+                outfile = plot_prefix * "$(electron_prefix)successful_dt.pdf"
             else
                 outfile = nothing
             end
-            dt_fig = plot_vs_t(run_info, "average_successful_dt"; outfile=outfile)
+            dt_fig = plot_vs_t(run_info, "$(electron_prefix)average_successful_dt"; outfile=outfile)
 
             # PLot minimum CFL factors
             ##########################
@@ -7051,14 +7076,23 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                 else
                     prefix = ri.run_name * " "
                 end
-                CFL_vars = ["minimum_CFL_ion_z", "minimum_CFL_ion_vpa"]
-                if ri.n_neutral_species > 0
-                    push!(CFL_vars, "minimum_CFL_neutral_z", "minimum_CFL_neutral_vz")
+                if electron
+                    CFL_vars = ["minimum_CFL_electron_z", "minimum_CFL_electron_vpa"]
+                else
+                    CFL_vars = ["minimum_CFL_ion_z", "minimum_CFL_ion_vpa"]
+                    if ri.n_neutral_species > 0
+                        push!(CFL_vars, "minimum_CFL_neutral_z", "minimum_CFL_neutral_vz")
+                    end
+                end
+                if it !== nothing
+                    time = ri.time[it]
+                else
+                    time = ri.time
                 end
                 for varname ∈ CFL_vars
-                    var = get_variable(ri, varname)
+                    var = get_variable(ri, varname; it=it)
                     maxval = min(maxval, maximum(var))
-                    plot_1d(ri.time, var; ax=ax, label=prefix*varname)
+                    plot_1d(time, var; ax=ax, label=prefix*electron_prefix*varname)
                 end
             end
             ylims!(ax, 0.0, 4.0 * maxval)
@@ -7072,56 +7106,71 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                 else
                     prefix = ri.run_name * " "
                 end
+                if it !== nothing
+                    time = ri.time[it]
+                else
+                    time = ri.time
+                end
 
-                limit_caused_by_per_output = get_variable(ri,
-                                                          "limit_caused_by_per_output";
-                                                          it=it)
+                limit_caused_by_per_output =
+                    get_variable(ri, "$(electron_prefix)limit_caused_by_per_output";
+                                 it=it)
                 counter = 0
 
                 # Accuracy limit counter
                 counter += 1
-                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                plot_1d(time, @view limit_caused_by_per_output[counter,:];
                         label=prefix * "RK accuracy", ax=ax)
 
                 # Maximum timestep increase limit counter
                 counter += 1
-                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                plot_1d(time, @view limit_caused_by_per_output[counter,:];
                         label=prefix * "max timestep increase", ax=ax)
 
                 # Slower maximum timestep increase near last failure limit counter
                 counter += 1
-                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                plot_1d(time, @view limit_caused_by_per_output[counter,:];
                         label=prefix * "max timestep increase near last fail", ax=ax)
 
                 # Minimum timestep limit counter
                 counter += 1
-                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                plot_1d(time, @view limit_caused_by_per_output[counter,:];
                         label=prefix * "min timestep", ax=ax)
 
                 # Maximum timestep limit counter
                 counter += 1
-                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                plot_1d(time, @view limit_caused_by_per_output[counter,:];
                         label=prefix * "max timestep", ax=ax)
 
-                # Ion z advection
+                # z advection
                 counter += 1
-                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
-                        label=prefix * "ion z advect", ax=ax)
+                if electron
+                    label = prefix * "electron z advect"
+                else
+                    label = prefix * "ion z advect"
+                end
+                plot_1d(time, @view limit_caused_by_per_output[counter,:]; label=label,
+                        ax=ax)
 
-                # Ion vpa advection
+                # vpa advection
                 counter += 1
-                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
-                        label=prefix * "ion vpa advect", ax=ax)
+                if electron
+                    label = prefix * "electron vpa advect"
+                else
+                    label = prefix * "ion vpa advect"
+                end
+                plot_1d(time, @view limit_caused_by_per_output[counter,:]; label=label,
+                        ax=ax)
 
-                if ri.n_neutral_species > 0
-                    # Ion z advection
+                if !electron && ri.n_neutral_species > 0
+                    # Neutral z advection
                     counter += 1
-                    plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
                             label=prefix * "neutral z advect", ax=ax)
 
-                    # Ion vpa advection
+                    # Neutral vz advection
                     counter += 1
-                    plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
                             label=prefix * "neutral vz advect", ax=ax)
                 end
 
@@ -7140,13 +7189,13 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
 
 
             if plot_prefix !== nothing
-                outfile = plot_prefix * "timestep_diagnostics.pdf"
+                outfile = plot_prefix * electron_prefix * "timestep_diagnostics.pdf"
                 save(outfile, steps_fig)
 
-                outfile = plot_prefix * "CFL_factors.pdf"
+                outfile = plot_prefix * electron_prefix * "CFL_factors.pdf"
                 save(outfile, CFL_fig)
 
-                outfile = plot_prefix * "timestep_limits.pdf"
+                outfile = plot_prefix * electron_prefix * "timestep_limits.pdf"
                 save(outfile, limits_fig)
             else
                 display(steps_fig)
@@ -7160,29 +7209,56 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
             if plot_prefix === nothing
                 error("plot_prefix is required when animate_CFL=true")
             end
-            data = get_variable(run_info, "CFL_ion_z")
-            datamin = minimum(minimum(d) for d ∈ data)
-            animate_vs_vpa_z(run_info, "CFL_ion_z"; data=data,
-                             outfile=plot_prefix * "CFL_ion_z_vs_vpa_z.gif",
-                             colorscale=log10,
-                             transform=x->positive_or_nan(x; epsilon=1.e-30),
-                             colorrange=(datamin, datamin * 1000.0),
-                             axis_args=Dict(:bottomspinevisible=>false,
-                                            :topspinevisible=>false,
-                                            :leftspinevisible=>false,
-                                            :rightspinevisible=>false))
-            data = get_variable(run_info, "CFL_ion_vpa")
-            datamin = minimum(minimum(d) for d ∈ data)
-            animate_vs_vpa_z(run_info, "CFL_ion_vpa"; data=data,
-                             outfile=plot_prefix * "CFL_ion_vpa_vs_vpa_z.gif",
-                             colorscale=log10,
-                             transform=x->positive_or_nan(x; epsilon=1.e-30),
-                             colorrange=(datamin, datamin * 1000.0),
-                             axis_args=Dict(:bottomspinevisible=>false,
-                                            :topspinevisible=>false,
-                                            :leftspinevisible=>false,
-                                            :rightspinevisible=>false))
-            if any(ri.n_neutral_species > 0 for ri ∈ run_info)
+            if !electron
+                data = get_variable(run_info, "CFL_ion_z")
+                datamin = minimum(minimum(d) for d ∈ data)
+                animate_vs_vpa_z(run_info, "CFL_ion_z"; data=data,
+                                 outfile=plot_prefix * "CFL_ion_z_vs_vpa_z.gif",
+                                 colorscale=log10,
+                                 transform=x->positive_or_nan(x; epsilon=1.e-30),
+                                 colorrange=(datamin, datamin * 1000.0),
+                                 axis_args=Dict(:bottomspinevisible=>false,
+                                                :topspinevisible=>false,
+                                                :leftspinevisible=>false,
+                                                :rightspinevisible=>false))
+                data = get_variable(run_info, "CFL_ion_vpa")
+                datamin = minimum(minimum(d) for d ∈ data)
+                animate_vs_vpa_z(run_info, "CFL_ion_vpa"; data=data,
+                                 outfile=plot_prefix * "CFL_ion_vpa_vs_vpa_z.gif",
+                                 colorscale=log10,
+                                 transform=x->positive_or_nan(x; epsilon=1.e-30),
+                                 colorrange=(datamin, datamin * 1000.0),
+                                 axis_args=Dict(:bottomspinevisible=>false,
+                                                :topspinevisible=>false,
+                                                :leftspinevisible=>false,
+                                                :rightspinevisible=>false))
+            end
+            if electron || any(ri.composition.electron_physics == kinetic_electrons for ri
+                               ∈ run_info)
+                data = get_variable(run_info, "CFL_electron_z")
+                datamin = minimum(minimum(d) for d ∈ data)
+                animate_vs_vpa_z(run_info, "CFL_electron_z"; data=data,
+                                 outfile=plot_prefix * "CFL_electron_z_vs_vpa_z.gif",
+                                 colorscale=log10,
+                                 transform=x->positive_or_nan(x; epsilon=1.e-30),
+                                 colorrange=(datamin, datamin * 1000.0),
+                                 axis_args=Dict(:bottomspinevisible=>false,
+                                                :topspinevisible=>false,
+                                                :leftspinevisible=>false,
+                                                :rightspinevisible=>false))
+                data = get_variable(run_info, "CFL_electron_vpa")
+                datamin = minimum(minimum(d) for d ∈ data)
+                animate_vs_vpa_z(run_info, "CFL_electron_vpa"; data=data,
+                                 outfile=plot_prefix * "CFL_electron_vpa_vs_vpa_z.gif",
+                                 colorscale=log10,
+                                 transform=x->positive_or_nan(x; epsilon=1.e-30),
+                                 colorrange=(datamin, datamin * 1000.0),
+                                 axis_args=Dict(:bottomspinevisible=>false,
+                                                :topspinevisible=>false,
+                                                :leftspinevisible=>false,
+                                                :rightspinevisible=>false))
+            end
+            if !electron && any(ri.n_neutral_species > 0 for ri ∈ run_info)
                 data = get_variable(run_info, "CFL_neutral_z")
                 datamin = minimum(minimum(d) for d ∈ data)
                 animate_vs_vz_z(run_info, "CFL_neutral_z"; data=data,
