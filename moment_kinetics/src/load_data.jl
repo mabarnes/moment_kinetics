@@ -3812,6 +3812,30 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         return variable
     end
 
+    # Select a slice of an electron distribution function sized variable
+    function select_slice_of_variable(variable::AbstractArray{T,5} where T; it=nothing,
+                                      is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                                      ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                                      ivz=nothing)
+        if it !== nothing
+            variable = selectdim(variable, 5, kwargs[:it])
+        end
+        if ir !== nothing
+            variable = selectdim(variable, 4, kwargs[:ir])
+        end
+        if iz !== nothing
+            variable = selectdim(variable, 3, kwargs[:iz])
+        end
+        if ivperp !== nothing
+            variable = selectdim(variable, 2, kwargs[:ivperp])
+        end
+        if ivpa !== nothing
+            variable = selectdim(variable, 1, kwargs[:ivpa])
+        end
+
+        return variable
+    end
+
     # Select a slice of a neutral distribution function sized variable
     function select_slice_of_variable(variable::AbstractArray{T,7} where T; it=nothing,
                                       is=nothing, ir=nothing, iz=nothing, ivperp=nothing,

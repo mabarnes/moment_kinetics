@@ -3193,10 +3193,71 @@ function select_slice(variable::AbstractArray{T,4}, dims::Symbol...; input=nothi
     return slice
 end
 
+function select_slice(variable::AbstractArray{T,5}, dims::Symbol...; input=nothing,
+                      it=nothing, is=1, ir=nothing, iz=nothing, ivperp=nothing,
+                      ivpa=nothing, kwargs...) where T
+    # Array is (vpa,vperp,z,r,t)
+
+    if it !== nothing
+        it0 = it
+    elseif input === nothing || :it0 ∉ input
+        it0 = size(variable, 5)
+    else
+        it0 = input.it0
+    end
+    if ir !== nothing
+        ir0 = ir
+    elseif input === nothing || :ir0 ∉ input
+        ir0 = max(size(variable, 4) ÷ 3, 1)
+    else
+        ir0 = input.ir0
+    end
+    if iz !== nothing
+        iz0 = iz
+    elseif input === nothing || :iz0 ∉ input
+        iz0 = max(size(variable, 3) ÷ 3, 1)
+    else
+        iz0 = input.iz0
+    end
+    if ivperp !== nothing
+        ivperp0 = ivperp
+    elseif input === nothing || :ivperp0 ∉ input
+        ivperp0 = max(size(variable, 2) ÷ 3, 1)
+    else
+        ivperp0 = input.ivperp0
+    end
+    if ivpa !== nothing
+        ivpa0 = ivpa
+    elseif input === nothing || :ivpa0 ∉ input
+        ivpa0 = max(size(variable, 1) ÷ 3, 1)
+    else
+        ivpa0 = input.ivpa0
+    end
+
+    slice = variable
+    if :t ∉ dims || it !== nothing
+        slice = selectdim(slice, 5, it0)
+    end
+    if :r ∉ dims || ir !== nothing
+        slice = selectdim(slice, 4, ir0)
+    end
+    if :z ∉ dims || iz !== nothing
+        slice = selectdim(slice, 3, iz0)
+    end
+    if :vperp ∉ dims || ivperp !== nothing
+        slice = selectdim(slice, 2, ivperp0)
+    end
+    if :vpa ∉ dims || ivpa !== nothing
+        slice = selectdim(slice, 1, ivpa0)
+    end
+
+    return slice
+end
+
 function select_slice(variable::AbstractArray{T,6}, dims::Symbol...; input=nothing,
                       it=nothing, is=1, ir=nothing, iz=nothing, ivperp=nothing,
                       ivpa=nothing, kwargs...) where T
-    # Array is (z,r,species,t)
+    # Array is (vpa,vperp,z,r,species,t)
 
     if it !== nothing
         it0 = it
@@ -3258,7 +3319,7 @@ end
 function select_slice(variable::AbstractArray{T,7}, dims::Symbol...; input=nothing,
                       it=nothing, is=1, ir=nothing, iz=nothing, ivzeta=nothing,
                       ivr=nothing, ivz=nothing, kwargs...) where T
-    # Array is (z,r,species,t)
+    # Array is (vz,vr,vzeta,z,r,species,t)
 
     if it !== nothing
         it0 = it
