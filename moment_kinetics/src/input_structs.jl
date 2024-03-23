@@ -38,7 +38,7 @@ end
 an option but known at compile time when a `time_info` struct is passed as a function
 argument.
 """
-struct time_info{Terrorsum <: Real}
+struct time_info{Terrorsum <: Real, T_electron}
     nstep::mk_int
     end_time::mk_float
     dt::MPISharedArray{mk_float,1}
@@ -75,6 +75,7 @@ struct time_info{Terrorsum <: Real}
     converged_residual_value::mk_float
     use_manufactured_solns_for_advance::Bool
     stopfile::String
+    electron::T_electron
 end
 
 """

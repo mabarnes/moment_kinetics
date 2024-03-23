@@ -47,13 +47,6 @@ ionization_frequency = 2.0
 electron_ionization_frequency = 2.0
 ionization_energy = 1.0
 constant_ionization_rate = false
-nstep = 40000
-#nstep = 1
-dt = 0.0005
-nwrite = 200
-use_semi_lagrange = false
-n_rk_stages = 4
-split_operators = false
 r_ngrid = 1
 r_nelement = 1
 z_ngrid = 9
@@ -86,3 +79,9 @@ ascii_output = true
 #vpa_dissipation_coefficient = 0.2
 #vpa_dissipation_coefficient = 2.0
 vpa_dissipation_coefficient = 20.0
+
+[timestepping]
+nstep = 40000
+#nstep = 1
+dt = 0.0005
+nwrite = 200

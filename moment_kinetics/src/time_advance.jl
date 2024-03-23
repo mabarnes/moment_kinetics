@@ -264,25 +264,15 @@ function allocate_advection_structs(composition, z, r, vpa, vperp, vz, vr, vzeta
 end
 
 """
-create arrays and do other work needed to setup
-the main time advance loop.
-this includes creating and populating structs
-for Chebyshev transforms, velocity space moments,
-EM fields, and advection terms
-"""
-function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
-                             vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
-                             z_spectral, r_spectral, composition, drive_input, moments,
-                             t_input, code_time, dt_reload, dt_before_last_fail_reload,
-                             collisions, species, geometry, boundary_distributions,
-                             external_source_settings, num_diss_params,
-                             manufactured_solns_input, advection_structs, scratch_dummy,
-                             io_input, restarting, restart_had_kinetic_electrons,
-                             input_dict)
-    # define some local variables for convenience/tidiness
-    n_ion_species = composition.n_ion_species
-    n_neutral_species = composition.n_neutral_species
+    setup_time_info(t_input; electrons=nothing)
 
+Create a [`input_structs.time_info`](@ref) struct using the settings in `t_input`.
+
+If something is passed in `electron`, it is stored in the `electron_t_params` member of
+the returned `time_info`.
+"""
+function setup_time_info(t_input, code_time, dt_reload, dt_before_last_fail_reload,
+                         manufactured_solns_input; electron=nothing)
     dt_shared = allocate_shared_float(1)
     previous_dt_shared = allocate_shared_float(1)
     next_output_time = allocate_shared_float(1)
@@ -320,7 +310,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_sp
     else
         error_sum_zero = 0.0
     end
-    t_params = time_info(t_input.nstep, end_time, dt_shared, previous_dt_shared, next_output_time,
+    return time_info(t_input.nstep, end_time, dt_shared, previous_dt_shared, next_output_time,
                          dt_before_output, dt_before_last_fail, CFL_prefactor,
                          step_to_output, Ref(0), Ref(0), mk_int[], mk_int[],
                          moments_output_times, dfns_output_times, t_input.type, rk_coefs,
@@ -331,7 +321,56 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_sp
                          t_input.last_fail_proximity_factor, t_input.minimum_dt,
                          t_input.maximum_dt, error_sum_zero, t_input.split_operators,
                          t_input.steady_state_residual, t_input.converged_residual_value,
-                         manufactured_solns_input.use_for_advance, t_input.stopfile_name)
+                         manufactured_solns_input.use_for_advance, t_input.stopfile_name,
+                         electron)
+end
+
+"""
+create arrays and do other work needed to setup
+the main time advance loop.
+this includes creating and populating structs
+for Chebyshev transforms, velocity space moments,
+EM fields, and advection terms
+"""
+function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
+                             vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
+                             z_spectral, r_spectral, composition, drive_input, moments,
+                             t_input, code_time, dt_reload, dt_before_last_fail_reload,
+                             electron_dt_reload, electron_dt_before_last_fail_reload,
+                             collisions, species, geometry, boundary_distributions,
+                             external_source_settings, num_diss_params,
+                             manufactured_solns_input, advection_structs, scratch_dummy,
+                             io_input, restarting, restart_had_kinetic_electrons,
+                             input_dict)
+    # define some local variables for convenience/tidiness
+    n_ion_species = composition.n_ion_species
+    n_neutral_species = composition.n_neutral_species
+
+    if composition.electron_physics == kinetic_electrons
+        electron_t_params = setup_time_info(t_input.electron_t_input, 0.0,
+                                            electron_dt_reload,
+                                            electron_dt_before_last_fail_reload,
+                                            manufactured_solns_input)
+        # Make Vectors that count which variable caused timestep limits and timestep failures
+        # the right length. Do this setup even when not using adaptive timestepping, because
+        # it is easier than modifying the file I/O according to whether we are using adaptive
+        # timestepping.
+        #
+        # Entries for limit by accuracy (which is an average over all variables),
+        # max_increase_factor, minimum_dt and maximum_dt
+        push!(electron_t_params.limit_caused_by, 0, 0, 0, 0, 0)
+
+        # electron pdf
+        push!(electron_t_params.limit_caused_by, 0, 0)
+        push!(electron_t_params.failure_caused_by, 0)
+
+        # electron ppar
+        push!(electron_t_params.failure_caused_by, 0)
+    else
+        electron_t_params = nothing
+    end
+    t_params = setup_time_info(t_input, code_time, dt_reload, dt_before_last_fail_reload,
+                               manufactured_solns_input; electron=electron_t_params)
 
     # Make Vectors that count which variable caused timestep limits and timestep failures
     # the right length. Do this setup even when not using adaptive timestepping, because
@@ -388,6 +427,10 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_sp
 
     # create an array of structs containing scratch arrays for the pdf and low-order moments
     # that may be evolved separately via fluid equations
+    n_rk_stages = t_params.n_rk_stages
+    if t_params.electron !== nothing
+        n_rk_stages = max(n_rk_stages, t_params.electron.n_rk_stages)
+    end
     scratch = setup_scratch_arrays(moments, pdf, n_rk_stages)
     # setup dummy arrays & buffer arrays for z r MPI
     n_neutral_species_alloc = max(1,composition.n_neutral_species)
@@ -406,7 +449,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_sp
                               vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
                               vperp_spectral, vpa_spectral, collisions,
                               external_source_settings, scratch_dummy, scratch, t_params,
-                              num_diss_params, advection_structs, io_input, input_dict)
+                              num_diss_params, advection_structs, io_input, input_dict;
+                              restart_from_Boltzmann_electrons=restarting)
     end
 
     # update the derivatives of the electron moments as these may be needed when
@@ -1177,7 +1221,7 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
 
         if write_moments || write_dfns || finish_now
             # update the diagnostic chodura condition
-            update_chodura!(moments,scratch[end].pdf,vpa,vperp,z,r,spectral_objects.r_spectral,composition,geometry,scratch_dummy,advect_objects.z_advect)
+            update_chodura!(moments,scratch[t_params.n_rk_stages+1].pdf,vpa,vperp,z,r,spectral_objects.r_spectral,composition,geometry,scratch_dummy,advect_objects.z_advect)
 
             # Always synchronise here, regardless of if we changed region or not
             begin_serial_region(no_synchronize=true)
@@ -1246,7 +1290,7 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
                 all_residuals = Vector{mk_float}()
                 @loop_s is begin
                     @views residual_ni =
-                        steady_state_residuals(scratch[end].density[:,:,is],
+                        steady_state_residuals(scratch[t_params.n_rk_stages+1].density[:,:,is],
                                                scratch[1].density[:,:,is], t_params.previous_dt[];
                                                use_mpi=true, only_max_abs=true)
                     if global_rank[] == 0
@@ -1259,7 +1303,7 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
                 if composition.n_neutral_species > 0
                     @loop_sn isn begin
                         residual_nn =
-                            steady_state_residuals(scratch[end].density_neutral[:,:,isn],
+                            steady_state_residuals(scratch[t_params.n_rk_stages+1].density_neutral[:,:,isn],
                                                    scratch[1].density_neutral[:,:,isn],
                                                    t_params.previous_dt[]; use_mpi=true,
                                                    only_max_abs=true)
@@ -1727,7 +1771,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     update_phi!(fields, scratch[istage+1], z, r, composition, collisions, moments,
                 z_spectral, r_spectral, scratch_dummy)
     if !(( moments.evolve_upar || moments.evolve_ppar) &&
-              istage == length(scratch)-1)
+              istage == t_params.n_rk_stages)
         # _block_synchronize() here because phi needs to be read on different ranks than
         # it was written on, even though the loop-type does not change here. However,
         # after the final RK stage can skip if:
@@ -1803,7 +1847,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
             update_phi!(fields, scratch[istage+1], z, r, composition, collisions, moments,
                         z_spectral, r_spectral, scratch_dummy)
             if !(( moments.evolve_upar || moments.evolve_ppar) &&
-                      istage == length(scratch)-1)
+                      istage == t_params.n_rk_stages)
                 # _block_synchronize() here because phi needs to be read on different ranks than
                 # it was written on, even though the loop-type does not change here. However,
                 # after the final RK stage can skip if:
@@ -1828,7 +1872,7 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
     error_norm_method = "L2"
 
     error_coeffs = t_params.rk_coefs[:,end]
-    if length(scratch) < 3
+    if t_params.n_rk_stages < 3
         # This should never happen as an adaptive RK scheme needs at least 2 RHS evals so
         # (with the pre-timestep data) there must be at least 3 entries in `scratch`.
         error("adaptive timestep needs a buffer scratch array")
@@ -1872,7 +1916,7 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
 
     # ion vpa-advection
     ion_vpa_CFL = Inf
-    update_speed_vpa!(vpa_advect, fields, scratch[end], moments, vpa, vperp, z, r,
+    update_speed_vpa!(vpa_advect, fields, scratch[t_params.n_rk_stages+1], moments, vpa, vperp, z, r,
                       composition, collisions, external_source_settings.ion, t,
                       geometry)
     @loop_s is begin
@@ -1892,9 +1936,10 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
     # Calculate error for ion distribution functions
     # Note rk_error_variable!() stores the calculated error in `scratch[2]`.
     rk_error_variable!(scratch, :pdf, t_params)
-    ion_pdf_error = local_error_norm(scratch[2].pdf, scratch[end].pdf, t_params.rtol,
-                                     t_params.atol; method=error_norm_method,
-                                     skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
+    ion_pdf_error = local_error_norm(scratch[2].pdf, scratch[t_params.n_rk_stages+1].pdf,
+                                     t_params.rtol, t_params.atol;
+                                     method=error_norm_method, skip_r_inner=skip_r_inner,
+                                     skip_z_lower=skip_z_lower,
                                      error_sum_zero=t_params.error_sum_zero)
     push!(error_norms, ion_pdf_error)
     push!(total_points,
@@ -1904,7 +1949,8 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
     if moments.evolve_density
         begin_s_r_z_region()
         rk_error_variable!(scratch, :density, t_params)
-        ion_n_err = local_error_norm(scratch[2].density, scratch[end].density,
+        ion_n_err = local_error_norm(scratch[2].density,
+                                     scratch[t_params.n_rk_stages+1].density,
                                      t_params.rtol, t_params.atol;
                                      method=error_norm_method, skip_r_inner=skip_r_inner,
                                      skip_z_lower=skip_z_lower,
@@ -1915,7 +1961,8 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
     if moments.evolve_upar
         begin_s_r_z_region()
         rk_error_variable!(scratch, :upar, t_params)
-        ion_u_err = local_error_norm(scratch[2].upar, scratch[end].upar, t_params.rtol,
+        ion_u_err = local_error_norm(scratch[2].upar,
+                                     scratch[t_params.n_rk_stages+1].upar, t_params.rtol,
                                      t_params.atol; method=error_norm_method,
                                      skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
                                      error_sum_zero=t_params.error_sum_zero)
@@ -1925,7 +1972,8 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
     if moments.evolve_ppar
         begin_s_r_z_region()
         rk_error_variable!(scratch, :ppar, t_params)
-        ion_p_err = local_error_norm(scratch[2].ppar, scratch[end].ppar, t_params.rtol,
+        ion_p_err = local_error_norm(scratch[2].ppar,
+                                     scratch[t_params.n_rk_stages+1].ppar, t_params.rtol,
                                      t_params.atol; method=error_norm_method,
                                      skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
                                      error_sum_zero=t_params.error_sum_zero)
@@ -1953,9 +2001,10 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
 
         # neutral vz-advection
         neutral_vz_CFL = Inf
-        update_speed_neutral_vz!(neutral_vz_advect, fields, scratch[end],
-                                 moments, vz, vr, vzeta, z, r, composition,
-                                 collisions, external_source_settings.neutral)
+        update_speed_neutral_vz!(neutral_vz_advect, fields,
+                                 scratch[t_params.n_rk_stages+1], moments, vz, vr, vzeta,
+                                 z, r, composition, collisions,
+                                 external_source_settings.neutral)
         @loop_sn isn begin
             this_minimum = get_minimum_CFL_neutral_vz(neutral_vz_advect[isn].speed, vz)
             @serial_region begin
@@ -1967,8 +2016,9 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         # Calculate error for neutral distribution functions
         rk_error_variable!(scratch, :pdf_neutral, t_params; neutrals=true)
         neut_pdf_error = local_error_norm(scratch[2].pdf_neutral,
-                                          scratch[end].pdf_neutral, t_params.rtol,
-                                          t_params.atol; method=error_norm_method,
+                                          scratch[t_params.n_rk_stages+1].pdf_neutral,
+                                          t_params.rtol, t_params.atol;
+                                          method=error_norm_method,
                                           skip_r_inner=skip_r_inner,
                                           skip_z_lower=skip_z_lower,
                                           error_sum_zero=t_params.error_sum_zero)
@@ -1982,8 +2032,9 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
             begin_sn_r_z_region()
             rk_error_variable!(scratch, :density_neutral, t_params; neutrals=true)
             neut_n_err = local_error_norm(scratch[2].density_neutral,
-                                          scratch[end].density, t_params.rtol,
-                                          t_params.atol; method=error_norm_method,
+                                          scratch[t_params.n_rk_stages+1].density,
+                                          t_params.rtol, t_params.atol;
+                                          method=error_norm_method,
                                           skip_r_inner=skip_r_inner,
                                           skip_z_lower=skip_z_lower,
                                           error_sum_zero=t_params.error_sum_zero)
@@ -1993,7 +2044,8 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         if moments.evolve_upar
             begin_s_r_z_region()
             rk_error_variable!(scratch, :uz_neutral, t_params; neutrals=true)
-            neut_u_err = local_error_norm(scratch[2].uz_neutral, scratch[end].uz_neutral,
+            neut_u_err = local_error_norm(scratch[2].uz_neutral,
+                                          scratch[t_params.n_rk_stages+1].uz_neutral,
                                           t_params.rtol, t_params.atol;
                                           method=error_norm_method,
                                           skip_r_inner=skip_r_inner,
@@ -2005,7 +2057,8 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         if moments.evolve_ppar
             begin_s_r_z_region()
             rk_error_variable!(scratch, :pz_neutral, t_params; neutrals=true)
-            neut_p_err = local_error_norm(scratch[2].pz_neutral, scratch[end].pz_neutral,
+            neut_p_err = local_error_norm(scratch[2].pz_neutral,
+                                          scratch[t_params.n_rk_stages+1].pz_neutral,
                                           t_params.rtol, t_params.atol;
                                           method=error_norm_method,
                                           skip_r_inner=skip_r_inner,

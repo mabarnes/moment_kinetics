@@ -118,7 +118,7 @@ an explicit time advance.
 NB: so far, this is only set up for 1D problem, where we can assume
 an isotropic distribution in f_e so that p_e = n_e T_e = ppar_e
 """
-function electron_energy_equation!(ppar, dens_i, fvec, moments, collisions, dt, composition,
+function electron_energy_equation!(ppar, fvec, moments, collisions, dt, composition,
                                    num_diss_params, z)
     begin_r_z_region()
     # define some abbreviated variables for convenient use in rest of function
@@ -127,21 +127,21 @@ function electron_energy_equation!(ppar, dens_i, fvec, moments, collisions, dt, 
     # calculate contribution to rhs of energy equation (formulated in terms of pressure)
     # arising from derivatives of ppar, qpar and upar
     @loop_r_z ir iz begin
-        ppar[iz,ir] -= dt*(fvec.electron_upar[iz,ir]*moments.electron.dppar_dz_upwind[iz,ir]
-                    + moments.electron.dqpar_dz[iz,ir]
-                    + 3*fvec.electron_ppar[iz,ir]*moments.electron.dupar_dz[iz,ir])
+        ppar[iz,ir] -= dt*(fvec.electron_upar[iz,ir]*moments.dppar_dz_upwind[iz,ir]
+                    + moments.dqpar_dz[iz,ir]
+                    + 3*fvec.electron_ppar[iz,ir]*moments.dupar_dz[iz,ir])
     end
     # @loop_r_z ir iz begin
-    #     ppar[iz,ir] -= dt*(fvec.electron_upar[iz,ir]*moments.electron.dppar_dz_upwind[iz,ir]
-    #                 + (2/3)*moments.electron.dqpar_dz[iz,ir]
-    #                 + (5/3)*fvec.electron_ppar[iz,ir]*moments.electron.dupar_dz[iz,ir])
+    #     ppar[iz,ir] -= dt*(fvec.electron_upar[iz,ir]*moments.dppar_dz_upwind[iz,ir]
+    #                 + (2/3)*moments.dqpar_dz[iz,ir]
+    #                 + (5/3)*fvec.electron_ppar[iz,ir]*moments.dupar_dz[iz,ir])
     # end
     # compute the contribution to the rhs of the energy equation
     # arising from artificial diffusion
     diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
     if diffusion_coefficient > 0.0
         @loop_r_z ir iz begin
-            ppar[iz,ir] += dt*diffusion_coefficient*moments.electron.d2ppar_dz2[iz,ir]
+            ppar[iz,ir] += dt*diffusion_coefficient*moments.d2ppar_dz2[iz,ir]
         end
     end
     # compute the contribution to the rhs of the energy equation
@@ -149,7 +149,7 @@ function electron_energy_equation!(ppar, dens_i, fvec, moments, collisions, dt, 
     if nu_ei > 0.0
         @loop_s_r_z is ir iz begin
             ppar[iz,ir] += dt * (2 * me_over_mi * nu_ei * (fvec.ppar[iz,ir,is] - fvec.electron_ppar[iz,ir]))
-            ppar[iz,ir] += dt * ((2/3) * moments.electron.parallel_friction[iz,ir]
+            ppar[iz,ir] += dt * ((2/3) * moments.parallel_friction[iz,ir]
                                 * (fvec.upar[iz,ir,is]-fvec.electron_upar[iz,ir]))
         end
     end
@@ -181,18 +181,15 @@ function electron_energy_equation!(ppar, dens_i, fvec, moments, collisions, dt, 
         end
     end
     # calculate the external electron heat source, if any
-    calculate_electron_heat_source!(moments.electron.heat_source, fvec.electron_ppar, moments.electron.dupar_dz,
+    calculate_electron_heat_source!(moments.heat_source, fvec.electron_ppar, moments.dupar_dz,
                                     fvec.density_neutral, collisions.ionization, collisions.ionization_energy,
                                     fvec.electron_density, fvec.ppar, collisions.nu_ei, composition.me_over_mi,
                                     composition.T_wall, z)
     # add the contribution from the electron heat source                                
     begin_r_z_region()
     @loop_r_z ir iz begin
-        ppar[iz,ir] += dt * moments.electron.heat_source[iz,ir]
+        ppar[iz,ir] += dt * moments.heat_source[iz,ir]
     end
-    # enforce the parallel boundary condtion on the electron parallel pressure
-    #println("!!!NO PARALLEL BC IS BEING ENFORCED ON ELECTRON PRESSURE!!!")
-    #enforce_parallel_BC_on_electron_pressure!(ppar, dens_i, composition.T_wall, fvec.ppar)
     return nothing
 end
 

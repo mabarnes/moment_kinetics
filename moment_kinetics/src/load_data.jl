@@ -573,6 +573,8 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
     code_time = 0.0
     dt = nothing
     dt_before_last_fail = nothing
+    electron_dt = nothing
+    electron_dt_before_last_fail = nothing
     previous_runs_info = nothing
     restart_had_kinetic_electrons = false
     begin_serial_region()
@@ -854,19 +856,27 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                 dt_before_last_fail = load_slice(dynamic, "dt_before_last_fail",
                                                 time_index)
             end
+            if "electron_dt" ∈ keys(dynamic)
+                electron_dt = load_slice(dynamic, "electron_dt", time_index)
+            end
+            if "electron_dt_before_last_fail" ∈ keys(dynamic)
+                electron_dt_before_last_fail =
+                    load_slice(dynamic, "electron_dt_before_last_fail", time_index)
+            end
         finally
             close(fid)
         end
     end
 
-    return code_time, dt, dt_before_last_fail, previous_runs_info, time_index, restart_had_kinetic_electrons
+    return code_time, dt, dt_before_last_fail, electron_dt, electron_dt_before_last_fail,
+           previous_runs_info, time_index, restart_had_kinetic_electrons
 end
 
 """
 Reload electron pdf and moments from an existing output file.
 """
-function reload_electron_data!(pdf, moments, restart_prefix_iblock, time_index, geometry,
-                               r, z, vpa, vperp, vzeta, vr, vz)
+function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, time_index,
+                               geometry, r, z, vpa, vperp, vzeta, vr, vz)
     code_time = 0.0
     previous_runs_info = nothing
     begin_serial_region()
@@ -959,6 +969,11 @@ function reload_electron_data!(pdf, moments, restart_prefix_iblock, time_index, 
                                     restart_evolve_density, restart_evolve_upar,
                                     restart_evolve_ppar)
 
+            t_params.dt[] = load_slice(dynamic, "electron_dt", time_index)
+            t_params.previous_dt[] = t_params.dt[]
+            t_params.dt_before_output[] = t_params.dt[]
+            t_params.dt_before_last_fail[] =
+                load_slice(dynamic, "electron_dt_before_last_fail", time_index)
         finally
             close(fid)
         end

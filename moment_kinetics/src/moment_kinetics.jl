@@ -59,7 +59,6 @@ include("boundary_conditions.jl")
 include("charge_exchange.jl")
 include("ionization.jl")
 include("krook_collisions.jl")
-include("electron_kinetic_equation.jl")
 include("continuity.jl")
 include("energy_equation.jl")
 include("force_balance.jl")
@@ -68,9 +67,10 @@ include("numerical_dissipation.jl")
 include("moment_kinetics_input.jl")
 include("utils.jl")
 include("load_data.jl")
+include("analysis.jl")
+include("electron_kinetic_equation.jl")
 include("initial_conditions.jl")
 include("parameter_scans.jl")
-include("analysis.jl")
 include("time_advance.jl")
 
 using TimerOutputs
@@ -286,6 +286,8 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         code_time = 0.
         dt = nothing
         dt_before_last_fail = nothing
+        electron_dt = nothing
+        electron_dt_before_last_fail = nothing
         previous_runs_info = nothing
         restart_had_kinetic_electrons = false
     else
@@ -301,8 +303,8 @@ function setup_moment_kinetics(input_dict::AbstractDict;
                                                                         io_input.output_dir)
 
         # Reload pdf and moments from an existing output file
-        code_time, dt, dt_before_last_fail, previous_runs_info, restart_time_index,
-        restart_had_kinetic_electrons =
+        code_time, dt, dt_before_last_fail, electron_dt, electron_dt_before_last_fail,
+        previous_runs_info, restart_time_index, restart_had_kinetic_electrons =
             reload_evolving_fields!(pdf, moments, boundary_distributions,
                                     backup_prefix_iblock, restart_time_index,
                                     composition, geometry, r, z, vpa, vperp, vzeta, vr,
@@ -328,10 +330,10 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral,
             r_spectral, composition, drive_input, moments, t_input, code_time, dt,
-            dt_before_last_fail, collisions, species, geometry, boundary_distributions,
-            external_source_settings, num_diss_params, manufactured_solns_input,
-            advection_structs, scratch_dummy, io_input, restarting,
-            restart_had_kinetic_electrons, input_dict)
+            dt_before_last_fail, electron_dt, electron_dt_before_last_fail, collisions,
+            species, geometry, boundary_distributions, external_source_settings,
+            num_diss_params, manufactured_solns_input, advection_structs, scratch_dummy,
+            io_input, restarting, restart_had_kinetic_electrons, input_dict)
 
     # This is the closest we can get to the end time of the setup before writing it to the
     # output file

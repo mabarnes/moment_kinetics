@@ -12,11 +12,13 @@ using ..calculus: derivative!, second_derivative!
 calculate the wpa-advection term for the electron kinetic equation 
 = (vthe / 2 ppare * dppare/dz + wpa / 2 ppare * dqpare/dz - wpa^2 * dvthe/dz) * df/dwpa
 """
-function electron_vpa_advection!(advection_term, pdf, ppar, vth, dppar_dz, dqpar_dz, dvth_dz, 
-                                 advect, vpa, spectral, scratch_dummy)
+function electron_vpa_advection!(pdf_out, pdf_in, ppar, vth, dppar_dz, dqpar_dz, dvth_dz,
+                                 advect, vpa, spectral, scratch_dummy, dt)
+    begin_r_z_vperp_region()
+
     # create a reference to a scratch_dummy array to store the wpa-derivative of the electron pdf
     dpdf_dvpa = scratch_dummy.buffer_vpavperpzr_1
-    d2pdf_dvpa2 = scratch_dummy.buffer_vpavperpzr_2
+    #d2pdf_dvpa2 = scratch_dummy.buffer_vpavperpzr_2
     begin_r_z_vperp_region()
     # get the updated speed along the wpa direction using the current pdf
     @views update_electron_speed_vpa!(advect[1], ppar, vth, dppar_dz, dqpar_dz, dvth_dz, vpa.grid)
@@ -27,18 +29,19 @@ function electron_vpa_advection!(advection_term, pdf, ppar, vth, dppar_dz, dqpar
     end
     #calculate the upwind derivative of the electron pdf w.r.t. wpa
     @loop_r_z_vperp ir iz ivperp begin
-        @views derivative!(dpdf_dvpa[:,ivperp,iz,ir], pdf[:,ivperp,iz,ir], vpa, advect[1].adv_fac[:,ivperp,iz,ir], spectral)
+        @views derivative!(dpdf_dvpa[:,ivperp,iz,ir], pdf_in[:,ivperp,iz,ir], vpa,
+                           advect[1].adv_fac[:,ivperp,iz,ir], spectral)
     end
     #@loop_r_z_vperp ir iz ivperp begin
-    #    @views second_derivative!(d2pdf_dvpa2[:,ivperp,iz,ir], pdf[:,ivperp,iz,ir], vpa, spectral)
+    #    @views second_derivative!(d2pdf_dvpa2[:,ivperp,iz,ir], pdf_in[:,ivperp,iz,ir], vpa, spectral)
     #end
     # calculate the advection term
     @loop_r_z_vperp ir iz ivperp begin
-        @. advection_term[:,ivperp,iz,ir] -= advect[1].adv_fac[:,ivperp,iz,ir] * dpdf_dvpa[:,ivperp,iz,ir]
-        #@. advection_term[:,ivperp,iz,ir] -= advect[1].adv_fac[:,ivperp,iz,ir] * dpdf_dvpa[:,ivperp,iz,ir] + 0.0001*d2pdf_dvpa2[:,ivperp,iz,ir]
+        @. pdf_out[:,ivperp,iz,ir] += dt * advect[1].adv_fac[:,ivperp,iz,ir] * dpdf_dvpa[:,ivperp,iz,ir]
+        #@. pdf_out[:,ivperp,iz,ir] -= advect[1].adv_fac[:,ivperp,iz,ir] * dpdf_dvpa[:,ivperp,iz,ir] + 0.0001*d2pdf_dvpa2[:,ivperp,iz,ir]
     end
     #@loop_vpa ivpa begin
-    #    println("electron_vpa_advection: ", advection_term[ivpa,1,10,1], " vpa: ", vpa.grid[ivpa], " dpdf_dvpa: ", dpdf_dvpa[ivpa,1,10,1],
+    #    println("electron_vpa_advection: ", pdf_out[ivpa,1,10,1], " vpa: ", vpa.grid[ivpa], " dpdf_dvpa: ", dpdf_dvpa[ivpa,1,10,1],
     #        " pdf: ", pdf[ivpa,1,10,1])
     #end
     #exit()

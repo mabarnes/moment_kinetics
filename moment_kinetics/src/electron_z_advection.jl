@@ -14,7 +14,10 @@ using ..calculus: second_derivative!, derivative!
 """
 calculate the z-advection term for the electron kinetic equation = wpa * vthe * df/dz
 """
-function electron_z_advection!(advection_term, pdf, upar, vth, advect, z, vpa, spectral, scratch_dummy)
+function electron_z_advection!(pdf_out, pdf_in, upar, vth, advect, z, vpa, spectral,
+                               scratch_dummy, dt)
+    begin_r_vperp_vpa_region()
+
     # create a pointer to a scratch_dummy array to store the z-derivative of the electron pdf
     dpdf_dz = scratch_dummy.buffer_vpavperpzr_1
     d2pdf_dz2 = scratch_dummy.buffer_vpavperpzr_2
@@ -27,7 +30,7 @@ function electron_z_advection!(advection_term, pdf, upar, vth, advect, z, vpa, s
         @views advect[1].adv_fac[:,ivpa,ivperp,ir] = -advect[1].speed[:,ivpa,ivperp,ir]
     end
     #calculate the upwind derivative
-    derivative_z!(dpdf_dz, pdf,
+    derivative_z!(dpdf_dz, pdf_in,
                   advect, scratch_dummy.buffer_vpavperpr_1,
                   scratch_dummy.buffer_vpavperpr_2, scratch_dummy.buffer_vpavperpr_3,
                   scratch_dummy.buffer_vpavperpr_4, scratch_dummy.buffer_vpavperpr_5,
@@ -37,8 +40,8 @@ function electron_z_advection!(advection_term, pdf, upar, vth, advect, z, vpa, s
     #end
     # calculate the advection term
     @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-        advection_term[ivpa,ivperp,iz,ir] -= advect[1].adv_fac[iz,ivpa,ivperp,ir] * dpdf_dz[ivpa,ivperp,iz,ir]
-        #advection_term[ivpa,ivperp,iz,ir] -= advect[1].adv_fac[iz,ivpa,ivperp,ir] * dpdf_dz[ivpa,ivperp,iz,ir] + 0.0001*d2pdf_dz2[ivpa,ivperp,iz,ir]
+        pdf_out[ivpa,ivperp,iz,ir] += dt * advect[1].adv_fac[iz,ivpa,ivperp,ir] * dpdf_dz[ivpa,ivperp,iz,ir]
+        #pdf_out[ivpa,ivperp,iz,ir] += dt * advect[1].adv_fac[iz,ivpa,ivperp,ir] * dpdf_dz[ivpa,ivperp,iz,ir] + 0.0001*d2pdf_dz2[ivpa,ivperp,iz,ir]
     end
     return nothing
 end

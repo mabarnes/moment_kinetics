@@ -223,6 +223,90 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     if timestepping_section["atol_upar"] === nothing
         timestepping_section["atol_upar"] = 1.0e-2 * timestepping_section["rtol"]
     end
+
+    # parameters related to electron time stepping
+    electron_timestepping_section = set_defaults_and_check_section!(
+        scan_input, "electron_timestepping";
+        nstep=50000,
+        dt=timestepping_section["dt"] * sqrt(composition.me_over_mi),
+        CFL_prefactor=timestepping_section["CFL_prefactor"],
+        nwrite=nothing,
+        nwrite_dfns=nothing,
+        type=timestepping_section["type"],
+        split_operators=false,
+        converged_residual_value=1.0e-3,
+        rtol=timestepping_section["rtol"],
+        atol=timestepping_section["atol"],
+        step_update_prefactor=timestepping_section["step_update_prefactor"],
+        max_increase_factor=timestepping_section["max_increase_factor"],
+        max_increase_factor_near_last_fail=timestepping_section["max_increase_factor_near_last_fail"],
+        last_fail_proximity_factor=timestepping_section["last_fail_proximity_factor"],
+        minimum_dt=timestepping_section["minimum_dt"] * sqrt(composition.me_over_mi),
+        maximum_dt=timestepping_section["maximum_dt"] * sqrt(composition.me_over_mi),
+        high_precision_error_sum=timestepping_section["high_precision_error_sum"],
+       )
+    if electron_timestepping_section["nwrite"] === nothing
+        electron_timestepping_section["nwrite"] = electron_timestepping_section["nstep"]
+    elseif electron_timestepping_section["nwrite"] > electron_timestepping_section["nstep"]
+        electron_timestepping_section["nwrite"] = electron_timestepping_section["nstep"]
+    end
+    if electron_timestepping_section["nwrite_dfns"] === nothing
+        electron_timestepping_section["nwrite_dfns"] = electron_timestepping_section["nstep"]
+    elseif electron_timestepping_section["nwrite_dfns"] > electron_timestepping_section["nstep"]
+        electron_timestepping_section["nwrite_dfns"] = electron_timestepping_section["nstep"]
+    end
+    # Make a copy because "stopfile_name" is not a separate input for the electrons, so we
+    # do not want to add a value to the `input_dict`. We also add a few dummy inputs that
+    # are not actually used for electrons.
+    electron_timestepping_section = copy(electron_timestepping_section)
+    electron_timestepping_section["stopfile_name"] = timestepping_section["stopfile_name"]
+    electron_timestepping_section["atol_upar"] = NaN
+    electron_timestepping_section["steady_state_residual"] = true
+    electron_timestepping_input = Dict_to_NamedTuple(electron_timestepping_section)
+    if !(0.0 < electron_timestepping_input.step_update_prefactor < 1.0)
+        error("[electron_timestepping] step_update_prefactor="
+              * "$(electron_timestepping_input.step_update_prefactor) must be between "
+              * "0.0 and 1.0.")
+    end
+    if electron_timestepping_input.max_increase_factor ≤ 1.0
+        error("[electron_timestepping] max_increase_factor="
+              * "$(electron_timestepping_input.max_increase_factor) must be greater than "
+              * "1.0.")
+    end
+    if electron_timestepping_input.max_increase_factor_near_last_fail ≤ 1.0
+        error("[electron_timestepping] max_increase_factor_near_last_fail="
+              * "$(electron_timestepping_input.max_increase_factor_near_last_fail) must "
+              * "be greater than 1.0.")
+    end
+    if !isinf(electron_timestepping_input.max_increase_factor_near_last_fail) &&
+            electron_timestepping_input.max_increase_factor_near_last_fail > electron_timestepping_input.max_increase_factor
+        error("[electron_timestepping] max_increase_factor_near_last_fail="
+              * "$(electron_timestepping_input.max_increase_factor_near_last_fail) should be "
+              * "less than max_increase_factor="
+              * "$(electron_timestepping_input.max_increase_factor).")
+    end
+    if electron_timestepping_input.last_fail_proximity_factor ≤ 1.0
+        error("[electron_timestepping] last_fail_proximity_factor="
+              * "$(electron_timestepping_input.last_fail_proximity_factor) must be "
+              * "greater than 1.0.")
+    end
+    if electron_timestepping_input.minimum_dt > electron_timestepping_input.maximum_dt
+        error("[electron_timestepping] minimum_dt="
+              * "$(electron_timestepping_input.minimum_dt) must be less than "
+              * "maximum_dt=$(electron_timestepping_input.maximum_dt)")
+    end
+    if electron_timestepping_input.maximum_dt ≤ 0.0
+        error("[electron_timestepping] maximum_dt="
+              * "$(electron_timestepping_input.maximum_dt) must be positive")
+    end
+
+    # Make a copy of `timestepping_section` here as we do not want to add
+    # `electron_timestepping_input` to the `input_dict` because there is already an
+    # "electron_timestepping" section containing the input info - we only want to put
+    # `electron_timestepping_input` into the Dict that is used to make
+    # `timestepping_input`, so that it becomes part of `timestepping_input`.
+    timestepping_section = copy(timestepping_section)
+    timestepping_section["electron_t_input"] = electron_timestepping_input
     timestepping_input = Dict_to_NamedTuple(timestepping_section)
     if !(0.0 < timestepping_input.step_update_prefactor < 1.0)
         error("step_update_prefactor=$(timestepping_input.step_update_prefactor) must "

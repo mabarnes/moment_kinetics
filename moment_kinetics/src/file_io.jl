@@ -56,7 +56,8 @@ moments & fields only
 struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
                        Tchodura_upper, Texti1, Texti2, Texti3, Texti4,
                        Texti5, Textn1, Textn2, Textn3, Textn4, Textn5, Tconstri, Tconstrn,
-                       Tconstre, Tint, Tfailcause}
+                       Tconstre, Tint, Tfailcause, Telectrontime, Telectronint,
+                       Telectronfailcause}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the time variable
@@ -141,6 +142,19 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
     # Last successful timestep before most recent timestep failure, used by adaptve
     # timestepping algorithm
     dt_before_last_fail::Ttime
+    # cumulative number of electron pseudo-timesteps taken
+    electron_step_counter::Telectronint
+    # current electron pseudo-timestep size
+    electron_dt::Telectrontime
+    # cumulative number of electron pseudo-timestep failures
+    electron_failure_counter::Telectronint
+    # cumulative count of which variable caused a electron pseudo-timstep failure
+    electron_failure_caused_by::Telectronfailcause
+    # cumulative count of which factors limited the electron pseudo-timestep at each step
+    electron_limit_caused_by::Telectronfailcause
+    # Last successful timestep before most recent electron pseudo-timestep failure, used
+    # by adaptve timestepping algorithm
+    electron_dt_before_last_fail::Telectrontime
 
     # Use parallel I/O?
     parallel_io::Bool
@@ -171,7 +185,8 @@ end
 structure containing the data/metadata needed for binary file i/o
 for electron initialization
 """
-struct io_initial_electron_info{Tfile, Ttime, Tfe, Tmom, Tconstr}
+struct io_initial_electron_info{Tfile, Ttime, Tfe, Tmom, Tconstr, Telectrontime,
+                                Telectronint, Telectronfailcause}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the pseudotime variable
@@ -192,6 +207,19 @@ struct io_initial_electron_info{Tfile, Ttime, Tfe, Tmom, Tconstr}
     electron_constraints_A_coefficient::Tconstr
     electron_constraints_B_coefficient::Tconstr
     electron_constraints_C_coefficient::Tconstr
+    # cumulative number of electron pseudo-timesteps taken
+    electron_step_counter::Telectronint
+    # current electron pseudo-timestep size
+    electron_dt::Telectrontime
+    # cumulative number of electron pseudo-timestep failures
+    electron_failure_counter::Telectronint
+    # cumulative count of which variable caused a electron pseudo-timstep failure
+    electron_failure_caused_by::Telectronfailcause
+    # cumulative count of which factors limited the electron pseudo-timestep at each step
+    electron_limit_caused_by::Telectronfailcause
+    # Last successful timestep before most recent electron pseudo-timestep failure, used
+    # by adaptve timestepping algorithm
+    electron_dt_before_last_fail::Telectrontime
 
     # Use parallel I/O?
     parallel_io::Bool
@@ -339,11 +367,13 @@ function setup_initial_electron_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, co
                                                  description="electron distribution function")
 
         io_electron_density, io_electron_upar, io_electron_ppar, io_electron_qpar,
-        io_electron_vth =
+        io_electron_vth, io_electron_step_counter, io_electron_dt,
+        io_electron_failure_counter, io_electron_failure_caused_by,
+        io_electron_limit_caused_by, io_electron_dt_before_last_fail =
             define_dynamic_electron_moment_variables!(fid, r, z, parallel_io,
                                                       external_source_settings,
                                                       evolve_density, evolve_upar,
-                                                      evolve_ppar)
+                                                      evolve_ppar, true)
 
         close(fid)
 
@@ -379,6 +409,12 @@ function reopen_initial_electron_io(file_info)
                                         getvar("electron_constraints_A_coefficient"),
                                         getvar("electron_constraints_B_coefficient"),
                                         getvar("electron_constraints_C_coefficient"),
+                                        getvar("electron_step_counter"),
+                                        getvar("electron_dt"),
+                                        getvar("electron_failure_counter"),
+                                        getvar("electron_failure_caused_by"),
+                                        getvar("electron_limit_caused_by"),
+                                        getvar("electron_dt_before_last_fail"),
                                         parallel_io)
     end
 
@@ -789,7 +825,7 @@ define dynamic (time-evolving) moment variables for writing to the hdf5 file
 function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                           r::coordinate, z::coordinate, parallel_io,
                                           external_source_settings, evolve_density,
-                                          evolve_upar, evolve_ppar)
+                                          evolve_upar, evolve_ppar, kinetic_electrons)
     @serial_region begin
         dynamic = create_io_group(fid, "dynamic_data", description="time evolving variables")
 
@@ -811,11 +847,14 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
 
         io_electron_density, io_electron_upar, io_electron_ppar, io_electron_qpar,
         io_electron_vth, electron_constraints_A_coefficient,
-        electron_constraints_B_coefficient, electron_constraints_C_coefficient =
+        electron_constraints_B_coefficient, electron_constraints_C_coefficient,
+        io_electron_step_counter, io_electron_dt, io_electron_failure_counter,
+        io_electron_failure_caused_by, io_electron_limit_caused_by,
+        io_electron_dt_before_last_fail =
             define_dynamic_electron_moment_variables!(fid, r, z, parallel_io,
                                                       external_source_settings,
                                                       evolve_density, evolve_upar,
-                                                      evolve_ppar)
+                                                      evolve_ppar, kinetic_electrons)
 
         io_density_neutral, io_uz_neutral, io_pz_neutral, io_qz_neutral,
         io_thermal_speed_neutral, external_source_neutral_amplitude,
@@ -897,7 +936,11 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                electron_constraints_C_coefficient,
                                io_time_for_run, io_step_counter, io_dt,
                                io_failure_counter, io_failure_caused_by,
-                               io_limit_caused_by, io_dt_before_last_fail, parallel_io)
+                               io_limit_caused_by, io_dt_before_last_fail,
+                               io_electron_step_counter, io_electron_dt,
+                               io_electron_failure_counter, io_electron_failure_caused_by,
+                               io_electron_limit_caused_by,
+                               io_electron_dt_before_last_fail, parallel_io)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -1099,7 +1142,8 @@ end
 define dynamic (time-evolving) electron moment variables for writing to the hdf5 file
 """
 function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordinate,
-        parallel_io, external_source_settings, evolve_density, evolve_upar, evolve_ppar)
+        parallel_io, external_source_settings, evolve_density, evolve_upar, evolve_ppar,
+        kinetic_electrons)
 
     dynamic = get_group(fid, "dynamic_data")
 
@@ -1146,9 +1190,52 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
                                parallel_io=parallel_io,
                                description="'C' coefficient enforcing pressure constraint for electrons")
 
+    if kinetic_electrons
+        io_electron_step_counter = create_dynamic_variable!(
+            dynamic, "electron_step_counter", mk_int; parallel_io=parallel_io,
+            description="cumulative number of electron pseudo-timesteps for the run")
+
+        io_electron_dt = create_dynamic_variable!(
+            dynamic, "electron_dt", mk_float; parallel_io=parallel_io,
+            description="current electron pseudo-timestep size")
+
+        io_electron_failure_counter = create_dynamic_variable!(
+            dynamic, "electron_failure_counter", mk_int; parallel_io=parallel_io,
+            description="cumulative number of electron pseudo-timestep failures for the run")
+
+        n_failure_vars = 1 + 1
+        io_electron_failure_caused_by = create_dynamic_variable!(
+            dynamic, "electron_failure_caused_by", mk_int;
+            diagnostic_var_size=n_failure_vars, parallel_io=parallel_io,
+            description="cumulative count of how many times each variable caused an "
+                        * "electron pseudo-timestep failure for the run")
+
+        n_limit_vars = 5 + 2
+        io_electron_limit_caused_by = create_dynamic_variable!(
+            dynamic, "electron_limit_caused_by", mk_int; diagnostic_var_size=n_limit_vars,
+            parallel_io=parallel_io,
+            description="cumulative count of how many times each factor limited the "
+                        * "electron pseudo-timestep for the run")
+
+        io_electron_dt_before_last_fail = create_dynamic_variable!(
+            dynamic, "electron_dt_before_last_fail", mk_float; parallel_io=parallel_io,
+            description="Last successful electron pseudo-timestep before most recent "
+                        * "electron pseudo-timestep failure, used by adaptve "
+                        * "timestepping algorithm")
+    else
+        io_electron_step_counter = nothing
+        io_electron_dt = nothing
+        io_electron_failure_counter = nothing
+        io_electron_failure_caused_by = nothing
+        io_electron_limit_caused_by = nothing
+        io_electron_dt_before_last_fail = nothing
+    end
+
     return io_electron_density, io_electron_upar, io_electron_ppar, io_electron_qpar,
            io_electron_vth, electron_constraints_A_coefficient, electron_constraints_B_coefficient,
-           electron_constraints_C_coefficient
+           electron_constraints_C_coefficient, io_electron_step_counter, io_electron_dt,
+           io_electron_failure_counter, io_electron_failure_caused_by,
+           io_electron_limit_caused_by, io_electron_dt_before_last_fail
 end
 
 """
@@ -1294,7 +1381,8 @@ function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz, com
                                                       parallel_io,
                                                       external_source_settings,
                                                       evolve_density, evolve_upar,
-                                                      evolve_ppar)
+                                                      evolve_ppar,
+                                                      composition.electron_physics == kinetic_electrons)
 
         dynamic = get_group(fid, "dynamic_data")
 
@@ -1405,7 +1493,7 @@ function setup_moments_io(prefix, binary_format, vz, vr, vzeta, vpa, vperp, r, z
         io_moments = define_dynamic_moment_variables!(
             fid, composition.n_ion_species, composition.n_neutral_species, r, z,
             parallel_io, external_source_settings, evolve_density, evolve_upar,
-            evolve_ppar)
+            evolve_ppar, composition.electron_physics == kinetic_electrons)
 
         close(fid)
 
@@ -1470,7 +1558,11 @@ function reopen_moments_io(file_info)
                                getvar("time_for_run"), getvar("step_counter"),
                                getvar("dt"), getvar("failure_counter"),
                                getvar("failure_caused_by"), getvar("limit_caused_by"),
-                               getvar("dt_before_last_fail"), parallel_io)
+                               getvar("dt_before_last_fail"),getvar("electron_step_counter"),
+                               getvar("electron_dt"), getvar("electron_failure_counter"),
+                               getvar("electron_failure_caused_by"),
+                               getvar("electron_limit_caused_by"),
+                               getvar("electron_dt_before_last_fail"), parallel_io)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -1586,7 +1678,13 @@ function reopen_dfns_io(file_info)
                                      getvar("dt"), getvar("failure_counter"),
                                      getvar("failure_caused_by"),
                                      getvar("limit_caused_by"),
-                                     getvar("dt_before_last_fail"), parallel_io)
+                                     getvar("dt_before_last_fail"),
+                                     getvar("electron_step_counter"),
+                                     getvar("electron_dt"),
+                                     getvar("electron_failure_counter"),
+                                     getvar("electron_failure_caused_by"),
+                                     getvar("electron_limit_caused_by"),
+                                     getvar("electron_dt_before_last_fail"), parallel_io)
 
         return io_dfns_info(fid, getvar("f"), getvar("f_electron"), getvar("f_neutral"),
                             parallel_io, io_moments)
@@ -1644,7 +1742,8 @@ function write_all_moments_data_to_binary(moments, fields, t, n_ion_species,
 
         write_ion_moments_data_to_binary(moments, n_ion_species, io_moments, t_idx, r, z)
 
-        write_electron_moments_data_to_binary(moments, io_moments, t_idx, r, z)
+        write_electron_moments_data_to_binary(moments, t_params.electron, io_moments,
+                                              t_idx, r, z)
 
         write_neutral_moments_data_to_binary(moments, n_neutral_species, io_moments,
                                              t_idx, r, z)
@@ -1785,7 +1884,7 @@ write time-dependent moments data for electrons to the binary output file
 
 Note: should only be called from within a function that (re-)opens the output file.
 """
-function write_electron_moments_data_to_binary(moments,
+function write_electron_moments_data_to_binary(moments, t_params,
                                                io_moments::Union{io_moments_info,io_initial_electron_info},
                                                t_idx, r, z)
     @serial_region begin
@@ -1812,6 +1911,21 @@ function write_electron_moments_data_to_binary(moments,
         append_to_dynamic_var(io_moments.electron_constraints_C_coefficient,
                               moments.electron.constraints_C_coefficient, t_idx,
                               parallel_io, z, r)
+
+        if t_params !== nothing
+            # Save timestepping info
+            append_to_dynamic_var(io_moments.electron_step_counter, t_params.step_counter[], t_idx, parallel_io)
+            append_to_dynamic_var(io_moments.electron_dt, t_params.dt_before_output[], t_idx, parallel_io)
+            append_to_dynamic_var(io_moments.electron_failure_counter, t_params.failure_counter[], t_idx, parallel_io)
+            append_to_dynamic_var(io_moments.electron_failure_caused_by, t_params.failure_caused_by,
+                                  t_idx, parallel_io, length(t_params.failure_caused_by);
+                                  only_root=true)
+            append_to_dynamic_var(io_moments.electron_limit_caused_by, t_params.limit_caused_by, t_idx,
+                                  parallel_io, length(t_params.limit_caused_by);
+                                  only_root=true)
+            append_to_dynamic_var(io_moments.electron_dt_before_last_fail,
+                                  t_params.dt_before_last_fail[], t_idx, parallel_io)
+        end
     end
 
     return nothing
@@ -1991,13 +2105,15 @@ function write_neutral_dfns_data_to_binary(ff_neutral, n_neutral_species,
 end
 
 """
-    write_initial_electron_state(pdf, moments, io_initial_electron, t_idx, r, z,
+    write_initial_electron_state(pdf, moments, t_params, t,
+                                 io_initial_electron, t_idx, r, z,
                                  vperp, vpa)
 
 Write the electron state to an output file.
 """
-function write_initial_electron_state(pdf, moments, t, io_or_file_info_initial_electron,
-                                      t_idx, r, z, vperp, vpa)
+function write_initial_electron_state(pdf, moments, t_params, t,
+                                      io_or_file_info_initial_electron, t_idx, r, z,
+                                      vperp, vpa)
 
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -2018,7 +2134,8 @@ function write_initial_electron_state(pdf, moments, t, io_or_file_info_initial_e
         write_electron_dfns_data_to_binary(pdf, io_initial_electron, t_idx, r, z, vperp,
                                            vpa)
 
-        write_electron_moments_data_to_binary(moments, io_initial_electron, t_idx, r, z)
+        write_electron_moments_data_to_binary(moments, t_params, io_initial_electron,
+                                              t_idx, r, z)
 
         closefile && close(io_initial_electron.fid)
     end
@@ -2311,7 +2428,8 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
                                                           r, z, false,
                                                           external_source_settings,
                                                           evolve_density, evolve_upar,
-                                                          evolve_ppar)
+                                                          evolve_ppar,
+                                                          composition.electron_physics == kinetic_electrons)
             io_dfns = define_dynamic_dfn_variables!(
                 fid, r, z, vperp, vpa, vzeta, vr, vz, composition.n_ion_species,
                 composition.n_neutral_species, false, external_source_settings,
