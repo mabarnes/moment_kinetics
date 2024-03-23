@@ -219,12 +219,6 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
     init_boundary_distributions!(boundary_distributions, pdf, vz, vr, vzeta, vpa, vperp,
                                  z, r, composition)
 
-    initialize_electrons!(pdf, moments, fields, geometry, composition, r, z,
-                          vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
-                          vperp_spectral, vpa_spectral, collisions,
-                          external_source_settings, scratch_dummy, scratch, t_input,
-                          num_diss_params, advection_structs, io_input, input_dict)
-
     # moments.electron.dens_updated[] = false
     # # initialise the electron density profile
     # init_electron_density!(moments.electron.dens, moments.electron.dens_updated, moments.ion.dens)
@@ -378,6 +372,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
     end
     # calculate the initial electron parallel heat flux;
     # if using kinetic electrons, this relies on the electron pdf, which itself relies on the electron heat flux
+    moments.electron.qpar_updated[] = false
     calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, pdf.electron,
         moments.electron.ppar, moments.electron.upar, moments.electron.vth, moments.electron.dT_dz, moments.ion.upar, 
         collisions.nu_ei, composition.me_over_mi, composition.electron_physics, vpa)
@@ -396,7 +391,13 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
     # electron pdf. The electron arrays will be updated as necessary by
     # initialize_electron_pdf!().
     if !restart_from_Boltzmann_electrons
-        initialize_scratch_arrays!(scratch, moments, pdf, t_input.n_rk_stages)
+        begin_serial_region()
+        @serial_region begin
+            scratch[1].electron_density .= moments.electron.dens
+            scratch[1].electron_upar .= moments.electron.upar
+            scratch[1].electron_ppar .= moments.electron.ppar
+            scratch[1].electron_pperp .= 0.0 #moments.electron.pperp
+        end
         # get the initial electrostatic potential and parallel electric field
         update_phi!(fields, scratch[1], z, r, composition, collisions, moments, z_spectral, r_spectral, scratch_dummy)
     end
@@ -409,38 +410,6 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
                              collisions, composition, geometry, external_source_settings,
                              num_diss_params, t_input.dt, io_input, input_dict)
 
-    return nothing
-end
-
-"""
-initialize the array of structs containing scratch arrays for the normalised pdf and low-order moments
-that may be evolved separately via fluid equations
-"""
-function initialize_scratch_arrays!(scratch, moments, pdf, n_rk_stages)
-    # populate each of the structs
-    begin_serial_region()
-    @serial_region begin
-        for istage ∈ 1:n_rk_stages+1
-            # initialise the scratch arrays for the ion pdf and velocity moments
-            scratch[istage].pdf .= pdf.ion.norm
-            scratch[istage].density .= moments.ion.dens
-            scratch[istage].upar .= moments.ion.upar
-            scratch[istage].ppar .= moments.ion.ppar
-            # initialise the scratch arrays for the electron pdf and velocity moments
-            if pdf.electron !== nothing
-                scratch[istage].pdf_electron .= pdf.electron.norm
-            end
-            scratch[istage].electron_density .= moments.electron.dens
-            scratch[istage].electron_upar .= moments.electron.upar
-            scratch[istage].electron_ppar .= moments.electron.ppar
-            scratch[istage].electron_temp .= moments.electron.temp
-            # initialise the scratch arrays for the neutral velocity moments and pdf
-            scratch[istage].pdf_neutral .= pdf.neutral.norm
-            scratch[istage].density_neutral .= moments.neutral.dens
-            scratch[istage].uz_neutral .= moments.neutral.uz
-            scratch[istage].pz_neutral .= moments.neutral.pz
-        end
-    end
     return nothing
 end
 

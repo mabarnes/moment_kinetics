@@ -15,6 +15,7 @@ using ..communication
 using ..communication: _block_synchronize
 using ..debugging
 using ..file_io: write_data_to_ascii, write_all_moments_data_to_binary, write_all_dfns_data_to_binary, debug_dump
+using ..initial_conditions: initialize_electrons!
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf
 using ..velocity_moments: update_moments!, update_moments_neutral!, reset_moments_status!
@@ -28,7 +29,7 @@ using ..velocity_moments: update_chodura!
 using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
 using ..boundary_conditions: enforce_boundary_conditions!
 using ..boundary_conditions: enforce_neutral_boundary_conditions!
-using ..input_structs: advance_info, time_info
+using ..input_structs
 using ..moment_constraints: hard_force_moment_constraints!,
                             hard_force_moment_constraints_neutral!
 using ..advection: setup_advection
@@ -276,7 +277,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_sp
                              collisions, species, geometry, boundary_distributions,
                              external_source_settings, num_diss_params,
                              manufactured_solns_input, advection_structs, scratch_dummy,
-                             restarting)
+                             io_input, restarting, restart_had_kinetic_electrons,
+                             input_dict)
     # define some local variables for convenience/tidiness
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
@@ -395,6 +397,18 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_sp
     else
         fp_arrays = nothing
     end
+
+    # Now that `t_params` and `scratch` have been created, initialize electrons if
+    # necessary
+    if !restarting || (composition.electron_physics == kinetic_electrons &&
+                       !restart_had_kinetic_electrons)
+        initialize_electrons!(pdf, moments, fields, geometry, composition, r, z,
+                              vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
+                              vperp_spectral, vpa_spectral, collisions,
+                              external_source_settings, scratch_dummy, scratch, t_params,
+                              num_diss_params, advection_structs, io_input, input_dict)
+    end
+
     # update the derivatives of the electron moments as these may be needed when
     # computing the electrostatic potential (and components of the electric field)
     calculate_electron_moment_derivatives!(moments, scratch[1], scratch_dummy, z, 

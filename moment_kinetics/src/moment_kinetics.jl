@@ -87,8 +87,7 @@ using .communication: _block_synchronize
 using .debugging
 using .external_sources
 using .input_structs
-using .initial_conditions: allocate_pdf_and_moments, init_pdf_and_moments!,
-                           initialize_electrons!
+using .initial_conditions: allocate_pdf_and_moments, init_pdf_and_moments!
 using .load_data: reload_evolving_fields!
 using .looping
 using .moment_constraints: hard_force_moment_constraints!
@@ -288,6 +287,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         dt = nothing
         dt_before_last_fail = nothing
         previous_runs_info = nothing
+        restart_had_kinetic_electrons = false
     else
         restarting = true
 
@@ -313,18 +313,6 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         initialize_external_source_amplitude!(moments, external_source_settings, vperp,
                                               vzeta, vr, composition.n_neutral_species)
 
-        if composition.electron_physics == kinetic_electrons && !restart_had_kinetic_electrons
-            # If we are initializing kinetic electrons using info from a simulation
-            # where electrons have a Boltzmann distribution, there is missing information
-            # that still needs to be specified for the electrons
-            initialize_electrons!(pdf, moments, fields, geometry, composition, r, z,
-                                  vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
-                                  vperp_spectral, vpa_spectral, collisions,
-                                  external_source_settings, scratch_dummy, scratch,
-                                  t_input, num_diss_params, advection_structs, io_input,
-                                  input_dict, restart_from_Boltzmann_electrons=true)
-        end
-
         _block_synchronize()
     end
 
@@ -342,7 +330,8 @@ function setup_moment_kinetics(input_dict::AbstractDict;
             r_spectral, composition, drive_input, moments, t_input, code_time, dt,
             dt_before_last_fail, collisions, species, geometry, boundary_distributions,
             external_source_settings, num_diss_params, manufactured_solns_input,
-            advection_structs, scratch_dummy, restarting)
+            advection_structs, scratch_dummy, io_input, restarting,
+            restart_had_kinetic_electrons, input_dict)
 
     # This is the closest we can get to the end time of the setup before writing it to the
     # output file
