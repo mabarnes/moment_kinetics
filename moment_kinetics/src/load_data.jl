@@ -608,8 +608,8 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
 
             neutral_1V = (vzeta.n_global == 1 && vr.n_global == 1)
             restart_neutral_1V = (restart_vzeta.n_global == 1 && restart_vr.n_global == 1)
-            if any(geometry.bzeta .!= 0.0) && ((neutral1V && !restart_neutral_1V) ||
-                                               (!neutral1V && restart_neutral_1V))
+            if any(geometry.bzeta .!= 0.0) && ((neutral_1V && !restart_neutral_1V) ||
+                                               (!neutral_1V && restart_neutral_1V))
                 # One but not the other of the run being restarted from and this run are
                 # 1V, but the interpolation below does not allow for vz and vpa being in
                 # different directions. Therefore interpolation between 1V and 3V cases
@@ -904,8 +904,8 @@ function reload_electron_data!(pdf, moments, restart_prefix_iblock, time_index, 
 
             neutral_1V = (vzeta.n_global == 1 && vr.n_global == 1)
             restart_neutral_1V = (restart_vzeta.n_global == 1 && restart_vr.n_global == 1)
-            if geometry.bzeta != 0.0 && ((neutral1V && !restart_neutral_1V) ||
-                                         (!neutral1V && restart_neutral_1V))
+            if geometry.bzeta != 0.0 && ((neutral_1V && !restart_neutral_1V) ||
+                                         (!neutral_1V && restart_neutral_1V))
                 # One but not the other of the run being restarted from and this run are
                 # 1V, but the interpolation below does not allow for vz and vpa being in
                 # different directions. Therefore interpolation between 1V and 3V cases
