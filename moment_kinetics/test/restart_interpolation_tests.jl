@@ -70,6 +70,10 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
     # by passing keyword arguments to run_test, kwargs becomes a Tuple of Pairs which can be used to
     # update the default inputs
 
+    # Make a copy to make sure nothing modifies the input Dicts defined in this test
+    # script.
+    test_input = deepcopy(test_input)
+
     if tol_3V === nothing
         atol_3V = atol
         rtol_3V = rtol

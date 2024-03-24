@@ -140,6 +140,10 @@ function run_test(test_input, expected_phi, tolerance; args...)
     # by passing keyword arguments to run_test, args becomes a Dict which can be used to
     # update the default inputs
 
+    # Make a copy to make sure nothing modifies the input Dicts defined in this test
+    # script.
+    test_input = deepcopy(test_input)
+
     # Convert keyword arguments to a unique name
     name = test_input["run_name"] * ", with element spacing: " * test_input["z_element_spacing_option"]
     if length(args) > 0
