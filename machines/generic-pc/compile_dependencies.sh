@@ -73,7 +73,7 @@ fi
 if [[ $BUILDHDF5 == "y" ]]; then
   HDF5=hdf5-1.14.3
   # Download and extract the source
-  wget -O ${HDF5}.tar.bz2 https://www.hdfgroup.org/package/hdf5-1-14-3-tar-bz2/?wpdmdl=18469
+  wget -O ${HDF5}.tar.bz2 https://support.hdfgroup.org/ftp/HDF5/releases/hdf5-1.14/hdf5-1.14.3/src/hdf5-1.14.3.tar.bz2
   tar xjf ${HDF5}.tar.bz2
 
   cd $HDF5

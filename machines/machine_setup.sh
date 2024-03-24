@@ -174,8 +174,11 @@ if [ $REQUEST_INPUT -eq 0 ]; then
   fi
 fi
 # Ensure we have the resolved path for $JULIA, to avoid potentially creating a
-# self-referencing symlink at bin/julia
-JULIA=$(realpath $JULIA)
+# self-referencing symlink at bin/julia.
+# Use Python's `os.path` module instead of GNU coreutils `realpath` as
+# `realpath` may not be available on all systems (e.g. some MacOS versions),
+# but we already assume Python is available.
+JULIA=$(/usr/bin/env python3 -c "import os; juliapath = os.path.realpath('$JULIA'); not os.path.isfile(juliapath) and exit(1); print(juliapath)")
 
 # Make sure $JULIA is actually an executable. If not, prompt the user to try
 # again.
@@ -191,9 +194,13 @@ while [[ -z "$JULIA" || ! $(command -v $JULIA) ]]; do
   read -e -p "> "  JULIA
 done
 # Convert $JULIA (which might be a relative path) to an absolute path.
-# '-s' to skip resolving symlinks (if we did resolve symlinks, it might make
-#      the path look different than expected).
-JULIA=$(realpath -s $JULIA)
+# Use Python's `os.path` module instead of GNU coreutils `realpath` as
+# `realpath` may not be available on all systems (e.g. some MacOS versions),
+# but we already assume Python is available.
+# Use `os.path.abspath` rather than `os.path.realpath` to skip resolving
+# symlinks (if we did resolve symlinks, it might make the path look different
+# than expected).
+JULIA=$(/usr/bin/env python3 -c "import os; juliapath = os.path.abspath('$JULIA'); not os.path.isfile(juliapath) and exit(1); print(juliapath)")
 echo
 echo "Using Julia at $JULIA"
 echo
@@ -224,11 +231,16 @@ if [ ! -z "$input" ]; then
   JULIA_DIRECTORY=$input
 fi
 # Convert input (which might be a relative path) to an absolute path.
-# '-m' to avoid erroring if the directory does not exist already.
-# '-s' to skip resolving symlinks (if we did resolve symlinks, it might make
-#      the path look different than expected).
+# Note that here we do not require the directory to exist already - if it does
+# not exist then Julia will create it.
+# Use Python's `os.path` module instead of GNU coreutils `realpath` as
+# `realpath` may not be available on all systems (e.g. some MacOS versions),
+# but we already assume Python is available.
+# Use `os.path.abspath` rather than `os.path.realpath` to skip resolving
+# symlinks (if we did resolve symlinks, it might make the path look different
+# than expected).
 if [ ! -z "$JULIA_DIRECTORY" ]; then
-  JULIA_DIRECTORY=$(realpath -m -s $JULIA_DIRECTORY)
+  JULIA_DIRECTORY=$(/usr/bin/env python3 -c "import os; print(os.path.abspath('$JULIA_DIRECTORY'))")
 fi
 echo
 echo "Using julia_directory=$JULIA_DIRECTORY"
