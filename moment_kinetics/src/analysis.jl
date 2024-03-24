@@ -618,12 +618,27 @@ function steady_state_square_residuals(variable, variable_at_previous_time, dt;
             reshaped_dt = dt
         end
         if only_max_abs
-            local_max_absolute = zeros(size(dt))
+            if size(dt) == ()
+                # local_max_absolute should always be at least a 1d array of size 1, not
+                # a 0d array, so that the MPI.Gather() below works correctly.
+                local_max_absolute = zeros(1)
+            else
+                local_max_absolute = zeros(size(dt))
+            end
         else
-            local_total_absolute_square = zeros(size(dt))
-            local_max_absolute_square = zeros(size(dt))
-            local_total_relative_square = zeros(size(dt))
-            local_max_relative_square = zeros(size(dt))
+            if size(dt) == ()
+                # local_max_absolute should always be at least a 1d array of size 1, not
+                # a 0d array, so that the MPI.Gather() below works correctly.
+                local_total_absolute_square = zeros(1)
+                local_max_absolute_square = zeros(1)
+                local_total_relative_square = zeros(1)
+                local_max_relative_square = zeros(1)
+            else
+                local_total_absolute_square = zeros(size(dt))
+                local_max_absolute_square = zeros(size(dt))
+                local_total_relative_square = zeros(size(dt))
+                local_max_relative_square = zeros(size(dt))
+            end
         end
         @loop_r_z ir iz begin
             this_slice = selectdim(selectdim(variable, t_dim - 1, ir), t_dim - 2, iz)

@@ -14,14 +14,17 @@ module communication
 
 export allocate_shared, block_rank, block_size, n_blocks, comm_block, comm_inter_block,
        iblock_index, comm_world, finalize_comms!, initialize_comms!, global_rank,
-       MPISharedArray, global_size
+       MPISharedArray, global_size, comm_anyv_subblock, anyv_subblock_rank,
+       anyv_subblock_size, anyv_isubblock_index, anyv_nsubblocks_per_block
 export setup_distributed_memory_MPI
 export setup_distributed_memory_MPI_for_weights_precomputation
-export _block_synchronize
+export _block_synchronize, _anyv_subblock_synchronize
 
 using MPI
 using SHA
 
+# Import moment_kinetics so that we can refer to it in docstrings
+import moment_kinetics
 using ..debugging
 using ..type_definitions: mk_float, mk_int
 
@@ -51,6 +54,20 @@ MPI.jl delete the communicator.
 """
 const comm_inter_block = Ref(MPI.COMM_NULL)
 
+"""
+Communicator for the local velocity-space subset of a shared-memory block in a 'anyv'
+region
+
+The 'anyv' region is used to parallelise the collision operator. See
+[`moment_kinetics.looping.get_best_anyv_split`](@ref).
+
+Must use a `Ref{MPI.Comm}` to allow a non-const `MPI.Comm` to be stored. Need to actually
+assign to this and not just copy a pointer into the `.val` member because otherwise the
+`MPI.Comm` object created by `MPI.Comm_split()` would be deleted, which probably makes
+MPI.jl delete the communicator.
+"""
+const comm_anyv_subblock = Ref(MPI.COMM_NULL)
+
 # Use Ref for these variables so that they can be made `const` (so have a definite
 # type), but contain a value assigned at run-time.
 """
@@ -72,6 +89,22 @@ const block_rank = Ref{mk_int}()
 """
 """
 const block_size = Ref{mk_int}()
+
+"""
+"""
+const anyv_subblock_rank = Ref{mk_int}()
+
+"""
+"""
+const anyv_subblock_size = Ref{mk_int}()
+
+"""
+"""
+const anyv_isubblock_index = Ref{mk_int}()
+
+"""
+"""
+const anyv_nsubblocks_per_block = Ref{mk_int}()
 
 """
 """
@@ -371,9 +404,9 @@ end
     export DebugMPISharedArray
 
     # Constructors
-    function DebugMPISharedArray(array::Array)
+    function DebugMPISharedArray(array::Array, comm)
         dims = size(array)
-        is_initialized = allocate_shared(mk_int, dims; maybe_debug=false)
+        is_initialized = allocate_shared(mk_int, dims; comm=comm, maybe_debug=false)
         if block_rank[] == 0
             is_initialized .= 0
         end
@@ -449,6 +482,23 @@ end
               * "silently disable the debug checks")
     end
 
+    # Explicit overload for vec() so the result is a DebugMPISharedArray
+    import Base: vec
+    function vec(A::DebugMPISharedArray)
+        return DebugMPISharedArray(
+            (isa(getfield(A, name), AbstractArray) ?
+             vec(getfield(A, name)) :
+             getfield(A, name)
+             for name ∈ fieldnames(typeof(A)))...)
+    end
+
+    # Explicit overload to avoid array when using DebugMPISharedArray Y, B and
+    # SparseArray A
+    import LinearAlgebra: ldiv!, Factorization
+    function ldiv!(Y::DebugMPISharedArray, A::Factorization, B::DebugMPISharedArray)
+        return ldiv!(Y.data, A, B.data)
+    end
+
     import MPI: Buffer
     function Buffer(A::DebugMPISharedArray)
         return Buffer(A.data)
@@ -480,6 +530,8 @@ dims - mk_int or Tuple{mk_int}
     Dimensions of the array to be created. Dimensions passed define the size of the
     array which is being handled by the 'block' (rather than the global array, or a
     subset for a single process).
+comm - `MPI.Comm`, default `comm_block[]`
+    MPI communicator containing the processes that share the array.
 maybe_debug - Bool
     Can be set to `false` to force not creating a DebugMPISharedArray when debugging is
     active. This avoids recursion when including a shared-memory array as a member of a
@@ -489,9 +541,12 @@ Returns
 -------
 Array{mk_float}
 """
-function allocate_shared(T, dims; maybe_debug=true)
-    br = block_rank[]
-    bs = block_size[]
+function allocate_shared(T, dims; comm=nothing, maybe_debug=true)
+    if comm === nothing
+        comm = comm_block[]
+    end
+    br = MPI.Comm_rank(comm)
+    bs = MPI.Comm_size(comm)
     n = prod(dims)
 
     if n == 0
@@ -502,7 +557,7 @@ function allocate_shared(T, dims; maybe_debug=true)
         @debug_shared_array begin
             # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
             if maybe_debug
-                array = DebugMPISharedArray(array)
+                array = DebugMPISharedArray(array, comm)
             end
         end
 
@@ -528,7 +583,7 @@ function allocate_shared(T, dims; maybe_debug=true)
         signaturestring = string([string(s.file, s.line) for s ∈ st]...)
 
         hash = sha256(signaturestring)
-        all_hashes = MPI.Allgather(hash, comm_block[])
+        all_hashes = MPI.Allgather(hash, comm)
         l = length(hash)
         for i ∈ 1:length(all_hashes)÷l
             if all_hashes[(i - 1) * l + 1: i * l] != hash
@@ -539,7 +594,7 @@ function allocate_shared(T, dims; maybe_debug=true)
         end
     end
 
-    win, array_temp = MPI.Win_allocate_shared(Array{T}, dims_local, comm_block[])
+    win, array_temp = MPI.Win_allocate_shared(Array{T}, dims_local, comm)
 
     # Array is allocated contiguously, but `array_temp` contains only the 'locally owned'
     # part.  We want to use as a shared array, so want to wrap the entire shared array.
@@ -554,77 +609,13 @@ function allocate_shared(T, dims; maybe_debug=true)
     @debug_shared_array begin
         # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
         if maybe_debug
-            debug_array = DebugMPISharedArray(array)
+            debug_array = DebugMPISharedArray(array, comm)
             push!(global_debugmpisharedarray_store, debug_array)
             return debug_array
         end
     end
 
     return array
-end
-
-# Need to put this before _block_synchronize() so that original_error() is defined.
-@debug_error_stop_all begin
-    # Redefine Base.error(::String) so that it communicates the error to other
-    # processes, which can pick it up in _block_synchronize() so that all processes are
-    # stopped. This should make interactive debugging easier, since all processes will
-    # stop if there is an error, instead of hanging.  Using ^C to stop hanging processes
-    # seems to mess up the MPI state so it's not possible to call, e.g.,
-    # `run_moment_kinetics()` again without restarting Julia.
-    #
-    # Also calls finalize_comms!() on all processes when erroring, so that a later run
-    # starts from a clean state. Note: if you catch the `ErrorException` raised by
-    # `error()` and try to continue, most likely you will get a segfault (when
-    # @debug_error_stop_all is active) because all the shared-memory arrays are deleted.
-    #
-    # Only want this active for debug runs, because for production runs we don't want
-    # extra MPI.Allgather() calls.
-    #
-    # The following implementation feels like a horrible hack, so I (JTO) am worried it
-    # might be fragile in the long run, but it only affects the code when debugging is
-    # enabled, and only really exists for convenience - if it breaks we can just delete
-    # it.
-    #
-    # Using 'world age' allows us to call the original Base.error(::String) from inside
-    # this redefined Base.error(::String). Implementation copied from here:
-    # https://discourse.julialang.org/t/how-to-call-the-original-function-when-overriding-it/56865/6
-    const world_age_before_definition = Base.get_world_counter()
-    original_error(message) = Base.invoke_in_world(world_age_before_definition,
-                                                   Base.error, message)
-    function Base.error(message::String)
-        # Communicate to all processes (which pick up the messages in
-        # _block_synchronize()) that there was an error
-        _ = MPI.Allgather(true, comm_world)
-
-        # Clean up MPI-allocated memory before raising error
-        finalize_comms!()
-
-        original_error(message)
-    end
-
-    # This needs to be called before each blocking collective operation (e.g.
-    # MPI.Barrier()), to make sure any errors that have occured on other processes are
-    # communicated.
-    function _gather_errors()
-        # Gather a flag from all processes saying if there has been an error. If there
-        # was, error here too so that all processes stop.
-        all_errors = MPI.Allgather(false, comm_world)
-        if any(all_errors)
-            error_procs = Vector{mk_int}(undef, 0)
-            for (i, flag) ∈ enumerate(all_errors)
-                if flag
-                    # (i-1) because MPI ranks are 0-based indices
-                    push!(error_procs, i-1)
-                end
-            end
-
-            # Clean up MPI-allocated memory before raising error
-            finalize_comms!()
-
-            original_error("Stop due to errors on other processes. Processes with "
-                           * "errors were: $error_procs.")
-        end
-    end
 end
 
 @debug_detect_redundant_block_synchronize begin
@@ -655,9 +646,12 @@ end
         and returns `false` (rather than calling `error()`) if the combination would
         cause an error.
     """
-    function debug_check_shared_array(array; check_redundant=false)
+    function debug_check_shared_array(array; check_redundant=false, comm=comm_block[])
+        comm_rank = MPI.Comm_rank(comm)
+        comm_size = MPI.Comm_size(comm)
+
         dims = size(array)
-        global_dims = (dims..., block_size[])
+        global_dims = (dims..., comm_size)
 
         is_read = array.is_read
         is_written = array.is_written
@@ -674,30 +668,26 @@ end
             end
         end
 
-        # If @debug_error_stop_all is active, need to gather errors from all processes
-        # before calling any MPI functions in order to avoid hangs.
-        @debug_error_stop_all _gather_errors()
-
         # Short-circuit if array has not been read or written at all
-        any_accessed = MPI.Allreduce(array.accessed[], |, comm_block[])
+        any_accessed = MPI.Allreduce(array.accessed[], |, comm)
         array.accessed[] = false
         if !any_accessed
             return true
         end
 
-        global_is_read = reshape(MPI.Allgather(is_read, comm_block[]),
+        global_is_read = reshape(MPI.Allgather(is_read, comm),
                                  global_dims...)
-        global_is_written = reshape(MPI.Allgather(is_written, comm_block[]),
+        global_is_written = reshape(MPI.Allgather(is_written, comm),
                                     global_dims...)
         for i ∈ CartesianIndices(array)
             n_reads = sum(global_is_read[i, :])
             n_writes = sum(global_is_written[i, :])
             if n_writes > 1
                 if check_redundant
-                    # In the @debug_detect_redundant__block_synchronize case, cannot
-                    # use Base.error() (as redefined by @debug_error_stop_all),
-                    # because the redefined function cleans up (deletes) the
-                    # shared-memory arrays, so would cause segfaults.
+                    # In the @debug_detect_redundant_block_synchronize case,
+                    # cannot throw an error() because the we need to check that
+                    # the `_block_synchronize()` call was redundant on all
+                    # processes, not just on this one.
                     return false
                 else
                     if array.creation_stack_trace != ""
@@ -713,10 +703,10 @@ end
                     end
                 end
             elseif n_writes == 1 && n_reads > 0
-                if global_is_written[i, block_rank[] + 1]
+                if global_is_written[i, comm_rank + 1]
                     read_procs = Vector{mk_int}(undef, 0)
                     for (r, is_read) ∈ enumerate(global_is_read[i, :])
-                        if r == block_rank[] + 1
+                        if r == comm_rank + 1
                             continue
                         elseif is_read
                             push!(read_procs, r)
@@ -725,17 +715,16 @@ end
                     if length(read_procs) > 0
                         if check_redundant
                             # In the @debug_detect_redundant_block_synchronize case,
-                            # cannot use Base.error() (as redefined by
-                            # @debug_error_stop_all), because the redefined function
-                            # cleans up (deletes) the shared-memory arrays, so would
-                            # cause segfaults.
+                            # cannot throw an error() because the we need to check that
+                            # the `_block_synchronize()` call was redundant on all
+                            # processes, not just on this one.
                             return false
                         else
                             # 'rank' is 0-based, but read_procs was 1-based, so
                             # correct
                             read_procs .-= 1
                             error("Shared memory array was written at $i on rank "
-                                  * "$(block_rank[]) but read from ranks "
+                                  * "$(comm_rank) but read from ranks "
                                   * "$read_procs Array was created at:\n"
                                   * array.creation_stack_trace)
                         end
@@ -752,9 +741,9 @@ end
 
     Can be added when debugging to help in down where an error occurs.
     """
-    function debug_check_shared_memory()
+    function debug_check_shared_memory(; kwargs...)
         for (arraynum, array) ∈ enumerate(global_debugmpisharedarray_store)
-            debug_check_shared_array(array)
+            debug_check_shared_array(array; kwargs...)
         end
         return nothing
     end
@@ -773,7 +762,6 @@ be true, but if it ever changes (i.e. different blocks doing totally different w
 the debugging routines need to be updated.
 """
 function _block_synchronize()
-    @debug_error_stop_all _gather_errors()
     MPI.Barrier(comm_block[])
 
     @debug_block_synchronize begin
@@ -877,8 +865,133 @@ function _block_synchronize()
             end
         end
 
-        @debug_error_stop_all _gather_errors()
         MPI.Barrier(comm_block[])
+    end
+end
+
+"""
+Call an MPI Barrier for all processors in an 'anyv' sub-block.
+
+The 'anyv' region is used to parallelise the collision operator. See
+[`moment_kinetics.looping.get_best_anyv_split`](@ref).
+
+Used to synchronise processors that are working on the same shared-memory array(s)
+between operations, to avoid race conditions. Should be even cheaper than
+[`_block_synchronize`](@ref) because it only requires communication on a smaller
+communicator.
+
+Note: `_anyv_subblock_synchronize()` may be called different numbers of times on different
+sub-blocks, depending on how the species and spatial dimensions are split up.
+`@debug_detect_redundant_block_synchronize` is not implemented (yet?) for
+`_anyv_subblock_synchronize()`.
+"""
+function _anyv_subblock_synchronize()
+
+    MPI.Barrier(comm_anyv_subblock[])
+
+    @debug_block_synchronize begin
+        st = stacktrace()
+        stackstring = string([string(s, "\n") for s ∈ st]...)
+
+        # Only include file and line number in the string that we hash so that
+        # function calls with different signatures are not seen as different
+        # (e.g. time_advance!() with I/O arguments on rank-0 but not on other
+        # ranks).
+        signaturestring = string([string(s.file, s.line) for s ∈ st]...)
+
+        hash = sha256(signaturestring)
+        all_hashes = reshape(MPI.Allgather(hash, comm_anyv_subblock[]), length(hash),
+                             MPI.Comm_size(comm_anyv_subblock[]))
+        for i ∈ 1:block_size[]
+            h = all_hashes[:, i]
+            if h != hash
+                error("_anyv_subblock_synchronize() called inconsistently\n",
+                      "rank $(block_rank[]) called from:\n",
+                      stackstring)
+            end
+        end
+    end
+
+    @debug_shared_array begin
+        # Check for potential race conditions:
+        # * Between _block_synchronize() any element of an array should be written to by
+        #   at most one rank.
+        # * If an element is not written to, any rank can read it.
+        # * If an element is written to, only the rank that writes to it should read it.
+        #
+        @debug_detect_redundant_block_synchronize previous_was_unnecessary = true
+        for (arraynum, array) ∈ enumerate(global_debugmpisharedarray_store)
+
+            debug_check_shared_array(array; comm=comm_anyv_subblock[])
+
+            @debug_detect_redundant_block_synchronize begin
+                # debug_detect_redundant_is_active[] is set to true at the beginning of
+                # time_advance!() so that we do not do these checks during
+                # initialization: they cause problems with @debug_initialize_NaN during
+                # array allocation; generally it does not matter if there are a few
+                # extra _block_synchronize() calls during initialization, so it is not
+                # worth the effort to trim them down to the absolute minimum.
+                if debug_detect_redundant_is_active[]
+
+                    if !debug_check_shared_array(array; check_redundant=true,
+                                                 comm_anyv_subblock)
+                        # If there was a failure for at least one array, the previous
+                        # _block_synchronize was necessary - if the previous call was not
+                        # there, for this array array.is_read and array.is_written would
+                        # have the values of combined_is_read and combined_is_written,
+                        # and would fail the debug_check_shared_array() above this
+                        # @debug_detect_redundant_block_synchronize block.
+                        previous_was_unnecessary = false
+                    end
+
+                    array.previous_is_read .= array.is_read
+                    array.previous_is_written .= array.is_written
+                else
+                    # If checking is inactive, set as if at 'previous' the array was
+                    # always read/written so that the next set of checks don't detect a
+                    # 'redundant' call which is actually only 'redundant' just after an
+                    # inactive region (e.g. initialisation or writing output).
+                    array.previous_is_read .= true
+                    array.previous_is_written .= true
+                end
+            end
+
+            array.is_read .= false
+            array.is_written .= false
+        end
+        @debug_detect_redundant_block_synchronize begin
+            if debug_detect_redundant_is_active[]
+                # Check the previous call was unnecessary on all processes, not just
+                # this one
+                previous_was_unnecessary = MPI.Allreduce(previous_was_unnecessary,
+                                                         MPI.Op(&, Bool), comm_anyv_subblock[])
+
+                if (previous_was_unnecessary && global_size[] > 1)
+                    # The intention of this debug block is to detect when calls to
+                    # _block_synchronize() are not necessary and can be removed. It's not
+                    # obvious that this will always work - it might be that a call to
+                    # _block_synchronize() is necessary with some options, but not
+                    # necessary with others. Hopefully it will be possible to handle
+                    # this by moving the _block_synchronize() call inside appropriate
+                    # if-clauses. If not, it might be necessary to define something like
+                    # _block_synchronize_ignore_redundant() to skip this check because
+                    # the check is ambiguous.
+                    #
+                    # If we are running in serial (global_size[] == 1), then none of the
+                    # _block_synchronize() calls are 'necessary', so this check is not
+                    # useful.
+                    error("Previous call to _block_synchronize() was not necessary. "
+                          * "Call was from:\n"
+                          * "$(previous_block_synchronize_stackstring[])")
+                end
+
+                st = stacktrace()
+                stackstring = string([string(s, "\n") for s ∈ st]...)
+                previous_block_synchronize_stackstring[] = stackstring
+            end
+        end
+
+        MPI.Barrier(comm_anyv_subblock[])
     end
 end
 

@@ -793,11 +793,12 @@ function chebyshev_radau_forward_transform!(chebyf, fext, ff, transform, n)
         chebyshev_spectral_derivative!(cheby_df, cheby_f)
         # form the derivative at x = - 1 using that T_n(-1) = (-1)^n
         # and converting the normalisation factors to undo the normalisation in the FFT
-        # df = d0 + sum_n=1 (-1)^n d_n/2 with d_n the coeffs
+        # df = d0 + sum_n=1 (-1)^n d_n with d_n the coeffs
         # of the Cheb derivative in the Fourier representation
+        # df = sum_n=0,N-1 d_n T_n(x)
         df = cheby_df[1]
         for i in 2:coord.ngrid
-            df += ((-1)^(i-1))*0.5*cheby_df[i]
+            df += ((-1)^(i-1))*cheby_df[i]
         end
         return df
     end

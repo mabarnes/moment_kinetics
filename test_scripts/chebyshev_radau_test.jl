@@ -1,10 +1,7 @@
 export chebyshevradau_test
 
 using Printf
-using Plots
-using LaTeXStrings
 using MPI
-using Measures
 
 import moment_kinetics
 using moment_kinetics.chebyshev
@@ -39,7 +36,7 @@ at the lower endpoint of the domain (-1,1] in the normalised
 coordinate x. Here in the tests the shifted coordinate y 
 is used with the vperp label so that the grid runs from (0,L].
 """
-function chebyshevradau_test(; ngrid=5, L_in=3.0)
+function chebyshevradau_test(; ngrid=5, L_in=3.0, discretization="chebyshev_pseudospectral")
 
     # elemental grid tests 
     #ngrid = 17
@@ -49,7 +46,6 @@ function chebyshevradau_test(; ngrid=5, L_in=3.0)
     y_nelement_global = y_nelement_local # total number of elements 
     y_L = L_in
     bc = "zero" 
-    discretization = "gausslegendre_pseudospectral"
     # fd_option and adv_input not actually used so given values unimportant
     fd_option = "fourth_order_centered"
     cheb_option = "matrix"
@@ -82,6 +78,17 @@ function chebyshevradau_test(; ngrid=5, L_in=3.0)
     println("exact df: ",df_exact," num df: ",df_num," abs(err): ",df_err) 
     
     for iy in 1:y.n
+        ff[iy] = exp(-y.grid[iy]^2)
+    end
+    df_exact = 0.0
+    df_num = sum(D0.*ff)/y.element_scale[1]
+    df_err = abs(df_num - df_exact)
+    println("f(y) = exp(-y^2) test")
+    println("exact df: ",df_exact," num df: ",df_num," abs(err): ",df_err)
+    f0 = -sum(D0[2:ngrid].*ff[2:ngrid])/D0[1]
+    println("exact f[0]: ",ff[1]," num f[0]: ",f0," abs(err): ",abs(f0-ff[1]))
+    
+    for iy in 1:y.n
         ff[iy] = sin(y.grid[iy])
     end
     df_exact = 1.0
@@ -89,6 +96,7 @@ function chebyshevradau_test(; ngrid=5, L_in=3.0)
     df_err = abs(df_num - df_exact)
     println("f(y) = sin(y) test")
     println("exact df: ",df_exact," num df: ",df_num," abs(err): ",df_err) 
+    
     for iy in 1:y.n
         ff[iy] = y.grid[iy] + (y.grid[iy])^2 + (y.grid[iy])^3
     end

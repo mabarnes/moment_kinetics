@@ -136,9 +136,6 @@ test_input_gauss_legendre = Dict("run_name" => "gausslegendre_pseudospectral",
                               "electron_physics" => "boltzmann_electron_response",
                               "nuii" => 1.0,
                               "use_semi_lagrange" => false,
-                              "Bzed" => 1.0,
-                              "Bmag" => 1.0,
-                              "rhostar" => 1.0,
                               "z_IC_upar_amplitude1" => 0.0,
                               "z_IC_density_amplitude1" => 0.001,
                               "z_IC_upar_amplitude2" => 0.0,
@@ -256,8 +253,8 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
             # open the netcdf file containing pdf data
             fid = open_readonly_output_file(path, "dfns")
             # load coordinates
-            vpa, vpa_spectral = load_coordinate_data(fid, "vpa")
-            vperp, vperp_spectral = load_coordinate_data(fid, "vperp")
+            vpa, vpa_spectral = load_coordinate_data(fid, "vpa"; ignore_MPI=true)
+            vperp, vperp_spectral = load_coordinate_data(fid, "vperp"; ignore_MPI=true)
 
             # load particle distribution function (pdf) data
             f_ion_vpavperpzrst = load_pdf_data(fid)

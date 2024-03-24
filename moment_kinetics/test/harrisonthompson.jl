@@ -197,8 +197,8 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
             fid = open_readonly_output_file(path,"moments")
 
             # load space-time coordinate data
-            z, z_spectral, z_chunk_size = load_coordinate_data(fid, "z")
-            r, r_spectral, r_chunk_size = load_coordinate_data(fid, "r")
+            z, z_spectral, z_chunk_size = load_coordinate_data(fid, "z"; ignore_MPI=true)
+            r, r_spectral, r_chunk_size = load_coordinate_data(fid, "r"; ignore_MPI=true)
             ntime, time = load_time_data(fid)
             n_ion_species, n_neutral_species = load_species_data(fid)
             

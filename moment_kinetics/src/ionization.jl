@@ -12,8 +12,8 @@ using ..looping
 """
 """
 
-function constant_ionization_source!(f_out, vpa, vperp, z, r, moments, composition,
-                                     collisions, dt)
+function constant_ionization_source!(f_out, fvec_in, vpa, vperp, z, r, moments,
+                                     composition, collisions, dt)
     @boundscheck vpa.n == size(f_out,1) || throw(BoundsError(f_out))
     @boundscheck vperp.n == size(f_out,2) || throw(BoundsError(f_out))
     @boundscheck z.n == size(f_out,3) || throw(BoundsError(f_out))
