@@ -1474,8 +1474,12 @@ function electron_kinetic_equation_euler_update!(fvec_out, fvec_in, moments, z, 
     end
 
     if evolve_ppar
-        electron_energy_equation!(fvec_out.electron_ppar, fvec_in, moments.electron,
-                                  collisions, dt, composition, num_diss_params, z)
+        electron_energy_equation!(fvec_out.electron_ppar, fvec_in.electron_ppar,
+                                  moments.electron.dens, moments.electron.upar,
+                                  moments.ion.upar, moments.ion.ppar,
+                                  moments.neutral.dens, moments.neutral.uz,
+                                  moments.neutral.pz, moments.electron, collisions, dt,
+                                  composition, num_diss_params, z)
     end
 
     return nothing
