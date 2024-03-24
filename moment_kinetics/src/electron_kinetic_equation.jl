@@ -484,7 +484,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
 
         # check to see if the electron pdf satisfies the electron kinetic equation to within the specified tolerance
 
-        if electron_pdf_converged || any(isnan.(ppar)) || any(isnan.(pdf))
+        if electron_pdf_converged
             break
         end
         t_params.step_counter[] += 1
