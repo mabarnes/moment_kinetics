@@ -1404,36 +1404,39 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         end
     end
 
-    # update remaining velocity moments that are calculable from the evolved pdf
-    # Note these may be needed for the boundary condition on the neutrals, so must be
-    # calculated before that is applied. Also may be needed to calculate advection speeds
-    # for for CFL stability limit calculations in adaptive_timestep_update!().
-    update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition)
-    # update the diagnostic chodura condition
-    # update_chodura!(moments,new_scratch.pdf,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
-    # update the thermal speed
-    begin_s_r_z_region()
-    try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
-        update_vth!(moments.charged.vth, new_scratch.ppar, new_scratch.pperp, new_scratch.density, vperp, z, r, composition)
-    catch e
-        if global_size[] > 1
-            println("ERROR: error calculating vth in time_advance.jl")
-            println(e)
-            display(stacktrace(catch_backtrace()))
-            flush(stdout)
-            flush(stderr)
-            MPI.Abort(comm_world, 1)
+    function update_derived_ion_moments_and_derivatives()
+        # update remaining velocity moments that are calculable from the evolved pdf
+        # Note these may be needed for the boundary condition on the neutrals, so must be
+        # calculated before that is applied. Also may be needed to calculate advection speeds
+        # for for CFL stability limit calculations in adaptive_timestep_update!().
+        update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition)
+        # update the diagnostic chodura condition
+        # update_chodura!(moments,new_scratch.pdf,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
+        # update the thermal speed
+        begin_s_r_z_region()
+        try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
+            update_vth!(moments.charged.vth, new_scratch.ppar, new_scratch.pperp, new_scratch.density, vperp, z, r, composition)
+        catch e
+            if global_size[] > 1
+                println("ERROR: error calculating vth in time_advance.jl")
+                println(e)
+                display(stacktrace(catch_backtrace()))
+                flush(stdout)
+                flush(stderr)
+                MPI.Abort(comm_world, 1)
+            end
+            rethrow(e)
         end
-        rethrow(e)
-    end
-    # update the parallel heat flux
-    update_qpar!(moments.charged.qpar, moments.charged.qpar_updated, new_scratch.density,
-                 new_scratch.upar, moments.charged.vth, new_scratch.pdf, vpa, vperp, z, r,
-                 composition, moments.evolve_density, moments.evolve_upar,
-                 moments.evolve_ppar)
+        # update the parallel heat flux
+        update_qpar!(moments.charged.qpar, moments.charged.qpar_updated, new_scratch.density,
+                     new_scratch.upar, moments.charged.vth, new_scratch.pdf, vpa, vperp, z, r,
+                     composition, moments.evolve_density, moments.evolve_upar,
+                     moments.evolve_ppar)
 
-    calculate_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
-                                  num_diss_params)
+        calculate_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
+                                      num_diss_params)
+    end
+    update_derived_ion_moments_and_derivatives()
 
     if composition.n_neutral_species > 0
         ##
@@ -1473,24 +1476,27 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
             end
         end
 
-        # update remaining velocity moments that are calculable from the evolved pdf
-        update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z, r,
-                                        composition)
-        # update the thermal speed
-        begin_sn_r_z_region()
-        @loop_sn_r_z isn ir iz begin
-            moments.neutral.vth[iz,ir,isn] = sqrt(2.0*new_scratch.pz_neutral[iz,ir,isn]/new_scratch.density_neutral[iz,ir,isn])
+        function update_derived_neutral_moments_and_derivatives()
+            # update remaining velocity moments that are calculable from the evolved pdf
+            update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z, r,
+                                            composition)
+            # update the thermal speed
+            begin_sn_r_z_region()
+            @loop_sn_r_z isn ir iz begin
+                moments.neutral.vth[iz,ir,isn] = sqrt(2.0*new_scratch.pz_neutral[iz,ir,isn]/new_scratch.density_neutral[iz,ir,isn])
+            end
+
+            # update the parallel heat flux
+            update_neutral_qz!(moments.neutral.qz, moments.neutral.qz_updated,
+                               new_scratch.density_neutral, new_scratch.uz_neutral,
+                               moments.neutral.vth, new_scratch.pdf_neutral, vz, vr, vzeta, z,
+                               r, composition, moments.evolve_density, moments.evolve_upar,
+                               moments.evolve_ppar)
+
+            calculate_moment_derivatives_neutral!(moments, new_scratch, scratch_dummy, z,
+                                                  z_spectral, num_diss_params)
         end
-
-        # update the parallel heat flux
-        update_neutral_qz!(moments.neutral.qz, moments.neutral.qz_updated,
-                           new_scratch.density_neutral, new_scratch.uz_neutral,
-                           moments.neutral.vth, new_scratch.pdf_neutral, vz, vr, vzeta, z,
-                           r, composition, moments.evolve_density, moments.evolve_upar,
-                           moments.evolve_ppar)
-
-        calculate_moment_derivatives_neutral!(moments, new_scratch, scratch_dummy, z,
-                                              z_spectral, num_diss_params)
+        update_derived_neutral_moments_and_derivatives()
     end
 
     # update the electrostatic potential phi
@@ -1518,55 +1524,13 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         old_scratch = scratch[istage]
 
         if t_params.previous_dt[] == 0.0
-
-            # update remaining velocity moments that are calculable from the evolved pdf
-            # These need to be re-calculated because `new_scratch` was swapped with the
-            # beginning of the timestep, because the timestep failed
-            update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition)
-            # update the diagnostic chodura condition
-            # update_chodura!(moments,new_scratch.pdf,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
-            # update the thermal speed
-            begin_s_r_z_region()
-            try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
-                update_vth!(moments.charged.vth, new_scratch.ppar, new_scratch.pperp, new_scratch.density, vperp, z, r, composition)
-            catch e
-                if global_size[] > 1
-                    println("ERROR: error calculating vth in time_advance.jl")
-                    println(e)
-                    display(stacktrace(catch_backtrace()))
-                    flush(stdout)
-                    flush(stderr)
-                    MPI.Abort(comm_world, 1)
-                end
-                rethrow(e)
+            # Re-update remaining velocity moments that are calculable from the evolved
+            # pdf These need to be re-calculated because `new_scratch` was swapped with
+            # the beginning of the timestep, because the timestep failed
+            update_derived_ion_moments_and_derivatives()
+            if composition.n_neutral_species > 0
+                update_derived_neutral_moments_and_derivatives()
             end
-            # update the parallel heat flux
-            update_qpar!(moments.charged.qpar, moments.charged.qpar_updated, new_scratch.density,
-                         new_scratch.upar, moments.charged.vth, new_scratch.pdf, vpa, vperp, z, r,
-                         composition, moments.evolve_density, moments.evolve_upar,
-                         moments.evolve_ppar)
-
-            calculate_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
-                                          num_diss_params)
-
-            # update remaining velocity moments that are calculable from the evolved pdf
-            update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z, r,
-                                            composition)
-            # update the thermal speed
-            begin_sn_r_z_region()
-            @loop_sn_r_z isn ir iz begin
-                moments.neutral.vth[iz,ir,isn] = sqrt(2.0*new_scratch.pz_neutral[iz,ir,isn]/new_scratch.density_neutral[iz,ir,isn])
-            end
-
-            # update the parallel heat flux
-            update_neutral_qz!(moments.neutral.qz, moments.neutral.qz_updated,
-                               new_scratch.density_neutral, new_scratch.uz_neutral,
-                               moments.neutral.vth, new_scratch.pdf_neutral, vz, vr, vzeta, z,
-                               r, composition, moments.evolve_density, moments.evolve_upar,
-                               moments.evolve_ppar)
-
-            calculate_moment_derivatives_neutral!(moments, new_scratch, scratch_dummy, z,
-                                                  z_spectral, num_diss_params)
 
             # update the electrostatic potential phi
             update_phi!(fields, scratch[istage+1], z, r, composition, z_spectral, r_spectral, scratch_dummy)
