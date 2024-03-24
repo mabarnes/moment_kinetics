@@ -327,7 +327,7 @@ function update_electron_pdf_with_time_advance!(fvec, pdf, qpar, qpar_updated,
         enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vperp, vpa,
                                                     vperp_spectral, vpa_spectral,
                                                     vpa_advect,
-                                                    num_diss_params.vpa_dissipation_coefficient > 0.0,
+                                                    num_diss_params.electron_num_diss_params.vpa_dissipation_coefficient > 0.0,
                                                     composition.me_over_mi)
         #println("A pdf 1 ", pdf[:,1,1,1])
         #println("A pdf end ", pdf[:,1,end,1])
@@ -1421,9 +1421,9 @@ function add_dissipation_term!(residual, pdf, scratch_dummy, z_spectral, z, vpa,
     @loop_r_z_vperp ir iz ivperp begin
         #@views derivative!(vpa.scratch, pdf[:,ivperp,iz,ir], vpa, false)
         #@views derivative!(vpa.scratch2, vpa.scratch, vpa, false)
-        #@. residual[:,ivperp,iz,ir] -= num_diss_params.vpa_dissipation_coefficient * vpa.scratch2
+        #@. residual[:,ivperp,iz,ir] -= num_diss_params.electron_num_diss_params.vpa_dissipation_coefficient * vpa.scratch2
         @views second_derivative!(vpa.scratch, pdf[:,ivperp,iz,ir], vpa, vpa_spectral)
-        @. residual[:,ivperp,iz,ir] -= num_diss_params.vpa_dissipation_coefficient * vpa.scratch
+        @. residual[:,ivperp,iz,ir] -= num_diss_params.electron_num_diss_params.vpa_dissipation_coefficient * vpa.scratch
     end
     #stop()
     return nothing

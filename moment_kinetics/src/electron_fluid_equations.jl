@@ -137,7 +137,7 @@ function electron_energy_equation!(ppar, dens_i, fvec, moments, collisions, dt, 
     # end
     # compute the contribution to the rhs of the energy equation
     # arising from artificial diffusion
-    diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
+    diffusion_coefficient = num_diss_params.electron.moment_dissipation_coefficient
     if diffusion_coefficient > 0.0
         @loop_r_z ir iz begin
             ppar[iz,ir] += dt*diffusion_coefficient*moments.electron.d2ppar_dz2[iz,ir]

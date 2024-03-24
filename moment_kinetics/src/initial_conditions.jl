@@ -1252,7 +1252,7 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
         enforce_boundary_condition_on_electron_pdf!(pdf, phi, vth, upar, vperp, vpa,
                                                     vperp_spectral, vpa_spectral,
                                                     vpa_advect,
-                                                    num_diss_params.vpa_dissipation_coefficient > 0.0,
+                                                    num_diss_params.electron_num_diss_params.vpa_dissipation_coefficient > 0.0,
                                                     me_over_mi)
         begin_r_region()
         @loop_r ir begin
