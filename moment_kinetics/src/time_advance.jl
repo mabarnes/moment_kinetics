@@ -8,7 +8,6 @@ export allocate_advection_structs
 export setup_dummy_and_buffer_arrays
 
 using MPI
-using StatsBase: mean
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float, allocate_shared_bool
 using ..communication
@@ -61,7 +60,7 @@ using ..manufactured_solns: manufactured_sources
 using ..advection: advection_info
 using ..runge_kutta: rk_update_evolved_moments!, rk_update_evolved_moments_neutral!,
                      rk_update_variable!, rk_error_variable!,
-                     setup_runge_kutta_coefficients!
+                     setup_runge_kutta_coefficients!, adaptive_timestep_update_t_params!
 using ..utils: to_minutes, get_minimum_CFL_z, get_minimum_CFL_vpa,
                get_minimum_CFL_neutral_z, get_minimum_CFL_neutral_vz
 using ..electron_fluid_equations: calculate_electron_density!
@@ -2196,200 +2195,8 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         end
     end
 
-    # Get global minimum of CFL limits
-    CFL_limit = nothing
-    this_limit_caused_by = nothing
-    @serial_region begin
-        # Get maximum error over all blocks
-        CFL_limits = MPI.Allreduce(CFL_limits, min, comm_inter_block[])
-        CFL_limit_caused_by = argmin(CFL_limits)
-        CFL_limit = CFL_limits[CFL_limit_caused_by]
-        # Reserve first two entries of t_params.limit_caused_by for accuracy limit and
-        # max_increase_factor limit.
-        this_limit_caused_by = CFL_limit_caused_by + 5
-    end
-
-    if error_norm_method == "Linf"
-        # Get overall maximum error on the shared-memory block
-        error_norms = MPI.Reduce(error_norms, max, comm_block[]; root=0)
-
-        error_norm = nothing
-        @serial_region begin
-            # Get maximum error over all blocks
-            error_norms = MPI.Allreduce(error_norms, max, comm_inter_block[])
-            error_norm = maximum(error_norms)
-        end
-        error_norm = MPI.bcast(error_norm, 0, comm_block[])
-    elseif error_norm_method == "L2"
-        # Get overall maximum error on the shared-memory block
-        error_norms = MPI.Reduce(error_norms, +, comm_block[]; root=0)
-
-        error_norm = nothing
-        @serial_region begin
-            # Get maximum error over all blocks
-            error_norms = MPI.Allreduce(error_norms, +, comm_inter_block[])
-
-            # So far `error_norms` is the sum of squares of the errors. Now that summation
-            # is finished, need to divide by total number of points and take square-root.
-            error_norms .= sqrt.(error_norms ./ total_points)
-            open("debug$(global_size[]).txt", "a") do io
-                for e in error_norms
-                    print(io, e, " ")
-                end
-                println(io, t_params.dt[], " ;")
-            end
-
-            # Weight the error from each variable equally by taking the mean, so the
-            # larger number of points in the distribution functions does not mean that
-            # error on the moments is ignored.
-            error_norm = mean(error_norms)
-        end
-
-        error_norm = MPI.bcast(error_norm, 0, comm_block[])
-    else
-        error("Unrecognized error_norm_method '$method'")
-    end
-
-    # Use current_dt instead of t_params.dt[] here because we are about to write to
-    # the shared-memory variable t_params.dt[] below, and we do not want to add an extra
-    # _block_synchronize() call after reading it here.
-    if error_norm > 1.0 && current_dt > t_params.minimum_dt
-        # Timestep failed, reduce timestep and re-try
-        success = false
-
-        # Set scratch[end] equal to scratch[1] to start the timestep over
-        scratch_temp = scratch[end]
-        scratch[end] = scratch[1]
-        scratch[1] = scratch_temp
-
-        @serial_region begin
-            t_params.failure_counter[] += 1
-
-            if t_params.previous_dt[] > 0.0
-                # If previous_dt=0, the previous step was also a failure so only update
-                # dt_before_last_fail when previous_dt>0
-                t_params.dt_before_last_fail[] = t_params.previous_dt[]
-            end
-
-            # If we were trying to take a step to the output timestep, dt will be smaller on
-            # the re-try, so will not reach the output time.
-            t_params.step_to_output[] = false
-
-            # Get new timestep estimate using same formula as for a successful step, but
-            # limit decrease to factor 1/2 - this factor should probably be settable!
-            t_params.dt[] = max(t_params.dt[] / 2.0,
-                                t_params.dt[] * t_params.step_update_prefactor * error_norm^(-1.0/t_params.rk_order))
-            t_params.dt[] = max(t_params.dt[], t_params.minimum_dt)
-
-            minimum_dt = 1.e-14
-            if t_params.dt[] < minimum_dt
-                println("Time advance failed: trying to set dt=$(t_params.dt[]) less than "
-                        * "$minimum_dt at t=$t. Ending run.")
-                # Set dt negative to signal an error
-                t_params.dt[] = -1.0
-            end
-
-            # Don't update the simulation time, as this step failed
-            t_params.previous_dt[] = 0.0
-
-            # Call the 'cause' of the timestep failure the variable that has the biggest
-            # error norm here
-            max_error_variable_index = argmax(error_norms)
-            t_params.failure_caused_by[max_error_variable_index] += 1
-
-            #println("t=$t, timestep failed, error_norm=$error_norm, error_norms=$error_norms, decreasing timestep to ", t_params.dt[])
-        end
-    else
-        success = true
-
-        @serial_region begin
-            # Save the timestep used to complete this step, this is used to update the
-            # simulation time.
-            t_params.previous_dt[] = t_params.dt[]
-
-            if t_params.step_to_output[]
-                # Completed an output step, reset dt to what it was before it was reduced to reach
-                # the output time
-                t_params.dt[] = t_params.dt_before_output[]
-                t_params.step_to_output[] = false
-
-                if t_params.dt[] > CFL_limit
-                    t_params.dt[] = CFL_limit
-                end
-            else
-                # Adjust timestep according to Fehlberg's suggestion
-                # (https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method).
-                # `step_update_prefactor` is a constant numerical factor to make the estimate
-                # of a good value for the next timestep slightly conservative. It defaults to
-                # 0.9.
-                t_params.dt[] *= t_params.step_update_prefactor * error_norm^(-1.0/t_params.rk_order)
-
-                if t_params.dt[] > CFL_limit
-                    t_params.dt[] = CFL_limit
-                else
-                    this_limit_caused_by = 1
-                end
-
-                # Limit so timestep cannot increase by a large factor, which might lead to
-                # numerical instability in some cases.
-                max_cap_limit_caused_by = 2
-                if isinf(t_params.max_increase_factor_near_last_fail)
-                    # Not using special timestep limiting near last failed dt value
-                    max_cap = t_params.max_increase_factor * t_params.previous_dt[]
-                else
-                    max_cap = t_params.max_increase_factor * t_params.previous_dt[]
-                    slow_increase_threshold = t_params.dt_before_last_fail[] / t_params.last_fail_proximity_factor
-                    if t_params.previous_dt[] > t_params.dt_before_last_fail[] * t_params.last_fail_proximity_factor
-                        # dt has successfully exceeded the last failed value, so allow it
-                        # to increase more quickly again
-                        t_params.dt_before_last_fail[] = Inf
-                    elseif max_cap > slow_increase_threshold
-                        # dt is getting close to last failed value, so increase more
-                        # slowly
-                        max_cap = max(slow_increase_threshold,
-                                      t_params.max_increase_factor_near_last_fail *
-                                      t_params.previous_dt[])
-                        max_cap_limit_caused_by = 3
-                    end
-                end
-                if t_params.dt[] > max_cap
-                    t_params.dt[] = max_cap
-                    this_limit_caused_by = max_cap_limit_caused_by
-                end
-
-                # Prevent timestep from going below minimum_dt
-                if t_params.dt[] < t_params.minimum_dt
-                    t_params.dt[] = t_params.minimum_dt
-                    this_limit_caused_by = 4
-                end
-
-                # Prevent timestep from going above maximum_dt
-                if t_params.dt[] > t_params.maximum_dt
-                    t_params.dt[] = t_params.maximum_dt
-                    this_limit_caused_by = 5
-                end
-
-                t_params.limit_caused_by[this_limit_caused_by] += 1
-
-                if (t_params.step_counter[] % 1000 == 0) && global_rank[] == 0
-                    println("step ", t_params.step_counter[], ": t=",
-                            round(t, sigdigits=6), ", nfail=", t_params.failure_counter[],
-                            ", dt=", t_params.dt[])
-                end
-            end
-        end
-    end
-
-    @serial_region begin
-        if t + t_params.dt[] >= t_params.next_output_time[]
-            t_params.dt_before_output[] = t_params.dt[]
-            t_params.dt[] = t_params.next_output_time[] - t
-            t_params.step_to_output[] = true
-        end
-    end
-
-    # Shared-memory variables have been updated, so synchronize
-    _block_synchronize()
+    adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, error_norms,
+                                       total_points, current_dt, error_norm_method)
 
     return nothing
 end
