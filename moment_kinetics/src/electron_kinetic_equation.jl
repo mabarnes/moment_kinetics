@@ -1440,24 +1440,27 @@ function electron_kinetic_equation_euler_update!(fvec_out, fvec_in, moments, z, 
                                                  vpa_advect, scratch_dummy, collisions,
                                                  composition, num_diss_params, dt;
                                                  evolve_ppar=false)
+    if evolve_ppar
+        ppar = fvec_in.electron_ppar
+    else
+        ppar = moments.electron.ppar
+    end
     # add the contribution from the z advection term
     electron_z_advection!(fvec_out.pdf_electron, fvec_in.pdf_electron,
                           moments.electron.upar, moments.electron.vth, z_advect, z,
                           vpa.grid, z_spectral, scratch_dummy, dt)
 
     # add the contribution from the wpa advection term
-    electron_vpa_advection!(fvec_out.pdf_electron, fvec_in.pdf_electron,
-                            fvec_in.electron_ppar, moments.electron.vth,
-                            moments.electron.dppar_dz, moments.electron.dqpar_dz,
-                            moments.electron.dvth_dz, vpa_advect, vpa, vpa_spectral,
-                            scratch_dummy, dt)
+    electron_vpa_advection!(fvec_out.pdf_electron, fvec_in.pdf_electron, ppar,
+                            moments.electron.vth, moments.electron.dppar_dz,
+                            moments.electron.dqpar_dz, moments.electron.dvth_dz,
+                            vpa_advect, vpa, vpa_spectral, scratch_dummy, dt)
 
     # add in the contribution to the residual from the term proportional to the pdf
-    add_contribution_from_pdf_term!(fvec_out.pdf_electron, fvec_in.pdf_electron,
-                                    fvec_in.electron_ppar, moments.electron.vth,
-                                    moments.electron.dens, moments.electron.ddens_dz,
-                                    moments.electron.dvth_dz, moments.electron.dqpar_dz,
-                                    vpa.grid, z, dt)
+    add_contribution_from_pdf_term!(fvec_out.pdf_electron, fvec_in.pdf_electron, ppar,
+                                    moments.electron.vth, moments.electron.dens,
+                                    moments.electron.ddens_dz, moments.electron.dvth_dz,
+                                    moments.electron.dqpar_dz, vpa.grid, z, dt)
 
     # add in numerical dissipation terms
     add_dissipation_term!(fvec_out.pdf_electron, fvec_in.pdf_electron, scratch_dummy,
