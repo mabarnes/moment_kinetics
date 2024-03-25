@@ -33,6 +33,7 @@ include("reference_parameters.jl")
 include("coordinates.jl")
 include("file_io.jl")
 include("geo.jl")
+include("gyroaverages.jl")
 include("velocity_moments.jl")
 include("velocity_grid_transforms.jl")
 include("em_fields.jl")
@@ -399,8 +400,8 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     # the main time advance loop -- including normalisation of f by density if requested
 
     moments, fields, spectral_objects, advect_objects,
-    scratch, advance, fp_arrays, scratch_dummy, manufactured_source_list =
-        setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
+    scratch, advance, fp_arrays, gyroavs, scratch_dummy, manufactured_source_list =
+        setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, gyrophase, vz_spectral,
             vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral,
             r_spectral, composition, drive_input, moments, t_input, collisions, species,
             geometry, boundary_distributions, external_source_settings, num_diss_params,
@@ -430,7 +431,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
 
     return pdf, scratch, code_time, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
-           composition, collisions, geometry, boundary_distributions,
+           composition, collisions, geometry, gyroavs, boundary_distributions,
            external_source_settings, num_diss_params, advance, fp_arrays, scratch_dummy,
            manufactured_source_list, ascii_io, io_moments, io_dfns
 end

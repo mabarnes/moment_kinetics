@@ -278,6 +278,10 @@ mutable struct species_composition
     # The ion flux reaching the wall that is recycled as neutrals is reduced by
     # `recycling_fraction` to account for ions absorbed by the wall.
     recycling_fraction::mk_float
+    # gyrokinetic_ions is a flag determining if the ion species is gyrokinetic
+    # gyrokinetic_ions = true -> use gyroaveraged fields at fixed guiding centre and moments of the pdf computed at fixed r
+    # gyrokinetic_ions = false -> use drift kinetic approximation
+    gyrokinetic_ions::Bool
     # scratch buffer whose size is n_species
     scratch::Vector{mk_float}
 end

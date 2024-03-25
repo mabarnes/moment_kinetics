@@ -98,6 +98,8 @@ struct coordinate
     element_shift::Array{mk_float,1}
     # option used to set up element spacing
     element_spacing_option::String
+    # list of element boundaries
+    element_boundaries::Array{mk_float,1}
 end
 
 """
@@ -166,7 +168,7 @@ function define_coordinate(input, parallel_io::Bool=false; init_YY::Bool=true)
         cell_width, igrid, ielement, imin, imax, igrid_full, input.discretization, input.fd_option, input.cheb_option,
         input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
         scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
-        local_io_range, global_io_range, element_scale, element_shift, input.element_spacing_option)
+        local_io_range, global_io_range, element_scale, element_shift, input.element_spacing_option, element_boundaries)
 
     if coord.n == 1 && occursin("v", coord.name)
         spectral = null_velocity_dimension_info()

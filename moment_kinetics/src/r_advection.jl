@@ -22,7 +22,7 @@ function r_advection!(f_out, fvec_in, moments, fields, advect, r, z, vperp, vpa,
         # get the updated speed along the r direction using the current f
         @views update_speed_r!(advect[is], fvec_in.upar[:,:,is],
                                moments.charged.vth[:,:,is], fields, moments.evolve_upar,
-                               moments.evolve_ppar, vpa, vperp, z, r, geometry)
+                               moments.evolve_ppar, vpa, vperp, z, r, geometry, is)
         # advance r-advection equation
         @loop_z_vpa iz ivpa begin
         end
@@ -84,7 +84,7 @@ end
 calculate the advection speed in the r-direction at each grid point
 """
 function update_speed_r!(advect, upar, vth, fields, evolve_upar, evolve_ppar, vpa, vperp,
-                         z, r, geometry)
+                         z, r, geometry, is)
     @boundscheck z.n == size(advect.speed,4) || throw(BoundsError(advect))
     @boundscheck vperp.n == size(advect.speed,3) || throw(BoundsError(advect))
     @boundscheck vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
@@ -105,7 +105,7 @@ function update_speed_r!(advect, upar, vth, fields, evolve_upar, evolve_ppar, vp
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 # ExB drift
                 @. geofac = bzeta[iz,:]*jacobian[iz,:]/Bmag[iz,:]
-                @views @. advect.speed[:,ivpa,ivperp,iz] = ExBfac*geofac*fields.Ez[iz,:]
+                @views @. advect.speed[:,ivpa,ivperp,iz] = ExBfac*geofac*fields.gEz[ivperp,iz,:,is]
                 # magnetic curvature drift
                 @. @views advect.speed[:,ivpa,ivperp,iz] += rhostar*(vpa.grid[ivpa]^2)*cvdriftr[iz,:]
                 # magnetic grad B drift
