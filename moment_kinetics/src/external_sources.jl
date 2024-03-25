@@ -44,6 +44,7 @@ function setup_external_sources!(input_dict, r, z)
                      input_dict, neutrals ? "neutral_source" : "ion_source";
                      active=false,
                      source_strength=1.0,
+                     source_n=1.0,
                      source_T=neutrals ? get(input_dict, "T_wall", 1.0) : 1.0,
                      r_profile="constant",
                      r_width=1.0,
@@ -423,6 +424,7 @@ function external_ion_source!(pdf, fvec, moments, ion_source_settings, vperp, vp
 
     source_amplitude = moments.charged.external_source_amplitude
     source_T = ion_source_settings.source_T
+    source_n = ion_source_settings.source_n
     if vperp.n == 1
         vth_factor = 1.0 / sqrt(source_T)
     else
@@ -446,7 +448,7 @@ function external_ion_source!(pdf, fvec, moments, ion_source_settings, vperp, vp
                 vperp_unnorm = vperp_grid[ivperp] * this_vth
                 vpa_unnorm = vpa_grid[ivpa] * this_vth + this_upar
                 pdf[ivpa,ivperp,iz,ir,is] +=
-                    this_prefactor *
+                    this_prefactor * source_n *
                     exp(-(vperp_unnorm^2 + vpa_unnorm^2) / source_T)
             end
         end
@@ -461,7 +463,7 @@ function external_ion_source!(pdf, fvec, moments, ion_source_settings, vperp, vp
                 # normalisation of F
                 vpa_unnorm = vpa_grid[ivpa] + this_upar
                 pdf[ivpa,ivperp,iz,ir,is] +=
-                    this_prefactor *
+                    this_prefactor * source_n *
                     exp(-(vperp_grid[ivperp]^2 + vpa_unnorm^2) / source_T)
             end
         end
@@ -473,7 +475,7 @@ function external_ion_source!(pdf, fvec, moments, ion_source_settings, vperp, vp
                 # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                 # normalisation of F
                 pdf[ivpa,ivperp,iz,ir,is] +=
-                    this_prefactor *
+                    this_prefactor * source_n *
                     exp(-(vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2) / source_T)
             end
         end
@@ -484,7 +486,7 @@ function external_ion_source!(pdf, fvec, moments, ion_source_settings, vperp, vp
                 # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                 # normalisation of F
                 pdf[ivpa,ivperp,iz,ir,is] +=
-                    this_prefactor *
+                    this_prefactor * source_n *
                     exp(-(vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2) / source_T)
             end
         end
