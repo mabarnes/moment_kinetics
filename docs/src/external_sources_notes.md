@@ -14,8 +14,8 @@ S_n &= A_n(r,z) \frac{1}{(\pi)^{3/2} (2 T_{\mathrm{source},n} / m_n)^{3/2}} \exp
 or in 1V simulations that do not include $v_\perp$, $v_\zeta$, $v_r$ dimensions
 ```math
 \begin{align}
-S_i &= A_i(r,z) \frac{1}{sqrt{\pi} \sqrt{2 T_{\mathrm{source},i} / m_i}} \exp\left( -\frac{v_\perp^2}{T_{\mathrm{source},i}} \right) \\
-S_n &= A_n(r,z) \frac{1}{sqrt{\pi} \sqrt{2 T_{\mathrm{source},n} / m_n}} \exp\left( -\frac{v_z^2}{T_{\mathrm{source},n}} \right)
+S_i &= A_i(r,z) \frac{1}{\sqrt{\pi} \sqrt{2 T_{\mathrm{source},i} / m_i}} \exp\left( -\frac{v_\perp^2}{T_{\mathrm{source},i}} \right) \\
+S_n &= A_n(r,z) \frac{1}{\sqrt{\pi} \sqrt{2 T_{\mathrm{source},n} / m_n}} \exp\left( -\frac{v_z^2}{T_{\mathrm{source},n}} \right)
 \end{align}
 ```
 
