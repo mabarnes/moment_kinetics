@@ -3899,6 +3899,16 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         for i ∈ size(variable, tdim):-1:2
             selectdim(variable, tdim, i) .-= selectdim(variable, tdim, i-1)
         end
+
+        # Per-step count does not make sense for the first step, so make sure element-1 is
+        # zero.
+        selectdim(variable, tdim, 1) .= zero(first(variable))
+
+        # Assume cumulative variables always increase, so if any value in the 'per-step'
+        # variable is negative, it is because there was a restart where the cumulative
+        # variable started over
+        variable .= max.(variable, zero(first(variable)))
+
         return variable
     end
 
@@ -4307,6 +4317,11 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         end
 
         variable = delta_t ./ successful_steps_per_output
+        for i ∈ eachindex(successful_steps_per_output)
+            if successful_steps_per_output[i] == 0
+                variable[i] = 0.0
+            end
+        end
         if successful_steps_per_output[1] == 0
             # Don't want a meaningless Inf...
             variable[1] = 0.0
@@ -4330,6 +4345,11 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         end
 
         variable = delta_t ./ electron_successful_steps_per_output
+        for i ∈ eachindex(electron_successful_steps_per_output)
+            if electron_successful_steps_per_output[i] == 0
+                variable[i] = 0.0
+            end
+        end
         if electron_successful_steps_per_output[1] == 0
             # Don't want a meaningless Inf...
             variable[1] = 0.0
