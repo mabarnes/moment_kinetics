@@ -252,6 +252,10 @@ function makie_post_process(run_dir::Union{String,Tuple},
     end
 
     timestep_diagnostics(run_info; plot_prefix=plot_prefix)
+    if any(ri.composition.electron_physics ==
+           moment_kinetics.input_structs.kinetic_electrons for ri ∈ run_info)
+        timestep_diagnostics(run_info; plot_prefix=plot_prefix, electron=true)
+    end
 
     do_steady_state_residuals = any(input_dict[v]["steady_state_residual"]
                                     for v ∈ moment_variable_list)
