@@ -3190,8 +3190,10 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
             run_name = split(filename, ".moments.")[1]
         elseif occursin(".dfns.", filename)
             run_name = split(filename, ".dfns.")[1]
+        elseif occursin(".initial_electron.", filename)
+            run_name = split(filename, ".initial_electron.")[1]
         else
-            error("Cannot recognise '$this_run_dir' as a moment_kinetics output file")
+            error("Cannot recognise '$this_run_dir/$filename' as a moment_kinetics output file")
         end
     elseif isdir(this_run_dir)
         # Normalise by removing any trailing slash - with a slash basename() would return an
