@@ -65,9 +65,9 @@ function source_terms_evolve_density!(pdf_out, pdf_in, dens, upar, ddens_dz, dup
     end
 
     if ion_source_settings.active
-        source_amplitude = moments.ion.external_source_amplitude
+        source_density_amplitude = moments.ion.external_source_density_amplitude
         @loop_r_z ir iz begin
-            term = dt * source_amplitude[iz,ir] / dens[iz,ir]
+            term = dt * source_density_amplitude[iz,ir] / dens[iz,ir]
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir] -= term * pdf_in[ivpa,ivperp,iz,ir]
             end
@@ -97,11 +97,13 @@ function source_terms_evolve_ppar_no_collisions!(pdf_out, pdf_in, dens, upar, pp
     end
 
     if ion_source_settings.active
-        source_amplitude = moments.ion.external_source_amplitude
-        source_T = ion_source_settings.source_T
+        source_density_amplitude = moments.ion.external_source_density_amplitude
+        source_momentum_amplitude = moments.ion.external_source_momentum_amplitude
+        source_pressure_amplitude = moments.ion.external_source_pressure_amplitude
         @loop_r_z ir iz begin
-            term = dt * source_amplitude[iz,ir] *
-                   (1.5/dens[iz,ir] - (0.25 * source_T + 0.5 * upar[iz,ir]^2) / ppar[iz,ir])
+            term = dt * (1.5 * source_density_amplitude[iz,ir] / dens[iz,ir] -
+                         (0.5 * source_pressure_amplitude[iz,ir] +
+                          source_momentum_amplitude[iz,ir]) / ppar[iz,ir])
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir] -= term * pdf_in[ivpa,ivperp,iz,ir]
             end
@@ -191,9 +193,9 @@ function source_terms_evolve_density_neutral!(pdf_out, pdf_in, dens, upar, ddens
     end
 
     if neutral_source_settings.active
-        source_amplitude = moments.neutral.external_source_amplitude
+        source_density_amplitude = moments.neutral.external_source_density_amplitude
         @loop_r_z ir iz begin
-            term = dt * source_amplitude[iz,ir] / dens[iz,ir]
+            term = dt * source_density_amplitude[iz,ir] / dens[iz,ir]
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 pdf_out[ivz,ivr,ivzeta,iz,ir] -= term * pdf_in[ivz,ivr,ivzeta,iz,ir]
             end
@@ -222,11 +224,13 @@ function source_terms_evolve_ppar_no_collisions_neutral!(pdf_out, pdf_in, dens, 
     end
 
     if neutral_source_settings.active
-        source_amplitude = moments.neutral.external_source_amplitude
-        source_T = neutral_source_settings.source_T
+        source_density_amplitude = moments.neutral.external_source_density_amplitude
+        source_momentum_amplitude = moments.neutral.external_source_momentum_amplitude
+        source_pressure_amplitude = moments.neutral.external_source_pressure_amplitude
         @loop_r_z ir iz begin
-            term = dt * source_amplitude[iz,ir] *
-                   (1.5/dens[iz,ir] - (0.25 * source_T + 0.5 * upar[iz,ir]^2) / ppar[iz,ir])
+            term = dt * (1.5 * source_density_amplitude[iz,ir] / dens[iz,ir] -
+                         (0.5 * source_pressure_amplitude[iz,ir] +
+                          source_momentum_amplitude[iz,ir]) / ppar[iz,ir])
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 pdf_out[ivz,ivr,ivzeta,iz,ir] -= term * pdf_in[ivz,ivr,ivzeta,iz,ir]
             end
