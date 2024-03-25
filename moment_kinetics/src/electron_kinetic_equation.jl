@@ -1880,7 +1880,7 @@ function calculate_pdf_dot_prefactor!(pdf_dot_prefactor, ppar, vth, dens, ddens_
 end
 
 # add contribution to the residual coming from the term proporational to the pdf
-function add_contribution_from_pdf_term!(residual, pdf, ppar, vth, dens, ddens_dz, dvth_dz, dqpar_dz, vpa, z, dt)
+function add_contribution_from_pdf_term!(pdf_out, pdf_in, ppar, vth, dens, ddens_dz, dvth_dz, dqpar_dz, vpa, z, dt)
     begin_r_z_vperp_vpa_region()
     @loop_r_z ir iz begin
         this_dqpar_dz = dqpar_dz[iz,ir]
@@ -1891,12 +1891,11 @@ function add_contribution_from_pdf_term!(residual, pdf, ppar, vth, dens, ddens_d
         this_dvth_dz = dvth_dz[iz,ir]
         this_vth = vth[iz,ir]
         @loop_vperp_vpa ivperp ivpa begin
-            residual[ivpa,ivperp,iz,ir] += dt * (-0.5 * this_dqpar_dz / this_ppar -
-                                                 vpa[ivpa] * this_vth *
-                                                 (this_ddens_dz / this_dens
-                                                  - this_dvth_dz / this_vth)) *
-                                           pdf[ivpa,ivperp,iz,ir]
-            #residual[ivpa, ivperp, :, :] -= (-0.5 * dqpar_dz[:, :] / ppar[:, :]) * pdf[ivpa, ivperp, :, :]
+            pdf_out[ivpa,ivperp,iz,ir] +=
+                dt * (-0.5 * this_dqpar_dz / this_ppar - vpa[ivpa] * this_vth *
+                      (this_ddens_dz / this_dens - this_dvth_dz / this_vth)) *
+                pdf_in[ivpa,ivperp,iz,ir]
+            #pdf_out[ivpa, ivperp, :, :] -= (-0.5 * dqpar_dz[:, :] / ppar[:, :]) * pdf_in[ivpa, ivperp, :, :]
         end
     end
     return nothing
