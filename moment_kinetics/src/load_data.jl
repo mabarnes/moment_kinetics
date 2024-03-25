@@ -3264,8 +3264,14 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         dqpar_dz = get_z_derivative(run_info, "parallel_heat_flux")
         if run_info.external_source_settings.ion.active
             external_source_amplitude = get_variable(run_info, "external_source_amplitude")
+            external_source_density_amplitude = get_variable(run_info, "external_source_density_amplitude")
+            external_source_momentum_amplitude = get_variable(run_info, "external_source_momentum_amplitude")
+            external_source_pressure_amplitude = get_variable(run_info, "external_source_pressure_amplitude")
         else
             external_source_amplitude = zeros(0,0,run_info.nt)
+            external_source_density_amplitude = zeros(0,0,run_info.nt)
+            external_source_momentum_amplitude = zeros(0,0,run_info.nt)
+            external_source_pressure_amplitude = zeros(0,0,run_info.nt)
         end
 
         nz, nr, nspecies, nt = size(vth)
@@ -3288,7 +3294,10 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                                    dvth_dz=dvth_dz[:,:,:,it],
                                    dqpar_dz=dqpar_dz[:,:,:,it],
                                    vth=vth[:,:,:,it],
-                                   external_source_amplitude=external_source_amplitude[:,:,it]),
+                                   external_source_amplitude=external_source_amplitude[:,:,it],
+                                   external_source_density_amplitude=external_source_density_amplitude[:,:,it],
+                                   external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,it],
+                                   external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,it]),
                              evolve_density=run_info.evolve_density,
                              evolve_upar=run_info.evolve_upar,
                              evolve_ppar=run_info.evolve_ppar)
@@ -3382,8 +3391,14 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         dqz_dz = get_z_derivative(run_info, "qz_neutral")
         if run_info.external_source_settings.neutral.active
             external_source_amplitude = get_variable(run_info, "external_source_neutral_amplitude")
+            external_source_density_amplitude = get_variable(run_info, "external_source_neutral_density_amplitude")
+            external_source_momentum_amplitude = get_variable(run_info, "external_source_neutral_momentum_amplitude")
+            external_source_pressure_amplitude = get_variable(run_info, "external_source_neutral_pressure_amplitude")
         else
             external_source_amplitude = zeros(0,0,run_info.nt)
+            external_source_density_amplitude = zeros(0,0,run_info.nt)
+            external_source_momentum_amplitude = zeros(0,0,run_info.nt)
+            external_source_pressure_amplitude = zeros(0,0,run_info.nt)
         end
 
         nz, nr, nspecies, nt = size(vth)
@@ -3412,7 +3427,10 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                                        dvth_dz=dvth_dz[:,:,:,it],
                                        dqz_dz=dqz_dz[:,:,:,it],
                                        vth=vth[:,:,:,it],
-                                       external_source_amplitude=external_source_amplitude[:,:,it]),
+                                       external_source_amplitude=external_source_amplitude[:,:,it],
+                                       external_source_density_amplitude=external_source_density_amplitude[:,:,it],
+                                       external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,it],
+                                       external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,it]),
                              evolve_density=run_info.evolve_density,
                              evolve_upar=run_info.evolve_upar,
                              evolve_ppar=run_info.evolve_ppar)
