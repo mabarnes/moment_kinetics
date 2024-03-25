@@ -2478,7 +2478,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
                                   fvec_in.ppar, fvec_in.density_neutral,
                                   fvec_in.uz_neutral, fvec_in.pz_neutral,
                                   moments.electron, collisions, dt, composition,
-                                  num_diss_params, z)
+                                  external_source_settings.electron, num_diss_params, z)
     end
     # reset "xx.updated" flags to false since ff has been updated
     # and the corresponding moments have not

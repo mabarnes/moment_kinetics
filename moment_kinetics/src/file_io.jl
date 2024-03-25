@@ -55,9 +55,9 @@ moments & fields only
 """
 struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
                        Tchodura_upper, Texti1, Texti2, Texti3, Texti4,
-                       Texti5, Textn1, Textn2, Textn3, Textn4, Textn5, Tconstri, Tconstrn,
-                       Tconstre, Tint, Tfailcause, Telectrontime, Telectronint,
-                       Telectronfailcause}
+                       Texti5, Textn1, Textn2, Textn3, Textn4, Textn5, Texte1, Texte2,
+                       Texte3, Texte4, Tconstri, Tconstrn, Tconstre, Tint, Tfailcause,
+                       Telectrontime, Telectronint, Telectronfailcause}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the time variable
@@ -115,6 +115,10 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
     external_source_neutral_momentum_amplitude::Textn3
     external_source_neutral_pressure_amplitude::Textn4
     external_source_neutral_controller_integral::Textn5
+    external_source_electron_amplitude::Texte1
+    external_source_electron_density_amplitude::Texte2
+    external_source_electron_momentum_amplitude::Texte3
+    external_source_electron_pressure_amplitude::Texte4
 
     # handles for constraint coefficients
     ion_constraints_A_coefficient::Tconstri
@@ -185,8 +189,8 @@ end
 structure containing the data/metadata needed for binary file i/o
 for electron initialization
 """
-struct io_initial_electron_info{Tfile, Ttime, Tfe, Tmom, Tconstr, Telectrontime,
-                                Telectronint, Telectronfailcause}
+struct io_initial_electron_info{Tfile, Ttime, Tfe, Tmom, Texte1, Texte2, Texte3, Texte4,
+                                Tconstr, Telectrontime, Telectronint, Telectronfailcause}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the pseudotime variable
@@ -203,6 +207,11 @@ struct io_initial_electron_info{Tfile, Ttime, Tfe, Tmom, Tconstr, Telectrontime,
     electron_parallel_heat_flux::Tmom
     # handle for the electron thermal speed variable
     electron_thermal_speed::Tmom
+    # handles for external source terms
+    external_source_electron_amplitude::Texte1
+    external_source_electron_density_amplitude::Texte2
+    external_source_electron_momentum_amplitude::Texte3
+    external_source_electron_pressure_amplitude::Texte4
     # handles for constraint coefficients
     electron_constraints_A_coefficient::Tconstr
     electron_constraints_B_coefficient::Tconstr
@@ -367,7 +376,12 @@ function setup_initial_electron_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, co
                                                  description="electron distribution function")
 
         io_electron_density, io_electron_upar, io_electron_ppar, io_electron_qpar,
-        io_electron_vth, io_electron_step_counter, io_electron_dt,
+        io_electron_vth, external_source_electron_amplitude,
+        external_source_electron_density_amplitude,
+        external_source_electron_momentum_amplitude,
+        external_source_electron_pressure_amplitude,
+        electron_constraints_A_coefficient, electron_constraints_B_coefficient,
+        electron_constraints_C_coefficient, io_electron_step_counter, io_electron_dt,
         io_electron_failure_counter, io_electron_failure_caused_by,
         io_electron_limit_caused_by, io_electron_dt_before_last_fail =
             define_dynamic_electron_moment_variables!(fid, r, z, parallel_io,
@@ -406,6 +420,10 @@ function reopen_initial_electron_io(file_info)
                                         getvar("electron_parallel_pressure"),
                                         getvar("electron_parallel_heat_flux"),
                                         getvar("electron_thermal_speed"),
+                                        getvar("external_source_electron_amplitude"),
+                                        getvar("external_source_electron_density_amplitude"),
+                                        getvar("external_source_electron_momentum_amplitude"),
+                                        getvar("external_source_electron_pressure_amplitude"),
                                         getvar("electron_constraints_A_coefficient"),
                                         getvar("electron_constraints_B_coefficient"),
                                         getvar("electron_constraints_C_coefficient"),
@@ -846,11 +864,14 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                                  evolve_upar, evolve_ppar)
 
         io_electron_density, io_electron_upar, io_electron_ppar, io_electron_qpar,
-        io_electron_vth, electron_constraints_A_coefficient,
-        electron_constraints_B_coefficient, electron_constraints_C_coefficient,
-        io_electron_step_counter, io_electron_dt, io_electron_failure_counter,
-        io_electron_failure_caused_by, io_electron_limit_caused_by,
-        io_electron_dt_before_last_fail =
+        io_electron_vth, external_source_electron_amplitude,
+        external_source_electron_density_amplitude,
+        external_source_electron_momentum_amplitude,
+        external_source_electron_pressure_amplitude,
+        electron_constraints_A_coefficient, electron_constraints_B_coefficient,
+        electron_constraints_C_coefficient, io_electron_step_counter, io_electron_dt,
+        io_electron_failure_counter, io_electron_failure_caused_by,
+        io_electron_limit_caused_by, io_electron_dt_before_last_fail =
             define_dynamic_electron_moment_variables!(fid, r, z, parallel_io,
                                                       external_source_settings,
                                                       evolve_density, evolve_upar,
@@ -925,6 +946,10 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                external_source_neutral_momentum_amplitude,
                                external_source_neutral_pressure_amplitude,
                                external_source_neutral_controller_integral,
+                               external_source_electron_amplitude,
+                               external_source_electron_density_amplitude,
+                               external_source_electron_momentum_amplitude,
+                               external_source_electron_pressure_amplitude,
                                ion_constraints_A_coefficient,
                                ion_constraints_B_coefficient,
                                ion_constraints_C_coefficient,
@@ -1177,6 +1202,23 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
                                       description="electron species thermal speed",
                                       units="c_ref")
 
+    external_source_electron_amplitude = create_dynamic_variable!(
+        dynamic, "external_source_electron_amplitude", mk_float, z, r;
+        parallel_io=parallel_io, description="Amplitude of the external source for electrons",
+        units="n_ref/c_ref^3*c_ref/L_ref")
+    external_source_electron_density_amplitude = create_dynamic_variable!(
+        dynamic, "external_source_electron_density_amplitude", mk_float, z, r;
+        parallel_io=parallel_io, description="Amplitude of the external density source for electrons",
+        units="n_ref*c_ref/L_ref")
+    external_source_electron_momentum_amplitude = create_dynamic_variable!(
+        dynamic, "external_source_electron_momentum_amplitude", mk_float, z, r;
+        parallel_io=parallel_io, description="Amplitude of the external momentum source for electrons",
+        units="m_ref*n_ref*c_ref*c_ref/L_ref")
+    external_source_electron_pressure_amplitude = create_dynamic_variable!(
+        dynamic, "external_source_electron_pressure_amplitude", mk_float, z, r;
+        parallel_io=parallel_io, description="Amplitude of the external pressure source for electrons",
+        units="m_ref*n_ref*c_ref^2*c_ref/L_ref")
+
     electron_constraints_A_coefficient =
         create_dynamic_variable!(dynamic, "electron_constraints_A_coefficient", mk_float, z, r;
                                parallel_io=parallel_io,
@@ -1232,7 +1274,11 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
     end
 
     return io_electron_density, io_electron_upar, io_electron_ppar, io_electron_qpar,
-           io_electron_vth, electron_constraints_A_coefficient, electron_constraints_B_coefficient,
+           io_electron_vth, external_source_electron_amplitude,
+           external_source_electron_density_amplitude,
+           external_source_electron_momentum_amplitude,
+           external_source_electron_pressure_amplitude,
+           electron_constraints_A_coefficient, electron_constraints_B_coefficient,
            electron_constraints_C_coefficient, io_electron_step_counter, io_electron_dt,
            io_electron_failure_counter, io_electron_failure_caused_by,
            io_electron_limit_caused_by, io_electron_dt_before_last_fail
@@ -1546,6 +1592,10 @@ function reopen_moments_io(file_info)
                                getvar("external_source_neutral_momentum_amplitude"),
                                getvar("external_source_neutral_pressure_amplitude"),
                                getvar("external_source_neutral_controller_integral"),
+                               getvar("external_source_electron_amplitude"),
+                               getvar("external_source_electron_density_amplitude"),
+                               getvar("external_source_electron_momentum_amplitude"),
+                               getvar("external_source_electron_pressure_amplitude"),
                                getvar("ion_constraints_A_coefficient"),
                                getvar("ion_constraints_B_coefficient"),
                                getvar("ion_constraints_C_coefficient"),
@@ -1665,6 +1715,10 @@ function reopen_dfns_io(file_info)
                                      getvar("external_source_neutral_momentum_amplitude"),
                                      getvar("external_source_neutral_pressure_amplitude"),
                                      getvar("external_source_neutral_controller_integral"),
+                                     getvar("external_source_electron_amplitude"),
+                                     getvar("external_source_electron_density_amplitude"),
+                                     getvar("external_source_electron_momentum_amplitude"),
+                                     getvar("external_source_electron_pressure_amplitude"),
                                      getvar("ion_constraints_A_coefficient"),
                                      getvar("ion_constraints_B_coefficient"),
                                      getvar("ion_constraints_C_coefficient"),
@@ -1901,6 +1955,18 @@ function write_electron_moments_data_to_binary(moments, t_params,
         append_to_dynamic_var(io_moments.electron_parallel_heat_flux,
                               moments.electron.qpar, t_idx, parallel_io, z, r)
         append_to_dynamic_var(io_moments.electron_thermal_speed, moments.electron.vth,
+                              t_idx, parallel_io, z, r)
+        append_to_dynamic_var(io_moments.external_source_electron_amplitude,
+                              moments.electron.external_source_amplitude, t_idx,
+                              parallel_io, z, r)
+        append_to_dynamic_var(io_moments.external_source_electron_density_amplitude,
+                              moments.electron.external_source_density_amplitude,
+                              t_idx, parallel_io, z, r)
+        append_to_dynamic_var(io_moments.external_source_electron_momentum_amplitude,
+                              moments.electron.external_source_momentum_amplitude,
+                              t_idx, parallel_io, z, r)
+        append_to_dynamic_var(io_moments.external_source_electron_pressure_amplitude,
+                              moments.electron.external_source_pressure_amplitude,
                               t_idx, parallel_io, z, r)
         append_to_dynamic_var(io_moments.electron_constraints_A_coefficient,
                               moments.electron.constraints_A_coefficient, t_idx,

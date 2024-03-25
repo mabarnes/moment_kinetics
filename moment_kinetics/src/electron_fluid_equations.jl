@@ -121,7 +121,7 @@ an isotropic distribution in f_e so that p_e = n_e T_e = ppar_e
 function electron_energy_equation!(ppar_out, ppar_in, electron_density, electron_upar,
                                    ion_upar, ion_ppar, density_neutral, uz_neutral,
                                    pz_neutral, moments, collisions, dt, composition,
-                                   num_diss_params, z)
+                                   electron_source_settings, num_diss_params, z)
     begin_r_z_region()
     # define some abbreviated variables for convenient use in rest of function
     me_over_mi = composition.me_over_mi
@@ -182,16 +182,14 @@ function electron_energy_equation!(ppar_out, ppar_in, electron_density, electron
             end
         end
     end
-    # calculate the external electron heat source, if any
-    calculate_electron_heat_source!(moments.heat_source, ppar_in, moments.dupar_dz,
-                                    density_neutral, collisions.ionization, collisions.ionization_energy,
-                                    electron_density, ion_ppar, collisions.nu_ei, composition.me_over_mi,
-                                    composition.T_wall, z)
-    # add the contribution from the electron heat source                                
-    begin_r_z_region()
-    @loop_r_z ir iz begin
-        ppar_out[iz,ir] += dt * moments.heat_source[iz,ir]
+
+    if electron_source_settings.active
+        source_amplitude = moments.external_source_pressure_amplitude
+        @loop_r_z ir iz begin
+            ppar_out[iz,ir] += dt * source_amplitude[iz,ir]
+        end
     end
+
     return nothing
 end
 

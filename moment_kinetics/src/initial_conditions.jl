@@ -511,8 +511,8 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
                                         moments.electron.dvth_dz, r, z, vperp, vpa,
                                         z_spectral, vperp_spectral, vpa_spectral,
                                         z_advect, vpa_advect, scratch_dummy, t_params,
-                                        collisions, composition, num_diss_params,
-                                        max_electron_pdf_iterations;
+                                        collisions, composition, external_source_settings,
+                                        num_diss_params, max_electron_pdf_iterations;
                                         io_initial_electron=io_initial_electron,
                                         initial_time=code_time, evolve_ppar=true)
 

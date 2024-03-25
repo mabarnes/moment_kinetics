@@ -171,8 +171,16 @@ struct moments_electron_substruct
     vth::MPISharedArray{mk_float,2}
     # this is the parallel friction force between ions and electrons
     parallel_friction::MPISharedArray{mk_float,2}
-    # this is the electron heat source
-    heat_source::MPISharedArray{mk_float,2}
+    # Spatially varying amplitude of the external source term
+    external_source_amplitude::MPISharedArray{mk_float,2}
+    # Spatially varying amplitude of the density moment of the external source term
+    external_source_density_amplitude::MPISharedArray{mk_float,2}
+    # Spatially varying amplitude of the parallel momentum moment of the external source
+    # term
+    external_source_momentum_amplitude::MPISharedArray{mk_float,2}
+    # Spatially varying amplitude of the parallel pressure moment of the external source
+    # term
+    external_source_pressure_amplitude::MPISharedArray{mk_float,2}
     # if evolve_ppar = true, then the velocity variable is (vpa - upa)/vth, which introduces
     # a factor of vth for each power of wpa in velocity space integrals.
     # v_norm_fac accounts for this: it is vth if using the above definition for the parallel velocity,

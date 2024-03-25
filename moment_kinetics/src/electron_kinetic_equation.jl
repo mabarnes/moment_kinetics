@@ -20,6 +20,7 @@ using ..electron_fluid_equations: calculate_electron_qpar_from_pdf!
 using ..electron_fluid_equations: electron_energy_equation!
 using ..electron_z_advection: electron_z_advection!, update_electron_speed_z!
 using ..electron_vpa_advection: electron_vpa_advection!, update_electron_speed_vpa!
+using ..external_sources: external_electron_source!
 using ..file_io: write_initial_electron_state, finish_initial_electron_io
 using ..krook_collisions: electron_krook_collisions!
 using ..moment_constraints: hard_force_moment_constraints!
@@ -58,8 +59,9 @@ OUTPUT:
 function update_electron_pdf!(scratch, pdf, moments, dens, vthe, ppar, qpar, qpar_updated,
         phi, ddens_dz, dppar_dz, dqpar_dz, dvth_dz, r, z, vperp, vpa, z_spectral,
         vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy, t_params,
-        collisions, composition, num_diss_params, max_electron_pdf_iterations;
-        io_initial_electron=nothing, initial_time=0.0, evolve_ppar=false)
+        collisions, composition, external_source_settings, num_diss_params,
+        max_electron_pdf_iterations; io_initial_electron=nothing, initial_time=0.0,
+        evolve_ppar=false)
 
     # set the method to use to solve the electron kinetic equation
     solution_method = "artificial_time_derivative"
@@ -69,9 +71,10 @@ function update_electron_pdf!(scratch, pdf, moments, dens, vthe, ppar, qpar, qpa
     if solution_method == "artificial_time_derivative"
         return update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi,
             collisions, composition, r, z, vperp, vpa, z_spectral, vperp_spectral,
-            vpa_spectral, z_advect, vpa_advect, scratch_dummy, t_params, num_diss_params,
-            max_electron_pdf_iterations; io_initial_electron=io_initial_electron,
-            initial_time=initial_time, evolve_ppar=evolve_ppar)
+            vpa_spectral, z_advect, vpa_advect, scratch_dummy, t_params,
+            external_source_settings, num_diss_params, max_electron_pdf_iterations;
+            io_initial_electron=io_initial_electron, initial_time=initial_time,
+            evolve_ppar=evolve_ppar)
     elseif solution_method == "shooting_method"
         return update_electron_pdf_with_shooting_method!(pdf, dens, vthe, ppar, qpar,
             qpar_updated, phi, ddens_dz, dppar_dz, dqpar_dz, dvth_dz, z, vpa,
@@ -115,8 +118,9 @@ OUTPUT:
 """
 function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, collisions,
         composition, r, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
-        vpa_advect, scratch_dummy, t_params, num_diss_params, max_electron_pdf_iterations;
-        io_initial_electron=nothing, initial_time=0.0, evolve_ppar=false)
+        vpa_advect, scratch_dummy, t_params, external_source_settings, num_diss_params,
+        max_electron_pdf_iterations; io_initial_electron=nothing, initial_time=0.0,
+        evolve_ppar=false)
 
     begin_r_z_region()
 
@@ -250,8 +254,8 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                                                     moments, z, vperp, vpa, z_spectral,
                                                     vpa_spectral, z_advect, vpa_advect,
                                                     scratch_dummy, collisions,
-                                                    composition, num_diss_params,
-                                                    t_params.dt[];
+                                                    composition, external_source_settings,
+                                                    num_diss_params, t_params.dt[];
                                                     evolve_ppar=evolve_ppar)
             speedup_hack!(scratch[istage+1], scratch[istage], z_speedup_fac, z, vpa;
                           evolve_ppar=evolve_ppar)
@@ -356,7 +360,8 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
 
             if t_params.adaptive && istage == t_params.n_rk_stages
                 electron_adaptive_timestep_update!(scratch, time, t_params, moments,
-                                                   z_advect, vpa_advect, r, z, vperp, vpa;
+                                                   z_advect, vpa_advect, r, z, vperp, vpa,
+                                                   external_source_settings;
                                                    evolve_ppar=evolve_ppar)
                 # Re-do this in case electron_adaptive_timestep_update!() re-arranged the
                 # `scratch` vector
@@ -1143,8 +1148,8 @@ Check the error estimate for the embedded RK method and adjust the timestep if
 appropriate.
 """
 function electron_adaptive_timestep_update!(scratch, t, t_params, moments, z_advect,
-                                            vpa_advect, r, z, vperp, vpa;
-                                            evolve_ppar=false)
+                                            vpa_advect, r, z, vperp, vpa,
+                                            external_source_settings; evolve_ppar=false)
     #error_norm_method = "Linf"
     error_norm_method = "L2"
 
@@ -1181,9 +1186,9 @@ function electron_adaptive_timestep_update!(scratch, t, t_params, moments, z_adv
     end
 
     # vpa-advection
-    update_electron_speed_vpa!(vpa_advect[1], moments.electron.ppar, moments.electron.vth,
-                               moments.electron.dppar_dz, moments.electron.dqpar_dz,
-                               moments.electron.dvth_dz, vpa.grid)
+    update_electron_speed_vpa!(vpa_advect[1], moments.electron.dens,
+                               moments.electron.upar, moments.electron.ppar,
+                               moments, vpa.grid, external_source_settings.electron)
     vpa_CFL = get_minimum_CFL_vpa(vpa_advect[1].speed, vpa)
     if block_rank[] == 0
         push!(CFL_limits, t_params.CFL_prefactor * vpa_CFL)
@@ -1262,7 +1267,7 @@ function update_electron_pdf_with_shooting_method!(pdf, dens, vthe, ppar, qpar, 
     # get critical velocities beyond which electrons are lost to the wall
     crit_speed_zmin, crit_speed_zmax = get_electron_critical_velocities(phi, vthe, composition.me_over_mi, z)
     # add the contribution to rhs from the term proportional to the pdf (rather than its derivatives)
-    add_contribution_from_pdf_term!(rhs, pdf, ppar, vthe, dens, ddens_dz, dvth_dz, dqpar_dz, vpa.grid, z)
+    add_contribution_from_pdf_term!(rhs, pdf, ppar, vthe, dens, ddens_dz, upar, dvth_dz, dqpar_dz, vpa.grid, z, external_source_settings.electron)
     # add the contribution to rhs from the wpa advection term
     add_contribution_from_wpa_advection!(rhs, pdf, vthe, ppar, dppar_dz, dqpar_dz, dvth_dz, vpa, vpa_spectral)
     # shoot in z from incoming boundary (using sign of zdot to determine direction)
@@ -1381,7 +1386,7 @@ function update_electron_pdf_with_picard_iteration!(pdf, dens, vthe, ppar, ddens
         # initialise the RHS to zero
         rhs .= 0.0
         # add the contribution to rhs from the term proportional to the pdf (rather than its derivatives)
-        add_contribution_from_pdf_term!(rhs, pdf, ppar, vthe, dens, ddens_dz, dvth_dz, dqpar_dz, vpa.grid, z)
+        add_contribution_from_pdf_term!(rhs, pdf, ppar, vthe, dens, ddens_dz, upar, dvth_dz, dqpar_dz, vpa.grid, z, external_source_settings.electron)
         # add the contribution to rhs from the wpa advection term
         #add_contribution_from_wpa_advection!(rhs, pdf, vthe, ppar, dppar_dz, dqpar_dz, dvth_dz, vpa, vpa_spectral)
         # loop over wpa locations, solving the linear system at each location;
@@ -1438,8 +1443,8 @@ When `evolve_ppar=true` is passed, also updates the electron parallel pressure.
 function electron_kinetic_equation_euler_update!(fvec_out, fvec_in, moments, z, vperp,
                                                  vpa, z_spectral, vpa_spectral, z_advect,
                                                  vpa_advect, scratch_dummy, collisions,
-                                                 composition, num_diss_params, dt;
-                                                 evolve_ppar=false)
+                                                 composition, external_source_settings,
+                                                 num_diss_params, dt; evolve_ppar=false)
     if evolve_ppar
         ppar = fvec_in.electron_ppar
     else
@@ -1451,16 +1456,15 @@ function electron_kinetic_equation_euler_update!(fvec_out, fvec_in, moments, z, 
                           vpa.grid, z_spectral, scratch_dummy, dt)
 
     # add the contribution from the wpa advection term
-    electron_vpa_advection!(fvec_out.pdf_electron, fvec_in.pdf_electron, ppar,
-                            moments.electron.vth, moments.electron.dppar_dz,
-                            moments.electron.dqpar_dz, moments.electron.dvth_dz,
-                            vpa_advect, vpa, vpa_spectral, scratch_dummy, dt)
+    electron_vpa_advection!(fvec_out.pdf_electron, fvec_in.pdf_electron,
+                            moments.electron.dens, moments.electron.upar, ppar,
+                            moments, vpa_advect, vpa, vpa_spectral, scratch_dummy, dt,
+                            external_source_settings.electron)
 
     # add in the contribution to the residual from the term proportional to the pdf
     add_contribution_from_pdf_term!(fvec_out.pdf_electron, fvec_in.pdf_electron, ppar,
-                                    moments.electron.vth, moments.electron.dens,
-                                    moments.electron.ddens_dz, moments.electron.dvth_dz,
-                                    moments.electron.dqpar_dz, vpa.grid, z, dt)
+                                    moments.electron.dens, moments.electron.upar, moments,
+                                    vpa.grid, z, dt, external_source_settings.electron)
 
     # add in numerical dissipation terms
     add_dissipation_term!(fvec_out.pdf_electron, fvec_in.pdf_electron, scratch_dummy,
@@ -1476,13 +1480,20 @@ function electron_kinetic_equation_euler_update!(fvec_out, fvec_in, moments, z, 
                                    vperp, vpa, dt)
     end
 
+    if external_source_settings.electron.active
+        external_electron_source!(fvec_out.pdf_electron, fvec_in.pdf_electron,
+                                  moments.electron.dens, moments.electron.upar, moments,
+                                  external_source_settings.electron, vperp, vpa, dt)
+    end
+
     if evolve_ppar
         electron_energy_equation!(fvec_out.electron_ppar, fvec_in.electron_ppar,
                                   moments.electron.dens, moments.electron.upar,
                                   moments.ion.upar, moments.ion.ppar,
                                   moments.neutral.dens, moments.neutral.uz,
                                   moments.neutral.pz, moments.electron, collisions, dt,
-                                  composition, num_diss_params, z)
+                                  composition, external_source_settings.electron,
+                                  num_diss_params, z)
     end
 
     return nothing
@@ -1498,7 +1509,8 @@ OUTPUT:
 function electron_kinetic_equation_residual!(residual, max_term, single_term, pdf, dens, upar, vth, ppar, upar_ion,
                                              ddens_dz, dppar_dz, dqpar_dz, dvth_dz, 
                                              z, vperp, vpa, z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-                                             collisions, num_diss_params, dt_electron)
+                                             collisions, external_source_settings,
+                                             num_diss_params, dt_electron)
 
     # initialise the residual to zero                                             
     begin_r_vperp_vpa_region()
@@ -1515,7 +1527,8 @@ function electron_kinetic_equation_residual!(residual, max_term, single_term, pd
     #calculate_contribution_from_z_advection!(residual, pdf, vth, z, vpa.grid, z_spectral, scratch_dummy)
     # add in the contribution to the residual from the wpa advection term
     electron_vpa_advection!(residual, pdf, ppar, vth, dppar_dz, dqpar_dz, dvth_dz, 
-                            vpa_advect, vpa, vpa_spectral, scratch_dummy, -1.0)
+                            vpa_advect, vpa, vpa_spectral, scratch_dummy, -1.0,
+                            external_source_settings.electron)
     #dt_max_vadv = simple_vpa_advection!(residual, pdf, ppar, vth, dppar_dz, dqpar_dz, dvth_dz, vpa, dt_electron)
     #@. single_term = residual - single_term
     #max_term .= max.(max_term, abs.(single_term))
@@ -1523,8 +1536,8 @@ function electron_kinetic_equation_residual!(residual, max_term, single_term, pd
     #println("v_adv residual = ", maximum(abs.(single_term)))
     #add_contribution_from_wpa_advection!(residual, pdf, vth, ppar, dppar_dz, dqpar_dz, dvth_dz, vpa, vpa_spectral)
     # add in the contribution to the residual from the term proportional to the pdf
-    add_contribution_from_pdf_term!(residual, pdf, ppar, vth, dens, ddens_dz, dvth_dz,
-                                    dqpar_dz, vpa.grid, z, -1.0)
+    add_contribution_from_pdf_term!(residual, pdf, ppar, dens, moments, vpa.grid, z, -1.0,
+                                    external_source_settings.electron)
     #@. single_term = residual - single_term
     #max_term .= max.(max_term, abs.(single_term))
     #@. single_term = residual
@@ -1654,7 +1667,7 @@ function add_source_term!(source_term, vpa, z, dvth_dz)
     return nothing
 end
 
-function add_dissipation_term!(pdf_out, pdf, scratch_dummy, z_spectral, z, vpa,
+function add_dissipation_term!(pdf_out, pdf_in, scratch_dummy, z_spectral, z, vpa,
                                vpa_spectral, num_diss_params, dt)
     dummy_zr1 = @view scratch_dummy.dummy_zrs[:,:,1]
     dummy_zr2 = @view scratch_dummy.buffer_vpavperpzr_1[1,1,:,:]
@@ -1664,7 +1677,7 @@ function add_dissipation_term!(pdf_out, pdf, scratch_dummy, z_spectral, z, vpa,
     buffer_r_4 = @view scratch_dummy.buffer_rs_4[:,1]
     # add in numerical dissipation terms
     #@loop_vperp_vpa ivperp ivpa begin
-    #    @views derivative_z!(dummy_zr1, pdf[ivpa,ivperp,:,:], buffer_r_1, buffer_r_2, buffer_r_3,
+    #    @views derivative_z!(dummy_zr1, pdf_in[ivpa,ivperp,:,:], buffer_r_1, buffer_r_2, buffer_r_3,
     #                         buffer_r_4, z_spectral, z)
     #    @views derivative_z!(dummy_zr2, dummy_zr1, buffer_r_1, buffer_r_2, buffer_r_3,
     #                         buffer_r_4, z_spectral, z)
@@ -1672,10 +1685,10 @@ function add_dissipation_term!(pdf_out, pdf, scratch_dummy, z_spectral, z, vpa,
     #end
     begin_r_z_vperp_region()
     @loop_r_z_vperp ir iz ivperp begin
-        #@views derivative!(vpa.scratch, pdf[:,ivperp,iz,ir], vpa, false)
+        #@views derivative!(vpa.scratch, pdf_in[:,ivperp,iz,ir], vpa, false)
         #@views derivative!(vpa.scratch2, vpa.scratch, vpa, false)
         #@. residual[:,ivperp,iz,ir] -= num_diss_params.vpa_dissipation_coefficient * vpa.scratch2
-        @views second_derivative!(vpa.scratch, pdf[:,ivperp,iz,ir], vpa, vpa_spectral)
+        @views second_derivative!(vpa.scratch, pdf_in[:,ivperp,iz,ir], vpa, vpa_spectral)
         @. pdf_out[:,ivperp,iz,ir] += dt * num_diss_params.vpa_dissipation_coefficient * vpa.scratch
     end
     #stop()
@@ -1880,7 +1893,12 @@ function calculate_pdf_dot_prefactor!(pdf_dot_prefactor, ppar, vth, dens, ddens_
 end
 
 # add contribution to the residual coming from the term proporational to the pdf
-function add_contribution_from_pdf_term!(pdf_out, pdf_in, ppar, vth, dens, ddens_dz, dvth_dz, dqpar_dz, vpa, z, dt)
+function add_contribution_from_pdf_term!(pdf_out, pdf_in, ppar, dens, upar, moments, vpa,
+                                         z, dt, electron_source_settings)
+    vth = moments.electron.vth
+    ddens_dz = moments.electron.ddens_dz
+    dvth_dz = moments.electron.dvth_dz
+    dqpar_dz = moments.electron.dqpar_dz
     begin_r_z_vperp_vpa_region()
     @loop_r_z ir iz begin
         this_dqpar_dz = dqpar_dz[iz,ir]
@@ -1898,6 +1916,21 @@ function add_contribution_from_pdf_term!(pdf_out, pdf_in, ppar, vth, dens, ddens
             #pdf_out[ivpa, ivperp, :, :] -= (-0.5 * dqpar_dz[:, :] / ppar[:, :]) * pdf_in[ivpa, ivperp, :, :]
         end
     end
+
+    if electron_source_settings.active
+        source_density_amplitude = moments.electron.external_source_density_amplitude
+        source_momentum_amplitude = moments.electron.external_source_momentum_amplitude
+        source_pressure_amplitude = moments.electron.external_source_pressure_amplitude
+        @loop_r_z ir iz begin
+            term = dt * (1.5 * source_density_amplitude[iz,ir] / dens[iz,ir] -
+                         (0.5 * source_pressure_amplitude[iz,ir] +
+                          source_momentum_amplitude[iz,ir]) / ppar[iz,ir])
+            @loop_vperp_vpa ivperp ivpa begin
+                pdf_out[ivpa,ivperp,iz,ir] -= term * pdf_in[ivpa,ivperp,iz,ir]
+            end
+        end
+    end
+
     return nothing
 end
 

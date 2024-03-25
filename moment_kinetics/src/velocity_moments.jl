@@ -223,8 +223,11 @@ function create_moments_electron(nz, nr, electron_model, numerical_dissipation)
     parallel_heat_flux_updated = Ref(false)
     # allocate array used for the election-ion parallel friction force
     parallel_friction_force = allocate_shared_float(nz, nr)
-    # allocate array used for electron heat source
-    heat_source = allocate_shared_float(nz, nr)
+    # allocate arrays used for external sources
+    external_source_amplitude = allocate_shared_float(nz, nr)
+    external_source_density_amplitude = allocate_shared_float(nz, nr)
+    external_source_momentum_amplitude = allocate_shared_float(nz, nr)
+    external_source_pressure_amplitude = allocate_shared_float(nz, nr)
     # allocate array used for the thermal speed
     thermal_speed = allocate_shared_float(nz, nr)
     # if evolving the electron pdf, it will be a function of the vth-normalised peculiar velocity
@@ -264,10 +267,11 @@ function create_moments_electron(nz, nr, electron_model, numerical_dissipation)
         parallel_flow_updated, parallel_pressure, parallel_pressure_updated,
         temperature, temperature_updated, 
         parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, 
-        parallel_friction_force, heat_source, v_norm_fac,
-        ddens_dz, dupar_dz, dppar_dz, dppar_dz_upwind, d2ppar_dz2, dqpar_dz, 
-        dT_dz, dT_dz_upwind, dvth_dz, constraints_A_coefficient,
-        constraints_B_coefficient, constraints_C_coefficient)
+        parallel_friction_force, external_source_amplitude,
+        external_source_density_amplitude, external_source_momentum_amplitude,
+        external_source_pressure_amplitude, v_norm_fac, ddens_dz, dupar_dz, dppar_dz,
+        dppar_dz_upwind, d2ppar_dz2, dqpar_dz, dT_dz, dT_dz_upwind, dvth_dz,
+        constraints_A_coefficient, constraints_B_coefficient, constraints_C_coefficient)
 end
 
 # neutral particles have natural mean velocities 
