@@ -7127,7 +7127,7 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
             end
             data = get_variable(run_info, "CFL_ion_z")
             datamin = minimum(minimum(d) for d ∈ data)
-            animate_vs_vpa_z(run_info, "CFL_ion_z"; data=data,
+            animate_vs_vpa_z(run_info, "CFL_ion_z"; data=data, it=it,
                              outfile=plot_prefix * "CFL_ion_z_vs_vpa_z.gif",
                              colorscale=log10,
                              transform=x->positive_or_nan(x; epsilon=1.e-30),
@@ -7138,7 +7138,7 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                                             :rightspinevisible=>false))
             data = get_variable(run_info, "CFL_ion_vpa")
             datamin = minimum(minimum(d) for d ∈ data)
-            animate_vs_vpa_z(run_info, "CFL_ion_vpa"; data=data,
+            animate_vs_vpa_z(run_info, "CFL_ion_vpa"; data=data, it=it,
                              outfile=plot_prefix * "CFL_ion_vpa_vs_vpa_z.gif",
                              colorscale=log10,
                              transform=x->positive_or_nan(x; epsilon=1.e-30),
@@ -7150,7 +7150,7 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
             if any(ri.n_neutral_species > 0 for ri ∈ run_info)
                 data = get_variable(run_info, "CFL_neutral_z")
                 datamin = minimum(minimum(d) for d ∈ data)
-                animate_vs_vz_z(run_info, "CFL_neutral_z"; data=data,
+                animate_vs_vz_z(run_info, "CFL_neutral_z"; data=data, it=it,
                                 outfile=plot_prefix * "CFL_neutral_z_vs_vz_z.gif",
                                 colorscale=log10,
                                 transform=x->positive_or_nan(x; epsilon=1.e-30),
@@ -7161,7 +7161,7 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                                                :rightspinevisible=>false))
                 data = get_variable(run_info, "CFL_neutral_vz")
                 datamin = minimum(minimum(d) for d ∈ data)
-                animate_vs_vz_z(run_info, "CFL_neutral_vz"; data=data,
+                animate_vs_vz_z(run_info, "CFL_neutral_vz"; data=data, it=it,
                                 outfile=plot_prefix * "CFL_neutral_vz_vs_vz_z.gif",
                                 colorscale=log10,
                                 transform=x->positive_or_nan(x; epsilon=1.e-30),
