@@ -721,6 +721,10 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vperp
         #phi[1,ir] = me_over_mi * vthe[1,ir]^2 * vpa.grid[ivpa_max]^2
         phi[1,ir] = me_over_mi * vmax^2
         iv0 = findfirst(x -> x>0.0, vpa_unnorm)
+        if iv0 === nothing
+            error("All unnormalised vpa values at lower-z sheath entrance are negative. "
+                  * "Cannot apply electron boundary condition.")
+        end
         pdf[iv0:end,1,1,ir] .= reversed_pdf[iv0:end]
         #println("check reversed change ", reversed_pdf[iv0:end])
         #println("reversed_pdf ", reversed_pdf)
@@ -972,6 +976,10 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, vperp
         #phi[end,ir] = me_over_mi * vthe[end,ir]^2 * vpa.grid[ivpa_min]^2
         phi[end,ir] = me_over_mi * vmin^2
         iv0 = findlast(x -> x<0.0, vpa_unnorm)
+        if iv0 === nothing
+            error("All unnormalised vpa values at upper-z sheath entrance are positive. "
+                  * "Cannot apply electron boundary condition.")
+        end
         pdf[1:iv0,1,end,ir] .= reversed_pdf[1:iv0]
         #println("after pdf ", pdf[:,1,end,ir])
         # obtain the normalisation constants needed to ensure the zeroth, first and second moments
