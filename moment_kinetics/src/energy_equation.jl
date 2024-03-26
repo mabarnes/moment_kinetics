@@ -30,7 +30,7 @@ function energy_equation!(ppar, fvec, moments, collisions, dt, spectral, composi
         end
     end
 
-    diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
+    diffusion_coefficient = num_diss_params.ion.moment_dissipation_coefficient
     if diffusion_coefficient > 0.0
         @loop_s_r_z is ir iz begin
             ppar[iz,ir,is] += dt*diffusion_coefficient*moments.ion.d2ppar_dz2[iz,ir,is]
@@ -82,7 +82,7 @@ function neutral_energy_equation!(pz, fvec, moments, collisions, dt, spectral,
         end
     end
 
-    diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
+    diffusion_coefficient = num_diss_params.neutral.moment_dissipation_coefficient
     if diffusion_coefficient > 0.0
         @loop_sn_r_z isn ir iz begin
             pz[iz,ir,isn] += dt*diffusion_coefficient*moments.neutral.d2pz_dz2[iz,ir,isn]

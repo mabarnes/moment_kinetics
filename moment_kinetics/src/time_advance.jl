@@ -431,8 +431,8 @@ function setup_time_advance!(pdf, fields, scratch, vz, vr, vzeta, vpa, vperp, z,
     if !restarting
         begin_serial_region()
         # ensure initial pdf has no negative values
-        force_minimum_pdf_value!(pdf.ion.norm, num_diss_params)
-        force_minimum_pdf_value_neutral!(pdf.neutral.norm, num_diss_params)
+        force_minimum_pdf_value!(pdf.ion.norm, num_diss_params.ion.force_minimum_pdf_value)
+        force_minimum_pdf_value_neutral!(pdf.neutral.norm, num_diss_params.neutral.force_minimum_pdf_value)
         # enforce boundary conditions and moment constraints to ensure a consistent initial
         # condition
         enforce_boundary_conditions!(
@@ -1360,7 +1360,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     # Ensure there are no negative values in the pdf before applying boundary
     # conditions, so that negative deviations do not mess up the integral-constraint
     # corrections in the sheath boundary conditions.
-    force_minimum_pdf_value!(new_scratch.pdf, num_diss_params)
+    force_minimum_pdf_value!(new_scratch.pdf, num_diss_params.ion.force_minimum_pdf_value)
 
     # Enforce boundary conditions in z and vpa on the distribution function.
     # Must be done after Runge Kutta update so that the boundary condition applied to
@@ -1465,7 +1465,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         # Ensure there are no negative values in the pdf before applying boundary
         # conditions, so that negative deviations do not mess up the integral-constraint
         # corrections in the sheath boundary conditions.
-        force_minimum_pdf_value_neutral!(new_scratch.pdf_neutral, num_diss_params)
+        force_minimum_pdf_value_neutral!(new_scratch.pdf_neutral, num_diss_params.neutral.force_minimum_pdf_value)
 
         # Enforce boundary conditions in z and vpa on the distribution function.
         # Must be done after Runge Kutta update so that the boundary condition applied to
