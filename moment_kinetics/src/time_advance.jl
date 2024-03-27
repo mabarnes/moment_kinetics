@@ -1936,8 +1936,9 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         CFL_limits = MPI.Allreduce(CFL_limits, min, comm_inter_block[])
         CFL_limit_caused_by = argmin(CFL_limits)
         CFL_limit = CFL_limits[CFL_limit_caused_by]
-        # Reserve first two entries of t_params.limit_caused_by for accuracy limit and
-        # max_increase_factor limit.
+        # Reserve first five entries of t_params.limit_caused_by for accuracy,
+        # max_increase_factor, max_increase_factor_near_fail, minimum_dt and maximum_dt
+        # limits.
         this_limit_caused_by = CFL_limit_caused_by + 5
     end
 
