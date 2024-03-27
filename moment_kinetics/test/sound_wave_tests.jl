@@ -53,12 +53,10 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "z_IC_temperature_phase2" => 0.0,
                                     "charge_exchange_frequency" => 2*π*0.1,
                                     "ionization_frequency" => 0.0,
-                                    "nstep" => 1500,
-                                    "dt" => 0.002,
-                                    "nwrite" => 20,
-                                    "use_semi_lagrange" => false,
-                                    "n_rk_stages" => 4,
-                                    "split_operators" => false,
+                                    "timestepping" => Dict{String,Any}("nstep" => 1500,
+                                                                       "dt" => 0.002,
+                                                                       "nwrite" => 20,
+                                                                       "split_operators" => false),
                                     "r_ngrid" => 1,
                                     "r_nelement" => 1,
                                     "r_bc" => "periodic",
@@ -140,8 +138,10 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
 
     # Convert keyword arguments to a unique name
     name = test_input["run_name"]
+    shortname = name
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
+        shortname = string(shortname, "_", (string(string(k)[1], v) for (k, v) in args)...)
 
         # Remove trailing "_"
         name = chop(name)
@@ -151,12 +151,17 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
     println("    - testing ", name)
 
     # Convert dict from symbol keys to String keys
-    modified_inputs = Dict(String(k) => v for (k, v) in args)
+    modified_inputs = Dict(String(k) => v for (k, v) in args
+                           if String(k) ∉ keys(test_input["timestepping"]))
+    modified_timestepping_inputs = Dict(String(k) => v for (k, v) in args
+                                        if String(k) ∈ keys(test_input["timestepping"]))
 
     # Update default inputs with values to be changed
     input = merge(test_input, modified_inputs)
+    input["timestepping"] = merge(test_input["timestepping"],
+                                  modified_timestepping_inputs)
 
-    input["run_name"] = name
+    input["run_name"] = shortname
 
     # Suppress console output while running
     phi_fit = undef
@@ -172,7 +177,7 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
             # Load and analyse output
             #########################
 
-            path = joinpath(realpath(input["base_directory"]), name, name)
+            path = joinpath(realpath(input["base_directory"]), shortname, shortname)
 
             # open the netcdf file and give it the handle 'fid'
             fid = open_readonly_output_file(path,"moments")

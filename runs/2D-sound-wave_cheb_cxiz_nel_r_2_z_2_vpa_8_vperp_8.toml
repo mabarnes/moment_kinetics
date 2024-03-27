@@ -29,12 +29,6 @@ z_IC_temperature_amplitude2 = 0.0
 z_IC_temperature_phase2 = 0.0
 charge_exchange_frequency = 1.0
 ionization_frequency = 1.0
-nstep = 160
-dt = 0.002
-nwrite = 40
-use_semi_lagrange = false
-n_rk_stages = 4
-split_operators = false
 z_ngrid = 5
 z_nelement = 2
 z_bc = "periodic"
@@ -72,6 +66,13 @@ vzeta_nelement = 8
 vzeta_L = 12.0
 vzeta_bc = "periodic"
 vzeta_discretization = "chebyshev_pseudospectral"
+
+[timestepping]
+nstep = 160
+dt = 0.002
+nwrite = 40
+n_rk_stages = 4
+split_operators = false
 
 [manufactured_solns]
 use_for_advance = true

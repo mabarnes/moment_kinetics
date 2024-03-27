@@ -31,13 +31,6 @@ z_IC_temperature_amplitude2 = 0.0
 z_IC_temperature_phase2 = 0.0
 charge_exchange_frequency = 0.0
 ionization_frequency = 0.0
-nstep = 2000
-dt = 0.0005
-nwrite = 200
-nwrite_dfns = 200
-use_semi_lagrange = false
-n_rk_stages = 4
-split_operators = false
 z_ngrid = 5
 z_nelement = 8
 z_nelement_local = 8
@@ -76,6 +69,14 @@ vzeta_nelement = 4
 vzeta_L = 12.0
 vzeta_bc = "periodic"
 vzeta_discretization = "chebyshev_pseudospectral"
+
+[timestepping]
+nstep = 2000
+dt = 0.0005
+nwrite = 200
+nwrite_dfns = 200
+n_rk_stages = 4
+split_operators = false
 
 [numerical_dissipation]
 #vpa_dissipation_coefficient = 0.1

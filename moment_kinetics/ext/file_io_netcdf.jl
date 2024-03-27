@@ -162,11 +162,22 @@ end
 function create_dynamic_variable!(file_or_group::NCDataset, name, type,
                                   coords::coordinate...; parallel_io,
                                   n_ion_species=nothing, n_neutral_species=nothing,
-                                  description=nothing, units=nothing)
+                                  diagnostic_var_size=nothing, description=nothing,
+                                  units=nothing)
 
     if n_ion_species !== nothing && n_neutral_species !== nothing
         error("Variable should not contain both ion and neutral species dimensions. "
               * "Got n_ion_species=$n_ion_species and "
+              * "n_neutral_species=$n_neutral_species")
+    end
+    if diagnostic_var_size !== nothing && n_ion_species !== nothing
+        error("Diagnostic variable should not contain both ion species dimension. Got "
+              * "diagnostic_var_size=$diagnostic_var_size and "
+              * "n_ion_species=$n_ion_species")
+    end
+    if diagnostic_var_size !== nothing && n_neutral_species !== nothing
+        error("Diagnostic variable should not contain both neutral species dimension. "
+              * "Got diagnostic_var_size=$diagnostic_var_size and "
               * "n_neutral_species=$n_neutral_species")
     end
 
@@ -201,7 +212,16 @@ function create_dynamic_variable!(file_or_group::NCDataset, name, type,
     # create the variable so it can be expanded indefinitely (up to the largest unsigned
     # integer in size) in the time dimension
     coord_dims = Tuple(c.name for c ∈ coords)
-    if n_ion_species !== nothing
+    if diagnostic_var_size !== nothing
+        if isa(diagnostic_var_size, Number)
+            # Make diagnostic_var_size a Tuple
+            diagnostic_var_size = (diagnostic_var_size,)
+        end
+        for (i,dim_size) ∈ enumerate(diagnostic_var_size)
+            maybe_create_netcdf_dim(file_or_group, "$name$i", dim_size)
+        end
+        fixed_dims = Tuple("$name$i" for i ∈ 1:length(diagnostic_var_size))
+    elseif n_ion_species !== nothing
         fixed_dims = tuple(coord_dims..., "ion_species")
     elseif n_neutral_species !== nothing
         fixed_dims = tuple(coord_dims..., "neutral_species")
@@ -227,7 +247,12 @@ end
 function append_to_dynamic_var(io_var::NCDatasets.CFVariable,
                                data::Union{Number,AbstractArray{T,N}}, t_idx,
                                parallel_io::Bool,
-                               coords...) where {T,N}
+                               coords...; only_root=false) where {T,N}
+    if only_root && parallel_io && global_rank[] != 0
+        # Variable should only be written from root, and this process is not root for the
+        # output file
+        return nothing
+    end
 
     if isa(data, Number)
         io_var[t_idx] = data

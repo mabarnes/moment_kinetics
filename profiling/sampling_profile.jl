@@ -13,7 +13,7 @@ function main(input_file)
     input["base_directory"] = test_output_directory
 
     short_input = deepcopy(input)
-    short_input["nstep"] = 2
+    short_input["timestepping"]["nstep"] = 2
 
     # Short run to make sure everything is compiled
     run_moment_kinetics(short_input)
