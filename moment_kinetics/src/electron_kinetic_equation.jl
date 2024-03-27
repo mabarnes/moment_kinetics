@@ -120,8 +120,6 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
 
     begin_r_z_region()
 
-    # create a (z,r) dimension dummy array for use in taking derivatives
-    dummy_zr = @view scratch_dummy.dummy_zrs[:,:,1]
     # create several (r) dimension dummy arrays for use in taking derivatives
     buffer_r_1 = @view scratch_dummy.buffer_rs_1[:,1]
     buffer_r_2 = @view scratch_dummy.buffer_rs_2[:,1]
@@ -130,9 +128,6 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
     buffer_r_5 = @view scratch_dummy.buffer_rs_5[:,1]
     buffer_r_6 = @view scratch_dummy.buffer_rs_6[:,1]
 
-    @loop_r_z ir iz begin
-        dummy_zr[iz,ir] = -moments.electron.upar[iz,ir]
-    end
     # compute the z-derivative of the input electron parallel flow, needed for the electron kinetic equation
     @views derivative_z!(moments.electron.dupar_dz, moments.electron.upar, buffer_r_1,
                          buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
@@ -316,12 +311,6 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                 if evolve_ppar
                     # get an updated iterate of the electron parallel pressure
                     begin_r_z_region()
-                    # Compute the upwinded z-derivative of the electron parallel pressure for the
-                    # electron energy equation
-                    @views derivative_z!(moments.electron.dppar_dz_upwind,
-                                         scratch[istage+1].electron_ppar, dummy_zr, buffer_r_1,
-                                         buffer_r_2, buffer_r_3, buffer_r_4, buffer_r_5,
-                                         buffer_r_6, z_spectral, z)
                     # compute the z-derivative of the updated electron parallel pressure
                     @views derivative_z!(moments.electron.dppar_dz,
                                          scratch[istage+1].electron_ppar, buffer_r_1, buffer_r_2,

@@ -127,12 +127,12 @@ function electron_energy_equation!(ppar, fvec, moments, collisions, dt, composit
     # calculate contribution to rhs of energy equation (formulated in terms of pressure)
     # arising from derivatives of ppar, qpar and upar
     @loop_r_z ir iz begin
-        ppar[iz,ir] -= dt*(fvec.electron_upar[iz,ir]*moments.dppar_dz_upwind[iz,ir]
+        ppar[iz,ir] -= dt*(fvec.electron_upar[iz,ir]*moments.dppar_dz[iz,ir]
                     + moments.dqpar_dz[iz,ir]
                     + 3*fvec.electron_ppar[iz,ir]*moments.dupar_dz[iz,ir])
     end
     # @loop_r_z ir iz begin
-    #     ppar[iz,ir] -= dt*(fvec.electron_upar[iz,ir]*moments.dppar_dz_upwind[iz,ir]
+    #     ppar[iz,ir] -= dt*(fvec.electron_upar[iz,ir]*moments.dppar_dz[iz,ir]
     #                 + (2/3)*moments.dqpar_dz[iz,ir]
     #                 + (5/3)*fvec.electron_ppar[iz,ir]*moments.dupar_dz[iz,ir])
     # end
