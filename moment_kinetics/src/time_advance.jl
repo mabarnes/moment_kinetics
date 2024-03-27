@@ -449,8 +449,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_sp
                               vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
                               vperp_spectral, vpa_spectral, collisions,
                               external_source_settings, scratch_dummy, scratch, t_params,
-                              num_diss_params, advection_structs, io_input, input_dict;
-                              restart_from_Boltzmann_electrons=restarting)
+                              t_input, num_diss_params, advection_structs, io_input,
+                              input_dict; restart_from_Boltzmann_electrons=restarting)
     end
 
     # update the derivatives of the electron moments as these may be needed when

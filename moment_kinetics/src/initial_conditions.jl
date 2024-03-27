@@ -226,8 +226,8 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
                                vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
                                vperp_spectral, vpa_spectral, collisions,
                                external_source_settings, scratch_dummy, scratch, t_params,
-                               num_diss_params, advection_structs, io_input, input_dict;
-                               restart_from_Boltzmann_electrons=false)
+                               t_input, num_diss_params, advection_structs, io_input,
+                               input_dict; restart_from_Boltzmann_electrons=false)
     
     moments.electron.dens_updated[] = false
     # initialise the electron density profile
@@ -334,7 +334,8 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
                              advection_structs.electron_z_advect,
                              advection_structs.electron_vpa_advect, scratch_dummy,
                              collisions, composition, geometry, external_source_settings,
-                             num_diss_params, t_params.electron, io_input, input_dict)
+                             num_diss_params, t_params.electron, t_input.electron_t_input,
+                             io_input, input_dict)
 
     return nothing
 end
@@ -429,7 +430,7 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
                                   vz, z_spectral, vperp_spectral, vpa_spectral, z_advect,
                                   vpa_advect, scratch_dummy, collisions, composition,
                                   geometry, external_source_settings, num_diss_params,
-                                  t_params, io_input, input_dict)
+                                  t_params, t_input, io_input, input_dict)
 
     # now that the initial electron pdf is given, the electron parallel heat flux should be updated
     # if using kinetic electrons
@@ -494,12 +495,19 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
         @views derivative_z!(moments.electron.dqpar_dz, moments.electron.qpar, 
             scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1], scratch_dummy.buffer_rs_3[:,1],
             scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
+
         # now that we have our initial guess for the electron pdf, we iterate
         # using the time-independent electron kinetic equation to find a self-consistent
-        # solution for the electron pdf
+        # solution for the electron pdf.
+        # First run with evolve_ppar=true to get electron_ppar close to steady state.
+        # electron_ppar does not have to be exactly steady state as it will be
+        # time-evolved along with the ions.
         max_electron_pdf_iterations = 2000000
         #max_electron_pdf_iterations = 500000
         #max_electron_pdf_iterations = 10000
+        if global_rank[] == 0
+            println("Initializing electrons - evolving both pdf_electron and electron_ppar")
+        end
         electron_pseudotime, n_debug_outputs =
             @views update_electron_pdf!(scratch, pdf.electron.norm, moments,
                                         moments.electron.dens, moments.electron.vth,
@@ -514,11 +522,35 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
                                         collisions, composition, external_source_settings,
                                         num_diss_params, max_electron_pdf_iterations;
                                         io_initial_electron=io_initial_electron,
-                                        initial_time=code_time, evolve_ppar=true)
+                                        initial_time=code_time,
+                                        residual_tolerance=t_input.initialization_residual_value,
+                                        evolve_ppar=true)
+
+        # Now run without evolve_ppar=true to get pdf_electron fully to steady state,
+        # ready for the start of the ion time advance.
+        if global_rank[] == 0
+            println("Initializing electrons - evolving pdf_electron only to steady state")
+        end
+        electron_pseudotime, n_debug_outputs =
+            @views update_electron_pdf!(scratch, pdf.electron.norm, moments,
+                                        moments.electron.dens, moments.electron.vth,
+                                        moments.electron.ppar, moments.electron.qpar,
+                                        moments.electron.qpar_updated, phi,
+                                        moments.electron.ddens_dz,
+                                        moments.electron.dppar_dz,
+                                        moments.electron.dqpar_dz,
+                                        moments.electron.dvth_dz, r, z, vperp, vpa,
+                                        z_spectral, vperp_spectral, vpa_spectral,
+                                        z_advect, vpa_advect, scratch_dummy, t_params,
+                                        collisions, composition, external_source_settings,
+                                        num_diss_params, max_electron_pdf_iterations;
+                                        io_initial_electron=io_initial_electron,
+                                        initial_time=electron_pseudotime,
+                                        initial_output_counter=n_debug_outputs)
 
         # Write the converged initial state for the electrons to a file so that it can be
         # re-used if the simulation is re-run.
-        t_idx = n_debug_outputs+1
+        t_idx = n_debug_outputs + 1
         write_initial_electron_state(pdf.electron.norm, moments, t_params,
                                      electron_pseudotime, io_initial_electron, t_idx, r,
                                      z, vperp, vpa)

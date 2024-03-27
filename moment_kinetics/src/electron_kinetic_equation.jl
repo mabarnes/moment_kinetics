@@ -61,7 +61,7 @@ function update_electron_pdf!(scratch, pdf, moments, dens, vthe, ppar, qpar, qpa
         vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy, t_params,
         collisions, composition, external_source_settings, num_diss_params,
         max_electron_pdf_iterations; io_initial_electron=nothing, initial_time=0.0,
-        evolve_ppar=false)
+        initial_output_counter=0, residual_tolerance=nothing, evolve_ppar=false)
 
     # set the method to use to solve the electron kinetic equation
     solution_method = "artificial_time_derivative"
@@ -74,7 +74,8 @@ function update_electron_pdf!(scratch, pdf, moments, dens, vthe, ppar, qpar, qpa
             vpa_spectral, z_advect, vpa_advect, scratch_dummy, t_params,
             external_source_settings, num_diss_params, max_electron_pdf_iterations;
             io_initial_electron=io_initial_electron, initial_time=initial_time,
-            evolve_ppar=evolve_ppar)
+            initial_output_counter=initial_output_counter,
+            residual_tolerance=residual_tolerance, evolve_ppar=evolve_ppar)
     elseif solution_method == "shooting_method"
         return update_electron_pdf_with_shooting_method!(pdf, dens, vthe, ppar, qpar,
             qpar_updated, phi, ddens_dz, dppar_dz, dqpar_dz, dvth_dz, z, vpa,
@@ -120,7 +121,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         composition, r, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
         vpa_advect, scratch_dummy, t_params, external_source_settings, num_diss_params,
         max_electron_pdf_iterations; io_initial_electron=nothing, initial_time=0.0,
-        evolve_ppar=false)
+        initial_output_counter=0, residual_tolerance=nothing, evolve_ppar=false)
 
     begin_r_z_region()
 
@@ -160,14 +161,12 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                          buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
 
     time = initial_time
-    if initial_time > 0.0
-        # Make sure that output times are set relative to this initial_time (before this they
-        # will be set relative to 0.0).
-        t_params.moments_output_times .+= initial_time
-        t_params.dfns_output_times .+= initial_time
-    end
+    # Make sure that output times are set relative to this initial_time (the values in
+    # t_params are set relative to 0.0).
+    moments_output_times = t_params.moments_output_times .+ initial_time
+    dfns_output_times = t_params.dfns_output_times .+ initial_time
     if io_initial_electron !== nothing
-        t_params.next_output_time[] = t_params.dfns_output_times[1]
+        t_params.next_output_time[] = dfns_output_times[1]
     end
 
     #z_speedup_fac = 20.0
@@ -219,7 +218,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         end
     end
 
-    output_counter = 0
+    output_counter = initial_output_counter
     begin_serial_region()
     output_counter += 1
     @serial_region begin
@@ -405,7 +404,10 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                 end
             end
             if global_rank[] == 0
-                electron_pdf_converged = abs(residual) < t_params.converged_residual_value
+                if residual_tolerance === nothing
+                    residual_tolerance = t_params.converged_residual_value
+                end
+                electron_pdf_converged = abs(residual) < residual_tolerance
             end
             electron_pdf_converged = MPI.Bcast(electron_pdf_converged, 0, comm_world)
         end
@@ -445,7 +447,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                 println("iteration: ", t_params.step_counter[], " time: ", time, " dt_electron: ", t_params.dt[], " phi_boundary: ", phi[[1,end],1], " residual: ", residual)
             end
         end
-        if (time ≥ t_params.dfns_output_times[output_counter] - epsilon)
+        if (time ≥ dfns_output_times[output_counter - initial_output_counter] - epsilon)
             begin_serial_region()
             @serial_region begin
                 if text_output
@@ -471,10 +473,10 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                 end
             end
             output_counter += 1
-            if output_counter ≤ length(t_params.dfns_output_times)
+            if output_counter - initial_output_counter ≤ length(dfns_output_times)
                 @serial_region begin
                     t_params.next_output_time[] =
-                        t_params.dfns_output_times[output_counter]
+                        dfns_output_times[output_counter - initial_output_counter]
                 end
             end
             @serial_region begin
