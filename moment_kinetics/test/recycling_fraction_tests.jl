@@ -106,7 +106,8 @@ test_input_split3 = merge(test_input_split2,
                                "vpa_nelement" => 31,
                                "vz_nelement" => 31,
                                "evolve_moments_parallel_pressure" => true,
-                               "numerical_dissipation" => Dict{String,Any}("force_minimum_pdf_value" => 0.0, "vpa_dissipation_coefficient" => 1e-2)))
+                               "ion_numerical_dissipation" => Dict{String,Any}("force_minimum_pdf_value" => 0.0, "vpa_dissipation_coefficient" => 1e-2),
+                               "neutral_numerical_dissipation" => Dict{String,Any}("force_minimum_pdf_value" => 0.0, "vz_dissipation_coefficient" => 1e-2)))
 test_input_split3["timestepping"] = merge(test_input_split3["timestepping"],
                                            Dict("dt" => 1.0e-5))
 

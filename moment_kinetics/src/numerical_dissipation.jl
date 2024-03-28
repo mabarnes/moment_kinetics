@@ -16,11 +16,36 @@ using ..calculus: derivative!, second_derivative!
 using ..derivatives: derivative_r!, derivative_z!
 using ..type_definitions: mk_float
 
-Base.@kwdef struct numerical_dissipation_parameters
+
+#############################################################
+########### Numerical Dissipation Parameter setup ###########
+"""
+Define the dissipation parameters for each species, which means
+there need to be three sections in each input file that specify
+the parameters required of each species, as follows:
+
+```
+[ion_numerical_dissipation]
+vpa_dissipation_coefficient
+...
+
+[electron_numerical_dissipation]
+vpa_dissipation_coefficient
+...
+
+[neutral_numerical_dissipation]
+vz_dissipation_coefficient
+...
+```
+
+There will still be the -1.0 default parameters.
+"""
+
+# define individual structs for each species with their particular parameters
+Base.@kwdef struct ion_num_diss_params
     vpa_boundary_buffer_damping_rate::mk_float = -1.0
     vpa_boundary_buffer_diffusion_coefficient::mk_float = -1.0
     vpa_dissipation_coefficient::mk_float = -1.0
-    vz_dissipation_coefficient::mk_float = -1.0
     vperp_dissipation_coefficient::mk_float = -1.0
     z_dissipation_coefficient::mk_float = -1.0
     r_dissipation_coefficient::mk_float = -1.0
@@ -28,18 +53,52 @@ Base.@kwdef struct numerical_dissipation_parameters
     force_minimum_pdf_value::Union{Nothing,mk_float} = nothing
 end
 
-function setup_numerical_dissipation(input_section::Dict, is_1V)
-    if is_1V && "vpa_dissipation_coefficient" ∈ keys(input_section)
+Base.@kwdef struct electron_num_diss_params
+    vpa_boundary_buffer_damping_rate::mk_float = -1.0
+    vpa_boundary_buffer_diffusion_coefficient::mk_float = -1.0
+    vpa_dissipation_coefficient::mk_float = -1.0
+    vperp_dissipation_coefficient::mk_float = -1.0
+    z_dissipation_coefficient::mk_float = -1.0
+    r_dissipation_coefficient::mk_float = -1.0
+    moment_dissipation_coefficient::mk_float = -1.0
+    force_minimum_pdf_value::Union{Nothing,mk_float} = nothing
+end
+
+Base.@kwdef struct neutral_num_diss_params
+    vz_dissipation_coefficient::mk_float = -1.0
+    z_dissipation_coefficient::mk_float = -1.0
+    r_dissipation_coefficient::mk_float = -1.0
+    moment_dissipation_coefficient::mk_float = -1.0
+    force_minimum_pdf_value::Union{Nothing,mk_float} = nothing
+end
+
+struct numerical_dissipation_parameters
+    ion::ion_num_diss_params
+    electron::electron_num_diss_params
+    neutral::neutral_num_diss_params
+end
+
+######### End Of Numerical Dissipation Parameter setup #########
+################################################################
+
+function setup_numerical_dissipation(ion_input::Dict, electron_input::Dict, 
+                                     neutral_input::Dict, is_1V)
+    if is_1V && "vpa_dissipation_coefficient" ∈ keys(ion_input)
         # Set default for vz_dissipation_coefficient the same as
-        # vpa_dissipation_coefficient for 1V case
-        input_section["vz_dissipation_coefficient"] =
-            get(input_section, "vz_dissipation_coefficient",
-                input_section["vpa_dissipation_coefficient"])
+        # ion_vpa_dissipation_coefficient for 1V case
+        neutral_input["vz_dissipation_coefficient"] =
+            get(neutral_input, "vz_dissipation_coefficient",
+                ion_input["vpa_dissipation_coefficient"])
     end
 
-    input = Dict(Symbol(k)=>v for (k,v) in input_section)
+    ion_input_dict = Dict(Symbol(k)=>v for (k,v) in ion_input)
+    ion_params = ion_num_diss_params(; ion_input_dict...)
+    electron_input_dict = Dict(Symbol(k)=>v for (k,v) in electron_input)
+    electron_params = electron_num_diss_params(; electron_input_dict...)
+    neutral_input_dict = Dict(Symbol(k)=>v for (k,v) in neutral_input)
+    neutral_params = neutral_num_diss_params(; neutral_input_dict...)
 
-    return numerical_dissipation_parameters(; input...)
+    return numerical_dissipation_parameters(ion_params, electron_params, neutral_params)
 end
 
 """
@@ -50,13 +109,11 @@ Disabled by default.
 
 The damping rate is set in the input TOML file by the parameter
 ```
-[numerical_dissipation]
+[ion_numerical_dissipation]
 vpa_boundary_buffer_damping_rate = 0.1
 ```
 """
-function vpa_boundary_buffer_decay!(f_out, fvec_in, moments, vpa, dt,
-                                    num_diss_params::numerical_dissipation_parameters)
-    damping_rate_prefactor = num_diss_params.vpa_boundary_buffer_damping_rate
+function vpa_boundary_buffer_decay!(f_out, fvec_in, moments, vpa, dt, damping_rate_prefactor)
 
     if damping_rate_prefactor <= 0.0
         return nothing
@@ -149,13 +206,11 @@ Disabled by default.
 
 The maximum diffusion rate in the buffer is set in the input TOML file by the parameter
 ```
-[numerical_dissipation]
+[ion_numerical_dissipation]
 vpa_boundary_buffer_diffusion_coefficient = 0.1
 ```
 """
-function vpa_boundary_buffer_diffusion!(f_out, fvec_in, vpa, vpa_spectral, dt,
-                                        num_diss_params::numerical_dissipation_parameters)
-    diffusion_prefactor = num_diss_params.vpa_boundary_buffer_diffusion_coefficient
+function vpa_boundary_buffer_diffusion!(f_out, fvec_in, vpa, vpa_spectral, dt, diffusion_prefactor)
 
     if diffusion_prefactor <= 0.0
         return nothing
@@ -238,14 +293,13 @@ Disabled by default.
 
 The diffusion coefficient is set in the input TOML file by the parameter
 ```
-[numerical_dissipation]
+[ion_numerical_dissipation]
 vpa_dissipation_coefficient = 0.1
 ```
 """
 function vpa_dissipation!(f_out, f_in, vpa, spectral::T_spectral, dt,
-        num_diss_params::numerical_dissipation_parameters) where T_spectral
+                          diffusion_coefficient) where T_spectral
 
-    diffusion_coefficient = num_diss_params.vpa_dissipation_coefficient
     if diffusion_coefficient <= 0.0 || vpa.n == 1
         return nothing
     end
@@ -300,16 +354,15 @@ Disabled by default.
 
 The diffusion coefficient is set in the input TOML file by the parameter
 ```
-[numerical_dissipation]
+[ion_numerical_dissipation]
 vperp_dissipation_coefficient = 0.1
 ```
 """
 function vperp_dissipation!(f_out, f_in, vperp, spectral::T_spectral, dt,
-        num_diss_params::numerical_dissipation_parameters) where T_spectral
+                            diffusion_coefficient) where T_spectral
     
     begin_s_r_z_vpa_region()
 
-    diffusion_coefficient = num_diss_params.vperp_dissipation_coefficient
     if diffusion_coefficient <= 0.0 || vperp.n == 1
         return nothing
     end
@@ -329,7 +382,7 @@ Disabled by default.
 
 The diffusion coefficient is set in the input TOML file by the parameter
 ```
-[numerical_dissipation]
+[ion_numerical_dissipation]
 z_dissipation_coefficient = 0.1
 ```
 
@@ -339,9 +392,8 @@ on internal or external element boundaries
 
 """
 function z_dissipation!(f_out, f_in, z, z_spectral::T_spectral, dt,
-        num_diss_params::numerical_dissipation_parameters, scratch_dummy) where T_spectral
+                        diffusion_coefficient, scratch_dummy) where T_spectral
 
-    diffusion_coefficient = num_diss_params.z_dissipation_coefficient
     if diffusion_coefficient <= 0.0 || z.n == 1
         return nothing
     end
@@ -374,7 +426,7 @@ Disabled by default.
 
 The diffusion coefficient is set in the input TOML file by the parameter
 ```
-[numerical_dissipation]
+[ion_numerical_dissipation]
 r_dissipation_coefficient = 0.1
 
 ```
@@ -385,9 +437,8 @@ on internal or external element boundaries
 
 """
 function r_dissipation!(f_out, f_in, r, r_spectral::T_spectral, dt,
-        num_diss_params::numerical_dissipation_parameters, scratch_dummy) where T_spectral
+                        diffusion_coefficient, scratch_dummy) where T_spectral
 
-    diffusion_coefficient = num_diss_params.r_dissipation_coefficient
     if diffusion_coefficient <= 0.0 || r.n == 1
         return nothing
     end
@@ -420,14 +471,13 @@ Disabled by default.
 
 The diffusion coefficient is set in the input TOML file by the parameter
 ```
-[numerical_dissipation]
+[neutral_numerical_dissipation]
 vz_dissipation_coefficient = 0.1
 ```
 """
 function vz_dissipation_neutral!(f_out, f_in, vz, spectral::T_spectral, dt,
-        num_diss_params::numerical_dissipation_parameters) where T_spectral
+                                 diffusion_coefficient) where T_spectral
 
-    diffusion_coefficient = num_diss_params.vz_dissipation_coefficient
     if diffusion_coefficient <= 0.0
         return nothing
     end
@@ -449,7 +499,7 @@ Disabled by default.
 
 The diffusion coefficient is set in the input TOML file by the parameter
 ```
-[numerical_dissipation]
+[neutral_numerical_dissipation]
 z_dissipation_coefficient = 0.1
 ```
 
@@ -459,9 +509,8 @@ on internal or external element boundaries
 
 """
 function z_dissipation_neutral!(f_out, f_in, z, z_spectral::T_spectral, dt,
-        num_diss_params::numerical_dissipation_parameters, scratch_dummy) where T_spectral
+                                diffusion_coefficient, scratch_dummy) where T_spectral
 
-    diffusion_coefficient = num_diss_params.z_dissipation_coefficient
     if diffusion_coefficient <= 0.0
         return nothing
     end
@@ -494,7 +543,7 @@ Disabled by default.
 
 The diffusion coefficient is set in the input TOML file by the parameter
 ```
-[numerical_dissipation]
+[neutral_numerical_dissipation]
 r_dissipation_coefficient = 0.1
 
 ```
@@ -505,9 +554,8 @@ on internal or external element boundaries
 
 """
 function r_dissipation_neutral!(f_out, f_in, r, r_spectral::T_spectral, dt,
-        num_diss_params::numerical_dissipation_parameters, scratch_dummy) where T_spectral
+                                diffusion_coefficient, scratch_dummy) where T_spectral
 
-    diffusion_coefficient = num_diss_params.r_dissipation_coefficient
     if diffusion_coefficient <= 0.0 || r.n == 1
         return nothing
     end
@@ -534,17 +582,16 @@ function r_dissipation_neutral!(f_out, f_in, r, r_spectral::T_spectral, dt,
 end
 
 """
-    force_minimum_pdf_value!(f, num_diss_paras::numerical_dissipation_parameters)
+    force_minimum_pdf_value!(f, minval)
 
 Set a minimum value for the pdf-sized array `f`. Any points less than the minimum are
 set to the minimum. By default, no minimum is applied. The minimum value can be set by
 ```
-[numerical_dissipation]
+[ion_numerical_dissipation]
 force_minimum_pdf_value = 0.0
 ```
 """
-function force_minimum_pdf_value!(f, num_diss_params::numerical_dissipation_parameters)
-    minval = num_diss_params.force_minimum_pdf_value
+function force_minimum_pdf_value!(f, minval)
 
     if minval === nothing
         return nothing
@@ -560,17 +607,16 @@ function force_minimum_pdf_value!(f, num_diss_params::numerical_dissipation_para
 end
 
 """
-    force_minimum_pdf_value_neutral!(f, num_diss_paras::numerical_dissipation_parameters)
+    force_minimum_pdf_value_neutral!(f, minval)
 
 Set a minimum value for the neutral-pdf-sized array `f`. Any points less than the minimum
 are set to the minimum. By default, no minimum is applied. The minimum value can be set by
 ```
-[numerical_dissipation]
+[neutral_numerical_dissipation]
 force_minimum_pdf_value = 0.0
 ```
 """
-function force_minimum_pdf_value_neutral!(f, num_diss_params::numerical_dissipation_parameters)
-    minval = num_diss_params.force_minimum_pdf_value
+function force_minimum_pdf_value_neutral!(f, minval)
 
     if minval === nothing
         return nothing

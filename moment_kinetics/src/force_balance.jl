@@ -38,7 +38,7 @@ function force_balance!(pflx, density_out, fvec, moments, fields, collisions, dt
     end
 
     # Ad-hoc diffusion to stabilise numerics...
-    diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
+    diffusion_coefficient = num_diss_params.ion.moment_dissipation_coefficient
     if diffusion_coefficient > 0.0
         @loop_s_r_z is ir iz begin
             pflx[iz,ir,is] += dt*diffusion_coefficient*moments.ion.d2upar_dz2[iz,ir,is]*density[iz,ir,is]
@@ -92,7 +92,7 @@ function neutral_force_balance!(pflx, density_out, fvec, moments, fields, collis
     end
 
     # Ad-hoc diffusion to stabilise numerics...
-    diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
+    diffusion_coefficient = num_diss_params.neutral.moment_dissipation_coefficient
     if diffusion_coefficient > 0.0
         @loop_sn_r_z isn ir iz begin
             pflx[iz,ir,isn] += dt*diffusion_coefficient*moments.neutral.d2uz_dz2[iz,ir,isn]*density[iz,ir,isn]

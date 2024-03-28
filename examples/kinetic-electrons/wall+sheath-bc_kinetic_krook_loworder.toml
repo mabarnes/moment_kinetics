@@ -73,7 +73,7 @@ vz_discretization = "chebyshev_pseudospectral"
 [output]
 ascii_output = true
 
-[numerical_dissipation]
+[electron_numerical_dissipation]
 #moment_dissipation_coefficient = 0.0001
 #moment_dissipation_coefficient = 1.0
 #vpa_dissipation_coefficient = 0.002

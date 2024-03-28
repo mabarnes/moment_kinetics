@@ -298,7 +298,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                                                         moments.electron.upar, vperp, vpa,
                                                         vperp_spectral, vpa_spectral,
                                                         vpa_advect, moments,
-                                                        num_diss_params.vpa_dissipation_coefficient > 0.0,
+                                                        num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
                                                         composition.me_over_mi)
 
             begin_r_z_region()
@@ -356,7 +356,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                     end
 
                     # centred second derivative for dissipation
-                    if num_diss_params.moment_dissipation_coefficient > 0.0
+                    if num_diss_params.electron.moment_dissipation_coefficient > 0.0
                         @views derivative_z!(moments.electron.d2ppar_dz2,
                                              moments.electron.dppar_dz, buffer_r_1, buffer_r_2,
                                              buffer_r_3, buffer_r_4, z_spectral, z)
@@ -1708,15 +1708,15 @@ function add_dissipation_term!(pdf_out, pdf_in, scratch_dummy, z_spectral, z, vp
     #                         buffer_r_4, z_spectral, z)
     #    @views derivative_z!(dummy_zr2, dummy_zr1, buffer_r_1, buffer_r_2, buffer_r_3,
     #                         buffer_r_4, z_spectral, z)
-    #    @. residual[ivpa,ivperp,:,:] -= num_diss_params.z_dissipation_coefficient * dummy_zr2
+    #    @. residual[ivpa,ivperp,:,:] -= num_diss_params.electron.z_dissipation_coefficient * dummy_zr2
     #end
     begin_r_z_vperp_region()
     @loop_r_z_vperp ir iz ivperp begin
         #@views derivative!(vpa.scratch, pdf_in[:,ivperp,iz,ir], vpa, false)
         #@views derivative!(vpa.scratch2, vpa.scratch, vpa, false)
-        #@. residual[:,ivperp,iz,ir] -= num_diss_params.vpa_dissipation_coefficient * vpa.scratch2
+        #@. residual[:,ivperp,iz,ir] -= num_diss_params.electron.vpa_dissipation_coefficient * vpa.scratch2
         @views second_derivative!(vpa.scratch, pdf_in[:,ivperp,iz,ir], vpa, vpa_spectral)
-        @. pdf_out[:,ivperp,iz,ir] += dt * num_diss_params.vpa_dissipation_coefficient * vpa.scratch
+        @. pdf_out[:,ivperp,iz,ir] += dt * num_diss_params.electron.vpa_dissipation_coefficient * vpa.scratch
     end
     #stop()
     return nothing

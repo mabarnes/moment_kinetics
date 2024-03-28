@@ -26,3 +26,4 @@ makie_postproc.so
 plots_postproc.so
 precompile-temp
 post_processing_input.toml
+.DS_Store

@@ -22,7 +22,7 @@ using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_pp
 using ..velocity_moments: update_neutral_density!, update_neutral_qz!
 using ..velocity_moments: update_neutral_uzeta!, update_neutral_uz!, update_neutral_ur!
 using ..velocity_moments: update_neutral_pzeta!, update_neutral_pz!, update_neutral_pr!
-using ..velocity_moments: calculate_moment_derivatives!, calculate_moment_derivatives_neutral!
+using ..velocity_moments: calculate_ion_moment_derivatives!, calculate_neutral_moment_derivatives!
 using ..velocity_moments: calculate_electron_moment_derivatives!
 using ..velocity_moments: update_chodura!
 using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
@@ -346,6 +346,9 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_sp
     # define some local variables for convenience/tidiness
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
+    ion_mom_diss_coeff = num_diss_params.ion.moment_dissipation_coefficient
+    electron_mom_diss_coeff = num_diss_params.electron.moment_dissipation_coefficient
+    neutral_mom_diss_coeff = num_diss_params.neutral.moment_dissipation_coefficient
 
     if composition.electron_physics == kinetic_electrons
         electron_t_params = setup_time_info(t_input.electron_t_input, 0.0,
@@ -456,8 +459,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_sp
 
     # update the derivatives of the electron moments as these may be needed when
     # computing the electrostatic potential (and components of the electric field)
-    calculate_electron_moment_derivatives!(moments, scratch[1], scratch_dummy, z, 
-                                           z_spectral, num_diss_params, composition.electron_physics)
+    calculate_electron_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, 
+                                           electron_mom_diss_coeff, composition.electron_physics)
     # initialize the electrostatic potential
     begin_serial_region()
     update_phi!(fields, scratch[1], z, r, composition, collisions, moments, z_spectral, r_spectral, scratch_dummy)
@@ -470,9 +473,10 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_sp
     # 'speed' in advect objects, which are needed for boundary conditions on the
     # distribution function which is then used to (possibly) re-calculate the moments
     # after which the initial values of moment derivatives are re-calculated.
-    calculate_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, num_diss_params)
-    calculate_moment_derivatives_neutral!(moments, scratch[1], scratch_dummy, z,
-                                          z_spectral, num_diss_params)
+    calculate_ion_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, 
+                                      ion_mom_diss_coeff)
+    calculate_neutral_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, 
+                                          neutral_mom_diss_coeff)
 
     r_advect = advection_structs.r_advect
     z_advect = advection_structs.z_advect
@@ -584,8 +588,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_sp
     if !restarting
         begin_serial_region()
         # ensure initial pdf has no negative values
-        force_minimum_pdf_value!(pdf.ion.norm, num_diss_params)
-        force_minimum_pdf_value_neutral!(pdf.neutral.norm, num_diss_params)
+        force_minimum_pdf_value!(pdf.ion.norm, num_diss_params.ion.force_minimum_pdf_value)
+        force_minimum_pdf_value_neutral!(pdf.neutral.norm, num_diss_params.neutral.force_minimum_pdf_value)
         # enforce boundary conditions and moment constraints to ensure a consistent initial
         # condition
         enforce_boundary_conditions!(
@@ -703,11 +707,12 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_sp
         end
     end
 
-    calculate_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, num_diss_params)
-    calculate_electron_moment_derivatives!(moments, scratch[1], scratch_dummy, z, 
-                                           z_spectral, num_diss_params, composition.electron_physics)
-    calculate_moment_derivatives_neutral!(moments, scratch[1], scratch_dummy, z,
-                                          z_spectral, num_diss_params)
+    calculate_ion_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, 
+                                      ion_mom_diss_coeff)
+    calculate_electron_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, 
+                                      electron_mom_diss_coeff, composition.electron_physics)
+    calculate_neutral_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, 
+                                      neutral_mom_diss_coeff)
     # update the electrostatic potential and components of the electric field, as pdfs and moments
     # may have changed due to enforcing boundary/moment constraints                                      
     update_phi!(fields, scratch[1], z, r, composition, collisions, moments, z_spectral, r_spectral,
@@ -864,11 +869,11 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         end
 
         # flag to determine if a d^2/dr^2 operator is present
-        r_diffusion = (advance_numerical_dissipation && num_diss_params.r_dissipation_coefficient > 0.0)
+        r_diffusion = (advance_numerical_dissipation && num_diss_params.ion.r_dissipation_coefficient > 0.0)
         # flag to determine if a d^2/dvpa^2 operator is present
-        vpa_diffusion = ((advance_numerical_dissipation && num_diss_params.vpa_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
-        vperp_diffusion = ((advance_numerical_dissipation && num_diss_params.vperp_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
-        vz_diffusion = (advance_numerical_dissipation && num_diss_params.vz_dissipation_coefficient > 0.0)
+        vpa_diffusion = ((advance_numerical_dissipation && num_diss_params.ion.vpa_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
+        vperp_diffusion = ((advance_numerical_dissipation && num_diss_params.ion.vperp_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
+        vz_diffusion = (advance_numerical_dissipation && num_diss_params.neutral.vz_dissipation_coefficient > 0.0)
     end
 
     manufactured_solns_test = manufactured_solns_input.use_for_advance
@@ -1614,7 +1619,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     # Ensure there are no negative values in the pdf before applying boundary
     # conditions, so that negative deviations do not mess up the integral-constraint
     # corrections in the sheath boundary conditions.
-    force_minimum_pdf_value!(new_scratch.pdf, num_diss_params)
+    force_minimum_pdf_value!(new_scratch.pdf, num_diss_params.ion.force_minimum_pdf_value)
 
     # Enforce boundary conditions in z and vpa on the distribution function.
     # Must be done after Runge Kutta update so that the boundary condition applied to
@@ -1669,8 +1674,8 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
                  composition, moments.evolve_density, moments.evolve_upar,
                  moments.evolve_ppar)
 
-    calculate_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
-                                  num_diss_params)
+    calculate_ion_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
+                                      num_diss_params.ion.moment_dissipation_coefficient)
 
     # update the lowest three electron moments (density, upar and ppar)
     calculate_electron_density!(new_scratch.electron_density, moments.electron.dens_updated, new_scratch.density)
@@ -1696,7 +1701,8 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
                                      new_scratch.electron_density)
     # calculate the corresponding zed derivatives of the moments
     calculate_electron_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
-                                           num_diss_params, composition.electron_physics)
+                                           num_diss_params.electron.moment_dissipation_coefficient, 
+                                           composition.electron_physics)
     # update the electron parallel heat flux
     calculate_electron_qpar!(moments.electron, new_scratch.pdf_electron,
         new_scratch.electron_ppar, new_scratch.electron_upar, new_scratch.upar,
@@ -1743,7 +1749,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         # Ensure there are no negative values in the pdf before applying boundary
         # conditions, so that negative deviations do not mess up the integral-constraint
         # corrections in the sheath boundary conditions.
-        force_minimum_pdf_value_neutral!(new_scratch.pdf_neutral, num_diss_params)
+        force_minimum_pdf_value_neutral!(new_scratch.pdf_neutral, num_diss_params.neutral.force_minimum_pdf_value)
 
         # Enforce boundary conditions in z and vpa on the distribution function.
         # Must be done after Runge Kutta update so that the boundary condition applied to
@@ -1790,8 +1796,8 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
                            r, composition, moments.evolve_density, moments.evolve_upar,
                            moments.evolve_ppar)
 
-        calculate_moment_derivatives_neutral!(moments, new_scratch, scratch_dummy, z,
-                                              z_spectral, num_diss_params)
+        calculate_neutral_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral, 
+                                              num_diss_params.neutral.moment_dissipation_coefficient)
     end
 
     # update the electrostatic potential phi
@@ -1848,8 +1854,9 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
                          composition, moments.evolve_density, moments.evolve_upar,
                          moments.evolve_ppar)
 
-            calculate_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
-                                          num_diss_params)
+            calculate_ion_moment_derivatives!(moments, new_scratch, scratch_dummy, z,
+                                              z_spectral,
+                                              num_diss_params.ion.moment_dissipation_coefficient)
 
             # update remaining velocity moments that are calculable from the evolved pdf
             update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z, r,
@@ -1867,8 +1874,9 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
                                r, composition, moments.evolve_density, moments.evolve_upar,
                                moments.evolve_ppar)
 
-            calculate_moment_derivatives_neutral!(moments, new_scratch, scratch_dummy, z,
-                                                  z_spectral, num_diss_params)
+            calculate_neutral_moment_derivatives!(moments, new_scratch, scratch_dummy, z,
+                                                  z_spectral,
+                                                  num_diss_params.neutral.moment_dissipation_coefficient)
 
             # update the electrostatic potential phi
             update_phi!(fields, scratch[istage+1], z, r, composition, collisions, moments,
@@ -2428,19 +2436,19 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     # add numerical dissipation
     if advance.numerical_dissipation
         vpa_dissipation!(fvec_out.pdf, fvec_in.pdf, vpa, vpa_spectral, dt,
-                         num_diss_params)
+                         num_diss_params.ion.vpa_dissipation_coefficient)
         vperp_dissipation!(fvec_out.pdf, fvec_in.pdf, vperp, vperp_spectral, dt,
-                         num_diss_params)
+                         num_diss_params.ion.vperp_dissipation_coefficient)
         z_dissipation!(fvec_out.pdf, fvec_in.pdf, z, z_spectral, dt,
-                       num_diss_params, scratch_dummy)
+                       num_diss_params.ion.z_dissipation_coefficient, scratch_dummy)
         r_dissipation!(fvec_out.pdf, fvec_in.pdf, r, r_spectral, dt,
-                       num_diss_params, scratch_dummy)
+                       num_diss_params.ion.r_dissipation_coefficient, scratch_dummy)
         vz_dissipation_neutral!(fvec_out.pdf_neutral, fvec_in.pdf_neutral, vz,
-                                vz_spectral, dt, num_diss_params)
+                                vz_spectral, dt, num_diss_params.neutral.vz_dissipation_coefficient)
         z_dissipation_neutral!(fvec_out.pdf_neutral, fvec_in.pdf_neutral, z, z_spectral,
-                               dt, num_diss_params, scratch_dummy)
+                               dt, num_diss_params.neutral.z_dissipation_coefficient, scratch_dummy)
         r_dissipation_neutral!(fvec_out.pdf_neutral, fvec_in.pdf_neutral, r, r_spectral,
-                               dt, num_diss_params, scratch_dummy)
+                               dt, num_diss_params.neutral.r_dissipation_coefficient, scratch_dummy)
     end
     # advance with the Fokker-Planck self-collision operator
     if advance.explicit_weakform_fp_collisions
