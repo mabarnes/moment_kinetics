@@ -686,9 +686,9 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_sp
             scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1], scratch_dummy.buffer_rs_3[:,1],
             scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
         # calculate the electron parallel heat flux
-        calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, pdf.electron,
-            moments.electron.ppar, moments.electron.upar, moments.electron.vth, moments.electron.dT_dz, moments.ion.upar, 
-            collisions.nu_ei, composition.me_over_mi, composition.electron_physics, vpa)
+        calculate_electron_qpar!(moments.electron, pdf.electron, moments.electron.ppar,
+            moments.electron.upar, moments.ion.upar, collisions.nu_ei,
+            composition.me_over_mi, composition.electron_physics, vpa)
         # calculate the electron-ion parallel friction force
         calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, moments.electron.dens,
             moments.electron.upar, moments.ion.upar, moments.electron.dT_dz,
