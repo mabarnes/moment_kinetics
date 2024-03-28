@@ -1697,9 +1697,9 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     calculate_electron_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
                                            num_diss_params, composition.electron_physics)
     # update the electron parallel heat flux
-    calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, new_scratch.pdf_electron,
-        new_scratch.electron_ppar, new_scratch.electron_upar, moments.electron.vth, moments.electron.dT_dz, 
-        new_scratch.upar, collisions.nu_ei, composition.me_over_mi, composition.electron_physics, vpa)
+    calculate_electron_qpar!(moments.electron, new_scratch.pdf_electron,
+        new_scratch.electron_ppar, new_scratch.electron_upar, new_scratch.upar,
+        collisions.nu_ei, composition.me_over_mi, composition.electron_physics, vpa)
     # update the electron parallel friction force
     calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, new_scratch.electron_density,
         new_scratch.electron_upar, new_scratch.upar, moments.electron.dT_dz, composition.me_over_mi,

@@ -276,10 +276,14 @@ output:
     qpar_e = updated parallel electron heat flux
     qpar_updated = flag indicating that the parallel electron heat flux is updated
 """
-function calculate_electron_qpar!(qpar_e, qpar_updated, pdf, ppar_e, upar_e, vth_e, dTe_dz, upar_i, 
-                                  nu_ei, me_over_mi, electron_model, vpa)
+function calculate_electron_qpar!(electron_moments, pdf, ppar_e, upar_e, upar_i, nu_ei,
+                                  me_over_mi, electron_model, vpa)
     # only calculate qpar_e if needs updating
+    qpar_updated = electron_moments.qpar_updated
     if !qpar_updated[]
+        qpar_e = electron_moments.qpar
+        vth_e = electron_moments.vth
+        dTe_dz = electron_moments.dT_dz
         if electron_model == braginskii_fluid
             begin_r_z_region()
             # use the classical Braginskii expression for the electron heat flux

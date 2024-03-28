@@ -299,9 +299,9 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
     # calculate the initial electron parallel heat flux;
     # if using kinetic electrons, this relies on the electron pdf, which itself relies on the electron heat flux
     moments.electron.qpar_updated[] = false
-    calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, pdf.electron,
-        moments.electron.ppar, moments.electron.upar, moments.electron.vth, moments.electron.dT_dz, moments.ion.upar, 
-        collisions.nu_ei, composition.me_over_mi, composition.electron_physics, vpa)
+    calculate_electron_qpar!(moments.electron, pdf.electron, moments.electron.ppar,
+        moments.electron.upar, moments.ion.upar, collisions.nu_ei, composition.me_over_mi,
+        composition.electron_physics, vpa)
     # calculate the zed derivative of the initial electron parallel heat flux
     @views derivative_z!(moments.electron.dqpar_dz, moments.electron.qpar, 
         scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1], scratch_dummy.buffer_rs_3[:,1],
@@ -486,10 +486,10 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
         end
 
         moments.electron.qpar_updated[] = false
-        calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, pdf.electron,
-            moments.electron.ppar, moments.electron.upar, moments.electron.vth, 
-            moments.electron.dT_dz, moments.ion.upar, 
-            collisions.nu_ei, composition.me_over_mi, composition.electron_physics, vpa)
+        calculate_electron_qpar!(moments.electron, pdf.electron, moments.electron.ppar,
+                                 moments.electron.upar, moments.ion.upar,
+                                 collisions.nu_ei, composition.me_over_mi,
+                                 composition.electron_physics, vpa)
         # update dqpar/dz for electrons
         # calculate the zed derivative of the initial electron parallel heat flux
         @views derivative_z!(moments.electron.dqpar_dz, moments.electron.qpar, 
