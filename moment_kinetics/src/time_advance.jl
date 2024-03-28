@@ -400,6 +400,10 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_sp
         # ion pressure
         push!(t_params.failure_caused_by, 0)
     end
+    if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
+        # electron pressure
+        push!(t_params.failure_caused_by, 0)
+    end
     if composition.n_neutral_species > 0
         # neutral pdf
         push!(t_params.limit_caused_by, 0, 0)
@@ -2014,6 +2018,20 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
                                      error_sum_zero=t_params.error_sum_zero)
         push!(error_norms, ion_p_err)
         push!(total_points, z.n_global * r.n_global * n_ion_species)
+    end
+
+    if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
+        begin_r_z_region()
+        rk_error_variable!(scratch, :electron_ppar, t_params)
+        electron_p_err = local_error_norm(scratch[2].electron_ppar,
+                                          scratch[t_params.n_rk_stages+1].electron_ppar,
+                                          t_params.rtol, t_params.atol;
+                                          method=error_norm_method,
+                                          skip_r_inner=skip_r_inner,
+                                          skip_z_lower=skip_z_lower,
+                                          error_sum_zero=t_params.error_sum_zero)
+        push!(error_norms, electron_p_err)
+        push!(total_points, z.n_global * r.n_global)
     end
 
     if n_neutral_species > 0

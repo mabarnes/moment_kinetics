@@ -387,7 +387,7 @@ function setup_initial_electron_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, co
             define_dynamic_electron_moment_variables!(fid, r, z, parallel_io,
                                                       external_source_settings,
                                                       evolve_density, evolve_upar,
-                                                      evolve_ppar, true)
+                                                      evolve_ppar, kinetic_electrons)
 
         close(fid)
 
@@ -843,7 +843,7 @@ define dynamic (time-evolving) moment variables for writing to the hdf5 file
 function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                           r::coordinate, z::coordinate, parallel_io,
                                           external_source_settings, evolve_density,
-                                          evolve_upar, evolve_ppar, kinetic_electrons)
+                                          evolve_upar, evolve_ppar, electron_physics)
     @serial_region begin
         dynamic = create_io_group(fid, "dynamic_data", description="time evolving variables")
 
@@ -875,7 +875,7 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
             define_dynamic_electron_moment_variables!(fid, r, z, parallel_io,
                                                       external_source_settings,
                                                       evolve_density, evolve_upar,
-                                                      evolve_ppar, kinetic_electrons)
+                                                      evolve_ppar, electron_physics)
 
         io_density_neutral, io_uz_neutral, io_pz_neutral, io_qz_neutral,
         io_thermal_speed_neutral, external_source_neutral_amplitude,
@@ -910,6 +910,9 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
         n_failure_vars = 1 + evolve_density + evolve_upar + evolve_ppar
         if n_neutral_species > 0
             n_failure_vars *= 2
+        end
+        if electron_physics ∈ (braginskii_fluid, kinetic_electrons)
+            n_failure_vars += 1
         end
         io_failure_caused_by = create_dynamic_variable!(
             dynamic, "failure_caused_by", mk_int; diagnostic_var_size=n_failure_vars,
@@ -1168,7 +1171,7 @@ define dynamic (time-evolving) electron moment variables for writing to the hdf5
 """
 function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordinate,
         parallel_io, external_source_settings, evolve_density, evolve_upar, evolve_ppar,
-        kinetic_electrons)
+        electron_physics)
 
     dynamic = get_group(fid, "dynamic_data")
 
@@ -1232,7 +1235,7 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
                                parallel_io=parallel_io,
                                description="'C' coefficient enforcing pressure constraint for electrons")
 
-    if kinetic_electrons
+    if electron_physics == kinetic_electrons
         io_electron_step_counter = create_dynamic_variable!(
             dynamic, "electron_step_counter", mk_int; parallel_io=parallel_io,
             description="cumulative number of electron pseudo-timesteps for the run")
@@ -1428,7 +1431,7 @@ function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz, com
                                                       external_source_settings,
                                                       evolve_density, evolve_upar,
                                                       evolve_ppar,
-                                                      composition.electron_physics == kinetic_electrons)
+                                                      composition.electron_physics)
 
         dynamic = get_group(fid, "dynamic_data")
 
@@ -1539,7 +1542,7 @@ function setup_moments_io(prefix, binary_format, vz, vr, vzeta, vpa, vperp, r, z
         io_moments = define_dynamic_moment_variables!(
             fid, composition.n_ion_species, composition.n_neutral_species, r, z,
             parallel_io, external_source_settings, evolve_density, evolve_upar,
-            evolve_ppar, composition.electron_physics == kinetic_electrons)
+            evolve_ppar, composition.electron_physics)
 
         close(fid)
 
@@ -2495,7 +2498,7 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
                                                           external_source_settings,
                                                           evolve_density, evolve_upar,
                                                           evolve_ppar,
-                                                          composition.electron_physics == kinetic_electrons)
+                                                          composition.electron_physics)
             io_dfns = define_dynamic_dfn_variables!(
                 fid, r, z, vperp, vpa, vzeta, vr, vz, composition.n_ion_species,
                 composition.n_neutral_species, false, external_source_settings,
