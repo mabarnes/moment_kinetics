@@ -582,7 +582,7 @@ function r_dissipation_neutral!(f_out, f_in, r, r_spectral::T_spectral, dt,
 end
 
 """
-    force_minimum_pdf_value!(f, num_diss_params::numerical_dissipation_parameters)
+    force_minimum_pdf_value!(f, minval)
 
 Set a minimum value for the pdf-sized array `f`. Any points less than the minimum are
 set to the minimum. By default, no minimum is applied. The minimum value can be set by
@@ -607,7 +607,7 @@ function force_minimum_pdf_value!(f, minval)
 end
 
 """
-    force_minimum_pdf_value_neutral!(f, num_diss_params::numerical_dissipation_parameters)
+    force_minimum_pdf_value_neutral!(f, minval)
 
 Set a minimum value for the neutral-pdf-sized array `f`. Any points less than the minimum
 are set to the minimum. By default, no minimum is applied. The minimum value can be set by
