@@ -6946,7 +6946,11 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing, electro
             run_info = (run_info,)
         end
 
-        println("Making timestep diagnostics plots")
+        if electron
+            println("Making electron timestep diagnostics plots")
+        else
+            println("Making timestep diagnostics plots")
+        end
 
         input = Dict_to_NamedTuple(input_dict["timestep_diagnostics"])
 
