@@ -36,8 +36,9 @@ using moment_kinetics.manufactured_solns: manufactured_solutions,
                                           manufactured_electric_fields
 using moment_kinetics.load_data: close_run_info, get_run_info_no_setup, get_variable,
                                  timestep_diagnostic_variables, em_variables,
-                                 ion_moment_variables, neutral_moment_variables,
-                                 all_moment_variables, ion_dfn_variables,
+                                 ion_moment_variables, electron_moment_variables,
+                                 neutral_moment_variables, all_moment_variables,
+                                 ion_dfn_variables, electron_dfn_variables,
                                  neutral_dfn_variables, all_dfn_variables, ion_variables,
                                  neutral_variables, all_variables
 using moment_kinetics.initial_conditions: vpagrid_to_dzdt
@@ -206,6 +207,17 @@ function makie_post_process(run_dir::Union{String,Tuple},
     has_rdim = any(ri !== nothing && ri.r.n > 1 for ri ∈ run_info_moments)
     has_zdim = any(ri !== nothing && ri.z.n > 1 for ri ∈ run_info_moments)
 
+    # Only plot electron stuff if some runs have electrons
+    if any(ri !== nothing for ri ∈ run_info_moments)
+        has_electrons = any(r.composition.electron_physics
+                            ∈ (braginskii_fluid, kinetic_electrons)
+                            for r in run_info_moments)
+    else
+        has_electrons = any(r.composition.electron_physics
+                            ∈ (braginskii_fluid, kinetic_electrons)
+                            for r in run_info_dfns)
+    end
+
     # Only plot neutral stuff if all runs have neutrals
     if any(ri !== nothing for ri ∈ run_info_moments)
         has_neutrals = all(r.n_neutral_species > 0 for r in run_info_moments)
@@ -220,6 +232,9 @@ function makie_post_process(run_dir::Union{String,Tuple},
     #############################
 
     moment_variable_list = tuple(em_variables..., ion_moment_variables...)
+    if has_electrons
+        moment_variable_list = tuple(moment_variable_list..., electron_moment_variables...)
+    end
     if has_neutrals
         moment_variable_list = tuple(moment_variable_list..., neutral_moment_variables...)
     end
@@ -295,6 +310,9 @@ function makie_post_process(run_dir::Union{String,Tuple},
     ############################################
     if any(ri !== nothing for ri in run_info_dfns)
         dfn_variable_list = ion_dfn_variables
+        if has_electrons
+            dfn_variable_list = tuple(dfn_variable_list..., electron_dfn_variables...)
+        end
         if has_neutrals
             dfn_variable_list = tuple(dfn_variable_list..., neutral_dfn_variables...)
         end

@@ -3927,6 +3927,9 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         n = postproc_load_variable(run_info, "electron_density"; kwargs...)
         vth = postproc_load_variable(run_info, "electron_thermal_speed"; kwargs...)
         variable = get_collision_frequency_ei(run_info.collisions, n, vth)
+    elseif variable_name == "electron_temperature"
+        vth = postproc_load_variable(run_info, "electron_thermal_speed"; kwargs...)
+        variable = vth.^2
     elseif variable_name == "temperature_neutral"
         vth = postproc_load_variable(run_info, "thermal_speed_neutral"; kwargs...)
         variable = vth.^2
