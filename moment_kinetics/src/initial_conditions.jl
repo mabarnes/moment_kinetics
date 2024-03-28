@@ -509,18 +509,12 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
             println("Initializing electrons - evolving both pdf_electron and electron_ppar")
         end
         electron_pseudotime, n_debug_outputs =
-            @views update_electron_pdf!(scratch, pdf.electron.norm, moments,
-                                        moments.electron.dens, moments.electron.vth,
-                                        moments.electron.ppar, moments.electron.qpar,
-                                        moments.electron.qpar_updated, phi,
-                                        moments.electron.ddens_dz,
-                                        moments.electron.dppar_dz,
-                                        moments.electron.dqpar_dz,
-                                        moments.electron.dvth_dz, r, z, vperp, vpa,
-                                        z_spectral, vperp_spectral, vpa_spectral,
-                                        z_advect, vpa_advect, scratch_dummy, t_params,
-                                        collisions, composition, external_source_settings,
-                                        num_diss_params, max_electron_pdf_iterations;
+            @views update_electron_pdf!(scratch, pdf.electron.norm, moments, phi, r, z,
+                                        vperp, vpa, z_spectral, vperp_spectral,
+                                        vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                                        t_params, collisions, composition,
+                                        external_source_settings, num_diss_params,
+                                        max_electron_pdf_iterations;
                                         io_initial_electron=io_initial_electron,
                                         initial_time=code_time,
                                         residual_tolerance=t_input.initialization_residual_value,
@@ -532,18 +526,12 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
             println("Initializing electrons - evolving pdf_electron only to steady state")
         end
         electron_pseudotime, n_debug_outputs =
-            @views update_electron_pdf!(scratch, pdf.electron.norm, moments,
-                                        moments.electron.dens, moments.electron.vth,
-                                        moments.electron.ppar, moments.electron.qpar,
-                                        moments.electron.qpar_updated, phi,
-                                        moments.electron.ddens_dz,
-                                        moments.electron.dppar_dz,
-                                        moments.electron.dqpar_dz,
-                                        moments.electron.dvth_dz, r, z, vperp, vpa,
-                                        z_spectral, vperp_spectral, vpa_spectral,
-                                        z_advect, vpa_advect, scratch_dummy, t_params,
-                                        collisions, composition, external_source_settings,
-                                        num_diss_params, max_electron_pdf_iterations;
+            @views update_electron_pdf!(scratch, pdf.electron.norm, moments, phi, r, z,
+                                        vperp, vpa, z_spectral, vperp_spectral,
+                                        vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                                        t_params, collisions, composition,
+                                        external_source_settings, num_diss_params,
+                                        max_electron_pdf_iterations;
                                         io_initial_electron=io_initial_electron,
                                         initial_time=electron_pseudotime,
                                         initial_output_counter=n_debug_outputs)

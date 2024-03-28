@@ -56,8 +56,7 @@ The electron kinetic equation is:
 OUTPUT:
     pdf = updated (modified) electron pdf
 """
-function update_electron_pdf!(scratch, pdf, moments, dens, vthe, ppar, qpar, qpar_updated,
-        phi, ddens_dz, dppar_dz, dqpar_dz, dvth_dz, r, z, vperp, vpa, z_spectral,
+function update_electron_pdf!(scratch, pdf, moments, phi, r, z, vperp, vpa, z_spectral,
         vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy, t_params,
         collisions, composition, external_source_settings, num_diss_params,
         max_electron_pdf_iterations; io_initial_electron=nothing, initial_time=0.0,
@@ -77,10 +76,28 @@ function update_electron_pdf!(scratch, pdf, moments, dens, vthe, ppar, qpar, qpa
             initial_output_counter=initial_output_counter,
             residual_tolerance=residual_tolerance, evolve_ppar=evolve_ppar)
     elseif solution_method == "shooting_method"
+        dens = moments.electron.dens
+        vthe = moments.electron.vth
+        ppar = moments.electron.ppar
+        qpar = moments.electron.qpar
+        qpar_updated = moments.electron.qpar_updated
+        ddens_dz = moments.electron.ddens_dz
+        dppar_dz = moments.electron.dppar_dz
+        dqpar_dz = moments.electron.dqpar_dz
+        dvth_dz = moments.electron.dvth_dz
         return update_electron_pdf_with_shooting_method!(pdf, dens, vthe, ppar, qpar,
             qpar_updated, phi, ddens_dz, dppar_dz, dqpar_dz, dvth_dz, z, vpa,
             vpa_spectral, scratch_dummy, composition)
     elseif solution_method == "picard_iteration"
+        dens = moments.electron.dens
+        vthe = moments.electron.vth
+        ppar = moments.electron.ppar
+        qpar = moments.electron.qpar
+        qpar_updated = moments.electron.qpar_updated
+        ddens_dz = moments.electron.ddens_dz
+        dppar_dz = moments.electron.dppar_dz
+        dqpar_dz = moments.electron.dqpar_dz
+        dvth_dz = moments.electron.dvth_dz
         return update_electron_pdf_with_picard_iteration!(pdf, dens, vthe, ppar, ddens_dz,
             dppar_dz, dqpar_dz, dvth_dz, z, vpa, vpa_spectral, scratch_dummy,
             max_electron_pdf_iterations)
