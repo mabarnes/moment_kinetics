@@ -73,15 +73,19 @@ vz_L = 18.0
 vz_bc = "both_zero"
 vz_discretization = "chebyshev_pseudospectral"
 
-[numerical_dissipation]
-vpa_dissipation_coefficient = 1.0e-3 #1.0e-2 #1.0e-1
-vperp_dissipation_coefficient = 1.0e-3 #1.0e-2 #1.0e-1
-#r_disspipation_coefficient = 1.0e-3
-#force_minimum_pdf_value = 0.0
-
 [geometry]
 #option="1D-mirror"
 DeltaB=0.0
 option="constant-helical"
 pitch=0.1
 rhostar= 0.1
+
+[ion_numerical_dissipation]
+vpa_dissipation_coefficient = 1.0e-3 #1.0e-2 #1.0e-1
+vperp_dissipation_coefficient = 1.0e-3 #1.0e-2 #1.0e-1
+#r_disspipation_coefficient = 1.0e-3
+#force_minimum_pdf_value = 0.0
+
+[neutral_numerical_dissipation]
+moment_dissipation_coefficient = 0.0001
+vz_dissipation_coefficient = 0.01

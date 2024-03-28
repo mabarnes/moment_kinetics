@@ -214,7 +214,7 @@ end
 """
 """
 function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
-                            evolve_ppar, ion_source_settings, numerical_dissipation)
+                            evolve_ppar, ion_source_settings, num_diss_params)
     # allocate array used for the particle density
     density = allocate_shared_float(nz, nr, n_species)
     # allocate array of Bools that indicate if the density is updated for each species
@@ -258,8 +258,7 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
         ddens_dz = nothing
         ddens_dz_upwind = nothing
     end
-    if evolve_density &&
-            numerical_dissipation.moment_dissipation_coefficient > 0.0
+    if evolve_density && num_diss_params.ion.moment_dissipation_coefficient > 0.0
 
         d2dens_dz2 = allocate_shared_float(nz, nr, n_species)
     else
@@ -275,8 +274,7 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
     else
         dupar_dz_upwind = nothing
     end
-    if evolve_upar &&
-            numerical_dissipation.moment_dissipation_coefficient > 0.0
+    if evolve_upar && num_diss_params.ion.moment_dissipation_coefficient > 0.0
 
         d2upar_dz2 = allocate_shared_float(nz, nr, n_species)
     else
@@ -355,7 +353,7 @@ end
     
 function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
                                 evolve_ppar, neutral_source_settings,
-                                numerical_dissipation)
+                                num_diss_params)
     density = allocate_shared_float(nz, nr, n_species)
     density_updated = allocate_bool(n_species)
     density_updated .= false
@@ -398,8 +396,7 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
         ddens_dz = nothing
         ddens_dz_upwind = nothing
     end
-    if evolve_density &&
-            numerical_dissipation.moment_dissipation_coefficient > 0.0
+    if evolve_density && num_diss_params.neutral.moment_dissipation_coefficient > 0.0
 
         d2dens_dz2 = allocate_shared_float(nz, nr, n_species)
     else
@@ -415,8 +412,7 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
     else
         duz_dz_upwind = nothing
     end
-    if evolve_upar &&
-            numerical_dissipation.moment_dissipation_coefficient > 0.0
+    if evolve_upar && num_diss_params.neutral.moment_dissipation_coefficient > 0.0
 
         d2uz_dz2 = allocate_shared_float(nz, nr, n_species)
     else
@@ -948,7 +944,7 @@ end
 Pre-calculate spatial derivatives of the moments that will be needed for the time advance
 """
 function calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z, z_spectral,
-                                           num_diss_params)
+                                           ion_mom_diss_coeff)
     begin_s_r_region()
 
     density = scratch.density
@@ -974,7 +970,7 @@ function calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z, z
                              dummy_zrs, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
                              buffer_r_5, buffer_r_6, z_spectral, z)
     end
-    if moments.evolve_density && num_diss_params.moment_dissipation_coefficient > 0.0
+    if moments.evolve_density && ion_mom_diss_coeff > 0.0
 
         # centred second derivative for dissipation
         @views derivative_z!(dummy_zrs, density, buffer_r_1, buffer_r_2, buffer_r_3,
@@ -996,7 +992,7 @@ function calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z, z
                              buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
                              buffer_r_5, buffer_r_6, z_spectral, z)
     end
-    if moments.evolve_upar && num_diss_params.moment_dissipation_coefficient > 0.0
+    if moments.evolve_upar && ion_mom_diss_coeff > 0.0
 
         # centred second derivative for dissipation
         @views derivative_z!(dummy_zrs, upar, buffer_r_1, buffer_r_2, buffer_r_3,
@@ -1505,7 +1501,7 @@ Pre-calculate spatial derivatives of the neutral moments that will be needed for
 advance
 """
 function calculate_neutral_moment_derivatives!(moments, scratch, scratch_dummy, z,
-                                               z_spectral, numerical_dissipation)
+                                               z_spectral, neutral_mom_diss_coeff)
     begin_sn_r_region()
 
     density = scratch.density_neutral
@@ -1532,8 +1528,7 @@ function calculate_neutral_moment_derivatives!(moments, scratch, scratch_dummy, 
                              dummy_zrsn, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
                              buffer_r_5, buffer_r_6, z_spectral, z; neutrals=true)
     end
-    if moments.evolve_density &&
-        numerical_dissipation.moment_dissipation_coefficient > 0.0
+    if moments.evolve_density && neutral_mom_diss_coeff > 0.0
 
         # centred second derivative for dissipation
         @views derivative_z!(dummy_zrsn, density, buffer_r_1, buffer_r_2, buffer_r_3,
@@ -1557,8 +1552,7 @@ function calculate_neutral_moment_derivatives!(moments, scratch, scratch_dummy, 
                              buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
                              buffer_r_5, buffer_r_6, z_spectral, z; neutrals=true)
     end
-    if moments.evolve_upar &&
-        numerical_dissipation.moment_dissipation_coefficient > 0.0
+    if moments.evolve_upar && neutral_mom_diss_coeff > 0.0
 
         # centred second derivative for dissipation
         @views derivative_z!(dummy_zrsn, uz, buffer_r_1, buffer_r_2, buffer_r_3,

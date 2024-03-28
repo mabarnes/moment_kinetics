@@ -86,7 +86,7 @@ vperp_discretization = "gausslegendre_pseudospectral"
 #vzeta_bc = "periodic"
 #vzeta_discretization = "chebyshev_pseudospectral"
 
-#[numerical_dissipation]
+#[ion_numerical_dissipation]
 #vpa_dissipation_coefficient = 0.0
 #vperp_dissipation_coefficient = 0.0
 #z_dissipation_coefficient = 0.1

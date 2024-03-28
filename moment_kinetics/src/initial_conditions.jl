@@ -83,7 +83,7 @@ Creates the structs for the pdf and the velocity-space moments
 """
 function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
                                   evolve_moments, collisions, external_source_settings,
-                                  numerical_dissipation)
+                                  num_diss_params)
     pdf = create_pdf(composition, r, z, vperp, vpa, vzeta, vr, vz)
 
     # create the 'moments' struct that contains various v-space moments and other
@@ -94,11 +94,11 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
     ion = create_moments_ion(z.n, r.n, composition.n_ion_species,
         evolve_moments.density, evolve_moments.parallel_flow,
         evolve_moments.parallel_pressure, external_source_settings.ion,
-        numerical_dissipation)
+        num_diss_params)
     neutral = create_moments_neutral(z.n, r.n, composition.n_neutral_species,
         evolve_moments.density, evolve_moments.parallel_flow,
         evolve_moments.parallel_pressure, external_source_settings.neutral,
-        numerical_dissipation)
+        num_diss_params)
 
     if abs(collisions.ionization) > 0.0 || z.bc == "wall"
         # if ionization collisions are included or wall BCs are enforced, then particle
