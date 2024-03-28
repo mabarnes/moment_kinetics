@@ -40,6 +40,7 @@ using ..neutral_vz_advection: update_speed_neutral_vz!, neutral_advection_vz!
 using ..vperp_advection: update_speed_vperp!, vperp_advection!
 using ..vpa_advection: update_speed_vpa!, vpa_advection!
 using ..charge_exchange: charge_exchange_collisions_1V!, charge_exchange_collisions_3V!
+using ..electron_kinetic_equation: update_electron_pdf!
 using ..ionization: ionization_collisions_1V!, ionization_collisions_3V!, constant_ionization_source!
 using ..krook_collisions: krook_collisions!
 using ..external_sources
@@ -856,9 +857,9 @@ function setup_advance_flags(moments, composition, t_params, collisions,
                 advance_neutral_energy = true
             end
         end
-        # if treating the electrons as a fluid with Braginskii closure, 
-        # then advance the electron energy equation
-        if composition.electron_physics == braginskii_fluid
+        # if treating the electrons as a fluid with Braginskii closure, or
+        # moment-kinetically then advance the electron energy equation
+        if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
             advance_electron_energy = true
         end
 
@@ -1678,7 +1679,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     # if electron model is braginskii_fluid, then ppar is evolved via the energy equation
     # and is already updated;
     # otherwise update assuming electron temperature is fixed in time
-    if composition.electron_physics == braginskii_fluid
+    if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
         @loop_r_z ir iz begin
             new_scratch.electron_ppar[iz,ir] = (rk_coefs[1]*moments.electron.ppar[iz,ir] 
                 + rk_coefs[2]*old_scratch.electron_ppar[iz,ir] + rk_coefs[3]*new_scratch.electron_ppar[iz,ir])
@@ -1700,6 +1701,32 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     calculate_electron_qpar!(moments.electron, new_scratch.pdf_electron,
         new_scratch.electron_ppar, new_scratch.electron_upar, new_scratch.upar,
         collisions.nu_ei, composition.me_over_mi, composition.electron_physics, vpa)
+    if composition.electron_physics == kinetic_electrons
+        max_electron_pdf_iterations = 100000
+
+        # Copy ion and electron moments from `scratch` into `moments` to be used in
+        # electron kinetic equation update
+        begin_r_z_region()
+        @loop_s_r_z is ir iz begin
+            moments.ion.dens[iz,ir,is] = new_scratch.density[iz,ir,is]
+            moments.ion.upar[iz,ir,is] = new_scratch.upar[iz,ir,is]
+            moments.ion.ppar[iz,ir,is] = new_scratch.ppar[iz,ir,is]
+        end
+        @loop_sn_r_z isn ir iz begin
+            moments.neutral.dens[iz,ir,isn] = new_scratch.density_neutral[iz,ir,isn]
+            moments.neutral.uz[iz,ir,isn] = new_scratch.uz_neutral[iz,ir,isn]
+            moments.neutral.pz[iz,ir,isn] = new_scratch.pz_neutral[iz,ir,isn]
+        end
+        @loop_r_z ir iz begin
+            moments.electron.ppar[iz,ir] = new_scratch.electron_ppar[iz,ir]
+        end
+
+        update_electron_pdf!(scratch, pdf.electron.norm, moments, fields.phi, r, z, vperp,
+                             vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
+                             vpa_advect, scratch_dummy, t_params.electron, collisions,
+                             composition, external_source_settings, num_diss_params,
+                             max_electron_pdf_iterations)
+    end
     # update the electron parallel friction force
     calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, new_scratch.electron_density,
         new_scratch.electron_upar, new_scratch.upar, moments.electron.dT_dz, composition.me_over_mi,
