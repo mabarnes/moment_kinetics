@@ -294,7 +294,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
             pdf.electron.norm, fields.phi, moments.electron.dens, moments.electron.upar,
             moments.electron.vth, z, vpa, vperp, vperp_spectral, vpa_spectral,
             [(speed=speed,)], moments, num_diss_params,
-            composition.me_over_mi)
+            composition.me_over_mi, scratch_dummy)
     end
     # calculate the initial electron parallel heat flux;
     # if using kinetic electrons, this relies on the electron pdf, which itself relies on the electron heat flux
@@ -1209,7 +1209,7 @@ this 'initital' value for the electron will just be the first guess in an iterat
 """
 function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upar, vth, z,
         vpa, vperp, vperp_spectral, vpa_spectral, vpa_advect, moments, num_diss_params,
-        me_over_mi; restart_from_boltzmann=false)
+        me_over_mi, scratch_dummy; restart_from_boltzmann=false)
 
     if z.bc == "wall"
         begin_r_region()
@@ -1224,12 +1224,28 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
         end
         # Apply the sheath boundary condition to get cut-off boundary distribution
         # functions and boundary values of phi
-        enforce_boundary_condition_on_electron_pdf!(pdf, phi, vth, upar, vperp, vpa,
+        enforce_boundary_condition_on_electron_pdf!(pdf, phi, vth, upar, z, vperp, vpa,
                                                     vperp_spectral, vpa_spectral,
                                                     vpa_advect, moments,
                                                     num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
                                                     me_over_mi)
-        begin_r_region()
+
+        # Distribute the z-boundary pdf values to every process
+        begin_serial_region()
+        pdf_lower = scratch_dummy.buffer_vpavperprs_1
+        pdf_upper = scratch_dummy.buffer_vpavperprs_2
+        @serial_region begin
+            if z.irank == 0
+                pdf_lower .= pdf[:,:,1,:]
+            end
+            MPI.Bcast!(pdf_lower, z.comm; root=0)
+            if z.irank == z.nrank - 1
+                pdf_upper .= pdf[:,:,end,:]
+            end
+            MPI.Bcast!(pdf_upper, z.comm; root=z.nrank-1)
+        end
+
+        begin_r_z_region()
         @loop_r ir begin
             # get critical velocities beyond which electrons are lost to the wall
             #vpa_crit_zmin, vpa_crit_zmax = get_electron_critical_velocities(phi, vth, me_over_mi, z)
@@ -1237,9 +1253,6 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
             # Blend boundary distribution function into bulk of domain to avoid
             # discontinuities (as much as possible)
             blend_fac = 100
-            if z.nrank > 1
-                error("Distributed MPI not supported in this init yet")
-            end
             @loop_z_vperp iz ivperp begin
                 #@. pdf[:,ivperp,iz] = exp(-30*z.grid[iz]^2)
                 #@. pdf[:,ivperp,iz] = (density[iz] / vth[iz]) *
@@ -1247,8 +1260,8 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
                 blend_fac_lower = exp(-blend_fac*(z.grid[iz] + 0.5*z.L)^2)
                 blend_fac_upper = exp(-blend_fac*(z.grid[iz] - 0.5*z.L)^2)
                 @. pdf[:,ivperp,iz,ir] = (1.0 - blend_fac_lower) * (1.0 - blend_fac_upper) * pdf[:,ivperp,iz,ir] +
-                                        blend_fac_lower * pdf[:,ivperp,1,ir] +
-                                        blend_fac_upper * pdf[:,ivperp,end,ir]
+                                        blend_fac_lower * pdf_lower[:,ivperp,ir] +
+                                        blend_fac_upper * pdf_upper[:,ivperp,ir]
                 #@. pdf[:,ivperp,iz,ir] = exp(-vpa.grid^2) * (
                 #                         (1 - exp(-blend_fac*(z.grid[iz] - z.grid[1])^2) *
                 #                          tanh(sharp_fac*(vpa.grid-vpa_crit_zmin))) *

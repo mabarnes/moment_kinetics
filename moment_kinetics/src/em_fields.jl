@@ -16,6 +16,8 @@ using ..velocity_moments: update_density!
 using ..derivatives: derivative_r!, derivative_z!
 using ..electron_fluid_equations: calculate_Epar_from_electron_force_balance!
 
+using MPI
+
 """
 """
 function setup_em_fields(nz, nr, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
@@ -166,7 +168,7 @@ function calculate_phi_from_Epar!(phi, Epar, z)
         # this one.
         this_delta_phi = phi[end,:] .- phi[1,:]
         for irank ∈ 1:z.nrank-1
-            delta_phi = MPI.Bcast(this_delta_phi, irank, z.comm)
+            delta_phi = MPI.bcast(this_delta_phi, z.comm; root=irank)
             if z.irank > irank
                 @loop_r_z ir iz begin
                     phi[iz,ir] += delta_phi[ir]
