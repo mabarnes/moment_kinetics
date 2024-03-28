@@ -969,21 +969,9 @@ function calculate_electron_moment_derivatives!(moments, scratch, scratch_dummy,
     buffer_r_2 = @view scratch_dummy.buffer_rs_2[:,1]
     buffer_r_3 = @view scratch_dummy.buffer_rs_3[:,1]
     buffer_r_4 = @view scratch_dummy.buffer_rs_4[:,1]
-    buffer_r_5 = @view scratch_dummy.buffer_rs_5[:,1]
-    buffer_r_6 = @view scratch_dummy.buffer_rs_6[:,1]
        
     @views derivative_z!(moments.electron.dupar_dz, upar, buffer_r_1,
                          buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
-
-    # Upwinded using upar as advection velocity, to be used in energy equation
-    @loop_r_z ir iz begin
-        dummy_zr[iz,ir] = -upar[iz,ir]
-    end
-    if electron_model ∈ (braginskii_fluid, kinetic_electrons)
-        @views derivative_z!(moments.electron.dppar_dz_upwind, ppar, dummy_zr,
-                             buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
-                             buffer_r_5, buffer_r_6, z_spectral, z)
-    end
 
     # centred second derivative for dissipation
     if numerical_dissipation.moment_dissipation_coefficient > 0.0
