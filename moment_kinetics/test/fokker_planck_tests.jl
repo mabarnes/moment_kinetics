@@ -22,6 +22,7 @@ using moment_kinetics.fokker_planck_test: dHdvperp_Maxwellian, dHdvpa_Maxwellian
 using moment_kinetics.fokker_planck_calculus: calculate_rosenbluth_potentials_via_elliptic_solve!, calculate_rosenbluth_potential_boundary_data_exact!
 using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary_data, allocate_rosenbluth_potential_boundary_data
 using moment_kinetics.fokker_planck_calculus: enforce_vpavperp_BCs!, calculate_rosenbluth_potentials_via_direct_integration!
+using moment_kinetics.fokker_planck_calculus: interpolate_2D_vspace!
 
 function create_grids(ngrid,nelement_vpa,nelement_vperp;
                       Lvpa=12.0,Lvperp=6.0)
@@ -69,6 +70,80 @@ function runtests()
     print_to_screen = false
     @testset "Fokker Planck tests" verbose=use_verbose begin
         println("Fokker Planck tests")
+        
+        @testset " - test Lagrange-polynomial 2D interpolation" begin
+            println(" - test Lagrange-polynomial 2D interpolation")
+            ngrid = 9
+            nelement_vpa = 16
+            nelement_vperp = 8
+            vpa, vpa_spectral, vperp, vperp_spectral = create_grids(ngrid,nelement_vpa,nelement_vperp,
+                                                                        Lvpa=8.0,Lvperp=4.0)
+            
+            # electron pdf on electron grids
+            Fe = allocate_shared_float(vpa.n,vperp.n)
+            # electron pdf on ion normalised grids
+            Fe_interp_ion_units = allocate_shared_float(vpa.n,vperp.n)
+            # exact value for comparison
+            Fe_exact_ion_units = allocate_shared_float(vpa.n,vperp.n)
+            # ion pdf on ion grids
+            Fi = allocate_shared_float(vpa.n,vperp.n)
+            # ion pdf on electron normalised grids
+            Fi_interp_electron_units = allocate_shared_float(vpa.n,vperp.n)
+            # exact value for comparison
+            Fi_exact_electron_units = allocate_shared_float(vpa.n,vperp.n)
+            # test array
+            F_err = allocate_float(vpa.n,vperp.n)
+            
+            dense = 1.0
+            upare = 0.0 # upare in electron reference units
+            vthe = 1.0 # vthe in electron reference units
+            densi = 1.0
+            upari = 0.0 # upari in ion reference units
+            vthi = 1.0 # vthi in ion reference units
+            # reference speeds for electrons and ions
+            cref_electron = 60.0 
+            cref_ion = 1.0
+            # scale factor for change of reference speed
+            scalefac = cref_ion/cref_electron
+            
+            begin_serial_region()
+            @serial_region begin
+                @loop_vperp_vpa ivperp ivpa begin
+                    Fe[ivpa,ivperp] = F_Maxwellian(dense,upare,vthe,vpa,vperp,ivpa,ivperp)
+                    Fe_exact_ion_units[ivpa,ivperp] = F_Maxwellian(dense,upare/scalefac,vthe/scalefac,vpa,vperp,ivpa,ivperp)/(scalefac^3)
+                    Fi[ivpa,ivperp] = F_Maxwellian(densi,upari,vthi,vpa,vperp,ivpa,ivperp)
+                    Fi_exact_electron_units[ivpa,ivperp] = (scalefac^3)*F_Maxwellian(densi,upari*scalefac,vthi*scalefac,vpa,vperp,ivpa,ivperp)
+                end
+            end
+            
+            begin_s_r_z_anyv_region()
+            interpolate_2D_vspace!(Fe_interp_ion_units,Fe,vpa,vperp,scalefac)
+            #println("Fe",Fe)
+            #println("Fe interp",Fe_interp_ion_units)
+            #println("Fe exact",Fe_exact_ion_units)
+            interpolate_2D_vspace!(Fi_interp_electron_units,Fi,vpa,vperp,1.0/scalefac)
+            #println("Fi",Fi)
+            #println("Fi interp", Fi_interp_electron_units)
+            #println("Fi exact",Fi_exact_electron_units)
+            
+            begin_serial_region()            
+            # check the result
+            @serial_region begin
+                # for electron data on ion grids
+                @. F_err = abs(Fe_interp_ion_units - Fe_exact_ion_units)
+                max_F_err = maximum(F_err)
+                max_F = maximum(Fe_exact_ion_units)
+                #println(max_F)
+                @test max_F_err < 3.0e-8 * max_F
+                # for ion data on electron grids
+                @. F_err = abs(Fi_interp_electron_units - Fi_exact_electron_units)
+                max_F_err = maximum(F_err)
+                max_F = maximum(Fi_exact_electron_units)
+                #println(max_F)
+                @test max_F_err < 3.0e-8 * max_F
+            end
+            
+        end
         
         @testset " - test weak-form 2D differentiation" begin
         # tests the correct definition of mass and stiffness matrices in 2D
