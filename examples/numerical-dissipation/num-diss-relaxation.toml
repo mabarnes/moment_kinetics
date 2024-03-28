@@ -58,7 +58,7 @@ vperp_L = 3.0
 vperp_bc = "zero"
 vperp_discretization = "gausslegendre_pseudospectral"
 
-[numerical_dissipation]
+[ion_numerical_dissipation]
 vpa_dissipation_coefficient = 0.1
 vperp_dissipation_coefficient = 0.1
 z_dissipation_coefficient = -1.0

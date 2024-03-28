@@ -52,7 +52,7 @@ Creates the structs for the pdf and the velocity-space moments
 """
 function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
                                   evolve_moments, collisions, external_source_settings,
-                                  numerical_dissipation, t_input)
+                                  num_diss_params, t_input)
     pdf = create_pdf(composition, r, z, vperp, vpa, vzeta, vr, vz)
 
     # create the 'moments' struct that contains various v-space moments and other
@@ -63,13 +63,13 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
     ion = create_moments_ion(z.n, r.n, composition.n_ion_species,
         evolve_moments.density, evolve_moments.parallel_flow,
         evolve_moments.parallel_pressure, external_source_settings.ion,
-        numerical_dissipation)
+        num_diss_params)
     electron = create_moments_electron(z.n, r.n,
-        composition.electron_physics, numerical_dissipation)
+        composition.electron_physics, num_diss_params)
     neutral = create_moments_neutral(z.n, r.n, composition.n_neutral_species,
         evolve_moments.density, evolve_moments.parallel_flow,
         evolve_moments.parallel_pressure, external_source_settings.neutral,
-        numerical_dissipation)
+        num_diss_params)
 
     if abs(collisions.ionization) > 0.0 || z.bc == "wall"
         # if ionization collisions are included or wall BCs are enforced, then particle
@@ -1365,7 +1365,7 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
         enforce_boundary_condition_on_electron_pdf!(pdf, phi, vth, upar, vperp, vpa,
                                                     vperp_spectral, vpa_spectral,
                                                     vpa_advect, moments,
-                                                    num_diss_params.vpa_dissipation_coefficient > 0.0,
+                                                    num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
                                                     me_over_mi)
         begin_r_region()
         @loop_r ir begin

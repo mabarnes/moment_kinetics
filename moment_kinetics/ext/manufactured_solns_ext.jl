@@ -638,31 +638,31 @@ using IfElse
             Si += - nuii_krook*(FMaxwellian - dfni)
         end
         include_num_diss_in_MMS = true
-        if num_diss_params.vpa_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
-            Si += - num_diss_params.vpa_dissipation_coefficient*Dvpa(Dvpa(dfni))
+        if num_diss_params.ion.vpa_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Si += - num_diss_params.ion.vpa_dissipation_coefficient*Dvpa(Dvpa(dfni))
         end
-        if num_diss_params.vperp_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
-            Si += - num_diss_params.vperp_dissipation_coefficient*Dvperp(Dvperp(dfni))
+        if num_diss_params.ion.vperp_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Si += - num_diss_params.ion.vperp_dissipation_coefficient*Dvperp(Dvperp(dfni))
         end
-        if num_diss_params.r_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
-            Si += - rfac*num_diss_params.r_dissipation_coefficient*Dr(Dr(dfni))
+        if num_diss_params.ion.r_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Si += - rfac*num_diss_params.ion.r_dissipation_coefficient*Dr(Dr(dfni))
         end
-        if num_diss_params.z_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
-            Si += - num_diss_params.z_dissipation_coefficient*Dz(Dz(dfni))
+        if num_diss_params.ion.z_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Si += - num_diss_params.ion.z_dissipation_coefficient*Dz(Dz(dfni))
         end
 
         Source_i = expand_derivatives(Si)
         
         # the neutral source to maintain the manufactured solution
         Sn = Dt(dfnn) + vz * Dz(dfnn) + rfac*vr * Dr(dfnn) + cx_frequency* (densi*dfnn - densn*vrvzvzeta_dfni) + ionization_frequency*dense*dfnn
-        if num_diss_params.vz_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
-            Sn += - num_diss_params.vz_dissipation_coefficient*Dvz(Dvz(dfnn))
+        if num_diss_params.neutral.vz_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Sn += - num_diss_params.neutral.vz_dissipation_coefficient*Dvz(Dvz(dfnn))
         end
-        if num_diss_params.r_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
-            Sn += - rfac*num_diss_params.r_dissipation_coefficient*Dr(Dr(dfnn))
+        if num_diss_params.neutral.r_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Sn += - rfac*num_diss_params.neutral.r_dissipation_coefficient*Dr(Dr(dfnn))
         end
-        if num_diss_params.z_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
-            Sn += - num_diss_params.z_dissipation_coefficient*Dz(Dz(dfnn))
+        if num_diss_params.neutral.z_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Sn += - num_diss_params.neutral.z_dissipation_coefficient*Dz(Dz(dfnn))
         end
         
         Source_n = expand_derivatives(Sn)

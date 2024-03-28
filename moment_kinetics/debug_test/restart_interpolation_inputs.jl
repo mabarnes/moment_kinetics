@@ -60,7 +60,8 @@ base_input = Dict(
      "vzeta_nelement" => 1,
      "vr_ngrid" => 1,
      "vr_nelement" => 1,
-     "numerical_dissipation" => Dict{String,Any}("force_minimum_pdf_value" => 0.0))
+     "ion_numerical_dissipation" => Dict{String,Any}("force_minimum_pdf_value" => 0.0),
+     "neutral_numerical_dissipation" => Dict{String,Any}("force_minimum_pdf_value" => 0.0))
 
 test_input =
     merge(base_input,

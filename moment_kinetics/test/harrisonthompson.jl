@@ -141,7 +141,7 @@ test_input_chebyshev_split1 = merge(test_input_chebyshev,
 test_input_chebyshev_split2 = merge(test_input_chebyshev_split1,
                                     Dict("run_name" => "chebyshev_pseudospectral_split2",
                                          "evolve_moments_parallel_flow" => true,
-                                         "numerical_dissipation" => Dict("force_minimum_pdf_value" => 0.0)))
+                                         "ion_numerical_dissipation" => Dict("force_minimum_pdf_value" => 0.0)))
 
 test_input_chebyshev_split3 = merge(test_input_chebyshev_split2,
                                     Dict("run_name" => "chebyshev_pseudospectral_split3",
