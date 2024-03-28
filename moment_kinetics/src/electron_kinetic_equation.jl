@@ -1258,7 +1258,8 @@ function electron_adaptive_timestep_update!(scratch, t, t_params, moments, z_adv
     end
 
     adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, error_norms,
-                                       total_points, current_dt, error_norm_method)
+                                       total_points, current_dt, error_norm_method,
+                                       electron=true)
 
     return nothing
 end

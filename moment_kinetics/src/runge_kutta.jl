@@ -732,7 +732,8 @@ end
 Use the calculated `CFL_limits` and `error_norms` to update the timestep in `t_params`.
 """
 function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, error_norms,
-                                            total_points, current_dt, error_norm_method)
+                                            total_points, current_dt, error_norm_method;
+                                            electron=false)
     # Get global minimum of CFL limits
     CFL_limit = nothing
     this_limit_caused_by = nothing
@@ -907,7 +908,8 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
                 t_params.limit_caused_by[this_limit_caused_by] += 1
 
                 if (t_params.step_counter[] % 1000 == 0) && global_rank[] == 0
-                    println("step ", t_params.step_counter[], ": t=",
+                    prefix = electron ? "electron" : "ion"
+                    println("$prefix step ", t_params.step_counter[], ": t=",
                             round(t, sigdigits=6), ", nfail=", t_params.failure_counter[],
                             ", dt=", t_params.dt[])
                 end
