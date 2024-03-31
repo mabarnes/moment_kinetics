@@ -464,8 +464,12 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
 
         if (mod(t_params.step_counter[] - initial_step_counter,100) == 0)
             begin_serial_region()
-            if global_rank[] == 0
-                println("iteration: ", t_params.step_counter[] - initial_step_counter, " time: ", time, " dt_electron: ", t_params.dt[], " phi_boundary: ", phi[[1,end],1], " residual: ", residual)
+            @serial_region begin
+                if z.irank == 0 && z.irank == z.nrank - 1
+                    println("iteration: ", t_params.step_counter[] - initial_step_counter, " time: ", time, " dt_electron: ", t_params.dt[], " phi_boundary: ", phi[[1,end],1], " residual: ", residual)
+                elseif z.irank == 0
+                    println("iteration: ", t_params.step_counter[] - initial_step_counter, " time: ", time, " dt_electron: ", t_params.dt[], " phi_boundary_lower: ", phi[1,1], " residual: ", residual)
+                end
             end
         end
         if (time ≥ dfns_output_times[output_counter - initial_output_counter] - epsilon)
