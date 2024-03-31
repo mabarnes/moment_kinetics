@@ -1210,7 +1210,7 @@ function electron_adaptive_timestep_update!(scratch, t, t_params, moments, z_adv
     #
     # z-advection
     # No need to synchronize here, as we just called _block_synchronize()
-    begin_r_z_vperp_vpa_region(; no_synchronize=true)
+    begin_r_vperp_vpa_region(; no_synchronize=true)
     update_electron_speed_z!(z_advect[1], moments.electron.upar, moments.electron.vth,
                              vpa.grid)
     z_CFL = get_minimum_CFL_z(z_advect[1].speed, z)
@@ -1221,6 +1221,7 @@ function electron_adaptive_timestep_update!(scratch, t, t_params, moments, z_adv
     end
 
     # vpa-advection
+    begin_r_z_vperp_region()
     update_electron_speed_vpa!(vpa_advect[1], moments.electron.dens,
                                moments.electron.upar, moments.electron.ppar,
                                moments, vpa.grid, external_source_settings.electron)
