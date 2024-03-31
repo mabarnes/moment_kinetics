@@ -513,6 +513,10 @@ end
 
     import MPI: Buffer
     function Buffer(A::DebugMPISharedArray)
+        A.is_initialized .= 1
+        A.is_read .= true
+        A.is_written .= true
+        A.accessed[] = true
         return Buffer(A.data)
     end
 
