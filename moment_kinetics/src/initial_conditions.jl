@@ -197,6 +197,23 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
                      pdf.ion.norm, vpa, vperp, z, r, composition,
                      moments.evolve_density, moments.evolve_upar, moments.evolve_ppar)
 
+        begin_serial_region()
+        @serial_region begin
+            # If electrons are being used, they will be initialized properly later. Here
+            # we only set the values to avoid false positives from the debug checks
+            # (when @debug_track_initialized is active).
+            moments.electron.dens .= 0.0
+            moments.electron.upar .= 0.0
+            moments.electron.ppar .= 0.0
+            moments.electron.qpar .= 0.0
+            moments.electron.constraints_A_coefficient .= 1.0
+            moments.electron.constraints_B_coefficient .= 0.0
+            moments.electron.constraints_C_coefficient .= 0.0
+            if composition.electron_physics == kinetic_electrons
+                pdf.electron.norm .= 0.0
+            end
+        end
+
         initialize_external_source_amplitude!(moments, external_source_settings, vperp,
                                               vzeta, vr, n_neutral_species)
         initialize_external_source_controller_integral!(moments, external_source_settings,

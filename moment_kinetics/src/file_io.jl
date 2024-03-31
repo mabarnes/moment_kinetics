@@ -1205,22 +1205,30 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
                                       description="electron species thermal speed",
                                       units="c_ref")
 
-    external_source_electron_amplitude = create_dynamic_variable!(
-        dynamic, "external_source_electron_amplitude", mk_float, z, r;
-        parallel_io=parallel_io, description="Amplitude of the external source for electrons",
-        units="n_ref/c_ref^3*c_ref/L_ref")
-    external_source_electron_density_amplitude = create_dynamic_variable!(
-        dynamic, "external_source_electron_density_amplitude", mk_float, z, r;
-        parallel_io=parallel_io, description="Amplitude of the external density source for electrons",
-        units="n_ref*c_ref/L_ref")
-    external_source_electron_momentum_amplitude = create_dynamic_variable!(
-        dynamic, "external_source_electron_momentum_amplitude", mk_float, z, r;
-        parallel_io=parallel_io, description="Amplitude of the external momentum source for electrons",
-        units="m_ref*n_ref*c_ref*c_ref/L_ref")
-    external_source_electron_pressure_amplitude = create_dynamic_variable!(
-        dynamic, "external_source_electron_pressure_amplitude", mk_float, z, r;
-        parallel_io=parallel_io, description="Amplitude of the external pressure source for electrons",
-        units="m_ref*n_ref*c_ref^2*c_ref/L_ref")
+    electron_source_settings = external_source_settings.electron
+    if electron_source_settings.active
+        external_source_electron_amplitude = create_dynamic_variable!(
+            dynamic, "external_source_electron_amplitude", mk_float, z, r;
+            parallel_io=parallel_io, description="Amplitude of the external source for electrons",
+            units="n_ref/c_ref^3*c_ref/L_ref")
+        external_source_electron_density_amplitude = create_dynamic_variable!(
+            dynamic, "external_source_electron_density_amplitude", mk_float, z, r;
+            parallel_io=parallel_io, description="Amplitude of the external density source for electrons",
+            units="n_ref*c_ref/L_ref")
+        external_source_electron_momentum_amplitude = create_dynamic_variable!(
+            dynamic, "external_source_electron_momentum_amplitude", mk_float, z, r;
+            parallel_io=parallel_io, description="Amplitude of the external momentum source for electrons",
+            units="m_ref*n_ref*c_ref*c_ref/L_ref")
+        external_source_electron_pressure_amplitude = create_dynamic_variable!(
+            dynamic, "external_source_electron_pressure_amplitude", mk_float, z, r;
+            parallel_io=parallel_io, description="Amplitude of the external pressure source for electrons",
+            units="m_ref*n_ref*c_ref^2*c_ref/L_ref")
+    else
+        external_source_electron_amplitude = nothing
+        external_source_electron_density_amplitude = nothing
+        external_source_electron_momentum_amplitude = nothing
+        external_source_electron_pressure_amplitude = nothing
+    end
 
     electron_constraints_A_coefficient =
         create_dynamic_variable!(dynamic, "electron_constraints_A_coefficient", mk_float, z, r;
@@ -1959,18 +1967,20 @@ function write_electron_moments_data_to_binary(moments, t_params,
                               moments.electron.qpar, t_idx, parallel_io, z, r)
         append_to_dynamic_var(io_moments.electron_thermal_speed, moments.electron.vth,
                               t_idx, parallel_io, z, r)
-        append_to_dynamic_var(io_moments.external_source_electron_amplitude,
-                              moments.electron.external_source_amplitude, t_idx,
-                              parallel_io, z, r)
-        append_to_dynamic_var(io_moments.external_source_electron_density_amplitude,
-                              moments.electron.external_source_density_amplitude,
-                              t_idx, parallel_io, z, r)
-        append_to_dynamic_var(io_moments.external_source_electron_momentum_amplitude,
-                              moments.electron.external_source_momentum_amplitude,
-                              t_idx, parallel_io, z, r)
-        append_to_dynamic_var(io_moments.external_source_electron_pressure_amplitude,
-                              moments.electron.external_source_pressure_amplitude,
-                              t_idx, parallel_io, z, r)
+        if io_moments.external_source_electron_amplitude !== nothing
+            append_to_dynamic_var(io_moments.external_source_electron_amplitude,
+                                  moments.electron.external_source_amplitude, t_idx,
+                                  parallel_io, z, r)
+            append_to_dynamic_var(io_moments.external_source_electron_density_amplitude,
+                                  moments.electron.external_source_density_amplitude,
+                                  t_idx, parallel_io, z, r)
+            append_to_dynamic_var(io_moments.external_source_electron_momentum_amplitude,
+                                  moments.electron.external_source_momentum_amplitude,
+                                  t_idx, parallel_io, z, r)
+            append_to_dynamic_var(io_moments.external_source_electron_pressure_amplitude,
+                                  moments.electron.external_source_pressure_amplitude,
+                                  t_idx, parallel_io, z, r)
+        end
         append_to_dynamic_var(io_moments.electron_constraints_A_coefficient,
                               moments.electron.constraints_A_coefficient, t_idx,
                               parallel_io, z, r)
