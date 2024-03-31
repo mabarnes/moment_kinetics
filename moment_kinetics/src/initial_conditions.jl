@@ -147,6 +147,11 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
             # initialise pressures assuming isotropic distribution
             @. moments.ion.ppar = 0.5 * moments.ion.dens * moments.ion.vth^2
             @. moments.ion.pperp = moments.ion.ppar
+            if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
+                @. moments.ion.constraints_A_coefficient = 1.0
+                @. moments.ion.constraints_B_coefficient = 0.0
+                @. moments.ion.constraints_C_coefficient = 0.0
+            end
             if n_neutral_species > 0
                 # initialise the neutral density profile
                 init_density!(moments.neutral.dens, z, r, species.neutral, n_neutral_species)
@@ -162,6 +167,11 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
                 @. moments.neutral.pz = 0.5 * moments.neutral.dens * moments.neutral.vth^2
                 # calculate the total neutral pressure
                 @. moments.neutral.ptot = 1.5 * moments.neutral.dens * moments.neutral.vth^2
+                if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
+                    @. moments.neutral.constraints_A_coefficient = 1.0
+                    @. moments.neutral.constraints_B_coefficient = 0.0
+                    @. moments.neutral.constraints_C_coefficient = 0.0
+                end
             end
         end
         # reflect the fact that the ion moments have now been updated

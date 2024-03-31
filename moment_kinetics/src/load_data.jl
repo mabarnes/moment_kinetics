@@ -641,6 +641,10 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                                               restart_r_spectral, restart_z,
                                               restart_z_spectral, interpolation_needed)
             moments.ion.ppar_updated .= true
+            moments.ion.pperp .= reload_moment("perpendicular_pressure", dynamic,
+                                               time_index, r, z, r_range, z_range,
+                                               restart_r, restart_r_spectral, restart_z,
+                                               restart_z_spectral, interpolation_needed)
             moments.ion.qpar .= reload_moment("parallel_heat_flux", dynamic, time_index,
                                               r, z, r_range, z_range, restart_r,
                                               restart_r_spectral, restart_z,
@@ -759,6 +763,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                                         restart_vpa_spectral, interpolation_needed,
                                         restart_evolve_density, restart_evolve_upar,
                                         restart_evolve_ppar)
+            elseif pdf.electron !== nothing
+                # The electron distribution function will be initialized later
+                pdf.electron.norm .= 0.0
             end
 
             if composition.n_neutral_species > 0
