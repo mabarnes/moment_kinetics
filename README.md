@@ -344,11 +344,11 @@ $ julia -p 8 -O3 --project run_parameter_scan.jl path/to/scan/input.toml
 There is a test suite in the `test/` subdirectory. It can be run in a few ways:
 * Execute some or all of the tests as a script. For example in the terminal run
     ```
-    $ julia -O3 --project moment_kinetcs/test/runtests.jl
+    $ julia -O3 --project moment_kinetics/test/runtests.jl
     ```
     or in the REPL run
     ```
-    julia> include("moment_kinetcs/test/runtests.jl")
+    julia> include("moment_kinetics/test/runtests.jl")
     ```
     Individual test files can also be used instead of `runtests.jl`, which runs all the tests.
 * You can also run the tests using `Pkg`. Either using `pkg>` mode
