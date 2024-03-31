@@ -390,23 +390,23 @@ end
     Special type for debugging race conditions in accesses to shared-memory arrays.
     Only used if debugging._debug_level is high enough.
     """
-    struct DebugMPISharedArray{T, N} <: AbstractArray{T, N}
-        data::Array{T,N}
+    struct DebugMPISharedArray{T, N, TArray <: AbstractArray{T,N}, TIntArray <: AbstractArray{mk_int,N}, TBoolArray <: AbstractArray{Bool,N}} <: AbstractArray{T, N}
+        data::TArray
         accessed::Ref{Bool}
-        is_initialized::Array{mk_int,N}
-        is_read::Array{Bool,N}
-        is_written::Array{Bool, N}
+        is_initialized::TIntArray
+        is_read::TBoolArray
+        is_written::TBoolArray
         creation_stack_trace::String
         @debug_detect_redundant_block_synchronize begin
-            previous_is_read::Array{Bool,N}
-            previous_is_written::Array{Bool, N}
+            previous_is_read::TBoolArray
+            previous_is_written::TBoolArray
         end
     end
 
     export DebugMPISharedArray
 
     # Constructors
-    function DebugMPISharedArray(array::Array, comm)
+    function DebugMPISharedArray(array::AbstractArray, comm)
         dims = size(array)
         is_initialized = allocate_shared(mk_int, dims; comm=comm, maybe_debug=false)
         if block_rank[] == 0
@@ -482,6 +482,16 @@ end
     function Base.convert(::Type{Array}, a::DebugMPISharedArray)
         error("Forbidden to convert DebugMPISharedArray to Array - this would "
               * "silently disable the debug checks")
+    end
+
+    # Explicit overload for view() so the result is a DebugMPISharedArray
+    import Base: view
+    function view(A::DebugMPISharedArray, inds...)
+        return DebugMPISharedArray(
+            (isa(getfield(A, name), AbstractArray) ?
+             view(getfield(A, name), inds...) :
+             getfield(A, name)
+             for name ∈ fieldnames(typeof(A)))...)
     end
 
     # Explicit overload for vec() so the result is a DebugMPISharedArray
