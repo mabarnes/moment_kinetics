@@ -508,12 +508,19 @@ end
     # SparseArray A
     import LinearAlgebra: ldiv!, Factorization
     function ldiv!(Y::DebugMPISharedArray, A::Factorization, B::DebugMPISharedArray)
+        @debug_track_initialized begin
+            Y.is_initialized .= 1
+        end
+        Y.is_written .= true
+        Y.accessed[] = true
         return ldiv!(Y.data, A, B.data)
     end
 
     import MPI: Buffer
     function Buffer(A::DebugMPISharedArray)
-        A.is_initialized .= 1
+        @debug_track_initialized begin
+            A.is_initialized .= 1
+        end
         A.is_read .= true
         A.is_written .= true
         A.accessed[] = true
