@@ -8,8 +8,7 @@ using moment_kinetics
 test_output_directory = tempname()
 mkpath(test_output_directory)
 
-base_input = Dict("nstep"=>1,
-                  "run_name"=>"precompilation",
+base_input = Dict("run_name" => "precompilation",
                   "base_directory" => test_output_directory,
                   "dt" => 0.0,
                   "r_ngrid" => 5,
@@ -44,7 +43,8 @@ base_input = Dict("nstep"=>1,
                   "vz_nelement" => 3,
                   "vz_bc" => "zero",
                   "vz_L" => 4.0,
-                  "vz_discretization" => "finite_difference")
+                  "vz_discretization" => "finite_difference",
+                  "timestepping" => Dict{String,Any}("nstep" => 1))
 cheb_input = merge(base_input, Dict("r_discretization" => "chebyshev_pseudospectral",
                                     "z_discretization" => "chebyshev_pseudospectral",
                                     "vperp_discretization" => "chebyshev_pseudospectral",
