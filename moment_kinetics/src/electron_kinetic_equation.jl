@@ -182,7 +182,9 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
     # t_params are set relative to 0.0).
     moments_output_times = t_params.moments_output_times .+ initial_time
     dfns_output_times = t_params.dfns_output_times .+ initial_time
-    if io_initial_electron !== nothing
+    if io_initial_electron === nothing
+        t_params.next_output_time[] = Inf
+    else
         t_params.next_output_time[] = dfns_output_times[1]
     end
 
