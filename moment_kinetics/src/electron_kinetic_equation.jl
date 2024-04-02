@@ -714,6 +714,11 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
             #    end
             #end
             upar0 = upar[1,ir]
+            if upar0 >= 0.0
+                error("In lower-z boundary condition, upar0=$upar0 has the wrong sign.")
+            elseif isnan(upar0)
+                error("In lower-z boundary condition, upar0=$upar0.")
+            end
             #println("before pdf left ", pdf[:,1,1,ir])
             while upar_integral > upar0 && ivpa_max > 1
                 ivpa += 1
@@ -723,6 +728,11 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
                 # calculate the updated first moment of the normalised pdf
                 upar_integral += vpa_unnorm[ivpa] * pdf[ivpa,1,1,ir] * vpa.wgts[ivpa]
                 #println("left ", ivpa, " ", upar_integral, " ", upar0)
+            end
+            if ivpa ≥ vpa.n
+                error("In lower-z boundary condition, upar_integral failed to reach upar0")
+            elseif ivpa ≤ 1
+                error("In lower-z boundary condition, ivpa=$ivpa ≤ 1")
             end
             integral_excess = upar_integral - upar0
             fraction_of_pdf = integral_excess / (vpa_unnorm[ivpa] * vpa.wgts[ivpa]) / pdf[ivpa,1,1,ir]
@@ -961,6 +971,11 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
             #    end
             #end
             upar_end = upar[end,ir]
+            if upar_end <= 0.0
+                error("In upper-z boundary condition, upar_end=$upar_end has the wrong sign.")
+            elseif isnan(upar_end)
+                error("In upper-z boundary condition, upar_end=$upar_end.")
+            end
             #println("before pdf ", pdf[:,1,end,ir])
             while upar_integral < upar_end && ivpa > 1
                 ivpa -= 1
@@ -970,6 +985,11 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
                 # calculate the updated first moment of the normalised pdf
                 upar_integral += vpa_unnorm[ivpa] * pdf[ivpa,1,end,ir] * vpa.wgts[ivpa]
                 #println("right ", ivpa, " ", upar_integral, " ", upar_end)
+            end
+            if ivpa ≤ 1
+                error("In upper-z boundary condition, upar_integral failed to reach upar_end")
+            elseif ivpa ≥ vpa.n
+                error("In upper-z boundary condition, ivpa=$ivpa ≥ vpa.n=$(vpa.n)")
             end
             integral_excess = upar_integral - upar_end
             fraction_of_pdf = integral_excess / (vpa_unnorm[ivpa] * vpa.wgts[ivpa]) / pdf[ivpa,1,end,ir]
