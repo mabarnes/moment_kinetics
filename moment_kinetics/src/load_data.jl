@@ -15,7 +15,7 @@ export read_distributed_zr_data!
 
 using ..array_allocation: allocate_float, allocate_int
 using ..calculus: derivative!
-using ..communication: setup_distributed_memory_MPI
+using ..communication
 using ..coordinates: coordinate, define_coordinate
 using ..electron_vpa_advection: update_electron_speed_vpa!
 using ..electron_z_advection: update_electron_speed_z!
@@ -874,6 +874,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
             close(fid)
         end
     end
+
+    restart_had_kinetic_electrons = MPI.Bcast(restart_had_kinetic_electrons, 0,
+                                              comm_block[])
 
     return code_time, dt, dt_before_last_fail, electron_dt, electron_dt_before_last_fail,
            previous_runs_info, time_index, restart_had_kinetic_electrons
