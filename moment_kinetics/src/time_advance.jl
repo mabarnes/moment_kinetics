@@ -292,13 +292,21 @@ function setup_time_info(t_input, code_time, dt_reload, dt_before_last_fail_relo
 
     end_time = code_time + t_input.dt * t_input.nstep
     epsilon = 1.e-11
-    moments_output_times = [code_time + i*t_input.dt
-                            for i ∈ t_input.nwrite:t_input.nwrite:t_input.nstep]
+    if t_input.nwrite == 0
+        moments_output_times = [end_time]
+    else
+        moments_output_times = [code_time + i*t_input.dt
+                                for i ∈ t_input.nwrite:t_input.nwrite:t_input.nstep]
+    end
     if moments_output_times[end] < end_time - epsilon
         push!(moments_output_times, end_time)
     end
-    dfns_output_times = [code_time + i*t_input.dt
-                         for i ∈ t_input.nwrite_dfns:t_input.nwrite_dfns:t_input.nstep]
+    if t_input.nwrite_dfns == 0
+        dfns_output_times = [end_time]
+    else
+        dfns_output_times = [code_time + i*t_input.dt
+                             for i ∈ t_input.nwrite_dfns:t_input.nwrite_dfns:t_input.nstep]
+    end
     if dfns_output_times[end] < end_time - epsilon
         push!(dfns_output_times, end_time)
     end
@@ -1172,6 +1180,11 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
     iwrite_dfns = 2
     finish_now = false
     t_params.step_counter[] = 1
+    if t ≥ t_params.end_time - epsilon
+        # User must have requested zero output steps, i.e. to just write out the initial
+        # profiles
+        return nothing
+    end
     while true
         if t_params.split_operators
             # MRH NOT SUPPORTED
