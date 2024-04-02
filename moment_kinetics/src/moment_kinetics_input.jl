@@ -22,7 +22,6 @@ using ..reference_parameters
 using ..geo: init_magnetic_geometry, setup_geometry_input
 
 using MPI
-using Quadmath
 using TOML
 using UUIDs
 

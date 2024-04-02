@@ -8,6 +8,7 @@ export allocate_advection_structs
 export setup_dummy_and_buffer_arrays
 
 using MPI
+using Quadmath
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float, allocate_shared_bool
 using ..communication
