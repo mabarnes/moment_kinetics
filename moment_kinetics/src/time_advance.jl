@@ -1770,7 +1770,7 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
     # Don't parallelise over species here, because get_minimum_CFL_*() does an MPI
     # reduction over the shared-memory block, so all processes must calculate the same
     # species at the same time.
-    begin_r_z_vperp_vpa_region(; no_synchronize=true)
+    begin_r_vperp_vpa_region(; no_synchronize=true)
     ion_z_CFL = Inf
     @loop_s is begin
         update_speed_z!(z_advect[is], moments.charged.upar, moments.charged.vth,
@@ -1783,6 +1783,7 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
     push!(CFL_limits, t_params.CFL_prefactor * ion_z_CFL)
 
     # ion vpa-advection
+    begin_r_z_vperp_region()
     ion_vpa_CFL = Inf
     update_speed_vpa!(vpa_advect, fields, scratch[end], moments, vpa, vperp, z, r,
                       composition, collisions, external_source_settings.ion, t,
@@ -1850,7 +1851,7 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         # Don't parallelise over species here, because get_minimum_CFL_*() does an MPI
         # reduction over the shared-memory block, so all processes must calculate the same
         # species at the same time.
-        begin_r_z_vzeta_vr_vz_region(; no_synchronize=true)
+        begin_r_vzeta_vr_vz_region()
         neutral_z_CFL = Inf
         @loop_sn isn begin
             update_speed_neutral_z!(neutral_z_advect[isn], moments.neutral.uz,
@@ -1864,6 +1865,7 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         push!(CFL_limits, t_params.CFL_prefactor * neutral_z_CFL)
 
         # neutral vz-advection
+        begin_r_z_vzeta_vr_region()
         neutral_vz_CFL = Inf
         update_speed_neutral_vz!(neutral_vz_advect, fields, scratch[end],
                                  moments, vz, vr, vzeta, z, r, composition,
