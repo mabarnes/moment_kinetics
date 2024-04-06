@@ -1500,16 +1500,14 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     end
 
     # update the electrostatic potential phi
-    update_phi!(fields, scratch[istage+1], z, r, composition, z_spectral, r_spectral, scratch_dummy)
-    if !(( moments.evolve_upar || moments.evolve_ppar) &&
-              istage == length(scratch)-1)
-        # _block_synchronize() here because phi needs to be read on different ranks than
-        # it was written on, even though the loop-type does not change here. However,
-        # after the final RK stage can skip if:
-        #  * evolving upar or ppar as synchronization will be triggered after moments
-        #    updates at the beginning of the next RK step
-        _block_synchronize()
-    end
+    update_phi!(fields, scratch[istage+1], z, r, composition, z_spectral, r_spectral,
+                scratch_dummy)
+    # _block_synchronize() here because phi needs to be read on different ranks than
+    # it was written on, even though the loop-type does not change here. However,
+    # after the final RK stage can skip if:
+    #  * evolving upar or ppar as synchronization will be triggered after moments
+    #    updates at the beginning of the next RK step
+    _block_synchronize()
 
     if t_params.adaptive && istage == t_params.n_rk_stages
         # Note the timestep update must be done before calculating derived moments and
