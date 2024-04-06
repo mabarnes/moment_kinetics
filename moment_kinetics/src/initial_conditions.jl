@@ -463,8 +463,12 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
     # if using kinetic electrons
     if composition.electron_physics == kinetic_electrons
         begin_serial_region()
-        restart_filename = get_default_restart_filename(io_input, "initial_electron";
-                                                        error_if_no_file_found=false)
+        if t_input.no_restart
+            restart_filename = nothing
+        else
+            restart_filename = get_default_restart_filename(io_input, "initial_electron";
+                                                            error_if_no_file_found=false)
+        end
         if restart_filename === nothing
             # No file to restart from
             previous_runs_info = nothing
