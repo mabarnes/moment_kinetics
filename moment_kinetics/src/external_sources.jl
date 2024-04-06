@@ -891,6 +891,7 @@ up to date.
 """
 function external_electron_source_controller!(fvec_in, moments, electron_source_settings,
                                               dt)
+    begin_r_z_region()
 
     is = 1
     electron_moments = moments.electron
