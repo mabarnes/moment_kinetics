@@ -1889,13 +1889,13 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
               vz.n_global * vr.n_global * vzeta.n_global * z.n_global * r.n_global *
               n_neutral_species)
 
-        # Calculate error for ion moments, if necessary
+        # Calculate error for neutral moments, if necessary
         if moments.evolve_density
             begin_sn_r_z_region()
             rk_error_variable!(scratch, :density_neutral, t_params; neutrals=true)
             neut_n_err = local_error_norm(scratch[2].density_neutral,
-                                          scratch[end].density, t_params.rtol,
-                                          t_params.atol; method=error_norm_method,
+                                          scratch[end].density_neutral, t_params.rtol,
+                                          t_params.atol, true; method=error_norm_method,
                                           skip_r_inner=skip_r_inner,
                                           skip_z_lower=skip_z_lower,
                                           error_sum_zero=t_params.error_sum_zero)
@@ -1903,10 +1903,10 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
             push!(total_points, z.n_global * r.n_global * n_neutral_species)
         end
         if moments.evolve_upar
-            begin_s_r_z_region()
+            begin_sn_r_z_region()
             rk_error_variable!(scratch, :uz_neutral, t_params; neutrals=true)
             neut_u_err = local_error_norm(scratch[2].uz_neutral, scratch[end].uz_neutral,
-                                          t_params.rtol, t_params.atol;
+                                          t_params.rtol, t_params.atol, true;
                                           method=error_norm_method,
                                           skip_r_inner=skip_r_inner,
                                           skip_z_lower=skip_z_lower,
@@ -1915,10 +1915,10 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
             push!(total_points, z.n_global * r.n_global * n_neutral_species)
         end
         if moments.evolve_ppar
-            begin_s_r_z_region()
+            begin_sn_r_z_region()
             rk_error_variable!(scratch, :pz_neutral, t_params; neutrals=true)
             neut_p_err = local_error_norm(scratch[2].pz_neutral, scratch[end].pz_neutral,
-                                          t_params.rtol, t_params.atol;
+                                          t_params.rtol, t_params.atol, true;
                                           method=error_norm_method,
                                           skip_r_inner=skip_r_inner,
                                           skip_z_lower=skip_z_lower,
