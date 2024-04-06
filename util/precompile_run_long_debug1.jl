@@ -11,8 +11,7 @@ using moment_kinetics
 test_output_directory = tempname()
 mkpath(test_output_directory)
 
-base_input = Dict("nstep"=>1,
-                  "run_name"=>"precompilation",
+base_input = Dict("run_name"=>"precompilation",
                   "base_directory" => test_output_directory,
                   "dt" => 0.0,
                   "z_ngrid" => 5,
@@ -22,7 +21,8 @@ base_input = Dict("nstep"=>1,
                   "vpa_ngrid" => 5,
                   "vpa_nelement" => 1,
                   "vpa_bc" => "periodic",
-                  "vpa_discretization" => "finite_difference")
+                  "vpa_discretization" => "finite_difference",
+                  "timestepping" => Dict{String,Any}("nstep" => 1))
 cheb_input = merge(base_input, Dict("z_discretization" => "chebyshev_pseudospectral",
                                     "vpa_discretization" => "chebyshev_pseudospectral"))
 wall_bc_input = merge(base_input, Dict("z_bc" => "wall"))

@@ -277,6 +277,8 @@ Initialize the arrays `moments.ion.external_source_amplitude`,
 """
 function initialize_external_source_amplitude!(moments, external_source_settings, vperp,
                                                vzeta, vr, n_neutral_species)
+    begin_r_z_region()
+
     ion_source_settings = external_source_settings.ion
     if ion_source_settings.active
         if ion_source_settings.source_type == "energy"
@@ -486,22 +488,25 @@ Initialize the arrays `moments.ion.external_source_controller_integral` and
 """
 function initialize_external_source_controller_integral!(
              moments, external_source_settings, n_neutral_species)
-    ion_source_settings = external_source_settings.ion
-    if ion_source_settings.active
-        if ion_source_settings.PI_density_controller_I != 0.0 &&
-            ion_source_settings.source_type ∈ ("density_profile_control",
-                                               "density_midpoint_control")
-            moments.ion.external_source_controller_integral .= 0.0
+    begin_serial_region()
+    @serial_region begin
+        ion_source_settings = external_source_settings.ion
+        if ion_source_settings.active
+            if ion_source_settings.PI_density_controller_I != 0.0 &&
+                ion_source_settings.source_type ∈ ("density_profile_control",
+                                                   "density_midpoint_control")
+                moments.ion.external_source_controller_integral .= 0.0
+            end
         end
-    end
 
-    if n_neutral_species > 0
-        neutral_source_settings = external_source_settings.neutral
-        if neutral_source_settings.active
-            if neutral_source_settings.PI_density_controller_I != 0.0 &&
-                neutral_source_settings.source_type ∈ ("density_profile_control",
-                                                       "density_midpoint_control")
-                moments.neutral.external_source_controller_integral .= 0.0
+        if n_neutral_species > 0
+            neutral_source_settings = external_source_settings.neutral
+            if neutral_source_settings.active
+                if neutral_source_settings.PI_density_controller_I != 0.0 &&
+                    neutral_source_settings.source_type ∈ ("density_profile_control",
+                                                           "density_midpoint_control")
+                    moments.neutral.external_source_controller_integral .= 0.0
+                end
             end
         end
     end
@@ -751,6 +756,7 @@ Calculate the amplitude when using a PI controller for the density to set the ex
 source amplitude.
 """
 function external_ion_source_controller!(fvec_in, moments, ion_source_settings, dt)
+    begin_r_z_region()
 
     is = 1
     ion_moments = moments.ion
@@ -944,6 +950,7 @@ source amplitude.
 """
 function external_neutral_source_controller!(fvec_in, moments, neutral_source_settings, r,
                                              z, dt)
+    begin_r_z_region()
 
     is = 1
     neutral_moments = moments.neutral

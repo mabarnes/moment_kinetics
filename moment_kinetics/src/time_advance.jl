@@ -1650,97 +1650,103 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         end
     end
 
-    # update remaining velocity moments that are calculable from the evolved pdf
-    # Note these may be needed for the boundary condition on the neutrals, so must be
-    # calculated before that is applied. Also may be needed to calculate advection speeds
-    # for for CFL stability limit calculations in adaptive_timestep_update!().
-    update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition)
-    # update the diagnostic chodura condition
-    # update_chodura!(moments,new_scratch.pdf,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
-    # update the thermal speed
-    begin_s_r_z_region()
-    try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
-        update_vth!(moments.ion.vth, new_scratch.ppar, new_scratch.pperp, new_scratch.density, vperp, z, r, composition)
-    catch e
-        if global_size[] > 1
-            println("ERROR: error calculating vth in time_advance.jl")
-            println(e)
-            display(stacktrace(catch_backtrace()))
-            flush(stdout)
-            flush(stderr)
-            MPI.Abort(comm_world, 1)
+    function update_derived_ion_moments_and_derivatives()
+        # update remaining velocity moments that are calculable from the evolved pdf
+        # Note these may be needed for the boundary condition on the neutrals, so must be
+        # calculated before that is applied. Also may be needed to calculate advection speeds
+        # for for CFL stability limit calculations in adaptive_timestep_update!().
+        update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition)
+        # update the diagnostic chodura condition
+        # update_chodura!(moments,new_scratch.pdf,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
+        # update the thermal speed
+        begin_s_r_z_region()
+        try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
+            update_vth!(moments.ion.vth, new_scratch.ppar, new_scratch.pperp, new_scratch.density, vperp, z, r, composition)
+        catch e
+            if global_size[] > 1
+                println("ERROR: error calculating vth in time_advance.jl")
+                println(e)
+                display(stacktrace(catch_backtrace()))
+                flush(stdout)
+                flush(stderr)
+                MPI.Abort(comm_world, 1)
+            end
+            rethrow(e)
         end
-        rethrow(e)
+        # update the parallel heat flux
+        update_qpar!(moments.ion.qpar, moments.ion.qpar_updated, new_scratch.density,
+                     new_scratch.upar, moments.ion.vth, new_scratch.pdf, vpa, vperp, z, r,
+                     composition, moments.evolve_density, moments.evolve_upar,
+                     moments.evolve_ppar)
+
+        calculate_ion_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
+                                          num_diss_params.ion.moment_dissipation_coefficient)
     end
-    # update the parallel heat flux
-    update_qpar!(moments.ion.qpar, moments.ion.qpar_updated, new_scratch.density,
-                 new_scratch.upar, moments.ion.vth, new_scratch.pdf, vpa, vperp, z, r,
-                 composition, moments.evolve_density, moments.evolve_upar,
-                 moments.evolve_ppar)
+    update_derived_ion_moments_and_derivatives()
 
-    calculate_ion_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
-                                      num_diss_params.ion.moment_dissipation_coefficient)
+    function update_derived_electron_moments_and_derivatives()
+        # update the lowest three electron moments (density, upar and ppar)
+        calculate_electron_density!(new_scratch.electron_density, moments.electron.dens_updated, new_scratch.density)
+        calculate_electron_upar_from_charge_conservation!(new_scratch.electron_upar, moments.electron.upar_updated,
+            new_scratch.electron_density, new_scratch.upar, new_scratch.density, composition.electron_physics, r, z)
+        # if electron model is braginskii_fluid, then ppar is evolved via the energy equation
+        # and is already updated;
+        # otherwise update assuming electron temperature is fixed in time
+        if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
+            @loop_r_z ir iz begin
+                new_scratch.electron_ppar[iz,ir] = (rk_coefs[1]*moments.electron.ppar[iz,ir] 
+                    + rk_coefs[2]*old_scratch.electron_ppar[iz,ir] + rk_coefs[3]*new_scratch.electron_ppar[iz,ir])
+            end
+        else
+            @loop_r_z ir iz begin
+                new_scratch.electron_ppar[iz,ir] = 0.5 * new_scratch.electron_density[iz,ir] *
+                                                   moments.electron.vth[iz,ir]^2
+            end
+        end
+        # regardless of electron model, electron ppar is now updated
+        moments.electron.ppar_updated[] = true
+        update_electron_vth_temperature!(moments, new_scratch.electron_ppar,
+                                         new_scratch.electron_density)
+        # calculate the corresponding zed derivatives of the moments
+        calculate_electron_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
+                                               num_diss_params.electron.moment_dissipation_coefficient, 
+                                               composition.electron_physics)
+        # update the electron parallel heat flux
+        calculate_electron_qpar!(moments.electron, new_scratch.pdf_electron,
+            new_scratch.electron_ppar, new_scratch.electron_upar, new_scratch.upar,
+            collisions.nu_ei, composition.me_over_mi, composition.electron_physics, vpa)
+        if composition.electron_physics == kinetic_electrons
+            max_electron_pdf_iterations = 100000
 
-    # update the lowest three electron moments (density, upar and ppar)
-    calculate_electron_density!(new_scratch.electron_density, moments.electron.dens_updated, new_scratch.density)
-    calculate_electron_upar_from_charge_conservation!(new_scratch.electron_upar, moments.electron.upar_updated,
-        new_scratch.electron_density, new_scratch.upar, new_scratch.density, composition.electron_physics, r, z)
-    # if electron model is braginskii_fluid, then ppar is evolved via the energy equation
-    # and is already updated;
-    # otherwise update assuming electron temperature is fixed in time
-    if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
-        @loop_r_z ir iz begin
-            new_scratch.electron_ppar[iz,ir] = (rk_coefs[1]*moments.electron.ppar[iz,ir] 
-                + rk_coefs[2]*old_scratch.electron_ppar[iz,ir] + rk_coefs[3]*new_scratch.electron_ppar[iz,ir])
+            # Copy ion and electron moments from `scratch` into `moments` to be used in
+            # electron kinetic equation update
+            begin_r_z_region()
+            @loop_s_r_z is ir iz begin
+                moments.ion.dens[iz,ir,is] = new_scratch.density[iz,ir,is]
+                moments.ion.upar[iz,ir,is] = new_scratch.upar[iz,ir,is]
+                moments.ion.ppar[iz,ir,is] = new_scratch.ppar[iz,ir,is]
+            end
+            @loop_sn_r_z isn ir iz begin
+                moments.neutral.dens[iz,ir,isn] = new_scratch.density_neutral[iz,ir,isn]
+                moments.neutral.uz[iz,ir,isn] = new_scratch.uz_neutral[iz,ir,isn]
+                moments.neutral.pz[iz,ir,isn] = new_scratch.pz_neutral[iz,ir,isn]
+            end
+            @loop_r_z ir iz begin
+                moments.electron.ppar[iz,ir] = new_scratch.electron_ppar[iz,ir]
+            end
+
+            update_electron_pdf!(scratch, pdf.electron.norm, moments, fields.phi, r, z, vperp,
+                                 vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
+                                 vpa_advect, scratch_dummy, t_params.electron, collisions,
+                                 composition, external_source_settings, num_diss_params,
+                                 max_electron_pdf_iterations)
         end
-    else
-        @loop_r_z ir iz begin
-            new_scratch.electron_ppar[iz,ir] = 0.5 * new_scratch.electron_density[iz,ir] *
-                                               moments.electron.vth[iz,ir]^2
-        end
+        # update the electron parallel friction force
+        calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, new_scratch.electron_density,
+            new_scratch.electron_upar, new_scratch.upar, moments.electron.dT_dz, composition.me_over_mi,
+            collisions.nu_ei, composition.electron_physics)
     end
-    # regardless of electron model, electron ppar is now updated
-    moments.electron.ppar_updated[] = true
-    update_electron_vth_temperature!(moments, new_scratch.electron_ppar,
-                                     new_scratch.electron_density)
-    # calculate the corresponding zed derivatives of the moments
-    calculate_electron_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
-                                           num_diss_params.electron.moment_dissipation_coefficient, 
-                                           composition.electron_physics)
-    # update the electron parallel heat flux
-    calculate_electron_qpar!(moments.electron, new_scratch.pdf_electron,
-        new_scratch.electron_ppar, new_scratch.electron_upar, new_scratch.upar,
-        collisions.nu_ei, composition.me_over_mi, composition.electron_physics, vpa)
-    if composition.electron_physics == kinetic_electrons
-        max_electron_pdf_iterations = 100000
-
-        # Copy ion and electron moments from `scratch` into `moments` to be used in
-        # electron kinetic equation update
-        begin_r_z_region()
-        @loop_s_r_z is ir iz begin
-            moments.ion.dens[iz,ir,is] = new_scratch.density[iz,ir,is]
-            moments.ion.upar[iz,ir,is] = new_scratch.upar[iz,ir,is]
-            moments.ion.ppar[iz,ir,is] = new_scratch.ppar[iz,ir,is]
-        end
-        @loop_sn_r_z isn ir iz begin
-            moments.neutral.dens[iz,ir,isn] = new_scratch.density_neutral[iz,ir,isn]
-            moments.neutral.uz[iz,ir,isn] = new_scratch.uz_neutral[iz,ir,isn]
-            moments.neutral.pz[iz,ir,isn] = new_scratch.pz_neutral[iz,ir,isn]
-        end
-        @loop_r_z ir iz begin
-            moments.electron.ppar[iz,ir] = new_scratch.electron_ppar[iz,ir]
-        end
-
-        update_electron_pdf!(scratch, pdf.electron.norm, moments, fields.phi, r, z, vperp,
-                             vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
-                             vpa_advect, scratch_dummy, t_params.electron, collisions,
-                             composition, external_source_settings, num_diss_params,
-                             max_electron_pdf_iterations)
-    end
-    # update the electron parallel friction force
-    calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, new_scratch.electron_density,
-        new_scratch.electron_upar, new_scratch.upar, moments.electron.dT_dz, composition.me_over_mi,
-        collisions.nu_ei, composition.electron_physics)
+    update_derived_electron_moments_and_derivatives()
 
     if composition.n_neutral_species > 0
         ##
@@ -1784,84 +1790,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
             end
         end
 
-        # update remaining velocity moments that are calculable from the evolved pdf
-        update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z, r,
-                                        composition)
-        # update the thermal speed
-        begin_sn_r_z_region()
-        @loop_sn_r_z isn ir iz begin
-            moments.neutral.vth[iz,ir,isn] = sqrt(2.0*new_scratch.pz_neutral[iz,ir,isn]/new_scratch.density_neutral[iz,ir,isn])
-        end
-
-        # update the parallel heat flux
-        update_neutral_qz!(moments.neutral.qz, moments.neutral.qz_updated,
-                           new_scratch.density_neutral, new_scratch.uz_neutral,
-                           moments.neutral.vth, new_scratch.pdf_neutral, vz, vr, vzeta, z,
-                           r, composition, moments.evolve_density, moments.evolve_upar,
-                           moments.evolve_ppar)
-
-        calculate_neutral_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral, 
-                                              num_diss_params.neutral.moment_dissipation_coefficient)
-    end
-
-    # update the electrostatic potential phi
-    update_phi!(fields, scratch[istage+1], z, r, composition, collisions, moments,
-                z_spectral, r_spectral, scratch_dummy)
-    if !(( moments.evolve_upar || moments.evolve_ppar) &&
-              istage == t_params.n_rk_stages)
-        # _block_synchronize() here because phi needs to be read on different ranks than
-        # it was written on, even though the loop-type does not change here. However,
-        # after the final RK stage can skip if:
-        #  * evolving upar or ppar as synchronization will be triggered after moments
-        #    updates at the beginning of the next RK step
-        _block_synchronize()
-    end
-
-    if t_params.adaptive && istage == t_params.n_rk_stages
-        # Note the timestep update must be done before calculating derived moments and
-        # moment derivatives, because the timstep might need to be re-done with a smaller
-        # dt, in which case scratch[t_params.n_rk_stages+1] will be reset to the values
-        # from the beginning of the timestep here.
-        adaptive_timestep_update!(scratch, t, t_params, moments, fields, composition,
-                                  collisions, geometry, external_source_settings,
-                                  advect_objects, r, z, vperp, vpa, vzeta, vr, vz)
-        # Re-do this in case adaptive_timestep_update re-arranged the `scratch` vector
-        new_scratch = scratch[istage+1]
-        old_scratch = scratch[istage]
-
-        if t_params.previous_dt[] == 0.0
-
-            # update remaining velocity moments that are calculable from the evolved pdf
-            # These need to be re-calculated because `new_scratch` was swapped with the
-            # beginning of the timestep, because the timestep failed
-            update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition)
-            # update the diagnostic chodura condition
-            # update_chodura!(moments,new_scratch.pdf,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
-            # update the thermal speed
-            begin_s_r_z_region()
-            try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
-                update_vth!(moments.ion.vth, new_scratch.ppar, new_scratch.pperp, new_scratch.density, vperp, z, r, composition)
-            catch e
-                if global_size[] > 1
-                    println("ERROR: error calculating vth in time_advance.jl")
-                    println(e)
-                    display(stacktrace(catch_backtrace()))
-                    flush(stdout)
-                    flush(stderr)
-                    MPI.Abort(comm_world, 1)
-                end
-                rethrow(e)
-            end
-            # update the parallel heat flux
-            update_qpar!(moments.ion.qpar, moments.ion.qpar_updated, new_scratch.density,
-                         new_scratch.upar, moments.ion.vth, new_scratch.pdf, vpa, vperp, z, r,
-                         composition, moments.evolve_density, moments.evolve_upar,
-                         moments.evolve_ppar)
-
-            calculate_ion_moment_derivatives!(moments, new_scratch, scratch_dummy, z,
-                                              z_spectral,
-                                              num_diss_params.ion.moment_dissipation_coefficient)
-
+        function update_derived_neutral_moments_and_derivatives()
             # update remaining velocity moments that are calculable from the evolved pdf
             update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z, r,
                                             composition)
@@ -1878,9 +1807,43 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
                                r, composition, moments.evolve_density, moments.evolve_upar,
                                moments.evolve_ppar)
 
-            calculate_neutral_moment_derivatives!(moments, new_scratch, scratch_dummy, z,
-                                                  z_spectral,
+            calculate_neutral_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral, 
                                                   num_diss_params.neutral.moment_dissipation_coefficient)
+        end
+        update_derived_neutral_moments_and_derivatives()
+    end
+
+    # update the electrostatic potential phi
+    update_phi!(fields, scratch[istage+1], z, r, composition, collisions, moments,
+                z_spectral, r_spectral, scratch_dummy)
+    # _block_synchronize() here because phi needs to be read on different ranks than
+    # it was written on, even though the loop-type does not change here. However,
+    # after the final RK stage can skip if:
+    #  * evolving upar or ppar as synchronization will be triggered after moments
+    #    updates at the beginning of the next RK step
+    _block_synchronize()
+
+    if t_params.adaptive && istage == t_params.n_rk_stages
+        # Note the timestep update must be done before calculating derived moments and
+        # moment derivatives, because the timstep might need to be re-done with a smaller
+        # dt, in which case scratch[t_params.n_rk_stages+1] will be reset to the values
+        # from the beginning of the timestep here.
+        adaptive_timestep_update!(scratch, t, t_params, moments, fields, composition,
+                                  collisions, geometry, external_source_settings,
+                                  advect_objects, r, z, vperp, vpa, vzeta, vr, vz)
+        # Re-do this in case adaptive_timestep_update re-arranged the `scratch` vector
+        new_scratch = scratch[istage+1]
+        old_scratch = scratch[istage]
+
+        if t_params.previous_dt[] == 0.0
+            # Re-update remaining velocity moments that are calculable from the evolved
+            # pdf These need to be re-calculated because `new_scratch` was swapped with
+            # the beginning of the timestep, because the timestep failed
+            update_derived_ion_moments_and_derivatives()
+            update_derived_electron_moments_and_derivatives()
+            if composition.n_neutral_species > 0
+                update_derived_neutral_moments_and_derivatives()
+            end
 
             # update the electrostatic potential phi
             update_phi!(fields, scratch[istage+1], z, r, composition, collisions, moments,
@@ -1941,7 +1904,7 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
     # Don't parallelise over species here, because get_minimum_CFL_*() does an MPI
     # reduction over the shared-memory block, so all processes must calculate the same
     # species at the same time.
-    begin_r_z_vperp_vpa_region(; no_synchronize=true)
+    begin_r_vperp_vpa_region(; no_synchronize=true)
     ion_z_CFL = Inf
     @loop_s is begin
         update_speed_z!(z_advect[is], moments.ion.upar, moments.ion.vth,
@@ -1954,6 +1917,7 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
     push!(CFL_limits, t_params.CFL_prefactor * ion_z_CFL)
 
     # ion vpa-advection
+    begin_r_z_vperp_region()
     ion_vpa_CFL = Inf
     update_speed_vpa!(vpa_advect, fields, scratch[t_params.n_rk_stages+1], moments, vpa, vperp, z, r,
                       composition, collisions, external_source_settings.ion, t,
@@ -2039,7 +2003,7 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         # Don't parallelise over species here, because get_minimum_CFL_*() does an MPI
         # reduction over the shared-memory block, so all processes must calculate the same
         # species at the same time.
-        begin_r_z_vzeta_vr_vz_region(; no_synchronize=true)
+        begin_r_vzeta_vr_vz_region()
         neutral_z_CFL = Inf
         @loop_sn isn begin
             update_speed_neutral_z!(neutral_z_advect[isn], moments.neutral.uz,
@@ -2053,6 +2017,7 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         push!(CFL_limits, t_params.CFL_prefactor * neutral_z_CFL)
 
         # neutral vz-advection
+        begin_r_z_vzeta_vr_region()
         neutral_vz_CFL = Inf
         update_speed_neutral_vz!(neutral_vz_advect, fields,
                                  scratch[t_params.n_rk_stages+1], moments, vz, vr, vzeta,
@@ -2080,13 +2045,13 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
               vz.n_global * vr.n_global * vzeta.n_global * z.n_global * r.n_global *
               n_neutral_species)
 
-        # Calculate error for ion moments, if necessary
+        # Calculate error for neutral moments, if necessary
         if moments.evolve_density
             begin_sn_r_z_region()
             rk_error_variable!(scratch, :density_neutral, t_params; neutrals=true)
             neut_n_err = local_error_norm(scratch[2].density_neutral,
-                                          scratch[t_params.n_rk_stages+1].density,
-                                          t_params.rtol, t_params.atol;
+                                          scratch[t_params.n_rk_stages+1].density_neutral,
+                                          t_params.rtol, t_params.atol, true;
                                           method=error_norm_method,
                                           skip_r_inner=skip_r_inner,
                                           skip_z_lower=skip_z_lower,
@@ -2095,11 +2060,11 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
             push!(total_points, z.n_global * r.n_global * n_neutral_species)
         end
         if moments.evolve_upar
-            begin_s_r_z_region()
+            begin_sn_r_z_region()
             rk_error_variable!(scratch, :uz_neutral, t_params; neutrals=true)
             neut_u_err = local_error_norm(scratch[2].uz_neutral,
                                           scratch[t_params.n_rk_stages+1].uz_neutral,
-                                          t_params.rtol, t_params.atol;
+                                          t_params.rtol, t_params.atol, true;
                                           method=error_norm_method,
                                           skip_r_inner=skip_r_inner,
                                           skip_z_lower=skip_z_lower,
@@ -2108,11 +2073,11 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
             push!(total_points, z.n_global * r.n_global * n_neutral_species)
         end
         if moments.evolve_ppar
-            begin_s_r_z_region()
+            begin_sn_r_z_region()
             rk_error_variable!(scratch, :pz_neutral, t_params; neutrals=true)
             neut_p_err = local_error_norm(scratch[2].pz_neutral,
                                           scratch[t_params.n_rk_stages+1].pz_neutral,
-                                          t_params.rtol, t_params.atol;
+                                          t_params.rtol, t_params.atol, true;
                                           method=error_norm_method,
                                           skip_r_inner=skip_r_inner,
                                           skip_z_lower=skip_z_lower,
