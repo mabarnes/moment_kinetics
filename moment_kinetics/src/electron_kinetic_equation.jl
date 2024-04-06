@@ -252,7 +252,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
     # evolve (artificially) in time until the residual is less than the tolerance
     while (!electron_pdf_converged
            && (t_params.step_counter[] - initial_step_counter < max_electron_pdf_iterations)
-           && t_params.dt[] > 0.0)
+           && t_params.dt[] > 0.0 && !isnan(t_params.dt[]))
         for istage ∈ 1:t_params.n_rk_stages
             # Set the initial values for this stage to the final values from the previous
             # stage

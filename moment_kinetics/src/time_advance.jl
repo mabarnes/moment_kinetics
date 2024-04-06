@@ -1203,7 +1203,7 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
         # update the time
         t += t_params.previous_dt[]
 
-        if t ≥ t_params.end_time - epsilon || t_params.dt[] < 0.0
+        if t ≥ t_params.end_time - epsilon || t_params.dt[] < 0.0 || isnan(t_params.dt[])
             # Ensure all output is written at the final step
             # Negative t_params.dt[] indicates the time stepping has failed, so stop and
             # write output.
