@@ -612,6 +612,7 @@ Calculate the amplitude when using a PI controller for the density to set the ex
 source amplitude.
 """
 function external_ion_source_controller!(fvec_in, moments, ion_source_settings, dt)
+    begin_r_z_region()
 
     is = 1
     ion_moments = moments.charged
@@ -737,6 +738,7 @@ source amplitude.
 """
 function external_neutral_source_controller!(fvec_in, moments, neutral_source_settings, r,
                                              z, dt)
+    begin_r_z_region()
 
     is = 1
     neutral_moments = moments.neutral
