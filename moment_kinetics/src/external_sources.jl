@@ -20,7 +20,7 @@ using ..array_allocation: allocate_float, allocate_shared_float
 using ..calculus
 using ..communication
 using ..coordinates
-using ..input_structs: set_defaults_and_check_section!, Dict_to_NamedTuple
+using ..input_structs
 using ..looping
 
 using MPI
@@ -38,7 +38,7 @@ and z-coordinates.
 Returns a NamedTuple `(ion=ion_source_settings, neutral=neutral_source_settings)`
 containing two NamedTuples of settings.
 """
-function setup_external_sources!(input_dict, r, z)
+function setup_external_sources!(input_dict, r, z, electron_physics)
     function get_settings(neutrals)
         input = set_defaults_and_check_section!(
                      input_dict, neutrals ? "neutral_source" : "ion_source";
@@ -220,7 +220,11 @@ function setup_external_sources!(input_dict, r, z)
     end
 
     ion_settings = get_settings(false)
-    electron_settings = get_electron_settings(ion_settings)
+    if electron_physics ∈ (braginskii_fluid, kinetic_electrons)
+        electron_settings = get_electron_settings(ion_settings)
+    else
+        electron_settings = (active=false,)
+    end
     neutral_settings = get_settings(true)
 
     return (ion=ion_settings, electron=electron_settings, neutral=neutral_settings)
