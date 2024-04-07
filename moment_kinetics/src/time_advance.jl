@@ -1707,11 +1707,13 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         # and is already updated;
         # otherwise update assuming electron temperature is fixed in time
         if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
+            begin_r_z_region()
             @loop_r_z ir iz begin
                 new_scratch.electron_ppar[iz,ir] = (rk_coefs[1]*moments.electron.ppar[iz,ir] 
                     + rk_coefs[2]*old_scratch.electron_ppar[iz,ir] + rk_coefs[3]*new_scratch.electron_ppar[iz,ir])
             end
         else
+            begin_r_z_region()
             @loop_r_z ir iz begin
                 new_scratch.electron_ppar[iz,ir] = 0.5 * new_scratch.electron_density[iz,ir] *
                                                    moments.electron.vth[iz,ir]^2
