@@ -658,6 +658,35 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                                               r, z, r_range, z_range, restart_r,
                                               restart_r_spectral, restart_z,
                                               restart_z_spectral, interpolation_needed)
+            if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
+                if "ion_constraints_A_coefficient" ∈ keys(dynamic)
+                    moments.ion.constraints_A_coefficient .=
+                        reload_moment("ion_constraints_A_coefficient", dynamic,
+                                      time_index, r, z, r_range, z_range, restart_r,
+                                      restart_r_spectral, restart_z, restart_z_spectral,
+                                      interpolation_needed)
+                elseif moments.ion.constraints_A_coefficient !== nothing
+                    moments.ion.constraints_A_coefficient .= 0.0
+                end
+                if "ion_constraints_B_coefficient" ∈ keys(dynamic)
+                    moments.ion.constraints_B_coefficient .=
+                        reload_moment("ion_constraints_B_coefficient", dynamic,
+                                      time_index, r, z, r_range, z_range, restart_r,
+                                      restart_r_spectral, restart_z, restart_z_spectral,
+                                      interpolation_needed)
+                elseif moments.ion.constraints_B_coefficient !== nothing
+                    moments.ion.constraints_B_coefficient .= 0.0
+                end
+                if "ion_constraints_C_coefficient" ∈ keys(dynamic)
+                    moments.ion.constraints_C_coefficient .=
+                        reload_moment("ion_constraints_C_coefficient", dynamic,
+                                      time_index, r, z, r_range, z_range, restart_r,
+                                      restart_r_spectral, restart_z, restart_z_spectral,
+                                      interpolation_needed)
+                elseif moments.ion.constraints_C_coefficient !== nothing
+                    moments.ion.constraints_C_coefficient .= 0.0
+                end
+            end
             if z.irank == 0
                 if "chodura_integral_lower" ∈ keys(dynamic)
                     moments.ion.chodura_integral_lower .= load_slice(dynamic, "chodura_integral_lower",
@@ -750,6 +779,33 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                                                            restart_r_spectral, restart_z,
                                                            restart_z_spectral,
                                                            interpolation_needed)
+            if "electron_constraints_A_coefficient" ∈ keys(dynamic)
+                moments.electron.constraints_A_coefficient .=
+                    reload_electron_moment("electron_constraints_A_coefficient", dynamic,
+                                           time_index, r, z, r_range, z_range, restart_r,
+                                           restart_r_spectral, restart_z,
+                                           restart_z_spectral, interpolation_needed)
+            else
+                moments.electron.constraints_A_coefficient .= 0.0
+            end
+            if "electron_constraints_B_coefficient" ∈ keys(dynamic)
+                moments.electron.constraints_B_coefficient .=
+                    reload_electron_moment("electron_constraints_B_coefficient", dynamic,
+                                           time_index, r, z, r_range, z_range, restart_r,
+                                           restart_r_spectral, restart_z,
+                                           restart_z_spectral, interpolation_needed)
+            else
+                moments.electron.constraints_B_coefficient .= 0.0
+            end
+            if "electron_constraints_C_coefficient" ∈ keys(dynamic)
+                moments.electron.constraints_C_coefficient .=
+                    reload_electron_moment("electron_constraints_C_coefficient", dynamic,
+                                           time_index, r, z, r_range, z_range, restart_r,
+                                           restart_r_spectral, restart_z,
+                                           restart_z_spectral, interpolation_needed)
+            else
+                moments.electron.constraints_C_coefficient .= 0.0
+            end
 
             # For now, electrons are always fully moment_kinetic
             restart_electron_evolve_density, restart_electron_evolve_upar,
@@ -802,6 +858,35 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                                                      restart_r, restart_r_spectral,
                                                      restart_z, restart_z_spectral,
                                                      interpolation_needed)
+                if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
+                    if "neutral_constraints_A_coefficient" ∈ keys(dynamic)
+                        moments.neutral.constraints_A_coefficient .=
+                            reload_moment("neutral_constraints_A_coefficient", dynamic,
+                                          time_index, r, z, r_range, z_range, restart_r,
+                                          restart_r_spectral, restart_z, restart_z_spectral,
+                                          interpolation_needed)
+                    elseif moments.neutral.constraints_A_coefficient !== nothing
+                        moments.neutral.constraints_A_coefficient .= 0.0
+                    end
+                    if "neutral_constraints_B_coefficient" ∈ keys(dynamic)
+                        moments.neutral.constraints_B_coefficient .=
+                            reload_moment("neutral_constraints_B_coefficient", dynamic,
+                                          time_index, r, z, r_range, z_range, restart_r,
+                                          restart_r_spectral, restart_z, restart_z_spectral,
+                                          interpolation_needed)
+                    elseif moments.neutral.constraints_B_coefficient !== nothing
+                        moments.neutral.constraints_B_coefficient .= 0.0
+                    end
+                    if "neutral_constraints_C_coefficient" ∈ keys(dynamic)
+                        moments.neutral.constraints_C_coefficient .=
+                            reload_moment("neutral_constraints_C_coefficient", dynamic,
+                                          time_index, r, z, r_range, z_range, restart_r,
+                                          restart_r_spectral, restart_z, restart_z_spectral,
+                                          interpolation_needed)
+                    elseif moments.neutral.constraints_C_coefficient !== nothing
+                        moments.neutral.constraints_C_coefficient .= 0.0
+                    end
+                end
 
                 if "external_source_neutral_controller_integral" ∈ get_variable_keys(dynamic) &&
                         length(moments.neutral.external_source_controller_integral) == 1
