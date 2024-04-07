@@ -310,6 +310,11 @@ function setup_moment_kinetics(input_dict::AbstractDict;
                                     composition, geometry, r, z, vpa, vperp, vzeta, vr,
                                     vz)
 
+        begin_serial_region()
+        @serial_region begin
+            @. moments.electron.temp = moments.electron.vth^2
+        end
+
         # Re-initialize the source amplitude here instead of loading it from the restart
         # file so that we can change the settings between restarts.
         initialize_external_source_amplitude!(moments, external_source_settings, vperp,

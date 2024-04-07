@@ -206,6 +206,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
             moments.electron.upar .= 0.0
             moments.electron.ppar .= 0.0
             moments.electron.qpar .= 0.0
+            moments.electron.temp .= 0.0
             moments.electron.constraints_A_coefficient .= 1.0
             moments.electron.constraints_B_coefficient .= 0.0
             moments.electron.constraints_C_coefficient .= 0.0
