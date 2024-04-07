@@ -654,6 +654,10 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                                              r_range, z_range, restart_r,
                                              restart_r_spectral, restart_z,
                                              restart_z_spectral, interpolation_needed)
+            moments.ion.dSdt .= reload_moment("entropy_production", dynamic, time_index,
+                                              r, z, r_range, z_range, restart_r,
+                                              restart_r_spectral, restart_z,
+                                              restart_z_spectral, interpolation_needed)
             if z.irank == 0
                 if "chodura_integral_lower" ∈ keys(dynamic)
                     moments.ion.chodura_integral_lower .= load_slice(dynamic, "chodura_integral_lower",
