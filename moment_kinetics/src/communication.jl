@@ -457,7 +457,7 @@ end
         A.accessed[] = true
         return getindex(A.data, I...)
     end
-    function Base.setindex!(A::DebugMPISharedArray{T, N}, v::T, I::Vararg{mk_int,N}) where {T, N}
+    function Base.setindex!(A::DebugMPISharedArray{T, N}, v::Number, I::Vararg{mk_int,N}) where {T, N}
         @debug_track_initialized begin
             A.is_initialized[I...] = 1
         end
