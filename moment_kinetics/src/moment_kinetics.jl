@@ -314,6 +314,13 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         @serial_region begin
             @. moments.electron.temp = moments.electron.vth^2
         end
+        if composition.electron_physics == kinetic_electrons
+            begin_r_z_vperp_vpa_region()
+            @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+                pdf.electron.pdf_before_ion_timestep[ivpa,ivperp,iz,ir] =
+                    pdf.electron.norm[ivpa,ivperp,iz,ir]
+            end
+        end
 
         # Re-initialize the source amplitude here instead of loading it from the restart
         # file so that we can change the settings between restarts.

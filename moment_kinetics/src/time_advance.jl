@@ -1844,7 +1844,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         # moment derivatives, because the timstep might need to be re-done with a smaller
         # dt, in which case scratch[t_params.n_rk_stages+1] will be reset to the values
         # from the beginning of the timestep here.
-        adaptive_timestep_update!(scratch, t, t_params, moments, fields, composition,
+        adaptive_timestep_update!(scratch, t, t_params, pdf, moments, fields, composition,
                                   collisions, geometry, external_source_settings,
                                   advect_objects, r, z, vperp, vpa, vzeta, vr, vz)
         # Re-do this in case adaptive_timestep_update re-arranged the `scratch` vector
@@ -1883,9 +1883,10 @@ end
 Check the error estimate for the embedded RK method and adjust the timestep if
 appropriate.
 """
-function adaptive_timestep_update!(scratch, t, t_params, moments, fields, composition,
-                                   collisions, geometry, external_source_settings,
-                                   advect_objects, r, z, vperp, vpa, vzeta, vr, vz)
+function adaptive_timestep_update!(scratch, t, t_params, pdf, moments, fields,
+                                   composition, collisions, geometry,
+                                   external_source_settings, advect_objects, r, z, vperp,
+                                   vpa, vzeta, vr, vz)
     #error_norm_method = "Linf"
     error_norm_method = "L2"
 
@@ -2105,6 +2106,26 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
 
     adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, error_norms,
                                        total_points, current_dt, error_norm_method)
+    if composition.electron_physics == kinetic_electrons
+        if t_params.previous_dt[] == 0.0
+            # Reset electron pdf to its value at the beginning of this step.
+            begin_r_z_vperp_vpa_region()
+            @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+                pdf.electron.norm[ivpa,ivperp,iz,ir] =
+                    pdf.electron.pdf_before_ion_timestep[ivpa,ivperp,iz,ir]
+                scratch[1].pdf_electron[ivpa,ivperp,iz,ir] =
+                    pdf.electron.pdf_before_ion_timestep[ivpa,ivperp,iz,ir]
+            end
+        else
+            # Store the current value, which will be the value at the beginning of the
+            # next step.
+            begin_r_z_vperp_vpa_region()
+            @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+                pdf.electron.pdf_before_ion_timestep[ivpa,ivperp,iz,ir] =
+                    pdf.electron.norm[ivpa,ivperp,iz,ir]
+            end
+        end
+    end
 
     return nothing
 end

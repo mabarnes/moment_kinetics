@@ -314,6 +314,14 @@ struct pdf_substruct{n_distribution}
     buffer::MPISharedArray{mk_float,n_distribution} # for collision operator terms when pdfs must be interpolated onto different velocity space grids
 end
 
+"""
+"""
+struct electron_pdf_substruct{n_distribution}
+    norm::MPISharedArray{mk_float,n_distribution}
+    buffer::MPISharedArray{mk_float,n_distribution} # for collision operator terms when pdfs must be interpolated onto different velocity space grids
+    pdf_before_ion_timestep::MPISharedArray{mk_float,n_distribution}
+end
+
 # struct of structs neatly contains i+n info?
 """
 """
@@ -321,7 +329,7 @@ struct pdf_struct
     #ion particles: s + r + z + vperp + vpa
     ion::pdf_substruct{5}
     # electron particles: r + z + vperp + vpa
-    electron::Union{pdf_substruct{4},Nothing}
+    electron::Union{electron_pdf_substruct{4},Nothing}
     #neutral particles: s + r + z + vzeta + vr + vz
     neutral::pdf_substruct{6}
 end

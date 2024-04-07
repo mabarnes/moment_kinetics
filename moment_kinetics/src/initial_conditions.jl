@@ -25,8 +25,8 @@ using ..em_fields: update_phi!
 using ..file_io: setup_initial_electron_io, write_initial_electron_state,
                  finish_initial_electron_io
 using ..load_data: reload_electron_data!
-using ..moment_kinetics_structs: scratch_pdf, pdf_substruct, pdf_struct, moments_struct,
-                                 boundary_distributions_struct
+using ..moment_kinetics_structs: scratch_pdf, pdf_substruct, electron_pdf_substruct,
+                                 pdf_struct, moments_struct, boundary_distributions_struct
 using ..velocity_moments: integrate_over_vspace, integrate_over_neutral_vspace
 using ..velocity_moments: integrate_over_positive_vz, integrate_over_negative_vz
 using ..velocity_moments: create_moments_ion, create_moments_electron, create_moments_neutral
@@ -106,7 +106,10 @@ function create_pdf(composition, r, z, vperp, vpa, vzeta, vr, vz)
         # MB: not sure if pdf_electron_buffer will ever be needed, but create for now
         # to emulate ion and neutral behaviour
         pdf_electron_buffer = allocate_shared_float(vpa.n, vperp.n, z.n, r.n)
-        electron_substruct = pdf_substruct(pdf_electron_norm, pdf_electron_buffer)
+        pdf_before_ion_timestep = allocate_shared_float(vpa.n, vperp.n, z.n, r.n)
+        electron_substruct = electron_pdf_substruct(pdf_electron_norm,
+                                                    pdf_electron_buffer,
+                                                    pdf_before_ion_timestep)
     else
         electron_substruct = nothing
     end
@@ -567,6 +570,12 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
                                         io_initial_electron=io_initial_electron,
                                         initial_time=electron_pseudotime,
                                         initial_output_counter=n_debug_outputs)
+
+        begin_r_z_vperp_vpa_region()
+        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+            pdf.electron.pdf_before_ion_timestep[ivpa,ivperp,iz,ir] =
+                pdf.electron.norm[ivpa,ivperp,iz,ir]
+        end
 
         # Write the converged initial state for the electrons to a file so that it can be
         # re-used if the simulation is re-run.
