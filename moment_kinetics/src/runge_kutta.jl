@@ -771,12 +771,6 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
             # So far `error_norms` is the sum of squares of the errors. Now that summation
             # is finished, need to divide by total number of points and take square-root.
             error_norms .= sqrt.(error_norms ./ total_points)
-            open("debug$(global_size[]).txt", "a") do io
-                for e in error_norms
-                    print(io, e, " ")
-                end
-                println(io, t_params.dt[], " ;")
-            end
 
             # Weight the error from each variable equally by taking the mean, so the
             # larger number of points in the distribution functions does not mean that
