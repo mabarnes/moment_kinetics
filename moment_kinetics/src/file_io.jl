@@ -324,7 +324,7 @@ end
 """
 open output file to save the initial electron pressure and distribution function
 """
-function setup_initial_electron_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition,
+function setup_initial_electron_io(io_input, vpa, vperp, z, r, composition,
                                    collisions, evolve_density, evolve_upar, evolve_ppar,
                                    external_source_settings, input_dict,
                                    restart_time_index, previous_runs_info)
@@ -364,7 +364,8 @@ function setup_initial_electron_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, co
         write_input!(fid, input_dict, parallel_io)
 
         ### define coordinate dimensions ###
-        define_io_coordinates!(fid, vz, vr, vzeta, vpa, vperp, z, r, parallel_io)
+        define_io_coordinates!(fid, nothing, nothing, nothing, vpa, vperp, z, r,
+                               parallel_io)
 
         ### create variables for time-dependent quantities ###
         dynamic = create_io_group(fid, "dynamic_data", description="time evolving variables")
@@ -667,12 +668,16 @@ function define_io_coordinates!(fid, vz, vr, vzeta, vpa, vperp, z, r, parallel_i
     @serial_region begin
         # create the "coords" group that will contain coordinate information
         coords = create_io_group(fid, "coords")
-        # create the "z" sub-group of "coords" that will contain z coordinate info,
-        # including total number of grid points and grid point locations
-        define_io_coordinate!(coords, z, "z", "spatial coordinate z", parallel_io)
-        # create the "r" sub-group of "coords" that will contain r coordinate info,
-        # including total number of grid points and grid point locations
-        define_io_coordinate!(coords, r, "r", "spatial coordinate r", parallel_io)
+        if z !== nothing
+            # create the "z" sub-group of "coords" that will contain z coordinate info,
+            # including total number of grid points and grid point locations
+            define_io_coordinate!(coords, z, "z", "spatial coordinate z", parallel_io)
+        end
+        if r !== nothing
+            # create the "r" sub-group of "coords" that will contain r coordinate info,
+            # including total number of grid points and grid point locations
+            define_io_coordinate!(coords, r, "r", "spatial coordinate r", parallel_io)
+        end
 
         if parallel_io
             # Parallel I/O produces a single file, so effectively a 'single block'
@@ -700,24 +705,34 @@ function define_io_coordinates!(fid, vz, vr, vzeta, vpa, vperp, z, r, parallel_i
                                 parallel_io=parallel_io, description="number of zr blocks")
         end
 
-        # create the "vz" sub-group of "coords" that will contain vz coordinate info,
-        # including total number of grid points and grid point locations
-        define_io_coordinate!(coords, vz, "vz", "velocity coordinate v_z", parallel_io)
-        # create the "vr" sub-group of "coords" that will contain vr coordinate info,
-        # including total number of grid points and grid point locations
-        define_io_coordinate!(coords, vr, "vr", "velocity coordinate v_r", parallel_io)
-        # create the "vzeta" sub-group of "coords" that will contain vzeta coordinate info,
-        # including total number of grid points and grid point locations
-        define_io_coordinate!(coords, vzeta, "vzeta", "velocity coordinate v_zeta",
-                              parallel_io)
-        # create the "vpa" sub-group of "coords" that will contain vpa coordinate info,
-        # including total number of grid points and grid point locations
-        define_io_coordinate!(coords, vpa, "vpa", "velocity coordinate v_parallel",
-                              parallel_io)
-        # create the "vperp" sub-group of "coords" that will contain vperp coordinate info,
-        # including total number of grid points and grid point locations
-        define_io_coordinate!(coords, vperp, "vperp", "velocity coordinate v_perp",
-                              parallel_io)
+        if vz !== nothing
+            # create the "vz" sub-group of "coords" that will contain vz coordinate info,
+            # including total number of grid points and grid point locations
+            define_io_coordinate!(coords, vz, "vz", "velocity coordinate v_z", parallel_io)
+        end
+        if vr !== nothing
+            # create the "vr" sub-group of "coords" that will contain vr coordinate info,
+            # including total number of grid points and grid point locations
+            define_io_coordinate!(coords, vr, "vr", "velocity coordinate v_r", parallel_io)
+        end
+        if vzeta !== nothing
+            # create the "vzeta" sub-group of "coords" that will contain vzeta coordinate info,
+            # including total number of grid points and grid point locations
+            define_io_coordinate!(coords, vzeta, "vzeta", "velocity coordinate v_zeta",
+                                  parallel_io)
+        end
+        if vpa !== nothing
+            # create the "vpa" sub-group of "coords" that will contain vpa coordinate info,
+            # including total number of grid points and grid point locations
+            define_io_coordinate!(coords, vpa, "vpa", "velocity coordinate v_parallel",
+                                  parallel_io)
+        end
+        if vperp !== nothing
+            # create the "vperp" sub-group of "coords" that will contain vperp coordinate info,
+            # including total number of grid points and grid point locations
+            define_io_coordinate!(coords, vperp, "vperp", "velocity coordinate v_perp",
+                                  parallel_io)
+        end
     end
 
     return nothing

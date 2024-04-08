@@ -226,7 +226,12 @@ function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=no
     overview = get_group(fid, "overview")
     parallel_io = load_variable(overview, "parallel_io")
 
-    coord_group = get_group(get_group(fid, "coords"), name)
+    coords_group = get_group(fid, "coords")
+    if name ∈ keys(coords_group)
+        coord_group = get_group(coords_group, name)
+    else
+        return nothing, nothing, nothing
+    end
 
     ngrid = load_variable(coord_group, "ngrid")
     n_local = load_variable(coord_group, "n_local")
@@ -602,14 +607,18 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
 
             # Test whether any interpolation is needed
             interpolation_needed = Dict(
-                x.name => x.n != restart_x.n || !all(isapprox.(x.grid, restart_x.grid))
+                x.name => (restart_x !== nothing
+                           && (x.n != restart_x.n
+                               || !all(isapprox.(x.grid, restart_x.grid))))
                 for (x, restart_x) ∈ ((z, restart_z), (r, restart_r),
                                       (vperp, restart_vperp), (vpa, restart_vpa),
                                       (vzeta, restart_vzeta), (vr, restart_vr),
                                       (vz, restart_vz)))
 
             neutral_1V = (vzeta.n_global == 1 && vr.n_global == 1)
-            restart_neutral_1V = (restart_vzeta.n_global == 1 && restart_vr.n_global == 1)
+            restart_neutral_1V = ((restart_vzeta === nothing
+                                   || restart_vzeta.n_global == 1)
+                                  && (restart_vr === nothing || restart_vr.n_global == 1))
             if any(geometry.bzeta .!= 0.0) && ((neutral_1V && !restart_neutral_1V) ||
                                                (!neutral_1V && restart_neutral_1V))
                 # One but not the other of the run being restarted from and this run are
@@ -1011,18 +1020,6 @@ function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, ti
                 for (x, restart_x) ∈ ((z, restart_z), (r, restart_r),
                                       (vperp, restart_vperp), (vpa, restart_vpa)))
 
-            neutral_1V = (vzeta.n_global == 1 && vr.n_global == 1)
-            restart_neutral_1V = (restart_vzeta.n_global == 1 && restart_vr.n_global == 1)
-            if geometry.bzeta != 0.0 && ((neutral_1V && !restart_neutral_1V) ||
-                                         (!neutral_1V && restart_neutral_1V))
-                # One but not the other of the run being restarted from and this run are
-                # 1V, but the interpolation below does not allow for vz and vpa being in
-                # different directions. Therefore interpolation between 1V and 3V cases
-                # only works (at the moment!) if bzeta=0.
-                error("Interpolation between 1V and 3V neutrals not yet supported when "
-                      * "bzeta!=0.")
-            end
-
             code_time = load_slice(dynamic, "time", time_index)
 
             r_range, z_range, vperp_range, vpa_range, vzeta_range, vr_range, vz_range =
@@ -1155,7 +1152,9 @@ function get_reload_ranges(parallel_io, restart_r, restart_z, restart_vperp, res
                            restart_vzeta, restart_vr, restart_vz)
     if parallel_io
         function get_range(coord)
-            if coord.irank == coord.nrank - 1
+            if coord === nothing
+                return 1:0
+            elseif coord.irank == coord.nrank - 1
                 return coord.global_io_range
             else
                 # Need to modify the range to load the end-point that is duplicated on
