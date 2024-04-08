@@ -245,6 +245,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         high_precision_error_sum=timestepping_section["high_precision_error_sum"],
         initialization_residual_value=1.0,
         no_restart=false,
+        debug_io=false,
        )
     if electron_timestepping_section["nwrite"] === nothing
         electron_timestepping_section["nwrite"] = electron_timestepping_section["nstep"]
