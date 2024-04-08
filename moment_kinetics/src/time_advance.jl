@@ -274,7 +274,7 @@ If something is passed in `electron`, it is stored in the `electron_t_params` me
 the returned `time_info`.
 """
 function setup_time_info(t_input, code_time, dt_reload, dt_before_last_fail_reload,
-                         manufactured_solns_input; electron=nothing)
+                         manufactured_solns_input, io_input, input_dict; electron=nothing)
     dt_shared = allocate_shared_float(1)
     previous_dt_shared = allocate_shared_float(1)
     next_output_time = allocate_shared_float(1)
@@ -320,19 +320,39 @@ function setup_time_info(t_input, code_time, dt_reload, dt_before_last_fail_relo
     else
         error_sum_zero = 0.0
     end
+    if electron === nothing
+        # Setting up time_info for electrons.
+        # Store io_input as the debug_io variable so we can use it to open the debug
+        # output file.
+        if t_input.debug_io !== false
+            if !isa(t_input.debug_io, mk_int)
+                error("`debug_io` input should be an integer, giving the number of steps "
+                      * "between writes, if it is passed")
+            end
+            debug_io = (io_input, input_dict, t_input.debug_io)
+        else
+            debug_io = nothing
+        end
+        electron_t_params = nothing
+    elseif electron === false
+        debug_io = nothing
+        electron_t_params = nothing
+    else
+        debug_io = nothing
+        electron_t_params = electron
+    end
     return time_info(t_input.nstep, end_time, dt_shared, previous_dt_shared, next_output_time,
-                         dt_before_output, dt_before_last_fail, CFL_prefactor,
-                         step_to_output, Ref(0), Ref(0), mk_int[], mk_int[],
-                         moments_output_times, dfns_output_times, t_input.type, rk_coefs,
-                         n_rk_stages, rk_order, adaptive, low_storage, t_input.rtol,
-                         t_input.atol, t_input.atol_upar, t_input.step_update_prefactor,
-                         t_input.max_increase_factor,
-                         t_input.max_increase_factor_near_last_fail,
-                         t_input.last_fail_proximity_factor, t_input.minimum_dt,
-                         t_input.maximum_dt, error_sum_zero, t_input.split_operators,
-                         t_input.steady_state_residual, t_input.converged_residual_value,
-                         manufactured_solns_input.use_for_advance, t_input.stopfile_name,
-                         electron)
+                     dt_before_output, dt_before_last_fail, CFL_prefactor, step_to_output,
+                     Ref(0), Ref(0), mk_int[], mk_int[], moments_output_times,
+                     dfns_output_times, t_input.type, rk_coefs, n_rk_stages, rk_order,
+                     adaptive, low_storage, t_input.rtol, t_input.atol, t_input.atol_upar,
+                     t_input.step_update_prefactor, t_input.max_increase_factor,
+                     t_input.max_increase_factor_near_last_fail,
+                     t_input.last_fail_proximity_factor, t_input.minimum_dt,
+                     t_input.maximum_dt, error_sum_zero, t_input.split_operators,
+                     t_input.steady_state_residual, t_input.converged_residual_value,
+                     manufactured_solns_input.use_for_advance, t_input.stopfile_name,
+                     debug_io, electron_t_params)
 end
 
 """
@@ -363,7 +383,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_sp
         electron_t_params = setup_time_info(t_input.electron_t_input, 0.0,
                                             electron_dt_reload,
                                             electron_dt_before_last_fail_reload,
-                                            manufactured_solns_input)
+                                            manufactured_solns_input, io_input,
+                                            input_dict)
         # Make Vectors that count which variable caused timestep limits and timestep failures
         # the right length. Do this setup even when not using adaptive timestepping, because
         # it is easier than modifying the file I/O according to whether we are using adaptive
@@ -380,10 +401,13 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_sp
         # electron ppar
         push!(electron_t_params.failure_caused_by, 0)
     else
-        electron_t_params = nothing
+        # Pass `false` rather than `nothing` to `setup_time_info()` call for ions, which
+        # indicates that 'debug_io' should never be set up for ions.
+        electron_t_params = false
     end
     t_params = setup_time_info(t_input, code_time, dt_reload, dt_before_last_fail_reload,
-                               manufactured_solns_input; electron=electron_t_params)
+                               manufactured_solns_input, io_input, input_dict;
+                               electron=electron_t_params)
 
     # Make Vectors that count which variable caused timestep limits and timestep failures
     # the right length. Do this setup even when not using adaptive timestepping, because

@@ -21,7 +21,7 @@ using ..electron_fluid_equations: electron_energy_equation!
 using ..electron_z_advection: electron_z_advection!, update_electron_speed_z!
 using ..electron_vpa_advection: electron_vpa_advection!, update_electron_speed_vpa!
 using ..external_sources: external_electron_source!
-using ..file_io: write_initial_electron_state, finish_initial_electron_io
+using ..file_io: setup_electron_io, write_electron_state, finish_electron_io
 using ..krook_collisions: electron_krook_collisions!
 using ..moment_constraints: hard_force_moment_constraints!
 using ..runge_kutta: rk_update_variable!, rk_error_variable!, local_error_norm,
@@ -59,7 +59,7 @@ OUTPUT:
 function update_electron_pdf!(scratch, pdf, moments, phi, r, z, vperp, vpa, z_spectral,
         vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy, t_params,
         collisions, composition, external_source_settings, num_diss_params,
-        max_electron_pdf_iterations; io_initial_electron=nothing, initial_time=0.0,
+        max_electron_pdf_iterations; io_electron=nothing, initial_time=0.0,
         initial_output_counter=0, residual_tolerance=nothing, evolve_ppar=false)
 
     # set the method to use to solve the electron kinetic equation
@@ -72,7 +72,7 @@ function update_electron_pdf!(scratch, pdf, moments, phi, r, z, vperp, vpa, z_sp
             collisions, composition, r, z, vperp, vpa, z_spectral, vperp_spectral,
             vpa_spectral, z_advect, vpa_advect, scratch_dummy, t_params,
             external_source_settings, num_diss_params, max_electron_pdf_iterations;
-            io_initial_electron=io_initial_electron, initial_time=initial_time,
+            io_electron=io_electron, initial_time=initial_time,
             initial_output_counter=initial_output_counter,
             residual_tolerance=residual_tolerance, evolve_ppar=evolve_ppar)
     elseif solution_method == "shooting_method"
@@ -129,7 +129,7 @@ The electron kinetic equation is:
     vpa_spectral = struct containing spectral information for the vpa-coordinate
     scratch_dummy = dummy arrays to be used for temporary storage
     max_electron_pdf_iterations = maximum number of iterations to use in the solution of the electron kinetic equation
-    io_initial_electron = info struct for binary file I/O
+    io_electron = info struct for binary file I/O
     initial_time = initial value for the (pseudo-)time
 OUTPUT:
     pdf = updated (modified) electron pdf
@@ -137,7 +137,7 @@ OUTPUT:
 function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, collisions,
         composition, r, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
         vpa_advect, scratch_dummy, t_params, external_source_settings, num_diss_params,
-        max_electron_pdf_iterations; io_initial_electron=nothing, initial_time=0.0,
+        max_electron_pdf_iterations; io_electron=nothing, initial_time=0.0,
         initial_output_counter=0, residual_tolerance=nothing, evolve_ppar=false)
 
     begin_r_z_region()
@@ -182,8 +182,25 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
     # t_params are set relative to 0.0).
     moments_output_times = t_params.moments_output_times .+ initial_time
     dfns_output_times = t_params.dfns_output_times .+ initial_time
+    if io_electron === nothing && t_params.debug_io !== nothing
+        # Overwrite the debug output file with the output from this call to
+        # update_electron_pdf_with_time_advance!().
+        io_electron = setup_electron_io(t_params.debug_io[1], vpa, vperp, z, r,
+                                        composition, collisions,
+                                        moments.evolve_density, moments.evolve_upar,
+                                        moments.evolve_ppar, external_source_settings,
+                                        t_params.debug_io[2], -1, nothing,
+                                        "electron_debug")
+        do_debug_io = true
+        debug_io_nwrite = t_params.debug_io[3]
+    else
+        do_debug_io = false
+    end
     @serial_region begin
-        if io_initial_electron === nothing
+        if io_electron === nothing || do_debug_io
+            # When doing debug_io, we don't want to make the adaptive timestep adjust to
+            # output at specific times - instead we just output after a fixed number of
+            # steps, however long those steps were.
             t_params.next_output_time[] = Inf
         else
             t_params.next_output_time[] = dfns_output_times[1]
@@ -245,10 +262,9 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
     begin_serial_region()
     output_counter += 1
     @serial_region begin
-        if io_initial_electron !== nothing
-            write_initial_electron_state(scratch[1].pdf_electron, moments, t_params, time,
-                                         io_initial_electron, output_counter, r, z, vperp,
-                                         vpa)
+        if io_electron !== nothing
+            write_electron_state(scratch[1].pdf_electron, moments, t_params, time,
+                                 io_electron, output_counter, r, z, vperp, vpa)
         end
     end
     # evolve (artificially) in time until the residual is less than the tolerance
@@ -476,7 +492,9 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                 end
             end
         end
-        if (time ≥ dfns_output_times[output_counter - initial_output_counter] - epsilon)
+        if ((time ≥ dfns_output_times[output_counter - initial_output_counter] - epsilon)
+            || (do_debug_io && (t_params.step_counter[] % debug_io_nwrite == 0)))
+
             begin_serial_region()
             @serial_region begin
                 if text_output
@@ -509,11 +527,10 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                 end
             end
             @serial_region begin
-                if io_initial_electron !== nothing
-                    write_initial_electron_state(scratch[t_params.n_rk_stages+1].pdf_electron,
-                                                 moments, t_params, time,
-                                                 io_initial_electron, output_counter, r,
-                                                 z, vperp, vpa)
+                if io_electron !== nothing
+                    write_electron_state(scratch[t_params.n_rk_stages+1].pdf_electron,
+                                         moments, t_params, time, io_electron,
+                                         output_counter, r, z, vperp, vpa)
                 end
             end
         end
@@ -549,20 +566,17 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
             close(io_pdf)
             close(io_pdf_stages)
         end
-        if !electron_pdf_converged
-            # need to exit or handle this appropriately
-
-            if io_initial_electron !== nothing
+        if !electron_pdf_converged || do_debug_io
+            if io_electron !== nothing && io_electron !== true
                 output_counter += 1
-                write_initial_electron_state(final_scratch_pdf, moments, t_params, time,
-                                             io_initial_electron, output_counter, r, z,
-                                             vperp, vpa)
-                finish_initial_electron_io(io_initial_electron)
+                write_electron_state(final_scratch_pdf, moments, t_params, time,
+                                     io_electron, output_counter, r, z, vperp, vpa)
+                finish_electron_io(io_electron)
             end
-
         end
     end
     if !electron_pdf_converged
+        # need to exit or handle this appropriately
         error("!!!max number of iterations for electron pdf update exceeded!!!\n"
               * "Stopping at $(Dates.format(now(), dateformat"H:MM:SS"))")
     end

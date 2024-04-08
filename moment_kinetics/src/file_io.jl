@@ -324,10 +324,10 @@ end
 """
 open output file to save the initial electron pressure and distribution function
 """
-function setup_initial_electron_io(io_input, vpa, vperp, z, r, composition,
-                                   collisions, evolve_density, evolve_upar, evolve_ppar,
-                                   external_source_settings, input_dict,
-                                   restart_time_index, previous_runs_info)
+function setup_electron_io(io_input, vpa, vperp, z, r, composition, collisions,
+                           evolve_density, evolve_upar, evolve_ppar,
+                           external_source_settings, input_dict, restart_time_index,
+                           previous_runs_info, prefix_label)
     begin_serial_region()
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -341,7 +341,7 @@ function setup_initial_electron_io(io_input, vpa, vperp, z, r, composition,
         parallel_io = io_input.parallel_io
         io_comm = comm_inter_block[]
 
-        electrons_prefix = string(out_prefix, ".initial_electron")
+        electrons_prefix = string(out_prefix, ".$prefix_label")
         if !parallel_io
             electrons_prefix *= ".$(iblock_index[])"
         end
@@ -394,8 +394,8 @@ function setup_initial_electron_io(io_input, vpa, vperp, z, r, composition,
 
         return file_info
     end
-    # For other processes in the block, return (nothing, nothing, nothing)
-    return nothing, nothing, nothing
+    # For other processes in the block, return nothing
+    return nothing
 end
 
 """
@@ -2199,15 +2199,13 @@ function write_neutral_dfns_data_to_binary(ff_neutral, n_neutral_species,
 end
 
 """
-    write_initial_electron_state(pdf, moments, t_params, t,
-                                 io_initial_electron, t_idx, r, z,
-                                 vperp, vpa)
+    write_electron_state(pdf, moments, t_params, t, io_initial_electron,
+                         t_idx, r, z, vperp, vpa)
 
 Write the electron state to an output file.
 """
-function write_initial_electron_state(pdf, moments, t_params, t,
-                                      io_or_file_info_initial_electron, t_idx, r, z,
-                                      vperp, vpa)
+function write_electron_state(pdf, moments, t_params, t, io_or_file_info_initial_electron,
+                              t_idx, r, z, vperp, vpa)
 
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -2269,13 +2267,15 @@ end
 """
 close output files for electron initialization
 """
-function finish_initial_electron_io(
-        binary_initial_electron::Union{io_initial_electron_info,Tuple,Nothing})
+function finish_electron_io(
+        binary_initial_electron::Union{io_initial_electron_info,Tuple,Nothing,Bool})
 
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        if binary_initial_electron !== nothing && !isa(binary_initial_electron, Tuple)
+        if (binary_initial_electron !== nothing && !isa(binary_initial_electron, Tuple)
+            && !isa(binary_initial_electron, Bool))
+
             close(binary_initial_electron.fid)
         end
     end

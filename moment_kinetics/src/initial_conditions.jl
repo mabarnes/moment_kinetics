@@ -22,8 +22,7 @@ using ..external_sources
 using ..interpolation: interpolate_to_grid_1d!
 using ..looping
 using ..em_fields: update_phi!
-using ..file_io: setup_initial_electron_io, write_initial_electron_state,
-                 finish_initial_electron_io
+using ..file_io: setup_electron_io, write_electron_state, finish_electron_io
 using ..load_data: reload_electron_data!
 using ..moment_kinetics_structs: scratch_pdf, pdf_substruct, electron_pdf_substruct,
                                  pdf_struct, moments_struct, boundary_distributions_struct
@@ -497,19 +496,22 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
             # might have been loaded from a restart file).
             code_time = MPI.Bcast(code_time, 0, comm_block[])
         end
-        io_initial_electron = nothing
+        # Set to `true` rather than `nothing` so that processes that are not writing
+        # output (i.e. not rank-0 of their shared-memory block) know that 'initial
+        # electron output' is being written (so that they know not to activate 'debug
+        # I/O').
+        io_initial_electron = true
         @serial_region begin
             # Setup I/O for initial electron state
-            io_initial_electron = setup_initial_electron_io(io_input, vz, vr, vzeta, vpa,
-                                                            vperp, z, r, composition,
-                                                            collisions,
-                                                            moments.evolve_density,
-                                                            moments.evolve_upar,
-                                                            moments.evolve_ppar,
-                                                            external_source_settings,
-                                                            input_dict,
-                                                            restart_time_index,
-                                                            previous_runs_info)
+            io_initial_electron = setup_electron_io(io_input, vpa, vperp, z, r,
+                                                    composition, collisions,
+                                                    moments.evolve_density,
+                                                    moments.evolve_upar,
+                                                    moments.evolve_ppar,
+                                                    external_source_settings, input_dict,
+                                                    restart_time_index,
+                                                    previous_runs_info,
+                                                    "initial_electron")
 
             # update the electron pdf in the first scratch
             scratch[1].pdf_electron .= pdf.electron.norm
@@ -550,7 +552,7 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
                                         t_params, collisions, composition,
                                         external_source_settings, num_diss_params,
                                         max_electron_pdf_iterations;
-                                        io_initial_electron=io_initial_electron,
+                                        io_electron=io_initial_electron,
                                         initial_time=code_time,
                                         residual_tolerance=t_input.initialization_residual_value,
                                         evolve_ppar=true)
@@ -567,7 +569,7 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
                                         t_params, collisions, composition,
                                         external_source_settings, num_diss_params,
                                         max_electron_pdf_iterations;
-                                        io_initial_electron=io_initial_electron,
+                                        io_electron=io_initial_electron,
                                         initial_time=electron_pseudotime,
                                         initial_output_counter=n_debug_outputs)
 
@@ -580,10 +582,9 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
         # Write the converged initial state for the electrons to a file so that it can be
         # re-used if the simulation is re-run.
         t_idx = n_debug_outputs + 1
-        write_initial_electron_state(pdf.electron.norm, moments, t_params,
-                                     electron_pseudotime, io_initial_electron, t_idx, r,
-                                     z, vperp, vpa)
-        finish_initial_electron_io(io_initial_electron)
+        write_electron_state(pdf.electron.norm, moments, t_params, electron_pseudotime,
+                             io_initial_electron, t_idx, r, z, vperp, vpa)
+        finish_electron_io(io_initial_electron)
 
     end
     return nothing
