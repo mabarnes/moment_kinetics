@@ -167,7 +167,7 @@ function calculate_phi_from_Epar!(phi, Epar, z)
         # Add contributions to integral along z from processes at smaller z-values than
         # this one.
         this_delta_phi = phi[end,:] .- phi[1,:]
-        for irank ∈ 1:z.nrank-1
+        for irank ∈ 0:z.nrank-2
             delta_phi = MPI.bcast(this_delta_phi, z.comm; root=irank)
             if z.irank > irank
                 @loop_r_z ir iz begin
