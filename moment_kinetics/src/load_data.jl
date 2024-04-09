@@ -3300,6 +3300,7 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
               * "`(String, Nothing)`. Got $run_dir")
     end
 
+    electron_debug = false
     if isfile(this_run_dir)
         # this_run_dir is actually a filename. Assume it is a moment_kinetics output file
         # and infer the directory and the run_name from the filename.
@@ -3313,6 +3314,9 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
             run_name = split(filename, ".dfns.")[1]
         elseif occursin(".initial_electron.", filename)
             run_name = split(filename, ".initial_electron.")[1]
+        elseif occursin(".electron_debug.", filename)
+            run_name = split(filename, ".electron_debug.")[1]
+            electron_debug = true
         else
             error("Cannot recognise '$this_run_dir/$filename' as a moment_kinetics output file")
         end
@@ -3356,7 +3360,11 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
     end
 
     if initial_electron
-        ext = "initial_electron"
+        if electron_debug
+            ext = "electron_debug"
+        else
+            ext = "initial_electron"
+        end
     elseif dfns
         ext = "dfns"
     else
@@ -3554,7 +3562,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
     if ivperp === nothing
         if :vperp ∈ keys(run_info)
             # v-space coordinates only present if run_info contains distribution functions
-            nvperp = run_info.vperp.n
+            nvperp = run_info.vperp === nothing ? 1 : run_info.vperp.n
             ivperp = 1:nvperp
         else
             nvperp = nothing
@@ -3568,7 +3576,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
     if ivpa === nothing
         if :vpa ∈ keys(run_info)
             # v-space coordinates only present if run_info contains distribution functions
-            nvpa = run_info.vpa.n
+            nvpa = run_info.vpa === nothing ? 1 : run_info.vpa.n
             ivpa = 1:nvpa
         else
             nvpa = nothing
@@ -3582,7 +3590,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
     if ivzeta === nothing
         if :vzeta ∈ keys(run_info)
             # v-space coordinates only present if run_info contains distribution functions
-            nvzeta = run_info.vzeta.n
+            nvzeta = run_info.vzeta === nothing ? 1 : run_info.vzeta.n
             ivzeta = 1:nvzeta
         else
             nvzeta = nothing
@@ -3596,7 +3604,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
     if ivr === nothing
         if :vr ∈ keys(run_info)
             # v-space coordinates only present if run_info contains distribution functions
-            nvr = run_info.vr.n
+            nvr = run_info.vr === nothing ? 1 : run_info.vr.n
             ivr = 1:nvr
         else
             nvr = nothing
@@ -3610,7 +3618,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
     if ivz === nothing
         if :vz ∈ keys(run_info)
             # v-space coordinates only present if run_info contains distribution functions
-            nvz = run_info.vz.n
+            nvz = run_info.vz === nothing ? 1 : run_info.vz.n
             ivz = 1:nvz
         else
             nvz = nothing
@@ -4185,8 +4193,12 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
 
         setup_distributed_memory_MPI(1,1,1,1)
         setup_loop_ranges!(0, 1; s=run_info.n_ion_species, sn=run_info.n_neutral_species,
-                           r=nr, z=nz, vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
-                           vr=run_info.vr.n, vz=run_info.vz.n)
+                           r=nr, z=nz,
+                           vperp=(run_info.vperp === nothing ? 1 : run_info.vperp.n),
+                           vpa=(run_info.vpa === nothing ? 1 : run_info.vpa.n),
+                           vzeta=(run_info.vzeta === nothing ? 1 : run_info.vzeta.n),
+                           vr=(run_info.vr === nothing ? 1 : run_info.vr.n),
+                           vz=(run_info.vz === nothing ? 1 : run_info.vz.n))
         for it ∈ 1:nt
             begin_serial_region()
             # Only need some struct with a 'speed' variable
@@ -4251,8 +4263,12 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         speed=allocate_float(nvpa, nvperp, nz, nr, nt)
         setup_distributed_memory_MPI(1,1,1,1)
         setup_loop_ranges!(0, 1; s=run_info.n_ion_species, sn=run_info.n_neutral_species,
-                           r=nr, z=nz, vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
-                           vr=run_info.vr.n, vz=run_info.vz.n)
+                           r=nr, z=nz,
+                           vperp=(run_info.vperp === nothing ? 1 : run_info.vperp.n),
+                           vpa=(run_info.vpa === nothing ? 1 : run_info.vpa.n),
+                           vzeta=(run_info.vzeta === nothing ? 1 : run_info.vzeta.n),
+                           vr=(run_info.vr === nothing ? 1 : run_info.vr.n),
+                           vz=(run_info.vz === nothing ? 1 : run_info.vz.n))
         for it ∈ 1:nt
             begin_serial_region()
             # Only need some struct with a 'speed' variable
