@@ -227,7 +227,7 @@ The result is stored in the array `fkpl_arrays.CC`.
 
 The normalised collision frequency is defined by
 ```math
-\\nu_{ss'} = \\frac{\\gamma_{ss'} n_\\mathrm{ref}}{2 m_s^2 c_\\mathrm{ref}^3}
+\\tilde{\\nu}_{ss'} = \\frac{L_\\mathrm{ref}}{c_\\mathrm{ref}}\\frac{\\gamma_{ss'} n_\\mathrm{ref}}{2 m_s^2 c_\\mathrm{ref}^3}
 ```
 with \$\\gamma_{ss'} = 2 \\pi (Z_s Z_{s'})^2 e^4 \\ln \\Lambda_{ss'} / (4 \\pi
 \\epsilon_0)^2\$.
