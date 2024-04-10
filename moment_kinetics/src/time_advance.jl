@@ -2248,6 +2248,9 @@ function ssp_rk!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyrophase
     end
 
     for istage ∈ 1:n_rk_stages
+        if global_rank[] == 0
+            println("ion step ", t_params.step_counter[], ".", istage, " ", t)
+        end
         # do an Euler time advance, with scratch[2] containing the advanced quantities
         # and scratch[1] containing quantities at time level n
         update_solution_vector!(scratch, moments, istage, composition, vpa, vperp, z, r)
