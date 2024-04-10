@@ -323,6 +323,17 @@ mutable struct collisions_input
     # nu_{ss'} = gamma_{ss'} n_{ref} / 2 (m_s)^2 (c_{ref})^3
     # with gamma_ss' = 2 pi (Z_s Z_s')^2 e^4 ln \Lambda_{ss'} / (4 pi \epsilon_0)^2
     nuii::mk_float
+    # option to determine which FP collision operator is used
+    slowing_down_test::Bool
+end
+
+"""
+"""
+Base.@kwdef struct fkpl_collisions_input
+    # ion-ion self collision frequency
+    # nu_{ss'} = gamma_{ss'} n_{ref} / 2 (m_s)^2 (c_{ref})^3
+    # with gamma_ss' = 2 pi (Z_s Z_s')^2 e^4 ln \Lambda_{ss'} / (4 pi \epsilon_0)^2
+    nuii::mk_float
 end
 
 """

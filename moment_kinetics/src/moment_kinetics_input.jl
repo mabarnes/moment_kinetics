@@ -192,6 +192,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     end
     # set the Fokker-Planck collision frequency
     collisions.nuii = get(scan_input, "nuii", 0.0)
+    collisions.slowing_down_test = get(scan_input, "slowing_down_test", false)
     
     # parameters related to the time stepping
     nstep = get(scan_input, "nstep", 5)
@@ -1014,7 +1015,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     krook_collision_frequency_prefactor = -1.0
     nuii = 0.0
     collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate,
-                                  krook_collision_frequency_prefactor,"none", nuii)
+                                  krook_collision_frequency_prefactor,"none", nuii, false)
 
     return z, r, vpa, vperp, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions
 end
