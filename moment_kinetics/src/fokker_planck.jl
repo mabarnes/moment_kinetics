@@ -242,7 +242,10 @@ function explicit_fp_collisions_weak_form_Maxwellian_cross_species!(pdf_out,pdf_
                                      fkpl_arrays,vperp,vpa,vperp_spectral,vpa_spectral)
         # enforce the boundary conditions on CC before it is used for timestepping
         enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
-        # advance this part of s,r,z with the resulting C[Fs,Fs]
+        # make sure that the cross-species terms conserve density
+        density_conserving_correction!(fkpl_arrays.CC, pdf_in[:,:,iz,ir,is], vpa, vperp,
+                                fkpl_arrays.S_dummy)
+        # advance this part of s,r,z with the resulting sum_s' C[Fs,Fs']
         begin_anyv_vperp_vpa_region()
         CC = fkpl_arrays.CC
         @loop_vperp_vpa ivperp ivpa begin
@@ -616,6 +619,36 @@ function conserving_corrections!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
     @loop_vperp_vpa ivperp ivpa begin
         wpar = vpa.grid[ivpa] - upar
         CC[ivpa,ivperp] -= (x0 + x1*wpar + x2*(vperp.grid[ivperp]^2 + wpar^2) )*pdf_in[ivpa,ivperp]
+    end
+end
+
+function density_conserving_correction!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
+    begin_anyv_region()
+    x0 = 0.0
+    @anyv_serial_region begin
+        # In principle the integrations here could be shared among the processes in the
+        # 'anyv' subblock, but this block is not a significant part of the cost of the
+        # collision operator, so probably not worth the complication.
+
+        # compute density of the input pdf
+        dens =  get_density(pdf_in, vpa, vperp)
+        
+        # compute density of the numerical collision operator
+        dn = get_density(CC, vpa, vperp)
+        
+        # obtain the coefficient for the correction
+        x0 = dn/dens
+    end
+
+    # Broadcast x0 to all processes in the 'anyv' subblock
+    param_vec = [x0]
+    MPI.Bcast!(param_vec, 0, comm_anyv_subblock[])
+    x0 = param_vec[1]
+    
+    # correct CC
+    begin_anyv_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        CC[ivpa,ivperp] -= x0*pdf_in[ivpa,ivperp]
     end
 end
 
