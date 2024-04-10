@@ -690,6 +690,18 @@ function init_charged_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
         @loop_z_vperp iz ivperp begin
             @. pdf[:,ivperp,iz] = (vpa.grid + 0.5*vpa.L)^spec.vpa_IC.monomial_degree
         end
+    elseif spec.vpa_IC.initialization_option == "isotropic-beam"
+        v0 = 0.5*sqrt(vperp.L^2 + (0.5*vpa.L)^2) # birth speed of beam
+        vslow = 0.2*v0 # spread of the beam in speed
+        v4norm = (vslow^2) * (v0^2)
+        @loop_z iz begin
+            @loop_vperp_vpa ivperp ivpa begin
+                v2 = (vpa.grid[ivpa])^2 + vperp.grid[ivperp]^2 - v0^2
+                pdf[ivpa,ivperp,iz] = exp(-(v2^2)/v4norm)
+            end
+            normfac = integrate_over_vspace(view(pdf,:,:,iz), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+            @. pdf[:,:,iz] /= normfac
+        end
     end
     return nothing
 end
