@@ -50,6 +50,8 @@ using ..communication
 using ..velocity_moments: integrate_over_vspace
 using ..velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_qpar, get_pressure, get_rmom
 using ..looping
+using ..input_structs: fkpl_collisions_input
+using ..reference_parameters: get_reference_collision_frequency
 using ..fokker_planck_calculus: init_Rosenbluth_potential_integration_weights!
 using ..fokker_planck_calculus: init_Rosenbluth_potential_boundary_integration_weights!
 using ..fokker_planck_calculus: allocate_boundary_integration_weights
@@ -67,6 +69,37 @@ using ..fokker_planck_calculus: calculate_rosenbluth_potentials_via_elliptic_sol
 using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_fluxes, H_Maxwellian, dGdvperp_Maxwellian
 using ..fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian
 using ..fokker_planck_test: F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
+
+function setup_fkpl_collisions_input(toml_input::Dict, reference_params)
+    # get reference collision frequency (note factor of 1/4 due to definition choices)
+    nuii_fkpl_default = 0.25*get_reference_collision_frequency(reference_params)
+    # read the input toml and specify a sensible default
+    default_dict = Dict{String,Any}("use_fokker_planck" => false, "nuii" => -1.0,
+          "frequency_option" => "manual" )
+    input_section = get(toml_input, "fokker_planck_collisions", default_dict)
+    # ensure defaults are carried over from the default dict if only a partial dict is given as an input
+    # as the default Dict here is entirely ignored if the namelist is present  
+    for (k,v) in default_dict
+        if !( k in keys(input_section))
+            input_section[k] = v
+        end
+    end
+    # ensure that the collision frequency is consistent with the input option
+    frequency_option = input_section["frequency_option"]
+    if frequency_option == "reference_parameters"
+        input_section["nuii"] = nuii_fkpl_default
+    elseif frequency_option == "manual" 
+        # use the frequency from the input file
+        # do nothing
+    else
+        error("Invalid option [fokker_planck_collisions] "
+              * "frequency_option=$(frequency_option) passed")
+    end
+    
+    input = Dict(Symbol(k)=>v for (k,v) in input_section)
+    #println(input)
+    return fkpl_collisions_input(; input...)
+end
 
 ########################################################
 # begin functions associated with the weak-form operator
@@ -184,7 +217,7 @@ function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,dSdt,compos
     
     # masses and collision frequencies
     ms, msp = 1.0, 1.0 # generalise!
-    nussp = collisions.nuii # generalise!
+    nussp = collisions.fkpl.nuii # generalise!
     # N.B. parallelisation using special 'anyv' region
     begin_s_r_z_anyv_region()
     @loop_s_r_z is ir iz begin
@@ -227,7 +260,7 @@ The result is stored in the array `fkpl_arrays.CC`.
 
 The normalised collision frequency is defined by
 ```math
-\\nu_{ss'} = \\frac{\\gamma_{ss'} n_\\mathrm{ref}}{2 m_s^2 c_\\mathrm{ref}^3}
+\\tilde{\\nu}_{ss'} = \\frac{L_{\\mathrm{ref}}}{c_{\\mathrm{ref}}}\\frac{\\gamma_{ss'} n_\\mathrm{ref}}{2 m_s^2 c_\\mathrm{ref}^3}
 ```
 with \$\\gamma_{ss'} = 2 \\pi (Z_s Z_{s'})^2 e^4 \\ln \\Lambda_{ss'} / (4 \\pi
 \\epsilon_0)^2\$.
