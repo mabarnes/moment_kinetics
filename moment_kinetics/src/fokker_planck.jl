@@ -95,7 +95,11 @@ function setup_fkpl_collisions_input(toml_input::Dict, reference_params)
         error("Invalid option [fokker_planck_collisions] "
               * "frequency_option=$(frequency_option) passed")
     end
-    
+    # finally, ensure nuii < 0 if use_fokker_planck is false
+    # so that nuii > 0 is the only check required in the rest of the code
+    if !input_section["use_fokker_planck"]
+        input_section["nuii"] = -1.0
+    end
     input = Dict(Symbol(k)=>v for (k,v) in input_section)
     #println(input)
     return fkpl_collisions_input(; input...)

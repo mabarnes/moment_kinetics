@@ -34,6 +34,11 @@ function setup_krook_collisions_input(toml_input::Dict, reference_params)
         error("Invalid option [krook_collisions] "
               * "frequency_option=$(frequency_option) passed")
     end
+    # finally, ensure prefactor < 0 if use_krook is false
+    # so that prefactor > 0 is the only check required in the rest of the code
+    if !input_section["use_krook"]
+        input_section["krook_collision_frequency_prefactor"] = -1.0
+    end
     input = Dict(Symbol(k)=>v for (k,v) in input_section)
     #println(input)
     return krook_collisions_input(; input...)
