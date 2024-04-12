@@ -230,8 +230,9 @@ function explicit_fp_collisions_weak_form_Maxwellian_cross_species!(pdf_out,pdf_
     @boundscheck r.n == size(dSdt,2) || throw(BoundsError(dSdt))
     @boundscheck n_ion_species == size(dSdt,3) || throw(BoundsError(dSdt))
     
-    # masses and collision frequencies
+    # masses charge numbers and collision frequencies
     mref = 1.0
+    Zref = 1.0
     nuref = collisions.fkpl.nuii # generalise!
     #msp = Array{mk_float,1}(undef,2)
     #densp = Array{mk_float,1}(undef,2)
@@ -240,6 +241,7 @@ function explicit_fp_collisions_weak_form_Maxwellian_cross_species!(pdf_out,pdf_
     #msp[1], msp[2] = 0.25, 0.25/1836.0
     #uparsp[1], uparsp[2] = 0.0, 0.0
     msp = [0.25, 0.25/1836.0]
+    Zsp = [0.5, 0.5]
     densp = [1.0, 1.0]
     uparsp = [0.0, 0.0]
     vthsp = [sqrt(0.01/msp[1]), sqrt(0.01/msp[2])]
@@ -277,7 +279,7 @@ function explicit_fp_collisions_weak_form_Maxwellian_cross_species!(pdf_out,pdf_
         
         # computes sum over s' of  C[Fs,Fs'] with Fs' an assumed Maxwellian 
         @views fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!(pdf_in[:,:,iz,ir,is],
-                                     nuref,mref,msp,densp,uparsp,vthsp,
+                                     nuref,mref,Zref,msp,Zsp,densp,uparsp,vthsp,
                                      fkpl_arrays,vperp,vpa,vperp_spectral,vpa_spectral)
         # enforce the boundary conditions on CC before it is used for timestepping
         enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
@@ -492,8 +494,9 @@ F_{s^\\prime}
 is an analytically specified Maxwellian distribution
 """
 function fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!(ffs_in,
-                                             nuref::mk_float,ms::mk_float,
-                                             msp::Array{mk_float,1},densp::Array{mk_float,1},
+                                             nuref::mk_float,ms::mk_float,Zs::mk_float,
+                                             msp::Array{mk_float,1},Zsp::::Array{mk_float,1}, 
+                                             densp::Array{mk_float,1},
                                              uparsp::Array{mk_float,1},vthsp::Array{mk_float,1},
                                              fkpl_arrays::fokkerplanck_weakform_arrays_struct,
                                              vperp, vpa, vperp_spectral, vpa_spectral)
@@ -530,17 +533,22 @@ function fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!(ffs_in,
         dHdvpa[ivpa,ivperp] = 0.0
         dHdvperp[ivpa,ivperp] = 0.0
     end
-    # sum the contributions from the potentials
+    # sum the contributions from the potentials, including order unity factors that differ between species
+    # making use of the Linearity of the operator in Fsp
+    # note that here we absorb ms/msp and Zsp^2 into the definition of the potentials, and we pass
+    # ms = msp = 1 to the collision operator assembly routine so that we can use a single array to include
+    # the contribution to the summed Rosenbluth potential from all the species
     for isp in 1:nsp
         dens = densp[isp]
         upar = uparsp[isp]
         vth = vthsp[isp]
+        ZZ = (Zsp[isp]/Zz)^2 # factor from gamma_ss'
         @loop_vperp_vpa ivperp ivpa begin
-            d2Gdvpa2[ivpa,ivperp] += d2Gdvpa2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            d2Gdvperp2[ivpa,ivperp] += d2Gdvperp2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            d2Gdvperpdvpa[ivpa,ivperp] += d2Gdvperpdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            dHdvpa[ivpa,ivperp] += (ms/msp[isp])*dHdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            dHdvperp[ivpa,ivperp] += (ms/msp[isp])*dHdvperp_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            d2Gdvpa2[ivpa,ivperp] += ZZ*d2Gdvpa2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            d2Gdvperp2[ivpa,ivperp] += ZZ*d2Gdvperp2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            d2Gdvperpdvpa[ivpa,ivperp] += ZZ*d2Gdvperpdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            dHdvpa[ivpa,ivperp] += ZZ*(ms/msp[isp])*dHdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            dHdvperp[ivpa,ivperp] += ZZ*(ms/msp[isp])*dHdvperp_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
         end
     end
     # Need to synchronize as these arrays may be read outside the locally-owned set of
