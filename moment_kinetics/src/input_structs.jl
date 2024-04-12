@@ -341,25 +341,6 @@ struct collisions_input
     fkpl::fkpl_collisions_input
 end
 
-    #"""
-    #"""
-    #mutable struct collisions_input
-    #    ## charge exchange collision frequency
-    #    #charge_exchange::mk_float
-    #    ## ionization collision frequency
-    #    #ionization::mk_float
-    #    ## if constant_ionization_rate = true, use an ionization term that is constant in z
-    #    #constant_ionization_rate::Bool
-    #    ## Coulomb collision rate at the reference density and temperature
-    #    #krook_collision_frequency_prefactor::mk_float
-    #    ## Setting to switch between different options for Krook collision operator
-    #    #krook_collisions_option::String
-    #    ## ion-ion self collision frequency
-    #    ## nu_{ss'} = gamma_{ss'} n_{ref} / 2 (m_s)^2 (c_{ref})^3
-    #    ## with gamma_ss' = 2 pi (Z_s Z_s')^2 e^4 ln \Lambda_{ss'} / (4 pi \epsilon_0)^2
-    #    #nuii::mk_float
-    #end
-
 """
 """
 Base.@kwdef struct geometry_input
