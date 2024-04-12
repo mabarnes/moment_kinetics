@@ -542,7 +542,7 @@ function fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!(ffs_in,
         dens = densp[isp]
         upar = uparsp[isp]
         vth = vthsp[isp]
-        ZZ = (Zsp[isp]/Zz)^2 # factor from gamma_ss'
+        ZZ = (Zsp[isp]/Zs)^2 # factor from gamma_ss'
         @loop_vperp_vpa ivperp ivpa begin
             d2Gdvpa2[ivpa,ivperp] += ZZ*d2Gdvpa2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             d2Gdvperp2[ivpa,ivperp] += ZZ*d2Gdvperp2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
