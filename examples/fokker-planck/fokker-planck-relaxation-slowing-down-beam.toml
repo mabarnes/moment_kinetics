@@ -30,9 +30,6 @@ vpa_IC_option1 = "isotropic-beam"
 charge_exchange_frequency = 0.0
 ionization_frequency = 0.0
 constant_ionization_rate = false
-# nuii sets the normalised input C[F,F] Fokker-Planck collision frequency
-nuii = 1.0
-slowing_down_test = true
 nstep = 1000
 dt = 1.0e-5
 nwrite = 50
@@ -62,3 +59,9 @@ vperp_discretization = "gausslegendre_pseudospectral"
 # Fokker-Planck operator requires the "gausslegendre_pseudospectral
 # options for the vpa and vperp grids
 
+[fokker_planck_collisions]
+# nuii sets the normalised input C[F,F] Fokker-Planck collision frequency
+nuii = 1.0
+slowing_down_test = true
+frequency_option = "manual"
+use_fokker_planck = true
