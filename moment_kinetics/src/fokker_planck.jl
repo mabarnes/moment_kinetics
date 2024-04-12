@@ -232,7 +232,7 @@ function explicit_fp_collisions_weak_form_Maxwellian_cross_species!(pdf_out,pdf_
     
     # masses and collision frequencies
     mref = 1.0
-    nuref = collisions.nuii # generalise!
+    nuref = collisions.fkpl.nuii # generalise!
     #msp = Array{mk_float,1}(undef,2)
     #densp = Array{mk_float,1}(undef,2)
     #uparsp = Array{mk_float,1}(undef,2)
