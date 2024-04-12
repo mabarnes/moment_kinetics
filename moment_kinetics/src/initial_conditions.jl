@@ -702,6 +702,19 @@ function init_charged_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
             normfac = integrate_over_vspace(view(pdf,:,:,iz), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
             @. pdf[:,:,iz] /= normfac
         end
+    elseif spec.vpa_IC.initialization_option == "directed-beam"
+        vpa0 = 0.25*0.5*abs(vpa.L) # centre of beam in vpa
+        vperp0 = 0.5*abs(vperp.L) # centre of beam in vperp
+        vth0 = 0.05*sqrt(vperp.L^2 + (0.5*vpa.L)^2) # width of beam in v 
+        @loop_z iz begin
+            @loop_vperp_vpa ivperp ivpa begin
+                v2 = (vpa.grid[ivpa] - vpa0)^2 + (vperp.grid[ivperp] - vperp0)^2
+                v2norm = vth0^2
+                pdf[ivpa,ivperp,iz] = exp(-v2/v2norm)
+            end
+            normfac = integrate_over_vspace(view(pdf,:,:,iz), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+            @. pdf[:,:,iz] /= normfac
+        end
     end
     return nothing
 end
