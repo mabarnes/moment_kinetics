@@ -9,6 +9,16 @@ using ..looping
 using ..input_structs: krook_collisions_input
 using ..reference_parameters: get_reference_collision_frequency
 
+
+"""
+Function for reading Krook collision operator input parameters. 
+Structure the namelist as follows.
+
+[krook_collisions]
+use_krook = true
+krook_collision_frequency_prefactor = 1.0
+frequency_option = "manual"
+"""
 function setup_krook_collisions_input(toml_input::Dict, reference_params)
     # get reference collision frequency
     nuii_krook_default = get_reference_collision_frequency(reference_params)

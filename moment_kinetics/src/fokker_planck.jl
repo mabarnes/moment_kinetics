@@ -70,6 +70,15 @@ using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_flux
 using ..fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian
 using ..fokker_planck_test: F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
 
+"""
+Function for reading Fokker Planck collision operator input parameters. 
+Structure the namelist as follows.
+
+[fokker_planck_collisions]
+use_fokker_planck = true
+nuii = 1.0
+frequency_option = "manual"
+"""
 function setup_fkpl_collisions_input(toml_input::Dict, reference_params)
     # get reference collision frequency (note factor of 1/4 due to definition choices)
     nuii_fkpl_default = 0.25*get_reference_collision_frequency(reference_params)
