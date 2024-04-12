@@ -10,7 +10,7 @@ export initial_condition_input, initial_condition_input_mutable
 export species_parameters, species_parameters_mutable
 export species_composition
 export drive_input, drive_input_mutable
-export collisions_input
+export collisions_input, krook_collisions_input, fkpl_collisions_input
 export io_input
 export pp_input
 export geometry_input
@@ -308,32 +308,39 @@ end
 
 """
 """
-mutable struct collisions_input
+Base.@kwdef struct krook_collisions_input
+    use_krook::Bool
+    # Coulomb collision rate at the reference density and temperature
+    krook_collision_frequency_prefactor::mk_float#
+    # Setting to switch between different options for Krook collision operator
+    frequency_option::String # "reference_parameters" # "manual", 
+end
+
+Base.@kwdef struct fkpl_collisions_input
+    use_fokker_planck::Bool
+    # ion-ion self collision frequency
+    # nu_{ss'} = (L/c_{ref}) * gamma_{ss'} n_{ref} / 2 (m_s)^2 (c_{ref})^3
+    # with gamma_ss' = 2 pi (Z_s Z_s')^2 e^4 ln \Lambda_{ss'} / (4 pi \epsilon_0)^2
+    nuii::mk_float
+    # option to determine which FP collision operator is used
+    slowing_down_test::Bool
+    # Setting to switch between different options for Fokker-Planck collision frequency input
+    frequency_option::String # "manual" # "reference_parameters"
+end
+
+"""
+"""
+struct collisions_input
     # charge exchange collision frequency
     charge_exchange::mk_float
     # ionization collision frequency
     ionization::mk_float
     # if constant_ionization_rate = true, use an ionization term that is constant in z
     constant_ionization_rate::Bool
-    # Coulomb collision rate at the reference density and temperature
-    krook_collision_frequency_prefactor::mk_float
-    # Setting to switch between different options for Krook collision operator
-    krook_collisions_option::String
-    # ion-ion self collision frequency
-    # nu_{ss'} = gamma_{ss'} n_{ref} / 2 (m_s)^2 (c_{ref})^3
-    # with gamma_ss' = 2 pi (Z_s Z_s')^2 e^4 ln \Lambda_{ss'} / (4 pi \epsilon_0)^2
-    nuii::mk_float
-    # option to determine which FP collision operator is used
-    slowing_down_test::Bool
-end
-
-"""
-"""
-Base.@kwdef struct fkpl_collisions_input
-    # ion-ion self collision frequency
-    # nu_{ss'} = gamma_{ss'} n_{ref} / 2 (m_s)^2 (c_{ref})^3
-    # with gamma_ss' = 2 pi (Z_s Z_s')^2 e^4 ln \Lambda_{ss'} / (4 pi \epsilon_0)^2
-    nuii::mk_float
+    # struct of parameters for the Krook operator
+    krook::krook_collisions_input
+    # struct of parameters for the Fokker-Planck operator
+    fkpl::fkpl_collisions_input
 end
 
 """

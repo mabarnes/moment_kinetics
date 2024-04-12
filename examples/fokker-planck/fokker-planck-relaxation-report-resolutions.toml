@@ -29,8 +29,7 @@ z_IC_temperature_phase2 = 0.0
 charge_exchange_frequency = 0.0
 ionization_frequency = 0.0
 constant_ionization_rate = false
-# nuii sets the normalised input C[F,F] Fokker-Planck collision frequency
-nuii = 1.0
+
 nstep = 200000
 dt = 1.0e-3
 nwrite = 50
@@ -60,3 +59,8 @@ vperp_discretization = "gausslegendre_pseudospectral"
 # Fokker-Planck operator requires the "gausslegendre_pseudospectral
 # options for the vpa and vperp grids
 
+[fokker_planck_collisions]
+use_fokker_planck = true
+# nuii sets the normalised input C[F,F] Fokker-Planck collision frequency
+nuii = 1.0
+frequency_option = "manual"

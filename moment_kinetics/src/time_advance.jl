@@ -493,7 +493,7 @@ function setup_advance_flags(moments, composition, t_input, collisions,
         advance_vperp_advection = vperp.n > 1 && z.n > 1
         advance_z_advection = z.n > 1
         advance_r_advection = r.n > 1
-        if collisions.nuii > 0.0 && vperp.n > 1
+        if collisions.fkpl.nuii > 0.0 && vperp.n > 1 
             explicit_weakform_fp_collisions = true
         else
             explicit_weakform_fp_collisions = false    
@@ -543,7 +543,7 @@ function setup_advance_flags(moments, composition, t_input, collisions,
         if collisions.ionization > 0.0 && collisions.constant_ionization_rate
             advance_ionization_source = true
         end
-        if collisions.krook_collision_frequency_prefactor > 0.0
+        if collisions.krook.krook_collision_frequency_prefactor > 0.0
             advance_krook_collisions = true
         end
         advance_external_source = external_source_settings.ion.active
@@ -1765,7 +1765,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     # advance with the Fokker-Planck self-collision operator
     if advance.explicit_weakform_fp_collisions
         update_entropy_diagnostic = (istage == 1)
-        if collisions.slowing_down_test
+        if collisions.fkpl.slowing_down_test
             explicit_fp_collisions_weak_form_Maxwellian_cross_species!(fvec_out.pdf,fvec_in.pdf,moments.charged.dSdt,composition,collisions,dt,
                                              fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral;
                                              diagnose_entropy_production = update_entropy_diagnostic)
