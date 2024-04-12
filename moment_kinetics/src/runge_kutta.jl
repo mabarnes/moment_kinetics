@@ -783,6 +783,8 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
         error("Unrecognized error_norm_method '$method'")
     end
 
+    just_completed_output_step = false
+
     # Use current_dt instead of t_params.dt[] here because we are about to write to
     # the shared-memory variable t_params.dt[] below, and we do not want to add an extra
     # _block_synchronize() call after reading it here.
@@ -846,6 +848,8 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
                 if t_params.dt[] > CFL_limit
                     t_params.dt[] = CFL_limit
                 end
+
+                just_completed_output_step = true
             else
                 # Adjust timestep according to Fehlberg's suggestion
                 # (https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method).
@@ -912,9 +916,12 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
     end
 
     @serial_region begin
-        if t + t_params.dt[] >= t_params.next_output_time[]
+        current_time = t + t_params.previous_dt[]
+        if (!just_completed_output_step
+            && (current_time + t_params.dt[] >= t_params.next_output_time[]))
+
             t_params.dt_before_output[] = t_params.dt[]
-            t_params.dt[] = t_params.next_output_time[] - t
+            t_params.dt[] = t_params.next_output_time[] - current_time
             t_params.step_to_output[] = true
         end
     end
