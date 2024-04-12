@@ -495,7 +495,7 @@ is an analytically specified Maxwellian distribution
 """
 function fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!(ffs_in,
                                              nuref::mk_float,ms::mk_float,Zs::mk_float,
-                                             msp::Array{mk_float,1},Zsp::::Array{mk_float,1}, 
+                                             msp::Array{mk_float,1},Zsp::Array{mk_float,1}, 
                                              densp::Array{mk_float,1},
                                              uparsp::Array{mk_float,1},vthsp::Array{mk_float,1},
                                              fkpl_arrays::fokkerplanck_weakform_arrays_struct,
