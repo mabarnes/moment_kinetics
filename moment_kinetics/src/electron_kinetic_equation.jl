@@ -301,14 +301,6 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                           evolve_ppar=evolve_ppar)
 
             rk_update_variable!(scratch, :pdf_electron, t_params, istage)
-            if evolve_ppar
-                rk_update_variable!(scratch, :electron_ppar, t_params, istage)
-                moments_struct_ppar = moments.electron.ppar
-                scratch_ppar = scratch[istage+1].electron_ppar
-                @loop_r_z ir iz begin
-                    moments_struct_ppar[iz,ir] = scratch_ppar[iz,ir]
-                end
-            end
 
             latest_pdf = scratch[istage+1].pdf_electron
             begin_r_z_vperp_vpa_region()
@@ -414,6 +406,15 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                     # been reset to the values from the beginning of the timestep here.
                     update_derived_moments_and_derivatives()
                 end
+            end
+            if evolve_ppar
+                rk_update_variable!(scratch, :electron_ppar, t_params, istage)
+                moments_struct_ppar = moments.electron.ppar
+                scratch_ppar = scratch[istage+1].electron_ppar
+                @loop_r_z ir iz begin
+                    moments_struct_ppar[iz,ir] = scratch_ppar[iz,ir]
+                end
+                _block_synchronize()
             end
         end
 
