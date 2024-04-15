@@ -68,6 +68,15 @@ function setup_chebyshev_pseudospectral(coord, run_directory; ignore_MPI=false)
         wisdom_filename = joinpath(run_directory, "fftw_wisdom.save")
     end
 
+    # When using FFTW.WISDOM_ONLY, the flag should be combined with the flag that was
+    # originally used to generate the 'wisdom' otherwise if the original flag was 'lower
+    # effort' (i.e. was FFTW.ESTIMATE) then the default (FFTW.MEASURE) will be used
+    # instead. Note that we also need an FFTW flag in chebyshev_radau_weights(), so if
+    # this flag is changed, that one should be changed too (if it is used). The flag is
+    # not automatically pased through, because there is not a convenient way to pass a
+    # flag through to chebyshev_radau_weights().
+    base_flag = FFTW.MEASURE
+
     function this_barrier()
         if !ignore_MPI
             # Normal case, all processors are creating the coordinate
@@ -88,12 +97,13 @@ function setup_chebyshev_pseudospectral(coord, run_directory; ignore_MPI=false)
         if wisdom_filename !== nothing
             # Load wisdom
             FFTW.import_wisdom(wisdom_filename)
-            fftw_flags = FFTW.MEASURE | FFTW.WISDOM_ONLY
+            # Flags can be combined with a bitwise-or operation `|`.
+            fftw_flags = base_flag | FFTW.WISDOM_ONLY
         else
-            fftw_flags = FFTW.MEASURE
+            fftw_flags = base_flag
         end
     else
-        fftw_flags = FFTW.MEASURE
+        fftw_flags = base_flag
     end
 
     lobatto = setup_chebyshev_pseudospectral_lobatto(coord, fftw_flags)
