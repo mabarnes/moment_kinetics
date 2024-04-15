@@ -15,6 +15,7 @@ using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_ppe
 
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form, fokker_planck_collision_operator_weak_form!
 using moment_kinetics.fokker_planck: conserving_corrections!, init_fokker_planck_collisions_direct_integration
+using moment_kinetics.fokker_planck: density_conserving_correction!, fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!
 using moment_kinetics.fokker_planck_test: print_test_data, fkpl_error_data, allocate_error_data #, plot_test_data
 using moment_kinetics.fokker_planck_test: F_Maxwellian, G_Maxwellian, H_Maxwellian
 using moment_kinetics.fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperp2_Maxwellian, d2Gdvperpdvpa_Maxwellian, dGdvperp_Maxwellian
@@ -217,7 +218,6 @@ function runtests()
             nelement_vperp = 4
             vpa, vpa_spectral, vperp, vperp_spectral = create_grids(ngrid,nelement_vpa,nelement_vperp,
                                                                         Lvpa=12.0,Lvperp=6.0)
-            nc_global = vpa.n*vperp.n
             begin_serial_region()
             fkpl_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral,
                                                                   precompute_weights=true, print_to_screen=print_to_screen)
@@ -365,7 +365,6 @@ function runtests()
             nelement_vperp = 4
             vpa, vpa_spectral, vperp, vperp_spectral = create_grids(ngrid,nelement_vpa,nelement_vperp,
                                                                         Lvpa=12.0,Lvperp=6.0)
-            nc_global = vpa.n*vperp.n
             begin_serial_region()
             fkpl_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral,
                                                                   precompute_weights=true, print_to_screen=print_to_screen)
@@ -507,6 +506,102 @@ function runtests()
                         @test isapprox(delta_n, rtol ; atol=atol)
                         if print_to_screen
                             println("dSdt: $dSdt")
+                            println("delta_n: ", delta_n)
+                        end
+                    end
+                end
+            end
+            finalize_comms!()                                                                  
+        end
+        
+        @testset " - test weak-form (slowing-down) collision operator calculation" begin
+            println(" - test weak-form (slowing-down) collision operator calculation")
+            ngrid = 9
+            nelement_vpa = 16
+            nelement_vperp = 8
+            vpa, vpa_spectral, vperp, vperp_spectral = create_grids(ngrid,nelement_vpa,nelement_vperp,
+                                                                        Lvpa=12.0,Lvperp=6.0)
+            begin_serial_region()
+            fkpl_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral,
+                                                                  precompute_weights=true, print_to_screen=print_to_screen)
+            
+            @testset "slowing_down_test=true test_numerical_conserving_terms=$test_numerical_conserving_terms" for test_numerical_conserving_terms in (true,false)
+                        
+                dummy_array = allocate_float(vpa.n,vperp.n)
+                Fs_M = allocate_float(vpa.n,vperp.n)
+                F_M = allocate_float(vpa.n,vperp.n)
+                C_M_num = allocate_shared_float(vpa.n,vperp.n)
+                C_M_exact = allocate_float(vpa.n,vperp.n)
+                C_M_err = allocate_float(vpa.n,vperp.n)
+                
+                # pick a set of parameters that represent slowing down
+                # on slow ions and faster electrons, but which are close
+                # enough to 1 for errors comparable to the self-collision operator
+                # increasing or reducing vth, mass increases the errors
+                dens, upar, vth = 1.0, 1.0, 1.0
+                mref = 1.0
+                Zref = 1.0
+                msp = [1.0,0.2]#[0.25, 0.25/1836.0]
+                Zsp = [0.5,0.5]#[0.5, 0.5]
+                denssp = [1.0,1.0]#[1.0, 1.0]
+                uparsp = [0.0,0.0]#[0.0, 0.0]
+                vthsp = [sqrt(0.5/msp[1]), sqrt(0.5/msp[2])]#[sqrt(0.01/msp[1]), sqrt(0.01/msp[2])]
+                nsprime = size(msp,1)
+                nuref = 1.0
+                
+                begin_serial_region()
+                for ivperp in 1:vperp.n
+                    for ivpa in 1:vpa.n
+                        Fs_M[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                        C_M_exact[ivpa,ivperp] = 0.0
+                    end
+                end
+                # sum up contributions to cross-collision operator
+                for isp in 1:nsprime
+                    zfac = (Zsp[isp]/Zref)^2
+                    nussp = nuref*zfac
+                    for ivperp in 1:vperp.n
+                        for ivpa in 1:vpa.n
+                            C_M_exact[ivpa,ivperp] += Cssp_Maxwellian_inputs(dens,upar,vth,mref,
+                                                                            denssp[isp],uparsp[isp],vthsp[isp],msp[isp],
+                                                                            nussp,vpa,vperp,ivpa,ivperp)
+                        end
+                    end
+                end
+                begin_s_r_z_anyv_region()
+                @views fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!(Fs_M[:,:],
+                                     nuref,mref,Zref,msp,Zsp,denssp,uparsp,vthsp,
+                                     fkpl_arrays,vperp,vpa,vperp_spectral,vpa_spectral)
+                if test_numerical_conserving_terms
+                    # enforce the boundary conditions on CC before it is used for timestepping
+                    enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
+                    # make ad-hoc conserving corrections
+                    density_conserving_correction!(fkpl_arrays.CC,Fs_M,vpa,vperp,dummy_array)
+                end
+                # extract C[Fs,Fs'] result
+                begin_vperp_vpa_region()
+                @loop_vperp_vpa ivperp ivpa begin
+                    C_M_num[ivpa,ivperp] = fkpl_arrays.CC[ivpa,ivperp]
+                end
+                begin_serial_region()
+                @serial_region begin
+                    C_M_max, C_M_L2 = print_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)                    
+                    atol_max = 7.0e-2
+                    atol_L2 = 6.0e-4
+                    @test C_M_max < atol_max
+                    @test C_M_L2 < atol_L2
+                    if !test_numerical_conserving_terms
+                        delta_n = get_density(C_M_num, vpa, vperp)
+                        rtol, atol = 0.0, 1.0e-12
+                        @test isapprox(delta_n, rtol ; atol=atol)
+                        if print_to_screen
+                            println("delta_n: ", delta_n)                           
+                        end
+                    elseif test_numerical_conserving_terms
+                        delta_n = get_density(C_M_num, vpa, vperp)
+                        rtol, atol = 0.0, 1.0e-15
+                        @test isapprox(delta_n, rtol ; atol=atol)
+                        if print_to_screen
                             println("delta_n: ", delta_n)
                         end
                     end
