@@ -1765,10 +1765,12 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     # advance with the Fokker-Planck self-collision operator
     if advance.explicit_weakform_fp_collisions
         update_entropy_diagnostic = (istage == 1)
-        # self collisions for each species
-        explicit_fokker_planck_collisions_weak_form!(fvec_out.pdf,fvec_in.pdf,moments.charged.dSdt,composition,
-                             collisions,dt,fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,scratch_dummy,
-                                                 diagnose_entropy_production = update_entropy_diagnostic)
+        if collisions.fkpl.self_collisions
+            # self collisions for each species
+            explicit_fokker_planck_collisions_weak_form!(fvec_out.pdf,fvec_in.pdf,moments.charged.dSdt,composition,
+                                 collisions,dt,fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,scratch_dummy,
+                                                     diagnose_entropy_production = update_entropy_diagnostic)
+        end
         if collisions.fkpl.slowing_down_test
         # include cross-collsions with fixed Maxwellian backgrounds
             explicit_fp_collisions_weak_form_Maxwellian_cross_species!(fvec_out.pdf,fvec_in.pdf,moments.charged.dSdt,

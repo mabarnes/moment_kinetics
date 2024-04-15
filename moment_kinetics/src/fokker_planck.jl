@@ -84,8 +84,16 @@ function setup_fkpl_collisions_input(toml_input::Dict, reference_params)
     # get reference collision frequency (note factor of 1/4 due to definition choices)
     nuii_fkpl_default = 0.25*get_reference_collision_frequency(reference_params)
     # read the input toml and specify a sensible default
-    default_dict = Dict{String,Any}("use_fokker_planck" => false, "nuii" => -1.0,
-          "frequency_option" => "manual", "slowing_down_test" => false )
+    default_dict = Dict{String,Any}("use_fokker_planck" => false,
+                                    "nuii" => -1.0,
+                                    "frequency_option" => "manual",
+                                    "self_collisions"=> true,
+                                    "slowing_down_test" => false,
+                                    "sd_density" => 1.0,
+                                    "sd_temp" => 0.01,
+                                    "sd_q" => 0.5,
+                                    "sd_mi" => 0.25,
+                                    "sd_me" => 0.25/1836.0)
     input_section = get(toml_input, "fokker_planck_collisions", default_dict)
     # ensure defaults are carried over from the default dict if only a partial dict is given as an input
     # as the default Dict here is entirely ignored if the namelist is present  
@@ -230,21 +238,18 @@ function explicit_fp_collisions_weak_form_Maxwellian_cross_species!(pdf_out,pdf_
     @boundscheck r.n == size(dSdt,2) || throw(BoundsError(dSdt))
     @boundscheck n_ion_species == size(dSdt,3) || throw(BoundsError(dSdt))
     
+    fkin = collisions.fkpl
     # masses charge numbers and collision frequencies
     mref = 1.0
     Zref = 1.0
-    nuref = collisions.fkpl.nuii # generalise!
-    #msp = Array{mk_float,1}(undef,2)
-    #densp = Array{mk_float,1}(undef,2)
-    #uparsp = Array{mk_float,1}(undef,2)
-    #vthsp = Array{mk_float,1}(undef,2)
-    #msp[1], msp[2] = 0.25, 0.25/1836.0
-    #uparsp[1], uparsp[2] = 0.0, 0.0
-    msp = [0.25, 0.25/1836.0]
-    Zsp = [0.5, 0.5]
-    densp = [1.0, 1.0]
+    nuref = fkin.nuii # generalise!
+    msp = [fkin.sd_mi, fkin.sd_me]
+    Zsp = [fkin.sd_q, fkin.sd_q]
+    # assume here that ne = sum_i n_i and that initial condition
+    # for beam ions has unit density
+    densp = [fkin.sd_density, fkin.sd_density+1.0]
     uparsp = [0.0, 0.0]
-    vthsp = [sqrt(0.01/msp[1]), sqrt(0.01/msp[2])]
+    vthsp = [sqrt(fkin.sd_temp/msp[1]), sqrt(fkin.sd_temp/msp[2])]
     
     # N.B. parallelisation using special 'anyv' region
     begin_s_r_z_anyv_region()

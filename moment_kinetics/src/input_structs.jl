@@ -317,15 +317,29 @@ Base.@kwdef struct krook_collisions_input
 end
 
 Base.@kwdef struct fkpl_collisions_input
+    # option to check if fokker planck frequency should be > 0
     use_fokker_planck::Bool
     # ion-ion self collision frequency
     # nu_{ss'} = (L/c_{ref}) * gamma_{ss'} n_{ref} / 2 (m_s)^2 (c_{ref})^3
     # with gamma_ss' = 2 pi (Z_s Z_s')^2 e^4 ln \Lambda_{ss'} / (4 pi \epsilon_0)^2
     nuii::mk_float
-    # option to determine which FP collision operator is used
+    # option to determine if self collisions are used (for physics test)
+    self_collisions::Bool
+    # option to determine if cross-collisions against fixed Maxwellians are used
     slowing_down_test::Bool
     # Setting to switch between different options for Fokker-Planck collision frequency input
     frequency_option::String # "manual" # "reference_parameters"
+    # options for fixed Maxwellian species in slowing down test operator
+    # ion density - electron density determined from quasineutrality
+    sd_density::mk_float
+    # ion temperature - electron temperature assumed identical
+    sd_temp::mk_float
+    # ion charge number
+    sd_q::mk_float
+    # ion mass with respect to reference
+    sd_mi::mk_float
+    # electron mass with respect to reference
+    sd_me::mk_float
 end
 
 """
