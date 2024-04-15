@@ -209,6 +209,11 @@ struct initial_condition_input
     temperature_phase::mk_float
     # inputs for "monomial" initial condition
     monomial_degree::mk_int
+    # inputs for "isotropic-beam", "directed-beam" initial conditions
+    v0::mk_float
+    vth0::mk_float
+    vpa0::mk_float
+    vperp0::mk_float
 end
 
 """

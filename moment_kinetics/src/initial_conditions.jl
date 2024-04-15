@@ -691,9 +691,9 @@ function init_charged_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
             @. pdf[:,ivperp,iz] = (vpa.grid + 0.5*vpa.L)^spec.vpa_IC.monomial_degree
         end
     elseif spec.vpa_IC.initialization_option == "isotropic-beam"
-        v0 = 0.5*sqrt(vperp.L^2 + (0.5*vpa.L)^2) # birth speed of beam
-        vslow = 0.2*v0 # spread of the beam in speed
-        v4norm = (vslow^2) * (v0^2)
+        v0 = spec.vpa_IC.v0 #0.5*sqrt(vperp.L^2 + (0.5*vpa.L)^2) # birth speed of beam
+        vth0 = spec.vpa_IC.vth0
+        v4norm = (v0^2)*(vth0^2) # spread of the beam in speed is vth0
         @loop_z iz begin
             @loop_vperp_vpa ivperp ivpa begin
                 v2 = (vpa.grid[ivpa])^2 + vperp.grid[ivperp]^2 - v0^2
@@ -703,9 +703,9 @@ function init_charged_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
             @. pdf[:,:,iz] /= normfac
         end
     elseif spec.vpa_IC.initialization_option == "directed-beam"
-        vpa0 = 0.25*0.5*abs(vpa.L) # centre of beam in vpa
-        vperp0 = 0.5*abs(vperp.L) # centre of beam in vperp
-        vth0 = 0.05*sqrt(vperp.L^2 + (0.5*vpa.L)^2) # width of beam in v 
+        vpa0 = spec.vpa_IC.vpa0 #0.25*0.5*abs(vpa.L) # centre of beam in vpa
+        vperp0 = spec.vpa_IC.vperp0 #0.5*abs(vperp.L) # centre of beam in vperp
+        vth0 = spec.vpa_IC.vth0 #0.05*sqrt(vperp.L^2 + (0.5*vpa.L)^2) # width of beam in v 
         @loop_z iz begin
             @loop_vperp_vpa ivperp ivpa begin
                 v2 = (vpa.grid[ivpa] - vpa0)^2 + (vperp.grid[ivperp] - vperp0)^2

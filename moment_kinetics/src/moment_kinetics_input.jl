@@ -449,19 +449,23 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
             species.charged[is].z_IC.density_amplitude, species.charged[is].z_IC.density_phase,
             species.charged[is].z_IC.upar_amplitude, species.charged[is].z_IC.upar_phase,
             species.charged[is].z_IC.temperature_amplitude, species.charged[is].z_IC.temperature_phase,
-            species.charged[is].z_IC.monomial_degree)
+            species.charged[is].z_IC.monomial_degree, 0.0, 0.0, 0.0, 0.0)
         r_IC = initial_condition_input(species.charged[is].r_IC.initialization_option,
             species.charged[is].r_IC.width, species.charged[is].r_IC.wavenumber,
             species.charged[is].r_IC.density_amplitude, species.charged[is].r_IC.density_phase,
             species.charged[is].r_IC.upar_amplitude, species.charged[is].r_IC.upar_phase,
             species.charged[is].r_IC.temperature_amplitude, species.charged[is].r_IC.temperature_phase,
-            species.charged[is].r_IC.monomial_degree)
+            species.charged[is].r_IC.monomial_degree, 0.0, 0.0, 0.0, 0.0)
         vpa_IC = initial_condition_input(species.charged[is].vpa_IC.initialization_option,
             species.charged[is].vpa_IC.width, species.charged[is].vpa_IC.wavenumber,
             species.charged[is].vpa_IC.density_amplitude, species.charged[is].vpa_IC.density_phase,
             species.charged[is].vpa_IC.upar_amplitude, species.charged[is].vpa_IC.upar_phase,
             species.charged[is].vpa_IC.temperature_amplitude,
-            species.charged[is].vpa_IC.temperature_phase, species.charged[is].vpa_IC.monomial_degree)
+            species.charged[is].vpa_IC.temperature_phase, species.charged[is].vpa_IC.monomial_degree,
+            get(scan_input, "vpa_IC_v0_$is", 0.5*sqrt(vperp.L^2 + (0.5*vpa.L)^2)),
+            get(scan_input, "vpa_IC_vth0$is", 0.1*sqrt(vperp.L^2 + (0.5*vpa.L)^2)),
+            get(scan_input, "vpa_IC_vpa0$is", 0.25*0.5*abs(vpa.L)),
+            get(scan_input, "vpa_IC_vperp0$is", 0.5*abs(vperp.L)))
         species_charged_immutable[is] = species_parameters(species_type, species.charged[is].initial_temperature,
             species.charged[is].initial_density, z_IC, r_IC, vpa_IC)
     end
@@ -473,19 +477,23 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
                 species.neutral[is].z_IC.density_amplitude, species.neutral[is].z_IC.density_phase,
                 species.neutral[is].z_IC.upar_amplitude, species.neutral[is].z_IC.upar_phase,
                 species.neutral[is].z_IC.temperature_amplitude, species.neutral[is].z_IC.temperature_phase,
-                species.neutral[is].z_IC.monomial_degree)
+                species.neutral[is].z_IC.monomial_degree, 0.0, 0.0, 0.0, 0.0)
             r_IC = initial_condition_input(species.neutral[is].r_IC.initialization_option,
                 species.neutral[is].r_IC.width, species.neutral[is].r_IC.wavenumber,
                 species.neutral[is].r_IC.density_amplitude, species.neutral[is].r_IC.density_phase,
                 species.neutral[is].r_IC.upar_amplitude, species.neutral[is].r_IC.upar_phase,
                 species.neutral[is].r_IC.temperature_amplitude, species.neutral[is].r_IC.temperature_phase,
-                species.neutral[is].r_IC.monomial_degree)
+                species.neutral[is].r_IC.monomial_degree, 0.0, 0.0, 0.0, 0.0)
             vpa_IC = initial_condition_input(species.neutral[is].vpa_IC.initialization_option,
                 species.neutral[is].vpa_IC.width, species.neutral[is].vpa_IC.wavenumber,
                 species.neutral[is].vpa_IC.density_amplitude, species.neutral[is].vpa_IC.density_phase,
                 species.neutral[is].vpa_IC.upar_amplitude, species.neutral[is].vpa_IC.upar_phase,
                 species.neutral[is].vpa_IC.temperature_amplitude,
-                species.neutral[is].vpa_IC.temperature_phase, species.neutral[is].vpa_IC.monomial_degree)
+                species.neutral[is].vpa_IC.temperature_phase, species.neutral[is].vpa_IC.monomial_degree,
+                get(scan_input, "vpa_IC_v0$is", 0.5*sqrt(vperp.L^2 + (0.5*vpa.L)^2)),
+                get(scan_input, "vpa_IC_vth0$is", 0.1*sqrt(vperp.L^2 + (0.5*vpa.L)^2)),
+                get(scan_input, "vpa_IC_vpa0$is", 0.25*0.5*abs(vpa.L)),
+                get(scan_input, "vpa_IC_vperp0$is", 0.5*abs(vperp.L)))
             species_neutral_immutable[is] = species_parameters(species_type, species.neutral[is].initial_temperature,
                 species.neutral[is].initial_density, z_IC, r_IC, vpa_IC)
         end
