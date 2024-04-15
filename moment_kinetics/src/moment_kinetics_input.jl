@@ -407,6 +407,14 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     #irank_z = 0
     #nrank_z = 0
 
+    # Create output_dir if it does not exist.
+    if !ignore_MPI
+        if global_rank[] == 0
+            mkpath(output_dir)
+        end
+        _block_synchronize()
+    end
+
     t_input = time_input(nstep, dt, nwrite_moments, nwrite_dfns, n_rk_stages,
                          split_operators, steady_state_residual, converged_residual_value,
                          manufactured_solns_input.use_for_advance, stopfile_name)
@@ -535,9 +543,6 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
 
     if global_rank[] == 0 && save_inputs_to_txt
         # Make file to log some information about inputs into.
-        # check to see if output_dir exists in the current directory
-        # if not, create it
-        isdir(output_dir) || mkpath(output_dir)
         io = open_ascii_output_file(string(output_dir,"/",run_name), "input")
     else
         io = devnull
