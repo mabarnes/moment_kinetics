@@ -538,10 +538,10 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
 
         # check to see if the electron pdf satisfies the electron kinetic equation to within the specified tolerance
 
+        t_params.step_counter[] += 1
         if electron_pdf_converged
             break
         end
-        t_params.step_counter[] += 1
     end
     # Update the 'pdf' arrays with the final result
     begin_r_z_vperp_vpa_region()
