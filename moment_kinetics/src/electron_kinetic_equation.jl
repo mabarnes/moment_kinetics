@@ -183,16 +183,14 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
     moments_output_times = t_params.moments_output_times .+ initial_time
     dfns_output_times = t_params.dfns_output_times .+ initial_time
     if io_electron === nothing && t_params.debug_io !== nothing
-        @serial_region begin
-            # Overwrite the debug output file with the output from this call to
-            # update_electron_pdf_with_time_advance!().
-            io_electron = setup_electron_io(t_params.debug_io[1], vpa, vperp, z, r,
-                                            composition, collisions,
-                                            moments.evolve_density, moments.evolve_upar,
-                                            moments.evolve_ppar, external_source_settings,
-                                            t_params.debug_io[2], -1, nothing,
-                                            "electron_debug")
-        end
+        # Overwrite the debug output file with the output from this call to
+        # update_electron_pdf_with_time_advance!().
+        io_electron = setup_electron_io(t_params.debug_io[1], vpa, vperp, z, r,
+                                        composition, collisions,
+                                        moments.evolve_density, moments.evolve_upar,
+                                        moments.evolve_ppar, external_source_settings,
+                                        t_params.debug_io[2], -1, nothing,
+                                        "electron_debug")
         do_debug_io = true
         debug_io_nwrite = t_params.debug_io[3]
     else

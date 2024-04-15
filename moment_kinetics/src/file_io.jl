@@ -394,8 +394,8 @@ function setup_electron_io(io_input, vpa, vperp, z, r, composition, collisions,
 
         return file_info
     end
-    # For other processes in the block, return (nothing, nothing, nothing)
-    return nothing, nothing, nothing
+    # For other processes in the block, return nothing
+    return nothing
 end
 
 """
