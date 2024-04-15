@@ -249,34 +249,6 @@ function explicit_fp_collisions_weak_form_Maxwellian_cross_species!(pdf_out,pdf_
     # N.B. parallelisation using special 'anyv' region
     begin_s_r_z_anyv_region()
     @loop_s_r_z is ir iz begin
-        # first argument is Fs, and second argument is Fs' in C[Fs,Fs'] 
-        @views fokker_planck_collision_operator_weak_form!(
-            pdf_in[:,:,iz,ir,is], pdf_in[:,:,iz,ir,is], mref, mref, nuref, fkpl_arrays,
-            vperp, vpa, vperp_spectral, vpa_spectral)
-        # enforce the boundary conditions on CC before it is used for timestepping
-        enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
-        # make ad-hoc conserving corrections
-        conserving_corrections!(fkpl_arrays.CC, pdf_in[:,:,iz,ir,is], vpa, vperp,
-                                fkpl_arrays.S_dummy)
-        
-        # advance this part of s,r,z with the resulting C[Fs,Fs]
-        begin_anyv_vperp_vpa_region()
-        CC = fkpl_arrays.CC
-        @loop_vperp_vpa ivperp ivpa begin
-            pdf_out[ivpa,ivperp,iz,ir,is] += dt*CC[ivpa,ivperp]
-        end
-        if diagnose_entropy_production
-            # assign dummy array
-            lnfC = fkpl_arrays.rhsvpavperp
-            @loop_vperp_vpa ivperp ivpa begin
-                lnfC[ivpa,ivperp] = log(abs(pdf_in[ivpa,ivperp,iz,ir,is]) + 1.0e-15)*CC[ivpa,ivperp]
-            end
-            begin_anyv_region()
-            @anyv_serial_region begin
-                dSdt[iz,ir,is] = -get_density(lnfC,vpa,vperp)
-            end
-        end
-        
         # computes sum over s' of  C[Fs,Fs'] with Fs' an assumed Maxwellian 
         @views fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!(pdf_in[:,:,iz,ir,is],
                                      nuref,mref,Zref,msp,Zsp,densp,uparsp,vthsp,
