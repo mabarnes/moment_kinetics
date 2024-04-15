@@ -690,28 +690,31 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
 
     # initialize z grid and write grid point locations to file
     z, z_spectral = define_coordinate(z_immutable, io_immutable.parallel_io;
-                                      ignore_MPI=ignore_MPI)
+                                      run_directory=output_dir, ignore_MPI=ignore_MPI)
     # initialize r grid and write grid point locations to file
     r, r_spectral = define_coordinate(r_immutable, io_immutable.parallel_io;
-                                      ignore_MPI=ignore_MPI)
+                                      run_directory=output_dir, ignore_MPI=ignore_MPI)
     # initialize vpa grid and write grid point locations to file
     vpa, vpa_spectral = define_coordinate(vpa_immutable, io_immutable.parallel_io;
-                                          ignore_MPI=ignore_MPI)
+                                          run_directory=output_dir, ignore_MPI=ignore_MPI)
     # initialize vperp grid and write grid point locations to file
     vperp, vperp_spectral = define_coordinate(vperp_immutable, io_immutable.parallel_io;
+                                              run_directory=output_dir,
                                               ignore_MPI=ignore_MPI)
     # initialize gyrophase grid and write grid point locations to file
     gyrophase, gyrophase_spectral = define_coordinate(gyrophase_immutable,
                                                       io_immutable.parallel_io;
+                                                      run_directory=output_dir,
                                                       ignore_MPI=ignore_MPI)
     # initialize vz grid and write grid point locations to file
     vz, vz_spectral = define_coordinate(vz_immutable, io_immutable.parallel_io;
-                                        ignore_MPI=ignore_MPI)
+                                        run_directory=output_dir, ignore_MPI=ignore_MPI)
     # initialize vr grid and write grid point locations to file
     vr, vr_spectral = define_coordinate(vr_immutable, io_immutable.parallel_io;
-                                        ignore_MPI=ignore_MPI)
+                                        run_directory=output_dir, ignore_MPI=ignore_MPI)
     # initialize vr grid and write grid point locations to file
     vzeta, vzeta_spectral = define_coordinate(vzeta_immutable, io_immutable.parallel_io;
+                                              run_directory=output_dir,
                                               ignore_MPI=ignore_MPI)
 
     external_source_settings = setup_external_sources!(scan_input, r, z,
