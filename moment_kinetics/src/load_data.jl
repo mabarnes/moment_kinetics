@@ -986,7 +986,7 @@ end
 Reload electron pdf and moments from an existing output file.
 """
 function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, time_index,
-                               geometry, r, z, vpa, vperp, vzeta, vr, vz)
+                               geometry, r, z, vpa, vperp, vzeta, vr, vz; run_directory=nothing)
     code_time = 0.0
     previous_runs_info = nothing
     begin_serial_region()
@@ -1014,7 +1014,8 @@ function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, ti
                 restart_vperp_spectral, restart_vpa, restart_vpa_spectral, restart_vzeta,
                 restart_vzeta_spectral, restart_vr,restart_vr_spectral, restart_vz,
                 restart_vz_spectral = load_restart_coordinates(fid, r, z, vperp, vpa,
-                                                               vzeta, vr, vz, parallel_io)
+                                                               vzeta, vr, vz, parallel_io;
+                                                               run_directory=run_directory)
 
             # Test whether any interpolation is needed
             interpolation_needed = Dict(
