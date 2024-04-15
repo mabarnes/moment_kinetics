@@ -82,6 +82,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     # this is the directory where the simulation data will be stored
     base_directory = get(scan_input, "base_directory", "runs")
     output_dir = joinpath(base_directory, run_name)
+
     # if evolve_moments.density = true, evolve density via continuity eqn
     # and g = f/n via modified drift kinetic equation
     evolve_moments.density = get(scan_input, "evolve_moments_density", false)
@@ -556,6 +557,12 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     #irank_z = 0
     #nrank_z = 0
 
+    # Create output_dir if it does not exist.
+    if global_rank[] == 0
+        mkpath(output_dir)
+    end
+    _block_synchronize()
+
     # replace mutable structures with immutable ones to optimize performance
     # and avoid possible misunderstandings	
 	z_advection_immutable = advection_input(z.advection.option, z.advection.constant_speed,
@@ -712,9 +719,6 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
 
     if global_rank[] == 0 && save_inputs_to_txt
         # Make file to log some information about inputs into.
-        # check to see if output_dir exists in the current directory
-        # if not, create it
-        isdir(output_dir) || mkpath(output_dir)
         io = open_ascii_output_file(string(output_dir,"/",run_name), "input")
     else
         io = devnull
