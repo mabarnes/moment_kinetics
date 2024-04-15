@@ -43,7 +43,7 @@ function runtests()
                     discretization, fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x'
-                x, spectral = define_coordinate(input)
+                x, spectral = define_coordinate(input; ignore_MPI=true)
                 # create array for the function f(x) to be differentiated/integrated
                 f = Array{Float64,1}(undef, x.n)
                 # create array for the derivative df/dx
@@ -93,7 +93,7 @@ function runtests()
                     "finite_difference", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x'
-                x, spectral = define_coordinate(input)
+                x, spectral = define_coordinate(input; ignore_MPI=true)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -143,7 +143,7 @@ function runtests()
                     "finite_difference", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x'
-                x, spectral = define_coordinate(input)
+                x, spectral = define_coordinate(input; ignore_MPI=true)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -189,7 +189,7 @@ function runtests()
                     "finite_difference", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x'
-                x, spectral = define_coordinate(input)
+                x, spectral = define_coordinate(input; ignore_MPI=true)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -243,7 +243,7 @@ function runtests()
                     "finite_difference", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                # create the coordinate struct 'x'
-                x, spectral = define_coordinate(input)
+                x, spectral = define_coordinate(input; ignore_MPI=true)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -459,7 +459,7 @@ function runtests()
                     "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
-                x, spectral = define_coordinate(input)
+                x, spectral = define_coordinate(input; ignore_MPI=true)
 
                 offset = randn(rng)
                 f = @. sinpi(2.0 * x.grid / L) + offset
@@ -655,7 +655,7 @@ function runtests()
                     "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
-                x, spectral = define_coordinate(input)
+                x, spectral = define_coordinate(input; ignore_MPI=true)
 
                 offset = randn(rng)
                 f = @. sinpi(2.0 * x.grid / L) + offset
@@ -698,7 +698,7 @@ function runtests()
                     "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
-                x, spectral = define_coordinate(input)
+                x, spectral = define_coordinate(input; ignore_MPI=true)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
@@ -748,7 +748,7 @@ function runtests()
                     "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
-                x, spectral = define_coordinate(input)
+                x, spectral = define_coordinate(input; ignore_MPI=true)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
@@ -884,7 +884,7 @@ function runtests()
                     "gausslegendre_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
-                x, spectral = define_coordinate(input,init_YY=false)
+                x, spectral = define_coordinate(input; ignore_MPI=true, init_YY=false)
 
                 offset = randn(rng)
                 f = @. sinpi(2.0 * x.grid / L) + offset
@@ -1001,7 +1001,7 @@ function runtests()
                     "gausslegendre_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
-                x, spectral = define_coordinate(input,init_YY=false)
+                x, spectral = define_coordinate(input; ignore_MPI=true, init_YY=false)
 
                 offset = randn(rng)
                 f = @. sinpi(2.0 * x.grid / L) + offset
@@ -1045,7 +1045,7 @@ function runtests()
                     "gausslegendre_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
-                x, spectral = define_coordinate(input,init_YY=false)
+                x, spectral = define_coordinate(input; ignore_MPI=true, init_YY=false)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
@@ -1096,7 +1096,7 @@ function runtests()
                     "gausslegendre_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
-                x, spectral = define_coordinate(input,init_YY=false)
+                x, spectral = define_coordinate(input; ignore_MPI=true, init_YY=false)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
@@ -1310,7 +1310,7 @@ function runtests()
                     "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
-                x, spectral = define_coordinate(input)
+                x, spectral = define_coordinate(input; ignore_MPI=true)
 
                 offset = randn(rng)
                 f = @. sinpi(2.0 * x.grid / L) + offset
@@ -1418,7 +1418,7 @@ function runtests()
                     "gausslegendre_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
-                x, spectral = define_coordinate(input,init_YY=false)
+                x, spectral = define_coordinate(input; ignore_MPI=true, init_YY=false)
 
                 offset = randn(rng)
                 f = @. sinpi(2.0 * x.grid / L) + offset
