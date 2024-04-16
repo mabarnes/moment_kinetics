@@ -399,6 +399,23 @@ function setup_electron_io(io_input, vpa, vperp, z, r, composition, collisions,
 end
 
 """
+Get the `file_info` for an existing electron I/O file
+"""
+function get_electron_io_info(io_input, prefix_label)
+    out_prefix = joinpath(io_input.output_dir, io_input.run_name)
+    electrons_prefix = string(out_prefix, ".$prefix_label")
+    if io_input.binary_format == hdf5
+        filename = string(electrons_prefix, ".h5")
+    elseif io_input.binary_format == netcdf
+        filename = string(electrons_prefix, ".cdf")
+    else
+        error("Unrecognized binary_format=$(io_input.binary_format)")
+    end
+
+    return (filename, io_input.parallel_io, comm_inter_block[])
+end
+
+"""
 Reopen an existing initial electron output file to append more data
 """
 function reopen_initial_electron_io(file_info)

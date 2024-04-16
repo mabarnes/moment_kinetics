@@ -21,7 +21,7 @@ using ..electron_fluid_equations: electron_energy_equation!
 using ..electron_z_advection: electron_z_advection!, update_electron_speed_z!
 using ..electron_vpa_advection: electron_vpa_advection!, update_electron_speed_vpa!
 using ..external_sources: external_electron_source!
-using ..file_io: setup_electron_io, write_electron_state, finish_electron_io
+using ..file_io: get_electron_io_info, write_electron_state, finish_electron_io
 using ..krook_collisions: electron_krook_collisions!
 using ..moment_constraints: hard_force_moment_constraints!
 using ..runge_kutta: rk_update_variable!, rk_error_variable!, local_error_norm,
@@ -185,12 +185,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
     if io_electron === nothing && t_params.debug_io !== nothing
         # Overwrite the debug output file with the output from this call to
         # update_electron_pdf_with_time_advance!().
-        io_electron = setup_electron_io(t_params.debug_io[1], vpa, vperp, z, r,
-                                        composition, collisions,
-                                        moments.evolve_density, moments.evolve_upar,
-                                        moments.evolve_ppar, external_source_settings,
-                                        t_params.debug_io[2], -1, nothing,
-                                        "electron_debug")
+        io_electron = get_electron_io_info(t_params.debug_io[1], "electron_debug")
         do_debug_io = true
         debug_io_nwrite = t_params.debug_io[3]
     else
