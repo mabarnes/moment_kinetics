@@ -546,6 +546,14 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
         if global_rank[] == 0
             println("Initializing electrons - evolving both pdf_electron and electron_ppar")
         end
+        if t_params.debug_io !== nothing
+            io_electron = setup_electron_io(t_params.debug_io[1], vpa, vperp, z, r,
+                                            composition, collisions,
+                                            moments.evolve_density, moments.evolve_upar,
+                                            moments.evolve_ppar, external_source_settings,
+                                            t_params.debug_io[2], -1, nothing,
+                                            "electron_debug")
+        end
         electron_pseudotime, n_debug_outputs =
             @views update_electron_pdf!(scratch, pdf.electron.norm, moments, phi, r, z,
                                         vperp, vpa, z_spectral, vperp_spectral,

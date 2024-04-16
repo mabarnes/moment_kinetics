@@ -14,7 +14,8 @@ using ..array_allocation: allocate_float, allocate_shared_float, allocate_shared
 using ..communication
 using ..communication: _block_synchronize
 using ..debugging
-using ..file_io: write_data_to_ascii, write_all_moments_data_to_binary, write_all_dfns_data_to_binary, debug_dump
+using ..file_io: write_data_to_ascii, write_all_moments_data_to_binary,
+                 write_all_dfns_data_to_binary, debug_dump, setup_electron_io
 using ..initial_conditions: initialize_electrons!
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf
@@ -492,6 +493,13 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_sp
                               external_source_settings, scratch_dummy, scratch, t_params,
                               t_input, num_diss_params, advection_structs, io_input,
                               input_dict; restart_from_Boltzmann_electrons=restarting)
+    elseif restarting && t_params.electron.debug_io !== nothing
+        io_electron = setup_electron_io(t_params.electron.debug_io[1], vpa, vperp, z, r,
+                                        composition, collisions, moments.evolve_density,
+                                        moments.evolve_upar, moments.evolve_ppar,
+                                        external_source_settings,
+                                        t_params.electron.debug_io[2], -1, nothing,
+                                        "electron_debug")
     end
 
     # update the derivatives of the electron moments as these may be needed when
