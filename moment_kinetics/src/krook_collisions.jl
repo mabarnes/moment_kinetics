@@ -6,7 +6,7 @@ export setup_krook_collisions_input, get_collision_frequency, krook_collisions!
 
 using ..constants: epsilon0, proton_charge
 using ..looping
-using ..input_structs: krook_collisions_input
+using ..input_structs: krook_collisions_input, set_defaults_and_check_section!
 using ..reference_parameters: get_reference_collision_frequency
 
 
@@ -23,16 +23,12 @@ function setup_krook_collisions_input(toml_input::Dict, reference_params)
     # get reference collision frequency
     nuii_krook_default = get_reference_collision_frequency(reference_params)
     # read the input toml and specify a sensible default    
-    default_dict = Dict{String,Any}("use_krook" => false, "krook_collision_frequency_prefactor" => -1.0,
-          "frequency_option" => "reference_parameters" )
-    input_section = get(toml_input, "krook_collisions", default_dict)
-    # ensure defaults are carried over from the default dict if only a partial dict is given as an input
-    # as the default Dict here is entirely ignored if the namelist is present    
-    for (k,v) in default_dict
-        if !( k in keys(input_section))
-            input_section[k] = v
-        end
-    end
+    input_section = input_section = set_defaults_and_check_section!(toml_input, "krook_collisions",
+       # begin default inputs (as kwargs)
+       use_krook = false,
+       krook_collision_frequency_prefactor = -1.0,
+       frequency_option = "reference_parameters")
+       
     # ensure that the collision frequency is consistent with the input option
     frequency_option = input_section["frequency_option"]
     if frequency_option == "reference_parameters"
