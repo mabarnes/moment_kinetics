@@ -48,13 +48,15 @@ function setup_external_sources!(input_dict, r, z)
                      source_n=1.0,
                      source_T=neutrals ? get(input_dict, "T_wall", 1.0) : 1.0,
                      source_v0=0.0, # birth speed for "alphas" option
+                     sink_strength=1.0, # strength of sink in "alphas-with-losses" option
+                     sink_vth=0.0, # thermal speed for sink in "alphas-with-losses" option 
                      r_profile="constant",
                      r_width=1.0,
                      r_relative_minimum=0.0,
                      z_profile="constant",
                      z_width=1.0,
                      z_relative_minimum=0.0,
-                     source_type="Maxwellian", # "energy", "alphas"
+                     source_type="Maxwellian", # "energy", "alphas", "alphas-with-losses"
                      PI_density_controller_P=0.0,
                      PI_density_controller_I=0.0,
                      PI_density_target_amplitude=1.0,
@@ -173,7 +175,7 @@ function setup_external_sources!(input_dict, r, z)
             PI_density_target_ir = nothing
             PI_density_target_iz = nothing
             PI_density_target_rank = nothing
-        elseif input["source_type"] ∈ ("Maxwellian", "energy", "alphas")
+        elseif input["source_type"] ∈ ("Maxwellian", "energy", "alphas", "alphas-with-losses")
             PI_density_target = nothing
             PI_controller_amplitude = nothing
             controller_source_profile = nothing
@@ -505,9 +507,12 @@ function external_ion_source!(pdf, fvec, moments, ion_source_settings, vperp, vp
                     fvec.pdf[ivpa,ivperp,iz,ir,is]
             end
         end
-    elseif source_type == "alphas"
+    elseif source_type == "alphas" || source_type == "alphas-with-losses"
         begin_s_r_z_region()
         source_v0 = ion_source_settings.source_v0
+        if !(source_v0 > 1.0e-8)
+            error("source_v0=$source_v0 < 1.0e-8")
+        end
         dummy_vpavperp = scratch_dummy.dummy_vpavperp
         if !moments.evolve_ppar && !moments.evolve_upar && !moments.evolve_density
             @loop_s_r_z is ir iz begin
@@ -525,7 +530,31 @@ function external_ion_source!(pdf, fvec, moments, ion_source_settings, vperp, vp
                     # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                     # normalisation of F
                     pdf[ivpa,ivperp,iz,ir,is] +=
-                        this_prefactor * dummy_vpavperp[ivpa,ivperp] / normfac
+                        this_prefactor * dummy_vpavperp[ivpa,ivperp] #/ normfac
+                end
+            end
+            
+            if source_type == "alphas-with-losses"
+                sink_vth = ion_source_settings.sink_vth
+                sink_strength = ion_source_settings.sink_strength
+                if !(sink_vth > 1.0e-8)
+                   error("sink_vth=$sink_vth < 1.0e-8")
+                end
+                # subtract a sink function representing the loss of slow ash particles
+                @loop_s_r_z is ir iz begin
+                    # first assign sink to local scratch array
+                    @loop_vperp_vpa ivperp ivpa begin
+                        v2 = vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2
+                        fac = 1.0/(sink_vth^2)
+                        dummy_vpavperp[ivpa,ivperp] = (sink_strength/(sink_vth^3))*exp(-fac*v2)
+                    end
+                    # add the source
+                    @loop_vperp_vpa ivperp ivpa begin
+                        # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
+                        # normalisation of F
+                        pdf[ivpa,ivperp,iz,ir,is] -=
+                            dt * dummy_vpavperp[ivpa,ivperp] * pdf[ivpa,ivperp,iz,ir,is]
+                    end
                 end
             end
         else
@@ -751,6 +780,8 @@ function external_ion_source_controller!(fvec_in, moments, ion_source_settings, 
             end
         end
     elseif ion_source_settings.source_type == "alphas"
+        # do nothing
+    elseif ion_source_settings.source_type == "alphas-with-losses"
         # do nothing
     else
         error("Unrecognised source_type=$(ion_source_settings.source_type)")
