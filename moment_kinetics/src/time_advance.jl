@@ -69,7 +69,7 @@ using ..utils: to_minutes, get_minimum_CFL_z, get_minimum_CFL_vpa,
                get_minimum_CFL_neutral_z, get_minimum_CFL_neutral_vz
 using ..electron_fluid_equations: calculate_electron_density!
 using ..electron_fluid_equations: calculate_electron_upar_from_charge_conservation!
-using ..electron_fluid_equations: calculate_electron_qpar!
+using ..electron_fluid_equations: calculate_electron_qpar!, electron_fluid_qpar_boundary_condition!
 using ..electron_fluid_equations: calculate_electron_parallel_friction_force!
 using ..electron_fluid_equations: electron_energy_equation!, update_electron_vth_temperature!
 using ..input_structs: braginskii_fluid
@@ -1763,7 +1763,9 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         calculate_electron_qpar!(moments.electron, new_scratch.pdf_electron,
             new_scratch.electron_ppar, new_scratch.electron_upar, new_scratch.upar,
             collisions.nu_ei, composition.me_over_mi, composition.electron_physics, vpa)
-        if composition.electron_physics == kinetic_electrons
+        if composition.electron_physics == braginskii_fluid
+            electron_fluid_qpar_boundary_condition!(moments.electron, z)
+        elseif composition.electron_physics == kinetic_electrons
             max_electron_pdf_iterations = 100000
 
             # Copy ion and electron moments from `scratch` into `moments` to be used in
