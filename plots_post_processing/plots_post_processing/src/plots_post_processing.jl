@@ -2933,11 +2933,30 @@ function plot_charged_pdf(run_name, run_name_label, vpa, vperp, z, r, z_local, r
                 anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                     @views heatmap(vperp.grid, vpa.grid, pdf[:,:,is,i], xlabel="vperp", ylabel="vpa", c = :deep, interpolation = :cubic)
                 end
-                outfile = string(run_name_label, "_pdf_vs_vperp_vpa", iz0_string, ir0_string, spec_string[is], ".gif")
+                outfile = string(run_name_label, "_pdf_vs_vpa_vperp", iz0_string, ir0_string, spec_string[is], ".gif")
                 trygif(anim, outfile, fps=5)
 
                 @views heatmap(vperp.grid, vpa.grid, pdf[:,:,is,itime_max], xlabel="vperp", ylabel="vpa", c = :deep, interpolation = :cubic)
                 outfile = string(run_name_label, "_pdf_vs_vpa_vperp", ir0_string, iz0_string, spec_string[is], ".pdf")
+                savefig(outfile)
+                
+                ivpa = floor(mk_int,vpa.n/2) + 1
+                @views plot(vperp.grid, pdf[ivpa,:,is,itime_max], xlabel="vperp", ylabel="f", label="", linewidth=2)
+                outfile = string(run_name_label, "_pdf_vs_vperp","_ivpa", ivpa, ir0_string, iz0_string, spec_string[is], ".pdf")
+                savefig(outfile)
+                ivperp = 1
+                @views plot(vpa.grid, pdf[:,ivperp,is,itime_max], xlabel="vpa", ylabel="f", label="", linewidth=2)
+                outfile = string(run_name_label, "_pdf_vs_vpa", "_ivperp", ivperp, ir0_string, iz0_string, spec_string[is], ".pdf")
+                savefig(outfile)
+                
+                
+                ivpa = floor(mk_int,vpa.n/2) + 1
+                @views plot(vperp.grid, log.(abs.(pdf[ivpa,:,is,itime_max])), xlabel="vperp", ylabel="log|f|", label="", linewidth=2)
+                outfile = string(run_name_label, "_logpdf_vs_vperp","_ivpa", ivpa, ir0_string, iz0_string, spec_string[is], ".pdf")
+                savefig(outfile)
+                ivperp = 1
+                @views plot(vpa.grid, log.(abs.(pdf[:,ivperp,is,itime_max])), xlabel="vpa", ylabel="log|f|", label="", linewidth=2)
+                outfile = string(run_name_label, "_logpdf_vs_vpa", "_ivperp", ivperp, ir0_string, iz0_string, spec_string[is], ".pdf")
                 savefig(outfile)
             end
         elseif vperp.n == 1
