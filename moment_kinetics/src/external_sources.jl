@@ -530,7 +530,7 @@ function external_ion_source!(pdf, fvec, moments, ion_source_settings, vperp, vp
                     # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                     # normalisation of F
                     pdf[ivpa,ivperp,iz,ir,is] +=
-                        this_prefactor * dummy_vpavperp[ivpa,ivperp] #/ normfac
+                        this_prefactor * dummy_vpavperp[ivpa,ivperp] / normfac
                 end
             end
             
