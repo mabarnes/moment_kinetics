@@ -276,6 +276,17 @@ the returned `time_info`.
 """
 function setup_time_info(t_input, code_time, dt_reload, dt_before_last_fail_reload,
                          manufactured_solns_input, io_input, input_dict; electron=nothing)
+    rk_coefs, n_rk_stages, rk_order, adaptive, low_storage, CFL_prefactor =
+        setup_runge_kutta_coefficients!(t_input.type,
+                                        t_input.CFL_prefactor,
+                                        t_input.split_operators)
+
+    if !adaptive
+        # No adaptive timestep, want to use the value from the input file even when we are
+        # restarting
+        dt_reload = nothing
+    end
+
     dt_shared = allocate_shared_float(1)
     previous_dt_shared = allocate_shared_float(1)
     next_output_time = allocate_shared_float(1)
@@ -312,10 +323,7 @@ function setup_time_info(t_input, code_time, dt_reload, dt_before_last_fail_relo
     if dfns_output_times[end] < end_time - epsilon
         push!(dfns_output_times, end_time)
     end
-    rk_coefs, n_rk_stages, rk_order, adaptive, low_storage, CFL_prefactor =
-        setup_runge_kutta_coefficients!(t_input.type,
-                                        t_input.CFL_prefactor,
-                                        t_input.split_operators)
+
     if t_input.high_precision_error_sum
         error_sum_zero = Float128(0.0)
     else
