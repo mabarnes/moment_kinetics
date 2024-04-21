@@ -558,10 +558,12 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     #nrank_z = 0
 
     # Create output_dir if it does not exist.
-    if global_rank[] == 0
-        mkpath(output_dir)
+    if !ignore_MPI
+        if global_rank[] == 0
+            mkpath(output_dir)
+        end
+        _block_synchronize()
     end
-    _block_synchronize()
 
     # replace mutable structures with immutable ones to optimize performance
     # and avoid possible misunderstandings	
