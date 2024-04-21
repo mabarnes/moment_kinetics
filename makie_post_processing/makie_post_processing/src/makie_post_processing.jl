@@ -3524,24 +3524,28 @@ function calculate_steady_state_residual end
 function calculate_steady_state_residual(run_info::Tuple, variable_name; is=1,
                                          data=nothing, plot_prefix=nothing,
                                          fig_axes=nothing)
-    n_runs = length(run_info)
-    if data === nothing
-        data = Tuple(nothing for _ ∈ 1:n_runs)
-    end
-    if fig_axes === nothing
-        fig_axes = _get_steady_state_residual_fig_axes(length(run_info))
-    end
+    try
+        n_runs = length(run_info)
+        if data === nothing
+            data = Tuple(nothing for _ ∈ 1:n_runs)
+        end
+        if fig_axes === nothing
+            fig_axes = _get_steady_state_residual_fig_axes(length(run_info))
+        end
 
-    for (i, (ri, d)) ∈ enumerate(zip(run_info, data))
-        calculate_steady_state_residual(ri, variable_name; is=is, data=d,
-                                        fig_axes=fig_axes, i_run=i)
-    end
+        for (i, (ri, d)) ∈ enumerate(zip(run_info, data))
+            calculate_steady_state_residual(ri, variable_name; is=is, data=d,
+                                            fig_axes=fig_axes, i_run=i)
+        end
 
-    if plot_prefix !== nothing
-        _save_residual_plots(fig_axes, plot_prefix)
-    end
+        if plot_prefix !== nothing
+            _save_residual_plots(fig_axes, plot_prefix)
+        end
 
-    return fig_axes
+        return fig_axes
+    catch e
+        println("Error in calculate_steady_state_residual(). Error was ", e)
+    end
 end
 
 function calculate_steady_state_residual(run_info, variable_name; is=1, data=nothing,
