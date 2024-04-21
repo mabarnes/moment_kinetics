@@ -372,14 +372,15 @@ end
 #    end
 #end
 
-function update_electron_vth_temperature!(moments, ppar, dens)
+function update_electron_vth_temperature!(moments, ppar, dens, composition)
     begin_r_z_region()
 
     temp = moments.electron.temp
     vth = moments.electron.vth
     @loop_r_z ir iz begin
-        temp[iz,ir] = 2 * ppar[iz,ir] / dens[iz,ir]
-        vth[iz,ir] = sqrt(temp[iz,ir])
+        p = max(ppar[iz,ir], 0.0)
+        temp[iz,ir] = 2 * p[iz,ir] / dens[iz,ir]
+        vth[iz,ir] = sqrt(temp[iz,ir] / composition.me_over_mi)
     end
     moments.electron.temp_updated[] = true
 

@@ -35,10 +35,10 @@ using ..velocity_moments: update_neutral_uz!, update_neutral_ur!, update_neutral
 using ..velocity_moments: update_ppar!, update_upar!, update_density!, update_pperp!, update_vth!, reset_moments_status!
 using ..electron_fluid_equations: calculate_electron_density!
 using ..electron_fluid_equations: calculate_electron_upar_from_charge_conservation!
-using ..electron_fluid_equations: calculate_electron_qpar!
+using ..electron_fluid_equations: calculate_electron_qpar!, electron_fluid_qpar_boundary_condition!
 using ..electron_fluid_equations: calculate_electron_parallel_friction_force!
 using ..electron_kinetic_equation: update_electron_pdf!, enforce_boundary_condition_on_electron_pdf!
-using ..input_structs: boltzmann_electron_response_with_simple_sheath, kinetic_electrons
+using ..input_structs: boltzmann_electron_response_with_simple_sheath, braginskii_fluid, kinetic_electrons
 using ..derivatives: derivative_z!
 using ..utils: get_default_restart_filename, get_prefix_iblock_and_move_existing_file
 
@@ -328,10 +328,85 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
     end
     # calculate the initial electron parallel heat flux;
     # if using kinetic electrons, this relies on the electron pdf, which itself relies on the electron heat flux
+    if composition.electron_physics == braginskii_fluid
+        electron_fluid_qpar_boundary_condition!(moments.electron, z)
+        if restart_from_Boltzmann_electrons
+            # Restarting from Boltzmann. If we use an exactly constant T_e profile,
+            # qpar for the electrons will be non-zero only at the boundary points,
+            # which will crash the code unless the timestep is insanely small. Give
+            # T_e a cubic profile with gradients at the boundaries that match the
+            # boundary qpar. The boundary values are both the constant 'Boltzmann
+            # electron' temperature
+            begin_serial_region()
+            @serial_region begin
+                # Ignore the 0.71*p_e*(u_i-u_e) term here as it would vanish when u_i=u_e
+                # and this is only a rough initial condition anyway
+                #
+                # q at the boundaries tells us dTe/dz for Braginskii electrons
+                if z.irank == 0
+                    dTe_dz_lower = @. -moments.electron.qpar[1,:] * 2.0 / 3.16 /
+                                       moments.electron.ppar[1,:] *
+                                       composition.me_over_mi * collisions.nu_ei
+                else
+                    dTe_dz_lower = nothing
+                end
+                dTe_dz_lower = MPI.bcast(dTe_dz_lower, z.comm; root=0)
+
+                if z.irank == z.nrank - 1
+                    dTe_dz_upper = @. -moments.electron.qpar[end,:] * 2.0 / 3.16 /
+                                       moments.electron.ppar[end,:] *
+                                       composition.me_over_mi * collisions.nu_ei
+                else
+                    dTe_dz_upper = nothing
+                end
+                dTe_dz_upper = MPI.bcast(dTe_dz_upper, z.comm; root=(z.nrank - 1))
+
+                # The temperature should already be equal to the 'Boltzmann electron'
+                # Te, so we just need to add a cubic that vanishes at ±Lz/2
+                # δT = A + B*z + C*z^2 + D*z^3
+                # ⇒ A - B*Lz/2 + C*Lz^2/4 - D*Lz^3/8 = 0
+                #   A + B*Lz/2 + C*Lz^2/4 + D*Lz^3/8 = 0
+                #   B - C*Lz + 3*D*Lz^2/4 = dTe/dz_lower
+                #   B + C*Lz + 3*D*Lz^2/4 = dTe/dz_upper
+                #
+                # Adding the first pair together, and subtracting the second pair:
+                #   A + C*Lz^2/4 = 0
+                #   2*C*Lz = dT/dz_upper - dT/dz_lower
+                #
+                # Subtracting the first pair and adding the second instead:
+                #   B*Lz/2 + D*Lz^3/8 = 0  ⇒  D*Lz^2/2 = -2*B
+                #   2*B + 3*D*Lz^2/2 = dTe/dz_upper - dTe/dz_lower
+                #
+                #   2*B - 3*2*B = -4*B = dTe/dz_upper + dTe/dz_lower
+                Lz = z.L
+                zg = z.grid
+                C = @. (dTe_dz_upper - dTe_dz_lower) / 2.0 / Lz
+                A = @. -C * Lz^2 / 4
+                B = @. -(dTe_dz_lower + dTe_dz_upper) / 4.0
+                D = @. -4.0 * B / Lz^2
+                @loop_r ir begin
+                    @. moments.electron.temp[:,ir] += A[ir] + B[ir]*zg + C[ir]*zg^2 +
+                                                      D[ir]*zg^3
+                end
+
+                @. moments.electron.vth = sqrt(moments.electron.temp /
+                                               composition.me_over_mi)
+                @. moments.electron.ppar = 0.5 * moments.electron.dens * moments.electron.temp
+                @views derivative_z!(moments.electron.dT_dz, moments.electron.temp,
+                                     scratch_dummy.buffer_rs_1[:,1],
+                                     scratch_dummy.buffer_rs_2[:,1],
+                                     scratch_dummy.buffer_rs_3[:,1],
+                                     scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
+            end
+        end
+    end
     moments.electron.qpar_updated[] = false
     calculate_electron_qpar!(moments.electron, pdf.electron, moments.electron.ppar,
         moments.electron.upar, moments.ion.upar, collisions.nu_ei, composition.me_over_mi,
         composition.electron_physics, vpa)
+    if composition.electron_physics == braginskii_fluid
+        electron_fluid_qpar_boundary_condition!(moments.electron, z)
+    end
     # calculate the zed derivative of the initial electron parallel heat flux
     @views derivative_z!(moments.electron.dqpar_dz, moments.electron.qpar, 
         scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1], scratch_dummy.buffer_rs_3[:,1],
@@ -353,6 +428,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
             scratch[1].electron_upar .= moments.electron.upar
             scratch[1].electron_ppar .= moments.electron.ppar
             scratch[1].electron_pperp .= 0.0 #moments.electron.pperp
+            scratch[1].electron_temp .= moments.electron.temp
         end
         # get the initial electrostatic potential and parallel electric field
         update_phi!(fields, scratch[1], z, r, composition, collisions, moments, z_spectral, r_spectral, scratch_dummy)

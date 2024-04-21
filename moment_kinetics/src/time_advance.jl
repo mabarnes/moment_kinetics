@@ -493,8 +493,9 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_sp
 
     # Now that `t_params` and `scratch` have been created, initialize electrons if
     # necessary
-    if !restarting || (composition.electron_physics == kinetic_electrons &&
-                       !restart_had_kinetic_electrons)
+    if !restarting ||
+        (composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons) &&
+         !restart_had_kinetic_electrons)
         initialize_electrons!(pdf, moments, fields, geometry, composition, r, z,
                               vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
                               vperp_spectral, vpa_spectral, collisions,
@@ -718,7 +719,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_sp
         # compute the updated electron temperature
         # NB: not currently necessary, as initial vth is not directly dependent on ion quantities
         @serial_region begin
-            @. moments.electron.temp = moments.electron.vth^2
+            @. moments.electron.temp = composition.me_over_mi * moments.electron.vth^2
         end
         # as the electron temperature has now been updated, set the appropriate flag
         moments.electron.temp_updated[] = true
@@ -738,6 +739,9 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_sp
         calculate_electron_qpar!(moments.electron, pdf.electron, moments.electron.ppar,
             moments.electron.upar, moments.ion.upar, collisions.nu_ei,
             composition.me_over_mi, composition.electron_physics, vpa)
+        if composition.electron_physics == braginskii_fluid
+            electron_fluid_qpar_boundary_condition!(moments.electron, z)
+        end
         # calculate the electron-ion parallel friction force
         calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, moments.electron.dens,
             moments.electron.upar, moments.ion.upar, moments.electron.dT_dz,
@@ -1755,14 +1759,15 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         else
             begin_r_z_region()
             @loop_r_z ir iz begin
-                new_scratch.electron_ppar[iz,ir] = 0.5 * new_scratch.electron_density[iz,ir] *
+                new_scratch.electron_ppar[iz,ir] = 0.5 * composition.me_over_mi *
+                                                   new_scratch.electron_density[iz,ir] *
                                                    moments.electron.vth[iz,ir]^2
             end
         end
         # regardless of electron model, electron ppar is now updated
         moments.electron.ppar_updated[] = true
         update_electron_vth_temperature!(moments, new_scratch.electron_ppar,
-                                         new_scratch.electron_density)
+                                         new_scratch.electron_density, composition)
         # calculate the corresponding zed derivatives of the moments
         calculate_electron_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
                                                num_diss_params.electron.moment_dissipation_coefficient, 

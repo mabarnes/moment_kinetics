@@ -312,7 +312,8 @@ function setup_moment_kinetics(input_dict::AbstractDict;
 
         begin_serial_region()
         @serial_region begin
-            @. moments.electron.temp = moments.electron.vth^2
+            @. moments.electron.temp = composition.me_over_mi * moments.electron.vth^2
+            @. moments.electron.ppar = 0.5 * moments.electron.dens * moments.electron.temp
         end
         if composition.electron_physics == kinetic_electrons
             begin_r_z_vperp_vpa_region()
