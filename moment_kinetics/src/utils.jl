@@ -277,6 +277,23 @@ function get_prefix_iblock_and_move_existing_file(restart_filename, output_dir)
     return backup_prefix_iblock
 end
 
+"""
+    enum_from_string(enum_type, name)
+
+Get an the value of `enum_type`, whose name is given by the String (or Symbol) `name`.
+
+Returns `nothing` if the name is not found.
+"""
+function enum_from_string(enum_type, name)
+    name = Symbol(name)
+    for e ∈ instances(enum_type)
+        if name == Symbol(e)
+            return e
+        end
+    end
+    return nothing
+end
+
 # Utility functions for timestepping
 
 """
