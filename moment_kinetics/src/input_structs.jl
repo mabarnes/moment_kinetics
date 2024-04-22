@@ -325,7 +325,7 @@ Base.@kwdef struct fkpl_collisions_input
     # option to check if fokker planck frequency should be > 0
     use_fokker_planck::Bool
     # ion-ion self collision frequency
-    # nu_{ss'} = (L/c_{ref}) * gamma_{ss'} n_{ref} / 2 (m_s)^2 (c_{ref})^3
+    # nu_{ss'} = (L/c_{ref}) * gamma_{ss'} n_{ref} /(m_s)^2 (c_{ref})^3
     # with gamma_ss' = 2 pi (Z_s Z_s')^2 e^4 ln \Lambda_{ss'} / (4 pi \epsilon_0)^2
     nuii::mk_float
     # option to determine if self collisions are used (for physics test)
