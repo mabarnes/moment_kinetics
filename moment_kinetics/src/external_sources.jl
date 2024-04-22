@@ -546,14 +546,17 @@ function external_ion_source!(pdf, fvec, moments, ion_source_settings, vperp, vp
                     @loop_vperp_vpa ivperp ivpa begin
                         v2 = vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2
                         fac = 1.0/(sink_vth^2)
-                        dummy_vpavperp[ivpa,ivperp] = (sink_strength/(sink_vth^3))*exp(-fac*v2)
+                        dummy_vpavperp[ivpa,ivperp] = (1.0/(sink_vth^3))*exp(-fac*v2)
                     end
+                    # numerical correction to normalisation
+                    normfac = get_density(dummy_vpavperp, vpa, vperp)
+                    # println("sink norm", normfac)
                     # add the source
                     @loop_vperp_vpa ivperp ivpa begin
                         # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                         # normalisation of F
                         pdf[ivpa,ivperp,iz,ir,is] -=
-                            dt * dummy_vpavperp[ivpa,ivperp] * pdf[ivpa,ivperp,iz,ir,is]
+                            dt * sink_strength * dummy_vpavperp[ivpa,ivperp] * pdf[ivpa,ivperp,iz,ir,is] / normfac
                     end
                 end
             end
