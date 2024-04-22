@@ -80,8 +80,8 @@ nuii = 1.0
 frequency_option = "manual"
 """
 function setup_fkpl_collisions_input(toml_input::Dict, reference_params)
-    # get reference collision frequency (note factor of 1/4 due to definition choices)
-    nuii_fkpl_default = 0.25*get_reference_collision_frequency(reference_params)
+    # get reference collision frequency (note factor of 1/2 due to definition choices)
+    nuii_fkpl_default = 0.5*get_reference_collision_frequency(reference_params)
     # read the input toml and specify a sensible default
     input_section = set_defaults_and_check_section!(toml_input, "fokker_planck_collisions",
        # begin default inputs (as kwargs)
@@ -269,7 +269,7 @@ The result is stored in the array `fkpl_arrays.CC`.
 
 The normalised collision frequency is defined by
 ```math
-\\tilde{\\nu}_{ss'} = \\frac{L_{\\mathrm{ref}}}{c_{\\mathrm{ref}}}\\frac{\\gamma_{ss'} n_\\mathrm{ref}}{2 m_s^2 c_\\mathrm{ref}^3}
+\\tilde{\\nu}_{ss'} = \\frac{L_{\\mathrm{ref}}}{c_{\\mathrm{ref}}}\\frac{\\gamma_{ss'} n_\\mathrm{ref}}{m_s^2 c_\\mathrm{ref}^3}
 ```
 with \$\\gamma_{ss'} = 2 \\pi (Z_s Z_{s'})^2 e^4 \\ln \\Lambda_{ss'} / (4 \\pi
 \\epsilon_0)^2\$.
