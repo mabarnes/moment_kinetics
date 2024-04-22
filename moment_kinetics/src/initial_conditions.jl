@@ -257,7 +257,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
                                vperp_spectral, vpa_spectral, collisions,
                                external_source_settings, scratch_dummy, scratch, t_params,
                                t_input, num_diss_params, advection_structs, io_input,
-                               input_dict; restart_from_Boltzmann_electrons=false)
+                               input_dict; restart_electron_physics)
     
     moments.electron.dens_updated[] = false
     # initialise the electron density profile
@@ -268,18 +268,9 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
         moments.ion.upar, moments.ion.dens, composition.electron_physics, r, z)
     # different choices for initialization of electron temperature/pressure/vth depending on whether
     # we are restarting from a previous simulation with Boltzmann electrons or not
-    if restart_from_Boltzmann_electrons
-        begin_serial_region()
-        @serial_region begin
-            # if restarting from a simulations where Boltzmann electrons were used, then the assumption is
-            # that the electron parallel temperature is constant along the field line and equal to T_e
-            moments.electron.temp .= composition.T_e
-            # the thermal speed is related to the temperature by vth_e / v_ref = sqrt((T_e/T_ref) / (m_e/m_ref))
-            moments.electron.vth .= sqrt(composition.T_e / composition.me_over_mi)
-            # ppar = 0.5 * n * T, so we can calculate the parallel pressure from the density and T_e
-            moments.electron.ppar .= 0.5 * moments.electron.dens * composition.T_e
-        end
-    else
+    if restart_electron_physics === nothing
+        # Not restarting, so create initial profiles
+
         # initialise the electron thermal speed profile
         init_electron_vth!(moments.electron.vth, moments.ion.vth, composition.T_e, composition.me_over_mi, z.grid)
         begin_r_z_region()
@@ -291,7 +282,21 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
         @loop_r_z ir iz begin
             moments.electron.ppar[iz,ir] = 0.5 * moments.electron.dens[iz,ir] * moments.electron.temp[iz,ir]
         end
-    end
+    elseif restart_electron_physics ∉ (braginskii_fluid, kinetic_electrons)
+        # Restarting from Boltzmann electron simulation, so start with constant
+        # electron temperature
+        begin_serial_region()
+        @serial_region begin
+            # if restarting from a simulations where Boltzmann electrons were used, then the assumption is
+            # that the electron parallel temperature is constant along the field line and equal to T_e
+            moments.electron.temp .= composition.T_e
+            # the thermal speed is related to the temperature by vth_e / v_ref = sqrt((T_e/T_ref) / (m_e/m_ref))
+            moments.electron.vth .= sqrt(composition.T_e / composition.me_over_mi)
+            # ppar = 0.5 * n * T, so we can calculate the parallel pressure from the density and T_e
+            moments.electron.ppar .= 0.5 * moments.electron.dens * composition.T_e
+        end
+    end # else, we are restarting from `braginskii_fluid` or `kinetic_electrons`, so keep the reloaded electron pressure/temperature profiles.
+
     # the electron temperature has now been updated
     moments.electron.temp_updated[] = true
     # the electron parallel pressure now been updated
@@ -330,7 +335,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
     # if using kinetic electrons, this relies on the electron pdf, which itself relies on the electron heat flux
     if composition.electron_physics == braginskii_fluid
         electron_fluid_qpar_boundary_condition!(moments.electron, z)
-        if restart_from_Boltzmann_electrons
+        if restart_electron_physics ∉ (nothing, braginskii_fluid, kinetic_electrons)
             # Restarting from Boltzmann. If we use an exactly constant T_e profile,
             # qpar for the electrons will be non-zero only at the boundary points,
             # which will crash the code unless the timestep is insanely small. Give
@@ -421,18 +426,16 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
     # arrays need to exist and be otherwise initialised in order to compute the initial
     # electron pdf. The electron arrays will be updated as necessary by
     # initialize_electron_pdf!().
-    if !restart_from_Boltzmann_electrons
-        begin_serial_region()
-        @serial_region begin
-            scratch[1].electron_density .= moments.electron.dens
-            scratch[1].electron_upar .= moments.electron.upar
-            scratch[1].electron_ppar .= moments.electron.ppar
-            scratch[1].electron_pperp .= 0.0 #moments.electron.pperp
-            scratch[1].electron_temp .= moments.electron.temp
-        end
-        # get the initial electrostatic potential and parallel electric field
-        update_phi!(fields, scratch[1], z, r, composition, collisions, moments, z_spectral, r_spectral, scratch_dummy)
+    begin_serial_region()
+    @serial_region begin
+        scratch[1].electron_density .= moments.electron.dens
+        scratch[1].electron_upar .= moments.electron.upar
+        scratch[1].electron_ppar .= moments.electron.ppar
+        scratch[1].electron_pperp .= 0.0 #moments.electron.pperp
+        scratch[1].electron_temp .= moments.electron.temp
     end
+    # get the initial electrostatic potential and parallel electric field
+    update_phi!(fields, scratch[1], z, r, composition, collisions, moments, z_spectral, r_spectral, scratch_dummy)
 
     # initialize the electron pdf that satisfies the electron kinetic equation
     initialize_electron_pdf!(scratch, pdf, moments, fields.phi, r, z, vpa, vperp,

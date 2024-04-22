@@ -379,8 +379,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_sp
                              collisions, species, geometry, boundary_distributions,
                              external_source_settings, num_diss_params,
                              manufactured_solns_input, advection_structs, scratch_dummy,
-                             io_input, restarting, restart_had_kinetic_electrons,
-                             input_dict)
+                             io_input, restarting, restart_electron_physics, input_dict)
     # define some local variables for convenience/tidiness
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
@@ -493,16 +492,18 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_sp
 
     # Now that `t_params` and `scratch` have been created, initialize electrons if
     # necessary
-    if !restarting ||
-        (composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons) &&
-         !restart_had_kinetic_electrons)
+    if composition.electron_physics != restart_electron_physics
         initialize_electrons!(pdf, moments, fields, geometry, composition, r, z,
                               vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
                               vperp_spectral, vpa_spectral, collisions,
                               external_source_settings, scratch_dummy, scratch, t_params,
                               t_input, num_diss_params, advection_structs, io_input,
-                              input_dict; restart_from_Boltzmann_electrons=restarting)
-    elseif restarting && t_params.electron.debug_io !== nothing
+                              input_dict;
+                              restart_electron_physics=restart_electron_physics)
+    elseif restarting && composition.electron_physics == kinetic_electrons &&
+           t_params.electron.debug_io !== nothing
+        # Create *.electron_debug.h5 file so that it can be re-opened in
+        # update_electron_pdf!().
         io_electron = setup_electron_io(t_params.electron.debug_io[1], vpa, vperp, z, r,
                                         composition, collisions, moments.evolve_density,
                                         moments.evolve_upar, moments.evolve_ppar,

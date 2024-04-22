@@ -20,7 +20,7 @@ using ..coordinates: coordinate, define_coordinate
 using ..electron_vpa_advection: update_electron_speed_vpa!
 using ..electron_z_advection: update_electron_speed_z!
 using ..file_io: check_io_implementation, get_group, get_subgroup_keys, get_variable_keys
-using ..input_structs: advection_input, grid_input, hdf5, netcdf
+using ..input_structs
 using ..interpolation: interpolate_to_grid_1d!
 using ..krook_collisions
 using ..looping
@@ -29,7 +29,7 @@ using ..neutral_vz_advection: update_speed_neutral_vz!
 using ..neutral_z_advection: update_speed_neutral_z!
 using ..type_definitions: mk_float, mk_int
 using ..utils: get_CFL!, get_minimum_CFL_z, get_minimum_CFL_vpa, get_minimum_CFL_neutral_z,
-               get_minimum_CFL_neutral_vz
+               get_minimum_CFL_neutral_vz, enum_from_string
 using ..vpa_advection: update_speed_vpa!
 using ..z_advection: update_speed_z!
 
@@ -582,7 +582,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
     electron_dt = nothing
     electron_dt_before_last_fail = nothing
     previous_runs_info = nothing
-    restart_had_kinetic_electrons = false
+    restart_electron_physics = nothing
     begin_serial_region()
     @serial_region begin
         fid = open_readonly_output_file(restart_prefix_iblock[1], "dfns";
@@ -596,6 +596,8 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
             end
             restart_evolve_density, restart_evolve_upar, restart_evolve_ppar =
                 load_mk_options(fid)
+
+            restart_input = load_input(fid)
 
             previous_runs_info = load_run_info_history(fid)
 
@@ -823,8 +825,13 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                 restart_electron_evolve_ppar = true, true, true
             electron_evolve_density, electron_evolve_upar, electron_evolve_ppar =
                 true, true, true
-            restart_had_kinetic_electrons = ("f_electron" ∈ keys(dynamic))
-            if pdf.electron !== nothing && restart_had_kinetic_electrons
+            if "electron_physics" ∈ keys(restart_input)
+                restart_electron_physics = enum_from_string(electron_physics_type,
+                                                            restart_input["electron_physics"])
+            else
+                restart_electron_physics = boltzmann_electron_response
+            end
+            if pdf.electron !== nothing && restart_electron_physics == kinetic_electrons
                 pdf.electron.norm .=
                     reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa,
                                         r_range, z_range, vperp_range, vpa_range,
@@ -975,11 +982,10 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
         end
     end
 
-    restart_had_kinetic_electrons = MPI.Bcast(restart_had_kinetic_electrons, 0,
-                                              comm_block[])
+    restart_electron_physics = MPI.bcast(restart_electron_physics, 0, comm_block[])
 
     return code_time, dt, dt_before_last_fail, electron_dt, electron_dt_before_last_fail,
-           previous_runs_info, time_index, restart_had_kinetic_electrons
+           previous_runs_info, time_index, restart_electron_physics
 end
 
 """

@@ -289,7 +289,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         electron_dt = nothing
         electron_dt_before_last_fail = nothing
         previous_runs_info = nothing
-        restart_had_kinetic_electrons = false
+        restart_electron_physics = nothing
     else
         restarting = true
 
@@ -304,7 +304,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
 
         # Reload pdf and moments from an existing output file
         code_time, dt, dt_before_last_fail, electron_dt, electron_dt_before_last_fail,
-        previous_runs_info, restart_time_index, restart_had_kinetic_electrons =
+        previous_runs_info, restart_time_index, restart_electron_physics =
             reload_evolving_fields!(pdf, moments, boundary_distributions,
                                     backup_prefix_iblock, restart_time_index,
                                     composition, geometry, r, z, vpa, vperp, vzeta, vr,
@@ -346,7 +346,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
             dt_before_last_fail, electron_dt, electron_dt_before_last_fail, collisions,
             species, geometry, boundary_distributions, external_source_settings,
             num_diss_params, manufactured_solns_input, advection_structs, scratch_dummy,
-            io_input, restarting, restart_had_kinetic_electrons, input_dict)
+            io_input, restarting, restart_electron_physics, input_dict)
 
     # This is the closest we can get to the end time of the setup before writing it to the
     # output file
