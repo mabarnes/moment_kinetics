@@ -904,7 +904,7 @@ function runtests()
                 # create the coordinate struct 'x' and info for derivatives, etc.
                 # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
                 # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; init_YY=false, ignore_MPI=true)
+                x, spectral = define_coordinate(input; ignore_MPI=true, init_YY=false)
 
                 offset = randn(rng)
                 f = @. sinpi(2.0 * x.grid / L) + offset
@@ -1023,7 +1023,7 @@ function runtests()
                 # create the coordinate struct 'x' and info for derivatives, etc.
                 # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
                 # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; init_YY=false, ignore_MPI=true)
+                x, spectral = define_coordinate(input; ignore_MPI=true, init_YY=false)
 
                 offset = randn(rng)
                 f = @. sinpi(2.0 * x.grid / L) + offset
@@ -1069,7 +1069,7 @@ function runtests()
                 # create the coordinate struct 'x' and info for derivatives, etc.
                 # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
                 # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; init_YY=false, ignore_MPI=true)
+                x, spectral = define_coordinate(input; ignore_MPI=true, init_YY=false)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
@@ -1122,7 +1122,7 @@ function runtests()
                 # create the coordinate struct 'x' and info for derivatives, etc.
                 # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
                 # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; init_YY=false, ignore_MPI=true)
+                x, spectral = define_coordinate(input; ignore_MPI=true, init_YY=false)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
@@ -1448,7 +1448,7 @@ function runtests()
                 # create the coordinate struct 'x' and info for derivatives, etc.
                 # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
                 # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; init_YY=false, ignore_MPI=true)
+                x, spectral = define_coordinate(input; ignore_MPI=true, init_YY=false)
 
                 offset = randn(rng)
                 f = @. sinpi(2.0 * x.grid / L) + offset

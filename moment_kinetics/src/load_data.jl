@@ -218,7 +218,7 @@ memory scratch arrays (`ignore_MPI=true` will be passed through to
 [`define_coordinate`](@ref)).
 """
 function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=nothing,
-                              run_directory=nothing, ignore_MPI=false)
+                              run_directory=nothing, ignore_MPI=true)
     if printout
         println("Loading $name coordinate data...")
     end
@@ -312,8 +312,7 @@ function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=no
                        advection_input("default", 0.0, 0.0, 0.0), MPI.COMM_NULL,
                        element_spacing_option)
 
-    coord, spectral = define_coordinate(input, parallel_io; run_directory=run_directory,
-                                        ignore_MPI=ignore_MPI)
+    coord, spectral = define_coordinate(input, parallel_io; ignore_MPI=ignore_MPI)
 
     return coord, spectral, chunk_size
 end
@@ -3440,7 +3439,7 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
     z_local, z_local_spectral, z_chunk_size =
         load_coordinate_data(file_final_restart, "z"; ignore_MPI=true)
     r_local, r_local_spectral, r_chunk_size =
-        load_coordinate_data(file_final_restart, "r"; ignore_MPI=true)
+        load_coordinate_data(file_final_restart, "r")
     r, r_spectral, z, z_spectral = construct_global_zr_coords(r_local, z_local;
                                                               ignore_MPI=true)
 
@@ -4799,7 +4798,7 @@ end
 
 """
 """
-function construct_global_zr_coords(r_local, z_local; ignore_MPI=false)
+function construct_global_zr_coords(r_local, z_local; ignore_MPI=true)
 
     function make_global_input(coord_local)
         return grid_input(coord_local.name, coord_local.ngrid,
@@ -4808,10 +4807,8 @@ function construct_global_zr_coords(r_local, z_local; ignore_MPI=false)
             coord_local.advection, MPI.COMM_NULL, coord_local.element_spacing_option)
     end
 
-    r_global, r_global_spectral = define_coordinate(make_global_input(r_local);
-                                                    ignore_MPI=ignore_MPI)
-    z_global, z_global_spectral = define_coordinate(make_global_input(z_local);
-                                                    ignore_MPI=ignore_MPI)
+    r_global, r_global_spectral = define_coordinate(make_global_input(r_local); ignore_MPI=ignore_MPI)
+    z_global, z_global_spectral = define_coordinate(make_global_input(z_local); ignore_MPI=ignore_MPI)
 
     return r_global, r_global_spectral, z_global, z_global_spectral
 end
