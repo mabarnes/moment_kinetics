@@ -1754,7 +1754,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     end
     update_derived_ion_moments_and_derivatives()
 
-    function update_derived_electron_moments_and_derivatives()
+    function update_electrons(update_pdf=true)
         # update the lowest three electron moments (density, upar and ppar)
         calculate_electron_density!(new_scratch.electron_density, moments.electron.dens_updated, new_scratch.density)
         calculate_electron_upar_from_charge_conservation!(new_scratch.electron_upar, moments.electron.upar_updated,
@@ -1810,18 +1810,21 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
                 moments.electron.ppar[iz,ir] = new_scratch.electron_ppar[iz,ir]
             end
 
-            update_electron_pdf!(scratch, pdf.electron.norm, moments, fields.phi, r, z, vperp,
-                                 vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
-                                 vpa_advect, scratch_dummy, t_params.electron, collisions,
-                                 composition, external_source_settings, num_diss_params,
-                                 max_electron_pdf_iterations)
+            if update_pdf
+                update_electron_pdf!(scratch, pdf.electron.norm, moments, fields.phi, r,
+                                     z, vperp, vpa, z_spectral, vperp_spectral,
+                                     vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                                     t_params.electron, collisions, composition,
+                                     external_source_settings, num_diss_params,
+                                     max_electron_pdf_iterations)
+            end
         end
         # update the electron parallel friction force
         calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, new_scratch.electron_density,
             new_scratch.electron_upar, new_scratch.upar, moments.electron.dT_dz, composition.me_over_mi,
             collisions.nu_ei, composition.electron_physics)
     end
-    update_derived_electron_moments_and_derivatives()
+    update_electrons()
 
     if composition.n_neutral_species > 0
         ##
@@ -1915,7 +1918,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
             # pdf These need to be re-calculated because `new_scratch` was swapped with
             # the beginning of the timestep, because the timestep failed
             update_derived_ion_moments_and_derivatives()
-            update_derived_electron_moments_and_derivatives()
+            update_electrons(false)
             if composition.n_neutral_species > 0
                 update_derived_neutral_moments_and_derivatives()
             end
