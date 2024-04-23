@@ -96,15 +96,21 @@ elseif Sys.isapple()
     # path instead.
     # ?? Could we attempt to auto-detect the MPI library before prompting the user??
     if prompt_for_lib_paths
-        default_mpi_library_path = get(mk_preferences, "mpi_library_path", "")
-        mpi_library_path = get_input_with_path_completion(
-            "\nEnter the full path to your MPI library (e.g. something like "
-            * "'libmpi.dylib'): [$default_mpi_library_path]")
-        if mpi_library_path == ""
-            mpi_library_path = default_mpi_library_path
-        end
+        try
+            # See if MPIPreferences can auto-detect the system MPI library path
+            MPIPreferences.use_system_binary()
+        catch
+            println("Failed to auto-detect path of MPI library...")
+            default_mpi_library_path = get(mk_preferences, "mpi_library_path", "")
+            mpi_library_path = get_input_with_path_completion(
+                "\nEnter the full path to your MPI library (e.g. something like "
+                * "'libmpi.dylib'): [$default_mpi_library_path]")
+            if mpi_library_path == ""
+                mpi_library_path = default_mpi_library_path
+            end
 
-        MPIPreferences.use_system_binary(library_names=mpi_library_path)
+            MPIPreferences.use_system_binary(library_names=mpi_library_path)
+        end
 
         # Just got the value for the setting, now write it to LocalPreferences.toml
         mk_preferences["mpi_library_path"] = mpi_library_path
