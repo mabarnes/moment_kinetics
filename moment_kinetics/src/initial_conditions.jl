@@ -569,8 +569,7 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
             # Reload pdf and moments from an existing output file
             code_time, previous_runs_info, restart_time_index =
                 reload_electron_data!(pdf, moments, t_params, backup_prefix_iblock, -1,
-                                      geometry, r, z, vpa, vperp, vzeta, vr, vz;
-                                      run_directory=io_input.output_dir)
+                                      geometry, r, z, vpa, vperp, vzeta, vr, vz)
 
             # Broadcast code_time from the root process of each shared-memory block (on which it
             # might have been loaded from a restart file).

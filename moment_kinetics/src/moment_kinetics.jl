@@ -308,7 +308,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
             reload_evolving_fields!(pdf, moments, boundary_distributions,
                                     backup_prefix_iblock, restart_time_index,
                                     composition, geometry, r, z, vpa, vperp, vzeta, vr,
-                                    vz; run_directory=io_input.output_dir)
+                                    vz)
 
         begin_serial_region()
         @serial_region begin

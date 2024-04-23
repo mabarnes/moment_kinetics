@@ -199,7 +199,8 @@ function load_input(fid)
 end
 
 """
-    load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=nothing)
+    load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=nothing,
+                         ignore_MPI=true)
 
 Load data for the coordinate `name` from a file-handle `fid`.
 
@@ -213,12 +214,12 @@ If `irank` and `nrank` are passed, then the `coord` and `spectral` objects retur
 be set up for the parallelisation specified by `irank` and `nrank`, rather than the one
 implied by the output file.
 
-If `ignore_MPI=true` is passed, the returned coordinates will be created without shared
-memory scratch arrays (`ignore_MPI=true` will be passed through to
+Unless `ignore_MPI=false` is passed, the returned coordinates will be created without
+shared memory scratch arrays (`ignore_MPI=true` will be passed through to
 [`define_coordinate`](@ref)).
 """
 function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=nothing,
-                              run_directory=nothing, ignore_MPI=true)
+                              ignore_MPI=true)
     if printout
         println("Loading $name coordinate data...")
     end
@@ -574,7 +575,7 @@ Reload pdf and moments from an existing output file.
 """
 function reload_evolving_fields!(pdf, moments, boundary_distributions,
                                  restart_prefix_iblock, time_index, composition, geometry,
-                                 r, z, vpa, vperp, vzeta, vr, vz; run_directory=nothing)
+                                 r, z, vpa, vperp, vzeta, vr, vz)
     code_time = 0.0
     dt = nothing
     dt_before_last_fail = nothing
@@ -605,8 +606,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                 restart_vperp_spectral, restart_vpa, restart_vpa_spectral, restart_vzeta,
                 restart_vzeta_spectral, restart_vr,restart_vr_spectral, restart_vz,
                 restart_vz_spectral = load_restart_coordinates(fid, r, z, vperp, vpa,
-                                                               vzeta, vr, vz, parallel_io;
-                                                               run_directory=run_directory)
+                                                               vzeta, vr, vz, parallel_io)
 
             # Test whether any interpolation is needed
             interpolation_needed = Dict(
@@ -991,7 +991,7 @@ end
 Reload electron pdf and moments from an existing output file.
 """
 function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, time_index,
-                               geometry, r, z, vpa, vperp, vzeta, vr, vz; run_directory=nothing)
+                               geometry, r, z, vpa, vperp, vzeta, vr, vz)
     code_time = 0.0
     previous_runs_info = nothing
     begin_serial_region()
@@ -1019,8 +1019,7 @@ function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, ti
                 restart_vperp_spectral, restart_vpa, restart_vpa_spectral, restart_vzeta,
                 restart_vzeta_spectral, restart_vr,restart_vr_spectral, restart_vz,
                 restart_vz_spectral = load_restart_coordinates(fid, r, z, vperp, vpa,
-                                                               vzeta, vr, vz, parallel_io;
-                                                               run_directory=run_directory)
+                                                               vzeta, vr, vz, parallel_io)
 
             # Test whether any interpolation is needed
             interpolation_needed = Dict(
@@ -1086,47 +1085,37 @@ function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, ti
     return code_time, previous_runs_info, time_index
 end
 
-function load_restart_coordinates(fid, r, z, vperp, vpa, vzeta, vr, vz, parallel_io;
-                                  run_directory=nothing)
+function load_restart_coordinates(fid, r, z, vperp, vpa, vzeta, vr, vz, parallel_io)
     if parallel_io
         restart_z, restart_z_spectral, _ =
-            load_coordinate_data(fid, "z"; irank=z.irank, nrank=z.nrank,
-                                 run_directory=run_directory, ignore_MPI=true)
+            load_coordinate_data(fid, "z"; irank=z.irank, nrank=z.nrank)
         restart_r, restart_r_spectral, _ =
-            load_coordinate_data(fid, "r"; irank=r.irank, nrank=r.nrank,
-                                 run_directory=run_directory, ignore_MPI=true)
+            load_coordinate_data(fid, "r"; irank=r.irank, nrank=r.nrank)
         restart_vperp, restart_vperp_spectral, _ =
-            load_coordinate_data(fid, "vperp"; irank=vperp.irank, nrank=vperp.nrank,
-                                 run_directory=run_directory, ignore_MPI=true)
+            load_coordinate_data(fid, "vperp"; irank=vperp.irank, nrank=vperp.nrank)
         restart_vpa, restart_vpa_spectral, _ =
-            load_coordinate_data(fid, "vpa"; irank=vpa.irank, nrank=vpa.nrank,
-                                 run_directory=run_directory, ignore_MPI=true)
+            load_coordinate_data(fid, "vpa"; irank=vpa.irank, nrank=vpa.nrank)
         restart_vzeta, restart_vzeta_spectral, _ =
-            load_coordinate_data(fid, "vzeta"; irank=vzeta.irank, nrank=vzeta.nrank,
-                                 run_directory=run_directory, ignore_MPI=true)
+            load_coordinate_data(fid, "vzeta"; irank=vzeta.irank, nrank=vzeta.nrank)
         restart_vr, restart_vr_spectral, _ =
-            load_coordinate_data(fid, "vr"; irank=vr.irank, nrank=vr.nrank,
-                                 run_directory=run_directory, ignore_MPI=true)
+            load_coordinate_data(fid, "vr"; irank=vr.irank, nrank=vr.nrank)
         restart_vz, restart_vz_spectral, _ =
-            load_coordinate_data(fid, "vz"; irank=vz.irank, nrank=vz.nrank,
-                                 run_directory=run_directory, ignore_MPI=true)
+            load_coordinate_data(fid, "vz"; irank=vz.irank, nrank=vz.nrank)
     else
         restart_z, restart_z_spectral, _ =
-            load_coordinate_data(fid, "z"; run_directory=run_directory, ignore_MPI=true)
+            load_coordinate_data(fid, "z")
         restart_r, restart_r_spectral, _ =
-            load_coordinate_data(fid, "r"; run_directory=run_directory, ignore_MPI=true)
+            load_coordinate_data(fid, "r")
         restart_vperp, restart_vperp_spectral, _ =
-            load_coordinate_data(fid, "vperp"; run_directory=run_directory,
-                                 ignore_MPI=true)
+            load_coordinate_data(fid, "vperp")
         restart_vpa, restart_vpa_spectral, _ =
-            load_coordinate_data(fid, "vpa"; run_directory=run_directory, ignore_MPI=true)
+            load_coordinate_data(fid, "vpa")
         restart_vzeta, restart_vzeta_spectral, _ =
-            load_coordinate_data(fid, "vzeta"; run_directory=run_directory,
-                                 ignore_MPI=true)
+            load_coordinate_data(fid, "vzeta")
         restart_vr, restart_vr_spectral, _ =
-            load_coordinate_data(fid, "vr"; run_directory=run_directory, ignore_MPI=true)
+            load_coordinate_data(fid, "vr")
         restart_vz, restart_vz_spectral, _ =
-            load_coordinate_data(fid, "vz"; run_directory=run_directory, ignore_MPI=true)
+            load_coordinate_data(fid, "vz")
 
         if restart_r.nrank != r.nrank
             error("Not using parallel I/O, and distributed MPI layout has "
@@ -3437,24 +3426,23 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
     evolve_density, evolve_upar, evolve_ppar = load_mk_options(file_final_restart)
 
     z_local, z_local_spectral, z_chunk_size =
-        load_coordinate_data(file_final_restart, "z"; ignore_MPI=true)
+        load_coordinate_data(file_final_restart, "z")
     r_local, r_local_spectral, r_chunk_size =
         load_coordinate_data(file_final_restart, "r")
-    r, r_spectral, z, z_spectral = construct_global_zr_coords(r_local, z_local;
-                                                              ignore_MPI=true)
+    r, r_spectral, z, z_spectral = construct_global_zr_coords(r_local, z_local)
 
     vperp, vperp_spectral, vperp_chunk_size =
-        load_coordinate_data(file_final_restart, "vperp"; ignore_MPI=true)
+        load_coordinate_data(file_final_restart, "vperp")
     vpa, vpa_spectral, vpa_chunk_size =
-        load_coordinate_data(file_final_restart, "vpa"; ignore_MPI=true)
+        load_coordinate_data(file_final_restart, "vpa")
 
     if n_neutral_species > 0
         vzeta, vzeta_spectral, vzeta_chunk_size =
-            load_coordinate_data(file_final_restart, "vzeta"; ignore_MPI=true)
+            load_coordinate_data(file_final_restart, "vzeta")
         vr, vr_spectral, vr_chunk_size =
-            load_coordinate_data(file_final_restart, "vr"; ignore_MPI=true)
+            load_coordinate_data(file_final_restart, "vr")
         vz, vz_spectral, vz_chunk_size =
-            load_coordinate_data(file_final_restart, "vz"; ignore_MPI=true)
+            load_coordinate_data(file_final_restart, "vz")
     else
         dummy_adv_input = advection_input("default", 1.0, 0.0, 0.0)
         dummy_comm = MPI.COMM_NULL
