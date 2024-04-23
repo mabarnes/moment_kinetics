@@ -885,9 +885,6 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
         t += t_input.dt
 
         if diagnostic_checks
-            # update the diagnostic chodura condition
-            # update_chodura!(moments,scratch[end].pdf,vpa,vperp,z,r,spectral_objects.r_spectral,composition,geometry,scratch_dummy,advect_objects.z_advect)
-
             # Always synchronise here, regardless of if we changed region or not
             begin_serial_region(no_synchronize=true)
             _block_synchronize()
