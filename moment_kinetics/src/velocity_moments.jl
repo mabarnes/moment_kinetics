@@ -491,16 +491,12 @@ the function used to update moments at run time is update_derived_moments! in ti
 """
 function update_moments!(moments, ff_in, gyroavs::gyro_operators, vpa, vperp, z, r, composition,
         r_spectral, geometry, scratch_dummy, z_advect)
-    ff = scratch_dummy.buffer_vpavperpzrs_1 # the buffer array for the charged pdf -> make sure not to reuse this array below
     if composition.gyrokinetic_ions
+        ff = scratch_dummy.buffer_vpavperpzrs_1 # the buffer array for the charged pdf -> make sure not to reuse this array below
         # fill buffer with ring-averaged F (gyroaverage at fixed position)
         gyroaverage_pdf!(ff,ff_in,gyroavs,vpa,vperp,z,r,composition)
     else
-        # copy F into buffer (drift-kinetic)
-        begin_s_r_z_vperp_vpa_region()
-        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin 
-            ff[ivpa,ivperp,iz,ir,is] = ff_in[ivpa,ivperp,iz,ir,is]
-        end
+        ff = ff_in
     end
     begin_s_r_z_region()
     n_species = size(ff,5)

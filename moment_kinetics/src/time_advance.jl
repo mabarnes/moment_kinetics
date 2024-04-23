@@ -1425,16 +1425,12 @@ update velocity moments that are calculable from the evolved charged pdf
 function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
     r_spectral, geometry, gyroavs, scratch_dummy, z_advect, diagnostic_moments)
     
-    ff = scratch_dummy.buffer_vpavperpzrs_1
     if composition.gyrokinetic_ions
+        ff = scratch_dummy.buffer_vpavperpzrs_1
         # fill buffer with ring-averaged F (gyroaverage at fixed position)
         gyroaverage_pdf!(ff,new_scratch.pdf,gyroavs,vpa,vperp,z,r,composition)
     else
-        # copy F into buffer (drift-kinetic)
-        begin_s_r_z_vperp_vpa_region()
-        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin 
-            ff[ivpa,ivperp,iz,ir,is] = new_scratch.pdf[ivpa,ivperp,iz,ir,is]
-        end
+        ff = new_scratch.pdf
     end
     
     if !moments.evolve_density
