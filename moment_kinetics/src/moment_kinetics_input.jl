@@ -107,7 +107,10 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     if !(0.0 <= composition.recycling_fraction <= 1.0)
         error("recycling_fraction must be between 0 and 1. Got $recycling_fraction.")
     end
-
+    # gyrokinetic_ions = True -> use gyroaveraged fields at fixed guiding centre and moments of the pdf computed at fixed r
+    # gyrokinetic_ions = False -> use drift kinetic approximation
+    composition.gyrokinetic_ions = get(scan_input, "gyrokinetic_ions", false)
+    
     # Reference parameters that define the conversion between physical quantities and
     # normalised values used in the code.
     reference_params = setup_reference_parameters(scan_input)
@@ -936,9 +939,10 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     # The ion flux reaching the wall that is recycled as neutrals is reduced by
     # `recycling_fraction` to account for ions absorbed by the wall.
     recycling_fraction = 1.0
+    gyrokinetic_ions = false
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
         electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, Er_constant,
-        mn_over_mi, me_over_mi, recycling_fraction, allocate_float(n_species))
+        mn_over_mi, me_over_mi, recycling_fraction, gyrokinetic_ions, allocate_float(n_species))
     
     species_charged = Array{species_parameters_mutable,1}(undef,n_ion_species)
     species_neutral = Array{species_parameters_mutable,1}(undef,n_neutral_species)

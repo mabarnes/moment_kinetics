@@ -55,6 +55,7 @@ using ..force_balance: force_balance!, neutral_force_balance!
 using ..energy_equation: energy_equation!, neutral_energy_equation!
 using ..em_fields: setup_em_fields, update_phi!
 using ..fokker_planck: init_fokker_planck_collisions_weak_form, explicit_fokker_planck_collisions_weak_form!
+using ..gyroaverages: init_gyro_operators, gyroaverage_pdf!
 using ..manufactured_solns: manufactured_sources
 using ..advection: advection_info
 using ..utils: to_minutes
@@ -180,7 +181,7 @@ this includes creating and populating structs
 for Chebyshev transforms, velocity space moments,
 EM fields, and advection terms
 """
-function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
+function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, gyrophase, vz_spectral,
                              vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
                              z_spectral, r_spectral, composition, drive_input, moments,
                              t_input, collisions, species, geometry,
@@ -216,12 +217,16 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     else
         fp_arrays = nothing
     end
+    # create gyroaverage matrix arrays
+    gyroavs = init_gyro_operators(vperp,z,r,gyrophase,geometry,composition)
+
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
-    fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency, drive_input.force_Er_zero_at_wall)
+    fields = setup_em_fields(vperp.n, z.n, r.n, composition.n_ion_species, drive_input.force_phi,
+      drive_input.amplitude, drive_input.frequency, drive_input.force_Er_zero_at_wall)
     # initialize the electrostatic potential
     begin_serial_region()
-    update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral, scratch_dummy)
+    update_phi!(fields, scratch[1], vperp, z, r, composition, z_spectral, r_spectral, scratch_dummy, gyroavs)
     @serial_region begin
         # save the initial phi(z) for possible use later (e.g., if forcing phi)
         fields.phi0 .= fields.phi
@@ -250,7 +255,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
         @loop_s is begin
             @views update_speed_r!(r_advect[is], moments.charged.upar[:,:,is],
                                    moments.charged.vth[:,:,is], fields, moments.evolve_upar,
-                                   moments.evolve_ppar, vpa, vperp, z, r, geometry)
+                                   moments.evolve_ppar, vpa, vperp, z, r, geometry, is)
         end
         # enforce prescribed boundary condition in r on the distribution function f
     end
@@ -267,7 +272,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             @views update_speed_z!(z_advect[is], moments.charged.upar[:,:,is],
                                    moments.charged.vth[:,:,is], moments.evolve_upar,
                                    moments.evolve_ppar, fields, vpa, vperp, z, r, 0.0,
-                                   geometry)
+                                   geometry, is)
         end
     end
     begin_serial_region()
@@ -388,10 +393,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
         # update moments in case they were affected by applying boundary conditions or
         # constraints to the pdf
         reset_moments_status!(moments)
-        update_moments!(moments, pdf.charged.norm, vpa, vperp, z, r, composition)
-        # update the Chodura diagnostic -- note that the pdf should be the unnormalised one
-        # so this will break for the split moments cases
-        update_chodura!(moments,pdf.charged.norm,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
+        update_moments!(moments, pdf.charged.norm, gyroavs, vpa, vperp, z, r, composition,
+           r_spectral,geometry,scratch_dummy,z_advect)
         # enforce boundary conditions in r and z on the neutral particle distribution function
         if n_neutral_species > 0
             # Note, so far vr and vzeta do not need advect objects, so pass `nothing` for
@@ -431,8 +434,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
         end
     end
 
-    update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral,
-                scratch_dummy)
+    update_phi!(fields, scratch[1], vperp, z, r, composition, z_spectral, r_spectral,
+                scratch_dummy, gyroavs)
     calculate_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, num_diss_params)
     calculate_moment_derivatives_neutral!(moments, scratch[1], scratch_dummy, z,
                                           z_spectral, num_diss_params)
@@ -441,7 +444,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     _block_synchronize()
 
     return moments, fields, spectral_objects, advect_objects,
-    scratch, advance, fp_arrays, scratch_dummy, manufactured_source_list
+    scratch, advance, fp_arrays, gyroavs, scratch_dummy, manufactured_source_list
 end
 
 """
@@ -824,7 +827,7 @@ time integrator can be used without severe CFL condition
 """
 function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
-           composition, collisions, geometry, boundary_distributions, 
+           composition, collisions, geometry, gyroavs, boundary_distributions, 
            external_source_settings, num_diss_params, advance, fp_arrays, scratch_dummy,
            manufactured_source_list, ascii_io, io_moments, io_dfns)
 
@@ -858,6 +861,13 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
     iwrite_dfns = 2
     finish_now = false
     for i ∈ 1:t_input.nstep
+        
+        if i == t_input.nstep
+            # Ensure all output is written at the final step
+            finish_now = true
+        end
+        diagnostic_checks = mod(i,t_input.nwrite_moments) == 0 || mod(i,t_input.nwrite_dfns) == 0 || finish_now
+        
         if t_input.split_operators
             # MRH NOT SUPPORTED
             time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
@@ -867,22 +877,14 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
         else
             time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
                 moments, fields, spectral_objects, advect_objects,
-                composition, collisions, geometry, boundary_distributions,
+                composition, collisions, geometry, gyroavs, boundary_distributions,
                 external_source_settings, num_diss_params, advance, fp_arrays,  scratch_dummy,
-                manufactured_source_list, i)
+                manufactured_source_list, diagnostic_checks, i)
         end
         # update the time
         t += t_input.dt
 
-        if i == t_input.nstep
-            # Ensure all output is written at the final step
-            finish_now = true
-        end
-
-        if mod(i,t_input.nwrite_moments) == 0 || mod(i,t_input.nwrite_dfns) == 0 || finish_now
-            # update the diagnostic chodura condition
-            update_chodura!(moments,scratch[end].pdf,vpa,vperp,z,r,spectral_objects.r_spectral,composition,geometry,scratch_dummy,advect_objects.z_advect)
-
+        if diagnostic_checks
             # Always synchronise here, regardless of if we changed region or not
             begin_serial_region(no_synchronize=true)
             _block_synchronize()
@@ -1206,15 +1208,15 @@ end
 """
 function time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
-           composition, collisions, geometry, boundary_distributions,
+           composition, collisions, geometry, gyroavs, boundary_distributions,
            external_source_settings, num_diss_params, advance, fp_arrays, scratch_dummy,
-           manufactured_source_list, istep)
+           manufactured_source_list, diagnostic_checks, istep)
 
     if t_input.n_rk_stages > 1
         ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
             moments, fields, spectral_objects, advect_objects, composition, collisions,
-            geometry, boundary_distributions, external_source_settings, num_diss_params,
-            advance, fp_arrays, scratch_dummy, manufactured_source_list, istep)
+            geometry, gyroavs, boundary_distributions, external_source_settings, num_diss_params,
+            advance, fp_arrays, scratch_dummy, manufactured_source_list, diagnostic_checks, istep)
     else
         euler_time_advance!(scratch, scratch, pdf, fields, moments,
             advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t,
@@ -1237,7 +1239,7 @@ or update them by taking the appropriate velocity moment of the evolved pdf
 """
 function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr, vzeta,
                     vpa, vperp, z, r, spectral_objects, advect_objects, rk_coefs, istage, composition,
-                    geometry, num_diss_params, advance, scratch_dummy)
+                    geometry, gyroavs, num_diss_params, advance, scratch_dummy, diagnostic_moments)
     begin_s_r_z_region()
 
     new_scratch = scratch[istage+1]
@@ -1285,30 +1287,9 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         end
     end
     # update remaining velocity moments that are calculable from the evolved pdf
-    update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition)
-    # update the diagnostic chodura condition
-    # update_chodura!(moments,new_scratch.pdf,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
-    # update the thermal speed
-    begin_s_r_z_region()
-    try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
-        update_vth!(moments.charged.vth, new_scratch.ppar, new_scratch.pperp, new_scratch.density, vperp, z, r, composition)
-    catch e
-        if global_size[] > 1
-            println("ERROR: error calculating vth in time_advance.jl")
-            println(e)
-            display(stacktrace(catch_backtrace()))
-            flush(stdout)
-            flush(stderr)
-            MPI.Abort(comm_world, 1)
-        end
-        rethrow(e)
-    end
-    # update the parallel heat flux
-    update_qpar!(moments.charged.qpar, moments.charged.qpar_updated, new_scratch.density,
-                 new_scratch.upar, moments.charged.vth, new_scratch.pdf, vpa, vperp, z, r,
-                 composition, moments.evolve_density, moments.evolve_upar,
-                 moments.evolve_ppar)
-
+    update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
+        r_spectral, geometry, gyroavs, scratch_dummy, z_advect, diagnostic_moments)
+    
     calculate_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
                                   num_diss_params)
 
@@ -1376,7 +1357,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     end
 
     # update the electrostatic potential phi
-    update_phi!(fields, scratch[istage+1], z, r, composition, z_spectral, r_spectral, scratch_dummy)
+    update_phi!(fields, scratch[istage+1], vperp, z, r, composition, z_spectral, r_spectral, scratch_dummy, gyroavs)
     if !(( moments.evolve_upar || moments.evolve_ppar) &&
               istage == length(scratch)-1)
         # _block_synchronize() here because phi needs to be read on different ranks than
@@ -1441,23 +1422,61 @@ end
 """
 update velocity moments that are calculable from the evolved charged pdf
 """
-function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition)
+function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
+    r_spectral, geometry, gyroavs, scratch_dummy, z_advect, diagnostic_moments)
+    
+    if composition.gyrokinetic_ions
+        ff = scratch_dummy.buffer_vpavperpzrs_1
+        # fill buffer with ring-averaged F (gyroaverage at fixed position)
+        gyroaverage_pdf!(ff,new_scratch.pdf,gyroavs,vpa,vperp,z,r,composition)
+    else
+        ff = new_scratch.pdf
+    end
+    
     if !moments.evolve_density
         update_density!(new_scratch.density, moments.charged.dens_updated,
-                        new_scratch.pdf, vpa, vperp, z, r, composition)
+                        ff, vpa, vperp, z, r, composition)
     end
     if !moments.evolve_upar
         update_upar!(new_scratch.upar, moments.charged.upar_updated, new_scratch.density,
-                     new_scratch.ppar, new_scratch.pdf, vpa, vperp, z, r, composition,
+                     new_scratch.ppar, ff, vpa, vperp, z, r, composition,
                      moments.evolve_density, moments.evolve_ppar)
     end
     if !moments.evolve_ppar
         # update_ppar! calculates (p_parallel/m_s N_e c_s^2) + (n_s/N_e)*(upar_s/c_s)^2 = (1/√π)∫d(vpa/c_s) (vpa/c_s)^2 * (√π f_s c_s / N_e)
         update_ppar!(new_scratch.ppar, moments.charged.ppar_updated, new_scratch.density,
-                     new_scratch.upar, new_scratch.pdf, vpa, vperp, z, r, composition,
+                     new_scratch.upar, ff, vpa, vperp, z, r, composition,
                      moments.evolve_density, moments.evolve_upar)
     end 
-    update_pperp!(new_scratch.pperp, new_scratch.pdf, vpa, vperp, z, r, composition)
+    update_pperp!(new_scratch.pperp, ff, vpa, vperp, z, r, composition)
+    
+    # if diagnostic time step/RK stage
+    # update the diagnostic chodura condition
+    if diagnostic_moments
+        update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
+    end
+    # update the thermal speed
+    begin_s_r_z_region()
+    try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
+        update_vth!(moments.charged.vth, new_scratch.ppar, new_scratch.pperp, new_scratch.density, vperp, z, r, composition)
+    catch e
+        if global_size[] > 1
+            println("ERROR: error calculating vth in time_advance.jl")
+            println(e)
+            display(stacktrace(catch_backtrace()))
+            flush(stdout)
+            flush(stderr)
+            MPI.Abort(comm_world, 1)
+        end
+        rethrow(e)
+    end
+    # update the parallel heat flux
+    update_qpar!(moments.charged.qpar, moments.charged.qpar_updated, new_scratch.density,
+                 new_scratch.upar, moments.charged.vth, ff, vpa, vperp, z, r,
+                 composition, moments.evolve_density, moments.evolve_upar,
+                 moments.evolve_ppar)
+    # add further moments to be computed here
+    
 end
 
 """
@@ -1487,8 +1506,8 @@ end
 """
 function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects, composition, collisions,
-           geometry, boundary_distributions, external_source_settings, num_diss_params,
-           advance, fp_arrays, scratch_dummy, manufactured_source_list,  istep)
+           geometry, gyroavs, boundary_distributions, external_source_settings, num_diss_params,
+           advance, fp_arrays, scratch_dummy, manufactured_source_list, diagnostic_checks, istep)
 
     begin_s_r_z_region()
 
@@ -1534,10 +1553,11 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
             t_input, spectral_objects, composition,
             collisions, geometry, scratch_dummy, manufactured_source_list,
             external_source_settings, num_diss_params, advance, fp_arrays, istage)
+        diagnostic_moments = diagnostic_checks && istage == n_rk_stages
         @views rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr,
                           vzeta, vpa, vperp, z, r, spectral_objects, advect_objects,
                           advance.rk_coefs[:,istage], istage, composition, geometry,
-                          num_diss_params, advance, scratch_dummy)
+                          gyroavs, num_diss_params, advance, scratch_dummy, diagnostic_moments)
     end
 
     istage = n_rk_stages+1

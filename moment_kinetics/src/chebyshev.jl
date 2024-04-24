@@ -667,7 +667,7 @@ function chebyshev_radau_weights(moments::Array{mk_float,1}, n)
     # create array for moments on extended [0,2π] domain in theta = ArcCos[z]
     fext = allocate_complex(nfft)
     # make fft plan
-    forward_transform = plan_fft!(fext, flags=FFTW.WISDOM_ONLY)
+    forward_transform = plan_fft!(fext, flags=FFTW.ESTIMATE)
     # assign values of fext from moments 
     @inbounds begin
         for j ∈ 1:n
