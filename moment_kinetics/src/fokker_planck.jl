@@ -97,7 +97,7 @@ function setup_fkpl_collisions_input(toml_input::Dict, reference_params)
        sd_q = 1.0,
        sd_mi = 0.25,
        sd_me = 0.25/1836.0,
-       Zi = 2.0)
+       Zi = 1.0)
     # ensure that the collision frequency is consistent with the input option
     frequency_option = input_section["frequency_option"]
     if frequency_option == "reference_parameters"
