@@ -22,6 +22,7 @@ using ..communication
 using ..coordinates
 using ..input_structs: set_defaults_and_check_section!, Dict_to_NamedTuple
 using ..looping
+using ..velocity_moments: get_density
 
 using MPI
 
@@ -44,14 +45,20 @@ function setup_external_sources!(input_dict, r, z)
                      input_dict, neutrals ? "neutral_source" : "ion_source";
                      active=false,
                      source_strength=1.0,
+                     source_n=1.0,
                      source_T=neutrals ? get(input_dict, "T_wall", 1.0) : 1.0,
+                     source_v0=0.0, # birth speed for "alphas" option
+                     source_vpa0=0.0, # birth vpa for "beam" option
+                     source_vperp0=0.0, # birth vperp for "beam" option
+                     sink_strength=1.0, # strength of sink in "alphas-with-losses" & "beam-with-losses" option
+                     sink_vth=0.0, # thermal speed for sink in "alphas-with-losses" & "beam-with-losses" option 
                      r_profile="constant",
                      r_width=1.0,
                      r_relative_minimum=0.0,
                      z_profile="constant",
                      z_width=1.0,
                      z_relative_minimum=0.0,
-                     source_type="Maxwellian",
+                     source_type="Maxwellian", # "energy", "alphas", "alphas-with-losses", "beam", "beam-with-losses"
                      PI_density_controller_P=0.0,
                      PI_density_controller_I=0.0,
                      PI_density_target_amplitude=1.0,
@@ -170,7 +177,7 @@ function setup_external_sources!(input_dict, r, z)
             PI_density_target_ir = nothing
             PI_density_target_iz = nothing
             PI_density_target_rank = nothing
-        elseif input["source_type"] ∈ ("Maxwellian", "energy")
+        elseif input["source_type"] ∈ ("Maxwellian", "energy", "alphas", "alphas-with-losses", "beam", "beam-with-losses")
             PI_density_target = nothing
             PI_controller_amplitude = nothing
             controller_source_profile = nothing
@@ -418,11 +425,12 @@ end
 
 Add external source term to the ion kinetic equation.
 """
-function external_ion_source!(pdf, fvec, moments, ion_source_settings, vperp, vpa, dt)
-    begin_s_r_z_vperp_region()
-
+function external_ion_source!(pdf, fvec, moments, ion_source_settings, vperp, vpa, dt, scratch_dummy)
+    
+    source_type =  ion_source_settings.source_type
     source_amplitude = moments.charged.external_source_amplitude
     source_T = ion_source_settings.source_T
+    source_n = ion_source_settings.source_n
     if vperp.n == 1
         vth_factor = 1.0 / sqrt(source_T)
     else
@@ -430,77 +438,198 @@ function external_ion_source!(pdf, fvec, moments, ion_source_settings, vperp, vp
     end
     vpa_grid = vpa.grid
     vperp_grid = vperp.grid
+    if source_type in ("Maxwellian","energy")
+        begin_s_r_z_vperp_region()
+        if moments.evolve_ppar && moments.evolve_upar && moments.evolve_density
+            vth = moments.charged.vth
+            density = fvec.density
+            upar = fvec.upar
+            @loop_s_r_z is ir iz begin
+                this_vth = vth[iz,ir,is]
+                this_upar = upar[iz,ir,is]
+                this_prefactor = dt * this_vth / density[iz,ir,is] * vth_factor *
+                                 source_amplitude[iz,ir]
+                @loop_vperp_vpa ivperp ivpa begin
+                    # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
+                    # normalisation of F
+                    vperp_unnorm = vperp_grid[ivperp] * this_vth
+                    vpa_unnorm = vpa_grid[ivpa] * this_vth + this_upar
+                    pdf[ivpa,ivperp,iz,ir,is] +=
+                        this_prefactor * source_n *
+                        exp(-(vperp_unnorm^2 + vpa_unnorm^2) / source_T)
+                end
+            end
+        elseif moments.evolve_upar && moments.evolve_density
+            density = fvec.density
+            upar = fvec.upar
+            @loop_s_r_z is ir iz begin
+                this_upar = upar[iz,ir,is]
+                this_prefactor = dt / density[iz,ir,is] * vth_factor * source_amplitude[iz,ir]
+                @loop_vperp_vpa ivperp ivpa begin
+                    # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
+                    # normalisation of F
+                    vpa_unnorm = vpa_grid[ivpa] + this_upar
+                    pdf[ivpa,ivperp,iz,ir,is] +=
+                        this_prefactor * source_n *
+                        exp(-(vperp_grid[ivperp]^2 + vpa_unnorm^2) / source_T)
+                end
+            end
+        elseif moments.evolve_density
+            density = fvec.density
+            @loop_s_r_z is ir iz begin
+                this_prefactor = dt / density[iz,ir,is] * vth_factor * source_amplitude[iz,ir]
+                @loop_vperp_vpa ivperp ivpa begin
+                    # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
+                    # normalisation of F
+                    pdf[ivpa,ivperp,iz,ir,is] +=
+                        this_prefactor * source_n *
+                        exp(-(vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2) / source_T)
+                end
+            end
+        elseif !moments.evolve_ppar && !moments.evolve_upar && !moments.evolve_density
+            @loop_s_r_z is ir iz begin
+                this_prefactor = dt * vth_factor * source_amplitude[iz,ir]
+                @loop_vperp_vpa ivperp ivpa begin
+                    # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
+                    # normalisation of F
+                    pdf[ivpa,ivperp,iz,ir,is] +=
+                        this_prefactor * source_n *
+                        exp(-(vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2) / source_T)
+                end
+            end
+        else
+            error("Unsupported combination evolve_density=$(moments.evolve_density), "
+                  * "evolve_upar=$(moments.evolve_upar), evolve_ppar=$(moments.evolve_ppar)")
+        end
 
-    if moments.evolve_ppar && moments.evolve_upar && moments.evolve_density
-        vth = moments.charged.vth
-        density = fvec.density
-        upar = fvec.upar
-        @loop_s_r_z is ir iz begin
-            this_vth = vth[iz,ir,is]
-            this_upar = upar[iz,ir,is]
-            this_prefactor = dt * this_vth / density[iz,ir,is] * vth_factor *
-                             source_amplitude[iz,ir]
-            @loop_vperp_vpa ivperp ivpa begin
-                # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
-                # normalisation of F
-                vperp_unnorm = vperp_grid[ivperp] * this_vth
-                vpa_unnorm = vpa_grid[ivpa] * this_vth + this_upar
-                pdf[ivpa,ivperp,iz,ir,is] +=
-                    this_prefactor *
-                    exp(-(vperp_unnorm^2 + vpa_unnorm^2) / source_T)
+        if source_type == "energy"
+            # Take particles out of pdf so source does not change density
+            @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+                pdf[ivpa,ivperp,iz,ir,is] -= dt * source_amplitude[iz,ir] *
+                    fvec.pdf[ivpa,ivperp,iz,ir,is]
             end
         end
-    elseif moments.evolve_upar && moments.evolve_density
-        density = fvec.density
-        upar = fvec.upar
-        @loop_s_r_z is ir iz begin
-            this_upar = upar[iz,ir,is]
-            this_prefactor = dt / density[iz,ir,is] * vth_factor * source_amplitude[iz,ir]
-            @loop_vperp_vpa ivperp ivpa begin
-                # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
-                # normalisation of F
-                vpa_unnorm = vpa_grid[ivpa] + this_upar
-                pdf[ivpa,ivperp,iz,ir,is] +=
-                    this_prefactor *
-                    exp(-(vperp_grid[ivperp]^2 + vpa_unnorm^2) / source_T)
-            end
+    elseif source_type == "alphas" || source_type == "alphas-with-losses"
+        begin_s_r_z_region()
+        source_v0 = ion_source_settings.source_v0
+        if !(source_v0 > 1.0e-8)
+            error("source_v0=$source_v0 < 1.0e-8")
         end
-    elseif moments.evolve_density
-        density = fvec.density
-        @loop_s_r_z is ir iz begin
-            this_prefactor = dt / density[iz,ir,is] * vth_factor * source_amplitude[iz,ir]
-            @loop_vperp_vpa ivperp ivpa begin
-                # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
-                # normalisation of F
-                pdf[ivpa,ivperp,iz,ir,is] +=
-                    this_prefactor *
-                    exp(-(vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2) / source_T)
+        dummy_vpavperp = scratch_dummy.dummy_vpavperp
+        if !moments.evolve_ppar && !moments.evolve_upar && !moments.evolve_density
+            @loop_s_r_z is ir iz begin
+                this_prefactor = dt * source_amplitude[iz,ir]
+                # first assign source to local scratch array
+                @loop_vperp_vpa ivperp ivpa begin
+                    v2 = vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2
+                    fac = 2.0/(source_T*source_v0^2)
+                    dummy_vpavperp[ivpa,ivperp] = exp(-fac*(v2 - source_v0^2)^2 )
+                end
+                # get the density for normalisation purposes
+                normfac = get_density(dummy_vpavperp, vpa, vperp)
+                # add the source
+                @loop_vperp_vpa ivperp ivpa begin
+                    # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
+                    # normalisation of F
+                    pdf[ivpa,ivperp,iz,ir,is] +=
+                        this_prefactor * dummy_vpavperp[ivpa,ivperp] / normfac
+                end
             end
+            
+            if source_type == "alphas-with-losses"
+                sink_vth = ion_source_settings.sink_vth
+                sink_strength = ion_source_settings.sink_strength
+                if !(sink_vth > 1.0e-8)
+                   error("sink_vth=$sink_vth < 1.0e-8")
+                end
+                # subtract a sink function representing the loss of slow ash particles
+                @loop_s_r_z is ir iz begin
+                    # first assign sink to local scratch array
+                    @loop_vperp_vpa ivperp ivpa begin
+                        v2 = vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2
+                        fac = 1.0/(sink_vth^2)
+                        dummy_vpavperp[ivpa,ivperp] = (1.0/(sink_vth^3))*exp(-fac*v2)
+                    end
+                    # numerical correction to normalisation
+                    normfac = get_density(dummy_vpavperp, vpa, vperp)
+                    # println("sink norm", normfac)
+                    # add the source
+                    @loop_vperp_vpa ivperp ivpa begin
+                        # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
+                        # normalisation of F
+                        pdf[ivpa,ivperp,iz,ir,is] -=
+                            dt * sink_strength * dummy_vpavperp[ivpa,ivperp] * pdf[ivpa,ivperp,iz,ir,is] / normfac
+                    end
+                end
+            end
+        else
+            error("Unsupported combination in source_type=$(source_type) evolve_density=$(moments.evolve_density), "
+                  * "evolve_upar=$(moments.evolve_upar), evolve_ppar=$(moments.evolve_ppar)")
         end
-    elseif !moments.evolve_ppar && !moments.evolve_upar && !moments.evolve_density
-        @loop_s_r_z is ir iz begin
-            this_prefactor = dt * vth_factor * source_amplitude[iz,ir]
-            @loop_vperp_vpa ivperp ivpa begin
-                # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
-                # normalisation of F
-                pdf[ivpa,ivperp,iz,ir,is] +=
-                    this_prefactor *
-                    exp(-(vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2) / source_T)
+    elseif source_type == "beam" || source_type == "beam-with-losses"
+        begin_s_r_z_region()
+        source_vpa0 = ion_source_settings.source_vpa0
+        source_vperp0 = ion_source_settings.source_vperp0
+        if !(source_vpa0 > 1.0e-8)
+            error("source_vpa0=$source_vpa0 < 1.0e-8")
+        end
+        if !(source_vperp0 > 1.0e-8)
+            error("source_vperp0=$source_vperp0 < 1.0e-8")
+        end
+        dummy_vpavperp = scratch_dummy.dummy_vpavperp
+        if !moments.evolve_ppar && !moments.evolve_upar && !moments.evolve_density
+            @loop_s_r_z is ir iz begin
+                this_prefactor = dt * source_amplitude[iz,ir]
+                # first assign source to local scratch array
+                @loop_vperp_vpa ivperp ivpa begin
+                    vth0  = sqrt(2.0*source_T) # sqrt(2 T / m), m = mref = 1
+                    v2 = ((vperp_grid[ivperp]-source_vperp0)^2 + (vpa_grid[ivpa]-source_vpa0)^2)/(vth0^2)
+                    dummy_vpavperp[ivpa,ivperp] = (1.0/vth0^3)*exp(-v2)
+                end
+                # get the density for normalisation purposes
+                normfac = get_density(dummy_vpavperp, vpa, vperp)
+                # add the source
+                @loop_vperp_vpa ivperp ivpa begin
+                    # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
+                    # normalisation of F
+                    pdf[ivpa,ivperp,iz,ir,is] +=
+                        this_prefactor * dummy_vpavperp[ivpa,ivperp] / normfac
+                end
             end
+            
+            if source_type == "beam-with-losses"
+                sink_vth = ion_source_settings.sink_vth
+                sink_strength = ion_source_settings.sink_strength
+                if !(sink_vth > 1.0e-8)
+                   error("sink_vth=$sink_vth < 1.0e-8")
+                end
+                # subtract a sink function representing the loss of slow ash particles
+                @loop_s_r_z is ir iz begin
+                    # first assign sink to local scratch array
+                    @loop_vperp_vpa ivperp ivpa begin
+                        v2 = vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2
+                        fac = 1.0/(sink_vth^2)
+                        dummy_vpavperp[ivpa,ivperp] = (1.0/(sink_vth^3))*exp(-fac*v2)
+                    end
+                    # numerical correction to normalisation
+                    normfac = get_density(dummy_vpavperp, vpa, vperp)
+                    # println("sink norm", normfac)
+                    # add the source
+                    @loop_vperp_vpa ivperp ivpa begin
+                        # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
+                        # normalisation of F
+                        pdf[ivpa,ivperp,iz,ir,is] -=
+                            dt * sink_strength * dummy_vpavperp[ivpa,ivperp] * pdf[ivpa,ivperp,iz,ir,is] / normfac
+                    end
+                end
+            end
+        else
+            error("Unsupported combination in source_type=$(source_type) evolve_density=$(moments.evolve_density), "
+                  * "evolve_upar=$(moments.evolve_upar), evolve_ppar=$(moments.evolve_ppar)")
         end
     else
-        error("Unsupported combination evolve_density=$(moments.evolve_density), "
-              * "evolve_upar=$(moments.evolve_upar), evolve_ppar=$(moments.evolve_ppar)")
+        error("Unsupported source_type=$(source_type) ")
     end
-
-    if ion_source_settings.source_type == "energy"
-        # Take particles out of pdf so source does not change density
-        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-            pdf[ivpa,ivperp,iz,ir,is] -= dt * source_amplitude[iz,ir] *
-                fvec.pdf[ivpa,ivperp,iz,ir,is]
-        end
-    end
-
     return nothing
 end
 
@@ -716,6 +845,14 @@ function external_ion_source_controller!(fvec_in, moments, ion_source_settings, 
                     amplitude[iz,ir]
             end
         end
+    elseif ion_source_settings.source_type == "alphas"
+        # do nothing
+    elseif ion_source_settings.source_type == "alphas-with-losses"
+        # do nothing
+    elseif ion_source_settings.source_type == "beam"
+        # do nothing
+    elseif ion_source_settings.source_type == "beam-with-losses"
+        # do nothing
     else
         error("Unrecognised source_type=$(ion_source_settings.source_type)")
     end
