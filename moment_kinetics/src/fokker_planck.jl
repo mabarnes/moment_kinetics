@@ -91,11 +91,13 @@ function setup_fkpl_collisions_input(toml_input::Dict, reference_params)
        frequency_option = "manual",
        self_collisions = true,
        slowing_down_test = false,
+       #normalise_to_slowing_down_time = false,
        sd_density = 1.0,
        sd_temp = 0.01,
-       sd_q = 0.5,
+       sd_q = 1.0,
        sd_mi = 0.25,
-       sd_me = 0.25/1836.0)
+       sd_me = 0.25/1836.0,
+       Zi = 2.0)
     # ensure that the collision frequency is consistent with the input option
     frequency_option = input_section["frequency_option"]
     if frequency_option == "reference_parameters"
@@ -114,6 +116,35 @@ function setup_fkpl_collisions_input(toml_input::Dict, reference_params)
     end
     input = Dict(Symbol(k)=>v for (k,v) in input_section)
     #println(input)
+    if input_section["slowing_down_test"]
+        # calculate nu_alphae and vc3 (critical speed of slowing down)
+        # as a diagnostic to aid timestep choice
+        # nu_alphae/nuref
+        Zalpha = input_section["Zi"]
+        Zi = input_section["sd_q"]
+        ni = input_section["sd_density"]
+        ne = Zi*ni+Zalpha # assume unit density for alphas in initial state
+        Te = input_section["sd_temp"]
+        me = input_section["sd_me"]
+        mi = input_section["sd_mi"]
+        nu_alphae = (8.0/(3.0*sqrt(pi)))*ne*sqrt(me)*(Te^(-1.5))*(Zalpha^(2.0))
+        vc3 = (3.0/4.0)*sqrt(pi)*(Zi^2)*(ni/ne)*(1.0/mi)*(1.0/sqrt(me))*(Te^(1.5))
+        nu_alphaalpha = Zalpha^4
+        nu_alphai = nu_alphae*vc3
+        if global_rank[] == 0
+            println("slowing_down_test = true")
+            println("nu_alphaalpha/nuref = $nu_alphaalpha")
+            println("nu_alphai/nuref = $nu_alphai")
+            println("nu_alphae/nuref = $nu_alphae")
+            println("vc3/cref^3 = $vc3")
+            println("critical speed vc/cref = ",vc3^(1.0/3.0))
+        end
+        #if input_section["normalise_to_slowing_down_time"]
+        #    nuii = input_section["nuii"]
+        #    input_section["nuii"] = nuii/nu_alphae
+        #end
+        #println(input_section["nuii"])
+    end
     return fkpl_collisions_input(; input...)
 end
 
@@ -234,14 +265,16 @@ function explicit_fp_collisions_weak_form_Maxwellian_cross_species!(pdf_out,pdf_
     
     fkin = collisions.fkpl
     # masses charge numbers and collision frequencies
-    mref = 1.0
-    Zref = 1.0
-    nuref = fkin.nuii # generalise!
+    mref = 1.0 # generalise if multiple ions evolved
+    Zs = fkin.Zi # generalise if multiple ions evolved
+    nuref = fkin.nuii # generalise if multiple ions evolved
     msp = [fkin.sd_mi, fkin.sd_me]
-    Zsp = [fkin.sd_q, fkin.sd_q]
+    Zsp = [fkin.sd_q, -1.0]
     # assume here that ne = sum_i n_i and that initial condition
     # for beam ions has unit density
-    densp = [fkin.sd_density, fkin.sd_density+1.0]
+    ns = 1.0 # initial density of evolved ions (hardcode to be the same as initial conditions)
+    # get electron density from quasineutrality ne = sum_s Zs ns
+    densp = [fkin.sd_density, fkin.sd_q*fkin.sd_density+ns*Zs] 
     uparsp = [0.0, 0.0]
     vthsp = [sqrt(fkin.sd_temp/msp[1]), sqrt(fkin.sd_temp/msp[2])]
     
@@ -250,7 +283,7 @@ function explicit_fp_collisions_weak_form_Maxwellian_cross_species!(pdf_out,pdf_
     @loop_s_r_z is ir iz begin
         # computes sum over s' of  C[Fs,Fs'] with Fs' an assumed Maxwellian 
         @views fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!(pdf_in[:,:,iz,ir,is],
-                                     nuref,mref,Zref,msp,Zsp,densp,uparsp,vthsp,
+                                     nuref,mref,Zs,msp,Zsp,densp,uparsp,vthsp,
                                      fkpl_arrays,vperp,vpa,vperp_spectral,vpa_spectral)
         # enforce the boundary conditions on CC before it is used for timestepping
         enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
@@ -296,7 +329,9 @@ function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,dSdt,compos
     
     # masses and collision frequencies
     ms, msp = 1.0, 1.0 # generalise!
-    nussp = collisions.fkpl.nuii # generalise!
+    nuref = collisions.fkpl.nuii # generalise!
+    Zi = collisions.fkpl.Zi # generalise!
+    nussp = nuref*(Zi^4) # include charge number factor for self collisions
     # N.B. parallelisation using special 'anyv' region
     begin_s_r_z_anyv_region()
     @loop_s_r_z is ir iz begin
@@ -337,12 +372,18 @@ Function for evaluating \$C_{ss'} = C_{ss'}[F_s,F_{s'}]\$
 
 The result is stored in the array `fkpl_arrays.CC`.
 
-The normalised collision frequency is defined by
+The normalised collision frequency for collisions between species s and s' is defined by
 ```math
 \\tilde{\\nu}_{ss'} = \\frac{L_{\\mathrm{ref}}}{c_{\\mathrm{ref}}}\\frac{\\gamma_{ss'} n_\\mathrm{ref}}{m_s^2 c_\\mathrm{ref}^3}
 ```
 with \$\\gamma_{ss'} = 2 \\pi (Z_s Z_{s'})^2 e^4 \\ln \\Lambda_{ss'} / (4 \\pi
 \\epsilon_0)^2\$.
+The input parameter to this code is 
+```math
+\\tilde{\\nu}_{ii} = \\frac{L_{\\mathrm{ref}}}{c_{\\mathrm{ref}}}\\frac{\\gamma_\\mathrm{ref} n_\\mathrm{ref}}{m_\\mathrm{ref}^2 c_\\mathrm{ref}^3}
+```
+with \$\\gamma_\\mathrm{ref} = 2 \\pi e^4 \\ln \\Lambda_{ii} / (4 \\pi
+\\epsilon_0)^2\$. This means that \$\\tilde{\\nu}_{ss'} = (Z_s Z_{s'})^2\\tilde{\\nu}_\\mathrm{ref}\$ and this conversion is handled explicitly in the code with the charge number input provided by the user.
 """
 function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp,
                                              fkpl_arrays::fokkerplanck_weakform_arrays_struct,
@@ -513,7 +554,7 @@ function fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!(ffs_in,
         dens = densp[isp]
         upar = uparsp[isp]
         vth = vthsp[isp]
-        ZZ = (Zsp[isp]/Zs)^2 # factor from gamma_ss'
+        ZZ = (Zsp[isp]*Zs)^2 # factor from gamma_ss'
         @loop_vperp_vpa ivperp ivpa begin
             d2Gdvpa2[ivpa,ivperp] += ZZ*d2Gdvpa2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             d2Gdvperp2[ivpa,ivperp] += ZZ*d2Gdvperp2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
