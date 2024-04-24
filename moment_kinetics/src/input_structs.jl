@@ -334,8 +334,6 @@ Base.@kwdef struct fkpl_collisions_input
     # option to determine if cross-collisions against fixed Maxwellians are used
     slowing_down_test::Bool
     # Setting to switch between different options for Fokker-Planck collision frequency input
-    #normalise_to_slowing_down_time::Bool
-    # Setting to force nuii -> nuii*(1/nu_alphae) so that tref = 1/nu_alphae
     frequency_option::String # "manual" # "reference_parameters"
     # options for fixed Maxwellian species in slowing down test operator
     # ion density - electron density determined from quasineutrality

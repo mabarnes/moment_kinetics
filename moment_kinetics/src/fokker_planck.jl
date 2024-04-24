@@ -91,7 +91,6 @@ function setup_fkpl_collisions_input(toml_input::Dict, reference_params)
        frequency_option = "reference_parameters",
        self_collisions = true,
        slowing_down_test = false,
-       #normalise_to_slowing_down_time = false,
        sd_density = 1.0,
        sd_temp = 0.01,
        sd_q = 1.0,
@@ -139,11 +138,6 @@ function setup_fkpl_collisions_input(toml_input::Dict, reference_params)
             println("vc3/cref^3 = $vc3")
             println("critical speed vc/cref = ",vc3^(1.0/3.0))
         end
-        #if input_section["normalise_to_slowing_down_time"]
-        #    nuii = input_section["nuii"]
-        #    input_section["nuii"] = nuii/nu_alphae
-        #end
-        #println(input_section["nuii"])
     end
     return fkpl_collisions_input(; input...)
 end
