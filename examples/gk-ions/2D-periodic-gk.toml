@@ -1,16 +1,13 @@
-steady_state_residual = true
-converged_residual_value = 1.0e-3
-runtime_plots = true
 n_ion_species = 1
 n_neutral_species = 0
 boltzmann_electron_response = true
-evolve_moments_density = true
+evolve_moments_density = false
 evolve_moments_parallel_flow = false
 evolve_moments_parallel_pressure = false
-evolve_moments_conservation = true
-recycling_fraction = 0.5
-T_e = 0.2 # 1.0
-T_wall = 0.1
+evolve_moments_conservation = false
+gyrokinetic_ions = true
+T_e = 1.0
+T_wall = 1.0
 initial_density1 = 1.0
 initial_temperature1 = 1.0
 z_IC_option1 = "gaussian"
@@ -43,46 +40,48 @@ vpa_IC_upar_amplitude2 = 0.0
 vpa_IC_upar_phase2 = 0.0
 vpa_IC_temperature_amplitude2 = 0.0
 vpa_IC_temperature_phase2 = 0.0
-#charge_exchange_frequency = 0.75
-#ionization_frequency = 0.5
-r_ngrid = 1
-r_nelement = 1
-z_ngrid = 9
-z_nelement = 32
-#z_nelement_local = 4
-z_bc = "wall"
+charge_exchange_frequency = 0.5
+ionization_frequency = 0.05
+constant_ionization_rate = true
+nstep = 50
+dt = 1.0e-3
+nwrite = 10
+nwrite_dfns = 10
+use_semi_lagrange = false
+n_rk_stages = 4
+split_operators = false
+r_ngrid = 5
+r_nelement = 2
+r_bc = "periodic"
+z_ngrid = 5
+z_nelement = 2
+z_bc = "periodic"
 z_discretization = "chebyshev_pseudospectral"
-vpa_ngrid = 10
-vpa_nelement = 63
-vpa_L = 18.0
+vpa_ngrid = 5
+vpa_nelement = 2
+vpa_L = 6.0
 vpa_bc = "zero"
 vpa_discretization = "chebyshev_pseudospectral"
-vz_ngrid = 10
-vz_nelement = 63
+vperp_ngrid = 5
+vperp_nelement = 1
+vperp_L = 3.0
+vperp_bc = "zero"
+vperp_discretization = "chebyshev_pseudospectral"
+vz_ngrid = 9
+vz_nelement = 64
 vz_L = 18.0
-vz_bc = "zero"
+vz_bc = "both_zero"
 vz_discretization = "chebyshev_pseudospectral"
 
-[timestepping]
-nstep = 100000
-dt = 1.0e-4
-nwrite = 5000
-nwrite_dfns = 5000
-split_operators = false
-
-[ion_source]
-active = true
-z_profile = "gaussian"
-z_width = 0.125
-source_strength = 8.0
-source_T = 1.0
-
 [numerical_dissipation]
-#vpa_dissipation_coefficient = 1.0e-1
-#vpa_dissipation_coefficient = 1.0e-2
-#vpa_dissipation_coefficient = 1.0e-3
+vpa_dissipation_coefficient = 1.0e-3 #1.0e-2 #1.0e-1
+vperp_dissipation_coefficient = 1.0e-3 #1.0e-2 #1.0e-1
+#r_disspipation_coefficient = 1.0e-3
 #force_minimum_pdf_value = 0.0
 
-[krook_collisions]
-use_krook = true
-frequency_option = "reference_parameters"
+[geometry]
+#option="1D-mirror"
+DeltaB=0.0
+option="constant-helical"
+pitch=0.1
+rhostar= 0.1

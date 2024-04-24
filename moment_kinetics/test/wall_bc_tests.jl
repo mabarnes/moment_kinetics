@@ -214,7 +214,7 @@ function run_test(test_input, expected_phi, tolerance; args...)
                            test_input["z_nelement"], nrank_per_block, irank, 1.0,
                            test_input["z_discretization"], "", cheb_option, test_input["z_bc"],
                            adv_input, comm, test_input["z_element_spacing_option"])
-        z, z_spectral = define_coordinate(input)
+        z, z_spectral = define_coordinate(input; ignore_MPI=true)
 
         # Cross comparison of all discretizations to same benchmark
         if test_input["z_element_spacing_option"] == "uniform" 

@@ -98,6 +98,8 @@ struct coordinate
     element_shift::Array{mk_float,1}
     # option used to set up element spacing
     element_spacing_option::String
+    # list of element boundaries
+    element_boundaries::Array{mk_float,1}
 end
 
 """
@@ -105,7 +107,8 @@ create arrays associated with a given coordinate,
 setup the coordinate grid, and populate the coordinate structure
 containing all of this information
 """
-function define_coordinate(input, parallel_io::Bool=false; init_YY::Bool=true)
+function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing,
+                           ignore_MPI=false, init_YY::Bool=true)
     # total number of grid points is ngrid for the first element
     # plus ngrid-1 unique points for each additional element due
     # to the repetition of a point at the element boundary
@@ -166,7 +169,7 @@ function define_coordinate(input, parallel_io::Bool=false; init_YY::Bool=true)
         cell_width, igrid, ielement, imin, imax, igrid_full, input.discretization, input.fd_option, input.cheb_option,
         input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
         scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
-        local_io_range, global_io_range, element_scale, element_shift, input.element_spacing_option)
+        local_io_range, global_io_range, element_scale, element_shift, input.element_spacing_option, element_boundaries)
 
     if coord.n == 1 && occursin("v", coord.name)
         spectral = null_velocity_dimension_info()
@@ -178,7 +181,7 @@ function define_coordinate(input, parallel_io::Bool=false; init_YY::Bool=true)
         # create arrays needed for explicit Chebyshev pseudospectral treatment in this
         # coordinate and create the plans for the forward and backward fast Chebyshev
         # transforms
-        spectral = setup_chebyshev_pseudospectral(coord)
+        spectral = setup_chebyshev_pseudospectral(coord, run_directory; ignore_MPI=ignore_MPI)
         # obtain the local derivatives of the uniform grid with respect to the used grid
         derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
     elseif input.discretization == "gausslegendre_pseudospectral"
