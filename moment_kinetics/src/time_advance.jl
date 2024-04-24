@@ -495,7 +495,7 @@ function setup_advance_flags(moments, composition, t_input, collisions,
         advance_vperp_advection = vperp.n > 1 && z.n > 1
         advance_z_advection = z.n > 1
         advance_r_advection = r.n > 1
-        if collisions.nuii > 0.0 && vperp.n > 1
+        if collisions.fkpl.nuii > 0.0 && vperp.n > 1 
             explicit_weakform_fp_collisions = true
         else
             explicit_weakform_fp_collisions = false    
@@ -545,7 +545,7 @@ function setup_advance_flags(moments, composition, t_input, collisions,
         if collisions.ionization > 0.0 && collisions.constant_ionization_rate
             advance_ionization_source = true
         end
-        if collisions.krook_collision_frequency_prefactor > 0.0
+        if collisions.krook.krook_collision_frequency_prefactor > 0.0
             advance_krook_collisions = true
         end
         advance_external_source = external_source_settings.ion.active
