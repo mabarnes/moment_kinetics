@@ -44,7 +44,7 @@ function runtests()
                                 discretization, fd_option, cheb_option, bc, adv_input, comm,
                                 element_spacing_option)
             # create the coordinate struct 'z'
-            z, spectral = define_coordinate(input)
+            z, spectral = define_coordinate(input; ignore_MPI=true)
 
             test_grid = [z for z in range(-zlim, zlim, length=ntest)]
 
