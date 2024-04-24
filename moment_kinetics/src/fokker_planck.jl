@@ -87,7 +87,7 @@ function setup_fkpl_collisions_input(toml_input::Dict, reference_params)
        # begin default inputs (as kwargs)
        use_fokker_planck = false,
        nuii = -1.0,
-       frequency_option = "manual")
+       frequency_option = "reference_parameters")
        
     # ensure that the collision frequency is consistent with the input option
     frequency_option = input_section["frequency_option"]
