@@ -398,6 +398,14 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     #irank_z = 0
     #nrank_z = 0
 
+    # Create output_dir if it does not exist.
+    if !ignore_MPI
+        if global_rank[] == 0
+            mkpath(output_dir)
+        end
+        _block_synchronize()
+    end
+
     t_input = time_input(nstep, dt, nwrite_moments, nwrite_dfns, n_rk_stages,
                          split_operators, steady_state_residual, converged_residual_value,
                          manufactured_solns_input.use_for_advance, stopfile_name)
@@ -514,29 +522,46 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
                               Dict(Symbol(k)=>v for (k,v) in io_settings)...)
 
     # initialize z grid and write grid point locations to file
-    z, z_spectral = define_coordinate(z_immutable, io_immutable.parallel_io)
+    if ignore_MPI
+        run_directory = nothing
+    else
+        run_directory = output_dir
+    end
+    z, z_spectral = define_coordinate(z_immutable, io_immutable.parallel_io;
+                                      run_directory=run_directory, ignore_MPI=ignore_MPI)
     # initialize r grid and write grid point locations to file
-    r, r_spectral = define_coordinate(r_immutable, io_immutable.parallel_io)
+    r, r_spectral = define_coordinate(r_immutable, io_immutable.parallel_io;
+                                      run_directory=run_directory, ignore_MPI=ignore_MPI)
     # initialize vpa grid and write grid point locations to file
-    vpa, vpa_spectral = define_coordinate(vpa_immutable, io_immutable.parallel_io)
+    vpa, vpa_spectral = define_coordinate(vpa_immutable, io_immutable.parallel_io;
+                                          run_directory=run_directory,
+                                          ignore_MPI=ignore_MPI)
     # initialize vperp grid and write grid point locations to file
-    vperp, vperp_spectral = define_coordinate(vperp_immutable, io_immutable.parallel_io)
+    vperp, vperp_spectral = define_coordinate(vperp_immutable, io_immutable.parallel_io;
+                                              run_directory=run_directory,
+                                              ignore_MPI=ignore_MPI)
     # initialize gyrophase grid and write grid point locations to file
-    gyrophase, gyrophase_spectral = define_coordinate(gyrophase_immutable, io_immutable.parallel_io)
+    gyrophase, gyrophase_spectral = define_coordinate(gyrophase_immutable,
+                                                      io_immutable.parallel_io;
+                                                      run_directory=run_directory,
+                                                      ignore_MPI=ignore_MPI)
     # initialize vz grid and write grid point locations to file
-    vz, vz_spectral = define_coordinate(vz_immutable, io_immutable.parallel_io)
+    vz, vz_spectral = define_coordinate(vz_immutable, io_immutable.parallel_io;
+                                        run_directory=run_directory,
+                                        ignore_MPI=ignore_MPI)
     # initialize vr grid and write grid point locations to file
-    vr, vr_spectral = define_coordinate(vr_immutable, io_immutable.parallel_io)
+    vr, vr_spectral = define_coordinate(vr_immutable, io_immutable.parallel_io;
+                                        run_directory=run_directory,
+                                        ignore_MPI=ignore_MPI)
     # initialize vr grid and write grid point locations to file
-    vzeta, vzeta_spectral = define_coordinate(vzeta_immutable, io_immutable.parallel_io)
+    vzeta, vzeta_spectral = define_coordinate(vzeta_immutable, io_immutable.parallel_io;
+                                              run_directory=run_directory,
+                                              ignore_MPI=ignore_MPI)
 
     external_source_settings = setup_external_sources!(scan_input, r, z)
 
     if global_rank[] == 0 && save_inputs_to_txt
         # Make file to log some information about inputs into.
-        # check to see if output_dir exists in the current directory
-        # if not, create it
-        isdir(output_dir) || mkpath(output_dir)
         io = open_ascii_output_file(string(output_dir,"/",run_name), "input")
     else
         io = devnull

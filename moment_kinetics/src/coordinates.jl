@@ -107,7 +107,8 @@ create arrays associated with a given coordinate,
 setup the coordinate grid, and populate the coordinate structure
 containing all of this information
 """
-function define_coordinate(input, parallel_io::Bool=false; init_YY::Bool=true)
+function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing,
+                           ignore_MPI=false, init_YY::Bool=true)
     # total number of grid points is ngrid for the first element
     # plus ngrid-1 unique points for each additional element due
     # to the repetition of a point at the element boundary
@@ -181,7 +182,7 @@ function define_coordinate(input, parallel_io::Bool=false; init_YY::Bool=true)
         # create arrays needed for explicit Chebyshev pseudospectral treatment in this
         # coordinate and create the plans for the forward and backward fast Chebyshev
         # transforms
-        spectral = setup_chebyshev_pseudospectral(coord)
+        spectral = setup_chebyshev_pseudospectral(coord, run_directory; ignore_MPI=ignore_MPI)
         # obtain the local derivatives of the uniform grid with respect to the used grid
         derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
     elseif input.discretization == "gausslegendre_pseudospectral"
