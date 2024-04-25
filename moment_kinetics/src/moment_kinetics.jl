@@ -29,6 +29,7 @@ include("quadrature.jl")
 include("hermite_spline_interpolation.jl")
 include("derivatives.jl")
 include("input_structs.jl")
+include("runge_kutta.jl")
 include("reference_parameters.jl")
 include("coordinates.jl")
 include("file_io.jl")
@@ -62,10 +63,10 @@ include("force_balance.jl")
 include("source_terms.jl")
 include("numerical_dissipation.jl")
 include("moment_kinetics_input.jl")
+include("utils.jl")
 include("load_data.jl")
 include("parameter_scans.jl")
 include("analysis.jl")
-include("utils.jl")
 include("time_advance.jl")
 
 using TimerOutputs
@@ -328,6 +329,8 @@ function setup_moment_kinetics(input_dict::AbstractDict;
                               external_source_settings, manufactured_solns_input)
         # initialize time variable
         code_time = 0.
+        dt = nothing
+        dt_before_last_fail = nothing
         previous_runs_info = nothing
     else
         restarting = true
@@ -383,11 +386,11 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         MPI.Barrier(comm_world)
 
         # Reload pdf and moments from an existing output file
-        code_time, previous_runs_info, restart_time_index =
+        code_time, dt, dt_before_last_fail, previous_runs_info, restart_time_index =
             reload_evolving_fields!(pdf, moments, boundary_distributions,
                                     backup_prefix_iblock, restart_time_index,
                                     composition, geometry, r, z, vpa, vperp, vzeta, vr,
-                                    vz; run_directory=io_input.output_dir)
+                                    vz)
 
         # Re-initialize the source amplitude here instead of loading it from the restart
         # file so that we can change the settings between restarts.
@@ -400,12 +403,13 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     # the main time advance loop -- including normalisation of f by density if requested
 
     moments, fields, spectral_objects, advect_objects,
-    scratch, advance, fp_arrays, gyroavs, scratch_dummy, manufactured_source_list =
+    scratch, advance, t_params, fp_arrays, gyroavs, scratch_dummy, manufactured_source_list =
         setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, gyrophase, vz_spectral,
             vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral,
-            r_spectral, composition, drive_input, moments, t_input, collisions, species,
-            geometry, boundary_distributions, external_source_settings, num_diss_params,
-            manufactured_solns_input, restarting)
+            r_spectral, composition, drive_input, moments, t_input, code_time, dt,
+            dt_before_last_fail, collisions, species, geometry, boundary_distributions,
+            external_source_settings, num_diss_params, manufactured_solns_input,
+            restarting)
 
     # This is the closest we can get to the end time of the setup before writing it to the
     # output file
@@ -422,14 +426,14 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     # write initial data to binary files
 
     write_moments_data_to_binary(moments, fields, code_time, composition.n_ion_species,
-        composition.n_neutral_species, io_moments, 1, 0.0, r, z)
+        composition.n_neutral_species, io_moments, 1, 0.0, t_params, r, z)
     write_dfns_data_to_binary(pdf.charged.norm, pdf.neutral.norm, moments, fields,
          code_time, composition.n_ion_species, composition.n_neutral_species, io_dfns, 1,
-         0.0, r, z, vperp, vpa, vzeta, vr, vz)
+         0.0, t_params, r, z, vperp, vpa, vzeta, vr, vz)
 
     begin_s_r_z_vperp_region()
 
-    return pdf, scratch, code_time, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
+    return pdf, scratch, code_time, t_params, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
            composition, collisions, geometry, gyroavs, boundary_distributions,
            external_source_settings, num_diss_params, advance, fp_arrays, scratch_dummy,

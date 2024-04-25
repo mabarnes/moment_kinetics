@@ -3,7 +3,7 @@
 module input_structs
 
 export evolve_moments_options
-export time_input
+export time_info
 export advection_input, advection_input_mutable
 export grid_input, grid_input_mutable
 export initial_condition_input, initial_condition_input_mutable
@@ -17,6 +17,7 @@ export geometry_input
 export set_defaults_and_check_top_level!, set_defaults_and_check_section!,
        Dict_to_NamedTuple
 
+using ..communication
 using ..type_definitions: mk_float, mk_int
 
 using MPI
@@ -32,13 +33,42 @@ mutable struct evolve_moments_options
 end
 
 """
+`t_error_sum` is included so that a type which might be mk_float or Float128 can be set by
+an option but known at compile time when a `time_info` struct is passed as a function
+argument.
 """
-struct time_input
+struct time_info{Terrorsum <: Real}
     nstep::mk_int
-    dt::mk_float
-    nwrite_moments::mk_int
-    nwrite_dfns::mk_int
+    end_time::mk_float
+    dt::MPISharedArray{mk_float,1}
+    previous_dt::MPISharedArray{mk_float,1}
+    next_output_time::MPISharedArray{mk_float,1}
+    dt_before_output::MPISharedArray{mk_float,1}
+    dt_before_last_fail::MPISharedArray{mk_float,1}
+    CFL_prefactor::mk_float
+    step_to_output::MPISharedArray{Bool,1}
+    step_counter::Ref{mk_int}
+    failure_counter::Ref{mk_int}
+    failure_caused_by::Vector{mk_int}
+    limit_caused_by::Vector{mk_int}
+    moments_output_times::Vector{mk_float}
+    dfns_output_times::Vector{mk_float}
+    type::String
+    rk_coefs::Array{mk_float,2}
     n_rk_stages::mk_int
+    rk_order::mk_int
+    adaptive::Bool
+    low_storage::Bool
+    rtol::mk_float
+    atol::mk_float
+    atol_upar::mk_float
+    step_update_prefactor::mk_float
+    max_increase_factor::mk_float
+    max_increase_factor_near_last_fail::mk_float
+    last_fail_proximity_factor::mk_float
+    minimum_dt::mk_float
+    maximum_dt::mk_float
+    error_sum_zero::Terrorsum
     split_operators::Bool
     steady_state_residual::Bool
     converged_residual_value::mk_float
@@ -74,7 +104,6 @@ mutable struct advance_info
     neutral_continuity::Bool
     neutral_force_balance::Bool
     neutral_energy::Bool
-    rk_coefs::Array{mk_float,2}
     manufactured_solns_test::Bool
     r_diffusion::Bool #flag to control how r bc is imposed when r diffusion terms are present
     vpa_diffusion::Bool #flag to control how vpa bc is imposed when vpa diffusion terms are present

@@ -41,13 +41,6 @@ constant_ionization_rate = false
 nuii = 1.0
 #nuii_krook = 0.0
 #nuii_pitch = 0.0
-nstep = 5000
-dt = 1.0e-2
-nwrite = 5000
-nwrite_dfns = 5000
-use_semi_lagrange = false
-n_rk_stages = 4
-split_operators = false
 z_ngrid = 1
 z_nelement = 1
 z_nelement_local = 1
@@ -88,6 +81,14 @@ vperp_discretization = "gausslegendre_pseudospectral"
 #vzeta_L = 12.0
 #vzeta_bc = "periodic"
 #vzeta_discretization = "chebyshev_pseudospectral"
+
+[timestepping]
+nstep = 5000
+dt = 1.0e-2
+nwrite = 5000
+nwrite_dfns = 5000
+n_rk_stages = 4
+split_operators = false
 
 #[numerical_dissipation]
 #vpa_dissipation_coefficient = 0.0

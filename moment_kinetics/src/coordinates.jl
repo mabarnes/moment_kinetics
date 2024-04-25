@@ -355,13 +355,14 @@ associated with the cell between adjacent grid points
 function grid_spacing(grid, n)
     # array to contain the cell widths
     d = allocate_float(n)
-    @inbounds begin
-        for i ∈ 2:n
-            d[i-1] =  grid[i]-grid[i-1]
+    if n == 1
+        d[1] = 1.0
+    else
+        d[1] = grid[2] - grid[1]
+        for i ∈ 2:n-1
+            d[i] =  0.5*(grid[i+1]-grid[i-1])
         end
-        # final (nth) entry corresponds to cell beyond the grid boundary
-        # only time this may be needed is if periodic BCs are used
-        d[n] = d[1]
+        d[n] = grid[n] - grid[n-1]
     end
     return d
 end

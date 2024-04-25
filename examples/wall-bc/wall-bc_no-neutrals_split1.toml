@@ -45,13 +45,6 @@ vpa_IC_temperature_amplitude2 = 0.0
 vpa_IC_temperature_phase2 = 0.0
 #charge_exchange_frequency = 0.75
 #ionization_frequency = 0.5
-nstep = 100000
-dt = 1.0e-4
-nwrite = 5000
-nwrite_dfns = 5000
-use_semi_lagrange = false
-n_rk_stages = 4
-split_operators = false
 r_ngrid = 1
 r_nelement = 1
 z_ngrid = 9
@@ -69,6 +62,13 @@ vz_nelement = 63
 vz_L = 18.0
 vz_bc = "zero"
 vz_discretization = "chebyshev_pseudospectral"
+
+[timestepping]
+nstep = 100000
+dt = 1.0e-4
+nwrite = 5000
+nwrite_dfns = 5000
+split_operators = false
 
 [ion_source]
 active = true
