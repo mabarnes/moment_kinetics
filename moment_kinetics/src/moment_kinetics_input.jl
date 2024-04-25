@@ -118,6 +118,9 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     # normalised values used in the code.
     reference_params = setup_reference_parameters(scan_input)
 
+    # Set me_over_mi here so we can use reference_params
+    composition.me_over_mi = reference_params.me / reference_params.mref
+
     ## set geometry_input
     geometry_in = setup_geometry_input(scan_input, get_default_rhostar(reference_params))
     
@@ -1109,8 +1112,9 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     Er_constant = 0.0
     # ratio of the neutral particle mass to the ion particle mass
     mn_over_mi = 1.0
-    # ratio of the electron particle mass to the ion particle mass
-    me_over_mi = 1.0/1836.0/2.0
+    # ratio of the electron particle mass to the ion particle mass - value set later using
+    # reference_params
+    me_over_mi = NaN
     # The ion flux reaching the wall that is recycled as neutrals is reduced by
     # `recycling_fraction` to account for ions absorbed by the wall.
     recycling_fraction = 1.0

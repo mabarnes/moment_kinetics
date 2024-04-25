@@ -356,8 +356,12 @@ end
 """
 Base.@kwdef struct krook_collisions_input
     use_krook::Bool
-    # Coulomb collision rate at the reference density and temperature
-    krook_collision_frequency_prefactor::mk_float#
+    # Ion-ion Coulomb collision rate at the reference density and temperature
+    nuii0::mk_float
+    # Electron-electron Coulomb collision rate at the reference density and temperature
+    nuee0::mk_float
+    # Electron-ion Coulomb collision rate at the reference density and temperature
+    nuei0::mk_float
     # Setting to switch between different options for Krook collision operator
     frequency_option::String # "reference_parameters" # "manual", 
 end

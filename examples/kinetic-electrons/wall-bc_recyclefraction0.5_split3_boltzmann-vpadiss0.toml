@@ -7,7 +7,6 @@ evolve_moments_parallel_flow = true
 evolve_moments_parallel_pressure = true
 evolve_moments_conservation = true
 recycling_fraction = 0.5
-krook_collisions_option = "reference_parameters"
 T_e = 0.2 # 1.0
 T_wall = 0.1
 initial_density1 = 1.0
@@ -93,3 +92,6 @@ force_minimum_pdf_value = 0.0
 #vz_dissipation_coefficient = 1.0e-2
 #vz_dissipation_coefficient = 1.0e-3
 force_minimum_pdf_value = 0.0
+
+[krook_collisions]
+use_krook = true

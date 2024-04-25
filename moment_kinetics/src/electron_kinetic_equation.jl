@@ -1545,7 +1545,7 @@ function electron_kinetic_equation_euler_update!(fvec_out, fvec_in, moments, z, 
     add_dissipation_term!(fvec_out.pdf_electron, fvec_in.pdf_electron, scratch_dummy,
                           z_spectral, z, vpa, vpa_spectral, num_diss_params, dt)
 
-    if collisions.krook_collision_frequency_prefactor_ee > 0.0
+    if collisions.krook.nuee0 > 0.0 || collisions.krook.nuei0 > 0.0
         # Add a Krook collision operator
         # Set dt=-1 as we update the residual here rather than adding an update to
         # 'fvec_out'.

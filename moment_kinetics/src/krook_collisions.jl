@@ -8,7 +8,9 @@ export setup_krook_collisions_input, get_collision_frequency_ii, get_collision_f
 using ..constants
 using ..looping
 using ..input_structs: krook_collisions_input, set_defaults_and_check_section!
-using ..reference_parameters: get_reference_collision_frequency
+using ..reference_parameters: get_reference_collision_frequency_ii,
+                              get_reference_collision_frequency_ee,
+                              get_reference_collision_frequency_ei
 
 
 """
@@ -22,18 +24,24 @@ frequency_option = "manual"
 """
 function setup_krook_collisions_input(toml_input::Dict, reference_params)
     # get reference collision frequency
-    nuii_krook_default = get_reference_collision_frequency(reference_params)
+    nuii_krook_default = get_reference_collision_frequency_ii(reference_params)
+    nuee_krook_default = get_reference_collision_frequency_ee(reference_params)
+    nuei_krook_default = get_reference_collision_frequency_ei(reference_params)
     # read the input toml and specify a sensible default    
     input_section = input_section = set_defaults_and_check_section!(toml_input, "krook_collisions",
        # begin default inputs (as kwargs)
        use_krook = false,
-       krook_collision_frequency_prefactor = -1.0,
+       nuii0 = -1.0,
+       nuee0 = -1.0,
+       nuei0 = -1.0,
        frequency_option = "reference_parameters")
        
     # ensure that the collision frequency is consistent with the input option
     frequency_option = input_section["frequency_option"]
     if frequency_option == "reference_parameters"
-        input_section["krook_collision_frequency_prefactor"] = nuii_krook_default
+        input_section["nuii0"] = nuii_krook_default
+        input_section["nuee0"] = nuee_krook_default
+        input_section["nuei0"] = nuei_krook_default
     elseif frequency_option == "manual" 
         # use the frequency from the input file
         # do nothing
@@ -44,7 +52,9 @@ function setup_krook_collisions_input(toml_input::Dict, reference_params)
     # finally, ensure prefactor < 0 if use_krook is false
     # so that prefactor > 0 is the only check required in the rest of the code
     if !input_section["use_krook"]
-        input_section["krook_collision_frequency_prefactor"] = -1.0
+        input_section["nuii0"] = -1.0
+        input_section["nuee0"] = -1.0
+        input_section["nuei0"] = -1.0
     end
     input = Dict(Symbol(k)=>v for (k,v) in input_section)
     #println(input)
@@ -61,16 +71,20 @@ Calculate the ion-ion collision frequency, depending on the settings/parameters 
 together.
 """
 function get_collision_frequency_ii(collisions, n, vth)
-    if collisions.krook_collisions_option == "reference_parameters"
-        return @. collisions.krook_collision_frequency_prefactor_ii * n * vth^(-3)
-    elseif collisions.krook_collisions_option == "manual"
+    # extract krook options from collisions struct
+    colk = collisions.krook
+    nuii0 = colk.nuii0
+    frequency_option = colk.frequency_option
+    if frequency_option == "reference_parameters"
+        return @. nuii0 * n * vth^(-3)
+    elseif frequency_option == "manual"
         # Include 0.0*n so that the result gets promoted to an array if n is an array,
         # which hopefully means this function will have a fixed return type given the
         # types of the arguments (we don't want to be 'type unstable' for array inputs by
         # returning a scalar from this branch but an array from the "reference_parameters"
         # branch).
-        return @. collisions.krook_collision_frequency_prefactor_ii + 0.0 * n
-    elseif collisions.krook_collisions_option == "none"
+        return @. nuii0 + 0.0 * n
+    elseif frequency_option == "none"
         # Include 0.0*n so that the result gets promoted to an array if n is an array,
         # which hopefully means this function will have a fixed return type given the
         # types of the arguments (we don't want to be 'type unstable' for array inputs by
@@ -78,8 +92,8 @@ function get_collision_frequency_ii(collisions, n, vth)
         # branch).
         return @. 0.0 * n
     else
-        error("Unrecognised option "
-              * "krook_collisions_option=$(collisions.krook_collisions_option)")
+        error("Unrecognised option [krook_collisions] "
+              * "frequency_option=$(frequency_option)")
     end
 end
 
@@ -93,16 +107,20 @@ in `collisions`, for the given density `n` and electron thermal speed `vthe`.
 together.
 """
 function get_collision_frequency_ee(collisions, n, vthe)
-    if collisions.krook_collisions_option == "reference_parameters"
-        return @. collisions.krook_collision_frequency_prefactor_ee * n * vthe^(-3)
-    elseif collisions.krook_collisions_option == "manual"
+    # extract krook options from collisions struct
+    colk = collisions.krook
+    nuee0 = colk.nuee0
+    frequency_option = colk.frequency_option
+    if frequency_option == "reference_parameters"
+        return @. nuee0 * n * vthe^(-3)
+    elseif frequency_option == "manual"
         # Include 0.0*n so that the result gets promoted to an array if n is an array,
         # which hopefully means this function will have a fixed return type given the
         # types of the arguments (we don't want to be 'type unstable' for array inputs by
         # returning a scalar from this branch but an array from the "reference_parameters"
         # branch).
-        return @. collisions.krook_collision_frequency_prefactor_ee + 0.0 * n
-    elseif collisions.krook_collisions_option == "none"
+        return @. nuee0 + 0.0 * n
+    elseif frequency_option == "none"
         # Include 0.0*n so that the result gets promoted to an array if n is an array,
         # which hopefully means this function will have a fixed return type given the
         # types of the arguments (we don't want to be 'type unstable' for array inputs by
@@ -110,8 +128,8 @@ function get_collision_frequency_ee(collisions, n, vthe)
         # branch).
         return @. 0.0 * n
     else
-        error("Unrecognised option "
-              * "krook_collisions_option=$(collisions.krook_collisions_option)")
+        error("Unrecognised option [krook_collisions] "
+              * "frequency_option=$(frequency_option)")
     end
 end
 
@@ -127,18 +145,18 @@ together.
 function get_collision_frequency_ei(collisions, n, vthe)
     # extract krook options from collisions struct
     colk = collisions.krook
-    krook_collision_frequency_prefactor = colk.krook_collision_frequency_prefactor
+    nuei0 = colk.nuei0
     frequency_option = colk.frequency_option
     if frequency_option == "reference_parameters"
-        return @. krook_collision_frequency_prefactor_ei * n * vthe^(-3)
+        return @. nuei0 * n * vthe^(-3)
     elseif frequency_option == "manual"
         # Include 0.0*n so that the result gets promoted to an array if n is an array,
         # which hopefully means this function will have a fixed return type given the
         # types of the arguments (we don't want to be 'type unstable' for array inputs by
         # returning a scalar from this branch but an array from the "reference_parameters"
         # branch).
-        return @. collisions.krook_collision_frequency_prefactor_ei + 0.0 * n
-    elseif collisions.krook_collisions_option == "none"
+        return @. nuei0 + 0.0 * n
+    elseif frequency_option == "none"
         # Include 0.0*n so that the result gets promoted to an array if n is an array,
         # which hopefully means this function will have a fixed return type given the
         # types of the arguments (we don't want to be 'type unstable' for array inputs by
@@ -146,8 +164,8 @@ function get_collision_frequency_ei(collisions, n, vthe)
         # branch).
         return @. 0.0 * n
     else
-        error("Unrecognised option "
-              * "krook_collisions_option=$(collisions.krook_collisions_option)")
+        error("Unrecognised option [krook_collisions] "
+              * "frequency_option=$(frequency_option)")
     end
 end
 
