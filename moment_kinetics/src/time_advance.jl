@@ -936,13 +936,9 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
     t_params.step_counter[] = 1
     while true
         
-        if t ≥ t_params.end_time - epsilon || t_params.dt[] < 0.0
-            # Ensure all output is written at the final step
-            finish_now = true
-        end
         diagnostic_checks = (t + t_params.dt[] ≥ t_params.moments_output_times[moments_output_counter] - epsilon
                              || t + t_params.dt[] ≥ t_params.dfns_output_times[dfns_output_counter] - epsilon
-                             || finish_now)
+                             || t + t_params.dt[] ≥ t_params.end_time - epsilon)
         
         if t_params.split_operators
             # MRH NOT SUPPORTED
@@ -960,6 +956,17 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
         # update the time
         t += t_params.previous_dt[]
 
+        if t ≥ t_params.end_time - epsilon
+            # Ensure all output is written at the final step
+            finish_now = true
+        elseif t_params.dt[] < 0.0 || isnan(t_params.dt[]) || isinf(t_params.dt[])
+            # Negative t_params.dt[] indicates the time stepping has failed, so stop and
+            # write output.
+            # t_params.dt[] should never be NaN or Inf, so if it is something has gone
+            # wrong.
+            println("dt=", t_params.dt[], " at t=$t, terminating run.")
+            finish_now = true
+        end
 
         if isfile(t_params.stopfile * "now")
             # Stop cleanly if a file called 'stop' was created
