@@ -697,7 +697,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                    (this_vperp.n == 1 for this_vperp ∈ vperp)...,
                    (vzeta === nothing ? true : (this_vzeta.n == 1 for this_vzeta ∈ vzeta))...,
                    (vr === nothing ? true : (this_vr.n == 1 for this_vr ∈ vr))...])
-    if is_1D1V
+    if is_1D1V && false
         # load full (vpa,z,r,species,t) particle distribution function (pdf) data
         ff = get_tuple_of_return_values(load_distributed_ion_pdf_slice, run_names,
                                         nblocks, itime_min_pdfs:iskip_pdfs:itime_max_pdfs,
@@ -1070,7 +1070,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
         composition, species, collisions, geometry, drive_input, external_source_settings,
         num_diss_params, manufactured_solns_input = input
 
-    if !is_1D1V
+    if !is_1D1V || true
         # make plots and animations of the phi, Ez and Er
         plot_ion_moments_2D(density, parallel_flow, parallel_pressure, 
                             perpendicular_pressure, thermal_speed, entropy_production,
@@ -3582,8 +3582,21 @@ function plot_ion_pdf_2D_at_wall(run_name, run_name_label, r_global, z_global,
             description = "_ion_spec"*string(is)*"_"
 
             # plot f(vpa,ivperp0,iz_wall,ir0,is,itime) at the wall
-            @views plot(vpa.grid, pdf[:,ivperp0,ir0,is,itime0], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i")
+            @views plot(vpa.grid, pdf[:,ivperp0,ir0,is,itime0], xlabel=L"v_{\|\|}", ylabel=L"f_i",label="")
             outfile = string(run_name_label, "_pdf(vpa,vperp0,iz_"*zlabel*",ir0)"*description*"vs_vpa.pdf")
+            trysavefig(outfile)
+            
+            vfac = copy(vpa.grid)
+            for ivpa in 1:size(vpa.grid,1)
+                if abs(vpa.grid[ivpa]) > 1.0e-8
+                    vfac[ivpa] = 1.0/vpa.grid[ivpa]^2
+                else
+                    vfac[ivpa] = 0.0 
+                end
+            end
+            # plot f(vpa,ivperp0,iz_wall,ir0,is,itime)/vpa^2 at the wall
+            @views plot(vpa.grid, pdf[:,ivperp0,ir0,is,itime0].*vfac, xlabel=L"v_{\|\|}", ylabel=L"f_i/v_{\|\|}^2",label="",seriestype=:scatter)
+            outfile = string(run_name_label, "_pdf(vpa,vperp0,iz_"*zlabel*",ir0)_over_vpa2"*description*"vs_vpa.pdf")
             trysavefig(outfile)
 
             # plot f(vpa,vperp,iz_wall,ir0,is,itime) at the wall

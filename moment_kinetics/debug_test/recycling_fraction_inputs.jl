@@ -10,7 +10,7 @@ test_input = Dict("n_ion_species" => 1,
                   "evolve_moments_parallel_pressure" => false,
                   "evolve_moments_conservation" => false,
                   "recycling_fraction" => 0.5,
-                  "krook_collisions" => true,
+                  "krook_collisions" => Dict{String,Any}("use_krook" => true),
                   "T_e" => 0.2,
                   "T_wall" => 0.1,
                   "initial_density1" => 1.0,
@@ -96,6 +96,9 @@ test_input_split3 = merge(test_input_split2,
                                "vz_nelement" => 8,
                                "numerical_dissipation" => Dict{String,Any}("force_minimum_pdf_value" => 0.0,
                                                                            "vpa_dissipation_coefficient" => 1e-2)))
+test_input_split3["timestepping"] = merge(test_input_split3["timestepping"],
+                                          Dict{String,Any}("dt" => 1.0e-9,
+                                                           "minimum_dt" => 1.0e-9))
 
 
 test_input_list = [

@@ -14,7 +14,8 @@ using ..communication
 using ..coordinates: define_coordinate
 using ..external_sources
 using ..file_io: io_has_parallel, input_option_error, open_ascii_output_file
-using ..krook_collisions: setup_krook_collisions!
+using ..krook_collisions: setup_krook_collisions_input
+using ..fokker_planck: setup_fkpl_collisions_input
 using ..finite_differences: fd_check_option
 using ..input_structs
 using ..numerical_dissipation: setup_numerical_dissipation
@@ -74,7 +75,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     #   reference value using J_||e + J_||i = 0 at z = 0
     electron_physics = get(scan_input, "electron_physics", boltzmann_electron_response)
     
-    z, r, vpa, vperp, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions =
+    z, r, vpa, vperp, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments =
         load_defaults(n_ion_species, n_neutral_species, electron_physics)
 
     # this is the prefix for all output files associated with this run
@@ -109,7 +110,10 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     if !(0.0 <= composition.recycling_fraction <= 1.0)
         error("recycling_fraction must be between 0 and 1. Got $recycling_fraction.")
     end
-
+    # gyrokinetic_ions = True -> use gyroaveraged fields at fixed guiding centre and moments of the pdf computed at fixed r
+    # gyrokinetic_ions = False -> use drift kinetic approximation
+    composition.gyrokinetic_ions = get(scan_input, "gyrokinetic_ions", false)
+    
     # Reference parameters that define the conversion between physical quantities and
     # normalised values used in the code.
     reference_params = setup_reference_parameters(scan_input)
@@ -176,18 +180,22 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     end
     #################### end specification of species inputs #####################
 
-    collisions.charge_exchange = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(species.ion[1].initial_temperature))
-    collisions.charge_exchange_electron = get(scan_input, "electron_charge_exchange_frequency", 0.0)
-    collisions.ionization = get(scan_input, "ionization_frequency", collisions.charge_exchange)
-    collisions.ionization_electron = get(scan_input, "electron_ionization_frequency", collisions.ionization)
-    collisions.ionization_energy = get(scan_input, "ionization_energy", 0.0)
-    collisions.constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
-    collisions.nu_ei = get(scan_input, "nu_ei", 0.0)
-    # Set options for Krook collisions in the `collisions` struct
-    setup_krook_collisions!(collisions, reference_params, scan_input)
-    # set the Fokker-Planck collision frequency
-    collisions.nuii = get(scan_input, "nuii", 0.0)
-    
+    charge_exchange = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(species.ion[1].initial_temperature))
+    charge_exchange_electron = get(scan_input, "electron_charge_exchange_frequency", 0.0)
+    ionization = get(scan_input, "ionization_frequency", charge_exchange)
+    ionization_electron = get(scan_input, "electron_ionization_frequency", ionization)
+    ionization_energy = get(scan_input, "ionization_energy", 0.0)
+    constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
+    nu_ei = get(scan_input, "nu_ei", 0.0)
+    # set up krook collision inputs
+    krook_input = setup_krook_collisions_input(scan_input, reference_params)
+    # set up krook collision inputs
+    fkpl_input = setup_fkpl_collisions_input(scan_input, reference_params)
+    collisions = collisions_input(charge_exchange, charge_exchange_electron, ionization,
+                                  ionization_electron, ionization_energy,
+                                  constant_ionization_rate, nu_ei, krook_input,
+                                  fkpl_input)
+
     # parameters related to the time stepping
     timestepping_section = set_defaults_and_check_section!(
         scan_input, "timestepping";
@@ -525,7 +533,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     # vperp.bc is set here (a bit out of place) so that we can use
     # num_diss_params.ion.vperp_dissipation_coefficient to set the default.
     vperp.bc = get(scan_input, "vperp_bc",
-                   (collisions.nuii > 0.0 ||
+                   ( collisions.fkpl.nuii > 0.0 ||
                     num_diss_params.ion.vperp_dissipation_coefficient > 0.0) ?
                     "zero" : "none")
     
@@ -1106,9 +1114,10 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     # The ion flux reaching the wall that is recycled as neutrals is reduced by
     # `recycling_fraction` to account for ions absorbed by the wall.
     recycling_fraction = 1.0
+    gyrokinetic_ions = false
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
         electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, Er_constant,
-        mn_over_mi, me_over_mi, recycling_fraction, allocate_float(n_species))
+        mn_over_mi, me_over_mi, recycling_fraction, gyrokinetic_ions, allocate_float(n_species))
     
     species_ion = Array{species_parameters_mutable,1}(undef,n_ion_species)
     species_neutral = Array{species_parameters_mutable,1}(undef,n_neutral_species)
@@ -1203,29 +1212,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     drive_amplitude = 1.0
     drive_frequency = 1.0
     drive = drive_input_mutable(drive_phi, drive_amplitude, drive_frequency)
-    # ion-neutral charge exchange collision frequency
-    charge_exchange = 0.0
-    # electron-neutral charge exchange collision frequency
-    charge_exchange_electron = 0.0
-    # ionization collision frequency
-    ionization = 0.0
-    # ionization collision frequency for electrons
-    ionization_electron = ionization
-    # ionization energy cost
-    ionization_energy = 0.0
-    constant_ionization_rate = false
-    # electron-ion collision frequency
-    nu_ei = 0.0
-    krook_collision_frequency_prefactor = -1.0
-    nuii = 0.0
-    collisions = collisions_input(charge_exchange, charge_exchange_electron, ionization,
-                                  ionization_electron, ionization_energy,
-                                  constant_ionization_rate, nu_ei,
-                                  krook_collision_frequency_prefactor,
-                                  krook_collision_frequency_prefactor,
-                                  krook_collision_frequency_prefactor, "none", nuii)
-
-    return z, r, vpa, vperp, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions
+    
+    return z, r, vpa, vperp, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments
 end
 
 """
@@ -1249,9 +1237,9 @@ function check_input(io, output_dir, nstep, dt, r, z, vpa, vperp, composition, s
         println(io, "this is not a supported option.  forcing evolve_moments.density = true.")
         evolve_moments.density = true
     end
-    if collisions.nuii > 0.0
+    if collisions.fkpl.nuii > 0.0
     # check that the grids support the collision operator
-        print(io, "The self-collision operator is switched on \n nuii = $collisions.nuii \n")
+        print(io, "The self-collision operator is switched on \n nuii = $collisions.fkpl.nuii \n")
         if !(vpa.discretization == "gausslegendre_pseudospectral") || !(vperp.discretization == "gausslegendre_pseudospectral")
             error("ERROR: you are using \n      vpa.discretization='"*vpa.discretization*
               "' \n      vperp.discretization='"*vperp.discretization*"' \n      with the ion self-collision operator \n"*

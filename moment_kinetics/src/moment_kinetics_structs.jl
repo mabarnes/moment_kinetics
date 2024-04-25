@@ -44,6 +44,12 @@ struct em_fields_struct
     Er::MPISharedArray{mk_float,2}
     # Ez is the parallel electric field
     Ez::MPISharedArray{mk_float,2}
+    # gphi is the gyroaveraged electrostatic potential
+    gphi::MPISharedArray{mk_float,4}
+    # gEr is the gyroaveraged radial electric field
+    gEr::MPISharedArray{mk_float,4}
+    # gEz is the gyroaveraged parallel electric field
+    gEz::MPISharedArray{mk_float,4}
     # if including an external forcing for phi, it is of the form
     # phi_external = phi0*drive_amplitude*sinpi(t*drive_frequency)
     force_phi::Bool
@@ -311,7 +317,7 @@ end
 """
 struct pdf_substruct{n_distribution}
     norm::MPISharedArray{mk_float,n_distribution}
-    buffer::MPISharedArray{mk_float,n_distribution} # for collision operator terms when pdfs must be interpolated onto different velocity space grids
+    buffer::MPISharedArray{mk_float,n_distribution} # for collision operator terms when pdfs must be interpolated onto different velocity space grids, and for gyroaveraging
 end
 
 """

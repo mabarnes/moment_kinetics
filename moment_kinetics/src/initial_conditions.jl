@@ -97,8 +97,10 @@ Allocate arrays for pdfs
 function create_pdf(composition, r, z, vperp, vpa, vzeta, vr, vz)
     # allocate pdf arrays
     pdf_ion_norm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, composition.n_ion_species)
+    # buffer array is for ion-neutral collisions, not for storing charged pdf
     pdf_ion_buffer = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, composition.n_neutral_species) # n.b. n_species is n_neutral_species here
     pdf_neutral_norm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, composition.n_neutral_species)
+    # buffer array is for neutral-ion collisions, not for storing neutral pdf
     pdf_neutral_buffer = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, composition.n_ion_species)
     if composition.electron_physics == kinetic_electrons
         pdf_electron_norm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n)
@@ -254,7 +256,7 @@ end
 
 function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z,
                                vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
-                               vperp_spectral, vpa_spectral, collisions,
+                               vperp_spectral, vpa_spectral, collisions, gyroavs,
                                external_source_settings, scratch_dummy, scratch, t_params,
                                t_input, num_diss_params, advection_structs, io_input,
                                input_dict; restart_electron_physics)
@@ -435,7 +437,8 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
         scratch[1].electron_temp .= moments.electron.temp
     end
     # get the initial electrostatic potential and parallel electric field
-    update_phi!(fields, scratch[1], z, r, composition, collisions, moments, z_spectral, r_spectral, scratch_dummy)
+    update_phi!(fields, scratch[1], vperp, z, r, composition, collisions, moments,
+                z_spectral, r_spectral, scratch_dummy, gyroavs)
 
     # initialize the electron pdf that satisfies the electron kinetic equation
     initialize_electron_pdf!(scratch, pdf, moments, fields.phi, r, z, vpa, vperp,

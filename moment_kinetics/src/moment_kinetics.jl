@@ -34,6 +34,7 @@ include("reference_parameters.jl")
 include("coordinates.jl")
 include("file_io.jl")
 include("geo.jl")
+include("gyroaverages.jl")
 include("velocity_moments.jl")
 include("velocity_grid_transforms.jl")
 include("electron_fluid_equations.jl")
@@ -253,7 +254,8 @@ function setup_moment_kinetics(input_dict::AbstractDict;
 
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and the electromagnetic fields
-    fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude,
+    fields = setup_em_fields(vperp.n, z.n, r.n, composition.n_ion_species,
+                             drive_input.force_phi, drive_input.amplitude,
                              drive_input.frequency, drive_input.force_Er_zero_at_wall)
 
     # Allocate arrays and create the pdf and moments structs
@@ -338,11 +340,11 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
 
-    moments, fields, spectral_objects, scratch, advance, t_params, fp_arrays,
+    moments, fields, spectral_objects, scratch, advance, t_params, fp_arrays, gyroavs,
     manufactured_source_list =
-        setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
-            vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral,
-            r_spectral, composition, drive_input, moments, t_input, code_time, dt,
+        setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrophase,
+            vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
+            z_spectral, r_spectral, composition, moments, t_input, code_time, dt,
             dt_before_last_fail, electron_dt, electron_dt_before_last_fail, collisions,
             species, geometry, boundary_distributions, external_source_settings,
             num_diss_params, manufactured_solns_input, advection_structs, scratch_dummy,
@@ -373,7 +375,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
 
     return pdf, scratch, code_time, t_params, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advection_structs,
-           composition, collisions, geometry, boundary_distributions,
+           composition, collisions, geometry, gyroavs, boundary_distributions,
            external_source_settings, num_diss_params, advance, fp_arrays, scratch_dummy,
            manufactured_source_list, ascii_io, io_moments, io_dfns
 end

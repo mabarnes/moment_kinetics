@@ -8,6 +8,7 @@ physical units of the simulation, and are needed for a few specific steps during
 module reference_parameters
 
 export setup_reference_parameters
+export get_reference_collision_frequency
 
 using ..constants
 using ..input_structs
@@ -54,6 +55,33 @@ function setup_reference_parameters(input_dict)
     reference_params = Dict_to_NamedTuple(reference_parameter_section)
 
     return reference_params
+end
+
+"""
+Calculate normalized collision frequency at reference parameters for Coulomb collisions.
+
+Currently valid only for hydrogenic ions (Z=1)
+"""
+function get_reference_collision_frequency(reference_params)
+    Nref = reference_params.Nref
+    Tref = reference_params.Tref
+    mref = reference_params.mref
+    timeref = reference_params.timeref
+    cref = reference_params.cref
+
+    Nref_per_cm3 = Nref * 1.0e-6
+
+    # Coulomb logarithm at reference parameters for same-species ion-ion collisions, using
+    # NRL formulary. Formula given for n in units of cm^-3 and T in units of eV.
+    logLambda_ii = 23.0 - log(sqrt(2.0*Nref_per_cm3) / Tref^1.5)
+
+    # Collision frequency, using \hat{\nu} from Appendix, p. 277 of Helander "Collisional
+    # Transport in Magnetized Plasmas" (2002).
+    nu_ii0_per_s = Nref * proton_charge^4 * logLambda_ii  /
+                   (4.0 * π * epsilon0^2 * mref^2 * cref^3) # s^-1
+    nu_ii0 = nu_ii0_per_s * timeref
+
+    return nu_ii0
 end
 
 end

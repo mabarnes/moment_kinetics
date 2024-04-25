@@ -15,25 +15,28 @@ using ..velocity_moments: update_density!
 #using ..calculus: derivative!
 using ..derivatives: derivative_r!, derivative_z!
 using ..electron_fluid_equations: calculate_Epar_from_electron_force_balance!
+using ..gyroaverages: gyro_operators, gyroaverage_field!
 
 using MPI
 
 """
 """
-function setup_em_fields(nz, nr, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
+function setup_em_fields(nvperp, nz, nr, n_ion_species, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
     phi = allocate_shared_float(nz,nr)
     phi0 = allocate_shared_float(nz,nr)
     Er = allocate_shared_float(nz,nr)
     Ez = allocate_shared_float(nz,nr)
-    return em_fields_struct(phi, phi0, Er, Ez, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
+    gphi = allocate_shared_float(nvperp,nz,nr,n_ion_species)
+    gEr = allocate_shared_float(nvperp,nz,nr,n_ion_species)
+    gEz = allocate_shared_float(nvperp,nz,nr,n_ion_species)
+    return em_fields_struct(phi, phi0, Er, Ez, gphi, gEr, gEz, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
 end
 
 """
 update_phi updates the electrostatic potential, phi
 """
-function update_phi!(fields, fvec, z, r, composition, collisions, moments, 
-    z_spectral, r_spectral, scratch_dummy)
-    # define a new variable for the number of ion species for brevity of following code
+function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments,
+                     z_spectral, r_spectral, scratch_dummy, gyroavs::gyro_operators)
     n_ion_species = composition.n_ion_species
     # check bounds of fields and fvec arrays
     @boundscheck size(fields.phi,1) == z.n || throw(BoundsError(fields.phi))
@@ -148,6 +151,21 @@ function update_phi!(fields, fvec, z, r, composition, collisions, moments,
                     z_spectral,z)
         end
     end
+
+    # get gyroaveraged field arrays for distribution function advance
+    gkions = composition.gyrokinetic_ions
+    if gkions
+        gyroaverage_field!(fields.gphi,fields.phi,gyroavs,vperp,z,r,composition)
+        gyroaverage_field!(fields.gEz,fields.Ez,gyroavs,vperp,z,r,composition)
+        gyroaverage_field!(fields.gEr,fields.Er,gyroavs,vperp,z,r,composition)
+    else # use the drift-kinetic form of the fields in the kinetic equation
+        @loop_s_r_z_vperp is ir iz ivperp begin
+            fields.gphi[ivperp,iz,ir,is] = fields.phi[iz,ir]
+            fields.gEz[ivperp,iz,ir,is] = fields.Ez[iz,ir]
+            fields.gEr[ivperp,iz,ir,is] = fields.Er[iz,ir]
+        end
+    end
+
     return nothing
 end
 
@@ -176,6 +194,7 @@ function calculate_phi_from_Epar!(phi, Epar, z)
             end
         end
     end
+
     return nothing
 end
 

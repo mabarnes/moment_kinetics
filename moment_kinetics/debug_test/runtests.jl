@@ -11,6 +11,7 @@ function runtests()
         include(joinpath(@__DIR__, "mms_tests.jl"))
         include(joinpath(@__DIR__, "restart_interpolation_tests.jl"))
         include(joinpath(@__DIR__, "recycling_fraction_tests.jl"))
+        include(joinpath(@__DIR__, "gyroaverage_tests.jl"))
     end
 end
 
