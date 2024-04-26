@@ -450,7 +450,7 @@ using IfElse
                                     geometry_input_data::geometry_input, composition, species, nr, nvperp)
         # calculate the geometry symbolically
         geometry = geometry_sym(geometry_input_data,Lz,Lr,nr)
-        charged_species = species.charged[1]
+        ion_species = species.ion[1]
         if composition.n_neutral_species > 0
             neutral_species = species.neutral[1]
         else
@@ -458,17 +458,17 @@ using IfElse
         end
 
         densi = densi_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
-                          charged_species)
+                          ion_species)
         upari = upari_sym(Lr, Lz, r_bc, z_bc, composition, geometry, nr, manufactured_solns_input,
-                          charged_species)
+                          ion_species)
         ppari = ppari_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
-                          charged_species)
+                          ion_species)
         pperpi = pperpi_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
-                          charged_species, nvperp)
+                          ion_species, nvperp)
         vthi = vthi_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
-                          charged_species, nvperp)
+                          ion_species, nvperp)
         dfni = dfni_sym(Lr, Lz, r_bc, z_bc, composition, geometry, nr,
-                        manufactured_solns_input, charged_species)
+                        manufactured_solns_input, ion_species)
 
         densn = densn_sym(Lr, Lz, r_bc, z_bc, geometry,composition,
                           manufactured_solns_input, neutral_species)
@@ -538,7 +538,7 @@ using IfElse
             geometry_input_data::geometry_input, collisions,
             num_diss_params, species)
         geometry = geometry_sym(geometry_input_data,z_coord.L,r_coord.L,r_coord.n)
-        charged_species = species.charged[1]
+        ion_species = species.ion[1]
         if composition.n_neutral_species > 0
             neutral_species = species.neutral[1]
         else
@@ -547,16 +547,16 @@ using IfElse
 
         # ion manufactured solutions
         densi = densi_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition,
-                          manufactured_solns_input, charged_species)
-        upari = upari_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition, geometry, r_coord.n, manufactured_solns_input, charged_species)
+                          manufactured_solns_input, ion_species)
+        upari = upari_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition, geometry, r_coord.n, manufactured_solns_input, ion_species)
         vthi = vthi_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition, manufactured_solns_input,
-                          charged_species, vperp_coord.n)
+                          ion_species, vperp_coord.n)
         dfni = dfni_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition,
-                        geometry, r_coord.n, manufactured_solns_input, charged_species)
+                        geometry, r_coord.n, manufactured_solns_input, ion_species)
         #dfni in vr vz vzeta coordinates
         vrvzvzeta_dfni = cartesian_dfni_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc,
                                             composition, manufactured_solns_input,
-                                            charged_species)
+                                            ion_species)
 
         # neutral manufactured solutions
         densn = densn_sym(r_coord.L,z_coord.L, r_coord.bc, z_coord.bc, geometry,
@@ -604,7 +604,7 @@ using IfElse
         # calculate the electric fields and the potential
         Er, Ez, phi = electric_fields(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc,
                                       composition, r_coord.n, manufactured_solns_input,
-                                      charged_species)
+                                      ion_species)
 
         # the adiabatic invariant (for compactness)
         mu = 0.5*(vperp^2)/Bmag

@@ -23,14 +23,14 @@ function force_balance!(pflx, density_out, fvec, moments, fields, collisions, dt
     upar = fvec.upar
     @loop_s_r_z is ir iz begin
         pflx[iz,ir,is] = density[iz,ir,is]*upar[iz,ir,is] -
-                         dt*(moments.charged.dppar_dz[iz,ir,is] +
-                             upar[iz,ir,is]*upar[iz,ir,is]*moments.charged.ddens_dz_upwind[iz,ir,is] +
-                             2.0*density[iz,ir,is]*upar[iz,ir,is]*moments.charged.dupar_dz_upwind[iz,ir,is] -
+                         dt*(moments.ion.dppar_dz[iz,ir,is] +
+                             upar[iz,ir,is]*upar[iz,ir,is]*moments.ion.ddens_dz_upwind[iz,ir,is] +
+                             2.0*density[iz,ir,is]*upar[iz,ir,is]*moments.ion.dupar_dz_upwind[iz,ir,is] -
                              0.5*geometry.bzed[iz,ir]*fields.Ez[iz,ir]*density[iz,ir,is])
     end
 
     if ion_source_settings.active && false
-        source_amplitude = moments.charged.external_source_momentum_amplitude
+        source_amplitude = moments.ion.external_source_momentum_amplitude
         @loop_s_r_z is ir iz begin
             pflx[iz,ir,is] +=
                 dt * source_amplitude[iz,ir]
@@ -41,7 +41,7 @@ function force_balance!(pflx, density_out, fvec, moments, fields, collisions, dt
     diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
     if diffusion_coefficient > 0.0
         @loop_s_r_z is ir iz begin
-            pflx[iz,ir,is] += dt*diffusion_coefficient*moments.charged.d2upar_dz2[iz,ir,is]*density[iz,ir,is]
+            pflx[iz,ir,is] += dt*diffusion_coefficient*moments.ion.d2upar_dz2[iz,ir,is]*density[iz,ir,is]
         end
     end
 

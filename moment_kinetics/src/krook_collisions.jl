@@ -98,7 +98,7 @@ function krook_collisions!(pdf_out, fvec_in, moments, composition, collisions, v
         # through by vth, remembering pdf is already multiplied by vth
         @loop_s_r_z is ir iz begin
             n = fvec_in.density[iz,ir,is]
-            vth = moments.charged.vth[iz,ir,is]
+            vth = moments.ion.vth[iz,ir,is]
             nu_ii = get_collision_frequency(collisions, n, vth)
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
@@ -111,7 +111,7 @@ function krook_collisions!(pdf_out, fvec_in, moments, composition, collisions, v
         # is already multiplied by vth, and grid is already normalized by vth
         @loop_s_r_z is ir iz begin
             n = fvec_in.density[iz,ir,is]
-            vth = moments.charged.vth[iz,ir,is]
+            vth = moments.ion.vth[iz,ir,is]
             nu_ii = get_collision_frequency(collisions, n, vth)
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
@@ -124,7 +124,7 @@ function krook_collisions!(pdf_out, fvec_in, moments, composition, collisions, v
         # Compared to evolve_density version, grid is already shifted by upar
         @loop_s_r_z is ir iz begin
             n = fvec_in.density[iz,ir,is]
-            vth = moments.charged.vth[iz,ir,is]
+            vth = moments.ion.vth[iz,ir,is]
             nu_ii = get_collision_frequency(collisions, n, vth)
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
@@ -138,7 +138,7 @@ function krook_collisions!(pdf_out, fvec_in, moments, composition, collisions, v
         # that pdf is already normalized by density
         @loop_s_r_z is ir iz begin
             n = fvec_in.density[iz,ir,is]
-            vth = moments.charged.vth[iz,ir,is]
+            vth = moments.ion.vth[iz,ir,is]
             nu_ii = get_collision_frequency(collisions, n, vth)
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
@@ -151,7 +151,7 @@ function krook_collisions!(pdf_out, fvec_in, moments, composition, collisions, v
     else
         @loop_s_r_z is ir iz begin
             n = fvec_in.density[iz,ir,is]
-            vth = moments.charged.vth[iz,ir,is]
+            vth = moments.ion.vth[iz,ir,is]
             if vperp.n == 1
                 vth_prefactor = 1.0 / vth
             else

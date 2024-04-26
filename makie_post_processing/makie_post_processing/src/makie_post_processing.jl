@@ -303,7 +303,7 @@ function makie_post_process(run_dir::Union{String,Tuple},
         end
     end
 
-    plot_charged_pdf_2D_at_wall(run_info_dfns; plot_prefix=plot_prefix)
+    plot_ion_pdf_2D_at_wall(run_info_dfns; plot_prefix=plot_prefix)
     if has_neutrals
         plot_neutral_pdf_2D_at_wall(run_info_dfns; plot_prefix=plot_prefix)
     end
@@ -4302,9 +4302,9 @@ function animate_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, is=1,
 end
 
 """
-    plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
+    plot_ion_pdf_2D_at_wall(run_info; plot_prefix)
 
-Make plots/animations of the charged particle distribution function at wall boundaries.
+Make plots/animations of the ion distribution function at wall boundaries.
 
 The information for the runs to plot is passed in `run_info` (as returned by
 [`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where line
@@ -4318,7 +4318,7 @@ will be saved with the format `plot_prefix<some_identifying_string>.pdf`. When `
 is not a Tuple, `plot_prefix` is optional - plots/animations will be saved only if it is
 passed.
 """
-function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
+function plot_ion_pdf_2D_at_wall(run_info; plot_prefix)
     input = Dict_to_NamedTuple(input_dict_dfns["wall_pdf"])
     if !(input.plot || input.animate || input.advection_velocity)
         # nothing to do
@@ -4332,7 +4332,7 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
     z_lower = 1
     z_upper = run_info[1].z.n
     if !all(ri.z.n == z_upper for ri ∈ run_info)
-        println("Cannot run plot_charged_pdf_2D_at_wall() for runs with different "
+        println("Cannot run plot_ion_pdf_2D_at_wall() for runs with different "
                 * "z-grid sizes. Got $(Tuple(ri.z.n for ri ∈ run_info))")
         return nothing
     end
@@ -5772,7 +5772,7 @@ end
                    field_sym_label, norm_label, plot_dims, animate_dims)
 
 Utility function for making plots to avoid duplicated code in
-[`compare_charged_pdf_symbolic_test`](@ref) and
+[`compare_ion_pdf_symbolic_test`](@ref) and
 [`compare_neutral_pdf_symbolic_test`](@ref).
 
 The information for the run to analyse is passed in `run_info` (as returned by
@@ -5922,7 +5922,7 @@ function _MMS_pdf_plots(run_info, input, variable_name, plot_prefix, field_label
 end
 
 """
-    compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
+    compare_ion_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
                                       input=nothing)
 
 Compare the computed and manufactured solutions for the ion distribution function.
@@ -5943,7 +5943,7 @@ Note: when calculating error norms, data is loaded only for 1 time point and for
 chunk that is the same size as computed by 1 block of the simulation at run time. This
 should prevent excessive memory requirements for this function.
 """
-function compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
+function compare_ion_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
                                            input=nothing)
 
     field_label = L"\tilde{f}_i"
@@ -6473,7 +6473,7 @@ function manufactured_solutions_analysis_dfns(run_info; plot_prefix)
         println_to_stdout_and_file(io, "# ", run_info.run_name)
         println_to_stdout_and_file(io, join(run_info.time, " "), " # time / (Lref/cref): ")
 
-        compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=io, input=input)
+        compare_ion_pdf_symbolic_test(run_info, plot_prefix; io=io, input=input)
 
         if run_info.n_neutral_species > 0
             compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=io, input=input)

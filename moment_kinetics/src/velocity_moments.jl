@@ -5,7 +5,7 @@ module velocity_moments
 export integrate_over_vspace
 export integrate_over_positive_vpa, integrate_over_negative_vpa
 export integrate_over_positive_vz, integrate_over_negative_vz
-export create_moments_chrg, create_moments_ntrl
+export create_moments_ion, create_moments_neutral
 export update_moments!
 export update_density!
 export update_upar!
@@ -14,7 +14,7 @@ export update_pperp!
 export update_qpar!
 export update_vth!
 export reset_moments_status!
-export moments_chrg_substruct, moments_ntrl_substruct
+export moments_ion_substruct, moments_neutral_substruct
 export update_neutral_density!
 export update_neutral_uz!
 export update_neutral_ur!
@@ -49,7 +49,7 @@ using ..gyroaverages: gyro_operators, gyroaverage_pdf!
 
 """
 """
-struct moments_charged_substruct
+struct moments_ion_substruct
     # this is the particle density
     dens::MPISharedArray{mk_float,3}
     # flag that keeps track of if the density needs updating before use
@@ -213,8 +213,8 @@ end
 
 """
 """
-function create_moments_charged(nz, nr, n_species, evolve_density, evolve_upar,
-                                evolve_ppar, ion_source_settings, numerical_dissipation)
+function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
+                            evolve_ppar, ion_source_settings, numerical_dissipation)
     # allocate array used for the particle density
     density = allocate_shared_float(nz, nr, n_species)
     # allocate array of Bools that indicate if the density is updated for each species
@@ -337,7 +337,7 @@ function create_moments_charged(nz, nr, n_species, evolve_density, evolve_upar,
     end
 
     # return struct containing arrays needed to update moments
-    return moments_charged_substruct(density, density_updated, parallel_flow,
+    return moments_ion_substruct(density, density_updated, parallel_flow,
         parallel_flow_updated, parallel_pressure, parallel_pressure_updated,perpendicular_pressure,
         parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, 
         chodura_integral_lower, chodura_integral_upper, v_norm_fac,
@@ -492,7 +492,7 @@ the function used to update moments at run time is update_derived_moments! in ti
 function update_moments!(moments, ff_in, gyroavs::gyro_operators, vpa, vperp, z, r, composition,
         r_spectral, geometry, scratch_dummy, z_advect)
     if composition.gyrokinetic_ions
-        ff = scratch_dummy.buffer_vpavperpzrs_1 # the buffer array for the charged pdf -> make sure not to reuse this array below
+        ff = scratch_dummy.buffer_vpavperpzrs_1 # the buffer array for the ion pdf -> make sure not to reuse this array below
         # fill buffer with ring-averaged F (gyroaverage at fixed position)
         gyroaverage_pdf!(ff,ff_in,gyroavs,vpa,vperp,z,r,composition)
     else
@@ -500,46 +500,46 @@ function update_moments!(moments, ff_in, gyroavs::gyro_operators, vpa, vperp, z,
     end
     begin_s_r_z_region()
     n_species = size(ff,5)
-    @boundscheck n_species == size(moments.charged.dens,3) || throw(BoundsError(moments))
+    @boundscheck n_species == size(moments.ion.dens,3) || throw(BoundsError(moments))
     @loop_s is begin
-        if moments.charged.dens_updated[is] == false
-            @views update_density_species!(moments.charged.dens[:,:,is], ff[:,:,:,:,is],
+        if moments.ion.dens_updated[is] == false
+            @views update_density_species!(moments.ion.dens[:,:,is], ff[:,:,:,:,is],
                                            vpa, vperp, z, r)
-            moments.charged.dens_updated[is] = true
+            moments.ion.dens_updated[is] = true
         end
-        if moments.charged.upar_updated[is] == false
+        if moments.ion.upar_updated[is] == false
             # Can pass moments.ppar here even though it has not been updated yet,
             # because moments.ppar is only needed if evolve_ppar=true, in which case it
             # will not be updated because it is not calculated from the distribution
             # function
-            @views update_upar_species!(moments.charged.upar[:,:,is],
-                                        moments.charged.dens[:,:,is],
-                                        moments.charged.ppar[:,:,is], ff[:,:,:,:,is], vpa,
+            @views update_upar_species!(moments.ion.upar[:,:,is],
+                                        moments.ion.dens[:,:,is],
+                                        moments.ion.ppar[:,:,is], ff[:,:,:,:,is], vpa,
                                         vperp, z, r, moments.evolve_density,
                                         moments.evolve_ppar)
-            moments.charged.upar_updated[is] = true
+            moments.ion.upar_updated[is] = true
         end
-        if moments.charged.ppar_updated[is] == false
-            @views update_ppar_species!(moments.charged.ppar[:,:,is],
-                                        moments.charged.dens[:,:,is],
-                                        moments.charged.upar[:,:,is], ff[:,:,:,:,is], vpa,
+        if moments.ion.ppar_updated[is] == false
+            @views update_ppar_species!(moments.ion.ppar[:,:,is],
+                                        moments.ion.dens[:,:,is],
+                                        moments.ion.upar[:,:,is], ff[:,:,:,:,is], vpa,
                                         vperp, z, r, moments.evolve_density,
                                         moments.evolve_upar)
-            moments.charged.ppar_updated[is] = true
+            moments.ion.ppar_updated[is] = true
         end
-        @views update_pperp_species!(moments.charged.pperp[:,:,is], ff[:,:,:,:,is], vpa, vperp, z, r)
-        if moments.charged.qpar_updated[is] == false
-            @views update_qpar_species!(moments.charged.qpar[:,:,is],
-                                        moments.charged.dens[:,:,is],
-                                        moments.charged.upar[:,:,is],
-                                        moments.charged.vth[:,:,is], ff[:,:,:,:,is], vpa,
+        @views update_pperp_species!(moments.ion.pperp[:,:,is], ff[:,:,:,:,is], vpa, vperp, z, r)
+        if moments.ion.qpar_updated[is] == false
+            @views update_qpar_species!(moments.ion.qpar[:,:,is],
+                                        moments.ion.dens[:,:,is],
+                                        moments.ion.upar[:,:,is],
+                                        moments.ion.vth[:,:,is], ff[:,:,:,:,is], vpa,
                                         vperp, z, r, moments.evolve_density,
                                         moments.evolve_upar, moments.evolve_ppar)
-            moments.charged.qpar_updated[is] = true
+            moments.ion.qpar_updated[is] = true
         end
     end
 
-    update_vth!(moments.charged.vth, moments.charged.ppar, moments.charged.pperp, moments.charged.dens, vperp, z, r, composition)
+    update_vth!(moments.ion.vth, moments.ion.ppar, moments.ion.pperp, moments.ion.dens, vperp, z, r, composition)
     # update the Chodura diagnostic -- note that the pdf should be the unnormalised one
     # so this will break for the split moments cases
     update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
@@ -884,22 +884,22 @@ function update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometr
     begin_s_r_region()
     if z.irank == 0
         @loop_s_r is ir begin
-            @views moments.charged.chodura_integral_lower[ir,is] = update_chodura_integral_species!(ff[:,:,1,ir,is],dffdr[:,:,1,ir,is],
-            ff_dummy[:,:],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[1,:,:,ir],moments.charged.dens[1,ir,is],del_vpa,1,ir)
+            @views moments.ion.chodura_integral_lower[ir,is] = update_chodura_integral_species!(ff[:,:,1,ir,is],dffdr[:,:,1,ir,is],
+            ff_dummy[:,:],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[1,:,:,ir],moments.ion.dens[1,ir,is],del_vpa,1,ir)
         end
     else # we do not save this Chodura integral to the output file
         @loop_s_r is ir begin
-            moments.charged.chodura_integral_lower[ir,is] = 0.0
+            moments.ion.chodura_integral_lower[ir,is] = 0.0
         end
     end
     if z.irank == z.nrank - 1
         @loop_s_r is ir begin
-            @views moments.charged.chodura_integral_upper[ir,is] = update_chodura_integral_species!(ff[:,:,end,ir,is],dffdr[:,:,end,ir,is],
-            ff_dummy[:,:],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[end,:,:,ir],moments.charged.dens[end,ir,is],del_vpa,z.n,ir)
+            @views moments.ion.chodura_integral_upper[ir,is] = update_chodura_integral_species!(ff[:,:,end,ir,is],dffdr[:,:,end,ir,is],
+            ff_dummy[:,:],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[end,:,:,ir],moments.ion.dens[end,ir,is],del_vpa,z.n,ir)
         end
     else # we do not save this Chodura integral to the output file
         @loop_s_r is ir begin
-            moments.charged.chodura_integral_upper[ir,is] =  0.0
+            moments.ion.chodura_integral_upper[ir,is] =  0.0
         end
     end
 end
@@ -947,15 +947,15 @@ end
 """
 Pre-calculate spatial derivatives of the moments that will be needed for the time advance
 """
-function calculate_moment_derivatives!(moments, scratch, scratch_dummy, z, z_spectral,
-                                       numerical_dissipation)
+function calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z, z_spectral,
+                                           num_diss_params)
     begin_s_r_region()
 
     density = scratch.density
     upar = scratch.upar
     ppar = scratch.ppar
-    qpar = moments.charged.qpar
-    vth = moments.charged.vth
+    qpar = moments.ion.qpar
+    vth = moments.ion.vth
     dummy_zrs = scratch_dummy.dummy_zrs
     buffer_r_1 = scratch_dummy.buffer_rs_1
     buffer_r_2 = scratch_dummy.buffer_rs_2
@@ -964,27 +964,26 @@ function calculate_moment_derivatives!(moments, scratch, scratch_dummy, z, z_spe
     buffer_r_5 = scratch_dummy.buffer_rs_5
     buffer_r_6 = scratch_dummy.buffer_rs_6
     if moments.evolve_density
-        @views derivative_z!(moments.charged.ddens_dz, density, buffer_r_1,
+        @views derivative_z!(moments.ion.ddens_dz, density, buffer_r_1,
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
         # Upwinded using upar as advection velocity, to be used in continuity equation
         @loop_s_r_z is ir iz begin
             dummy_zrs[iz,ir,is] = -upar[iz,ir,is]
         end
-        @views derivative_z!(moments.charged.ddens_dz_upwind, density,
+        @views derivative_z!(moments.ion.ddens_dz_upwind, density,
                              dummy_zrs, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
                              buffer_r_5, buffer_r_6, z_spectral, z)
     end
-    if moments.evolve_density &&
-        numerical_dissipation.moment_dissipation_coefficient > 0.0
+    if moments.evolve_density && num_diss_params.moment_dissipation_coefficient > 0.0
 
         # centred second derivative for dissipation
         @views derivative_z!(dummy_zrs, density, buffer_r_1, buffer_r_2, buffer_r_3,
                              buffer_r_4, z_spectral, z)
-        @views derivative_z!(moments.charged.d2dens_dz2, dummy_zrs, buffer_r_1,
+        @views derivative_z!(moments.ion.d2dens_dz2, dummy_zrs, buffer_r_1,
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
     end
     if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
-        @views derivative_z!(moments.charged.dupar_dz, upar, buffer_r_1,
+        @views derivative_z!(moments.ion.dupar_dz, upar, buffer_r_1,
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
     end
     if moments.evolve_upar
@@ -993,21 +992,20 @@ function calculate_moment_derivatives!(moments, scratch, scratch_dummy, z, z_spe
         @loop_s_r_z is ir iz begin
             dummy_zrs[iz,ir,is] = -upar[iz,ir,is]
         end
-        @views derivative_z!(moments.charged.dupar_dz_upwind, upar, dummy_zrs,
+        @views derivative_z!(moments.ion.dupar_dz_upwind, upar, dummy_zrs,
                              buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
                              buffer_r_5, buffer_r_6, z_spectral, z)
     end
-    if moments.evolve_upar &&
-        numerical_dissipation.moment_dissipation_coefficient > 0.0
+    if moments.evolve_upar && num_diss_params.moment_dissipation_coefficient > 0.0
 
         # centred second derivative for dissipation
         @views derivative_z!(dummy_zrs, upar, buffer_r_1, buffer_r_2, buffer_r_3,
                              buffer_r_4, z_spectral, z)
-        @views derivative_z!(moments.charged.d2upar_dz2, dummy_zrs, buffer_r_1,
+        @views derivative_z!(moments.ion.d2upar_dz2, dummy_zrs, buffer_r_1,
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
     end
     if moments.evolve_upar
-        @views derivative_z!(moments.charged.dppar_dz, ppar, buffer_r_1,
+        @views derivative_z!(moments.ion.dppar_dz, ppar, buffer_r_1,
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
     end
     if moments.evolve_ppar
@@ -1015,19 +1013,19 @@ function calculate_moment_derivatives!(moments, scratch, scratch_dummy, z, z_spe
         @loop_s_r_z is ir iz begin
             dummy_zrs[iz,ir,is] = -upar[iz,ir,is]
         end
-        @views derivative_z!(moments.charged.dppar_dz_upwind, ppar, dummy_zrs,
+        @views derivative_z!(moments.ion.dppar_dz_upwind, ppar, dummy_zrs,
                              buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
                              buffer_r_5, buffer_r_6, z_spectral, z)
 
         # centred second derivative for dissipation
         @views derivative_z!(dummy_zrs, ppar, buffer_r_1, buffer_r_2, buffer_r_3,
                              buffer_r_4, z_spectral, z)
-        @views derivative_z!(moments.charged.d2ppar_dz2, dummy_zrs, buffer_r_1,
+        @views derivative_z!(moments.ion.d2ppar_dz2, dummy_zrs, buffer_r_1,
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
 
-        @views derivative_z!(moments.charged.dqpar_dz, qpar, buffer_r_1,
+        @views derivative_z!(moments.ion.dqpar_dz, qpar, buffer_r_1,
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
-        @views derivative_z!(moments.charged.dvth_dz, vth, buffer_r_1,
+        @views derivative_z!(moments.ion.dvth_dz, vth, buffer_r_1,
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
     end
 end
@@ -1506,7 +1504,7 @@ end
 Pre-calculate spatial derivatives of the neutral moments that will be needed for the time
 advance
 """
-function calculate_moment_derivatives_neutral!(moments, scratch, scratch_dummy, z,
+function calculate_neutral_moment_derivatives!(moments, scratch, scratch_dummy, z,
                                                z_spectral, numerical_dissipation)
     begin_sn_r_region()
 
@@ -1800,18 +1798,18 @@ end
 """
 function reset_moments_status!(moments)
     if moments.evolve_density == false
-        moments.charged.dens_updated .= false
+        moments.ion.dens_updated .= false
         moments.neutral.dens_updated .= false
     end
     if moments.evolve_upar == false
-        moments.charged.upar_updated .= false
+        moments.ion.upar_updated .= false
         moments.neutral.uz_updated .= false
     end
     if moments.evolve_ppar == false
-        moments.charged.ppar_updated .= false
+        moments.ion.ppar_updated .= false
         moments.neutral.pz_updated .= false
     end
-    moments.charged.qpar_updated .= false
+    moments.ion.qpar_updated .= false
     moments.neutral.uzeta_updated .= false
     moments.neutral.ur_updated .= false
     moments.neutral.pzeta_updated .= false

@@ -4,7 +4,7 @@ module load_data
 
 export open_readonly_output_file
 export load_fields_data
-export load_charged_particle_moments_data
+export load_ion_particle_moments_data
 export load_neutral_particle_moments_data
 export load_pdf_data
 export load_neutral_pdf_data
@@ -441,33 +441,33 @@ end
 
 """
 """
-function load_charged_particle_moments_data(fid; printout=false, extended_moments = false)
+function load_ion_moments_data(fid; printout=false, extended_moments = false)
     if printout
-        print("Loading charged particle velocity moments data...")
+        print("Loading ion velocity moments data...")
     end
 
     group = get_group(fid, "dynamic_data")
 
-    # Read charged species density
+    # Read ion species density
     density = load_variable(group, "density")
 
-    # Read charged species parallel flow
+    # Read ion species parallel flow
     parallel_flow = load_variable(group, "parallel_flow")
 
-    # Read charged species parallel pressure
+    # Read ion species parallel pressure
     parallel_pressure = load_variable(group, "parallel_pressure")
 
-    # Read charged_species parallel heat flux
+    # Read ion_species parallel heat flux
     parallel_heat_flux = load_variable(group, "parallel_heat_flux")
 
-    # Read charged species thermal speed
+    # Read ion species thermal speed
     thermal_speed = load_variable(group, "thermal_speed")
 
     if extended_moments
-        # Read charged species perpendicular pressure
+        # Read ion species perpendicular pressure
         perpendicular_pressure = load_variable(group, "perpendicular_pressure")
 
-        # Read charged species entropy_production
+        # Read ion species entropy_production
         entropy_production = load_variable(group, "entropy_production")
     end
 
@@ -514,12 +514,12 @@ end
 """
 function load_pdf_data(fid; printout=false)
     if printout
-        print("Loading charged particle distribution function data...")
+        print("Loading ion particle distribution function data...")
     end
 
     group = get_group(fid, "dynamic_data")
 
-    # Read charged distribution function
+    # Read ion distribution function
     pdf = load_variable(group, "f")
 
     if printout
@@ -718,42 +718,42 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                 return moment
             end
 
-            moments.charged.dens .= load_moment("density")
-            moments.charged.dens_updated .= true
-            moments.charged.upar .= load_moment("parallel_flow")
-            moments.charged.upar_updated .= true
-            moments.charged.ppar .= load_moment("parallel_pressure")
-            moments.charged.ppar_updated .= true
-            moments.charged.qpar .= load_moment("parallel_heat_flux")
-            moments.charged.qpar_updated .= true
-            moments.charged.vth .= load_moment("thermal_speed")
+            moments.ion.dens .= load_moment("density")
+            moments.ion.dens_updated .= true
+            moments.ion.upar .= load_moment("parallel_flow")
+            moments.ion.upar_updated .= true
+            moments.ion.ppar .= load_moment("parallel_pressure")
+            moments.ion.ppar_updated .= true
+            moments.ion.qpar .= load_moment("parallel_heat_flux")
+            moments.ion.qpar_updated .= true
+            moments.ion.vth .= load_moment("thermal_speed")
             if z.irank == 0
                 if "chodura_integral_lower" ∈ keys(dynamic)
-                    moments.charged.chodura_integral_lower .= load_slice(dynamic, "chodura_integral_lower",
-                                                                         r_range, :, time_index)
+                    moments.ion.chodura_integral_lower .= load_slice(dynamic, "chodura_integral_lower",
+                                                                     r_range, :, time_index)
                 else
-                    moments.charged.chodura_integral_lower .= 0.0
+                    moments.ion.chodura_integral_lower .= 0.0
                 end
             end
             if z.irank == z.nrank - 1
                 if "chodura_integral_upper" ∈ keys(dynamic)
-                    moments.charged.chodura_integral_upper .= load_slice(dynamic, "chodura_integral_upper",
-                                                                         r_range, :, time_index)
+                    moments.ion.chodura_integral_upper .= load_slice(dynamic, "chodura_integral_upper",
+                                                                     r_range, :, time_index)
                 else
-                    moments.charged.chodura_integral_upper .= 0.0
+                    moments.ion.chodura_integral_upper .= 0.0
                 end
             end
 
             if "external_source_controller_integral" ∈ get_variable_keys(dynamic) &&
-                    length(moments.charged.external_source_controller_integral) == 1
-                moments.charged.external_source_controller_integral .=
+                    length(moments.ion.external_source_controller_integral) == 1
+                moments.ion.external_source_controller_integral .=
                     load_slice(dynamic, "external_source_controller_integral", time_index)
-            elseif length(moments.charged.external_source_controller_integral) > 1
-                moments.charged.external_source_controller_integral .=
+            elseif length(moments.ion.external_source_controller_integral) > 1
+                moments.ion.external_source_controller_integral .=
                     load_moment("external_source_controller_integral")
             end
 
-            function load_charged_pdf()
+            function load_ion_pdf()
                 this_pdf = load_slice(dynamic, "f", vpa_range, vperp_range, z_range,
                                       r_range, :, time_index)
                 orig_nvpa, orig_nvperp, orig_nz, orig_nr, nspecies = size(this_pdf)
@@ -819,7 +819,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     # => old_wpa = new_wpa - upar
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        restart_vpa_vals = vpa.grid .- moments.charged.upar[iz,ir,is]
+                        restart_vpa_vals = vpa.grid .- moments.ion.upar[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,ir,is], restart_vpa,
@@ -832,7 +832,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     # => old_wpa = new_wpa/vth
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        restart_vpa_vals = vpa.grid ./ moments.charged.vth[iz,ir,is]
+                        restart_vpa_vals = vpa.grid ./ moments.ion.vth[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,ir,is], restart_vpa,
@@ -846,8 +846,8 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
                         restart_vpa_vals =
-                            @. (vpa.grid - moments.charged.upar[iz,ir,is]) /
-                               moments.charged.vth[iz,ir,is]
+                            @. (vpa.grid - moments.ion.upar[iz,ir,is]) /
+                               moments.ion.vth[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,ir,is], restart_vpa,
@@ -860,7 +860,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     # => old_wpa = new_wpa + upar
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        restart_vpa_vals = vpa.grid .+ moments.charged.upar[iz,ir,is]
+                        restart_vpa_vals = vpa.grid .+ moments.ion.upar[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,ir,is], restart_vpa,
@@ -874,8 +874,8 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
                         restart_vpa_vals =
-                            @. (vpa.grid + moments.charged.upar[iz,ir,is]) /
-                               moments.charged.vth
+                            @. (vpa.grid + moments.ion.upar[iz,ir,is]) /
+                               moments.ion.vth
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,ir,is], restart_vpa,
@@ -888,7 +888,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     # => old_wpa = new_wpa/vth
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        restart_vpa_vals = vpa.grid ./ moments.charged.vth[iz,ir,is]
+                        restart_vpa_vals = vpa.grid ./ moments.ion.vth[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,ir,is], restart_vpa,
@@ -901,7 +901,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     # => old_wpa = new_wpa*vth
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        restart_vpa_vals = vpa.grid .* moments.charged.vth[iz,ir,is]
+                        restart_vpa_vals = vpa.grid .* moments.ion.vth[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,ir,is], restart_vpa,
@@ -914,8 +914,8 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     # => old_wpa = new_wpa*vth - upar/vth
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        restart_vpa_vals = @. vpa.grid * moments.charged.vth[iz,ir,is] -
-                                              moments.charged.upar[iz,ir,is]
+                        restart_vpa_vals = @. vpa.grid * moments.ion.vth[iz,ir,is] -
+                                              moments.ion.upar[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,ir,is], restart_vpa,
@@ -930,7 +930,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
                         restart_vpa_vals =
                             @. vpa.grid -
-                               moments.charged.upar[iz,ir,is]/moments.charged.vth[iz,ir,is]
+                               moments.ion.upar[iz,ir,is]/moments.ion.vth[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,ir,is], restart_vpa,
@@ -943,8 +943,8 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     # => old_wpa = new_wpa*vth + upar
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        restart_vpa_vals = @. vpa.grid * moments.charged.vth[iz,ir,is] +
-                                              moments.charged.upar[iz,ir,is]
+                        restart_vpa_vals = @. vpa.grid * moments.ion.vth[iz,ir,is] +
+                                              moments.ion.upar[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,ir,is], restart_vpa,
@@ -957,7 +957,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     # => old_wpa = new_wpa*vth
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        restart_vpa_vals = vpa.grid .* moments.charged.vth[iz,ir,is]
+                        restart_vpa_vals = vpa.grid .* moments.ion.vth[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,ir,is], restart_vpa,
@@ -972,7 +972,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
                         restart_vpa_vals =
                             @. vpa.grid +
-                               moments.charged.upar[iz,ir,is] / moments.charged.vth[iz,ir,is]
+                               moments.ion.upar[iz,ir,is] / moments.ion.vth[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,ir,is], restart_vpa,
@@ -993,33 +993,33 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                 if moments.evolve_density && !restart_evolve_density
                     # Need to normalise by density
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
-                        this_pdf[:,:,iz,ir,is] ./= moments.charged.dens[iz,ir,is]
+                        this_pdf[:,:,iz,ir,is] ./= moments.ion.dens[iz,ir,is]
                     end
                 elseif !moments.evolve_density && restart_evolve_density
                     # Need to unnormalise by density
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
-                        this_pdf[:,:,iz,ir,is] .*= moments.charged.dens[iz,ir,is]
+                        this_pdf[:,:,iz,ir,is] .*= moments.ion.dens[iz,ir,is]
                     end
                 end
                 if moments.evolve_ppar && !restart_evolve_ppar
                     # Need to normalise by vth
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
-                        this_pdf[:,:,iz,ir,is] .*= moments.charged.vth[iz,ir,is]
+                        this_pdf[:,:,iz,ir,is] .*= moments.ion.vth[iz,ir,is]
                     end
                 elseif !moments.evolve_ppar && restart_evolve_ppar
                     # Need to unnormalise by vth
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
-                        this_pdf[:,:,iz,ir,is] ./= moments.charged.vth[iz,ir,is]
+                        this_pdf[:,:,iz,ir,is] ./= moments.ion.vth[iz,ir,is]
                     end
                 end
 
                 return this_pdf
             end
 
-            pdf.charged.norm .= load_charged_pdf()
+            pdf.ion.norm .= load_ion_pdf()
             boundary_distributions_io = get_group(fid, "boundary_distributions")
 
-            function load_charged_boundary_pdf(var_name, ir)
+            function load_ion_boundary_pdf(var_name, ir)
                 this_pdf = load_slice(boundary_distributions_io, var_name, vpa_range,
                                       vperp_range, z_range, :)
                 orig_nvpa, orig_nvperp, orig_nz, nspecies = size(this_pdf)
@@ -1074,7 +1074,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     # => old_wpa = new_wpa - upar
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
                     for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        restart_vpa_vals = vpa.grid .- moments.charged.upar[iz,ir,is]
+                        restart_vpa_vals = vpa.grid .- moments.ion.upar[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
@@ -1086,7 +1086,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     # => old_wpa = new_wpa/vth
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
                     for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        restart_vpa_vals = vpa.grid ./ moments.charged.vth[iz,ir,is]
+                        restart_vpa_vals = vpa.grid ./ moments.ion.vth[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
@@ -1099,8 +1099,8 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
                     for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
                         restart_vpa_vals =
-                            @. (vpa.grid - moments.charged.upar[iz,ir,is]) /
-                               moments.charged.vth[iz,ir,is]
+                            @. (vpa.grid - moments.ion.upar[iz,ir,is]) /
+                               moments.ion.vth[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
@@ -1112,7 +1112,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     # => old_wpa = new_wpa + upar
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
                     for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        restart_vpa_vals = vpa.grid .+ moments.charged.upar[iz,ir,is]
+                        restart_vpa_vals = vpa.grid .+ moments.ion.upar[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
@@ -1125,8 +1125,8 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
                     for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
                         restart_vpa_vals =
-                            @. (vpa.grid + moments.charged.upar[iz,ir,is]) /
-                               moments.charged.vth
+                            @. (vpa.grid + moments.ion.upar[iz,ir,is]) /
+                               moments.ion.vth
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
@@ -1138,7 +1138,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     # => old_wpa = new_wpa/vth
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
                     for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        restart_vpa_vals = vpa.grid ./ moments.charged.vth[iz,ir,is]
+                        restart_vpa_vals = vpa.grid ./ moments.ion.vth[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
@@ -1150,7 +1150,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     # => old_wpa = new_wpa*vth
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
                     for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        restart_vpa_vals = vpa.grid .* moments.charged.vth[iz,ir,is]
+                        restart_vpa_vals = vpa.grid .* moments.ion.vth[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
@@ -1162,8 +1162,8 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     # => old_wpa = new_wpa*vth - upar/vth
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
                     for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        restart_vpa_vals = @. vpa.grid * moments.charged.vth[iz,ir,is] -
-                                              moments.charged.upar[iz,ir,is]
+                        restart_vpa_vals = @. vpa.grid * moments.ion.vth[iz,ir,is] -
+                                              moments.ion.upar[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
@@ -1177,7 +1177,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
                         restart_vpa_vals =
                             @. vpa.grid -
-                               moments.charged.upar[iz,ir,is]/moments.charged.vth[iz,ir,is]
+                               moments.ion.upar[iz,ir,is]/moments.ion.vth[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
@@ -1189,8 +1189,8 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     # => old_wpa = new_wpa*vth + upar
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
                     for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        restart_vpa_vals = @. vpa.grid * moments.charged.vth[iz,ir,is] +
-                                              moments.charged.upar[iz,ir,is]
+                        restart_vpa_vals = @. vpa.grid * moments.ion.vth[iz,ir,is] +
+                                              moments.ion.upar[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
@@ -1202,7 +1202,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     # => old_wpa = new_wpa*vth
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
                     for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        restart_vpa_vals = vpa.grid .* moments.charged.vth[iz,ir,is]
+                        restart_vpa_vals = vpa.grid .* moments.ion.vth[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
@@ -1216,7 +1216,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                     for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
                         restart_vpa_vals =
                             @. vpa.grid +
-                               moments.charged.upar[iz,ir,is] / moments.charged.vth[iz,ir,is]
+                               moments.ion.upar[iz,ir,is] / moments.ion.vth[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
@@ -1236,33 +1236,33 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                 if moments.evolve_density && !restart_evolve_density
                     # Need to normalise by density
                     for is ∈ nspecies, iz ∈ 1:z.n
-                        this_pdf[:,:,iz,is] ./= moments.charged.dens[iz,ir,is]
+                        this_pdf[:,:,iz,is] ./= moments.ion.dens[iz,ir,is]
                     end
                 elseif !moments.evolve_density && restart_evolve_density
                     # Need to unnormalise by density
                     for is ∈ nspecies, iz ∈ 1:z.n
-                        this_pdf[:,:,iz,is] .*= moments.charged.dens[iz,ir,is]
+                        this_pdf[:,:,iz,is] .*= moments.ion.dens[iz,ir,is]
                     end
                 end
                 if moments.evolve_ppar && !restart_evolve_ppar
                     # Need to normalise by vth
                     for is ∈ nspecies, iz ∈ 1:z.n
-                        this_pdf[:,:,iz,is] .*= moments.charged.vth[iz,ir,is]
+                        this_pdf[:,:,iz,is] .*= moments.ion.vth[iz,ir,is]
                     end
                 elseif !moments.evolve_ppar && restart_evolve_ppar
                     # Need to unnormalise by vth
                     for is ∈ nspecies, iz ∈ 1:z.n
-                        this_pdf[:,:,iz,is] ./= moments.charged.vth[iz,ir,is]
+                        this_pdf[:,:,iz,is] ./= moments.ion.vth[iz,ir,is]
                     end
                 end
 
                 return this_pdf
             end
 
-            boundary_distributions.pdf_rboundary_charged[:,:,:,1,:] .=
-                load_charged_boundary_pdf("pdf_rboundary_charged_left", 1)
-            boundary_distributions.pdf_rboundary_charged[:,:,:,2,:] .=
-                load_charged_boundary_pdf("pdf_rboundary_charged_right", r.n)
+            boundary_distributions.pdf_rboundary_ion[:,:,:,1,:] .=
+                load_ion_boundary_pdf("pdf_rboundary_ion_left", 1)
+            boundary_distributions.pdf_rboundary_ion[:,:,:,2,:] .=
+                load_ion_boundary_pdf("pdf_rboundary_ion_right", r.n)
 
             if composition.n_neutral_species > 0
                 moments.neutral.dens .= load_moment("density_neutral")
@@ -1888,11 +1888,11 @@ restarts (which are sequential in time), so concatenate the data from each entry
 
 The slice to take is specified by the keyword arguments.
 """
-function load_distributed_charged_pdf_slice(run_names::Tuple, nblocks::Tuple, t_range,
-                                            n_species::mk_int, r::coordinate,
-                                            z::coordinate, vperp::coordinate,
-                                            vpa::coordinate; is=nothing, ir=nothing,
-                                            iz=nothing, ivperp=nothing, ivpa=nothing)
+function load_distributed_ion_pdf_slice(run_names::Tuple, nblocks::Tuple, t_range,
+                                        n_species::mk_int, r::coordinate,
+                                        z::coordinate, vperp::coordinate,
+                                        vpa::coordinate; is=nothing, ir=nothing,
+                                        iz=nothing, ivperp=nothing, ivpa=nothing)
     # dimension of pdf is [vpa,vperp,z,r,species,t]
 
     result_dims = mk_int[]
@@ -2913,14 +2913,13 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                                       run_info.r_local.n, run_info.itime_skip)
             result = result[iz,ir,is,it]
         elseif nd === 6
-            result = load_distributed_charged_pdf_slice(run_info.files, run_info.nblocks,
-                                                        it, run_info.n_ion_species,
-                                                        run_info.r_local,
-                                                        run_info.z_local, run_info.vperp,
-                                                        run_info.vpa;
-                                                        is=(is === (:) ? nothing : is),
-                                                        ir=ir, iz=iz, ivperp=ivperp,
-                                                        ivpa=ivpa)
+            result = load_distributed_ion_pdf_slice(run_info.files, run_info.nblocks, it,
+                                                    run_info.n_ion_species,
+                                                    run_info.r_local, run_info.z_local,
+                                                    run_info.vperp, run_info.vpa;
+                                                    is=(is === (:) ? nothing : is),
+                                                    ir=ir, iz=iz, ivperp=ivperp,
+                                                    ivpa=ivpa)
         elseif nd === 7
             result = load_distributed_neutral_pdf_slice(run_info.files, run_info.nblocks,
                                                         it, run_info.n_ion_species,
@@ -3145,12 +3144,12 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             advect = [(speed=@view(speed[:,:,:,:,is,it]),) for is ∈ 1:nspecies]
             # Only need Ez
             fields = (Ez=@view(Ez[:,:,it]),)
-            @views moments = (charged=(dppar_dz=dppar_dz[:,:,:,it],
-                                       dupar_dz=dupar_dz[:,:,:,it],
-                                       dvth_dz=dvth_dz[:,:,:,it],
-                                       dqpar_dz=dqpar_dz[:,:,:,it],
-                                       vth=vth[:,:,:,it],
-                                       external_source_amplitude=external_source_amplitude[:,:,it]),
+            @views moments = (ion=(dppar_dz=dppar_dz[:,:,:,it],
+                                   dupar_dz=dupar_dz[:,:,:,it],
+                                   dvth_dz=dvth_dz[:,:,:,it],
+                                   dqpar_dz=dqpar_dz[:,:,:,it],
+                                   vth=vth[:,:,:,it],
+                                   external_source_amplitude=external_source_amplitude[:,:,it]),
                              evolve_density=run_info.evolve_density,
                              evolve_upar=run_info.evolve_upar,
                              evolve_ppar=run_info.evolve_ppar)

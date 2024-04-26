@@ -237,10 +237,10 @@ end
     initialize_external_source_amplitude!(moments, external_source_settings, vperp,
                                           vzeta, vr, n_neutral_species)
 
-Initialize the arrays `moments.charged.external_source_amplitude`,
-`moments.charged.external_source_density_amplitude`,
-`moments.charged.external_source_momentum_amplitude`,
-`moments.charged.external_source_pressure_amplitude`,
+Initialize the arrays `moments.ion.external_source_amplitude`,
+`moments.ion.external_source_density_amplitude`,
+`moments.ion.external_source_momentum_amplitude`,
+`moments.ion.external_source_pressure_amplitude`,
 `moments.neutral.external_source_amplitude`,
 `moments.neutral.external_source_density_amplitude`,
 `moments.neutral.external_source_momentum_amplitude`, and
@@ -255,20 +255,20 @@ function initialize_external_source_amplitude!(moments, external_source_settings
     if ion_source_settings.active
         if ion_source_settings.source_type == "energy"
             @loop_r_z ir iz begin
-                moments.charged.external_source_amplitude[iz,ir] =
+                moments.ion.external_source_amplitude[iz,ir] =
                     ion_source_settings.source_strength *
                     ion_source_settings.r_amplitude[ir] *
                     ion_source_settings.z_amplitude[iz]
             end
             if moments.evolve_density
                 @loop_r_z ir iz begin
-                    moments.charged.external_source_density_amplitude[iz,ir] = 0.0
+                    moments.ion.external_source_density_amplitude[iz,ir] = 0.0
                 end
             end
             if moments.evolve_upar
                 @loop_r_z ir iz begin
-                    moments.charged.external_source_momentum_amplitude[iz,ir] =
-                        - moments.charged.dens[iz,ir] * moments.charged.upar[iz,ir] *
+                    moments.ion.external_source_momentum_amplitude[iz,ir] =
+                        - moments.ion.dens[iz,ir] * moments.ion.upar[iz,ir] *
                           ion_source_settings.source_strength *
                           ion_source_settings.r_amplitude[ir] *
                           ion_source_settings.z_amplitude[iz]
@@ -276,9 +276,9 @@ function initialize_external_source_amplitude!(moments, external_source_settings
             end
             if moments.evolve_ppar
                 @loop_r_z ir iz begin
-                    moments.charged.external_source_pressure_amplitude[iz,ir] =
+                    moments.ion.external_source_pressure_amplitude[iz,ir] =
                         (0.5 * ion_source_settings.source_T +
-                         moments.charged.upar[iz,ir]^2 - moments.charged.ppar[iz,ir]) *
+                         moments.ion.upar[iz,ir]^2 - moments.ion.ppar[iz,ir]) *
                         ion_source_settings.source_strength *
                         ion_source_settings.r_amplitude[ir] *
                         ion_source_settings.z_amplitude[iz]
@@ -286,14 +286,14 @@ function initialize_external_source_amplitude!(moments, external_source_settings
             end
         else
             @loop_r_z ir iz begin
-                moments.charged.external_source_amplitude[iz,ir] =
+                moments.ion.external_source_amplitude[iz,ir] =
                     ion_source_settings.source_strength *
                     ion_source_settings.r_amplitude[ir] *
                     ion_source_settings.z_amplitude[iz]
             end
             if moments.evolve_density
                 @loop_r_z ir iz begin
-                    moments.charged.external_source_density_amplitude[iz,ir] =
+                    moments.ion.external_source_density_amplitude[iz,ir] =
                         ion_source_settings.source_strength *
                         ion_source_settings.r_amplitude[ir] *
                         ion_source_settings.z_amplitude[iz]
@@ -301,14 +301,14 @@ function initialize_external_source_amplitude!(moments, external_source_settings
             end
             if moments.evolve_upar
                 @loop_r_z ir iz begin
-                    moments.charged.external_source_momentum_amplitude[iz,ir] = 0.0
+                    moments.ion.external_source_momentum_amplitude[iz,ir] = 0.0
                 end
             end
             if moments.evolve_ppar
                 @loop_r_z ir iz begin
-                    moments.charged.external_source_pressure_amplitude[iz,ir] =
+                    moments.ion.external_source_pressure_amplitude[iz,ir] =
                         (0.5 * ion_source_settings.source_T +
-                         moments.charged.upar[iz,ir]^2) *
+                         moments.ion.upar[iz,ir]^2) *
                         ion_source_settings.source_strength *
                         ion_source_settings.r_amplitude[ir] *
                         ion_source_settings.z_amplitude[iz]
@@ -393,7 +393,7 @@ end
 function initialize_external_source_controller_integral!(
              moments, external_source_settings, n_neutral_species)
 
-Initialize the arrays `moments.charged.external_source_controller_integral` and
+Initialize the arrays `moments.ion.external_source_controller_integral` and
 `moments.neutral.external_source_controller_integral`, using the settings in
 `external_source_settings`
 """
@@ -406,7 +406,7 @@ function initialize_external_source_controller_integral!(
             if ion_source_settings.PI_density_controller_I != 0.0 &&
                 ion_source_settings.source_type ∈ ("density_profile_control",
                                                    "density_midpoint_control")
-                moments.charged.external_source_controller_integral .= 0.0
+                moments.ion.external_source_controller_integral .= 0.0
             end
         end
 
@@ -433,7 +433,7 @@ Add external source term to the ion kinetic equation.
 function external_ion_source!(pdf, fvec, moments, ion_source_settings, vperp, vpa, dt, scratch_dummy)
     
     source_type =  ion_source_settings.source_type
-    source_amplitude = moments.charged.external_source_amplitude
+    source_amplitude = moments.ion.external_source_amplitude
     source_T = ion_source_settings.source_T
     source_n = ion_source_settings.source_n
     if vperp.n == 1
@@ -446,7 +446,7 @@ function external_ion_source!(pdf, fvec, moments, ion_source_settings, vperp, vp
     if source_type in ("Maxwellian","energy")
         begin_s_r_z_vperp_region()
         if moments.evolve_ppar && moments.evolve_upar && moments.evolve_density
-            vth = moments.charged.vth
+            vth = moments.ion.vth
             density = fvec.density
             upar = fvec.upar
             @loop_s_r_z is ir iz begin
@@ -744,7 +744,7 @@ function external_ion_source_controller!(fvec_in, moments, ion_source_settings, 
     begin_r_z_region()
 
     is = 1
-    ion_moments = moments.charged
+    ion_moments = moments.ion
 
     if ion_source_settings.source_type == "Maxwellian"
         if moments.evolve_ppar

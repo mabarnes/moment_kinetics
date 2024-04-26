@@ -42,7 +42,7 @@ struct ascii_ios{T <: Union{IOStream,Nothing}}
     #ff::T
     # corresponds to the ascii file to which velocity space moments of the
     # distribution function such as density and pressure are written
-    moments_charged::T
+    moments_ion::T
     moments_neutral::T
     # corresponds to the ascii file to which electromagnetic fields
     # such as the electrostatic potential are written
@@ -66,19 +66,19 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower,
     Er::Tphi
     # handle for the z electric field variable
     Ez::Tphi
-    # handle for the charged species density
+    # handle for the ion species density
     density::Tmomi
-    # handle for the charged species parallel flow
+    # handle for the ion species parallel flow
     parallel_flow::Tmomi
-    # handle for the charged species parallel pressure
+    # handle for the ion species parallel pressure
     parallel_pressure::Tmomi
-    # handle for the charged species perpendicular pressure
+    # handle for the ion species perpendicular pressure
     perpendicular_pressure::Tmomi
-    # handle for the charged species parallel heat flux
+    # handle for the ion species parallel heat flux
     parallel_heat_flux::Tmomi
-    # handle for the charged species thermal speed
+    # handle for the ion species thermal speed
     thermal_speed::Tmomi
-    # handle for the charged species entropy production
+    # handle for the ion species entropy production
     entropy_production::Tmomi
     # handle for chodura diagnostic (lower)
     chodura_integral_lower::Tchodura_lower
@@ -130,7 +130,7 @@ distribution function data only
 struct io_dfns_info{Tfile, Tfi, Tfn, Tmoments}
     # file identifier for the binary file to which data is written
     fid::Tfile
-    # handle for the charged species distribution function variable
+    # handle for the ion species distribution function variable
     f::Tfi
     # handle for the neutral species distribution function variable
     f_neutral::Tfn
@@ -198,10 +198,10 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
 
         if io_input.ascii_output
             #ff_io = open_ascii_output_file(out_prefix, "f_vs_t")
-            mom_chrg_io = open_ascii_output_file(out_prefix, "moments_charged_vs_t")
+            mom_ion_io = open_ascii_output_file(out_prefix, "moments_ion_vs_t")
             mom_ntrl_io = open_ascii_output_file(out_prefix, "moments_neutral_vs_t")
             fields_io = open_ascii_output_file(out_prefix, "fields_vs_t")
-            ascii = ascii_ios(mom_chrg_io, mom_ntrl_io, fields_io)
+            ascii = ascii_ios(mom_ion_io, mom_ntrl_io, fields_io)
         else
             ascii = ascii_ios(nothing, nothing, nothing)
         end
@@ -426,14 +426,14 @@ function write_boundary_distributions!(fid, boundary_distributions, parallel_io,
     @serial_region begin
         boundary_distributions_io = create_io_group(fid, "boundary_distributions")
 
-        write_single_value!(boundary_distributions_io, "pdf_rboundary_charged_left",
-            boundary_distributions.pdf_rboundary_charged[:,:,:,1,:], vpa, vperp, z,
+        write_single_value!(boundary_distributions_io, "pdf_rboundary_ion_left",
+            boundary_distributions.pdf_rboundary_ion[:,:,:,1,:], vpa, vperp, z,
             parallel_io=parallel_io, n_ion_species=composition.n_ion_species,
-            description="Initial charged-particle pdf at left radial boundary")
-        write_single_value!(boundary_distributions_io, "pdf_rboundary_charged_right",
-            boundary_distributions.pdf_rboundary_charged[:,:,:,2,:], vpa, vperp, z,
+            description="Initial ion-particle pdf at left radial boundary")
+        write_single_value!(boundary_distributions_io, "pdf_rboundary_ion_right",
+            boundary_distributions.pdf_rboundary_ion[:,:,:,2,:], vpa, vperp, z,
             parallel_io=parallel_io, n_ion_species=composition.n_ion_species,
-            description="Initial charged-particle pdf at right radial boundary")
+            description="Initial ion-particle pdf at right radial boundary")
         write_single_value!(boundary_distributions_io, "pdf_rboundary_neutral_left",
             boundary_distributions.pdf_rboundary_neutral[:,:,:,:,1,:], vz, vr, vzeta, z,
             parallel_io=parallel_io, n_neutral_species=composition.n_neutral_species,
@@ -657,49 +657,49 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
         io_density = create_dynamic_variable!(dynamic, "density", mk_float, z, r;
                                               n_ion_species=n_ion_species,
                                               parallel_io=parallel_io,
-                                              description="charged species density",
+                                              description="ion species density",
                                               units="n_ref")
 
         # io_upar is the handle for the ion parallel flow density
         io_upar = create_dynamic_variable!(dynamic, "parallel_flow", mk_float, z, r;
                                            n_ion_species=n_ion_species,
                                            parallel_io=parallel_io,
-                                           description="charged species parallel flow",
+                                           description="ion species parallel flow",
                                            units="c_ref = sqrt(2*T_ref/mi)")
 
         # io_ppar is the handle for the ion parallel pressure
         io_ppar = create_dynamic_variable!(dynamic, "parallel_pressure", mk_float, z, r;
                                            n_ion_species=n_ion_species,
                                            parallel_io=parallel_io,
-                                           description="charged species parallel pressure",
+                                           description="ion species parallel pressure",
                                            units="n_ref*T_ref")
         
         # io_pperp is the handle for the ion parallel pressure
         io_pperp = create_dynamic_variable!(dynamic, "perpendicular_pressure", mk_float, z, r;
                                            n_ion_species=n_ion_species,
                                            parallel_io=parallel_io,
-                                           description="charged species perpendicular pressure",
+                                           description="ion species perpendicular pressure",
                                            units="n_ref*T_ref")
 
         # io_qpar is the handle for the ion parallel heat flux
         io_qpar = create_dynamic_variable!(dynamic, "parallel_heat_flux", mk_float, z, r;
                                            n_ion_species=n_ion_species,
                                            parallel_io=parallel_io,
-                                           description="charged species parallel heat flux",
+                                           description="ion species parallel heat flux",
                                            units="n_ref*T_ref*c_ref")
 
         # io_vth is the handle for the ion thermal speed
         io_vth = create_dynamic_variable!(dynamic, "thermal_speed", mk_float, z, r;
                                           n_ion_species=n_ion_species,
                                           parallel_io=parallel_io,
-                                          description="charged species thermal speed",
+                                          description="ion species thermal speed",
                                           units="c_ref")
 
         # io_dSdt is the handle for the entropy production (due to collisions)
         io_dSdt = create_dynamic_variable!(dynamic, "entropy_production", mk_float, z, r;
                                           n_ion_species=n_ion_species,
                                           parallel_io=parallel_io,
-                                          description="charged species entropy production",
+                                          description="ion species entropy production",
                                           units="")
 
         if parallel_io || z.irank == 0
@@ -951,7 +951,7 @@ function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz,
         io_f = create_dynamic_variable!(dynamic, "f", mk_float, vpa, vperp, z, r;
                                         n_ion_species=n_ion_species,
                                         parallel_io=parallel_io,
-                                        description="charged species distribution function")
+                                        description="ion species distribution function")
 
         # io_f_neutral is the handle for the neutral pdf
         io_f_neutral = create_dynamic_variable!(dynamic, "f_neutral", mk_float, vz, vr, vzeta, z, r;
@@ -1256,66 +1256,66 @@ function write_moments_data_to_binary(moments, fields, t, n_ion_species,
         append_to_dynamic_var(io_moments.Ez, fields.Ez, t_idx, parallel_io, z, r)
 
         # add the density data at this time slice to the output file
-        append_to_dynamic_var(io_moments.density, moments.charged.dens, t_idx,
+        append_to_dynamic_var(io_moments.density, moments.ion.dens, t_idx,
                               parallel_io, z, r, n_ion_species)
-        append_to_dynamic_var(io_moments.parallel_flow, moments.charged.upar, t_idx,
+        append_to_dynamic_var(io_moments.parallel_flow, moments.ion.upar, t_idx,
                               parallel_io, z, r, n_ion_species)
-        append_to_dynamic_var(io_moments.parallel_pressure, moments.charged.ppar, t_idx,
+        append_to_dynamic_var(io_moments.parallel_pressure, moments.ion.ppar, t_idx,
                               parallel_io, z, r, n_ion_species)
-        append_to_dynamic_var(io_moments.perpendicular_pressure, moments.charged.pperp, t_idx,
+        append_to_dynamic_var(io_moments.perpendicular_pressure, moments.ion.pperp, t_idx,
                               parallel_io, z, r, n_ion_species)
-        append_to_dynamic_var(io_moments.parallel_heat_flux, moments.charged.qpar, t_idx,
+        append_to_dynamic_var(io_moments.parallel_heat_flux, moments.ion.qpar, t_idx,
                               parallel_io, z, r, n_ion_species)
-        append_to_dynamic_var(io_moments.thermal_speed, moments.charged.vth, t_idx,
+        append_to_dynamic_var(io_moments.thermal_speed, moments.ion.vth, t_idx,
                               parallel_io, z, r, n_ion_species)
-        append_to_dynamic_var(io_moments.entropy_production, moments.charged.dSdt, t_idx,
+        append_to_dynamic_var(io_moments.entropy_production, moments.ion.dSdt, t_idx,
                               parallel_io, z, r, n_ion_species)
         if z.irank == 0 # lower wall 
             append_to_dynamic_var(io_moments.chodura_integral_lower,
-                                  moments.charged.chodura_integral_lower, t_idx,
+                                  moments.ion.chodura_integral_lower, t_idx,
                                   parallel_io, r, n_ion_species)
         elseif io_moments.chodura_integral_lower !== nothing
             append_to_dynamic_var(io_moments.chodura_integral_lower,
-                                  moments.charged.chodura_integral_lower, t_idx,
+                                  moments.ion.chodura_integral_lower, t_idx,
                                   parallel_io, 0, n_ion_species)
         end
         if z.irank == z.nrank - 1 # upper wall
             append_to_dynamic_var(io_moments.chodura_integral_upper,
-                                  moments.charged.chodura_integral_upper, t_idx,
+                                  moments.ion.chodura_integral_upper, t_idx,
                                   parallel_io, r, n_ion_species)
         elseif io_moments.chodura_integral_upper !== nothing
             append_to_dynamic_var(io_moments.chodura_integral_upper,
-                                  moments.charged.chodura_integral_upper, t_idx,
+                                  moments.ion.chodura_integral_upper, t_idx,
                                   parallel_io, 0, n_ion_species)
         end
         if io_moments.external_source_amplitude !== nothing
             append_to_dynamic_var(io_moments.external_source_amplitude,
-                                  moments.charged.external_source_amplitude, t_idx,
+                                  moments.ion.external_source_amplitude, t_idx,
                                   parallel_io, z, r)
             if moments.evolve_density
                 append_to_dynamic_var(io_moments.external_source_density_amplitude,
-                                      moments.charged.external_source_density_amplitude,
+                                      moments.ion.external_source_density_amplitude,
                                       t_idx, parallel_io, z, r)
             end
             if moments.evolve_upar
                 append_to_dynamic_var(io_moments.external_source_momentum_amplitude,
-                                      moments.charged.external_source_momentum_amplitude,
+                                      moments.ion.external_source_momentum_amplitude,
                                       t_idx, parallel_io, z, r)
             end
             if moments.evolve_ppar
                 append_to_dynamic_var(io_moments.external_source_pressure_amplitude,
-                                      moments.charged.external_source_pressure_amplitude,
+                                      moments.ion.external_source_pressure_amplitude,
                                       t_idx, parallel_io, z, r)
             end
         end
         if io_moments.external_source_controller_integral !== nothing
-            if size(moments.charged.external_source_controller_integral) == (1,1)
+            if size(moments.ion.external_source_controller_integral) == (1,1)
                 append_to_dynamic_var(io_moments.external_source_controller_integral,
-                                      moments.charged.external_source_controller_integral[1,1],
+                                      moments.ion.external_source_controller_integral[1,1],
                                       t_idx, parallel_io)
             else
                 append_to_dynamic_var(io_moments.external_source_controller_integral,
-                                      moments.charged.external_source_controller_integral,
+                                      moments.ion.external_source_controller_integral,
                                       t_idx, parallel_io, z, r)
             end
         end
@@ -1457,7 +1457,7 @@ include("file_io_hdf5.jl")
 """
 function write_data_to_ascii(moments, fields, vpa, vperp, z, r, t, n_ion_species,
                              n_neutral_species, ascii_io::Union{ascii_ios,Nothing})
-    if ascii_io === nothing || ascii_io.moments_charged === nothing
+    if ascii_io === nothing || ascii_io.moments_ion === nothing
         # ascii I/O is disabled
         return nothing
     end
@@ -1465,8 +1465,8 @@ function write_data_to_ascii(moments, fields, vpa, vperp, z, r, t, n_ion_species
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        #write_f_ascii(ff, z, vpa, t, ascii_io.ff)
-        write_moments_charged_ascii(moments.charged, z, r, t, n_ion_species, ascii_io.moments_charged)
+        #write_f_ascii(pdf, z, vpa, t, ascii_io.ff)
+        write_moments_ion_ascii(moments.ion, z, r, t, n_ion_species, ascii_io.moments_ion)
         if n_neutral_species > 0
             write_moments_neutral_ascii(moments.neutral, z, r, t, n_neutral_species, ascii_io.moments_neutral)
         end
@@ -1483,27 +1483,28 @@ function write_f_ascii(f, z, vpa, t, ascii_io)
         # Only read/write from first process in each 'block'
 
         @inbounds begin
-            n_species = size(f,3)
-            for is ∈ 1:n_species
+            #n_species = size(f,3)
+            #for is ∈ 1:n_species
                 for j ∈ 1:vpa.n
                     for i ∈ 1:z.n
-                        println(ascii_io,"t: ", t, "   spec: ", is, ",   z: ", z.grid[i],
-                            ",  vpa: ", vpa.grid[j], ",   f: ", f[i,j,is])
+                        println(ascii_io,"t: ", t, "   z: ", z.grid[i],
+                            "  vpa: ", vpa.grid[j], "   fion: ", f.ion.norm[i,j,1], 
+                            "   fneutral: ", f.neutral.norm[i,j,1])
                     end
                     println(ascii_io)
                 end
                 println(ascii_io)
-            end
-            println(ascii_io)
+            #end
+            #println(ascii_io)
         end
     end
     return nothing
 end
 
 """
-write moments of the charged species distribution function f at this time slice
+write moments of the ion species distribution function f at this time slice
 """
-function write_moments_charged_ascii(mom, z, r, t, n_species, ascii_io)
+function write_moments_ion_ascii(mom, z, r, t, n_species, ascii_io)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -1704,9 +1705,9 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
         debug_output_file.label[debug_output_counter[]] = label
         # add the distribution function data at this time slice to the netcdf file
         if ff === nothing
-            debug_output_file.dfns.charged_f[:,:,:,:,:,debug_output_counter[]] = 0.0
+            debug_output_file.dfns.ion_f[:,:,:,:,:,debug_output_counter[]] = 0.0
         else
-            debug_output_file.dfns.charged_f[:,:,:,:,:,debug_output_counter[]] = ff
+            debug_output_file.dfns.ion_f[:,:,:,:,:,debug_output_counter[]] = ff
         end
         # add the moments data at this time slice to the netcdf file
         if dens === nothing
