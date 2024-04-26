@@ -379,7 +379,7 @@ function update_electron_vth_temperature!(moments, ppar, dens, composition)
     vth = moments.electron.vth
     @loop_r_z ir iz begin
         p = max(ppar[iz,ir], 0.0)
-        temp[iz,ir] = 2 * p[iz,ir] / dens[iz,ir]
+        temp[iz,ir] = 2 * p / dens[iz,ir]
         vth[iz,ir] = sqrt(temp[iz,ir] / composition.me_over_mi)
     end
     moments.electron.temp_updated[] = true
