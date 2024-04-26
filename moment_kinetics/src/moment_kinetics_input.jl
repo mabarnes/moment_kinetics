@@ -23,6 +23,7 @@ using ..reference_parameters
 using ..geo: init_magnetic_geometry, setup_geometry_input
 
 using MPI
+using Quadmath
 using TOML
 
 """
@@ -188,17 +189,73 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate, krook_input, fkpl_input)
 
     # parameters related to the time stepping
-    nstep = get(scan_input, "nstep", 5)
-    dt = get(scan_input, "dt", 0.00025/sqrt(species.charged[1].initial_temperature))
-    nwrite_moments = get(scan_input, "nwrite", 1)
-    nwrite_dfns = get(scan_input, "nwrite_dfns", nstep)
-    # options are n_rk_stages = 1, 2, 3 or 4 (corresponding to forward Euler,
-    # Heun's method, SSP RK3 and 4-stage SSP RK3)
-    n_rk_stages = get(scan_input, "n_rk_stages", 4)
-    split_operators = get(scan_input, "split_operators", false)
-    stopfile_name = joinpath(output_dir, "stop")
-    steady_state_residual = get(scan_input, "steady_state_residual", false)
-    converged_residual_value = get(scan_input, "converged_residual_value", -1.0)
+    timestepping_section = set_defaults_and_check_section!(
+        scan_input, "timestepping";
+        nstep=5,
+        dt=0.00025/sqrt(species.charged[1].initial_temperature),
+        CFL_prefactor=-1.0,
+        nwrite=1,
+        nwrite_dfns=nothing,
+        type="SSPRK4",
+        split_operators=false,
+        stopfile_name=joinpath(output_dir, "stop"),
+        steady_state_residual=false,
+        converged_residual_value=-1.0,
+        rtol=1.0e-5,
+        atol=1.0e-12,
+        atol_upar=nothing,
+        step_update_prefactor=0.9,
+        max_increase_factor=1.05,
+        max_increase_factor_near_last_fail=Inf,
+        last_fail_proximity_factor=1.05,
+        minimum_dt=0.0,
+        maximum_dt=Inf,
+        high_precision_error_sum=false,
+       )
+    if timestepping_section["nwrite"] > timestepping_section["nstep"]
+        timestepping_section["nwrite"] = timestepping_section["nstep"]
+    end
+    if timestepping_section["nwrite_dfns"] === nothing
+        timestepping_section["nwrite_dfns"] = timestepping_section["nstep"]
+    elseif timestepping_section["nwrite_dfns"] > timestepping_section["nstep"]
+        timestepping_section["nwrite_dfns"] = timestepping_section["nstep"]
+    end
+    if timestepping_section["atol_upar"] === nothing
+        timestepping_section["atol_upar"] = 1.0e-2 * timestepping_section["rtol"]
+    end
+    timestepping_input = Dict_to_NamedTuple(timestepping_section)
+    if !(0.0 < timestepping_input.step_update_prefactor < 1.0)
+        error("step_update_prefactor=$(timestepping_input.step_update_prefactor) must "
+              * "be between 0.0 and 1.0.")
+    end
+    if timestepping_input.max_increase_factor ≤ 1.0
+        error("max_increase_factor=$(timestepping_input.max_increase_factor) must "
+              * "be greater than 1.0.")
+    end
+    if timestepping_input.max_increase_factor_near_last_fail ≤ 1.0
+        error("max_increase_factor_near_last_fail="
+              * "$(timestepping_input.max_increase_factor_near_last_fail) must be "
+              * "greater than 1.0.")
+    end
+    if !isinf(timestepping_input.max_increase_factor_near_last_fail) &&
+            timestepping_input.max_increase_factor_near_last_fail > timestepping_input.max_increase_factor
+        error("max_increase_factor_near_last_fail="
+              * "$(timestepping_input.max_increase_factor_near_last_fail) should be "
+              * "less than max_increase_factor="
+              * "$(timestepping_input.max_increase_factor).")
+    end
+    if timestepping_input.last_fail_proximity_factor ≤ 1.0
+        error("last_fail_proximity_factor="
+              * "$(timestepping_input.last_fail_proximity_factor) must be "
+              * "greater than 1.0.")
+    end
+    if timestepping_input.minimum_dt > timestepping_input.maximum_dt
+        error("minimum_dt=$(timestepping_input.minimum_dt) must be less than "
+              * "maximum_dt=$(timestepping_input.maximum_dt)")
+    end
+    if timestepping_input.maximum_dt ≤ 0.0
+        error("maximum_dt=$(timestepping_input.maximum_dt) must be positive")
+    end
 
     use_for_init_is_default = !(("manufactured_solns" ∈ keys(scan_input)) &&
                                 ("use_for_init" ∈ keys(scan_input["manufactured_solns"])))
@@ -391,6 +448,13 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         irank_z = irank_r = 0
         nrank_z = nrank_r = 1
         comm_sub_z = comm_sub_r = MPI.COMM_NULL
+        r.nelement_local = r.nelement_global
+        z.nelement_local = z.nelement_global
+        vperp.nelement_local = vperp.nelement_global
+        vpa.nelement_local = vpa.nelement_global
+        vzeta.nelement_local = vzeta.nelement_global
+        vr.nelement_local = vr.nelement_global
+        vz.nelement_local = vz.nelement_global
     else
         irank_z, nrank_z, comm_sub_z, irank_r, nrank_r, comm_sub_r = setup_distributed_memory_MPI(z.nelement_global,z.nelement_local,r.nelement_global,r.nelement_local)
     end
@@ -409,9 +473,14 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         _block_synchronize()
     end
 
-    t_input = time_input(nstep, dt, nwrite_moments, nwrite_dfns, n_rk_stages,
-                         split_operators, steady_state_residual, converged_residual_value,
-                         manufactured_solns_input.use_for_advance, stopfile_name)
+    # Create output_dir if it does not exist.
+    if !ignore_MPI
+        if global_rank[] == 0
+            mkpath(output_dir)
+        end
+        _block_synchronize()
+    end
+
     # replace mutable structures with immutable ones to optimize performance
     # and avoid possible misunderstandings	
 	z_advection_immutable = advection_input(z.advection.option, z.advection.constant_speed,
@@ -578,16 +647,17 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     end
 
     # check input (and initialized coordinate structs) to catch errors/unsupported options
-    check_input(io, output_dir, nstep, dt, r, z, vpa, vperp, composition,
-                species_immutable, evolve_moments, num_diss_params, save_inputs_to_txt,
-                collisions)
+    check_input(io, output_dir, timestepping_input.nstep, timestepping_input.dt, r, z,
+                vpa, vperp, composition, species_immutable, evolve_moments,
+                num_diss_params, save_inputs_to_txt, collisions)
 
     # return immutable structs for z, vpa, species and composition
-    all_inputs = (io_immutable, evolve_moments, t_input, z, z_spectral, r, r_spectral,
-                  vpa, vpa_spectral, vperp, vperp_spectral, gyrophase, gyrophase_spectral,
-                  vz, vz_spectral, vr, vr_spectral, vzeta, vzeta_spectral, composition,
-                  species_immutable, collisions, geometry, drive_immutable,
-                  external_source_settings, num_diss_params, manufactured_solns_input)
+    all_inputs = (io_immutable, evolve_moments, timestepping_input, z, z_spectral, r,
+                  r_spectral, vpa, vpa_spectral, vperp, vperp_spectral, gyrophase,
+                  gyrophase_spectral, vz, vz_spectral, vr, vr_spectral, vzeta,
+                  vzeta_spectral, composition, species_immutable, collisions, geometry,
+                  drive_immutable, external_source_settings, num_diss_params,
+                  manufactured_solns_input)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
     close(io)

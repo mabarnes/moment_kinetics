@@ -24,12 +24,6 @@ z_IC_upar_phase2 = 0.0
 z_IC_temperature_amplitude2 = 0.5
 z_IC_temperature_phase2 = 0.0
 charge_exchange_frequency = 0.6283185307179586
-nstep = 100
-dt = 0.0005
-nwrite = 200
-use_semi_lagrange = false
-n_rk_stages = 4
-split_operators = false
 z_ngrid = 9
 z_nelement = 10
 z_bc = "periodic"
@@ -39,3 +33,10 @@ vpa_nelement = 15
 vpa_L = 8.0
 vpa_bc = "periodic"
 vpa_discretization = "chebyshev_pseudospectral"
+
+[timestepping]
+nstep = 100
+dt = 0.0005
+nwrite = 200
+n_rk_stages = 4
+split_operators = false

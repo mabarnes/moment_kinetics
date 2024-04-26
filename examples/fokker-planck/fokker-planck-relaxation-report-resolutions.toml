@@ -30,13 +30,6 @@ charge_exchange_frequency = 0.0
 ionization_frequency = 0.0
 constant_ionization_rate = false
 
-nstep = 200000
-dt = 1.0e-3
-nwrite = 50
-nwrite_dfns = 50
-use_semi_lagrange = false
-n_rk_stages = 4
-split_operators = false
 z_ngrid = 1
 z_nelement = 1
 z_nelement_local = 1
@@ -64,3 +57,9 @@ use_fokker_planck = true
 # nuii sets the normalised input C[F,F] Fokker-Planck collision frequency
 nuii = 1.0
 frequency_option = "manual"
+
+[timestepping]
+nstep = 200000
+dt = 1.0e-3
+nwrite = 50
+nwrite_dfns = 50

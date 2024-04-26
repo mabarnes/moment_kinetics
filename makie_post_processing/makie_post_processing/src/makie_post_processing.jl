@@ -14,7 +14,7 @@ export makie_post_process, generate_example_input_file, get_variable,
        setup_makie_post_processing_input!, get_run_info, close_run_info
 export animate_f_unnorm_vs_vpa, animate_f_unnorm_vs_vpa_z, get_1d_ax, get_2d_ax,
        irregular_heatmap, irregular_heatmap!, plot_f_unnorm_vs_vpa,
-       plot_f_unnorm_vs_vpa_z, positive_or_nan, postproc_load_variable, positive_or_nan,
+       plot_f_unnorm_vs_vpa_z, positive_or_nan, get_variable, positive_or_nan,
        put_legend_above, put_legend_below, put_legend_left, put_legend_right
 
 include("shared_utils.jl")
@@ -38,7 +38,7 @@ using moment_kinetics.looping: all_dimensions, ion_dimensions, neutral_dimension
 using moment_kinetics.manufactured_solns: manufactured_solutions,
                                           manufactured_electric_fields
 using moment_kinetics.load_data: close_run_info, get_run_info_no_setup, get_variable,
-                                 postproc_load_variable, em_variables,
+                                 timestep_diagnostic_variables, em_variables,
                                  ion_moment_variables, neutral_moment_variables,
                                  all_moment_variables, ion_dfn_variables,
                                  neutral_dfn_variables, all_dfn_variables, ion_variables,
@@ -98,7 +98,11 @@ const two_dimension_combinations = Tuple(
 Run post processing with input read from a TOML file
 
 `run_dir...` is the path to the directory to plot from. If more than one `run_dir` is
-given, plots comparing the runs in `run_dir...`.
+given, plots comparing the runs in `run_dir...` are made.
+A moment_kinetics binary output file can also be passed as `run_dir`, in which case the
+filename is only used to infer the directory and `run_name`, so it is possible for example
+to pass a `.moments.h5` output file and still make distribution function plots (as long as
+the corresponding `.dfns.h5` file exists).
 
 `restart_index` specifies which restart to read if there are multiple restarts. The
 default (`nothing`) reads all restarts and concatenates them. An integer value reads the
@@ -136,8 +140,12 @@ end
 
 Run post prossing, with (non-default) input given in a Dict
 
-`run_dir` is the path to an output directory, or (to make comparison plots) a tuple of
-paths to output directories.
+`run_dir...` is the path to the directory to plot from. If more than one `run_dir` is
+given, plots comparing the runs in `run_dir...` are made.
+A moment_kinetics binary output file can also be passed as `run_dir`, in which case the
+filename is only used to infer the directory and `run_name`, so it is possible for example
+to pass a `.moments.h5` output file and still make distribution function plots (as long as
+the corresponding `.dfns.h5` file exists).
 
 `input_dict` is a dictionary containing settings for the post-processing.
 
@@ -245,6 +253,8 @@ function makie_post_process(run_dir::Union{String,Tuple},
             plot_prefix = joinpath(comparison_plot_dir, "compare_")
         end
     end
+
+    timestep_diagnostics(run_info; plot_prefix=plot_prefix)
 
     do_steady_state_residuals = any(input_dict[v]["steady_state_residual"]
                                     for v ∈ moment_variable_list)
@@ -607,7 +617,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
     section_defaults = OrderedDict(k=>v for (k,v) ∈ this_input_dict
                                    if !isa(v, AbstractDict) &&
                                       !(k ∈ time_index_options))
-    for variable_name ∈ all_moment_variables
+    for variable_name ∈ tuple(all_moment_variables..., timestep_diagnostic_variables...)
         set_defaults_and_check_section!(
             this_input_dict, variable_name;
             OrderedDict(Symbol(k)=>v for (k,v) ∈ section_defaults)...)
@@ -660,6 +670,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         this_input_dict, "wall_pdf";
         plot=false,
         animate=false,
+        advection_velocity=false,
         colormap=this_input_dict["colormap"],
         animation_ext=this_input_dict["animation_ext"],
        )
@@ -668,6 +679,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         this_input_dict, "wall_pdf_neutral";
         plot=false,
         animate=false,
+        advection_velocity=false,
         colormap=this_input_dict["colormap"],
         animation_ext=this_input_dict["animation_ext"],
        )
@@ -717,6 +729,12 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
        )
     sort!(this_input_dict["manufactured_solns"])
 
+    set_defaults_and_check_section!(
+        this_input_dict, "timestep_diagnostics";
+        plot=true,
+        animate_CFL=false,
+       )
+
     return nothing
 end
 
@@ -728,7 +746,11 @@ end
 
 Get file handles and other info for a single run
 
-`run_dir` is the directory to read output from.
+`run_dir` is either the directory to read output from (whose name should be the
+`run_name`), or a moment_kinetics binary output file. If a file is passed, it is only used
+to infer the directory and `run_name`, so it is possible for example to pass a
+`.moments.h5` output file and also `dfns=true` and the `.dfns.h5` file will be the one
+actually opened (as long as it exists).
 
 `restart_index` can be given by passing a Tuple, e.g. `("runs/example", 42)` as the
 positional argument. It specifies which restart to read if there are multiple restarts. If
@@ -779,15 +801,15 @@ end
 
 const chunk_size_1d = 10000
 const chunk_size_2d = 100
-struct VariableCache{T1,T2,N}
+struct VariableCache{T1,T2,T3}
     run_info::T1
     variable_name::String
     t_chunk_size::mk_int
     n_tinds::mk_int
     tinds_range_global::Union{UnitRange{mk_int},StepRange{mk_int}}
     tinds_chunk::Union{Base.RefValue{UnitRange{mk_int}},Base.RefValue{StepRange{mk_int}}}
-    data_chunk::Array{mk_float,N}
-    dim_slices::T2
+    data_chunk::T2
+    dim_slices::T3
 end
 
 function VariableCache(run_info, variable_name::String, t_chunk_size::mk_int;
@@ -804,8 +826,8 @@ function VariableCache(run_info, variable_name::String, t_chunk_size::mk_int;
     tinds_chunk = 1:t_chunk_size
     dim_slices = (is=is, iz=iz, ir=ir, ivperp=ivperp, ivpa=ivpa, ivzeta=ivzeta, ivr=ivr,
                   ivz=ivz)
-    data_chunk = postproc_load_variable(run_info, variable_name;
-                                        it=tinds_range_global[tinds_chunk], dim_slices...)
+    data_chunk = get_variable(run_info, variable_name; it=tinds_range_global[tinds_chunk],
+                              dim_slices...)
 
     return VariableCache(run_info, variable_name, t_chunk_size,
                          n_tinds, tinds_range_global, Ref(tinds_chunk),
@@ -828,9 +850,9 @@ function get_cache_slice(variable_cache::VariableCache, tind)
         variable_cache.tinds_chunk[] = new_chunk
         selectdim(variable_cache.data_chunk,
                   ndims(variable_cache.data_chunk), 1:length(new_chunk)) .=
-            postproc_load_variable(variable_cache.run_info, variable_cache.variable_name;
-                                   it=variable_cache.tinds_range_global[new_chunk],
-                                   variable_cache.dim_slices...)
+            get_variable(variable_cache.run_info, variable_cache.variable_name;
+                         it=variable_cache.tinds_range_global[new_chunk],
+                         variable_cache.dim_slices...)
         local_tind = findfirst(i->i==tind, new_chunk)
     end
 
@@ -1156,7 +1178,7 @@ function check_moment_constraints(run_info, is_neutral; input, plot_prefix)
     is = 1
 
     if is_neutral
-        fn = postproc_load_variable(run_info, "f_neutral")
+        fn = get_variable(run_info, "f_neutral")
         if run_info.evolve_density
             moment = zeros(run_info.z.n, run_info.r.n, run_info.nt)
             for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
@@ -1196,7 +1218,7 @@ function check_moment_constraints(run_info, is_neutral; input, plot_prefix)
                          outfile=plot_prefix * "parallel_pressure_moment_neutral_check.gif")
         end
     else
-        f = postproc_load_variable(run_info, "f")
+        f = get_variable(run_info, "f")
         if run_info.evolve_density
             moment = zeros(run_info.z.n, run_info.r.n, run_info.nt)
             for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
@@ -1325,6 +1347,21 @@ for dim ∈ one_dimension_combinations
                          data = Tuple(nothing for _ in run_info)
                      end
 
+                     if input === nothing
+                         if run_info[1].dfns
+                             if var_name ∈ keys(input_dict_dfns)
+                                 input = input_dict[var_name]
+                             else
+                                 input = input_dict_dfns
+                             end
+                         else
+                             if var_name ∈ keys(input_dict)
+                                 input = input_dict[var_name]
+                             else
+                                 input = input_dict
+                             end
+                         end
+                     end
                      if input isa AbstractDict
                          input = Dict_to_NamedTuple(input)
                      end
@@ -1374,9 +1411,17 @@ for dim ∈ one_dimension_combinations
                                      ivz=nothing, kwargs...)
                  if input === nothing
                      if run_info.dfns
-                         input = input_dict_dfns[var_name]
+                         if var_name ∈ keys(input_dict_dfns)
+                             input = input_dict[var_name]
+                         else
+                             input = input_dict_dfns
+                         end
                      else
-                         input = input_dict[var_name]
+                         if var_name ∈ keys(input_dict)
+                             input = input_dict[var_name]
+                         else
+                             input = input_dict
+                         end
                      end
                  end
                  if isa(input, AbstractDict)
@@ -1389,7 +1434,7 @@ for dim ∈ one_dimension_combinations
                                                               ir=ir, iz=iz, ivperp=ivperp,
                                                               ivpa=ivpa, ivzeta=ivzeta,
                                                               ivr=ivr, ivz=ivz)
-                     data = postproc_load_variable(run_info, var_name; dim_slices...)
+                     data = get_variable(run_info, var_name; dim_slices...)
                  else
                      data = select_slice(data, $(QuoteNode(dim)); input=input, it=it,
                                          is=is, ir=ir, iz=iz, ivperp=ivperp, ivpa=ivpa,
@@ -1551,9 +1596,17 @@ for (dim1, dim2) ∈ two_dimension_combinations
                                      ivz=nothing, kwargs...)
                  if input === nothing
                      if run_info.dfns
-                         input = input_dict_dfns[var_name]
+                         if var_name ∈ keys(input_dict_dfns)
+                             input = input_dict[var_name]
+                         else
+                             input = input_dict_dfns
+                         end
                      else
-                         input = input_dict[var_name]
+                         if var_name ∈ keys(input_dict)
+                             input = input_dict[var_name]
+                         else
+                             input = input_dict
+                         end
                      end
                  end
                  if isa(input, AbstractDict)
@@ -1567,7 +1620,7 @@ for (dim1, dim2) ∈ two_dimension_combinations
                                                               ir=ir, iz=iz, ivperp=ivperp,
                                                               ivpa=ivpa, ivzeta=ivzeta,
                                                               ivr=ivr, ivz=ivz)
-                     data = postproc_load_variable(run_info, var_name; dim_slices...)
+                     data = get_variable(run_info, var_name; dim_slices...)
                  else
                      data = select_slice(data, $(QuoteNode(dim2)), $(QuoteNode(dim1));
                                          input=input, it=it, is=is, ir=ir, iz=iz,
@@ -1721,6 +1774,21 @@ for dim ∈ one_dimension_combinations_no_t
                          error("`outfile` is required for $($function_name_str)")
                      end
 
+                     if input === nothing
+                         if run_info[1].dfns
+                             if var_name ∈ keys(input_dict_dfns)
+                                 input = input_dict[var_name]
+                             else
+                                 input = input_dict_dfns
+                             end
+                         else
+                             if var_name ∈ keys(input_dict)
+                                 input = input_dict[var_name]
+                             else
+                                 input = input_dict
+                             end
+                         end
+                     end
                      if input isa AbstractDict
                          input = Dict_to_NamedTuple(input)
                      end
@@ -1787,9 +1855,17 @@ for dim ∈ one_dimension_combinations_no_t
                                      ivz=nothing, kwargs...)
                  if input === nothing
                      if run_info.dfns
-                         input = input_dict_dfns[var_name]
+                         if var_name ∈ keys(input_dict_dfns)
+                             input = input_dict[var_name]
+                         else
+                             input = input_dict_dfns
+                         end
                      else
-                         input = input_dict[var_name]
+                         if var_name ∈ keys(input_dict)
+                             input = input_dict[var_name]
+                         else
+                             input = input_dict
+                         end
                      end
                  end
                  if isa(input, AbstractDict)
@@ -1969,7 +2045,7 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                                       frame_index)
                          subtitles = nothing
                      end
-                     fig, ax, colorbar_places = get_2d_ax(length(run_info),
+                     fig, ax, colorbar_places = get_2d_ax(length(run_info);
                                                           title=title,
                                                           subtitles=subtitles,
                                                           axis_args...)
@@ -2003,9 +2079,17 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                                      ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
                  if input === nothing
                      if run_info.dfns
-                         input = input_dict_dfns[var_name]
+                         if var_name ∈ keys(input_dict_dfns)
+                             input = input_dict[var_name]
+                         else
+                             input = input_dict_dfns
+                         end
                      else
-                         input = input_dict[var_name]
+                         if var_name ∈ keys(input_dict)
+                             input = input_dict[var_name]
+                         else
+                             input = input_dict
+                         end
                      end
                  end
                  if isa(input, AbstractDict)
@@ -2938,7 +3022,7 @@ function irregular_heatmap!(ax, xs, ys, zs; kwargs...)
 
     vertices, faces, colors = curvilinear_grid_mesh(xs, ys, zeros(nx, ny), zs)
 
-    return mesh!(ax, vertices, faces; color = colors, shading = false, kwargs...)
+    return mesh!(ax, vertices, faces; color = colors, shading = NoShading, kwargs...)
 end
 
 """
@@ -3105,19 +3189,19 @@ function select_slice(variable::AbstractArray{T,6}, dims::Symbol...; input=nothi
     else
         iz0 = input.iz0
     end
-    if ivpa !== nothing
-        ivpa0 = ivpa
-    elseif input === nothing || :ivpa0 ∉ input
-        ivpa0 = max(size(variable, 2) ÷ 3, 1)
-    else
-        ivpa0 = input.ivpa0
-    end
     if ivperp !== nothing
         ivperp0 = ivperp
     elseif input === nothing || :ivperp0 ∉ input
-        ivperp0 = max(size(variable, 1) ÷ 3, 1)
+        ivperp0 = max(size(variable, 2) ÷ 3, 1)
     else
         ivperp0 = input.ivperp0
+    end
+    if ivpa !== nothing
+        ivpa0 = ivpa
+    elseif input === nothing || :ivpa0 ∉ input
+        ivpa0 = max(size(variable, 1) ÷ 3, 1)
+    else
+        ivpa0 = input.ivpa0
     end
 
     slice = variable
@@ -3465,7 +3549,7 @@ function calculate_steady_state_residual(run_info, variable_name; is=1, data=not
                                          i_run=1)
 
     if data === nothing
-        data = postproc_load_variable(run_info, variable_name; is=is)
+        data = get_variable(run_info, variable_name; is=is)
     end
 
     t_dim = ndims(data)
@@ -3620,22 +3704,19 @@ function plot_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing, neutra
     end
 
     if neutral
-        f = postproc_load_variable(run_info, "f_neutral"; it=it, is=is, ir=input.ir0,
-                                   iz=iz, ivzeta=input.ivzeta0, ivr=input.ivr0)
-        density = postproc_load_variable(run_info, "density_neutral"; it=it, is=is,
-                                         ir=input.ir0, iz=iz)
-        upar = postproc_load_variable(run_info, "uz_neutral"; it=it, is=is, ir=input.ir0,
-                                      iz=iz)
-        vth = postproc_load_variable(run_info, "thermal_speed_neutral"; it=it, is=is,
-                                     ir=input.ir0, iz=iz)
+        f = get_variable(run_info, "f_neutral"; it=it, is=is, ir=input.ir0, iz=iz,
+                         ivzeta=input.ivzeta0, ivr=input.ivr0)
+        density = get_variable(run_info, "density_neutral"; it=it, is=is, ir=input.ir0,
+                               iz=iz)
+        upar = get_variable(run_info, "uz_neutral"; it=it, is=is, ir=input.ir0, iz=iz)
+        vth = get_variable(run_info, "thermal_speed_neutral"; it=it, is=is, ir=input.ir0,
+                           iz=iz)
     else
-        f = postproc_load_variable(run_info, "f"; it=it, is=is, ir=input.ir0, iz=iz,
-                                   ivperp=input.ivperp0)
-        density = postproc_load_variable(run_info, "density"; it=it, is=is, ir=input.ir0,
-                                         iz=iz)
-        upar = postproc_load_variable(run_info, "parallel_flow"; it=it, is=is, ir=input.ir0, iz=iz)
-        vth = postproc_load_variable(run_info, "thermal_speed"; it=it, is=is,
-                                     ir=input.ir0, iz=iz)
+        f = get_variable(run_info, "f"; it=it, is=is, ir=input.ir0, iz=iz,
+                         ivperp=input.ivperp0)
+        density = get_variable(run_info, "density"; it=it, is=is, ir=input.ir0, iz=iz)
+        upar = get_variable(run_info, "parallel_flow"; it=it, is=is, ir=input.ir0, iz=iz)
+        vth = get_variable(run_info, "thermal_speed"; it=it, is=is, ir=input.ir0, iz=iz)
     end
 
     f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(f, run_info.vpa.grid, density, upar, vth,
@@ -3790,21 +3871,17 @@ function plot_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, it=nothi
     end
 
     if neutral
-        f = postproc_load_variable(run_info, "f_neutral"; it=it, is=is, ir=input.ir0,
-                                   ivzeta=input.ivzeta0, ivr=input.ivr0)
-        density = postproc_load_variable(run_info, "density_neutral"; it=it, is=is,
-                                         ir=input.ir0)
-        upar = postproc_load_variable(run_info, "uz_neutral"; it=it, is=is, ir=input.ir0)
-        vth = postproc_load_variable(run_info, "thermal_speed_neutral"; it=it, is=is,
-                                     ir=input.ir0)
+        f = get_variable(run_info, "f_neutral"; it=it, is=is, ir=input.ir0,
+                         ivzeta=input.ivzeta0, ivr=input.ivr0)
+        density = get_variable(run_info, "density_neutral"; it=it, is=is, ir=input.ir0)
+        upar = get_variable(run_info, "uz_neutral"; it=it, is=is, ir=input.ir0)
+        vth = get_variable(run_info, "thermal_speed_neutral"; it=it, is=is, ir=input.ir0)
         vpa_grid = run_info.vz.grid
     else
-        f = postproc_load_variable(run_info, "f"; it=it, is=is, ir=input.ir0,
-                                   ivperp=input.ivperp0)
-        density = postproc_load_variable(run_info, "density"; it=it, is=is, ir=input.ir0)
-        upar = postproc_load_variable(run_info, "parallel_flow"; it=it, is=is, ir=input.ir0)
-        vth = postproc_load_variable(run_info, "thermal_speed"; it=it, is=is,
-                                     ir=input.ir0)
+        f = get_variable(run_info, "f"; it=it, is=is, ir=input.ir0, ivperp=input.ivperp0)
+        density = get_variable(run_info, "density"; it=it, is=is, ir=input.ir0)
+        upar = get_variable(run_info, "parallel_flow"; it=it, is=is, ir=input.ir0)
+        vth = get_variable(run_info, "thermal_speed"; it=it, is=is, ir=input.ir0)
         vpa_grid = run_info.vpa.grid
     end
 
@@ -3962,18 +4039,16 @@ function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
         f = VariableCache(run_info, "f_neutral", chunk_size_1d; it=nothing, is=is,
                           ir=input.ir0, iz=iz, ivperp=nothing, ivpa=nothing,
                           ivzeta=input.ivzeta0, ivr=input.ivr0, ivz=nothing)
-        density = postproc_load_variable(run_info, "density_neutral"; is=is, ir=input.ir0,
-                                         iz=iz)
-        upar = postproc_load_variable(run_info, "uz_neutral"; is=is, ir=input.ir0, iz=iz)
-        vth = postproc_load_variable(run_info, "thermal_speed_neutral"; is=is,
-                                     ir=input.ir0, iz=iz)
+        density = get_variable(run_info, "density_neutral"; is=is, ir=input.ir0, iz=iz)
+        upar = get_variable(run_info, "uz_neutral"; is=is, ir=input.ir0, iz=iz)
+        vth = get_variable(run_info, "thermal_speed_neutral"; is=is, ir=input.ir0, iz=iz)
     else
         f = VariableCache(run_info, "f", chunk_size_2d; it=nothing, is=is, ir=input.ir0, iz=iz,
                           ivperp=input.ivperp0, ivpa=nothing, ivzeta=nothing, ivr=nothing,
                           ivz=nothing)
-        density = postproc_load_variable(run_info, "density"; is=is, ir=input.ir0, iz=iz)
-        upar = postproc_load_variable(run_info, "parallel_flow"; is=is, ir=input.ir0, iz=iz)
-        vth = postproc_load_variable(run_info, "thermal_speed"; is=is, ir=input.ir0, iz=iz)
+        density = get_variable(run_info, "density"; is=is, ir=input.ir0, iz=iz)
+        upar = get_variable(run_info, "parallel_flow"; is=is, ir=input.ir0, iz=iz)
+        vth = get_variable(run_info, "thermal_speed"; is=is, ir=input.ir0, iz=iz)
     end
 
     function get_this_f_unnorm(it)
@@ -4245,7 +4320,7 @@ passed.
 """
 function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
     input = Dict_to_NamedTuple(input_dict_dfns["wall_pdf"])
-    if !(input.plot || input.animate)
+    if !(input.plot || input.animate || input.advection_velocity)
         # nothing to do
         return nothing
     end
@@ -4265,8 +4340,8 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
     println("Making plots of ion distribution function at walls")
     flush(stdout)
 
-    has_rdim = any(ri !== nothing && ri.r.n > 1 for ri ∈ run_info_moments)
-    has_zdim = any(ri !== nothing && ri.z.n > 1 for ri ∈ run_info_moments)
+    has_rdim = any(ri !== nothing && ri.r.n > 1 for ri ∈ run_info)
+    has_zdim = any(ri !== nothing && ri.z.n > 1 for ri ∈ run_info)
     is_1V = all(ri !== nothing && ri.vperp.n == 1 for ri ∈ run_info)
     moment_kinetic = any(ri !== nothing
                          && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
@@ -4342,6 +4417,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
                                  outfile=plot_prefix * "pdf_$(label)_vs_vpa_r." * input.animation_ext)
             end
         end
+
+        if input.advection_velocity
+            animate_vs_vpa(run_info, "vpa_advect_speed"; is=1, input=f_input,
+                           outfile=plot_prefix * "vpa_advect_speed_$(label)_vs_vpa." * input.animation_ext)
+        end
     end
 
     return nothing
@@ -4366,7 +4446,7 @@ passed.
 """
 function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
     input = Dict_to_NamedTuple(input_dict_dfns["wall_pdf_neutral"])
-    if !(input.plot || input.animate)
+    if !(input.plot || input.animate || input.advection_velocity)
         # nothing to do
         return nothing
     end
@@ -4386,8 +4466,8 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
     println("Making plots of neutral distribution function at walls")
     flush(stdout)
 
-    has_rdim = any(ri !== nothing && ri.r.n > 1 for ri ∈ run_info_moments)
-    has_zdim = any(ri !== nothing && ri.z.n > 1 for ri ∈ run_info_moments)
+    has_rdim = any(ri !== nothing && ri.r.n > 1 for ri ∈ run_info)
+    has_zdim = any(ri !== nothing && ri.z.n > 1 for ri ∈ run_info)
     is_1V = all(ri !== nothing && ri.vzeta.n == 1 && ri.vr.n == 1 for ri ∈ run_info)
     moment_kinetic = any(ri !== nothing
                          && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
@@ -4491,6 +4571,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
                                     outfile=plot_prefix * "pdf_neutral_$(label)_vs_vr_r." * input.animation_ext)
                 end
             end
+        end
+
+        if input.advection_velocity
+            animate_vs_vz(run_info, "neutral_vz_advect_speed"; is=1, input=f_neutral_input,
+                          outfile=plot_prefix * "neutral_vz_advect_speed_$(label)_vs_vz." * input.animation_ext)
         end
     end
 
@@ -4680,12 +4765,12 @@ function Chodura_condition_plots(run_info; plot_prefix=nothing, axes=nothing)
     input = Dict_to_NamedTuple(input_dict_dfns["Chodura_condition"])
 
     time = run_info.time
-    density = postproc_load_variable(run_info, "density")
-    upar = postproc_load_variable(run_info, "parallel_flow")
-    vth = postproc_load_variable(run_info, "thermal_speed")
-    Er = postproc_load_variable(run_info, "Er")
-    f_lower = postproc_load_variable(run_info, "f", iz=1)
-    f_upper = postproc_load_variable(run_info, "f", iz=run_info.z.n_global)
+    density = get_variable(run_info, "density")
+    upar = get_variable(run_info, "parallel_flow")
+    vth = get_variable(run_info, "thermal_speed")
+    Er = get_variable(run_info, "Er")
+    f_lower = get_variable(run_info, "f", iz=1)
+    f_upper = get_variable(run_info, "f", iz=run_info.z.n_global)
 
     Chodura_ratio_lower, Chodura_ratio_upper =
         check_Chodura_condition(run_info.r_local, run_info.z_local, run_info.vperp,
@@ -4872,7 +4957,7 @@ function sound_wave_plots(run_info; outfile=nothing, ax=nothing, phi=nothing)
 
     # This analysis is only designed for 1D cases, so only use phi[:,ir0,:]
     if phi === nothing
-        phi = postproc_load_variable(run_info, "phi"; ir=input.ir0)
+        phi = get_variable(run_info, "phi"; ir=input.ir0)
     else
         select_slice(phi, :t, :z; input=input)
     end
@@ -5079,9 +5164,9 @@ function instability2D_plots(run_info, variable_name; plot_prefix, zind=nothing,
     time = run_info.time
 
     if variable_name == "temperature"
-        variable = postproc_load_variable(run_info, "thermal_speed").^2
+        variable = get_variable(run_info, "thermal_speed").^2
     else
-        variable = postproc_load_variable(run_info, variable_name)
+        variable = get_variable(run_info, variable_name)
     end
 
     if ndims(variable) == 4
@@ -5404,9 +5489,8 @@ function manufactured_solutions_get_field_and_field_sym(run_info, variable_name;
 
     variable_func = manufactured_funcs[func_name_lookup[variable_name]]
 
-    variable = postproc_load_variable(run_info, String(variable_name); it=tinds, is=1,
-                                      ir=ir, iz=iz, ivperp=ivperp, ivpa=ivpa,
-                                      ivzeta=ivzeta, ivr=ivr, ivz=ivz)
+    variable = get_variable(run_info, String(variable_name); it=tinds, is=1, ir=ir, iz=iz,
+                            ivperp=ivperp, ivpa=ivpa, ivzeta=ivzeta, ivr=ivr, ivz=ivz)
     variable_sym = similar(variable)
 
     time = run_info.time
@@ -6227,6 +6311,9 @@ function compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
     if !has_zdim
         animate_dims = setdiff(animate_dims, (:z,))
     end
+    if !has_zdim
+        animate_dims = setdiff(animate_dims, (:z,))
+    end
     if is_1V
         animate_dims = setdiff(animate_dims, (:vzeta, :vr))
     end
@@ -6394,6 +6481,314 @@ function manufactured_solutions_analysis_dfns(run_info; plot_prefix)
     end
 
     return nothing
+end
+
+"""
+    timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
+
+Plot a time-trace of some adaptive-timestep diagnostics: steps per output, timestep
+failures per output, how many times per output each variable caused a timestep failure,
+and which factor limited the length of successful timesteps (CFL, accuracy, max_timestep).
+
+If `plot_prefix` is passed, it gives the path and prefix for plots to be saved to. They
+will be saved with the format `plot_prefix_timestep_diagnostics.pdf`.
+
+`it` can be used to select a subset of the time points by passing a range.
+"""
+function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
+    try
+        if !isa(run_info, Tuple)
+            run_info = (run_info,)
+        end
+
+        println("Making timestep diagnostics plots")
+
+        input = Dict_to_NamedTuple(input_dict["timestep_diagnostics"])
+
+         steps_fig = nothing
+         dt_fig = nothing
+         CFL_fig = nothing
+
+        if input.plot
+            # Plot numbers of steps and numbers of failures
+            ###############################################
+
+            steps_fig, ax = get_1d_ax(; xlabel="time", ylabel="number of steps per output")
+            # Put failures a separate y-axis
+            ax_failures = Axis(steps_fig[1, 1]; ylabel="number of failures per output",
+                               yaxisposition = :right)
+            hidespines!(ax_failures)
+            hidexdecorations!(ax_failures)
+            hideydecorations!(ax_failures; ticks=false, label=false, ticklabels=false)
+
+            for ri ∈ run_info
+                if length(run_info) == 1
+                    prefix = ""
+                else
+                    prefix = ri.run_name * " "
+                end
+
+                plot_1d(ri.time, get_variable(ri, "steps_per_output"; it=it);
+                        label=prefix * "steps", ax=ax)
+                # Fudge to create an invisible line on ax_failures that cycles the line colors
+                # and adds a label for "steps_per_output" to the plot because we create the
+                # legend from ax_failures.
+                plot_1d([ri.time[1]], [0]; label=prefix * "steps", ax=ax_failures)
+                plot_1d(ri.time, get_variable(ri, "failures_per_output"; it=it);
+                        label=prefix * "failures", ax=ax_failures)
+
+                failure_caused_by_per_output = get_variable(ri,
+                                                            "failure_caused_by_per_output";
+                                                            it=it)
+                counter = 0
+                # Ion pdf failure counter
+                counter += 1
+                plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                        label=prefix * "failures caused by f_ion", ax=ax_failures)
+                if ri.evolve_density
+                    # Ion density failure counter
+                    counter += 1
+                    plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                            linestyle=:dash, label=prefix * "failures caused by n_ion",
+                            ax=ax_failures)
+                end
+                if ri.evolve_upar
+                    # Ion flow failure counter
+                    counter += 1
+                    plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                            linestyle=:dash, label=prefix * "failures caused by u_ion",
+                            ax=ax_failures)
+                end
+                if ri.evolve_ppar
+                    # Ion flow failure counter
+                    counter += 1
+                    plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                            linestyle=:dash, label=prefix * "failures caused by p_ion",
+                            ax=ax_failures)
+                end
+                if ri.n_neutral_species > 0
+                    # Neutral pdf failure counter
+                    counter += 1
+                    plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                            label=prefix * "failures caused by f_neutral", ax=ax_failures)
+                    if ri.evolve_density
+                        # Neutral density failure counter
+                        counter += 1
+                        plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                                linestyle=:dash,
+                                label=prefix * "failures caused by n_neutral", ax=ax_failures)
+                    end
+                    if ri.evolve_upar
+                        # Neutral flow failure counter
+                        counter += 1
+                        plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                                linestyle=:dash,
+                                label=prefix * "failures caused by u_neutral", ax=ax_failures)
+                    end
+                    if ri.evolve_ppar
+                        # Neutral flow failure counter
+                        counter += 1
+                        plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                                linestyle=:dash,
+                                label=prefix * "failures caused by p_neutral", ax=ax_failures)
+                    end
+                end
+
+                if counter > size(failure_caused_by_per_output, 1)
+                    error("Tried to plot non-existent variables in "
+                          * "failure_caused_by_per_output. Settings not understood "
+                          * "correctly.")
+                end
+                if counter < size(failure_caused_by_per_output, 1)
+                    error("Some variables in failure_caused_by_per_output not plotted. "
+                          * "Settings not understood correctly.")
+                end
+            end
+
+            put_legend_right(steps_fig, ax_failures)
+
+            # Plot average timesteps
+            ########################
+
+            if plot_prefix !== nothing
+                outfile = plot_prefix * "successful_dt.pdf"
+            else
+                outfile = nothing
+            end
+            dt_fig = plot_vs_t(run_info, "average_successful_dt"; outfile=outfile)
+
+            # PLot minimum CFL factors
+            ##########################
+
+            CFL_fig, ax = get_1d_ax(; xlabel="time", ylabel="(grid spacing) / speed")
+            maxval = Inf
+            for ri ∈ run_info
+                if length(run_info) == 1
+                    prefix = ""
+                else
+                    prefix = ri.run_name * " "
+                end
+                CFL_vars = ["minimum_CFL_ion_z", "minimum_CFL_ion_vpa"]
+                if ri.n_neutral_species > 0
+                    push!(CFL_vars, "minimum_CFL_neutral_z", "minimum_CFL_neutral_vz")
+                end
+                for varname ∈ CFL_vars
+                    var = get_variable(ri, varname)
+                    maxval = min(maxval, maximum(var))
+                    plot_1d(ri.time, var; ax=ax, label=prefix*varname)
+                end
+            end
+            ylims!(ax, 0.0, 4.0 * maxval)
+            put_legend_right(CFL_fig, ax)
+
+            limits_fig, ax = get_1d_ax(; xlabel="time", ylabel="number of limits per factor per output")
+
+            for ri ∈ run_info
+                if length(run_info) == 1
+                    prefix = ""
+                else
+                    prefix = ri.run_name * " "
+                end
+
+                limit_caused_by_per_output = get_variable(ri,
+                                                          "limit_caused_by_per_output";
+                                                          it=it)
+                counter = 0
+
+                # Accuracy limit counter
+                counter += 1
+                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                        label=prefix * "RK accuracy", ax=ax)
+
+                # Maximum timestep increase limit counter
+                counter += 1
+                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                        label=prefix * "max timestep increase", ax=ax)
+
+                # Slower maximum timestep increase near last failure limit counter
+                counter += 1
+                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                        label=prefix * "max timestep increase near last fail", ax=ax)
+
+                # Minimum timestep limit counter
+                counter += 1
+                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                        label=prefix * "min timestep", ax=ax)
+
+                # Maximum timestep limit counter
+                counter += 1
+                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                        label=prefix * "max timestep", ax=ax)
+
+                # Ion z advection
+                counter += 1
+                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                        label=prefix * "ion z advect", ax=ax)
+
+                # Ion vpa advection
+                counter += 1
+                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                        label=prefix * "ion vpa advect", ax=ax)
+
+                if ri.n_neutral_species > 0
+                    # Ion z advection
+                    counter += 1
+                    plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                            label=prefix * "neutral z advect", ax=ax)
+
+                    # Ion vpa advection
+                    counter += 1
+                    plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                            label=prefix * "neutral vz advect", ax=ax)
+                end
+
+                if counter > size(limit_caused_by_per_output, 1)
+                    error("Tried to plot non-existent variables in "
+                          * "limit_caused_by_per_output. Settings not understood "
+                          * "correctly.")
+                end
+                if counter < size(limit_caused_by_per_output, 1)
+                    error("Some variables in limit_caused_by_per_output not plotted. "
+                          * "Settings not understood correctly.")
+                end
+            end
+
+            put_legend_right(limits_fig, ax)
+
+
+            if plot_prefix !== nothing
+                outfile = plot_prefix * "timestep_diagnostics.pdf"
+                save(outfile, steps_fig)
+
+                outfile = plot_prefix * "CFL_factors.pdf"
+                save(outfile, CFL_fig)
+
+                outfile = plot_prefix * "timestep_limits.pdf"
+                save(outfile, limits_fig)
+            else
+                display(steps_fig)
+                display(dt_fig)
+                display(CFL_fig)
+                display(limits_fig)
+            end
+        end
+
+        if input.animate_CFL
+            if plot_prefix === nothing
+                error("plot_prefix is required when animate_CFL=true")
+            end
+            data = get_variable(run_info, "CFL_ion_z")
+            datamin = minimum(minimum(d) for d ∈ data)
+            animate_vs_vpa_z(run_info, "CFL_ion_z"; data=data,
+                             outfile=plot_prefix * "CFL_ion_z_vs_vpa_z.gif",
+                             colorscale=log10,
+                             transform=x->positive_or_nan(x; epsilon=1.e-30),
+                             colorrange=(datamin, datamin * 1000.0),
+                             axis_args=Dict(:bottomspinevisible=>false,
+                                            :topspinevisible=>false,
+                                            :leftspinevisible=>false,
+                                            :rightspinevisible=>false))
+            data = get_variable(run_info, "CFL_ion_vpa")
+            datamin = minimum(minimum(d) for d ∈ data)
+            animate_vs_vpa_z(run_info, "CFL_ion_vpa"; data=data,
+                             outfile=plot_prefix * "CFL_ion_vpa_vs_vpa_z.gif",
+                             colorscale=log10,
+                             transform=x->positive_or_nan(x; epsilon=1.e-30),
+                             colorrange=(datamin, datamin * 1000.0),
+                             axis_args=Dict(:bottomspinevisible=>false,
+                                            :topspinevisible=>false,
+                                            :leftspinevisible=>false,
+                                            :rightspinevisible=>false))
+            if any(ri.n_neutral_species > 0 for ri ∈ run_info)
+                data = get_variable(run_info, "CFL_neutral_z")
+                datamin = minimum(minimum(d) for d ∈ data)
+                animate_vs_vz_z(run_info, "CFL_neutral_z"; data=data,
+                                outfile=plot_prefix * "CFL_neutral_z_vs_vz_z.gif",
+                                colorscale=log10,
+                                transform=x->positive_or_nan(x; epsilon=1.e-30),
+                                colorrange=(datamin, datamin * 1000.0),
+                                axis_args=Dict(:bottomspinevisible=>false,
+                                               :topspinevisible=>false,
+                                               :leftspinevisible=>false,
+                                               :rightspinevisible=>false))
+                data = get_variable(run_info, "CFL_neutral_vz")
+                datamin = minimum(minimum(d) for d ∈ data)
+                animate_vs_vz_z(run_info, "CFL_neutral_vz"; data=data,
+                                outfile=plot_prefix * "CFL_neutral_vz_vs_vz_z.gif",
+                                colorscale=log10,
+                                transform=x->positive_or_nan(x; epsilon=1.e-30),
+                                colorrange=(datamin, datamin * 1000.0),
+                                axis_args=Dict(:bottomspinevisible=>false,
+                                               :topspinevisible=>false,
+                                               :leftspinevisible=>false,
+                                               :rightspinevisible=>false))
+            end
+        end
+
+        return steps_fig, dt_fig, CFL_fig
+    catch e
+        println("Error in timestep_diagnostics(). Error was ", e)
+    end
 end
 
 # Utility functions
