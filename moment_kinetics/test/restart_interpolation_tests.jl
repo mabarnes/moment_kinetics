@@ -92,10 +92,15 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
     println("    - testing ", message)
 
     # Convert from Tuple of Pairs with symbol keys to Dict with String keys
-    modified_inputs = Dict(String(k) => v for (k, v) in kwargs)
+    modified_inputs = Dict(String(k) => v for (k, v) in kwargs
+                           if String(k) ∉ keys(test_input["timestepping"]))
+    modified_timestepping_inputs = Dict(String(k) => v for (k, v) in kwargs
+                                        if String(k) ∈ keys(test_input["timestepping"]))
 
     # Update default inputs with values to be changed
     input = merge(test_input, modified_inputs)
+    input["timestepping"] = merge(test_input["timestepping"],
+                                  modified_timestepping_inputs)
 
     input["run_name"] = name
 
@@ -299,7 +304,7 @@ function runtests()
                                        Dict("evolve_moments_parallel_pressure" => true,
                                             "vpa_L" => 1.5*vpa_L, "vz_L" => 1.5*vpa_L))
 
-        for (base, base_label) ∈ ((base_input, "full-f"),
+        for (base, base_label) ∈ ((base_input_full_f, "full-f"),
                                   (base_input_evolve_density, "split 1"),
                                   (base_input_evolve_upar, "split 2"),
                                   (base_input_evolve_ppar, "split 3"))
