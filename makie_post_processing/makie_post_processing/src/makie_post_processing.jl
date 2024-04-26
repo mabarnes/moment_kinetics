@@ -33,7 +33,6 @@ using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input,
                                      set_defaults_and_check_top_level!,
                                      set_defaults_and_check_section!, Dict_to_NamedTuple
-using moment_kinetics.krook_collisions: get_collision_frequency
 using moment_kinetics.looping: all_dimensions, ion_dimensions, neutral_dimensions
 using moment_kinetics.manufactured_solns: manufactured_solutions,
                                           manufactured_electric_fields

@@ -91,7 +91,7 @@ mutable struct advance_info
     ionization_collisions::Bool
     ionization_collisions_1V::Bool
     ionization_source::Bool
-    krook_collisions::Bool
+    krook_collisions_ii::Bool
     explicit_weakform_fp_collisions::Bool
     external_source::Bool
     numerical_dissipation::Bool
@@ -343,8 +343,8 @@ end
 """
 Base.@kwdef struct krook_collisions_input
     use_krook::Bool
-    # Coulomb collision rate at the reference density and temperature
-    krook_collision_frequency_prefactor::mk_float#
+    # Ion-ion Coulomb collision rate at the reference density and temperature
+    nuii0::mk_float
     # Setting to switch between different options for Krook collision operator
     frequency_option::String # "reference_parameters" # "manual", 
 end

@@ -20,7 +20,7 @@ using ..calculus: derivative!
 using ..communication: setup_distributed_memory_MPI
 using ..coordinates: coordinate, define_coordinate
 using ..file_io: check_io_implementation, get_group, get_subgroup_keys, get_variable_keys
-using ..krook_collisions: get_collision_frequency
+using ..krook_collisions: get_collision_frequency_ii
 using ..input_structs: advection_input, grid_input, hdf5, netcdf
 using ..interpolation: interpolate_to_grid_1d!
 using ..looping
@@ -45,7 +45,7 @@ const timestep_diagnostic_variables = ("time_for_run", "step_counter", "dt",
 const em_variables = ("phi", "Er", "Ez")
 const ion_moment_variables = ("density", "parallel_flow", "parallel_pressure",
                               "thermal_speed", "temperature", "parallel_heat_flux",
-                              "collision_frequency", "sound_speed", "mach_number")
+                              "collision_frequency_ii", "sound_speed", "mach_number")
 const neutral_moment_variables = ("density_neutral", "uz_neutral", "pz_neutral",
                                   "thermal_speed_neutral", "temperature_neutral",
                                   "qz_neutral")
@@ -3029,10 +3029,10 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
     if variable_name == "temperature"
         vth = postproc_load_variable(run_info, "thermal_speed"; kwargs...)
         variable = vth.^2
-    elseif variable_name == "collision_frequency"
+    elseif variable_name == "collision_frequency_ii"
         n = postproc_load_variable(run_info, "density"; kwargs...)
         vth = postproc_load_variable(run_info, "thermal_speed"; kwargs...)
-        variable = get_collision_frequency(run_info.collisions, n, vth)
+        variable = get_collision_frequency_ii(run_info.collisions, n, vth)
     elseif variable_name == "temperature_neutral"
         vth = postproc_load_variable(run_info, "thermal_speed_neutral"; kwargs...)
         variable = vth.^2
