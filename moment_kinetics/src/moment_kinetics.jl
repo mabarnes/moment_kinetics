@@ -41,7 +41,6 @@ include("em_fields.jl")
 include("bgk.jl")
 include("manufactured_solns.jl") # MRH Here?
 include("external_sources.jl")
-include("initial_conditions.jl")
 include("moment_constraints.jl")
 include("fokker_planck_test.jl")
 include("fokker_planck_calculus.jl")
@@ -54,6 +53,7 @@ include("vperp_advection.jl")
 include("neutral_r_advection.jl")
 include("neutral_z_advection.jl")
 include("neutral_vz_advection.jl")
+include("boundary_conditions.jl")
 include("charge_exchange.jl")
 include("ionization.jl")
 include("krook_collisions.jl")
@@ -65,8 +65,9 @@ include("numerical_dissipation.jl")
 include("moment_kinetics_input.jl")
 include("utils.jl")
 include("load_data.jl")
-include("parameter_scans.jl")
 include("analysis.jl")
+include("initial_conditions.jl")
+include("parameter_scans.jl")
 include("time_advance.jl")
 
 using TimerOutputs
@@ -83,8 +84,7 @@ using .communication: _block_synchronize
 using .debugging
 using .external_sources
 using .input_structs
-using .initial_conditions: allocate_pdf_and_moments, init_pdf_and_moments!,
-                           enforce_boundary_conditions!
+using .initial_conditions: allocate_pdf_and_moments, init_pdf_and_moments!
 using .load_data: reload_evolving_fields!
 using .looping
 using .moment_constraints: hard_force_moment_constraints!

@@ -23,8 +23,8 @@ using ..velocity_moments: update_neutral_pzeta!, update_neutral_pz!, update_neut
 using ..velocity_moments: calculate_ion_moment_derivatives!, calculate_neutral_moment_derivatives!
 using ..velocity_moments: update_chodura!
 using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
-using ..initial_conditions: enforce_boundary_conditions!
-using ..initial_conditions: enforce_neutral_boundary_conditions!
+using ..boundary_conditions: enforce_boundary_conditions!
+using ..boundary_conditions: enforce_neutral_boundary_conditions!
 using ..input_structs: advance_info, time_info
 using ..moment_constraints: hard_force_moment_constraints!,
                             hard_force_moment_constraints_neutral!

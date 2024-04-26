@@ -6,7 +6,6 @@ function.
 module moment_constraints
 
 using ..communication: _block_synchronize
-using ..initial_conditions: enforce_zero_incoming_bc!
 using ..looping
 using ..velocity_moments: integrate_over_vspace, update_qpar!
 

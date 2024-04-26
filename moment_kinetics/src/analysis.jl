@@ -10,7 +10,7 @@ using ..array_allocation: allocate_float
 using ..calculus: integral
 using ..communication
 using ..coordinates: coordinate
-using ..initial_conditions: vpagrid_to_dzdt
+using ..boundary_conditions: vpagrid_to_dzdt
 using ..interpolation: interpolate_to_grid_1d
 using ..load_data: open_readonly_output_file, get_nranks, load_pdf_data, load_rank_data
 using ..load_data: load_distributed_ion_pdf_slice
