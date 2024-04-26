@@ -228,7 +228,7 @@ function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=no
     parallel_io = load_variable(overview, "parallel_io")
 
     coords_group = get_group(fid, "coords")
-    if name ∈ keys(coords_group)
+    if name ∈ get_subgroup_keys(coords_group)
         coord_group = get_group(coords_group, name)
     else
         return nothing, nothing, nothing
