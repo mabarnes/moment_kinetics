@@ -1112,7 +1112,7 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
                     print(Dates.format(now(), dateformat"H:MM:SS"))
                 end
             end
-            write_data_to_ascii(moments, fields, vpa, vperp, z, r, t,
+            write_data_to_ascii(pdf, moments, fields, vpa, vperp, z, r, t,
                                 composition.n_ion_species, composition.n_neutral_species,
                                 ascii_io)
             write_all_moments_data_to_binary(moments, fields, t,

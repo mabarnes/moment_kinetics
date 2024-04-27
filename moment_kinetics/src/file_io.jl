@@ -38,7 +38,7 @@ structure containing the various input/output streams
 """
 struct ascii_ios{T <: Union{IOStream,Nothing}}
     # corresponds to the ascii file to which the distribution function is written
-    #ff::T
+    ff::T
     # corresponds to the ascii file to which velocity space moments of the
     # distribution function such as density and pressure are written
     moments_ion::T
@@ -205,13 +205,13 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
         out_prefix = joinpath(io_input.output_dir, io_input.run_name)
 
         if io_input.ascii_output
-            #ff_io = open_ascii_output_file(out_prefix, "f_vs_t")
+            ff_io = open_ascii_output_file(out_prefix, "f_vs_t")
             mom_ion_io = open_ascii_output_file(out_prefix, "moments_ion_vs_t")
             mom_ntrl_io = open_ascii_output_file(out_prefix, "moments_neutral_vs_t")
             fields_io = open_ascii_output_file(out_prefix, "fields_vs_t")
-            ascii = ascii_ios(mom_ion_io, mom_ntrl_io, fields_io)
+            ascii = ascii_ios(ff_io, mom_ion_io, mom_ntrl_io, fields_io)
         else
-            ascii = ascii_ios(nothing, nothing, nothing)
+            ascii = ascii_ios(nothing, nothing, nothing, nothing)
         end
 
         run_id = io_input.run_id
@@ -1710,7 +1710,7 @@ include("file_io_hdf5.jl")
 
 """
 """
-function write_data_to_ascii(moments, fields, vpa, vperp, z, r, t, n_ion_species,
+function write_data_to_ascii(pdf, moments, fields, vpa, vperp, z, r, t, n_ion_species,
                              n_neutral_species, ascii_io::Union{ascii_ios,Nothing})
     if ascii_io === nothing || ascii_io.moments_ion === nothing
         # ascii I/O is disabled
@@ -1720,7 +1720,7 @@ function write_data_to_ascii(moments, fields, vpa, vperp, z, r, t, n_ion_species
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        #write_f_ascii(pdf, z, vpa, t, ascii_io.ff)
+        write_f_ascii(pdf.ion.norm, z, vpa, t, ascii_io.ff)
         write_moments_ion_ascii(moments.ion, z, r, t, n_ion_species, ascii_io.moments_ion)
         if n_neutral_species > 0
             write_moments_neutral_ascii(moments.neutral, z, r, t, n_neutral_species, ascii_io.moments_neutral)
@@ -1812,7 +1812,8 @@ function write_fields_ascii(flds, z, r, t, ascii_io)
         @inbounds begin
             for ir ∈ 1:r.n
                 for iz ∈ 1:z.n
-                    println(ascii_io,"t: ", t, "   r: ", r.grid[ir],"   z: ", z.grid[iz], "  phi: ", flds.phi[iz,ir])
+                    println(ascii_io,"t: ", t, "   r: ", r.grid[ir],"   z: ", z.grid[iz], "  phi: ", flds.phi[iz,ir],
+                            " Ez: ", flds.Ez[iz,ir])
                 end
             end
         end

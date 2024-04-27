@@ -445,7 +445,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         moments.evolve_upar, moments.evolve_ppar, external_source_settings, input_dict,
         restart_time_index, previous_runs_info, time_for_setup)
     # write initial data to ascii files
-    write_data_to_ascii(moments, fields, vpa, vperp, z, r, code_time,
+    write_data_to_ascii(pdf, moments, fields, vpa, vperp, z, r, code_time,
         composition.n_ion_species, composition.n_neutral_species, ascii_io)
     # write initial data to binary files
 
