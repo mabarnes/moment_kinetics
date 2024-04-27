@@ -227,26 +227,22 @@ function allocate_advection_structs(composition, z, r, vpa, vperp, vz, vr, vzeta
 end
 
 """
-create arrays and do other work needed to setup
-the main time advance loop.
-this includes creating and populating structs
-for Chebyshev transforms, velocity space moments,
-EM fields, and advection terms
+    setup_time_info(t_input; electrons=nothing)
+
+Create a [`input_structs.time_info`](@ref) struct using the settings in `t_input`.
 """
-function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrophase,
-                             vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral,
-                             vperp_spectral, z_spectral, r_spectral, composition, moments,
-                             t_input, code_time, dt_reload, dt_before_last_fail_reload,
-                             collisions, species, geometry, boundary_distributions,
-                             external_source_settings, num_diss_params,
-                             manufactured_solns_input, advection_structs, scratch_dummy,
-                             restarting)
-    # define some local variables for convenience/tidiness
-    n_species = composition.n_species
-    n_ion_species = composition.n_ion_species
-    n_neutral_species = composition.n_neutral_species
-    ion_mom_diss_coeff = num_diss_params.ion.moment_dissipation_coefficient
-    neutral_mom_diss_coeff = num_diss_params.neutral.moment_dissipation_coefficient
+function setup_time_info(t_input, code_time, dt_reload, dt_before_last_fail_reload,
+                         manufactured_solns_input, io_input)
+    rk_coefs, n_rk_stages, rk_order, adaptive, low_storage, CFL_prefactor =
+        setup_runge_kutta_coefficients!(t_input.type,
+                                        t_input.CFL_prefactor,
+                                        t_input.split_operators)
+
+    if !adaptive
+        # No adaptive timestep, want to use the value from the input file even when we are
+        # restarting
+        dt_reload = nothing
+    end
 
     dt_shared = allocate_shared_float(1)
     previous_dt_shared = allocate_shared_float(1)
@@ -276,27 +272,49 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     if dfns_output_times[end] < end_time - epsilon
         push!(dfns_output_times, end_time)
     end
-    rk_coefs, n_rk_stages, rk_order, adaptive, low_storage, CFL_prefactor =
-        setup_runge_kutta_coefficients!(t_input.type,
-                                        t_input.CFL_prefactor,
-                                        t_input.split_operators)
+
     if t_input.high_precision_error_sum
         error_sum_zero = Float128(0.0)
     else
         error_sum_zero = 0.0
     end
-    t_params = time_info(t_input.nstep, end_time, dt_shared, previous_dt_shared, next_output_time,
-                         dt_before_output, dt_before_last_fail, CFL_prefactor,
-                         step_to_output, Ref(0), Ref(0), mk_int[], mk_int[],
-                         moments_output_times, dfns_output_times, t_input.type, rk_coefs,
-                         n_rk_stages, rk_order, adaptive, low_storage, t_input.rtol,
-                         t_input.atol, t_input.atol_upar, t_input.step_update_prefactor,
-                         t_input.max_increase_factor,
-                         t_input.max_increase_factor_near_last_fail,
-                         t_input.last_fail_proximity_factor, t_input.minimum_dt,
-                         t_input.maximum_dt, error_sum_zero, t_input.split_operators,
-                         t_input.steady_state_residual, t_input.converged_residual_value,
-                         manufactured_solns_input.use_for_advance, t_input.stopfile_name)
+    return time_info(t_input.nstep, end_time, dt_shared, previous_dt_shared, next_output_time,
+                     dt_before_output, dt_before_last_fail, CFL_prefactor, step_to_output,
+                     Ref(0), Ref(0), mk_int[], mk_int[], moments_output_times,
+                     dfns_output_times, t_input.type, rk_coefs, n_rk_stages, rk_order,
+                     adaptive, low_storage, t_input.rtol, t_input.atol, t_input.atol_upar,
+                     t_input.step_update_prefactor, t_input.max_increase_factor,
+                     t_input.max_increase_factor_near_last_fail,
+                     t_input.last_fail_proximity_factor, t_input.minimum_dt,
+                     t_input.maximum_dt, error_sum_zero, t_input.split_operators,
+                     t_input.steady_state_residual, t_input.converged_residual_value,
+                     manufactured_solns_input.use_for_advance, t_input.stopfile_name)
+end
+
+"""
+create arrays and do other work needed to setup
+the main time advance loop.
+this includes creating and populating structs
+for Chebyshev transforms, velocity space moments,
+EM fields, and advection terms
+"""
+function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrophase,
+                             vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral,
+                             vperp_spectral, z_spectral, r_spectral, composition,
+                             moments, t_input, code_time, dt_reload,
+                             dt_before_last_fail_reload, collisions, species, geometry,
+                             boundary_distributions, external_source_settings,
+                             num_diss_params, manufactured_solns_input, advection_structs,
+                             scratch_dummy, restarting)
+    # define some local variables for convenience/tidiness
+    n_ion_species = composition.n_ion_species
+    n_neutral_species = composition.n_neutral_species
+    ion_mom_diss_coeff = num_diss_params.ion.moment_dissipation_coefficient
+    electron_mom_diss_coeff = num_diss_params.electron.moment_dissipation_coefficient
+    neutral_mom_diss_coeff = num_diss_params.neutral.moment_dissipation_coefficient
+
+    t_params = setup_time_info(t_input, code_time, dt_reload, dt_before_last_fail_reload,
+                               manufactured_solns_input, io_input)
 
     # Make Vectors that count which variable caused timestep limits and timestep failures
     # the right length. Do this setup even when not using adaptive timestepping, because
