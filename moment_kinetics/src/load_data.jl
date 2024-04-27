@@ -186,7 +186,8 @@ function load_input(fid)
 end
 
 """
-    load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=nothing)
+    load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=nothing,
+                         run_directory=nothing, ignore_MPI=true)
 
 Load data for the coordinate `name` from a file-handle `fid`.
 
@@ -199,6 +200,10 @@ If `printout` is set to `true` a message will be printed when this function is c
 If `irank` and `nrank` are passed, then the `coord` and `spectral` objects returned will
 be set up for the parallelisation specified by `irank` and `nrank`, rather than the one
 implied by the output file.
+
+Unless `ignore_MPI=false` is passed, the returned coordinates will be created without
+shared memory scratch arrays (`ignore_MPI=true` will be passed through to
+[`define_coordinate`](@ref)).
 """
 function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=nothing,
                               run_directory=nothing, ignore_MPI=true)
@@ -290,7 +295,8 @@ function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=no
                        advection_input("default", 0.0, 0.0, 0.0), MPI.COMM_NULL,
                        element_spacing_option)
 
-    coord, spectral = define_coordinate(input, parallel_io; ignore_MPI=ignore_MPI)
+    coord, spectral = define_coordinate(input, parallel_io; run_directory=run_directory,
+                                        ignore_MPI=ignore_MPI)
 
     return coord, spectral, chunk_size
 end
@@ -2492,8 +2498,7 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         load_coordinate_data(file_final_restart, "z")
     r_local, r_local_spectral, r_chunk_size =
         load_coordinate_data(file_final_restart, "r")
-    r, r_spectral, z, z_spectral = construct_global_zr_coords(r_local, z_local;
-                                                              ignore_MPI=true)
+    r, r_spectral, z, z_spectral = construct_global_zr_coords(r_local, z_local)
 
     vperp, vperp_spectral, vperp_chunk_size =
         load_coordinate_data(file_final_restart, "vperp")
