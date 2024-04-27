@@ -65,12 +65,6 @@ dt = 1.0e-5
 nwrite = 1000
 split_operators = false
 
-[timestepping]
-nstep = 50000
-dt = 1.0e-5
-nwrite = 1000
-split_operators = false
-
 [ion_numerical_dissipation]
 #vpa_dissipation_coefficient = 1.0e-3 #1.0e-2 #1.0e-1
 force_minimum_pdf_value = 0.0

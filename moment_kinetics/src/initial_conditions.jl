@@ -97,7 +97,7 @@ Allocate arrays for pdfs
 function create_pdf(composition, r, z, vperp, vpa, vzeta, vr, vz)
     # allocate pdf arrays
     pdf_ion_norm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, composition.n_ion_species)
-    # buffer array is for ion-neutral collisions, not for storing charged pdf
+    # buffer array is for ion-neutral collisions, not for storing ion pdf
     pdf_ion_buffer = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, composition.n_neutral_species) # n.b. n_species is n_neutral_species here
     pdf_neutral_norm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, composition.n_neutral_species)
     # buffer array is for neutral-ion collisions, not for storing neutral pdf
@@ -1431,18 +1431,24 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
         end
     end
     # update upar, ppar, qpar, vth consistent with manufactured solns
-    update_density!(moments.ion.dens, pdf.ion.norm, vpa, vperp, z, r, composition)
-    update_qpar!(moments.ion.qpar, pdf.ion.norm, vpa, vperp, z, r, composition)
-    update_ppar!(moments.ion.ppar, pdf.ion.norm, vpa, vperp, z, r, composition)
+    update_density!(moments.ion.dens, moments.ion.dens_updated,
+                    pdf.ion.norm, vpa, vperp, z, r, composition)
     # get particle flux
-    update_upar!(moments.ion.upar, pdf.ion.norm, vpa, vperp, z, r, composition)
-    # convert from particle particle flux to parallel flow
-    begin_s_r_z_region()
-    @loop_s_r_z is ir iz begin
-        moments.ion.upar[iz,ir,is] /= moments.ion.dens[iz,ir,is]
-    # update the thermal speed
-        moments.ion.vth[iz,ir,is] = sqrt(2.0*moments.ion.ppar[iz,ir,is]/moments.ion.dens[iz,ir,is])
-    end
+    update_upar!(moments.ion.upar, moments.ion.upar_updated,
+                 moments.ion.dens, moments.ion.ppar, pdf.ion.norm,
+                 vpa, vperp, z, r, composition, moments.evolve_density,
+                 moments.evolve_ppar)
+    update_ppar!(moments.ion.ppar, moments.ion.ppar_updated,
+                 moments.ion.dens, moments.ion.upar, pdf.ion.norm,
+                 vpa, vperp, z, r, composition, moments.evolve_density,
+                 moments.evolve_upar)
+    update_pperp!(moments.ion.pperp, pdf.ion.norm, vpa, vperp, z, r, composition)
+    update_qpar!(moments.ion.qpar, moments.ion.qpar_updated,
+                 moments.ion.dens, moments.ion.upar,
+                 moments.ion.vth, pdf.ion.norm, vpa, vperp, z, r,
+                 composition, moments.evolve_density, moments.evolve_upar,
+                 moments.evolve_ppar)
+    update_vth!(moments.ion.vth, moments.ion.ppar, moments.ion.pperp, moments.ion.dens, vperp, z, r, composition)
 
     if n_neutral_species > 0
         begin_sn_r_z_region()
@@ -1478,7 +1484,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
             moments.neutral.ur[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
             moments.neutral.uzeta[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
             # get vth for neutrals
-            moments.ion.vth[iz,ir,isn] = sqrt(2.0*moments.neutral.ptot[iz,ir,isn]/moments.neutral.dens[iz,ir,isn])
+            moments.neutral.vth[iz,ir,isn] = sqrt(2.0*moments.neutral.ptot[iz,ir,isn]/moments.neutral.dens[iz,ir,isn])
         end
     end
     return nothing

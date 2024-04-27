@@ -4,6 +4,8 @@ module load_data
 
 export open_readonly_output_file
 export load_fields_data
+export load_ion_moments_data
+export load_neutral_particle_moments_data
 export load_pdf_data
 export load_neutral_pdf_data
 export load_coordinate_data
@@ -200,7 +202,7 @@ end
 
 """
     load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=nothing,
-                         ignore_MPI=true)
+                         run_directory=nothing, ignore_MPI=true)
 
 Load data for the coordinate `name` from a file-handle `fid`.
 
@@ -219,7 +221,7 @@ shared memory scratch arrays (`ignore_MPI=true` will be passed through to
 [`define_coordinate`](@ref)).
 """
 function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=nothing,
-                              ignore_MPI=true)
+                              run_directory=nothing, ignore_MPI=true)
     if printout
         println("Loading $name coordinate data...")
     end
@@ -313,7 +315,8 @@ function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=no
                        advection_input("default", 0.0, 0.0, 0.0), MPI.COMM_NULL,
                        element_spacing_option)
 
-    coord, spectral = define_coordinate(input, parallel_io; ignore_MPI=ignore_MPI)
+    coord, spectral = define_coordinate(input, parallel_io; run_directory=run_directory,
+                                        ignore_MPI=ignore_MPI)
 
     return coord, spectral, chunk_size
 end

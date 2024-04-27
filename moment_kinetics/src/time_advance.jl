@@ -792,8 +792,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     # Ensure all processes are synchronized at the end of the setup
     _block_synchronize()
 
-    return moments, fields, spectral_objects, scratch, advance, t_params, fp_arrays,
-    gyroavs, scratch_dummy, manufactured_source_list
+    return moments, spectral_objects, scratch, advance, t_params, fp_arrays, gyroavs,
+           manufactured_source_list
 end
 
 """
@@ -1368,8 +1368,9 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
                     print(Dates.format(now(), dateformat"H:MM:SS"))
                 end
             end
-            write_data_to_ascii(moments, fields, z, r, t, composition.n_ion_species,
-                                composition.n_neutral_species, ascii_io)
+            write_data_to_ascii(pdf, moments, fields, vpa, vperp, z, r, t,
+                                composition.n_ion_species, composition.n_neutral_species,
+                                ascii_io)
             write_all_moments_data_to_binary(moments, fields, t,
                                              composition.n_ion_species,
                                              composition.n_neutral_species, io_moments,

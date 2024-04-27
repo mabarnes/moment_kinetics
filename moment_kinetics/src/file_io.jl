@@ -537,14 +537,6 @@ Write provenance tracking information, to allow runs to be reproduced.
 function write_provenance_tracking_info!(fid, parallel_io, run_id, restart_time_index,
                                          input_dict, previous_runs_info)
 
-    if !parallel_io
-        # Communicate run_id to all blocks
-        # Need to convert run_id to a Vector{Char} for MPI
-        run_id_chars = [run_id...]
-        MPI.Bcast!(run_id_chars, 0, comm_inter_block[])
-        run_id = string(run_id_chars...)
-    end
-
     @serial_region begin
         provenance_tracking = create_io_group(fid, "provenance_tracking")
 
@@ -2304,8 +2296,7 @@ include("file_io_hdf5.jl")
 
 """
 """
-#function write_data_to_ascii(pdf, moments, fields, vpa, vperp, z, r, t, n_ion_species,
-function write_data_to_ascii(moments, fields, z, r, t, n_ion_species,
+function write_data_to_ascii(pdf, moments, fields, vpa, vperp, z, r, t, n_ion_species,
                              n_neutral_species, ascii_io::Union{ascii_ios,Nothing})
     if ascii_io === nothing || ascii_io.moments_ion === nothing
         # ascii I/O is disabled
@@ -2315,7 +2306,7 @@ function write_data_to_ascii(moments, fields, z, r, t, n_ion_species,
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        #write_f_ascii(pdf, z, vpa, t, ascii_io.ff)
+        write_f_ascii(pdf.ion.norm, z, vpa, t, ascii_io.ff)
         write_moments_ion_ascii(moments.ion, z, r, t, n_ion_species, ascii_io.moments_ion)
         write_moments_electron_ascii(moments.electron, z, r, t, ascii_io.moments_electron)
         if n_neutral_species > 0

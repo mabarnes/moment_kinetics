@@ -58,13 +58,6 @@ nwrite = 2000
 nwrite_dfns = 2000
 split_operators = false
 
-[timestepping]
-nstep = 2000
-dt = 1.0e-3
-nwrite = 2000
-nwrite_dfns = 2000
-split_operators = false
-
 [ion_numerical_dissipation]
 vpa_dissipation_coefficient = 0.1
 vperp_dissipation_coefficient = 0.1

@@ -5,7 +5,6 @@ module krook_collisions
 export setup_krook_collisions_input, get_collision_frequency_ii, get_collision_frequency_ee,
        get_collision_frequency_ei, krook_collisions!, electron_krook_collisions!
 
-using ..constants
 using ..looping
 using ..input_structs: krook_collisions_input, set_defaults_and_check_section!
 using ..reference_parameters: get_reference_collision_frequency_ii,
