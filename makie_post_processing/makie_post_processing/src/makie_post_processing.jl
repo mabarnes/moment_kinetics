@@ -542,11 +542,36 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         nz_min = 1
     end
     if dfns && has_run_info
-        nvperp_min = minimum(ri.vperp.n for ri in run_info if ri !== nothing)
-        nvpa_min = minimum(ri.vpa.n for ri in run_info if ri !== nothing)
-        nvzeta_min = minimum(ri.vzeta.n for ri in run_info if ri !== nothing)
-        nvr_min = minimum(ri.vr.n for ri in run_info if ri !== nothing)
-        nvz_min = minimum(ri.vz.n for ri in run_info if ri !== nothing)
+        if any(ri.vperp !== nothing for ri ∈ run_info)
+            nvperp_min = minimum(ri.vperp.n for ri in run_info
+                                 if ri !== nothing && ri.vperp !== nothing)
+        else
+            nvperp_min = 1
+        end
+        if any(ri.vpa !== nothing for ri ∈ run_info)
+            nvpa_min = minimum(ri.vpa.n for ri in run_info
+                               if ri !== nothing && ri.vpa !== nothing)
+        else
+            nvpa_min = 1
+        end
+        if any(ri.vzeta !== nothing for ri ∈ run_info)
+            nvzeta_min = minimum(ri.vzeta.n for ri in run_info
+                                 if ri !== nothing && ri.vzeta !== nothing)
+        else
+            nvzeta_min = 1
+        end
+        if any(ri.vr !== nothing for ri ∈ run_info)
+            nvr_min = minimum(ri.vr.n for ri in run_info
+                              if ri !== nothing && ri.vr !== nothing)
+        else
+            nvr_min = 1
+        end
+        if any(ri.vz !== nothing for ri ∈ run_info)
+            nvz_min = minimum(ri.vz.n for ri in run_info
+                              if ri !== nothing && ri.vz !== nothing)
+        else
+            nvz_min = 1
+        end
     else
         nvperp_min = 1
         nvpa_min = 1

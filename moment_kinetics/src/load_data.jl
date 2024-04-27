@@ -214,7 +214,12 @@ function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=no
     overview = get_group(fid, "overview")
     parallel_io = load_variable(overview, "parallel_io")
 
-    coord_group = get_group(get_group(fid, "coords"), name)
+    coords_group = get_group(fid, "coords")
+    if name ∈ get_subgroup_keys(coords_group)
+        coord_group = get_group(coords_group, name)
+    else
+        return nothing, nothing, nothing
+    end
 
     ngrid = load_variable(coord_group, "ngrid")
     n_local = load_variable(coord_group, "n_local")
@@ -652,14 +657,18 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
 
             # Test whether any interpolation is needed
             interpolation_needed = Dict(
-                x.name => x.n != restart_x.n || !all(isapprox.(x.grid, restart_x.grid))
+                x.name => (restart_x !== nothing
+                           && (x.n != restart_x.n
+                               || !all(isapprox.(x.grid, restart_x.grid))))
                 for (x, restart_x) ∈ ((z, restart_z), (r, restart_r),
                                       (vperp, restart_vperp), (vpa, restart_vpa),
                                       (vzeta, restart_vzeta), (vr, restart_vr),
                                       (vz, restart_vz)))
 
             neutral_1V = (vzeta.n_global == 1 && vr.n_global == 1)
-            restart_neutral_1V = (restart_vzeta.n_global == 1 && restart_vr.n_global == 1)
+            restart_neutral_1V = ((restart_vzeta === nothing
+                                   || restart_vzeta.n_global == 1)
+                                  && (restart_vr === nothing || restart_vr.n_global == 1))
             if any(geometry.bzeta .!= 0.0) && ((neutral_1V && !restart_neutral_1V) ||
                                                (!neutral_1V && restart_neutral_1V))
                 # One but not the other of the run being restarted from and this run are
@@ -674,7 +683,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
 
             if parallel_io
                 function get_range(coord)
-                    if coord.irank == coord.nrank - 1
+                    if coord === nothing
+                        return 1:0
+                    elseif coord.irank == coord.nrank - 1
                         return coord.global_io_range
                     else
                         # Need to modify the range to load the end-point that is duplicated on
@@ -2642,7 +2653,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
     if ivperp === nothing
         if :vperp ∈ keys(run_info)
             # v-space coordinates only present if run_info contains distribution functions
-            nvperp = run_info.vperp.n
+            nvperp = run_info.vperp === nothing ? 1 : run_info.vperp.n
             ivperp = 1:nvperp
         else
             nvperp = nothing
@@ -2656,7 +2667,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
     if ivpa === nothing
         if :vpa ∈ keys(run_info)
             # v-space coordinates only present if run_info contains distribution functions
-            nvpa = run_info.vpa.n
+            nvpa = run_info.vpa === nothing ? 1 : run_info.vpa.n
             ivpa = 1:nvpa
         else
             nvpa = nothing
@@ -2670,7 +2681,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
     if ivzeta === nothing
         if :vzeta ∈ keys(run_info)
             # v-space coordinates only present if run_info contains distribution functions
-            nvzeta = run_info.vzeta.n
+            nvzeta = run_info.vzeta === nothing ? 1 : run_info.vzeta.n
             ivzeta = 1:nvzeta
         else
             nvzeta = nothing
@@ -2684,7 +2695,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
     if ivr === nothing
         if :vr ∈ keys(run_info)
             # v-space coordinates only present if run_info contains distribution functions
-            nvr = run_info.vr.n
+            nvr = run_info.vr === nothing ? 1 : run_info.vr.n
             ivr = 1:nvr
         else
             nvr = nothing
@@ -2698,7 +2709,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
     if ivz === nothing
         if :vz ∈ keys(run_info)
             # v-space coordinates only present if run_info contains distribution functions
-            nvz = run_info.vz.n
+            nvz = run_info.vz === nothing ? 1 : run_info.vz.n
             ivz = 1:nvz
         else
             nvz = nothing
