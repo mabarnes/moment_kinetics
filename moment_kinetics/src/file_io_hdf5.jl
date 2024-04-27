@@ -80,9 +80,9 @@ end
 # HDF5.H5DataStore is the supertype for HDF5.File and HDF5.Group
 function write_single_value!(file_or_group::HDF5.H5DataStore, name,
                              data::Union{Number, AbstractString, AbstractArray{T,N}},
-                             coords...; parallel_io, n_ion_species=nothing,
-                             n_neutral_species=nothing, description=nothing,
-                             units=nothing) where {T,N}
+                             coords::Union{coordinate,mk_int}...; parallel_io,
+                             n_ion_species=nothing, n_neutral_species=nothing,
+                             description=nothing, units=nothing) where {T,N}
     if isa(data, Union{Number, AbstractString})
         file_or_group[name] = data
         if description !== nothing
