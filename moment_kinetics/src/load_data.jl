@@ -486,7 +486,7 @@ function load_ion_moments_data(fid; printout=false, extended_moments = false)
         println("done.")
     end
     if extended_moments
-        density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed, entropy_production
+        return density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed, entropy_production
     else
         return density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed
     end
