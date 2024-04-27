@@ -3227,6 +3227,27 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         return variable
     end
 
+    # Get a 'per step' value from a saved 'cumulative' value. E.g. 'iterations per step'
+    # from a saved 'cumulative total iterations'
+    function get_per_step_from_cumulative_variable(run_info, varname::String; kwargs...)
+        variable = get_variable(run_info, varname; kwargs...)
+        tdim = ndims(variable)
+        for i ∈ size(variable, tdim):-1:2
+            selectdim(variable, tdim, i) .-= selectdim(variable, tdim, i-1)
+        end
+
+        # Per-step count does not make sense for the first step, so make sure element-1 is
+        # zero.
+        selectdim(variable, tdim, 1) .= zero(first(variable))
+
+        # Assume cumulative variables always increase, so if any value in the 'per-step'
+        # variable is negative, it is because there was a restart where the cumulative
+        # variable started over
+        variable .= max.(variable, zero(first(variable)))
+
+        return variable
+    end
+
     if variable_name == "temperature"
         vth = postproc_load_variable(run_info, "thermal_speed"; kwargs...)
         variable = vth.^2
@@ -3506,29 +3527,13 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         variable = speed
         variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == "steps_per_output"
-        steps_per_output = get_variable(run_info, "step_counter"; kwargs...)
-        for i ∈ length(steps_per_output):-1:2
-            steps_per_output[i] -= steps_per_output[i-1]
-        end
-        variable = steps_per_output
+        variable = get_per_step_from_cumulative_variable(run_info, "step_counter"; kwargs...)
     elseif variable_name == "failures_per_output"
-        failures_per_output = get_variable(run_info, "failure_counter"; kwargs...)
-        for i ∈ length(failures_per_output):-1:2
-            failures_per_output[i] -= failures_per_output[i-1]
-        end
-        variable = failures_per_output
+        variable = get_per_step_from_cumulative_variable(run_info, "failure_counter"; kwargs...)
     elseif variable_name == "failure_caused_by_per_output"
-        failure_caused_by_per_output = get_variable(run_info, "failure_caused_by"; kwargs...)
-        for i ∈ size(failure_caused_by_per_output,2):-1:2
-            failure_caused_by_per_output[:,i] .-= failure_caused_by_per_output[:,i-1]
-        end
-        variable = failure_caused_by_per_output
+        variable = get_per_step_from_cumulative_variable(run_info, "failure_caused_by"; kwargs...)
     elseif variable_name == "limit_caused_by_per_output"
-        limit_caused_by_per_output = get_variable(run_info, "limit_caused_by"; kwargs...)
-        for i ∈ size(limit_caused_by_per_output,2):-1:2
-            limit_caused_by_per_output[:,i] .-= limit_caused_by_per_output[:,i-1]
-        end
-        variable = limit_caused_by_per_output
+        variable = get_per_step_from_cumulative_variable(run_info, "limit_caused_by"; kwargs...)
     elseif variable_name == "average_successful_dt"
         steps_per_output = get_variable(run_info, "steps_per_output"; kwargs...)
         failures_per_output = get_variable(run_info, "failures_per_output"; kwargs...)
@@ -3540,6 +3545,11 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         end
 
         variable = delta_t ./ successful_steps_per_output
+        for i ∈ eachindex(successful_steps_per_output)
+            if successful_steps_per_output[i] == 0
+                variable[i] = 0.0
+            end
+        end
         if successful_steps_per_output[1] == 0
             # Don't want a meaningless Inf...
             variable[1] = 0.0
