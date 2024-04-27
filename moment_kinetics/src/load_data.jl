@@ -17,12 +17,12 @@ export read_distributed_zr_data!
 
 using ..array_allocation: allocate_float, allocate_int
 using ..calculus: derivative!
-using ..communication: setup_distributed_memory_MPI
+using ..communication
 using ..coordinates: coordinate, define_coordinate
 using ..file_io: check_io_implementation, get_group, get_subgroup_keys, get_variable_keys
-using ..krook_collisions: get_collision_frequency_ii
-using ..input_structs: advection_input, grid_input, hdf5, netcdf
+using ..input_structs
 using ..interpolation: interpolate_to_grid_1d!
+using ..krook_collisions
 using ..looping
 using ..moment_kinetics_input: mk_input
 using ..neutral_vz_advection: update_speed_neutral_vz!
