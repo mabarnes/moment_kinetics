@@ -1071,14 +1071,13 @@ end
 define dynamic (time-evolving) distribution function variables for writing to the output
 file
 """
-function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz,
-                                       n_ion_species, n_neutral_species, parallel_io,
-                                       external_source_settings, evolve_density,
-                                       evolve_upar, evolve_ppar)
+function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz, composition,
+                                       parallel_io, external_source_settings,
+                                       evolve_density, evolve_upar, evolve_ppar)
 
     @serial_region begin
-        io_moments = define_dynamic_moment_variables!(fid, n_ion_species,
-                                                      n_neutral_species, r, z,
+        io_moments = define_dynamic_moment_variables!(fid, composition.n_ion_species,
+                                                      composition.n_neutral_species, r, z,
                                                       parallel_io,
                                                       external_source_settings,
                                                       evolve_density, evolve_upar,
@@ -1088,13 +1087,13 @@ function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz,
 
         # io_f is the handle for the ion pdf
         io_f = create_dynamic_variable!(dynamic, "f", mk_float, vpa, vperp, z, r;
-                                        n_ion_species=n_ion_species,
+                                        n_ion_species=composition.n_ion_species,
                                         parallel_io=parallel_io,
                                         description="ion species distribution function")
 
         # io_f_neutral is the handle for the neutral pdf
         io_f_neutral = create_dynamic_variable!(dynamic, "f_neutral", mk_float, vz, vr, vzeta, z, r;
-                                                n_neutral_species=n_neutral_species,
+                                                n_neutral_species=composition.n_neutral_species,
                                                 parallel_io=parallel_io,
                                                 description="neutral species distribution function")
 
@@ -1288,9 +1287,8 @@ function setup_dfns_io(prefix, binary_format, boundary_distributions, r, z, vper
         ### create variables for time-dependent quantities and store them ###
         ### in a struct for later access ###
         io_dfns = define_dynamic_dfn_variables!(
-            fid, r, z, vperp, vpa, vzeta, vr, vz, composition.n_ion_species,
-            composition.n_neutral_species, parallel_io, external_source_settings,
-            evolve_density, evolve_upar, evolve_ppar)
+            fid, r, z, vperp, vpa, vzeta, vr, vz, composition, parallel_io,
+            external_source_settings, evolve_density, evolve_upar, evolve_ppar)
 
         close(fid)
 
