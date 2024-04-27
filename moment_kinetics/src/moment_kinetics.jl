@@ -93,6 +93,9 @@ using .moment_kinetics_input: mk_input, read_input_file
 using .time_advance: setup_time_advance!, time_advance!
 using .type_definitions: mk_int
 using .utils: to_minutes
+using .em_fields: setup_em_fields
+using .time_advance: setup_dummy_and_buffer_arrays
+using .time_advance: allocate_advection_structs
 
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
@@ -313,11 +316,27 @@ function setup_moment_kinetics(input_dict::AbstractDict;
             vperp=vperp.n, vpa=vpa.n, vzeta=vzeta.n, vr=vr.n, vz=vz.n)
     end
 
+    # create the "fields" structure that contains arrays
+    # for the electrostatic potential phi and the electromagnetic fields
+    fields = setup_em_fields(vperp.n, z.n, r.n, composition.n_ion_species,
+                             drive_input.force_phi, drive_input.amplitude,
+                             drive_input.frequency, drive_input.force_Er_zero_at_wall)
+
     # Allocate arrays and create the pdf and moments structs
     pdf, moments, boundary_distributions =
         allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
                                  evolve_moments, collisions, external_source_settings,
                                  num_diss_params)
+
+    # create structs containing the information needed to treat advection in z, r, vpa, vperp, and vz
+    # for ions, electrons and neutrals
+    # NB: the returned advection_structs are yet to be initialized
+    advection_structs = allocate_advection_structs(composition, z, r, vpa, vperp, vz, vr, vzeta)
+
+    # setup dummy arrays & buffer arrays for z r MPI                             
+    n_neutral_species_alloc = max(1, composition.n_neutral_species)
+    scratch_dummy = setup_dummy_and_buffer_arrays(r.n, z.n, vpa.n, vperp.n, vz.n, vr.n, vzeta.n, 
+        composition.n_ion_species, n_neutral_species_alloc)
 
     if restart === false
         restarting = false
@@ -399,17 +418,22 @@ function setup_moment_kinetics(input_dict::AbstractDict;
 
         _block_synchronize()
     end
+
+    # Broadcast code_time from the root process of each shared-memory block (on which it
+    # might have been loaded from a restart file).
+    code_time = MPI.Bcast(code_time, 0, comm_block[])
+
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
 
-    moments, fields, spectral_objects, advect_objects,
-    scratch, advance, t_params, fp_arrays, gyroavs, scratch_dummy, manufactured_source_list =
-        setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, gyrophase, vz_spectral,
-            vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral,
-            r_spectral, composition, drive_input, moments, t_input, code_time, dt,
+    moments, spectral_objects, scratch, advance, t_params, fp_arrays, gyroavs,
+    manufactured_source_list =
+        setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrophase,
+            vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
+            z_spectral, r_spectral, composition, moments, t_input, code_time, dt,
             dt_before_last_fail, collisions, species, geometry, boundary_distributions,
             external_source_settings, num_diss_params, manufactured_solns_input,
-            restarting)
+            advection_structs, scratch_dummy, restarting)
 
     # This is the closest we can get to the end time of the setup before writing it to the
     # output file
@@ -435,7 +459,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     begin_s_r_z_vperp_region()
 
     return pdf, scratch, code_time, t_params, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
-           moments, fields, spectral_objects, advect_objects,
+           moments, fields, spectral_objects, advection_structs,
            composition, collisions, geometry, gyroavs, boundary_distributions,
            external_source_settings, num_diss_params, advance, fp_arrays, scratch_dummy,
            manufactured_source_list, ascii_io, io_moments, io_dfns

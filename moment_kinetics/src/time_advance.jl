@@ -4,6 +4,7 @@ module time_advance
 
 export setup_time_advance!
 export time_advance!
+export allocate_advection_structs
 export setup_dummy_and_buffer_arrays
 
 using MPI
@@ -25,7 +26,7 @@ using ..velocity_moments: update_chodura!
 using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
 using ..boundary_conditions: enforce_boundary_conditions!
 using ..boundary_conditions: enforce_neutral_boundary_conditions!
-using ..input_structs: advance_info, time_info
+using ..input_structs
 using ..moment_constraints: hard_force_moment_constraints!,
                             hard_force_moment_constraints_neutral!
 using ..advection: setup_advection
@@ -177,6 +178,54 @@ struct spectral_object_struct{Tvz,Tvr,Tvzeta,Tvpa,Tvperp,Tz,Tr}
     r_spectral::Tr
 end
 
+function allocate_advection_structs(composition, z, r, vpa, vperp, vz, vr, vzeta)
+    # define some local variables for convenience/tidiness
+    n_ion_species = composition.n_ion_species
+    n_neutral_species = composition.n_neutral_species
+    n_neutral_species_alloc = max(1,composition.n_neutral_species)
+    ##                              ##
+    # ion particle advection structs #
+    ##                              ##
+    # create structure z_advect whose members are the arrays needed to compute
+    # the advection term(s) appearing in the part of the ion kinetic equation dealing
+    # with advection in z
+    begin_serial_region()
+    z_advect = setup_advection(n_ion_species, z, vpa, vperp, r)
+    # create structure r_advect whose members are the arrays needed to compute
+    # the advection term(s) appearing in the split part of the ion kinetic equation dealing
+    # with advection in r
+    begin_serial_region()
+    r_advect = setup_advection(n_ion_species, r, vpa, vperp, z)
+    # create structure vpa_advect whose members are the arrays needed to compute
+    # the advection term(s) appearing in the split part of the ion kinetic equation dealing
+    # with advection in vpa
+    begin_serial_region()
+    vpa_advect = setup_advection(n_ion_species, vpa, vperp, z, r)
+    # create structure vperp_advect whose members are the arrays needed to compute
+    # the advection term(s) appearing in the split part of the ion kinetic equation dealing
+    # with advection in vperp
+    begin_serial_region()
+    vperp_advect = setup_advection(n_ion_species, vperp, vpa, z, r)
+    ##                                  ##
+    # neutral particle advection structs #
+    ##                                  ##
+    # create structure neutral_z_advect for neutral particle advection
+    begin_serial_region()
+    neutral_z_advect = setup_advection(n_neutral_species_alloc, z, vz, vr, vzeta, r)
+    # create structure neutral_r_advect for neutral particle advection
+    begin_serial_region()
+    neutral_r_advect = setup_advection(n_neutral_species_alloc, r, vz, vr, vzeta, z)
+    # create structure neutral_vz_advect for neutral particle advection
+    begin_serial_region()
+    neutral_vz_advect = setup_advection(n_neutral_species_alloc, vz, vr, vzeta, z, r)
+    ##                                                                 ##
+    # construct named list of advection structs to compactify arguments #
+    ##                                                                 ##
+    advection_structs = advect_object_struct(vpa_advect, vperp_advect, z_advect, r_advect, 
+                                             neutral_z_advect, neutral_r_advect, neutral_vz_advect)
+    return advection_structs
+end
+
 """
 create arrays and do other work needed to setup
 the main time advance loop.
@@ -184,13 +233,14 @@ this includes creating and populating structs
 for Chebyshev transforms, velocity space moments,
 EM fields, and advection terms
 """
-function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, gyrophase, vz_spectral,
-                             vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
-                             z_spectral, r_spectral, composition, drive_input, moments,
+function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrophase,
+                             vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral,
+                             vperp_spectral, z_spectral, r_spectral, composition, moments,
                              t_input, code_time, dt_reload, dt_before_last_fail_reload,
                              collisions, species, geometry, boundary_distributions,
                              external_source_settings, num_diss_params,
-                             manufactured_solns_input, restarting)
+                             manufactured_solns_input, advection_structs, scratch_dummy,
+                             restarting)
     # define some local variables for convenience/tidiness
     n_species = composition.n_species
     n_ion_species = composition.n_ion_species
@@ -306,8 +356,6 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, gyrophase, vz
     scratch = setup_scratch_arrays(moments, pdf.ion.norm, pdf.neutral.norm, t_params.n_rk_stages)
     # setup dummy arrays & buffer arrays for z r MPI
     n_neutral_species_alloc = max(1,composition.n_neutral_species)
-    scratch_dummy = setup_dummy_and_buffer_arrays(r.n,z.n,vpa.n,vperp.n,vz.n,vr.n,vzeta.n,
-                                   composition.n_ion_species,n_neutral_species_alloc)
     # create arrays for Fokker-Planck collisions 
     if advance.explicit_weakform_fp_collisions
         fp_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; precompute_weights=true)
@@ -317,10 +365,6 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, gyrophase, vz
     # create gyroaverage matrix arrays
     gyroavs = init_gyro_operators(vperp,z,r,gyrophase,geometry,composition)
 
-    # create the "fields" structure that contains arrays
-    # for the electrostatic potential phi and eventually the electromagnetic fields
-    fields = setup_em_fields(vperp.n, z.n, r.n, composition.n_ion_species, drive_input.force_phi,
-      drive_input.amplitude, drive_input.frequency, drive_input.force_Er_zero_at_wall)
     # initialize the electrostatic potential
     begin_serial_region()
     update_phi!(fields, scratch[1], vperp, z, r, composition, z_spectral, r_spectral, scratch_dummy, gyroavs)
@@ -338,15 +382,17 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, gyrophase, vz
     calculate_neutral_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, 
                                           neutral_mom_diss_coeff)
 
+    r_advect = advection_structs.r_advect
+    z_advect = advection_structs.z_advect
+    vperp_advect = advection_structs.vperp_advect
+    vpa_advect = advection_structs.vpa_advect
+    neutral_r_advect = advection_structs.neutral_r_advect
+    neutral_z_advect = advection_structs.neutral_z_advect
+    neutral_vz_advect = advection_structs.neutral_vz_advect
     ##
     # ion particle advection only
     ##
 
-    # create structure r_advect whose members are the arrays needed to compute
-    # the advection term(s) appearing in the split part of the GK equation dealing
-    # with advection in r
-    begin_serial_region()
-    r_advect = setup_advection(n_ion_species, r, vpa, vperp, z)
     if r.n > 1
         # initialise the r advection speed
         begin_s_z_vperp_vpa_region()
@@ -358,11 +404,6 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, gyrophase, vz
         # enforce prescribed boundary condition in r on the distribution function f
     end
 
-    # create structure z_advect whose members are the arrays needed to compute
-    # the advection term(s) appearing in the split part of the GK equation dealing
-    # with advection in z
-    begin_serial_region()
-    z_advect = setup_advection(n_ion_species, z, vpa, vperp, r)
     if z.n > 1
         # initialise the z advection speed
         begin_s_r_vperp_vpa_region()
@@ -373,23 +414,13 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, gyrophase, vz
                                    geometry, is)
         end
     end
-    begin_serial_region()
 
-    # create structure vpa_advect whose members are the arrays needed to compute
-    # the advection term(s) appearing in the split part of the GK equation dealing
-    # with advection in vpa
-    vpa_advect = setup_advection(n_ion_species, vpa, vperp, z, r)
     # initialise the vpa advection speed
     begin_s_r_z_vperp_region()
     update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, vperp, z, r,
                       composition, collisions, external_source_settings.ion, 0.0,
                       geometry)
 
-    # create structure vperp_advect whose members are the arrays needed to compute
-    # the advection term(s) appearing in the split part of the GK equation dealing
-    # with advection in vperp
-    begin_serial_region()
-    vperp_advect = setup_advection(n_ion_species, vperp, vpa, z, r)
     # initialise the vperp advection speed
     # Note that z_advect and r_advect are arguments of update_speed_vperp!
     # This means that z_advect[is].speed and r_advect[is].speed are used to determine
@@ -408,9 +439,6 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, gyrophase, vz
     # Neutral particle advection
     ##
 
-    # create structure neutral_r_advect for neutral particle advection
-    begin_serial_region()
-    neutral_r_advect = setup_advection(n_neutral_species_alloc, r, vz, vr, vzeta, z)
     if n_neutral_species > 0 && r.n > 1
         # initialise the r advection speed
         begin_sn_z_vzeta_vr_vz_region()
@@ -419,9 +447,6 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, gyrophase, vz
         end
     end
 
-    # create structure neutral_z_advect for neutral particle advection
-    begin_serial_region()
-    neutral_z_advect = setup_advection(n_neutral_species_alloc, z, vz, vr, vzeta, r)
     if n_neutral_species > 0 && z.n > 1
         # initialise the z advection speed
         begin_sn_r_vzeta_vr_vz_region()
@@ -434,9 +459,6 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, gyrophase, vz
         end
     end
 
-    # create structure neutral_vz_advect for neutral particle advection
-    begin_serial_region()
-    neutral_vz_advect = setup_advection(n_neutral_species_alloc, vz, vr, vzeta, z, r)
     if n_neutral_species > 0
         # initialise the z advection speed
         @serial_region begin
@@ -457,7 +479,6 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, gyrophase, vz
     # construct advect & spectral objects to compactify arguments
     ##
 
-    advect_objects = advect_object_struct(vpa_advect, vperp_advect, z_advect, r_advect, neutral_z_advect, neutral_r_advect, neutral_vz_advect)
     spectral_objects = spectral_object_struct(vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral, r_spectral)
     if(advance.manufactured_solns_test)
         manufactured_source_list = manufactured_sources(manufactured_solns_input, r, z,
@@ -554,9 +575,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, gyrophase, vz
     # Ensure all processes are synchronized at the end of the setup
     _block_synchronize()
 
-    return moments, fields, spectral_objects, advect_objects,
-    scratch, advance, t_params, fp_arrays, gyroavs, scratch_dummy,
-    manufactured_source_list
+    return moments, spectral_objects, scratch, advance, t_params, fp_arrays, gyroavs,
+           manufactured_source_list
 end
 
 """

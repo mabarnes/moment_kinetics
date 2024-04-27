@@ -2,6 +2,7 @@
 """
 module input_structs
 
+export advance_info
 export evolve_moments_options
 export time_info
 export advection_input, advection_input_mutable
