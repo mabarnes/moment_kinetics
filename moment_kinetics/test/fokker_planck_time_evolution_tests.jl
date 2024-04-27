@@ -179,6 +179,10 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
     # by passing keyword arguments to run_test, args becomes a Dict which can be used to
     # update the default inputs
 
+    # Make a copy to make sure nothing modifies the input Dicts defined in this test
+    # script.
+    test_input = deepcopy(test_input)
+
     if upar_rtol === nothing
         upar_rtol = rtol
     end

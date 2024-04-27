@@ -167,6 +167,10 @@ function run_test(test_input, expected_phi; rtol=4.e-14, atol=1.e-15, args...)
     # by passing keyword arguments to run_test, args becomes a Tuple of Pairs which can be
     # used to update the default inputs
 
+    # Make a copy to make sure nothing modifies the input Dicts defined in this test
+    # script.
+    test_input = deepcopy(test_input)
+
     # Convert keyword arguments to a unique name
     name = test_input["run_name"]
     if length(args) > 0
