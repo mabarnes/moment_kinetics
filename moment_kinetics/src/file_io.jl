@@ -1732,7 +1732,7 @@ function write_data_to_ascii(pdf, moments, fields, vpa, vperp, z, r, t, n_ion_sp
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        write_f_ascii(pdf.ion.norm, z, vpa, t, ascii_io.ff)
+        write_f_ascii(pdf, z, vpa, t, ascii_io.ff)
         write_moments_ion_ascii(moments.ion, z, r, t, n_ion_species, ascii_io.moments_ion)
         if n_neutral_species > 0
             write_moments_neutral_ascii(moments.neutral, z, r, t, n_neutral_species, ascii_io.moments_neutral)
