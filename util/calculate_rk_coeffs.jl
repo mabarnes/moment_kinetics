@@ -6,6 +6,115 @@ into ones that we can use.
 
 using Symbolics
 
+# Following two functions copied and modified from Symbolics.jl's linear_algebra.jl so
+# that we can hack them to force them to return a Rational{BigInt} result.
+# Modifications:
+#  * Add prefix `my_` to the function names, to avoid confusion/conflicts
+#  * Change `Num.()` to `Rational{BigInt}.()` in `_my_solve` so that `A` and `b` are
+#    arrays of `Rational{BigInt}` (so that we avoid any rounding errors). For the case
+#    that we want, the entries of `A` and `b` are all numerical values (not actual
+#    symbolic expressions), so this hack can be done.
+#  * Change `/` to `//` in `my_sym_lu2()`
+using Symbolics: linear_expansion, SymbolicUtils, value, sym_lu, Num, RCNum, _iszero, nterms
+using LinearAlgebra
+function my_solve_for(eq, var; simplify=false, check=true) # scalar case
+    # simplify defaults for `false` as canonicalization should handle most of
+    # the cases.
+    a, b, islinear = linear_expansion(eq, var)
+    check && @assert islinear
+    islinear || return nothing
+    # a * x + b = 0
+    if eq isa AbstractArray && var isa AbstractArray
+        x = _my_solve(a, -b, simplify)
+    else
+        x = a \ -b
+    end
+    simplify || return x
+    if x isa AbstractArray
+        SymbolicUtils.simplify.(simplify_fractions.(x))
+    else
+        SymbolicUtils.simplify(simplify_fractions(x))
+    end
+end
+
+function _my_solve(A::AbstractMatrix, b::AbstractArray, do_simplify)
+    #A = Num.(value.(SymbolicUtils.quick_cancel.(A)))
+    #b = Num.(value.(SymbolicUtils.quick_cancel.(b)))
+    A = Rational{BigInt}.(value.(SymbolicUtils.quick_cancel.(A)))
+    b = Rational{BigInt}.(value.(SymbolicUtils.quick_cancel.(b)))
+    sol = value.(sym_lu(A) \ b)
+    do_simplify ? SymbolicUtils.simplify_fractions.(sol) : sol
+end
+
+function my_solve_for2(eq, var; simplify=false, check=true) # scalar case
+    # simplify defaults for `false` as canonicalization should handle most of
+    # the cases.
+    a, b, islinear = linear_expansion(eq, var)
+    check && @assert islinear
+    islinear || return nothing
+    # a * x + b = 0
+    if eq isa AbstractArray && var isa AbstractArray
+        x = _my_solve2(a, -b, simplify)
+    else
+        x = a \ -b
+    end
+    simplify || return x
+    if x isa AbstractArray
+        SymbolicUtils.simplify.(simplify_fractions.(x))
+    else
+        SymbolicUtils.simplify(simplify_fractions(x))
+    end
+end
+
+function _my_solve2(A::AbstractMatrix, b::AbstractArray, do_simplify)
+    A = Num.(value.(SymbolicUtils.quick_cancel.(A)))
+    b = Num.(value.(SymbolicUtils.quick_cancel.(b)))
+    sol = value.(my_sym_lu2(A) \ b)
+    do_simplify ? SymbolicUtils.simplify_fractions.(sol) : sol
+end
+
+function my_sym_lu2(A; check=true)
+    SINGULAR = typemax(Int)
+    m, n = size(A)
+    F = map(x->x isa RCNum ? x : Num(x), A)
+    minmn = min(m, n)
+    p = Vector{LinearAlgebra.BlasInt}(undef, minmn)
+    info = 0
+    for k = 1:minmn
+        kp = k
+        amin = SINGULAR
+        for i in k:m
+            absi = _iszero(F[i, k]) ? SINGULAR : nterms(F[i,k])
+            if absi < amin
+                kp = i
+                amin = absi
+            end
+        end
+
+        p[k] = kp
+
+        if amin == SINGULAR && !(amin isa Symbolic) && (amin isa Number) && iszero(info)
+            info = k
+        end
+
+        # swap
+        for j in 1:n
+            F[k, j], F[kp, j] = F[kp, j], F[k, j]
+        end
+
+        for i in k+1:m
+            F[i, k] = F[i, k] // F[k, k]
+        end
+        for j = k+1:n
+            for i in k+1:m
+                F[i, j] = F[i, j] - F[i, k] * F[k, j]
+            end
+        end
+    end
+    check && LinearAlgebra.checknonsingular(info)
+    LU(F, p, convert(LinearAlgebra.BlasInt, info))
+end
+
 """
     convert_butcher_tableau_for_moment_kinetics(a, b)
 
@@ -27,11 +136,11 @@ that can be used to calculate an error estimate.
 Currently assumes the method is explicit, so `a` has no non-zero diagonal or
 upper-triangular elements.
 
-Returns an array `rk_coeffs` of size `n_rk_stages`x`n_rk_stages` where `size(a) =
+Returns an array `rk_coefs` of size `n_rk_stages`x`n_rk_stages` where `size(a) =
 (n_rk_stages, n_rk_stages)`.
 """
 function convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=true)
-    using_rationals = isa(a[1,1], Rational)
+    using_rationals = eltype(a) <: Rational
     n_rk_stages = size(a, 1)
     if size(b, 1) > 1
         adaptive = true
@@ -50,191 +159,190 @@ function convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=true)
     # y_out are the same as y, but given as expressions in terms of y and f
     # k are the RHS evaluations as defined on the Wikipedia page
     # k_subs are the k evaluated in terms of y by back-substituting the definitions of y.
-    @variables y[1:n_rk_stages+1] y_out[1:n_rk_stages+1] k[1:n_rk_stages] k_subs[1:n_rk_stages]
+    @variables y[1:n_rk_stages+1] k[1:n_rk_stages] yn rk_coefs[1:n_rk_stages+1, 1:output_size]
     y = Symbolics.scalarize(y)
-    y_out = Symbolics.scalarize(y_out)
     k = Symbolics.scalarize(k)
-    k_subs = Symbolics.scalarize(k_subs)
+    rk_coefs = Symbolics.scalarize(rk_coefs)
 
-    if using_rationals
-        k_subs[1] = (y[2] - y[1]) // a[2,1]
-    else
-        k_subs[1] = (y[2] - y[1]) / a[2,1]
+    # Expressions defined using the 'standard' Butcher formulae
+    y_k_expressions = [
+                       yn + (i == 1 ? 0 : sum(a[i,j] * k[j] for j ∈ 1:i-1))
+                       for i ∈ 1:n_rk_stages
+                      ]
+    # Final entry of y_k_expressions is y^(n+1)
+    push!(y_k_expressions, yn + sum(b[1,i] * k[i] for i ∈ 1:n_rk_stages))
+
+    if adaptive
+        y_err = sum((b[2,i] - b[1,i]) * k[i] for i ∈ 1:n_rk_stages)
     end
-    k_subs[1] = simplify(expand(k_subs[1]))
-    for i ∈ 2:n_rk_stages-1
-        if using_rationals
-            k_subs[i] = (y[i+1] - y[1] - sum(a[i+1,j]*k_subs[j] for j ∈ 1:i-1)) // a[i+1,i]
+
+    # Define expressions for y[i] using the rk_coefs as used in moment_kinetics
+    y_rk_coefs_expressions = [
+                              sum(rk_coefs[j,i-1] * y[j] for j ∈ 1:i-1) + rk_coefs[i,i-1] * (y[i-1] + k[i-1])
+                              for i ∈ 2:(n_rk_stages + 1)
+                             ]
+    # Substitute to eliminate y[i] from the expressions
+    y_rk_coefs_expressions = [
+                              substitute(e, Dict(y[i] => y_k_expressions[i] for i ∈ 1:n_rk_stages))
+                              for e ∈ y_rk_coefs_expressions
+                             ]
+    if adaptive
+        y_rk_coefs_err = sum(rk_coefs[j,n_rk_stages+1] * y[j] for j ∈ 1:n_rk_stages+1)
+        y_rk_coefs_err = substitute(y_rk_coefs_err, Dict(y[i] => y_k_expressions[i] for i ∈ 1:n_rk_stages+1))
+    end
+
+    # Construct equations that can be solved for rk_coefs entries by equating the
+    # coefficients of each k[i] in the two sets of expressions
+    rk_coefs_equations = []
+    for (i, (rk_coefs_expr, Butcher_expr)) ∈ enumerate(zip(y_rk_coefs_expressions, y_k_expressions[2:end]))
+        lhs = Symbolics.coeff(rk_coefs_expr, yn)
+        rhs = Symbolics.coeff(Butcher_expr, yn)
+        if isa(lhs, Number) && lhs == 0 && isa(rhs, Number) && rhs == 0
+            push!(rk_coefs_equations, rk_coefs[1,i] ~ 0)
         else
-            k_subs[i] = (y[i+1] - y[1] - sum(a[i+1,j]*k_subs[j] for j ∈ 1:i-1)) / a[i+1,i]
+            push!(rk_coefs_equations, lhs ~ rhs)
         end
-        k_subs[i] = simplify(expand(k_subs[i]))
+        for j ∈ 1:n_rk_stages
+            lhs = Symbolics.coeff(rk_coefs_expr, k[j])
+            rhs = Symbolics.coeff(Butcher_expr, k[j])
+            if isa(lhs, Number) && lhs == 0 && isa(rhs, Number) && rhs == 0
+                push!(rk_coefs_equations, rk_coefs[j+1,i] ~ 0)
+            else
+                push!(rk_coefs_equations, lhs ~ rhs + 0)
+            end
+        end
+    end
+    if adaptive
+        i = n_rk_stages + 1
+        lhs = Symbolics.coeff(y_rk_coefs_err, yn)
+        rhs = Symbolics.coeff(y_err, yn)
+        if isa(lhs, Number) && lhs == 0 && isa(rhs, Number) && rhs == 0
+            push!(rk_coefs_equations, rk_coefs[1,i] ~ 0)
+        else
+            push!(rk_coefs_equations, lhs ~ rhs)
+        end
+        for j ∈ 1:n_rk_stages
+            lhs = Symbolics.coeff(y_rk_coefs_err, k[j])
+            rhs = Symbolics.coeff(y_err, k[j])
+            if isa(lhs, Number) && lhs == 0 && isa(rhs, Number) && rhs == 0
+                push!(rk_coefs_equations, rk_coefs[j+1,i] ~ 0)
+            else
+                push!(rk_coefs_equations, lhs ~ rhs + 0)
+            end
+        end
     end
 
-    y_out[1] = y[1]
-    y_out[2] = y[1] + a[2,1] * k[1]
-    y_out[2] = simplify(expand(y_out[2]))
-    for i ∈ 3:n_rk_stages
-        y_out[i] = y[1] + sum(a[i,j]*k_subs[j] for j ∈ 1:i-2) + a[i,i-1]*k[i-1]
-        y_out[i] = simplify(expand(y_out[i]))
-    end
-
-    y_out[n_rk_stages+1] = y[1] + sum(b[1,j]*k_subs[j] for j ∈ 1:n_rk_stages-1) +
-                           b[1,n_rk_stages]*k[n_rk_stages]
-    y_out[n_rk_stages+1] = simplify(expand(y_out[n_rk_stages+1]))
+    # Solve rk_coefs_equations for the rk_coefs entries
     if using_rationals
-        k_subs[n_rk_stages] = (y[n_rk_stages+1] - y[1]
-                               - sum(b[1,j]*k_subs[j] for j ∈ 1:n_rk_stages-1)) //
-                              b[1,n_rk_stages]
+        rk_coefs_values = my_solve_for(rk_coefs_equations, [rk_coefs...])
     else
-        k_subs[n_rk_stages] = (y[n_rk_stages+1] - y[1]
-                               - sum(b[1,j]*k_subs[j] for j ∈ 1:n_rk_stages-1)) /
-                              b[1,n_rk_stages]
+        rk_coefs_values = Symbolics.solve_for(rk_coefs_equations, [rk_coefs...])
     end
-    k_subs[n_rk_stages] = simplify(expand(k_subs[n_rk_stages]))
-    #println("y_out")
-    #for i ∈ 1:n_rk_stages+1
-    #    println(y_out[i])
-    #end
-    #println("k")
-    #for i ∈ 1:n_rk_stages
-    #    println(k_subs[i])
-    #end
+    rk_coefs_values = reshape(rk_coefs_values, n_rk_stages+1, output_size)
 
     if low_storage
         if using_rationals
-            rk_coeffs = zeros(Rational{Int64}, 3, output_size)
+            rk_coefs_out = zeros(Rational{Int64}, 3, output_size)
         else
-            rk_coeffs = zeros(3, output_size)
+            rk_coefs_out = zeros(3, output_size)
         end
         for i in 1:n_rk_stages
-            k_coeff = Symbolics.coeff(y_out[i+1], k[i])
-
             if i == 1
                 j = i
-                rk_coeffs[1,i] = Symbolics.coeff(y_out[i+1], y[j])
-                #println("k_coeff=$k_coeff, yout[$i]=", y_out[i+1])
-                #println("before rk_coeffs[:,$i]=", rk_coeffs[:,i])
-                # Subtract k_coeff because k_coeff*y[i] is included in the 'forward Euler step'
-                rk_coeffs[1,i] -= k_coeff
-
-                # Coefficient of the result of the 'forward Euler step' (y1 + h*f(y[i])
-                rk_coeffs[3,i] = k_coeff
-                #println("after rk_coeffs[:,$i]=", rk_coeffs[:,i])
-            else
-                j = 1
-                rk_coeffs[1,i] = Symbolics.coeff(y_out[i+1], y[j])
-                for j ∈ 2:i-2
-                    if Symbolics.coeff(y_out[i+1], y[j]) != 0
+                rk_coefs_out[1,i] = rk_coefs_values[1,i]
+                rk_coefs_out[3,i] = rk_coefs_values[2,i]
+                for j ∈ 3:n_rk_stages+1
+                    if rk_coefs_values[j,i] != 0
                         error("Found non-zero coefficient where zero was expected for low-storage coefficients")
                     end
                 end
-                j = i
-                rk_coeffs[2,i] = Symbolics.coeff(y_out[i+1], y[j])
-                #println("k_coeff=$k_coeff, yout[$i]=", y_out[i+1])
-                #println("before rk_coeffs[:,$i]=", rk_coeffs[:,i])
-                # Subtract k_coeff because k_coeff*y[i] is included in the 'forward Euler step'
-                rk_coeffs[2,i] -= k_coeff
-
-                # Coefficient of the result of the 'forward Euler step' (y1 + h*f(y[i])
-                rk_coeffs[3,i] = k_coeff
-                #println("after rk_coeffs[:,$i]=", rk_coeffs[:,i])
-            end
-        end
-
-        #for i ∈ 1:n_rk_stages
-        #    println("k$i = ", k_subs[i])
-        #end
-        if adaptive
-            error_coefficients = b[2,:] .- b[1,:]
-            #println("error_coefficients=", error_coefficients)
-            #println("error coefficients ", error_coefficients)
-            y_err = sum(error_coefficients[j]*k_subs[j] for j ∈ 1:n_rk_stages)
-            y_err = simplify(expand(y_err))
-
-            # Use final column of rk_coeffs to store the coefficients used to calculate the truncation
-            # error estimate
-            j = 1
-            rk_coeffs[1,n_rk_stages+1] = Symbolics.coeff(y_err, y[j])
-            for j ∈ 2:n_rk_stages-1
-                if Symbolics.coeff(y_err, y[j]) != 0
-                    error("Found non-zero error coefficient where zero was expected for low-storage coefficients")
+            else
+                j = 1
+                rk_coefs_out[1,i] = rk_coefs_values[1,i]
+                for j ∈ 2:i-1
+                    if rk_coefs_values[j,i] != 0
+                        error("Found non-zero coefficient where zero was expected for low-storage coefficients")
+                    end
+                end
+                rk_coefs_out[2,i] = rk_coefs_values[i,i]
+                rk_coefs_out[3,i] = rk_coefs_values[i+1,i]
+                for j ∈ i+2:n_rk_stages+1
+                    if rk_coefs_values[j,i] != 0
+                        error("Found non-zero coefficient where zero was expected for low-storage coefficients")
+                    end
                 end
             end
-            j = n_rk_stages
-            rk_coeffs[2,n_rk_stages+1] = Symbolics.coeff(y_err, y[j])
-            j = n_rk_stages + 1
-            rk_coeffs[3,n_rk_stages+1] = Symbolics.coeff(y_err, y[j])
+        end
+        if adaptive
+            i = n_rk_stages+1
+            j = 1
+            rk_coefs_out[1,i] = rk_coefs_values[1,i]
+            for j ∈ 2:i-2
+                if rk_coefs_values[j,i] != 0
+                    error("Found non-zero coefficient where zero was expected for low-storage coefficients")
+                end
+            end
+            rk_coefs_out[2,i] = rk_coefs_values[i-1,i]
+            rk_coefs_out[3,i] = rk_coefs_values[i,i]
         end
     else
-        if using_rationals
-            rk_coeffs = zeros(Rational{Int64}, n_rk_stages+1, output_size)
-        else
-            rk_coeffs = zeros(n_rk_stages+1, output_size)
-        end
-        for i in 1:n_rk_stages
-            k_coeff = Symbolics.coeff(y_out[i+1], k[i])
-
-            for j ∈ 1:i
-                rk_coeffs[j,i] = Symbolics.coeff(y_out[i+1], y[j])
-            end
-            #println("k_coeff=$k_coeff, yout[$i]=", y_out[i+1])
-            #println("before rk_coeffs[:,$i]=", rk_coeffs[:,i])
-            # Subtract k_coeff because k_coeff*y[i] is included in the 'forward Euler step'
-            rk_coeffs[i,i] -= k_coeff
-
-            # Coefficient of the result of the 'forward Euler step' (y1 + h*f(y[i])
-            rk_coeffs[i+1,i] = k_coeff
-            #println("after rk_coeffs[:,$i]=", rk_coeffs[:,i])
-        end
-
-        #for i ∈ 1:n_rk_stages
-        #    println("k$i = ", k_subs[i])
-        #end
-        if adaptive
-            error_coefficients = b[2,:] .- b[1,:]
-            #println("error_coefficients=", error_coefficients)
-            #println("error coefficients ", error_coefficients)
-            y_err = sum(error_coefficients[j]*k_subs[j] for j ∈ 1:n_rk_stages)
-            y_err = simplify(expand(y_err))
-
-            # Use final column of rk_coeffs to store the coefficients used to calculate the truncation
-            # error estimate
-            for j ∈ 1:n_rk_stages+1
-                rk_coeffs[j,n_rk_stages+1] = Symbolics.coeff(y_err, y[j])
-            end
-        end
+        rk_coefs_out = rk_coefs_values
     end
 
-    return rk_coeffs
+    return rk_coefs_out
+end
+function convert_butcher_tableau_for_moment_kinetics(a::Matrix{Rational{Int64}},
+                                                     b::Matrix{Rational{Int64}};
+                                                     low_storage=true)
+    a = Matrix{Rational{BigInt}}(a)
+    b = Matrix{Rational{BigInt}}(b)
+    return convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=low_storage)
 end
 
-function convert_rk_coeffs_to_butcher_tableau(rkcoeffs::AbstractArray{T,N}) where {T,N}
-    adaptive = (abs(sum(rkcoeffs[:,end])) < 1.0e-13)
-    low_storage = size(rkcoeffs, 1) == 3
+function convert_rk_coefs_to_butcher_tableau(rk_coefs::AbstractArray{T,N}) where {T,N}
+    using_rationals = eltype(rk_coefs) <: Rational
+    adaptive = (abs(sum(rk_coefs[:,end])) < 1.0e-13)
+    low_storage = size(rk_coefs, 1) == 3
     if adaptive
-        n_rk_stages = size(rkcoeffs, 2) - 1
+        n_rk_stages = size(rk_coefs, 2) - 1
     else
-        n_rk_stages = size(rkcoeffs, 2)
+        n_rk_stages = size(rk_coefs, 2)
     end
 
-    @variables y[1:n_rk_stages+1] y_out[1:n_rk_stages+1] k[1:n_rk_stages] k_subs[1:n_rk_stages]
+    @variables y[1:n_rk_stages+1] yn k[1:n_rk_stages]
     y = Symbolics.scalarize(y)
     k = Symbolics.scalarize(k)
 
     if low_storage
-        for i ∈ 1:n_rk_stages
-            y[i+1] = rkcoeffs[1,i]*y[1] + rkcoeffs[2,i]*y[i] + rkcoeffs[3,i]*(y[i] + k[i])
-        end
+        y_expressions = [
+                         yn,
+                         (rk_coefs[1,i]*y[1] + rk_coefs[2,i]*y[i] + rk_coefs[3,i]*(y[i] + k[i])
+                          for i ∈ 1:n_rk_stages)...
+                        ]
     else
-        for i ∈ 1:n_rk_stages
-            y[i+1] = sum(rkcoeffs[j,i]*y[j] for j ∈ 1:i) + rkcoeffs[i+1,i]*(y[i] + k[i])
-            y[i+1] = simplify(expand(y[i+1]))
+        y_expressions = [
+                         yn,
+                         (sum(rk_coefs[j,i]*y[j] for j ∈ 1:i) + rk_coefs[i+1,i]*(y[i] + k[i])
+                          for i ∈ 1:n_rk_stages)...
+                        ]
+    end
+    y_expressions = [simplify(expand(e)) for e ∈ y_expressions]
+    if adaptive
+        i = n_rk_stages + 1
+        if low_storage
+            y_err = simplify(expand(rk_coefs[1,i]*y[1] + rk_coefs[2,i]*y[n_rk_stages] + rk_coefs[3,i]*y[n_rk_stages+1]))
+        else
+            y_err = simplify(expand(sum(rk_coefs[j,i]*y[j] for j ∈ 1:i)))
         end
     end
-    #for i ∈ 1:n_rk_stages+1
-    #    println("i=$i, y[$i]=", y[i])
-    #end
+
+    # Set up equations to solve for each y[i] in terms of k[i]
+    y_equations = [y[i] ~ y_expressions[i] for i ∈ 1:n_rk_stages+1]
+    if using_rationals
+        y_k_expressions = my_solve_for2(y_equations, y)
+    else
+        y_k_expressions = Symbolics.solve_for(y_equations, y)
+    end
 
     if adaptive
         b = zeros(T, 2, n_rk_stages)
@@ -243,29 +351,22 @@ function convert_rk_coeffs_to_butcher_tableau(rkcoeffs::AbstractArray{T,N}) wher
     end
 
     for j ∈ 1:n_rk_stages
-        b[1, j] = Symbolics.coeff(y[n_rk_stages+1], k[j])
+        b[1, j] = Symbolics.coeff(y_k_expressions[n_rk_stages+1], k[j])
     end
     if adaptive
-        if low_storage
-            yerr = rkcoeffs[1,n_rk_stages+1]*y[1] +
-                   rkcoeffs[2,n_rk_stages+1]*y[n_rk_stages] +
-                   rkcoeffs[3,n_rk_stages+1]*y[n_rk_stages+1]
-        else
-            yerr = sum(rkcoeffs[j,n_rk_stages+1]*y[j] for j ∈ 1:n_rk_stages+1)
-        end
         error_coeffs = zeros(T, n_rk_stages)
+        y_k_err = substitute(y_err, Dict(y[i] => y_k_expressions[i] for i ∈ 1:n_rk_stages+1))
+        y_k_err = simplify(expand(y_k_err))
         for j ∈ 1:n_rk_stages
-            error_coeffs[j] = Symbolics.coeff(yerr, k[j])
+            error_coeffs[j] = Symbolics.coeff(y_k_err, k[j])
         end
-        #println("error_coeffs=", error_coeffs)
-        # b[2,:] is the lower-order solution
         @. b[2,:] = error_coeffs + b[1,:]
     end
 
     a = zeros(T, n_rk_stages, n_rk_stages)
     for i ∈ 1:n_rk_stages
         for j ∈ 1:n_rk_stages
-            a[i,j] = Symbolics.coeff(y[i], k[j])
+            a[i,j] = Symbolics.coeff(y_k_expressions[i], k[j])
         end
     end
 
@@ -274,63 +375,62 @@ end
 
 function convert_and_check_butcher_tableau(name, a, b; low_storage=true)
     println(name)
-    rk_coeffs = convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=low_storage)
+    rk_coefs = convert_butcher_tableau_for_moment_kinetics(a, b; low_storage=low_storage)
     print("a="); display(a)
     print("b="); display(b)
-    print("rk_coeffs="); display(rk_coeffs)
+    print("rk_coefs="); display(rk_coefs)
     println("a=$a")
     println("b=$b")
-    println("rk_coeffs=$rk_coeffs")
+    println("rk_coefs=$rk_coefs")
     println()
 
-    check_end = size(rk_coeffs, 2)
+    check_end = size(rk_coefs, 2)
     if size(b, 1) > 1
         # Adaptive timestep
-        if abs(sum(rk_coeffs[:,end])) > 1.0e-13
+        if abs(sum(rk_coefs[:,end])) > 1.0e-13
             error("Sum of error coefficients should be 0")
         end
         check_end -= 1
     end
     for i ∈ 1:check_end
-        if abs(sum(rk_coeffs[:,i]) - 1) > 1.0e-13
+        if abs(sum(rk_coefs[:,i]) - 1) > 1.0e-13
             error("Sum of RK coefficients should be 1 for each stage")
         end
     end
 
     # Consistency check: converting back should give the original a, b.
-    a_check, b_check = convert_rk_coeffs_to_butcher_tableau(rk_coeffs)
-    #println("check?? ", a_check, " ", b_check)
+    a_check, b_check = convert_rk_coefs_to_butcher_tableau(rk_coefs)
 
     if isa(a[1], Real)
         if maximum(abs.(a_check .- a)) > 1.0e-13
-            error("Converting rk_coeffs back to Butcher tableau gives different 'a':\n"
+            error("Converting rk_coefs back to Butcher tableau gives different 'a':\n"
                   * "Original: $a\n"
                   * "New:      $a_check")
         end
         if maximum(abs.(b_check .- b)) > 1.0e-13
-            error("Converting rk_coeffs back to Butcher tableau gives different 'b':\n"
+            error("Converting rk_coefs back to Butcher tableau gives different 'b':\n"
                   * "Original: $b\n"
                   * "New:      $b_check")
         end
     else
         if a_check != a
-            error("Converting rk_coeffs back to Butcher tableau gives different 'a':\n"
+            error("Converting rk_coefs back to Butcher tableau gives different 'a':\n"
                   * "Original: $a\n"
                   * "New:      $a_check")
         end
         if b_check != b
-            error("Converting rk_coeffs back to Butcher tableau gives different 'b':\n"
+            error("Converting rk_coefs back to Butcher tableau gives different 'b':\n"
                   * "Original: $b\n"
                   * "New:      $b_check")
         end
     end
 end
 
-function convert_and_check_rk_coeffs(name, rk_coeffs)
+function convert_and_check_rk_coefs(name, rk_coefs)
     println(name)
 
-    print("rk_coeffs="); display(rk_coeffs)
-    a, b = convert_rk_coeffs_to_butcher_tableau(rk_coeffs)
+    print("rk_coefs="); display(rk_coefs)
+    a, b = convert_rk_coefs_to_butcher_tableau(rk_coefs)
     print("a="); display(a)
     print("b="); display(b)
     println("a=$a")
@@ -561,7 +661,7 @@ convert_and_check_butcher_tableau(
     construct_fekete_2nd_order(2)...
    )
 
-convert_and_check_rk_coeffs(
+convert_and_check_rk_coefs(
     "mk's ssprk4",
     [1//2 0    2//3 0   ;
      1//2 1//2 0    0   ;
@@ -570,7 +670,7 @@ convert_and_check_rk_coeffs(
      0    0    0    1//2],
    )
 
-convert_and_check_rk_coeffs(
+convert_and_check_rk_coefs(
     "mk's ssprk3",
     [0  3//4 1//3;
      1  0    0   ;
@@ -578,7 +678,7 @@ convert_and_check_rk_coeffs(
      0  0    2//3],
    )
 
-convert_and_check_rk_coeffs(
+convert_and_check_rk_coefs(
     "mk's ssprk2",
     [0 1//2;
      0 0   ;
