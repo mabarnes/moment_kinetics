@@ -58,7 +58,7 @@ nwrite = 2000
 nwrite_dfns = 2000
 split_operators = false
 
-[numerical_dissipation]
+[ion_numerical_dissipation]
 vpa_dissipation_coefficient = 0.1
 vperp_dissipation_coefficient = 0.1
 z_dissipation_coefficient = -1.0

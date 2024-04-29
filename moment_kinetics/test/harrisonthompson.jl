@@ -139,7 +139,7 @@ test_input_chebyshev_split1 = merge(test_input_chebyshev,
 test_input_chebyshev_split2 = merge(test_input_chebyshev_split1,
                                     Dict("run_name" => "chebyshev_pseudospectral_split2",
                                          "evolve_moments_parallel_flow" => true,
-                                         "numerical_dissipation" => Dict("force_minimum_pdf_value" => 0.0)))
+                                         "ion_numerical_dissipation" => Dict("force_minimum_pdf_value" => 0.0)))
 
 test_input_chebyshev_split3 = merge(test_input_chebyshev_split2,
                                     Dict("run_name" => "chebyshev_pseudospectral_split3",
@@ -153,6 +153,10 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
                   regression_rtol, regression_atol; args...)
     # by passing keyword arguments to run_test, args becomes a Dict which can be used to
     # update the default inputs
+
+    # Make a copy to make sure nothing modifies the input Dicts defined in this test
+    # script.
+    test_input = deepcopy(test_input)
 
     # Convert keyword arguments to a unique name
     name = test_input["run_name"]

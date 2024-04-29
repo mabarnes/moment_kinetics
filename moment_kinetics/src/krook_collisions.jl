@@ -2,12 +2,11 @@
 """
 module krook_collisions
 
-export setup_krook_collisions_input, get_collision_frequency, krook_collisions!
+export setup_krook_collisions_input, get_collision_frequency_ii, krook_collisions!
 
-using ..constants: epsilon0, proton_charge
 using ..looping
 using ..input_structs: krook_collisions_input, set_defaults_and_check_section!
-using ..reference_parameters: get_reference_collision_frequency
+using ..reference_parameters: get_reference_collision_frequency_ii
 
 
 """
@@ -21,18 +20,18 @@ frequency_option = "manual"
 """
 function setup_krook_collisions_input(toml_input::Dict, reference_params)
     # get reference collision frequency
-    nuii_krook_default = get_reference_collision_frequency(reference_params)
+    nuii_krook_default = get_reference_collision_frequency_ii(reference_params)
     # read the input toml and specify a sensible default    
     input_section = input_section = set_defaults_and_check_section!(toml_input, "krook_collisions",
        # begin default inputs (as kwargs)
        use_krook = false,
-       krook_collision_frequency_prefactor = -1.0,
+       nuii0 = -1.0,
        frequency_option = "reference_parameters")
        
     # ensure that the collision frequency is consistent with the input option
     frequency_option = input_section["frequency_option"]
     if frequency_option == "reference_parameters"
-        input_section["krook_collision_frequency_prefactor"] = nuii_krook_default
+        input_section["nuii0"] = nuii_krook_default
     elseif frequency_option == "manual" 
         # use the frequency from the input file
         # do nothing
@@ -43,7 +42,7 @@ function setup_krook_collisions_input(toml_input::Dict, reference_params)
     # finally, ensure prefactor < 0 if use_krook is false
     # so that prefactor > 0 is the only check required in the rest of the code
     if !input_section["use_krook"]
-        input_section["krook_collision_frequency_prefactor"] = -1.0
+        input_section["nuii0"] = -1.0
     end
     input = Dict(Symbol(k)=>v for (k,v) in input_section)
     #println(input)
@@ -51,21 +50,21 @@ function setup_krook_collisions_input(toml_input::Dict, reference_params)
 end
 
 """
-    get_collision_frequency(collisions, n, vth)
+    get_collision_frequency_ii(collisions, n, vth)
 
-Calculate the collision frequency, depending on the settings/parameters in `collisions`,
-for the given density `n` and thermal speed `vth`.
+Calculate the ion-ion collision frequency, depending on the settings/parameters in
+`collisions`, for the given density `n` and thermal speed `vth`.
 
 `n` and `vth` may be scalars or arrays, but should have shapes that can be broadcasted
 together.
 """
-function get_collision_frequency(collisions, n, vth)
+function get_collision_frequency_ii(collisions, n, vth)
     # extract krook options from collisions struct
     colk = collisions.krook
-    krook_collision_frequency_prefactor = colk.krook_collision_frequency_prefactor
+    nuii0 = colk.nuii0
     frequency_option = colk.frequency_option
     if frequency_option == "reference_parameters"
-        return @. krook_collision_frequency_prefactor * n * vth^(-3)
+        return @. nuii0 * n * vth^(-3)
     elseif frequency_option == "manual"
         # Include 0.0*n so that the result gets promoted to an array if n is an array,
         # which hopefully means this function will have a fixed return type given the
@@ -98,8 +97,8 @@ function krook_collisions!(pdf_out, fvec_in, moments, composition, collisions, v
         # through by vth, remembering pdf is already multiplied by vth
         @loop_s_r_z is ir iz begin
             n = fvec_in.density[iz,ir,is]
-            vth = moments.charged.vth[iz,ir,is]
-            nu_ii = get_collision_frequency(collisions, n, vth)
+            vth = moments.ion.vth[iz,ir,is]
+            nu_ii = get_collision_frequency_ii(collisions, n, vth)
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
                     (fvec_in.pdf[ivpa,ivperp,iz,ir,is]
@@ -111,8 +110,8 @@ function krook_collisions!(pdf_out, fvec_in, moments, composition, collisions, v
         # is already multiplied by vth, and grid is already normalized by vth
         @loop_s_r_z is ir iz begin
             n = fvec_in.density[iz,ir,is]
-            vth = moments.charged.vth[iz,ir,is]
-            nu_ii = get_collision_frequency(collisions, n, vth)
+            vth = moments.ion.vth[iz,ir,is]
+            nu_ii = get_collision_frequency_ii(collisions, n, vth)
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
                     (fvec_in.pdf[ivpa,ivperp,iz,ir,is]
@@ -124,8 +123,8 @@ function krook_collisions!(pdf_out, fvec_in, moments, composition, collisions, v
         # Compared to evolve_density version, grid is already shifted by upar
         @loop_s_r_z is ir iz begin
             n = fvec_in.density[iz,ir,is]
-            vth = moments.charged.vth[iz,ir,is]
-            nu_ii = get_collision_frequency(collisions, n, vth)
+            vth = moments.ion.vth[iz,ir,is]
+            nu_ii = get_collision_frequency_ii(collisions, n, vth)
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
                     (fvec_in.pdf[ivpa,ivperp,iz,ir,is]
@@ -138,8 +137,8 @@ function krook_collisions!(pdf_out, fvec_in, moments, composition, collisions, v
         # that pdf is already normalized by density
         @loop_s_r_z is ir iz begin
             n = fvec_in.density[iz,ir,is]
-            vth = moments.charged.vth[iz,ir,is]
-            nu_ii = get_collision_frequency(collisions, n, vth)
+            vth = moments.ion.vth[iz,ir,is]
+            nu_ii = get_collision_frequency_ii(collisions, n, vth)
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
                 (fvec_in.pdf[ivpa,ivperp,iz,ir,is]
@@ -151,13 +150,13 @@ function krook_collisions!(pdf_out, fvec_in, moments, composition, collisions, v
     else
         @loop_s_r_z is ir iz begin
             n = fvec_in.density[iz,ir,is]
-            vth = moments.charged.vth[iz,ir,is]
+            vth = moments.ion.vth[iz,ir,is]
             if vperp.n == 1
                 vth_prefactor = 1.0 / vth
             else
                 vth_prefactor = 1.0 / vth^3
             end
-            nu_ii = get_collision_frequency(collisions, n, vth)
+            nu_ii = get_collision_frequency_ii(collisions, n, vth)
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
                     (fvec_in.pdf[ivpa,ivperp,iz,ir,is]

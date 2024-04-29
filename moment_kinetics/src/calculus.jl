@@ -347,42 +347,42 @@ in the main code
 
 function assign_endpoint!(df1d::AbstractArray{mk_float,Ndims},
  receive_buffer::AbstractArray{mk_float,Mdims},key::String,coord) where {Ndims,Mdims}
-	if key == "lower"
-		j = 1
-	elseif key == "upper"
-		j = coord.n
-	else
-		println("ERROR: invalid key in assign_endpoint!")
-	end
+    if key == "lower"
+            j = 1
+    elseif key == "upper"
+            j = coord.n
+    else
+            println("ERROR: invalid key in assign_endpoint!")
+    end
     # test against coord name -- make sure to use exact string delimiters e.g. "x" not 'x'
-	# test against Ndims (autodetermined) to choose which array slices to use in assigning endpoints
-	#println("DEBUG MESSAGE: coord.name: ",coord.name," Ndims: ",Ndims," key: ",key)
-	if coord.name == "z" && Ndims==2
-		df1d[j,:] .= receive_buffer[:]
-		#println("ASSIGNING DATA")
-        elseif coord.name == "z" && Ndims==3
-		df1d[j,:,:] .= receive_buffer[:,:]
-		#println("ASSIGNING DATA")
-	elseif coord.name == "z" && Ndims==5
-		df1d[:,:,j,:,:] .= receive_buffer[:,:,:,:]
-		#println("ASSIGNING DATA")
+    # test against Ndims (autodetermined) to choose which array slices to use in assigning endpoints
+    #println("DEBUG MESSAGE: coord.name: ",coord.name," Ndims: ",Ndims," key: ",key)
+    if coord.name == "z" && Ndims==2
+        df1d[j,:] .= receive_buffer[:]
+        #println("ASSIGNING DATA")
+    elseif coord.name == "z" && Ndims==3
+        df1d[j,:,:] .= receive_buffer[:,:]
+        #println("ASSIGNING DATA")
+    elseif coord.name == "z" && Ndims==5
+        df1d[:,:,j,:,:] .= receive_buffer[:,:,:,:]
+        #println("ASSIGNING DATA")
     elseif coord.name == "z" && Ndims==6
-		df1d[:,:,:,j,:,:] .= receive_buffer[:,:,:,:,:]
-		#println("ASSIGNING DATA")
-	elseif coord.name == "r" && Ndims==2
-		df1d[:,j] .= receive_buffer[:]
-		#println("ASSIGNING DATA")
-	elseif coord.name == "r" && Ndims==3
-		df1d[:,j,:] .= receive_buffer[:,:]
-		#println("ASSIGNING DATA")
-	elseif coord.name == "r" && Ndims==5
-		df1d[:,:,:,j,:] .= receive_buffer[:,:,:,:]
-		#println("ASSIGNING DATA")
-	elseif coord.name == "r" && Ndims==6
-		df1d[:,:,:,:,j,:] .= receive_buffer[:,:,:,:,:]
-		#println("ASSIGNING DATA")
-	else
-        println("ERROR: failure to assign endpoints in reconcile_element_boundaries_MPI! (centered): coord.name: ",coord.name," Ndims: ",Ndims," key: ",key)
+        df1d[:,:,:,j,:,:] .= receive_buffer[:,:,:,:,:]
+        #println("ASSIGNING DATA")
+    elseif coord.name == "r" && Ndims==2
+        df1d[:,j] .= receive_buffer[:]
+        #println("ASSIGNING DATA")
+    elseif coord.name == "r" && Ndims==3
+        df1d[:,j,:] .= receive_buffer[:,:]
+        #println("ASSIGNING DATA")
+    elseif coord.name == "r" && Ndims==5
+        df1d[:,:,:,j,:] .= receive_buffer[:,:,:,:]
+        #println("ASSIGNING DATA")
+    elseif coord.name == "r" && Ndims==6
+        df1d[:,:,:,:,j,:] .= receive_buffer[:,:,:,:,:]
+        #println("ASSIGNING DATA")
+    else
+        error("ERROR: failure to assign endpoints in reconcile_element_boundaries_MPI! (centered): coord.name: ",coord.name," Ndims: ",Ndims," key: ",key)
     end
 end
 

@@ -3,12 +3,11 @@
 module plots_post_processing
 
 export analyze_and_plot_data
-export compare_charged_pdf_symbolic_test
 export compare_moments_symbolic_test
 export compare_neutral_pdf_symbolic_test
 export compare_fields_symbolic_test
 export construct_global_zr_coords
-export allocate_global_zr_charged_moments
+export allocate_global_zr_ion_moments
 export allocate_global_zr_neutral_moments
 export allocate_global_zr_fields
 export get_coords_nelement
@@ -43,9 +42,9 @@ using moment_kinetics.load_data: open_readonly_output_file, get_group, load_inpu
                                  load_time_data, construct_global_zr_coords
 using moment_kinetics.load_data: get_nranks
 using moment_kinetics.load_data: load_fields_data, load_pdf_data
-using moment_kinetics.load_data: load_charged_particle_moments_data,
+using moment_kinetics.load_data: load_ion_moments_data,
                                  load_neutral_particle_moments_data
-using moment_kinetics.load_data: load_distributed_charged_pdf_slice,
+using moment_kinetics.load_data: load_distributed_ion_pdf_slice,
                                  load_distributed_neutral_pdf_slice, iglobal_func
 using moment_kinetics.load_data: load_neutral_pdf_data
 using moment_kinetics.load_data: load_variable, read_distributed_zr_data!
@@ -193,7 +192,7 @@ function allocate_global_zr_fields(nz_global,nr_global,ntime)
     return phi, Ez, Er
 end
 
-function allocate_global_zr_charged_moments(nz_global,nr_global,n_ion_species,ntime)
+function allocate_global_zr_ion_moments(nz_global,nr_global,n_ion_species,ntime)
     density = allocate_float(nz_global,nr_global,n_ion_species,ntime)
     parallel_flow = allocate_float(nz_global,nr_global,n_ion_species,ntime)
     parallel_pressure = allocate_float(nz_global,nr_global,n_ion_species,ntime)
@@ -206,7 +205,7 @@ function allocate_global_zr_charged_moments(nz_global,nr_global,n_ion_species,nt
     return density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed, entropy_production, chodura_integral_lower, chodura_integral_upper
 end
 
-function allocate_global_zr_charged_dfns(nvpa_global, nvperp_global, nz_global, nr_global,
+function allocate_global_zr_ion_dfns(nvpa_global, nvperp_global, nz_global, nr_global,
                                          n_ion_species, ntime)
     f = allocate_float(nvpa_global, nvperp_global, nz_global, nr_global, n_ion_species,
                        ntime)
@@ -434,11 +433,11 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                              Tuple(this_r.n_global for this_r ∈ r),
                                              ntime)
     density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed, entropy_production, chodura_integral_lower, chodura_integral_upper =
-        get_tuple_of_return_values(allocate_global_zr_charged_moments,
+        get_tuple_of_return_values(allocate_global_zr_ion_moments,
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r),
                                    n_ion_species, ntime)
-    if has_neutrals
+    if any(n_neutral_species .> 0)
         neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed =
             get_tuple_of_return_values(allocate_global_zr_neutral_moments,
                                        Tuple(this_z.n_global for this_z ∈ z),
@@ -463,7 +462,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                nblocks,
                                Tuple(this_z.n for this_z ∈ z),
                                Tuple(this_r.n for this_r ∈ r), iskip)
-    # charged particle moments
+    # ion particle moments
     get_tuple_of_return_values(read_distributed_zr_data!, density, "density", run_names,
                                "moments", nblocks,
                                Tuple(this_z.n for this_z ∈ z),
@@ -556,7 +555,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     perpendicular_pressure_at_pdf_timse, parallel_heat_flux_at_pdf_times,
     thermal_speed_at_pdf_times, entropy_production_at_pdf_times,
     chodura_integral_lower_at_pdf_times, chodura_integral_upper_at_pdf_times =
-        get_tuple_of_return_values(allocate_global_zr_charged_moments,
+        get_tuple_of_return_values(allocate_global_zr_ion_moments,
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r), n_ion_species,
                                    ntime_pdfs)
@@ -581,7 +580,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                run_names, "dfns", nblocks,
                                Tuple(this_z.n for this_z ∈ z),
                                Tuple(this_r.n for this_r ∈ r), iskip_pdfs)
-    # charged particle moments
+    # ion particle moments
     get_tuple_of_return_values(read_distributed_zr_data!, density_at_pdf_times, "density",
                                run_names, "dfns", nblocks,
                                Tuple(this_z.n for this_z ∈ z),
@@ -663,7 +662,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                    (vr === nothing ? true : (this_vr.n == 1 for this_vr ∈ vr))...])
     if is_1D1V && false
         # load full (vpa,z,r,species,t) particle distribution function (pdf) data
-        ff = get_tuple_of_return_values(load_distributed_charged_pdf_slice, run_names,
+        ff = get_tuple_of_return_values(load_distributed_ion_pdf_slice, run_names,
                                         nblocks, itime_min_pdfs:iskip_pdfs:itime_max_pdfs,
                                         n_ion_species, r, z, vperp, vpa)
         if has_neutrals
@@ -1031,26 +1030,26 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
 
     if !is_1D1V || true
         # make plots and animations of the phi, Ez and Er
-        plot_charged_moments_2D(density, parallel_flow, parallel_pressure, 
-                                perpendicular_pressure, thermal_speed, entropy_production,
-                                chodura_integral_lower, chodura_integral_upper, time,
-                                z_global.grid, r_global.grid, iz0, ir0, n_ion_species,
-                                itime_min, itime_max, nwrite_movie, run_name_label, pp)
+        plot_ion_moments_2D(density, parallel_flow, parallel_pressure, 
+                            perpendicular_pressure, thermal_speed, entropy_production,
+                            chodura_integral_lower, chodura_integral_upper, time,
+                            z_global.grid, r_global.grid, iz0, ir0, n_ion_species,
+                            itime_min, itime_max, nwrite_movie, run_name_label, pp)
         # make plots and animations of the phi, Ez and Er
         plot_fields_2D(phi, Ez, Er, time, z_global.grid, r_global.grid, iz0, ir0, itime_min,
                        itime_max, nwrite_movie, run_name_label, pp, "")
 
         # load full (vpa,z,r,species,t) particle distribution function (pdf) data
         spec_type = "ion"
-        plot_charged_pdf(run_name, run_name_label, vpa, vperp, z_global, r_global, z, r,
-                         ivpa0, ivperp0, iz0, ir0, spec_type, n_ion_species, ntime_pdfs,
-                         nblocks, itime_min_pdfs, itime_max_pdfs, iskip_pdfs,
-                         nwrite_movie_pdfs, pp)
+        plot_ion_pdf(run_name, run_name_label, vpa, vperp, z_global, r_global, z, r,
+                     ivpa0, ivperp0, iz0, ir0, spec_type, n_ion_species, ntime_pdfs,
+                     nblocks, itime_min_pdfs, itime_max_pdfs, iskip_pdfs,
+                     nwrite_movie_pdfs, pp)
         Maxwellian_diagnostic = true
         if Maxwellian_diagnostic
             pressure = copy(parallel_pressure)
             @. pressure = (2.0*perpendicular_pressure + parallel_pressure)/3.0
-            ff = load_distributed_charged_pdf_slice(run_name, nblocks, 1:ntime, n_ion_species, r,
+            ff = load_distributed_ion_pdf_slice(run_name, nblocks, 1:ntime, n_ion_species, r,
                                                    z, vperp, vpa; iz=iz0, ir=ir0)
             plot_Maxwellian_diagnostic(ff[:,:,:,:], density[iz0,ir0,:,:],
              parallel_flow[iz0,ir0,:,:], thermal_speed[iz0,ir0,:,:], vpa.grid, vpa.wgts, 
@@ -1066,9 +1065,9 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
         end
         # plot ion pdf data near the wall boundary
         if pp.plot_wall_pdf
-            plot_charged_pdf_2D_at_wall(run_name, run_name_label, r_global, z_global,
-                                        nblocks, n_ion_species, r, z, vperp, vpa,
-                                        ntime_pdfs)
+            plot_ion_pdf_2D_at_wall(run_name, run_name_label, r_global, z_global,
+                                    nblocks, n_ion_species, r, z, vperp, vpa,
+                                    ntime_pdfs)
         end
     end
 
@@ -1157,7 +1156,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
         compare_moments_symbolic_test(run_name_label,thermal_speed,vthi_sym,"ion",z_global.grid,r_global.grid,time,z_global.n,r_global.n,ntime,
          L"\widetilde{v}_{th,i}",L"\widetilde{v}_{th,i}^{sym}",L"\varepsilon(\widetilde{v}_{th,i})","vthi")
 
-        compare_charged_pdf_symbolic_test(run_name_label,manufactured_solns_list,"ion",
+        compare_ion_pdf_symbolic_test(run_name_label,manufactured_solns_list,"ion",
           L"\widetilde{f}_i",L"\widetilde{f}^{sym}_i",L"\varepsilon(\widetilde{f}_i)","pdf")
         if n_neutral_species > 0
             # neutral test
@@ -1253,7 +1252,7 @@ function calculate_differences(prefix...)
                                              ntime)
     density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed,
     chodura_integral_lower, chodura_integral_upper =
-        get_tuple_of_return_values(allocate_global_zr_charged_moments,
+        get_tuple_of_return_values(allocate_global_zr_ion_moments,
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r),
                                    n_ion_species, ntime)
@@ -1282,7 +1281,7 @@ function calculate_differences(prefix...)
                                nblocks,
                                Tuple(this_z.n for this_z ∈ z),
                                Tuple(this_r.n for this_r ∈ r))
-    # charged particle moments
+    # ion particle moments
     get_tuple_of_return_values(read_distributed_zr_data!, density, "density", run_names,
                                "moments", nblocks,
                                Tuple(this_z.n for this_z ∈ z),
@@ -1358,7 +1357,7 @@ function calculate_differences(prefix...)
     density_at_pdf_times, parallel_flow_at_pdf_times, parallel_pressure_at_pdf_times,
     parallel_heat_flux_at_pdf_times, thermal_speed_at_pdf_times, chodura_integral_lower_at_pdf_times,
     chodura_integral_upper_at_pdf_times =
-        get_tuple_of_return_values(allocate_global_zr_charged_moments,
+        get_tuple_of_return_values(allocate_global_zr_ion_moments,
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r), n_ion_species,
                                    ntime_pdfs)
@@ -1383,7 +1382,7 @@ function calculate_differences(prefix...)
                                run_names, "dfns", nblocks,
                                Tuple(this_z.n for this_z ∈ z),
                                Tuple(this_r.n for this_r ∈ r))
-    # charged particle moments
+    # ion moments
     get_tuple_of_return_values(read_distributed_zr_data!, density_at_pdf_times, "density",
                                run_names, "dfns", nblocks,
                                Tuple(this_z.n for this_z ∈ z),
@@ -1431,7 +1430,7 @@ function calculate_differences(prefix...)
     end
 
     # load full (vpa,z,r,species,t) particle distribution function (pdf) data
-    ff = get_tuple_of_return_values(load_distributed_charged_pdf_slice, run_names,
+    ff = get_tuple_of_return_values(load_distributed_ion_pdf_slice, run_names,
                                     nblocks, Tuple(1:nt for nt ∈ ntime_pdfs),
                                     n_ion_species, r, z, vperp, vpa)
     if maximum(n_neutral_species) > 0
@@ -2658,7 +2657,7 @@ function compare_moments_symbolic_test(run_name,moment,moment_sym,spec_string,z,
 
 end
 
-function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec_string,
+function compare_ion_pdf_symbolic_test(run_name,manufactured_solns_list,spec_string,
     pdf_label,pdf_sym_label,norm_label,file_string)
     fid = open_readonly_output_file(run_name,"dfns", printout=false)
     # load block data on iblock=0
@@ -2672,7 +2671,7 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
     ntime, time, _ = load_time_data(fid, printout=false)
     close(fid)
-    # get the charged particle pdf
+    # get the ion pdf
     dfni_func = manufactured_solns_list.dfni_func
     is = 1 # only one species supported currently
 
@@ -2754,7 +2753,7 @@ function compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
     ntime, time, _ = load_time_data(fid, printout=false)
     close(fid)
-    # get the charged particle pdf
+    # get the ion pdf
     dfnn_func = manufactured_solns_list.dfnn_func
     is = 1 # only one species supported currently
 
@@ -2837,7 +2836,7 @@ end
 """
 plots various slices of the ion pdf (1d and 2d, stills and animations)
 """
-function plot_charged_pdf(run_name, run_name_label, vpa, vperp, z, r, z_local, r_local,
+function plot_ion_pdf(run_name, run_name_label, vpa, vperp, z, r, z_local, r_local,
                           ivpa0, ivperp0, iz0, ir0, spec_type, n_species, n_time_pdfs,
                           nblocks, itime_min, itime_max, iskip, nwrite_movie, pp)
 
@@ -2860,7 +2859,7 @@ function plot_charged_pdf(run_name, run_name_label, vpa, vperp, z, r, z_local, r
     end
     # make a gif animation of f(vpa,z,t) at a given (vperp,r) location
     if pp.animate_f_vs_vpa_z
-        pdf = load_distributed_charged_pdf_slice(run_name, nblocks,
+        pdf = load_distributed_ion_pdf_slice(run_name, nblocks,
                                                  itime_min:iskip:itime_max, n_species,
                                                  r_local, z_local, vperp, vpa;
                                                  ivperp=ivperp0, ir=ir0)
@@ -2878,10 +2877,10 @@ function plot_charged_pdf(run_name, run_name_label, vpa, vperp, z, r, z_local, r
     end
     # make a gif animation of f(vpa,r,t) at a given (vperp,z) location
     if pp.animate_f_vs_vpa_r
-        pdf = load_distributed_charged_pdf_slice(run_name, nblocks,
-                                                 itime_min:iskip:itime_max, n_species,
-                                                 r_local, z_local, vperp, vpa;
-                                                 ivperp=ivperp0, iz=iz0)
+        pdf = load_distributed_ion_pdf_slice(run_name, nblocks,
+                                             itime_min:iskip:itime_max, n_species,
+                                             r_local, z_local, vperp, vpa;
+                                             ivperp=ivperp0, iz=iz0)
         for is ∈ 1:n_species
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 @views heatmap(r.grid, vpa.grid, pdf[:,:,is,i], xlabel="r", ylabel="vpa", c = :deep, interpolation = :cubic)
@@ -2896,7 +2895,7 @@ function plot_charged_pdf(run_name, run_name_label, vpa, vperp, z, r, z_local, r
     end
     # make a gif animation of f(vperp,z,t) at a given (vpa,r) location
     if pp.animate_f_vs_vperp_z
-        pdf = load_distributed_charged_pdf_slice(run_name, nblocks,
+        pdf = load_distributed_ion_pdf_slice(run_name, nblocks,
                                                  itime_min:iskip:itime_max, n_species,
                                                  r_local, z_local, vperp, vpa; ivpa=ivpa0,
                                                  ir=ir0)
@@ -2910,7 +2909,7 @@ function plot_charged_pdf(run_name, run_name_label, vpa, vperp, z, r, z_local, r
     end
     # make a gif animation of f(vperp,r,t) at a given (vpa,z) location
     if pp.animate_f_vs_vperp_r
-        pdf = load_distributed_charged_pdf_slice(run_name, nblocks,
+        pdf = load_distributed_ion_pdf_slice(run_name, nblocks,
                                                  itime_min:iskip:itime_max, n_species,
                                                  r_local, z_local, vperp, vpa; ivpa=ivpa0,
                                                  iz=iz0)
@@ -2924,7 +2923,7 @@ function plot_charged_pdf(run_name, run_name_label, vpa, vperp, z, r, z_local, r
     end
     # make a gif animation of f(vpa,vperp,t) at a given (z,r) location
     if pp.animate_f_vs_vperp_vpa
-        pdf = load_distributed_charged_pdf_slice(run_name, nblocks,
+        pdf = load_distributed_ion_pdf_slice(run_name, nblocks,
                                                  itime_min:iskip:itime_max, n_species,
                                                  r_local, z_local, vperp, vpa; iz=iz0,
                                                  ir=ir0)
@@ -2953,10 +2952,10 @@ function plot_charged_pdf(run_name, run_name_label, vpa, vperp, z, r, z_local, r
     end
     # make a gif animation of f(z,r,t) at a given (vpa,vperp) location
     if pp.animate_f_vs_r_z
-        pdf = load_distributed_charged_pdf_slice(run_name, nblocks,
-                                                 itime_min:iskip:itime_max, n_species,
-                                                 r_local, z_local, vperp, vpa; ivpa=ivpa0,
-                                                 ivperp=ivperp0)
+        pdf = load_distributed_ion_pdf_slice(run_name, nblocks,
+                                             itime_min:iskip:itime_max, n_species,
+                                             r_local, z_local, vperp, vpa; ivpa=ivpa0,
+                                             ivperp=ivperp0)
         for is ∈ 1:n_species
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 @views heatmap(r.grid, z.grid, pdf[:,:,is,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
@@ -3135,14 +3134,14 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
     println("done.")
 end
 
-function plot_charged_moments_2D(density, parallel_flow, parallel_pressure,
+function plot_ion_moments_2D(density, parallel_flow, parallel_pressure,
     perpendicular_pressure, thermal_speed, 
     entropy_production,chodura_integral_lower, chodura_integral_upper,
     time, z, r, iz0, ir0, n_ion_species,
     itime_min, itime_max, nwrite_movie, run_name, pp)
     nr = size(r,1)
     ntime = size(time,1)
-    print("Plotting charged moments data...")
+    print("Plotting ion moments data...")
     for is in 1:n_ion_species
 		description = "_ion_spec"*string(is)*"_"
 		# the density
@@ -3408,9 +3407,9 @@ function plot_Maxwellian_diagnostic(ff, density, parallel_flow, thermal_speed, v
     end
     return nothing
 end
-function plot_charged_pdf_2D_at_wall(run_name, run_name_label, r_global, z_global,
+function plot_ion_pdf_2D_at_wall(run_name, run_name_label, r_global, z_global,
                                      nblocks, n_ion_species, r, z, vperp, vpa, ntime)
-    print("Plotting charged pdf data at wall boundaries...")
+    print("Plotting ion pdf data at wall boundaries...")
 
     # plot a thermal vpa on line plots
     ivpa0 = floor(mk_int,vpa.n/3)
@@ -3422,10 +3421,10 @@ function plot_charged_pdf_2D_at_wall(run_name, run_name_label, r_global, z_globa
     # Note only need final time point, so only load the one time point
     itime0 = 1
     # pdf at lower wall
-    pdf_lower = load_distributed_charged_pdf_slice(run_name, nblocks, ntime:ntime, n_ion_species, r,
+    pdf_lower = load_distributed_ion_pdf_slice(run_name, nblocks, ntime:ntime, n_ion_species, r,
                                                    z, vperp, vpa; iz=1)
     # pdf at upper wall
-    pdf_upper = load_distributed_charged_pdf_slice(run_name, nblocks, ntime:ntime, n_ion_species, r,
+    pdf_upper = load_distributed_ion_pdf_slice(run_name, nblocks, ntime:ntime, n_ion_species, r,
                                                    z, vperp, vpa; iz=z.n_global)
     for (pdf, zlabel) ∈ ((pdf_lower, "wall-"), (pdf_upper, "wall+"))
         for is in 1:n_ion_species
@@ -3455,7 +3454,7 @@ function plot_charged_pdf_2D_at_wall(run_name, run_name_label, r_global, z_globa
             outfile = string(run_name_label, "_pdf(vpa,vperp,iz_"*zlabel*",ir0)"*description*"vs_vperp_vpa.pdf")
             trysavefig(outfile)
 
-            # Skip this because load_distributed_charged_pdf_slice() currently only
+            # Skip this because load_distributed_ion_pdf_slice() currently only
             # handles selecting a single value like `iz=1`, not a sub-slice like
             # `iz=1:n_local`, so we only have data for one point in z here, so we can't
             # plot vs z.
@@ -3467,7 +3466,7 @@ function plot_charged_pdf_2D_at_wall(run_name, run_name_label, r_global, z_globa
 
             # plot f(ivpa0,ivperp0,z,r,is,itime) near the wall
             if r.n > 1
-                # Skip this because load_distributed_charged_pdf_slice() currently only
+                # Skip this because load_distributed_ion_pdf_slice() currently only
                 # handles selecting a single value like `iz=1`, not a sub-slice like
                 # `iz=1:n_local`, so we only have data for one point in z here, so we
                 # can't plot vs z.

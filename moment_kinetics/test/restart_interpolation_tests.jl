@@ -12,7 +12,7 @@ using moment_kinetics.file_io: io_has_parallel
 using moment_kinetics.input_structs: grid_input, advection_input, hdf5
 using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data,
                                  load_species_data, load_fields_data,
-                                 load_charged_particle_moments_data, load_pdf_data,
+                                 load_ion_moments_data, load_pdf_data,
                                  load_neutral_particle_moments_data,
                                  load_neutral_pdf_data, load_time_data, load_species_data
 using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
@@ -70,6 +70,10 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
     # by passing keyword arguments to run_test, kwargs becomes a Tuple of Pairs which can be used to
     # update the default inputs
 
+    # Make a copy to make sure nothing modifies the input Dicts defined in this test
+    # script.
+    test_input = deepcopy(test_input)
+
     if tol_3V === nothing
         atol_3V = atol
         rtol_3V = rtol
@@ -120,10 +124,10 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
     end
 
     phi = nothing
-    n_charged = nothing
-    upar_charged = nothing
-    ppar_charged = nothing
-    f_charged = nothing
+    n_ion = nothing
+    upar_ion = nothing
+    ppar_ion = nothing
+    f_ion = nothing
     n_neutral = nothing
     upar_neutral = nothing
     ppar_neutral = nothing
@@ -155,12 +159,12 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
             time = run_info.time
             n_ion_species = run_info.n_ion_species
             n_neutral_species = run_info.n_neutral_species
-            n_charged_zrst = postproc_load_variable(run_info, "density")
-            upar_charged_zrst = postproc_load_variable(run_info, "parallel_flow")
-            ppar_charged_zrst = postproc_load_variable(run_info, "parallel_pressure")
-            qpar_charged_zrst = postproc_load_variable(run_info, "parallel_heat_flux")
-            v_t_charged_zrst = postproc_load_variable(run_info, "thermal_speed")
-            f_charged_vpavperpzrst  = postproc_load_variable(run_info, "f")
+            n_ion_zrst = postproc_load_variable(run_info, "density")
+            upar_ion_zrst = postproc_load_variable(run_info, "parallel_flow")
+            ppar_ion_zrst = postproc_load_variable(run_info, "parallel_pressure")
+            qpar_ion_zrst = postproc_load_variable(run_info, "parallel_heat_flux")
+            v_t_ion_zrst = postproc_load_variable(run_info, "thermal_speed")
+            f_ion_vpavperpzrst  = postproc_load_variable(run_info, "f")
             n_neutral_zrst = postproc_load_variable(run_info, "density_neutral")
             upar_neutral_zrst = postproc_load_variable(run_info, "uz_neutral")
             ppar_neutral_zrst = postproc_load_variable(run_info, "pz_neutral")
@@ -181,12 +185,12 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
             rm(joinpath(realpath(input["base_directory"]), name); recursive=true)
 
             phi = phi_zrt[:,1,:]
-            n_charged = n_charged_zrst[:,1,:,:]
-            upar_charged = upar_charged_zrst[:,1,:,:]
-            ppar_charged = ppar_charged_zrst[:,1,:,:]
-            qpar_charged = qpar_charged_zrst[:,1,:,:]
-            v_t_charged = v_t_charged_zrst[:,1,:,:]
-            f_charged = f_charged_vpavperpzrst[:,1,:,1,:,:]
+            n_ion = n_ion_zrst[:,1,:,:]
+            upar_ion = upar_ion_zrst[:,1,:,:]
+            ppar_ion = ppar_ion_zrst[:,1,:,:]
+            qpar_ion = qpar_ion_zrst[:,1,:,:]
+            v_t_ion = v_t_ion_zrst[:,1,:,:]
+            f_ion = f_ion_vpavperpzrst[:,1,:,1,:,:]
             n_neutral = n_neutral_zrst[:,1,:,:]
             upar_neutral = upar_neutral_zrst[:,1,:,:]
             ppar_neutral = ppar_neutral_zrst[:,1,:,:]
@@ -197,7 +201,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
             # Unnormalize f
             if input["evolve_moments_density"]
                 for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
-                    f_charged[:,iz,is,it] .*= n_charged[iz,is,it]
+                    f_ion[:,iz,is,it] .*= n_ion[iz,is,it]
                 end
                 for it ∈ 1:length(time), isn ∈ 1:n_neutral_species, iz ∈ 1:z.n
                     f_neutral[:,iz,isn,it] .*= n_neutral[iz,isn,it]
@@ -205,7 +209,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
             end
             if input["evolve_moments_parallel_pressure"]
                 for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
-                    f_charged[:,iz,is,it] ./= v_t_charged[iz,is,it]
+                    f_ion[:,iz,is,it] ./= v_t_ion[iz,is,it]
                 end
                 for it ∈ 1:length(time), isn ∈ 1:n_neutral_species, iz ∈ 1:z.n
                     f_neutral[:,iz,isn,it] ./= v_t_neutral[iz,isn,it]
@@ -216,36 +220,36 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
         newgrid_phi = interpolate_to_grid_z(expected.z, phi[:, end], z, z_spectral)
         @test isapprox(expected.phi[:, end], newgrid_phi, rtol=rtol)
 
-        # Check charged particle moments and f
+        # Check ion particle moments and f
         ######################################
 
-        newgrid_n_charged = interpolate_to_grid_z(expected.z, n_charged[:, :, end], z, z_spectral)
-        @test isapprox(expected.n_charged[:, end], newgrid_n_charged[:,1], rtol=rtol)
+        newgrid_n_ion = interpolate_to_grid_z(expected.z, n_ion[:, :, end], z, z_spectral)
+        @test isapprox(expected.n_ion[:, end], newgrid_n_ion[:,1], rtol=rtol)
 
-        newgrid_upar_charged = interpolate_to_grid_z(expected.z, upar_charged[:, :, end], z, z_spectral)
-        @test isapprox(expected.upar_charged[:, end], newgrid_upar_charged[:,1], rtol=rtol, atol=atol_3V)
+        newgrid_upar_ion = interpolate_to_grid_z(expected.z, upar_ion[:, :, end], z, z_spectral)
+        @test isapprox(expected.upar_ion[:, end], newgrid_upar_ion[:,1], rtol=rtol, atol=atol_3V)
 
-        newgrid_ppar_charged = interpolate_to_grid_z(expected.z, ppar_charged[:, :, end], z, z_spectral)
-        @test isapprox(expected.ppar_charged[:, end], newgrid_ppar_charged[:,1], rtol=rtol)
+        newgrid_ppar_ion = interpolate_to_grid_z(expected.z, ppar_ion[:, :, end], z, z_spectral)
+        @test isapprox(expected.ppar_ion[:, end], newgrid_ppar_ion[:,1], rtol=rtol)
 
-        newgrid_vth_charged = @. sqrt(2.0*newgrid_ppar_charged/newgrid_n_charged)
-        newgrid_f_charged = interpolate_to_grid_z(expected.z, f_charged[:, :, :, end], z, z_spectral)
-        temp = newgrid_f_charged
-        newgrid_f_charged = fill(NaN, length(expected.vpa),
-                                 size(newgrid_f_charged, 2),
-                                 size(newgrid_f_charged, 3),
-                                 size(newgrid_f_charged, 4))
+        newgrid_vth_ion = @. sqrt(2.0*newgrid_ppar_ion/newgrid_n_ion)
+        newgrid_f_ion = interpolate_to_grid_z(expected.z, f_ion[:, :, :, end], z, z_spectral)
+        temp = newgrid_f_ion
+        newgrid_f_ion = fill(NaN, length(expected.vpa),
+                                 size(newgrid_f_ion, 2),
+                                 size(newgrid_f_ion, 3),
+                                 size(newgrid_f_ion, 4))
         for iz ∈ 1:length(expected.z)
             wpa = copy(expected.vpa)
             if input["evolve_moments_parallel_flow"]
-                wpa .-= newgrid_upar_charged[iz,1]
+                wpa .-= newgrid_upar_ion[iz,1]
             end
             if input["evolve_moments_parallel_pressure"]
-                wpa ./= newgrid_vth_charged[iz,1]
+                wpa ./= newgrid_vth_ion[iz,1]
             end
-            newgrid_f_charged[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vpa, vpa_spectral)
+            newgrid_f_ion[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vpa, vpa_spectral)
         end
-        @test isapprox(expected.f_charged[:, :, end], newgrid_f_charged[:,:,1], rtol=rtol_3V)
+        @test isapprox(expected.f_ion[:, :, end], newgrid_f_ion[:,:,1], rtol=rtol_3V)
 
         # Check neutral particle moments and f
         ######################################

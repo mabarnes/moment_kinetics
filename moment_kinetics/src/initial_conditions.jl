@@ -4,8 +4,6 @@ module initial_conditions
 
 export allocate_pdf_and_moments
 export init_pdf_and_moments!
-export enforce_boundary_conditions!
-export enforce_neutral_boundary_conditions!
 
 # functional testing 
 export create_boundary_distributions
@@ -17,18 +15,16 @@ using SpecialFunctions: erfc
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..bgk: init_bgk_pdf!
+using ..boundary_conditions: vpagrid_to_dzdt
 using ..communication
-using ..calculus: reconcile_element_boundaries_MPI!
-using ..coordinates: coordinate
 using ..external_sources
 using ..interpolation: interpolate_to_grid_1d!
 using ..looping
-using ..moment_kinetics_structs: scratch_pdf
+using ..moment_kinetics_structs: scratch_pdf, pdf_substruct,
+                                 pdf_struct, moments_struct, boundary_distributions_struct
 using ..velocity_moments: integrate_over_vspace, integrate_over_neutral_vspace
-using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_vpa
 using ..velocity_moments: integrate_over_positive_vz, integrate_over_negative_vz
-using ..velocity_moments: create_moments_charged, create_moments_neutral, update_qpar!
-using ..velocity_moments: moments_charged_substruct, moments_neutral_substruct
+using ..velocity_moments: create_moments_ion, create_moments_neutral, update_qpar!
 using ..velocity_moments: update_neutral_density!, update_neutral_pz!, update_neutral_pr!, update_neutral_pzeta!
 using ..velocity_moments: update_neutral_uz!, update_neutral_ur!, update_neutral_uzeta!, update_neutral_qz!
 using ..velocity_moments: update_ppar!, update_upar!, update_density!, update_pperp!, update_vth!, reset_moments_status!
@@ -38,52 +34,11 @@ using ..manufactured_solns: manufactured_solutions
 using MPI
 
 """
-"""
-struct pdf_substruct{n_distribution}
-    norm::MPISharedArray{mk_float,n_distribution}
-    buffer::MPISharedArray{mk_float,n_distribution} # for collision operator terms when pdfs must be interpolated onto different velocity space grids, and for gyroaveraging
-end
-
-# struct of structs neatly contains i+n info?
-struct pdf_struct
-    #charged particles: s + r + z + vperp + vpa
-    charged::pdf_substruct{5}
-    #neutral particles: s + r + z + vzeta + vr + vz
-    neutral::pdf_substruct{6}
-end
-
-struct moments_struct
-    charged::moments_charged_substruct
-    neutral::moments_neutral_substruct
-    # flag that indicates if the density should be evolved via continuity equation
-    evolve_density::Bool
-    # flag that indicates if particle number should be conserved for each species
-    # effects like ionisation or net particle flux from the domain would lead to
-    # non-conservation
-    particle_number_conserved::Bool
-    # flag that indicates if exact particle conservation should be enforced
-    enforce_conservation::Bool
-    # flag that indicates if the parallel flow should be evolved via force balance
-    evolve_upar::Bool
-    # flag that indicates if the parallel pressure should be evolved via the energy equation
-    evolve_ppar::Bool
-end
-
-struct boundary_distributions_struct
-    # knudsen cosine distribution for imposing the neutral wall boundary condition
-    knudsen::MPISharedArray{mk_float,3}
-    # charged particle r boundary values (vpa,vperp,z,r,s)
-    pdf_rboundary_charged::MPISharedArray{mk_float,5}
-    # neutral particle r boundary values (vz,vr,vzeta,z,r,s)
-    pdf_rboundary_neutral::MPISharedArray{mk_float,6}
-end
-
-"""
 Creates the structs for the pdf and the velocity-space moments
 """
 function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
                                   evolve_moments, collisions, external_source_settings,
-                                  numerical_dissipation)
+                                  num_diss_params)
     pdf = create_pdf(composition, r, z, vperp, vpa, vzeta, vr, vz)
 
     # create the 'moments' struct that contains various v-space moments and other
@@ -91,14 +46,14 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
     # the time-dependent entries are not initialised.
     # moments arrays have same r and z grids for both ion and neutral species
     # and so are included in the same struct
-    charged = create_moments_charged(z.n, r.n, composition.n_ion_species,
+    ion = create_moments_ion(z.n, r.n, composition.n_ion_species,
         evolve_moments.density, evolve_moments.parallel_flow,
         evolve_moments.parallel_pressure, external_source_settings.ion,
-        numerical_dissipation)
+        num_diss_params)
     neutral = create_moments_neutral(z.n, r.n, composition.n_neutral_species,
         evolve_moments.density, evolve_moments.parallel_flow,
         evolve_moments.parallel_pressure, external_source_settings.neutral,
-        numerical_dissipation)
+        num_diss_params)
 
     if abs(collisions.ionization) > 0.0 || z.bc == "wall"
         # if ionization collisions are included or wall BCs are enforced, then particle
@@ -109,7 +64,7 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
         particle_number_conserved = true
     end
 
-    moments = moments_struct(charged, neutral, evolve_moments.density,
+    moments = moments_struct(ion, neutral, evolve_moments.density,
                              particle_number_conserved,
                              evolve_moments.conservation,
                              evolve_moments.parallel_flow,
@@ -126,14 +81,13 @@ Allocate arrays for pdfs
 """
 function create_pdf(composition, r, z, vperp, vpa, vzeta, vr, vz)
     # allocate pdf arrays
-    pdf_charged_norm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, composition.n_ion_species)
-    # buffer array is for ion-neutral collisions, not for storing charged pdf
-    pdf_charged_buffer = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, composition.n_neutral_species) # n.b. n_species is n_neutral_species here
+    pdf_ion_norm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, composition.n_ion_species)
+    # buffer array is for ion-neutral collisions, not for storing ion pdf
+    pdf_ion_buffer = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, composition.n_neutral_species) # n.b. n_species is n_neutral_species here
     pdf_neutral_norm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, composition.n_neutral_species)
     # buffer array is for neutral-ion collisions, not for storing neutral pdf
     pdf_neutral_buffer = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, composition.n_ion_species)
-    
-    return pdf_struct(pdf_substruct(pdf_charged_norm, pdf_charged_buffer),
+    return pdf_struct(pdf_substruct(pdf_ion_norm, pdf_ion_buffer),
                       pdf_substruct(pdf_neutral_norm, pdf_neutral_buffer))
 
 end
@@ -156,33 +110,52 @@ function init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
         n_ion_species = composition.n_ion_species
         n_neutral_species = composition.n_neutral_species
         @serial_region begin
-            # initialise the density profile
-            init_density!(moments.charged.dens, z, r, species.charged, n_ion_species)
-            # initialise the parallel flow profile
-            init_upar!(moments.charged.upar, z, r, species.charged, n_ion_species)
-            # initialise the parallel thermal speed profile
-            init_vth!(moments.charged.vth, z, r, species.charged, n_ion_species)
+            # initialise the ion density profile
+            init_density!(moments.ion.dens, z, r, species.ion, n_ion_species)
+            # initialise the ion parallel flow profile
+            init_upar!(moments.ion.upar, z, r, species.ion, n_ion_species)
+            # initialise the ion parallel thermal speed profile
+            init_vth!(moments.ion.vth, z, r, species.ion, n_ion_species)
+            @. moments.ion.ppar = 0.5 * moments.ion.dens * moments.ion.vth^2
             # initialise pressures assuming isotropic distribution
-            @. moments.charged.ppar = 0.5 * moments.charged.dens * moments.charged.vth^2
-            @. moments.charged.pperp = moments.charged.ppar
+            @. moments.ion.ppar = 0.5 * moments.ion.dens * moments.ion.vth^2
+            @. moments.ion.pperp = moments.ion.ppar
+            if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
+                @. moments.ion.constraints_A_coefficient = 1.0
+                @. moments.ion.constraints_B_coefficient = 0.0
+                @. moments.ion.constraints_C_coefficient = 0.0
+            end
             if n_neutral_species > 0
-                #neutral particles
+                # initialise the neutral density profile
                 init_density!(moments.neutral.dens, z, r, species.neutral, n_neutral_species)
+                # initialise the z-component of the neutral flow
                 init_uz!(moments.neutral.uz, z, r, species.neutral, n_neutral_species)
+                # initialise the r-component of the neutral flow
                 init_ur!(moments.neutral.ur, z, r, species.neutral, n_neutral_species)
+                # initialise the zeta-component of the neutral flow
                 init_uzeta!(moments.neutral.uzeta, z, r, species.neutral, n_neutral_species)
+                # initialise the neutral thermal speed
                 init_vth!(moments.neutral.vth, z, r, species.neutral, n_neutral_species)
+                # calculate the z-component of the neutral pressure
                 @. moments.neutral.pz = 0.5 * moments.neutral.dens * moments.neutral.vth^2
+                # calculate the total neutral pressure
                 @. moments.neutral.ptot = 1.5 * moments.neutral.dens * moments.neutral.vth^2
+                if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
+                    @. moments.neutral.constraints_A_coefficient = 1.0
+                    @. moments.neutral.constraints_B_coefficient = 0.0
+                    @. moments.neutral.constraints_C_coefficient = 0.0
+                end
             end
         end
-        moments.charged.dens_updated .= true
-        moments.charged.upar_updated .= true
-        moments.charged.ppar_updated .= true
+        # reflect the fact that the ion moments have now been updated
+        moments.ion.dens_updated .= true
+        moments.ion.upar_updated .= true
+        moments.ion.ppar_updated .= true
+        # account for the fact that the neutral moments have now been updated
         moments.neutral.dens_updated .= true
         moments.neutral.uz_updated .= true
         moments.neutral.pz_updated .= true
-        # create and initialise the normalised particle distribution function (pdf)
+        # create and initialise the normalised, ion particle distribution function (pdf)
         # such that ∫dwpa pdf.norm = 1, ∫dwpa wpa * pdf.norm = 0, and ∫dwpa wpa^2 * pdf.norm = 1/2
         # note that wpa = vpa - upar, unless moments.evolve_ppar = true, in which case wpa = (vpa - upar)/vth
         # the definition of pdf.norm changes accordingly from pdf_unnorm / density to pdf_unnorm * vth / density
@@ -191,9 +164,9 @@ function init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
                         vpa, vzeta, vr, vz, vpa_spectral, vz_spectral, species)
         begin_s_r_z_region()
         # calculate the initial parallel heat flux from the initial un-normalised pdf
-        update_qpar!(moments.charged.qpar, moments.charged.qpar_updated,
-                     moments.charged.dens, moments.charged.upar, moments.charged.vth,
-                     pdf.charged.norm, vpa, vperp, z, r, composition,
+        update_qpar!(moments.ion.qpar, moments.ion.qpar_updated,
+                     moments.ion.dens, moments.ion.upar, moments.ion.vth,
+                     pdf.ion.norm, vpa, vperp, z, r, composition,
                      moments.evolve_density, moments.evolve_upar, moments.evolve_ppar)
 
         initialize_external_source_amplitude!(moments, external_source_settings, vperp,
@@ -222,7 +195,7 @@ function init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
     # collision operator will not be calculated before the initial values are written to
     # file.
     @serial_region begin
-        moments.charged.dSdt .= 0.0
+        moments.ion.dSdt .= 0.0
     end
 
     init_boundary_distributions!(boundary_distributions, pdf, vz, vr, vzeta, vpa, vperp,
@@ -242,30 +215,30 @@ function initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z
         for is ∈ 1:composition.n_ion_species, ir ∈ 1:r.n
             # Add ion contributions to wall flux here. Neutral contributions will be
             # added in init_neutral_pdf_over_density!()
-            if species.charged[is].z_IC.initialization_option == "bgk" || species.charged[is].vpa_IC.initialization_option == "bgk"
-                @views init_bgk_pdf!(pdf.charged.norm[:,1,:,ir,is], 0.0, species.charged[is].initial_temperature, z.grid, z.L, vpa.grid)
+            if species.ion[is].z_IC.initialization_option == "bgk" || species.ion[is].vpa_IC.initialization_option == "bgk"
+                @views init_bgk_pdf!(pdf.ion.norm[:,1,:,ir,is], 0.0, species.ion[is].initial_temperature, z.grid, z.L, vpa.grid)
             else
                 # updates pdf_norm to contain pdf / density, so that ∫dvpa pdf.norm = 1,
                 # ∫dwpa wpa * pdf.norm = 0, and ∫dwpa m_s (wpa/vths)^2 pdf.norm = 1/2
                 # to machine precision
-                @views init_charged_pdf_over_density!(
-                    pdf.charged.norm[:,:,:,ir,is], species.charged[is], composition, vpa, vperp,
-                    z, vpa_spectral, moments.charged.dens[:,ir,is],
-                    moments.charged.upar[:,ir,is], moments.charged.ppar[:,ir,is],
-                    moments.charged.vth[:,ir,is],
-                    moments.charged.v_norm_fac[:,ir,is], moments.evolve_density,
+                @views init_ion_pdf_over_density!(
+                    pdf.ion.norm[:,:,:,ir,is], species.ion[is], composition, vpa, vperp,
+                    z, vpa_spectral, moments.ion.dens[:,ir,is],
+                    moments.ion.upar[:,ir,is], moments.ion.ppar[:,ir,is],
+                    moments.ion.vth[:,ir,is],
+                    moments.ion.v_norm_fac[:,ir,is], moments.evolve_density,
                     moments.evolve_upar, moments.evolve_ppar)
             end
-            @views wall_flux_0[ir,is] = -(moments.charged.dens[1,ir,is] *
-                                          moments.charged.upar[1,ir,is])
-            @views wall_flux_L[ir,is] = moments.charged.dens[end,ir,is] *
-                                        moments.charged.upar[end,ir,is]
+            @views wall_flux_0[ir,is] = -(moments.ion.dens[1,ir,is] *
+                                          moments.ion.upar[1,ir,is])
+            @views wall_flux_L[ir,is] = moments.ion.dens[end,ir,is] *
+                                        moments.ion.upar[end,ir,is]
 
             @loop_z iz begin
                 if moments.evolve_ppar
-                    @. pdf.charged.norm[:,:,iz,ir,is] *= moments.charged.vth[iz,ir,is]
+                    @. pdf.ion.norm[:,:,iz,ir,is] *= moments.ion.vth[iz,ir,is]
                 elseif moments.evolve_density == false
-                    @. pdf.charged.norm[:,:,iz,ir,is] *= moments.charged.dens[iz,ir,is]
+                    @. pdf.ion.norm[:,:,iz,ir,is] *= moments.ion.dens[iz,ir,is]
                 end
             end
         end
@@ -529,7 +502,7 @@ end
 
 """
 """
-function init_charged_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
+function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
         vpa_spectral, density, upar, ppar, vth, v_norm_fac, evolve_density, evolve_upar,
         evolve_ppar)
 
@@ -563,7 +536,7 @@ function init_charged_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
             end
 
             # Only do this correction for runs without wall bc, because consistency of
-            # pdf and moments is taken care of by convert_full_f_charged_to_normalised!()
+            # pdf and moments is taken care of by convert_full_f_ion_to_normalised!()
             # for wall bc cases.
             for iz ∈ 1:z.n
                 # densfac = the integral of the pdf over v-space, which should be unity,
@@ -623,7 +596,7 @@ function init_charged_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                     @. pdf[:,ivperp,iz] *= 1.0 - exp(-vpa.grid^2*inverse_width)
                 end
             end
-            # Can use non-shared memory here because `init_charged_pdf_over_density!()` is
+            # Can use non-shared memory here because `init_ion_pdf_over_density!()` is
             # called inside a `@serial_region`
             lower_z_pdf_buffer = allocate_float(vpa.n, vperp.n)
             upper_z_pdf_buffer = allocate_float(vpa.n, vperp.n)
@@ -665,7 +638,7 @@ function init_charged_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
 
             # Get the unnormalised pdf and the moments of the constructed full-f
             # distribution function (which will be modified from the input moments).
-            convert_full_f_charged_to_normalised!(pdf, density, upar, ppar, vth, vperp,
+            convert_full_f_ion_to_normalised!(pdf, density, upar, ppar, vth, vperp,
                                                   vpa, vpa_spectral, evolve_density,
                                                   evolve_upar, evolve_ppar)
 
@@ -804,7 +777,7 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                     @. pdf[:,ivr,ivzeta,iz] *= 1.0 - exp(-vz.grid^2*inverse_width)
                 end
             end
-            # Can use non-shared memory here because `init_charged_pdf_over_density!()` is
+            # Can use non-shared memory here because `init_ion_pdf_over_density!()` is
             # called inside a `@serial_region`
             lower_z_pdf_buffer = allocate_float(vz.n, vr.n, vzeta.n)
             upper_z_pdf_buffer = allocate_float(vz.n, vr.n, vzeta.n)
@@ -929,31 +902,30 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
     #nb manufactured functions not functions of species
     begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
-        moments.charged.dens[iz,ir,is] = densi_func(z.grid[iz],r.grid[ir],0.0)
+        moments.ion.dens[iz,ir,is] = densi_func(z.grid[iz],r.grid[ir],0.0)
         @loop_vperp_vpa ivperp ivpa begin
-            pdf.charged.norm[ivpa,ivperp,iz,ir,is] = dfni_func(vpa.grid[ivpa],vperp.grid[ivperp],z.grid[iz],r.grid[ir],0.0)
+            pdf.ion.norm[ivpa,ivperp,iz,ir,is] = dfni_func(vpa.grid[ivpa],vperp.grid[ivperp],z.grid[iz],r.grid[ir],0.0)
         end
     end
     # update upar, ppar, qpar, vth consistent with manufactured solns
-    reset_moments_status!(moments)
-    update_density!(moments.charged.dens, moments.charged.dens_updated,
-                    pdf.charged.norm, vpa, vperp, z, r, composition)
+    update_density!(moments.ion.dens, moments.ion.dens_updated,
+                    pdf.ion.norm, vpa, vperp, z, r, composition)
     # get particle flux
-    update_upar!(moments.charged.upar, moments.charged.upar_updated,
-                 moments.charged.dens, moments.charged.ppar, pdf.charged.norm,
+    update_upar!(moments.ion.upar, moments.ion.upar_updated,
+                 moments.ion.dens, moments.ion.ppar, pdf.ion.norm,
                  vpa, vperp, z, r, composition, moments.evolve_density,
                  moments.evolve_ppar)
-    update_ppar!(moments.charged.ppar, moments.charged.ppar_updated,
-                 moments.charged.dens, moments.charged.upar, pdf.charged.norm,
+    update_ppar!(moments.ion.ppar, moments.ion.ppar_updated,
+                 moments.ion.dens, moments.ion.upar, pdf.ion.norm,
                  vpa, vperp, z, r, composition, moments.evolve_density,
                  moments.evolve_upar)
-    update_pperp!(moments.charged.pperp, pdf.charged.norm, vpa, vperp, z, r, composition)
-    update_qpar!(moments.charged.qpar, moments.charged.qpar_updated,
-                 moments.charged.dens, moments.charged.upar,
-                 moments.charged.vth, pdf.charged.norm, vpa, vperp, z, r,
+    update_pperp!(moments.ion.pperp, pdf.ion.norm, vpa, vperp, z, r, composition)
+    update_qpar!(moments.ion.qpar, moments.ion.qpar_updated,
+                 moments.ion.dens, moments.ion.upar,
+                 moments.ion.vth, pdf.ion.norm, vpa, vperp, z, r,
                  composition, moments.evolve_density, moments.evolve_upar,
                  moments.evolve_ppar)
-    update_vth!(moments.charged.vth, moments.charged.ppar, moments.charged.pperp, moments.charged.dens, vperp, z, r, composition)
+    update_vth!(moments.ion.vth, moments.ion.ppar, moments.ion.pperp, moments.ion.dens, vperp, z, r, composition)
 
     if n_neutral_species > 0
         begin_sn_r_z_region()
@@ -1011,7 +983,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
         begin_sn_r_z_region()
         @loop_sn_r_z isn ir iz begin
             # get vth for neutrals
-            moments.charged.vth[iz,ir,isn] = sqrt(2.0*moments.neutral.ptot[iz,ir,isn]/moments.neutral.dens[iz,ir,isn])
+            moments.neutral.vth[iz,ir,isn] = sqrt(2.0*moments.neutral.ptot[iz,ir,isn]/moments.neutral.dens[iz,ir,isn])
         end
     end
     return nothing
@@ -1081,7 +1053,7 @@ function init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composi
     return knudsen_cosine
 end
 
-function init_rboundary_pdfs!(rboundary_charged, rboundary_neutral, pdf::pdf_struct, vz,
+function init_rboundary_pdfs!(rboundary_ion, rboundary_neutral, pdf::pdf_struct, vz,
                               vr, vzeta, vpa, vperp, z, r, composition)
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
@@ -1089,8 +1061,8 @@ function init_rboundary_pdfs!(rboundary_charged, rboundary_neutral, pdf::pdf_str
 
     begin_s_z_region() #do not parallelise r here
     @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-        rboundary_charged[ivpa,ivperp,iz,1,is] = pdf.charged.norm[ivpa,ivperp,iz,1,is]
-        rboundary_charged[ivpa,ivperp,iz,end,is] = pdf.charged.norm[ivpa,ivperp,iz,end,is]
+        rboundary_ion[ivpa,ivperp,iz,1,is] = pdf.ion.norm[ivpa,ivperp,iz,1,is]
+        rboundary_ion[ivpa,ivperp,iz,end,is] = pdf.ion.norm[ivpa,ivperp,iz,end,is]
     end
     if n_neutral_species > 0
         begin_sn_z_region() #do not parallelise r here
@@ -1099,7 +1071,7 @@ function init_rboundary_pdfs!(rboundary_charged, rboundary_neutral, pdf::pdf_str
             rboundary_neutral[ivz,ivr,ivzeta,iz,end,isn] = pdf.neutral.norm[ivz,ivr,ivzeta,iz,end,isn]
         end
     end
-    return rboundary_charged, rboundary_neutral
+    return rboundary_ion, rboundary_neutral
 end
 
 """
@@ -1116,914 +1088,24 @@ function create_boundary_distributions(vz, vr, vzeta, vpa, vperp, z, composition
     #depends on T_wall, which has already been set
     init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composition, zero)
     #initialise fixed-in-time radial boundary condition based on initial condition values
-    pdf_rboundary_charged = allocate_shared_float(vpa.n, vperp.n, z.n, 2,
+    pdf_rboundary_ion = allocate_shared_float(vpa.n, vperp.n, z.n, 2,
                                                   composition.n_ion_species)
     pdf_rboundary_neutral =  allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, 2,
                                                    composition.n_neutral_species)
 
-    return boundary_distributions_struct(knudsen_cosine, pdf_rboundary_charged, pdf_rboundary_neutral)
+    return boundary_distributions_struct(knudsen_cosine, pdf_rboundary_ion, pdf_rboundary_neutral)
 end
 
 function init_boundary_distributions!(boundary_distributions, pdf, vz, vr, vzeta, vpa, vperp, z, r, composition)
     #initialise fixed-in-time radial boundary condition based on initial condition values
-    init_rboundary_pdfs!(boundary_distributions.pdf_rboundary_charged,
+    init_rboundary_pdfs!(boundary_distributions.pdf_rboundary_ion,
                          boundary_distributions.pdf_rboundary_neutral, pdf, vz, vr, vzeta,
                          vpa, vperp, z, r, composition)
     return nothing
 end
-"""
-enforce boundary conditions in vpa and z on the evolved pdf;
-also enforce boundary conditions in z on all separately evolved velocity space moments of the pdf
-"""
-function enforce_boundary_conditions!(f, f_r_bc, density, upar, ppar, moments, vpa_bc,
-        z_bc, r_bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral, vpa_adv, vperp_adv, z_adv, r_adv, composition, scratch_dummy,
-        r_diffusion, vpa_diffusion, vperp_diffusion)
-    if vpa.n > 1
-        begin_s_r_z_vperp_region()
-        @loop_s_r_z_vperp is ir iz ivperp begin
-            # enforce the vpa BC
-            # use that adv.speed independent of vpa 
-            @views enforce_v_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc,
-                             vpa_adv[is].speed[:,ivperp,iz,ir], vpa_diffusion,
-                             vpa, vpa_spectral)
-        end
-    end
-    if vperp.n > 1
-        begin_s_r_z_vpa_region()
-        @views enforce_vperp_boundary_condition!(f, vperp.bc, vperp, vperp_spectral,
-                             vperp_adv, vperp_diffusion)
-    end
-    if z.n > 1
-        begin_s_r_vperp_vpa_region()
-        # enforce the z BC on the evolved velocity space moments of the pdf
-        @views enforce_z_boundary_condition_moments!(density, moments, z_bc)
-        @views enforce_z_boundary_condition!(f, density, upar, ppar, moments, z_bc, z_adv, z,
-                                             vperp, vpa, composition,
-                                             scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
-                                             scratch_dummy.buffer_vpavperprs_3, scratch_dummy.buffer_vpavperprs_4)
-                                              
-    end
-    if r.n > 1
-        begin_s_z_vperp_vpa_region()
-        @views enforce_r_boundary_condition!(f, f_r_bc, r_bc, r_adv, vpa, vperp, z, r, composition,
-            scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
-            scratch_dummy.buffer_vpavperpzs_3, scratch_dummy.buffer_vpavperpzs_4,
-            r_diffusion)
-    end
-end
-function enforce_boundary_conditions!(fvec_out::scratch_pdf, moments, f_r_bc, vpa_bc,
-        z_bc, r_bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral, vpa_adv, vperp_adv, z_adv, r_adv, composition, scratch_dummy,
-        r_diffusion, vpa_diffusion, vperp_diffusion)
-    enforce_boundary_conditions!(fvec_out.pdf, f_r_bc, fvec_out.density, fvec_out.upar,
-        fvec_out.ppar, moments, vpa_bc, z_bc, r_bc, vpa, vperp, z, r, 
-        vpa_spectral, vperp_spectral, vpa_adv, vperp_adv, z_adv,
-        r_adv, composition, scratch_dummy, r_diffusion, vpa_diffusion, vperp_diffusion)
-end
 
 """
-enforce boundary conditions on f in r
-"""
-function enforce_r_boundary_condition!(f::AbstractArray{mk_float,5}, f_r_bc, bc::String,
-        adv, vpa, vperp, z, r, composition, end1::AbstractArray{mk_float,4},
-        end2::AbstractArray{mk_float,4}, buffer1::AbstractArray{mk_float,4},
-        buffer2::AbstractArray{mk_float,4}, r_diffusion::Bool)
-
-    nr = r.n
-
-    if r.nelement_global > r.nelement_local
-        # reconcile internal element boundaries across processes
-        # & enforce periodicity and external boundaries if needed
-        @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-            end1[ivpa,ivperp,iz,is] = f[ivpa,ivperp,iz,1,is]
-            end2[ivpa,ivperp,iz,is] = f[ivpa,ivperp,iz,nr,is]
-        end
-        @views reconcile_element_boundaries_MPI!(f,
-            end1, end2,	buffer1, buffer2, r)
-    end
-
-    # 'periodic' BC enforces periodicity by taking the average of the boundary points
-    # enforce the condition if r is local
-    if bc == "periodic" && r.nelement_global == r.nelement_local
-        @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-            f[ivpa,ivperp,iz,1,is] = 0.5*(f[ivpa,ivperp,iz,nr,is]+f[ivpa,ivperp,iz,1,is])
-            f[ivpa,ivperp,iz,nr,is] = f[ivpa,ivperp,iz,1,is]
-        end
-    end
-    if bc == "Dirichlet"
-        zero = 1.0e-10
-        # use the old distribution to force the new distribution to have
-        # consistant-in-time values at the boundary
-        # with bc = "Dirichlet" and r_diffusion = false
-        # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
-        # with bc = "Dirichlet" and r_diffusion = true
-        # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
-        @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-            ir = 1 # r = -L/2 -- check that the point is on lowest rank
-            if r.irank == 0 && (r_diffusion || adv[is].speed[ir,ivpa,ivperp,iz] > zero)
-                f[ivpa,ivperp,iz,ir,is] = f_r_bc[ivpa,ivperp,iz,1,is]
-            end
-            ir = r.n # r = L/2 -- check that the point is on highest rank
-            if r.irank == r.nrank - 1 && (r_diffusion || adv[is].speed[ir,ivpa,ivperp,iz] < -zero)
-                f[ivpa,ivperp,iz,ir,is] = f_r_bc[ivpa,ivperp,iz,end,is]
-            end
-        end
-    end
-end
-
-"""
-enforce boundary conditions on charged particle f in z
-"""
-function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::String, adv,
-                                       z, vperp, vpa, composition, end1::AbstractArray{mk_float,4},
-                                       end2::AbstractArray{mk_float,4}, buffer1::AbstractArray{mk_float,4},
-                                       buffer2::AbstractArray{mk_float,4})
-    # this block ensures periodic BC can be supported with distributed memory MPI
-    if z.nelement_global > z.nelement_local
-        # reconcile internal element boundaries across processes
-        # & enforce periodicity and external boundaries if needed
-        nz = z.n
-        @loop_s_r_vperp_vpa is ir ivperp ivpa begin
-            end1[ivpa,ivperp,ir,is] = pdf[ivpa,ivperp,1,ir,is]
-            end2[ivpa,ivperp,ir,is] = pdf[ivpa,ivperp,nz,ir,is]
-        end
-        # check on periodic bc happens inside this call below
-        @views reconcile_element_boundaries_MPI!(pdf,
-            end1, end2,	buffer1, buffer2, z)
-    end
-    # define a zero that accounts for finite precision
-    zero = 1.0e-14
-    # 'constant' BC is time-independent f at upwind boundary
-    # and constant f beyond boundary 
-    if bc == "constant"
-        begin_s_r_vperp_vpa_region()
-        density_offset = 1.0
-        vwidth = 1.0
-        if z.irank == 0
-            @loop_s_r_vperp_vpa is ir ivperp ivpa begin
-                if adv[is].speed[ivpa,1,ir] > 0.0
-                    pdf[ivpa,ivperp,1,ir,is] = density_offset * exp(-(vpa.grid[ivpa]^2 + vperp.grid[ivperp]^2)/vwidth^2) / sqrt(pi)
-                end
-            end
-        end
-        if z.irank == z.nrank - 1
-            @loop_s_r_vperp_vpa is ir ivperp ivpa begin
-                if adv[is].speed[ivpa,end,ir] > 0.0
-                    pdf[ivpa,ivperp,end,ir,is] = density_offset * exp(-(vpa.grid[ivpa]^2 + vperp.grid[ivperp]^2)/vwidth^2) / sqrt(pi)
-                end
-            end
-        end
-    # 'periodic' BC enforces periodicity by taking the average of the boundary points
-    elseif bc == "periodic" && z.nelement_global == z.nelement_local
-        begin_s_r_vperp_vpa_region()
-        @loop_s_r_vperp_vpa is ir ivperp ivpa begin
-            pdf[ivpa,ivperp,1,ir,is] = 0.5*(pdf[ivpa,ivperp,z.n,ir,is]+pdf[ivpa,ivperp,1,ir,is])
-            pdf[ivpa,ivperp,z.n,ir,is] = pdf[ivpa,ivperp,1,ir,is]
-        end
-    # 'wall' BC enforces wall boundary conditions
-    elseif bc == "wall"
-        # Need integrals over vpa at wall boundaries in z, so cannot parallelize over z
-        # or vpa.
-        begin_s_r_region()
-        @loop_s is begin
-            # zero incoming BC for ions, as they recombine at the wall
-            if moments.evolve_upar
-                @loop_r ir begin
-                    @views enforce_zero_incoming_bc!(
-                        pdf[:,:,:,ir,is], z, vpa, density[:,ir,is], upar[:,ir,is],
-                        ppar[:,ir,is], moments.evolve_upar, moments.evolve_ppar, zero)
-                end
-            else
-                @loop_r ir begin
-                    @views enforce_zero_incoming_bc!(pdf[:,:,:,ir,is],
-                                                     adv[is].speed[:,:,:,ir], z, zero)
-                end
-            end
-        end
-    end
-end
-
-"""
-enforce boundary conditions on neutral particle distribution function
-"""
-function enforce_neutral_boundary_conditions!(f_neutral, f_charged,
-        boundary_distributions, density_neutral, uz_neutral, pz_neutral, moments,
-        density_ion, upar_ion, Er, vzeta_spectral, vr_spectral, vz_spectral, r_adv, z_adv,
-        vzeta_adv, vr_adv, vz_adv, r, z, vzeta, vr, vz, composition, geometry,
-        scratch_dummy, r_diffusion, vz_diffusion)
-
-    # without acceleration of neutrals bc on vz vr vzeta should not be required as no
-    # advection or diffusion in these coordinates
-
-    if vzeta_adv !== nothing && vzeta.n_global > 1 && vzeta.bc != "none"
-        begin_sn_r_z_vr_vz_region()
-        @loop_sn_r_z_vr_vz isn ir iz ivr ivz begin
-            # enforce the vz BC
-            @views enforce_v_boundary_condition_local!(f_neutral[ivz,ivr,:,iz,ir,isn],
-                                                       vzeta.bc,
-                                                       vzeta_adv[isn].speed[ivz,ivr,:,iz,ir],
-                                                       false, vzeta, vzeta_spectral)
-        end
-    end
-    if vr_adv !== nothing && vr.n_global > 1 && vr.bc != "none"
-        begin_sn_r_z_vzeta_vz_region()
-        @loop_sn_r_z_vzeta_vz isn ir iz ivzeta ivz begin
-            # enforce the vz BC
-            @views enforce_v_boundary_condition_local!(f_neutral[ivz,:,ivzeta,iz,ir,isn],
-                                                       vr.bc,
-                                                       vr_adv[isn].speed[ivz,:,ivzeta,iz,ir],
-                                                       false, vr, vr_spectral)
-        end
-    end
-    if vz_adv !== nothing && vz.n_global > 1 && vz.bc != "none"
-        begin_sn_r_z_vzeta_vr_region()
-        @loop_sn_r_z_vzeta_vr isn ir iz ivzeta ivr begin
-            # enforce the vz BC
-            @views enforce_v_boundary_condition_local!(f_neutral[:,ivr,ivzeta,iz,ir,isn],
-                                                       vz.bc,
-                                                       vz_adv[isn].speed[:,ivr,ivzeta,iz,ir],
-                                                       vz_diffusion, vz, vz_spectral)
-        end
-    end
-    # f_initial contains the initial condition for enforcing a fixed-boundary-value condition
-    if z.n > 1
-        begin_sn_r_vzeta_vr_vz_region()
-        @views enforce_neutral_z_boundary_condition!(f_neutral, density_neutral, uz_neutral,
-            pz_neutral, moments, density_ion, upar_ion, Er, boundary_distributions,
-            z_adv, z, vzeta, vr, vz, composition, geometry, 
-            scratch_dummy.buffer_vzvrvzetarsn_1, scratch_dummy.buffer_vzvrvzetarsn_2,
-            scratch_dummy.buffer_vzvrvzetarsn_3, scratch_dummy.buffer_vzvrvzetarsn_4)
-    end
-    if r.n > 1
-        begin_sn_z_vzeta_vr_vz_region()
-        @views enforce_neutral_r_boundary_condition!(f_neutral, boundary_distributions.pdf_rboundary_neutral,
-                                    r_adv, vz, vr, vzeta, z, r, composition,
-                                    scratch_dummy.buffer_vzvrvzetazsn_1, scratch_dummy.buffer_vzvrvzetazsn_2,
-                                    scratch_dummy.buffer_vzvrvzetazsn_3, scratch_dummy.buffer_vzvrvzetazsn_4,
-                                    r_diffusion)
-    end
-end
-
-function enforce_neutral_r_boundary_condition!(f::AbstractArray{mk_float,6},
-        f_r_bc::AbstractArray{mk_float,6}, adv, vz, vr, vzeta, z, r, composition,
-        end1::AbstractArray{mk_float,5}, end2::AbstractArray{mk_float,5},
-        buffer1::AbstractArray{mk_float,5}, buffer2::AbstractArray{mk_float,5},
-        r_diffusion) #f_initial,
-
-    bc = r.bc
-    nr = r.n
-
-    if r.nelement_global > r.nelement_local
-        # reconcile internal element boundaries across processes
-        # & enforce periodicity and external boundaries if needed
-        @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
-            end1[ivz,ivr,ivzeta,iz,isn] = f[ivz,ivr,ivzeta,iz,1,isn]
-            end2[ivz,ivr,ivzeta,iz,isn] = f[ivz,ivr,ivzeta,iz,nr,isn]
-        end
-        @views reconcile_element_boundaries_MPI!(f,
-            end1, end2,	buffer1, buffer2, r)
-    end
-    # 'periodic' BC enforces periodicity by taking the average of the boundary points
-    # local case only when no communication required
-    if bc == "periodic" && r.nelement_global == r.nelement_local
-        @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
-            f[ivz,ivr,ivzeta,iz,1,isn] = 0.5*(f[ivz,ivr,ivzeta,iz,1,isn]+f[ivz,ivr,ivzeta,iz,nr,isn])
-            f[ivz,ivr,ivzeta,iz,nr,isn] = f[ivz,ivr,ivzeta,iz,1,isn]
-        end
-    end
-    # Dirichlet boundary condition for external endpoints
-    if bc == "Dirichlet"
-        zero = 1.0e-10
-        # use the old distribution to force the new distribution to have
-        # consistant-in-time values at the boundary
-        # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
-        @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
-            ir = 1 # r = -L/2
-            # incoming particles and on lowest rank
-            if r.irank == 0 && (r_diffusion || adv[isn].speed[ir,ivz,ivr,ivzeta,iz] > zero)
-                f[ivz,ivr,ivzeta,iz,ir,isn] = f_r_bc[ivz,ivr,ivzeta,iz,1,isn]
-            end
-            ir = nr # r = L/2
-            # incoming particles and on highest rank
-            if r.irank == r.nrank - 1 && (r_diffusion || adv[isn].speed[ir,ivz,ivr,ivzeta,iz] < -zero)
-                f[ivz,ivr,ivzeta,iz,ir,isn] = f_r_bc[ivz,ivr,ivzeta,iz,end,isn]
-            end
-        end
-    end
-end
-
-"""
-enforce boundary conditions on neutral particle f in z
-"""
-function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, density_ion,
-                                               upar_ion, Er, boundary_distributions, adv,
-                                               z, vzeta, vr, vz, composition, geometry,
-                                               end1::AbstractArray{mk_float,5}, end2::AbstractArray{mk_float,5},
-                                               buffer1::AbstractArray{mk_float,5}, buffer2::AbstractArray{mk_float,5})
-    
-
-    if z.nelement_global > z.nelement_local
-        # reconcile internal element boundaries across processes
-        # & enforce periodicity and external boundaries if needed
-        nz = z.n
-        @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
-            end1[ivz,ivr,ivzeta,ir,isn] = pdf[ivz,ivr,ivzeta,1,ir,isn]
-            end2[ivz,ivr,ivzeta,ir,isn] = pdf[ivz,ivr,ivzeta,nz,ir,isn]
-        end
-        # check on periodic bc occurs within this call below
-        @views reconcile_element_boundaries_MPI!(pdf,
-            end1, end2,	buffer1, buffer2, z)
-    end
-
-    zero = 1.0e-14
-    # 'constant' BC is time-independent f at upwind boundary
-    # and constant f beyond boundary
-    if z.bc == "constant"
-        begin_sn_r_vzeta_vr_vz_region()
-        density_offset = 1.0
-        vwidth = 1.0
-        if z.irank == 0
-            @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
-                if adv[isn].speed[ivz,ivr,ivzeta,1,ir] > 0.0
-                    pdf[ivz,ivr,ivzeta,1,ir,is] = density_offset *
-                        exp(-(vzeta.grid[ivzeta]^2 + vr.grid[ivr] + vz.grid[ivz])/vwidth^2) /
-                        sqrt(pi)
-                end
-            end
-        end
-        if z.irank == z.nrank - 1
-            @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
-                if adv[isn].speed[ivz,ivr,ivzeta,end,ir] > 0.0
-                    pdf[ivz,ivr,ivzeta,end,ir,is] = density_offset *
-                        exp(-(vzeta.grid[ivzeta]^2 + vr.grid[ivr] + vz.grid[ivz])/vwidth^2) /
-                        sqrt(pi)
-                end
-            end
-        end
-    # 'periodic' BC enforces periodicity by taking the average of the boundary points
-    elseif z.bc == "periodic" && z.nelement_global == z.nelement_local
-        begin_sn_r_vzeta_vr_vz_region()
-        @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
-            pdf[ivz,ivr,ivzeta,1,ir,isn] = 0.5*(pdf[ivz,ivr,ivzeta,1,ir,isn] +
-                                                pdf[ivz,ivr,ivzeta,end,ir,isn])
-            pdf[ivz,ivr,ivzeta,end,ir,isn] = pdf[ivz,ivr,ivzeta,1,ir,isn]
-        end
-    # 'wall' BC enforces wall boundary conditions
-    elseif z.bc == "wall"
-        # Need integrals over vpa at wall boundaries in z, so cannot parallelize over z
-        # or vpa.
-        begin_sn_r_region()
-        @loop_sn isn begin
-            # BC for neutrals
-            @loop_r ir begin
-                # define vtfac to avoid repeated computation below
-                vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
-                # Assume for now that the ion species index corresponding to this neutral
-                # species is the same as the neutral species index.
-                # Note, have already calculated moments of ion distribution function(s),
-                # so can use the moments here to get the flux
-                if z.irank == 0
-                    ion_flux_0 = -density_ion[1,ir,isn] * (upar_ion[1,ir,isn]*geometry.bzed[1,ir] - 0.5*geometry.rhostar*Er[1,ir])
-                else
-                    ion_flux_0 = NaN
-                end
-                if z.irank == z.nrank - 1
-                    ion_flux_L = density_ion[end,ir,isn] * (upar_ion[end,ir,isn]*geometry.bzed[end,ir] - 0.5*geometry.rhostar*Er[end,ir])
-                else
-                    ion_flux_L = NaN
-                end
-                # enforce boundary condition on the neutral pdf that all ions and neutrals
-                # that leave the domain re-enter as neutrals
-                @views enforce_neutral_wall_bc!(
-                    pdf[:,:,:,:,ir,isn], z, vzeta, vr, vz, pz[:,ir,isn], uz[:,ir,isn],
-                    density[:,ir,isn], ion_flux_0, ion_flux_L, boundary_distributions,
-                    vtfac, composition.recycling_fraction, moments.evolve_ppar,
-                    moments.evolve_upar, moments.evolve_density, zero)
-            end
-        end
-    end
-end
-
-"""
-enforce a zero incoming BC in z for given species pdf at each radial location
-"""
-function enforce_zero_incoming_bc!(pdf, speed, z, zero)
-    nvpa = size(pdf,1)
-    # no parallel BC should be enforced for dz/dt = 0
-    # note that the parallel velocity coordinate vpa may be dz/dt or
-    # some version of the peculiar velocity (dz/dt - upar),
-    # so use advection speed below instead of vpa
-    if z.irank == 0
-        @loop_vperp_vpa ivperp ivpa begin
-            # for left boundary in zed (z = -Lz/2), want
-            # f(z=-Lz/2, v_parallel > 0) = 0
-            if speed[1,ivpa,ivperp] > zero
-                pdf[ivpa,ivperp,1] = 0.0
-            end
-        end
-    end
-    if z.irank == z.nrank - 1
-        @loop_vperp_vpa ivperp ivpa begin
-            # for right boundary in zed (z = Lz/2), want
-            # f(z=Lz/2, v_parallel < 0) = 0
-            if speed[end,ivpa,ivperp] < -zero
-                pdf[ivpa,ivperp,end] = 0.0
-            end
-        end
-    end
-end
-function enforce_zero_incoming_bc!(pdf, z::coordinate, vpa::coordinate, density, upar,
-                                   ppar, evolve_upar, evolve_ppar, zero)
-    if z.irank != 0 && z.irank != z.nrank - 1
-        # No z-boundary in this block
-        return nothing
-    end
-    nvpa, nvperp, nz = size(pdf)
-    # no parallel BC should be enforced for dz/dt = 0
-    # note that the parallel velocity coordinate vpa may be dz/dt or
-    # some version of the peculiar velocity (dz/dt - upar),
-    # so use advection speed below instead of vpa
-
-    # absolute velocity at left boundary
-    if z.irank == 0
-        @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, sqrt(2.0*(ppar[1]/density[1])),
-                                         upar[1], evolve_ppar, evolve_upar)
-        @loop_vpa ivpa begin
-            # for left boundary in zed (z = -Lz/2), want
-            # f(z=-Lz/2, v_parallel > 0) = 0
-            if vpa.scratch[ivpa] > zero
-                pdf[ivpa,:,1] .= 0.0
-            end
-        end
-    end
-    # absolute velocity at right boundary
-    if z.irank == z.nrank - 1
-        @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, sqrt(2.0*(ppar[end]/density[end])),
-                                          upar[end], evolve_ppar, evolve_upar)
-        @loop_vpa ivpa begin
-            # for right boundary in zed (z = Lz/2), want
-            # f(z=Lz/2, v_parallel < 0) = 0
-            if vpa.scratch2[ivpa] < -zero
-                pdf[ivpa,:,end] .= 0.0
-            end
-        end
-    end
-
-    # Special constraint-forcing code that tries to keep the modifications smooth at
-    # v_parallel=0.
-    if z.irank == 0 && z.irank == z.nrank - 1
-        # Both z-boundaries in this block
-        z_range = (1,nz)
-    elseif z.irank == 0
-        z_range = (1,)
-    elseif z.irank == z.nrank - 1
-        z_range = (nz,)
-    else
-        error("No boundary in this block, should have returned already")
-    end
-    for iz ∈ z_range
-        # moment-kinetic approach only implemented for 1V case so far
-        @boundscheck size(pdf,2) == 1
-
-        f = @view pdf[:,1,iz]
-        if evolve_ppar && evolve_upar
-            I0 = integrate_over_vspace(f, vpa.wgts)
-            I1 = integrate_over_vspace(f, vpa.grid, vpa.wgts)
-            I2 = integrate_over_vspace(f, vpa.grid, 2, vpa.wgts)
-
-            # Store v_parallel with upar shift removed in vpa.scratch
-            vth = sqrt(2.0*ppar[iz]/density[iz])
-            @. vpa.scratch = vpa.grid + upar[iz]/vth
-            # Introduce factor to ensure corrections go smoothly to zero near
-            # v_parallel=0
-            @. vpa.scratch2 = f * abs(vpa.scratch) / (1.0 + abs(vpa.scratch))
-            J1 = integrate_over_vspace(vpa.scratch2, vpa.grid, vpa.wgts)
-            J2 = integrate_over_vspace(vpa.scratch2, vpa.grid, 2, vpa.wgts)
-            J3 = integrate_over_vspace(vpa.scratch2, vpa.grid, 3, vpa.wgts)
-            J4 = integrate_over_vspace(vpa.scratch2, vpa.grid, 4, vpa.wgts)
-
-            A = (J3^2 - J2*J4 + 0.5*(J2^2 - J1*J3)) /
-                (I0*(J3^2 - J2*J4) + I1*(J1*J4 - J2*J3) + I2*(J2^2 - J1*J3))
-            B = (0.5*J3 + A*(I1*J4 - I2*J3)) / (J3^2 - J2*J4)
-            C = (0.5 - A*I2 -B*J3) / J4
-
-            @. f = A*f + B*vpa.grid*vpa.scratch2 + C*vpa.grid*vpa.grid*vpa.scratch2
-        elseif evolve_upar
-            I0 = integrate_over_vspace(f, vpa.wgts)
-            I1 = integrate_over_vspace(f, vpa.grid, vpa.wgts)
-
-            # Store v_parallel with upar shift removed in vpa.scratch
-            @. vpa.scratch = vpa.grid + upar[iz]
-            # Introduce factor to ensure corrections go smoothly to zero near
-            # v_parallel=0
-            @. vpa.scratch2 = f * abs(vpa.scratch) / (1.0 + abs(vpa.scratch))
-            J1 = integrate_over_vspace(vpa.scratch2, vpa.grid, vpa.wgts)
-            J2 = integrate_over_vspace(vpa.scratch2, vpa.grid, 2, vpa.wgts)
-
-            A = 1.0 / (I0 - I1*J1/J2)
-            B = -A*I1/J2
-
-            @. f = A*f + B*vpa.grid*vpa.scratch2
-        elseif evolve_density
-            I0 = integrate_over_vspace(f, vpa.wgts)
-            @. f = f / I0
-        end
-    end
-end
-
-"""
-Set up an initial condition that tries to be smoothly compatible with the sheath
-boundary condition for ions, by setting f(±(v_parallel-u0)<0) where u0=0 at the sheath
-boundaries and for z<0 increases linearly to u0=vpa.L at z=0, while for z>0 increases
-from u0=-vpa.L at z=0 to zero at the z=z.L/2 sheath.
-
-To be applied to 'full-f' distribution function on v_parallel grid (not w_parallel
-grid).
-"""
-function enforce_initial_tapered_zero_incoming!(pdf, z::coordinate, vpa::coordinate)
-    nvpa = size(pdf,1)
-    zero = 1.0e-14
-    # no parallel BC should be enforced for dz/dt = 0
-    # note that the parallel velocity coordinate vpa may be dz/dt or
-    # some version of the peculiar velocity (dz/dt - upar),
-    # so use advection speed below instead of vpa
-
-    for iz ∈ 1:z.n
-        u0 = (2.0*z.grid[iz]/z.L - sign(z.grid[iz])) * vpa.L / 2.0
-        if z.grid[iz] < -zero
-            for ivpa ∈ 1:nvpa
-                if vpa.grid[ivpa] > u0 + zero
-                    pdf[ivpa,iz] = 0.0
-                end
-            end
-        elseif z.grid[iz] > zero
-            for ivpa ∈ 1:nvpa
-                if vpa.grid[ivpa] < u0 - zero
-                    pdf[ivpa,iz] = 0.0
-                end
-            end
-        end
-    end
-end
-
-"""
-enforce the wall boundary condition on neutrals;
-i.e., the incoming flux of neutrals equals the sum of the ion/neutral outgoing fluxes
-"""
-function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_flux_0,
-                                  wall_flux_L, boundary_distributions, vtfac,
-                                  recycling_fraction, evolve_ppar, evolve_upar,
-                                  evolve_density, zero)
-
-    # Reduce the ion flux by `recycling_fraction` to account for ions absorbed by the
-    # wall.
-    wall_flux_0 *= recycling_fraction
-    wall_flux_L *= recycling_fraction
-
-    if !evolve_density && !evolve_upar
-        knudsen_cosine = boundary_distributions.knudsen
-
-        if z.irank == 0
-            ## treat z = -Lz/2 boundary ##
-
-            # add the neutral species's contribution to the combined ion/neutral particle
-            # flux out of the domain at z=-Lz/2
-            @views wall_flux_0 += integrate_over_negative_vz(abs.(vz.grid) .* pdf[:,:,:,1], vz.grid, vz.wgts, vz.scratch, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-
-            # for left boundary in zed (z = -Lz/2), want
-            # f_n(z=-Lz/2, v_parallel > 0) = Γ_0 * f_KW(v_parallel)
-            @loop_vz ivz begin
-                if vz.grid[ivz] >= -zero
-                    @views @. pdf[ivz,:,:,1] = wall_flux_0 * knudsen_cosine[ivz,:,:]
-                end
-            end
-        end
-
-        if z.irank == z.nrank - 1
-            ## treat the right boundary at z = Lz/2 ##
-
-            # add the neutral species's contribution to the combined ion/neutral particle
-            # flux out of the domain at z=-Lz/2
-            @views wall_flux_L += integrate_over_positive_vz(abs.(vz.grid) .* pdf[:,:,:,end], vz.grid, vz.wgts, vz.scratch, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-
-            # for right boundary in zed (z = Lz/2), want
-            # f_n(z=Lz/2, v_parallel < 0) = Γ_Lz * f_KW(v_parallel)
-            @loop_vz ivz begin
-                if vz.grid[ivz] <= zero
-                    @views @. pdf[ivz,:,:,end] = wall_flux_L * knudsen_cosine[ivz,:,:]
-                end
-            end
-        end
-    elseif !evolve_upar
-        # Evolving density case
-        knudsen_cosine = boundary_distributions.knudsen
-
-        if z.irank == 0
-            ## treat z = -Lz/2 boundary ##
-
-            # Note the numerical integrol of knudsen_cosine was forced to be 1 (to machine
-            # precision) when it was initialised.
-            @views pdf_integral_0 = integrate_over_negative_vz(pdf[:,:,:,1], vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-            @views pdf_integral_1 = integrate_over_negative_vz(vz.grid .* pdf[:,:,:,1], vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-            knudsen_integral_0 = integrate_over_positive_vz(knudsen_cosine, vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-            knudsen_integral_1 = 1.0 # This is enforced in initialization
-
-            # Calculate normalisation factors N_in for the incoming and N_out for the
-            # Knudsen parts of the distirbution so that ∫dvpa F = 1 and ∫dvpa vpa F = uz
-            # Note wall_flux_0 is the ion flux into the wall (reduced by the recycling
-            # fraction), and the neutral flux should be out of the wall (i.e. uz>0) so
-            # n*uz = |n*uz| = wall_flux_0
-            # ⇒ N_in*pdf_integral_0 + N_out*knudsen_integral_0 = 1
-            #   N_in*pdf_integral_1 + N_out*knudsen_integral_1 = uz
-            uz = wall_flux_0 / density[1]
-            N_in = (1 - uz * knudsen_integral_0 / knudsen_integral_1) /
-                   (pdf_integral_0
-                    - pdf_integral_1 / knudsen_integral_1 * knudsen_integral_0)
-            N_out = (uz - N_in * pdf_integral_1) / knudsen_integral_1
-
-            @loop_vz ivz begin
-                if vz.grid[ivz] >= -zero
-                    @views @. pdf[ivz,:,:,1] = N_out * knudsen_cosine[ivz,:,:]
-                else
-                    @views @. pdf[ivz,:,:,1] *= N_in
-                end
-            end
-        end
-
-        if z.irank == z.nrank - 1
-            ## treat the right boundary at z = Lz/2 ##
-
-            # Note the numerical integrol of knudsen_cosine was forced to be 1 (to machine
-            # precision) when it was initialised.
-            @views pdf_integral_0 = integrate_over_positive_vz(pdf[:,:,:,end], vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-            @views pdf_integral_1 = integrate_over_positive_vz(vz.grid .* pdf[:,:,:,end], vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-            knudsen_integral_0 = integrate_over_negative_vz(knudsen_cosine, vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-            knudsen_integral_1 = -1.0 # This is enforced in initialization
-
-            # Calculate normalisation factors N_in for the incoming and N_out for the
-            # Knudsen parts of the distirbution so that ∫dvpa F = 1 and ∫dvpa vpa F = uz
-            # Note wall_flux_L is the ion flux into the wall (reduced by the recycling
-            # fraction), and the neutral flux should be out of the wall (i.e. uz<0) so
-            # -n*uz = |n*uz| = wall_flux_L
-            # ⇒ N_in*pdf_integral_0 + N_out*knudsen_integral_0 = 1
-            #   N_in*pdf_integral_1 + N_out*knudsen_integral_1 = uz
-            uz = -wall_flux_L / density[end]
-            N_in = (1 - uz * knudsen_integral_0 / knudsen_integral_1) /
-                   (pdf_integral_0
-                    - pdf_integral_1 / knudsen_integral_1 * knudsen_integral_0)
-            N_out = (uz - N_in * pdf_integral_1) / knudsen_integral_1
-
-            @loop_vz ivz begin
-                if vz.grid[ivz] <= zero
-                    @views @. pdf[ivz,:,:,end] = N_out * knudsen_cosine[ivz,:,:]
-                else
-                    @views @. pdf[ivz,:,:,end] *= N_in
-                end
-            end
-        end
-    else
-        if z.irank == 0
-            ## treat z = -Lz/2 boundary ##
-            # populate vz.scratch2 array with dz/dt values at z = -Lz/2
-            if evolve_ppar
-                vth = sqrt(2.0*pz[1]/density[1])
-            else
-                vth = nothing
-            end
-            @. vz.scratch2 = vpagrid_to_dzdt(vz.grid, vth, uz[1], evolve_ppar, evolve_upar)
-
-            # First apply boundary condition that total neutral outflux is equal to ion
-            # influx to uz
-            uz[1] = wall_flux_0 / density[1]
-            #would setting density work better??
-            #density[1] = - wall_flux_0 / uz[1]
-
-            # Create normalised Knudsen cosine distribution, to use for positive v_parallel
-            # at z = -Lz/2
-            # Note this only makes sense for the 1V case with vr.n=vzeta.n=1
-            @. vz.scratch = (3.0*pi/vtfac^3)*abs(vz.scratch2)*erfc(abs(vz.scratch2)/vtfac)
-
-            # The v_parallel>0 part of the pdf is replaced by the Knudsen cosine
-            # distribution. To ensure the constraints ∫dwpa wpa^m F = 0 are satisfied when
-            # necessary, calculate a normalisation factor for the Knudsen distribution (in
-            # vz.scratch) and correction terms for the incoming pdf similar to
-            # enforce_moment_constraints!().
-            #
-            # Note that it seems to be important that this boundary condition not be
-            # modified by the moment constraints, as that could cause numerical instability.
-            # By ensuring that the constraints are satisfied already here,
-            # enforce_moment_constraints!() will not change the pdf at the boundary. For
-            # ions this is not an issue, because points set to 0 by the bc are not modified
-            # from 0 by enforce_moment_constraints!().
-            knudsen_integral_0 = integrate_over_positive_vz(vz.scratch, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-            knudsen_integral_1 = integrate_over_positive_vz(vz.grid .* vz.scratch, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-
-            @views pdf_integral_0 = integrate_over_negative_vz(pdf[:,:,:,1], vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-            @views pdf_integral_1 = integrate_over_negative_vz(vz.grid .* pdf[:,:,:,1], vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-            if !evolve_ppar
-                # Calculate normalisation factors N_in for the incoming and N_out for the
-                # Knudsen parts of the distirbution so that ∫dwpa F = 1 and ∫dwpa wpa F = 0
-                # ⇒ N_in*pdf_integral_0 + N_out*knudsen_integral_0 = 1
-                #   N_in*pdf_integral_1 + N_out*knudsen_integral_1 = 0
-                N_in = 1.0 / (pdf_integral_0 - pdf_integral_1/knudsen_integral_1*knudsen_integral_0)
-                N_out = -N_in * pdf_integral_1 / knudsen_integral_1
-
-                zero_vz_ind = 0
-                for ivz ∈ 1:vz.n
-                    if vz.scratch2[ivz] <= -zero
-                        pdf[ivz,:,:,1] .= N_in*pdf[ivz,:,:,1]
-                    else
-                        zero_vz_ind = ivz
-                        if abs(vz.scratch2[ivz]) < zero
-                            # v_z = 0 point, half contribution from original pdf and half
-                            # from Knudsen cosine distribution, to be consistent with weights
-                            # used in
-                            # integrate_over_positive_vz()/integrate_over_negative_vz().
-                            @. pdf[ivz,:,:,1] = 0.5*(N_in*pdf[ivz,:,:,1] + N_out*vz.scratch[ivz])
-                        else
-                            pdf[ivz,:,:,1] .= N_out*vz.scratch[ivz]
-                        end
-                        break
-                    end
-                end
-                for ivz ∈ zero_vz_ind+1:vz.n
-                    pdf[ivz,:,:,1] .= N_out*vz.scratch[ivz]
-                end
-            else
-                knudsen_integral_2 = integrate_over_positive_vz(vz.grid .* vz.grid .* vz.scratch, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-                @views pdf_integral_2 = integrate_over_negative_vz(vz.grid .* vz.grid .* pdf[:,:,:,1], vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-                @views pdf_integral_3 = integrate_over_negative_vz(vz.grid .* vz.grid .* vz.grid .* pdf[:,:,:,1], vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-                # Calculate normalisation factor N_out for the Knudsen part of the
-                # distirbution and normalisation factor N_in and correction term C*wpa*F_in
-                # for the incoming distribution so that ∫dwpa F = 1, ∫dwpa wpa F = 0, and
-                # ∫dwpa wpa^2 F = 1/2
-                # ⇒ N_in*pdf_integral_0 + C*pdf_integral_1 + N_out*knudsen_integral_0 = 1
-                #   N_in*pdf_integral_1 + C*pdf_integral_2 + N_out*knudsen_integral_1 = 0
-                #   N_in*pdf_integral_2 + C*pdf_integral_3 + N_out*knudsen_integral_2 = 1/2
-                N_in = (0.5*knudsen_integral_0*pdf_integral_2 +
-                        knudsen_integral_1*(pdf_integral_3 - 0.5*pdf_integral_1) -
-                        knudsen_integral_2*pdf_integral_2) /
-                       (knudsen_integral_0*(pdf_integral_2^2 - pdf_integral_1*pdf_integral_3) +
-                        knudsen_integral_1*(pdf_integral_0*pdf_integral_3 - pdf_integral_1*pdf_integral_2) +
-                        knudsen_integral_2*(pdf_integral_1^2 - pdf_integral_0*pdf_integral_2))
-                N_out = -(N_in*(pdf_integral_1*pdf_integral_3 - pdf_integral_2^2) + 0.5*pdf_integral_2) /
-                         (knudsen_integral_1*pdf_integral_3 - knudsen_integral_2*pdf_integral_2)
-                C = (0.5 - N_out*knudsen_integral_2 - N_in*pdf_integral_2)/pdf_integral_3
-
-                zero_vz_ind = 0
-                for ivz ∈ 1:vz.n
-                    if vz.scratch2[ivz] <= -zero
-                        @views @. pdf[ivz,:,:,1] = N_in*pdf[ivz,:,:,1] + C*vz.grid[ivz]*pdf[ivz,:,:,1]
-                    else
-                        zero_vz_ind = ivz
-                        if abs(vz.scratch2[ivz]) < zero
-                            # v_parallel = 0 point, half contribution from original pdf and half
-                            # from Knudsen cosine distribution, to be consistent with weights
-                            # used in
-                            # integrate_over_positive_vz()/integrate_over_negative_vz().
-                            @views @. pdf[ivz,:,:,1] = 0.5*(N_in*pdf[ivz,:,:,1] +
-                                                            C*vz.grid[ivz]*pdf[ivz,:,:,1] +
-                                                            N_out*vz.scratch[ivz])
-                        else
-                            @. pdf[ivz,:,:,1] = N_out*vz.scratch[ivz]
-                        end
-                        break
-                    end
-                end
-                for ivz ∈ zero_vz_ind+1:vz.n
-                    @. pdf[ivz,:,:,1] = N_out*vz.scratch[ivz]
-                end
-            end
-        end
-
-        if z.irank == z.nrank - 1
-            ## treat the right boundary at z = Lz/2 ##
-            # populate vz.scratch2 array with dz/dt values at z = Lz/2
-            if evolve_ppar
-                vth = sqrt(2.0*pz[end]/density[end])
-            else
-                vth = nothing
-            end
-            @. vz.scratch2 = vpagrid_to_dzdt(vz.grid, vth, uz[end], evolve_ppar, evolve_upar)
-
-            # First apply boundary condition that total neutral outflux is equal to ion
-            # influx to uz
-            uz[end] = - wall_flux_L / density[end]
-            #would setting density work better??
-            #density[end] = - wall_flux_L / upar[end]
-
-            # obtain the Knudsen cosine distribution at z = Lz/2
-            # the z-dependence is only introduced if the peculiiar velocity is used as vz
-            # Note this only makes sense for the 1V case with vr.n=vzeta.n=1
-            @. vz.scratch = (3.0*pi/vtfac^3)*abs(vz.scratch2)*erfc(abs(vz.scratch2)/vtfac)
-
-            # The v_parallel<0 part of the pdf is replaced by the Knudsen cosine
-            # distribution. To ensure the constraint ∫dwpa wpa F = 0 is satisfied, multiply
-            # the Knudsen distribution (in vz.scratch) by a normalisation factor given by
-            # the integral (over negative v_parallel) of the outgoing Knudsen distribution
-            # and (over positive v_parallel) of the incoming pdf.
-            knudsen_integral_0 = integrate_over_negative_vz(vz.scratch, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-            knudsen_integral_1 = integrate_over_negative_vz(vz.grid .* vz.scratch, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-
-            @views pdf_integral_0 = integrate_over_positive_vz(pdf[:,:,:,end], vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-            @views pdf_integral_1 = integrate_over_positive_vz(vz.grid .* pdf[:,:,:,end], vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-
-            if !evolve_ppar
-                # Calculate normalisation factors N_in for the incoming and N_out for the
-                # Knudsen parts of the distirbution so that ∫dwpa F = 1 and ∫dwpa wpa F = 0
-                # ⇒ N_in*pdf_integral_0 + N_out*knudsen_integral_0 = 1
-                #   N_in*pdf_integral_1 + N_out*knudsen_integral_1 = 0
-                N_in = 1.0 / (pdf_integral_0 - pdf_integral_1/knudsen_integral_1*knudsen_integral_0)
-                N_out = -N_in * pdf_integral_1 / knudsen_integral_1
-
-                zero_vz_ind = 0
-                for ivz ∈ vz.n:-1:1
-                    if vz.scratch2[ivz] >= zero
-                        @views @. pdf[ivz,:,:,end] = N_in*pdf[ivz,:,:,end]
-                    else
-                        zero_vz_ind = ivz
-                        if abs(vz.scratch2[ivz]) < zero
-                            # v_parallel = 0 point, half contribution from original pdf and half
-                            # from Knudsen cosine distribution, to be consistent with weights
-                            # used in
-                            # integrate_over_positive_vz()/integrate_over_negative_vz().
-                            @views @. pdf[ivz,:,:,end] = 0.5*(N_in*pdf[ivz,:,:,end] + N_out*vz.scratch[ivz])
-                        else
-                            @. pdf[ivz,:,:,end] = N_out*vz.scratch[ivz]
-                        end
-                        break
-                    end
-                end
-                for ivz ∈ 1:zero_vz_ind-1
-                    @. pdf[ivz,:,:,end] = N_out*vz.scratch[ivz]
-                end
-            else
-                knudsen_integral_2 = integrate_over_negative_vz(vz.grid .* vz.grid .* vz.scratch, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-                @views pdf_integral_2 = integrate_over_positive_vz(vz.grid .* vz.grid .* pdf[:,:,:,end], vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-                @views pdf_integral_3 = integrate_over_positive_vz(vz.grid .* vz.grid .* vz.grid .* pdf[:,:,:,end], vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-                # Calculate normalisation factor N_out for the Knudsen part of the
-                # distirbution and normalisation factor N_in and correction term C*wpa*F_in
-                # for the incoming distribution so that ∫dwpa F = 1, ∫dwpa wpa F = 0, and
-                # ∫dwpa wpa^2 F = 1/2
-                # ⇒ N_in*pdf_integral_0 + C*pdf_integral_1 + N_out*knudsen_integral_0 = 1
-                #   N_in*pdf_integral_1 + C*pdf_integral_2 + N_out*knudsen_integral_1 = 0
-                #   N_in*pdf_integral_2 + C*pdf_integral_3 + N_out*knudsen_integral_2 = 1/2
-                N_in = (0.5*knudsen_integral_0*pdf_integral_2 +
-                        knudsen_integral_1*(pdf_integral_3 - 0.5*pdf_integral_1) -
-                        knudsen_integral_2*pdf_integral_2) /
-                       (knudsen_integral_0*(pdf_integral_2^2 - pdf_integral_1*pdf_integral_3) +
-                        knudsen_integral_1*(pdf_integral_0*pdf_integral_3 - pdf_integral_1*pdf_integral_2) +
-                        knudsen_integral_2*(pdf_integral_1^2 - pdf_integral_0*pdf_integral_2))
-                N_out = -(N_in*(pdf_integral_1*pdf_integral_3 - pdf_integral_2^2) + 0.5*pdf_integral_2) /
-                         (knudsen_integral_1*pdf_integral_3 - knudsen_integral_2*pdf_integral_2)
-                C = (0.5 - N_out*knudsen_integral_2 - N_in*pdf_integral_2)/pdf_integral_3
-
-                zero_vz_ind = 0
-                for ivz ∈ vz.n:-1:1
-                    if vz.scratch2[ivz] >= zero
-                        @views @. pdf[ivz,:,:,end] = N_in*pdf[ivz,:,:,end] + C*vz.grid[ivz]*pdf[ivz,:,:,end]
-                    else
-                        zero_vz_ind = ivz
-                        if abs(vz.scratch2[ivz]) < zero
-                            # v_parallel = 0 point, half contribution from original pdf and half
-                            # from Knudsen cosine distribution, to be consistent with weights
-                            # used in
-                            # integrate_over_positive_vz()/integrate_over_negative_vz().
-                            @views @. pdf[ivz,:,:,end] = 0.5*(N_in*pdf[ivz,:,:,end] +
-                                                              C*vz.grid[ivz]*pdf[ivz,:,:,end] +
-                                                              N_out*vz.scratch[ivz])
-                        else
-                            @. pdf[ivz,:,:,end] = N_out*vz.scratch[ivz]
-                        end
-                        break
-                    end
-                end
-                for ivz ∈ 1:zero_vz_ind-1
-                    @. pdf[ivz,:,:,end] = N_out*vz.scratch[ivz]
-                end
-            end
-        end
-    end
-end
-
-"""
-create an array of dz/dt values corresponding to the given vpagrid values
-"""
-function vpagrid_to_dzdt(vpagrid, vth, upar, evolve_ppar, evolve_upar)
-    if evolve_ppar
-        if evolve_upar
-            return vpagrid .* vth .+ upar
-        else
-            return vpagrid .* vth
-        end
-    elseif evolve_upar
-        return vpagrid .+ upar
-    else
-        return vpagrid
-    end
-end
-
-"""
-Take the full charged-particle distribution function, calculate the moments, then
+Take the full ion distribution function, calculate the moments, then
 normalise and shift to the moment-kinetic grid.
 
 Uses input value of `f` and modifies in place to the normalised distribution functions.
@@ -2032,7 +1114,7 @@ the moments of `f`.
 
 Inputs/outputs depend on z, vperp, and vpa (should be inside loops over species, r)
 """
-function convert_full_f_charged_to_normalised!(f, density, upar, ppar, vth, vperp, vpa,
+function convert_full_f_ion_to_normalised!(f, density, upar, ppar, vth, vperp, vpa,
         vpa_spectral, evolve_density, evolve_upar, evolve_ppar)
 
     @loop_z iz begin
@@ -2119,93 +1201,6 @@ function convert_full_f_neutral_to_normalised!(f, density, uz, pz, vth, vzeta, v
     end
 
     return nothing
-end
-
-"""
-enforce the z boundary condition on the evolved velocity space moments of f
-"""
-function enforce_z_boundary_condition_moments!(density, moments, bc::String)
-    ## TODO: parallelise
-    #begin_serial_region()
-    #@serial_region begin
-    #    # enforce z boundary condition on density if it is evolved separately from f
-    #	if moments.evolve_density
-    #        # TODO: extend to 'periodic' BC case, as this requires further code modifications to be consistent
-    #        # with finite difference derivatives (should be fine for Chebyshev)
-    #        if bc == "wall"
-    #            @loop_s_r is ir begin
-    #                density[1,ir,is] = 0.5*(density[1,ir,is] + density[end,ir,is])
-    #                density[end,ir,is] = density[1,ir,is]
-    #        	end
-    #        end
-    #    end
-    #end
-end
-
-"""
-"""
-function enforce_v_boundary_condition_local!(f, bc, speed, v_diffusion, v, v_spectral)
-    if bc == "zero"
-        if v_diffusion || speed[1] > 0.0
-            # 'upwind' boundary
-            f[1] = 0.0
-        end
-        if v_diffusion || speed[end] < 0.0
-            # 'upwind' boundary
-            f[end] = 0.0
-        end
-    elseif bc == "both_zero"
-        f[1] = 0.0
-        f[end] = 0.0
-    elseif bc == "zero_gradient"
-        D0 = v_spectral.lobatto.Dmat[1,:]
-        # adjust F(vpa = -L/2) so that d F / d vpa = 0 at vpa = -L/2
-        f[1] = -sum(D0[2:v.ngrid].*f[2:v.ngrid])/D0[1]
-
-        D0 = v_spectral.lobatto.Dmat[end,:]
-        # adjust F(vpa = L/2) so that d F / d vpa = 0 at vpa = L/2
-        f[end] = -sum(D0[1:ngrid-1].*f[end-v.ngrid+1:end-1])/D0[v.ngrid]
-    elseif bc == "periodic"
-        f[1] = 0.5*(f[1]+f[end])
-        f[end] = f[1]
-    else
-        error("Unsupported boundary condition option '$bc' for $(v.name)")
-    end
-end
-
-"""
-enforce zero boundary condition at vperp -> infinity
-"""
-function enforce_vperp_boundary_condition!(f, bc, vperp, vperp_spectral, vperp_advect, diffusion)
-    if bc == "zero"
-        nvperp = vperp.n
-        ngrid = vperp.ngrid
-        # set zero boundary condition
-        @loop_s_r_z_vpa is ir iz ivpa begin
-            if diffusion || vperp_advect[is].speed[nvperp,ivpa,iz,ir] < 0.0
-                f[ivpa,nvperp,iz,ir,is] = 0.0
-            end
-        end
-        # set regularity condition d F / d vperp = 0 at vperp = 0
-        if vperp.discretization == "gausslegendre_pseudospectral" || vperp.discretization == "chebyshev_pseudospectral"
-            D0 = vperp_spectral.radau.D0
-            buffer = @view vperp.scratch[1:ngrid-1]
-            @loop_s_r_z_vpa is ir iz ivpa begin
-                if diffusion || vperp_advect[is].speed[1,ivpa,iz,ir] > 0.0
-                    # adjust F(vperp = 0) so that d F / d vperp = 0 at vperp = 0
-                    @views @. buffer = D0[2:ngrid] * f[ivpa,2:ngrid,iz,ir,is]
-                    f[ivpa,1,iz,ir,is] = -sum(buffer)/D0[1]
-                end
-            end
-        else
-            println("vperp.bc=\"$bc\" not supported by discretization "
-                    * "$(vperp.discretization)")
-        end
-    elseif bc == "none"
-        # Do nothing
-    else
-        error("Unsupported boundary condition option '$bc' for vperp")
-    end
 end
 
 end

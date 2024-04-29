@@ -30,10 +30,7 @@ using moment_kinetics.analysis: analyze_fields_data, check_Chodura_condition,
                                 get_unnormalised_f_2d
 using moment_kinetics.array_allocation: allocate_float
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.input_structs: grid_input, advection_input,
-                                     set_defaults_and_check_top_level!,
-                                     set_defaults_and_check_section!, Dict_to_NamedTuple
-using moment_kinetics.krook_collisions: get_collision_frequency
+using moment_kinetics.input_structs
 using moment_kinetics.looping: all_dimensions, ion_dimensions, neutral_dimensions
 using moment_kinetics.manufactured_solns: manufactured_solutions,
                                           manufactured_electric_fields
@@ -303,10 +300,12 @@ function makie_post_process(run_dir::Union{String,Tuple},
         end
     end
 
-    plot_charged_pdf_2D_at_wall(run_info_dfns; plot_prefix=plot_prefix)
+    plot_ion_pdf_2D_at_wall(run_info_dfns; plot_prefix=plot_prefix)
     if has_neutrals
         plot_neutral_pdf_2D_at_wall(run_info_dfns; plot_prefix=plot_prefix)
     end
+
+    constraints_plots(run_info; plot_prefix=plot_prefix)
 
     if has_rdim
         # Plots for 2D instability do not make sense for 1D simulations
@@ -541,11 +540,36 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         nz_min = 1
     end
     if dfns && has_run_info
-        nvperp_min = minimum(ri.vperp.n for ri in run_info if ri !== nothing)
-        nvpa_min = minimum(ri.vpa.n for ri in run_info if ri !== nothing)
-        nvzeta_min = minimum(ri.vzeta.n for ri in run_info if ri !== nothing)
-        nvr_min = minimum(ri.vr.n for ri in run_info if ri !== nothing)
-        nvz_min = minimum(ri.vz.n for ri in run_info if ri !== nothing)
+        if any(ri.vperp !== nothing for ri ∈ run_info)
+            nvperp_min = minimum(ri.vperp.n for ri in run_info
+                                 if ri !== nothing && ri.vperp !== nothing)
+        else
+            nvperp_min = 1
+        end
+        if any(ri.vpa !== nothing for ri ∈ run_info)
+            nvpa_min = minimum(ri.vpa.n for ri in run_info
+                               if ri !== nothing && ri.vpa !== nothing)
+        else
+            nvpa_min = 1
+        end
+        if any(ri.vzeta !== nothing for ri ∈ run_info)
+            nvzeta_min = minimum(ri.vzeta.n for ri in run_info
+                                 if ri !== nothing && ri.vzeta !== nothing)
+        else
+            nvzeta_min = 1
+        end
+        if any(ri.vr !== nothing for ri ∈ run_info)
+            nvr_min = minimum(ri.vr.n for ri in run_info
+                              if ri !== nothing && ri.vr !== nothing)
+        else
+            nvr_min = 1
+        end
+        if any(ri.vz !== nothing for ri ∈ run_info)
+            nvz_min = minimum(ri.vz.n for ri in run_info
+                              if ri !== nothing && ri.vz !== nothing)
+        else
+            nvz_min = 1
+        end
     else
         nvperp_min = 1
         nvpa_min = 1
@@ -682,6 +706,22 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         advection_velocity=false,
         colormap=this_input_dict["colormap"],
         animation_ext=this_input_dict["animation_ext"],
+       )
+
+    set_defaults_and_check_section!(
+        this_input_dict, "constraints";
+        plot=false,
+        animate=false,
+        it0=this_input_dict["it0"],
+        ir0=this_input_dict["ir0"],
+        iz0=this_input_dict["iz0"],
+        ivperp0=this_input_dict["ivperp0"],
+        ivpa0=this_input_dict["ivpa0"],
+        ivzeta0=this_input_dict["ivzeta0"],
+        ivr0=this_input_dict["ivr0"],
+        ivz0=this_input_dict["ivz0"],
+        animation_ext=this_input_dict["animation_ext"],
+        show_element_boundaries=this_input_dict["show_element_boundaries"],
        )
 
     set_defaults_and_check_section!(
@@ -1263,7 +1303,7 @@ end
 for dim ∈ one_dimension_combinations
     function_name_str = "plot_vs_$dim"
     function_name = Symbol(function_name_str)
-    spaces = " " ^ length(function_name_str)
+    spaces = " " ^ (length(function_name_str) + 1)
     dim_str = String(dim)
     if dim == :t
         dim_grid = :( run_info.time )
@@ -1275,17 +1315,17 @@ for dim ∈ one_dimension_combinations
              export $function_name
 
              """
-             function $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
-                      $($spaces)input=nothing, outfile=nothing, yscale=nothing,
-                      transform=identity, axis_args=Dict{Symbol,Any}(), it=nothing,
-                      $($spaces)ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
-                      $($spaces)ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
-             function $($function_name_str)(run_info, var_name; is=1, data=nothing,
-                      $($spaces)input=nothing, ax=nothing, label=nothing,
-                      $($spaces)outfile=nothing, yscale=nothing, transform=identity,
-                      $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing,
-                      $($spaces)iz=nothing, ivperp=nothing, ivpa=nothing, ivzeta=nothing,
-                      $($spaces)ivr=nothing, ivz=nothing, kwargs...)
+                 $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
+                 $($spaces)input=nothing, outfile=nothing, yscale=nothing,
+                 transform=identity, axis_args=Dict{Symbol,Any}(), it=nothing,
+                 $($spaces)ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
+                 $($spaces)ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                 $($function_name_str)(run_info, var_name; is=1, data=nothing,
+                 $($spaces)input=nothing, ax=nothing, label=nothing,
+                 $($spaces)outfile=nothing, yscale=nothing, transform=identity,
+                 $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing,
+                 $($spaces)iz=nothing, ivperp=nothing, ivpa=nothing, ivzeta=nothing,
+                 $($spaces)ivr=nothing, ivz=nothing, kwargs...)
 
              Plot `var_name` from the run(s) represented by `run_info` (as returned by
              [`get_run_info`](@ref)) vs $($dim_str).
@@ -1350,7 +1390,7 @@ for dim ∈ one_dimension_combinations
                      if input === nothing
                          if run_info[1].dfns
                              if var_name ∈ keys(input_dict_dfns)
-                                 input = input_dict[var_name]
+                                 input = input_dict_dfns[var_name]
                              else
                                  input = input_dict_dfns
                              end
@@ -1412,7 +1452,7 @@ for dim ∈ one_dimension_combinations
                  if input === nothing
                      if run_info.dfns
                          if var_name ∈ keys(input_dict_dfns)
-                             input = input_dict[var_name]
+                             input = input_dict_dfns[var_name]
                          else
                              input = input_dict_dfns
                          end
@@ -1481,7 +1521,7 @@ end
 for (dim1, dim2) ∈ two_dimension_combinations
     function_name_str = "plot_vs_$(dim2)_$(dim1)"
     function_name = Symbol(function_name_str)
-    spaces = " " ^ length(function_name_str)
+    spaces = " " ^ (length(function_name_str) + 1)
     dim1_str = String(dim1)
     dim2_str = String(dim2)
     if dim1 == :t
@@ -1496,19 +1536,19 @@ for (dim1, dim2) ∈ two_dimension_combinations
              export $function_name
 
              """
-             function $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
-                      $($spaces)input=nothing, outfile=nothing, colorscale=identity,
-                      $($spaces)transform=identity, axis_args=Dict{Symbol,Any}(),
-                      $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
-                      $($spaces)ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing,
-                      $($spaces)kwargs...)
-             function $($function_name_str)(run_info, var_name; is=1, data=nothing,
-                      $($spaces)input=nothing, ax=nothing,
-                      $($spaces)colorbar_place=nothing, title=nothing,
-                      $($spaces)outfile=nothing, colorscale=identity, transform=identity,
-                      $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing,
-                      $($spaces)iz=nothing, ivperp=nothing, ivpa=nothing, ivzeta=nothing,
-                      $($spaces)ivr=nothing, ivz=nothing, kwargs...)
+                 $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
+                 $($spaces)input=nothing, outfile=nothing, colorscale=identity,
+                 $($spaces)transform=identity, axis_args=Dict{Symbol,Any}(),
+                 $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                 $($spaces)ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing,
+                 $($spaces)kwargs...)
+                 $($function_name_str)(run_info, var_name; is=1, data=nothing,
+                 $($spaces)input=nothing, ax=nothing,
+                 $($spaces)colorbar_place=nothing, title=nothing,
+                 $($spaces)outfile=nothing, colorscale=identity, transform=identity,
+                 $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing,
+                 $($spaces)iz=nothing, ivperp=nothing, ivpa=nothing, ivzeta=nothing,
+                 $($spaces)ivr=nothing, ivz=nothing, kwargs...)
 
              Plot `var_name` from the run(s) represented by `run_info` (as returned by
              [`get_run_info`](@ref))vs $($dim1_str) and $($dim2_str).
@@ -1597,7 +1637,7 @@ for (dim1, dim2) ∈ two_dimension_combinations
                  if input === nothing
                      if run_info.dfns
                          if var_name ∈ keys(input_dict_dfns)
-                             input = input_dict[var_name]
+                             input = input_dict_dfns[var_name]
                          else
                              input = input_dict_dfns
                          end
@@ -1688,7 +1728,7 @@ end
 for dim ∈ one_dimension_combinations_no_t
     function_name_str = "animate_vs_$dim"
     function_name = Symbol(function_name_str)
-    spaces = " " ^ length(function_name_str)
+    spaces = " " ^ (length(function_name_str) + 1)
     dim_str = String(dim)
     dim_grid = :( run_info.$dim.grid )
     idim = Symbol(:i, dim)
@@ -1696,19 +1736,19 @@ for dim ∈ one_dimension_combinations_no_t
              export $function_name
 
              """
-             function $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
-                      $($spaces)input=nothing, outfile=nothing, yscale=nothing,
-                      $($spaces)transform=identity, ylims=nothing,
-                      $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing, iz=nothing,
-                      $($spaces)ivperp=nothing, ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                      $($spaces)ivz=nothing, kwargs...)
-             function $($function_name_str)(run_info, var_name; is=1, data=nothing,
-                      $($spaces)input=nothing, frame_index=nothing, ax=nothing,
-                      $($spaces)fig=nothing, outfile=nothing, yscale=nothing,
-                      $($spaces)transform=identity, ylims=nothing,
-                      $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing, iz=nothing,
-                      $($spaces)ivperp=nothing, ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                      $($spaces)ivz=nothing, kwargs...)
+                 $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
+                 $($spaces)input=nothing, outfile=nothing, yscale=nothing,
+                 $($spaces)transform=identity, ylims=nothing,
+                 $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing, iz=nothing,
+                 $($spaces)ivperp=nothing, ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                 $($spaces)ivz=nothing, kwargs...)
+                 $($function_name_str)(run_info, var_name; is=1, data=nothing,
+                 $($spaces)input=nothing, frame_index=nothing, ax=nothing,
+                 $($spaces)fig=nothing, outfile=nothing, yscale=nothing,
+                 $($spaces)transform=identity, ylims=nothing, label=nothing,
+                 $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing, iz=nothing,
+                 $($spaces)ivperp=nothing, ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                 $($spaces)ivz=nothing, kwargs...)
 
              Animate `var_name` from the run(s) represented by `run_info` (as returned by
              [`get_run_info`](@ref))vs $($dim_str).
@@ -1739,6 +1779,9 @@ for dim ∈ one_dimension_combinations_no_t
 
              When a single `run_info` is passed, an `Axis` can be passed to `ax`. If it
              is, the plot will be added to `ax`.
+
+             When a single `run_info` is passed, `label` can be passed to set a custom
+             label for the line. By default the `run_info.run_name` is used.
 
              `outfile` is required for animations unless `ax` is passed. The animation
              will be saved to a file named `outfile`.  The suffix determines the file
@@ -1777,7 +1820,7 @@ for dim ∈ one_dimension_combinations_no_t
                      if input === nothing
                          if run_info[1].dfns
                              if var_name ∈ keys(input_dict_dfns)
-                                 input = input_dict[var_name]
+                                 input = input_dict_dfns[var_name]
                              else
                                  input = input_dict_dfns
                              end
@@ -1801,9 +1844,11 @@ for dim ∈ one_dimension_combinations_no_t
                              all(isapprox.(ri.time, run_info[1].time))
                              for ri ∈ run_info[2:end])
                          # All times are the same
-                         title = lift(i->string("t = ", run_info[1].time[i]), frame_index)
+                         time = select_slice(run_info[1].time, :t; input=input, it=it)
+                         title = lift(i->string("t = ", time[i]), frame_index)
                      else
-                         title = lift(i->join((string("t", irun, " = ", ri.time[i])
+                         time = select_slice(ri.time, :t; input=input, it=it)
+                         title = lift(i->join((string("t", irun, " = ", time[i])
                                                for (irun,ri) ∈ enumerate(run_info)), "; "),
                                       frame_index)
                      end
@@ -1849,14 +1894,14 @@ for dim ∈ one_dimension_combinations_no_t
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, frame_index=nothing, ax=nothing,
                                      fig=nothing, outfile=nothing, yscale=nothing,
-                                     ylims=nothing, axis_args=Dict{Symbol,Any}(),
-                                     it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
-                                     ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                                     ivz=nothing, kwargs...)
+                                     ylims=nothing, label=nothing,
+                                     axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing,
+                                     iz=nothing, ivperp=nothing, ivpa=nothing,
+                                     ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
                  if input === nothing
                      if run_info.dfns
                          if var_name ∈ keys(input_dict_dfns)
-                             input = input_dict[var_name]
+                             input = input_dict_dfns[var_name]
                          else
                              input = input_dict_dfns
                          end
@@ -1891,12 +1936,16 @@ for dim ∈ one_dimension_combinations_no_t
                      ind = frame_index
                  end
                  if ax === nothing
-                     title = lift(i->string("t = ", run_info.time[i]), ind)
+                     time = select_slice(run_info.time, :t; input=input, it=it)
+                     title = lift(i->string("t = ", time[i]), ind)
                      fig, ax = get_1d_ax(; xlabel="$($dim_str)",
                                          ylabel=get_variable_symbol(var_name),
                                          yscale=yscale, title=title, axis_args...)
                  else
                      fig = nothing
+                 end
+                 if label === nothing
+                     label = run_info.run_name
                  end
 
                  x = $dim_grid
@@ -1904,7 +1953,7 @@ for dim ∈ one_dimension_combinations_no_t
                      x = x[$idim]
                  end
                  animate_1d(x, data; ax=ax, ylims=ylims, frame_index=ind,
-                            label=run_info.run_name, kwargs...)
+                            label=label, kwargs...)
 
                  if input.show_element_boundaries && fig !== nothing
                      element_boundary_inds =
@@ -1941,7 +1990,7 @@ end
 for (dim1, dim2) ∈ two_dimension_combinations_no_t
     function_name_str = "animate_vs_$(dim2)_$(dim1)"
     function_name = Symbol(function_name_str)
-    spaces = " " ^ length(function_name_str)
+    spaces = " " ^ (length(function_name_str) + 1)
     dim1_str = String(dim1)
     dim2_str = String(dim2)
     dim1_grid = :( run_info.$dim1.grid )
@@ -1952,20 +2001,20 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
              export $function_name
 
              """
-             function $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
-                      $($spaces)input=nothing, outfile=nothing, colorscale=identity,
-                      $($spaces)transform=identity, axis_args=Dict{Symbol,Any}(),
-                      $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
-                      $($spaces)ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing,
-                      $($spaces)kwargs...)
-             function $($function_name_str)(run_info, var_name; is=1, data=nothing,
-                      $($spaces)input=nothing, frame_index=nothing, ax=nothing,
-                      $($spaces)fig=nothing, colorbar_place=colorbar_place,
-                      $($spaces)title=nothing, outfile=nothing, colorscale=identity,
-                      $($spaces)transform=identity, axis_args=Dict{Symbol,Any}(),
-                      $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
-                      $($spaces)ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing,
-                      $($spaces)kwargs...)
+                 $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
+                 $($spaces)input=nothing, outfile=nothing, colorscale=identity,
+                 $($spaces)transform=identity, axis_args=Dict{Symbol,Any}(),
+                 $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                 $($spaces)ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing,
+                 $($spaces)kwargs...)
+                 $($function_name_str)(run_info, var_name; is=1, data=nothing,
+                 $($spaces)input=nothing, frame_index=nothing, ax=nothing,
+                 $($spaces)fig=nothing, colorbar_place=colorbar_place,
+                 $($spaces)title=nothing, outfile=nothing, colorscale=identity,
+                 $($spaces)transform=identity, axis_args=Dict{Symbol,Any}(),
+                 $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                 $($spaces)ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing,
+                 $($spaces)kwargs...)
 
              Animate `var_name` from the run(s) represented by `run_info` (as returned by
              [`get_run_info`](@ref))vs $($dim1_str) and $($dim2_str).
@@ -2036,10 +2085,12 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
 
                      if length(run_info) > 1
                          title = get_variable_symbol(var_name)
-                         subtitles = (lift(i->string(ri.run_name, "\nt = ", ri.time[i]),
+                         time = select_slice(ri.time, :t; input=input, it=it)
+                         subtitles = (lift(i->string(ri.run_name, "\nt = ", time[i]),
                                            frame_index)
                                       for ri ∈ run_info)
                      else
+                         time = select_slice(run_info[1].time, :t; input=input, it=it)
                          title = lift(i->string(get_variable_symbol(var_name), "\nt = ",
                                                 run_info[1].time[i]),
                                       frame_index)
@@ -2080,7 +2131,7 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                  if input === nothing
                      if run_info.dfns
                          if var_name ∈ keys(input_dict_dfns)
-                             input = input_dict[var_name]
+                             input = input_dict_dfns[var_name]
                          else
                              input = input_dict_dfns
                          end
@@ -2122,6 +2173,7 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                      colormap = input.colormap
                  end
                  if title === nothing && ax == nothing
+                     time = select_slice(run_info.time, :t; input=input, it=it)
                      title = lift(i->string(get_variable_symbol(var_name), "\nt = ",
                                             run_info.time[i]),
                                   ind)
@@ -3524,24 +3576,28 @@ function calculate_steady_state_residual end
 function calculate_steady_state_residual(run_info::Tuple, variable_name; is=1,
                                          data=nothing, plot_prefix=nothing,
                                          fig_axes=nothing)
-    n_runs = length(run_info)
-    if data === nothing
-        data = Tuple(nothing for _ ∈ 1:n_runs)
-    end
-    if fig_axes === nothing
-        fig_axes = _get_steady_state_residual_fig_axes(length(run_info))
-    end
+    try
+        n_runs = length(run_info)
+        if data === nothing
+            data = Tuple(nothing for _ ∈ 1:n_runs)
+        end
+        if fig_axes === nothing
+            fig_axes = _get_steady_state_residual_fig_axes(length(run_info))
+        end
 
-    for (i, (ri, d)) ∈ enumerate(zip(run_info, data))
-        calculate_steady_state_residual(ri, variable_name; is=is, data=d,
-                                        fig_axes=fig_axes, i_run=i)
-    end
+        for (i, (ri, d)) ∈ enumerate(zip(run_info, data))
+            calculate_steady_state_residual(ri, variable_name; is=is, data=d,
+                                            fig_axes=fig_axes, i_run=i)
+        end
 
-    if plot_prefix !== nothing
-        _save_residual_plots(fig_axes, plot_prefix)
-    end
+        if plot_prefix !== nothing
+            _save_residual_plots(fig_axes, plot_prefix)
+        end
 
-    return fig_axes
+        return fig_axes
+    catch e
+        println("Error in calculate_steady_state_residual(). Error was ", e)
+    end
 end
 
 function calculate_steady_state_residual(run_info, variable_name; is=1, data=nothing,
@@ -4302,9 +4358,9 @@ function animate_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, is=1,
 end
 
 """
-    plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
+    plot_ion_pdf_2D_at_wall(run_info; plot_prefix)
 
-Make plots/animations of the charged particle distribution function at wall boundaries.
+Make plots/animations of the ion distribution function at wall boundaries.
 
 The information for the runs to plot is passed in `run_info` (as returned by
 [`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where line
@@ -4318,7 +4374,7 @@ will be saved with the format `plot_prefix<some_identifying_string>.pdf`. When `
 is not a Tuple, `plot_prefix` is optional - plots/animations will be saved only if it is
 passed.
 """
-function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
+function plot_ion_pdf_2D_at_wall(run_info; plot_prefix)
     input = Dict_to_NamedTuple(input_dict_dfns["wall_pdf"])
     if !(input.plot || input.animate || input.advection_velocity)
         # nothing to do
@@ -4332,7 +4388,7 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
     z_lower = 1
     z_upper = run_info[1].z.n
     if !all(ri.z.n == z_upper for ri ∈ run_info)
-        println("Cannot run plot_charged_pdf_2D_at_wall() for runs with different "
+        println("Cannot run plot_ion_pdf_2D_at_wall() for runs with different "
                 * "z-grid sizes. Got $(Tuple(ri.z.n for ri ∈ run_info))")
         return nothing
     end
@@ -4580,6 +4636,338 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
     end
 
     return nothing
+end
+
+"""
+    constraints_plots(run_info; plot_prefix=plot_prefix)
+
+Plot and/or animate the coefficients used to correct the normalised distribution
+function(s) (aka shape functions) to obey the moment constraints.
+
+If there were no discretisation errors, we would have \$A=1\$, \$B=0\$, \$C=0\$. The
+plots/animations show \$(A-1)\$ so that all three coefficients can be shown nicely on the
+same axes.
+"""
+function constraints_plots(run_info; plot_prefix=plot_prefix)
+    input = Dict_to_NamedTuple(input_dict["constraints"])
+
+    if !(input.plot || input.animate)
+        return nothing
+    end
+
+    try
+        println("Making plots of moment constraints coefficients")
+
+        if !isa(run_info, Tuple)
+            run_info = (run_info,)
+        end
+
+        it0 = input.it0
+        ir0 = input.ir0
+
+        if input.plot
+            if any(ri.evolve_density || ri.evolve_upar || ri.evolve_ppar
+                   for ri ∈ run_info)
+
+                # Ions
+                frame_index = Observable(1)
+                fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
+                for ri ∈ run_info
+                    if !(ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                        continue
+                    end
+                    nspecies = ri.n_ion_species
+                    for is ∈ 1:nspecies
+                        if length(run_info) > 1
+                            prefix = ri.run_name * ", "
+                        else
+                            prefix = ""
+                        end
+                        if nspecies > 1
+                            suffix = ", species $is"
+                        else
+                            suffix = ""
+                        end
+
+                        varname = "ion_constraints_A_coefficient"
+                        label = prefix * "(A-1)" * suffix
+                        data = get_variable(ri, varname; it=it0, is=is, ir=ir0)
+                        data .-= 1.0
+                        plot_vs_z(ri, varname; label=label, data=data, ax=ax, input=input)
+
+                        varname = "ion_constraints_B_coefficient"
+                        label = prefix * "B" * suffix
+                        plot_vs_z(ri, varname; label=label, ax=ax, it=it0, is=is, ir=ir0,
+                                  input=input)
+
+                        varname = "ion_constraints_C_coefficient"
+                        label = prefix * "C" * suffix
+                        plot_vs_z(ri, varname; label=label, ax=ax, it=it0, is=is, ir=ir0,
+                                  input=input)
+                    end
+                end
+                put_legend_right(fig, ax)
+                save(plot_prefix * "ion_constraints.pdf", fig)
+            end
+
+            # Neutrals
+            if any(ri.n_neutral_species > 1
+                   && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                   for ri ∈ run_info)
+
+                fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
+                for ri ∈ run_info
+                    if !(ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                        continue
+                    end
+                    nspecies = ri.n_neutral_species
+                    for is ∈ 1:nspecies
+                        if length(run_info) > 1
+                            prefix = ri.run_name * ", "
+                        else
+                            prefix = ""
+                        end
+                        if nspecies > 1
+                            suffix = ", species $is"
+                        else
+                            suffix = ""
+                        end
+
+                        varname = "neutral_constraints_A_coefficient"
+                        label = prefix * "(A-1)" * suffix
+                        data = get_variable(ri, varname; it=it0, is=is, ir=ir0)
+                        data .-= 1.0
+                        plot_vs_z(ri, varname; label=label, data=data, ax=ax, input=input)
+
+                        varname = "neutral_constraints_B_coefficient"
+                        label = prefix * "B" * suffix
+                        plot_vs_z(ri, varname; label=label, ax=ax, it=it0, is=is, ir=ir0,
+                                  input=input)
+
+                        varname = "neutral_constraints_C_coefficient"
+                        label = prefix * "C" * suffix
+                        plot_vs_z(ri, varname; label=label, ax=ax, it=it0, is=is, ir=ir0,
+                                  input=input)
+                    end
+                end
+                put_legend_right(fig, ax)
+                save(plot_prefix * "neutral_constraints.pdf", fig)
+            end
+
+            # Electrons
+            if any(ri.composition.electron_physics == kinetic_electrons for ri ∈ run_info)
+
+                fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        prefix = ri.run_name * ", "
+                    else
+                        prefix = ""
+                    end
+
+                    varname = "electron_constraints_A_coefficient"
+                    label = prefix * "(A-1)"
+                    data = get_variable(ri, varname; it=it0, ir=ir0)
+                    data .-= 1.0
+                    plot_vs_z(ri, varname; label=label, data=data, ax=ax, input=input)
+
+                    varname = "electron_constraints_B_coefficient"
+                    label = prefix * "B"
+                    plot_vs_z(ri, varname; label=label, ax=ax, it=it0, ir=ir0,
+                              input=input)
+
+                    varname = "electron_constraints_C_coefficient"
+                    label = prefix * "C"
+                    plot_vs_z(ri, varname; label=label, ax=ax, it=it0, ir=ir0,
+                              input=input)
+                end
+                put_legend_right(fig, ax)
+                save(plot_prefix * "electron_constraints.pdf", fig)
+            end
+        end
+
+        if input.animate
+            nt = minimum(ri.nt for ri ∈ run_info)
+
+            if any(ri.evolve_density || ri.evolve_upar || ri.evolve_ppar
+                   for ri ∈ run_info)
+
+                # Ions
+                frame_index = Observable(1)
+                fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
+
+                # Calculate plot limits manually so we can exclude the first time point, which
+                # often has a large value for (A-1) due to the way initialisation is done,
+                # which can make the subsequent values hard to see.
+                ymin = Inf
+                ymax = -Inf
+                for ri ∈ run_info
+                    if !(ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                        continue
+                    end
+                    nspecies = ri.n_ion_species
+                    for is ∈ 1:nspecies
+                        if length(run_info) > 1
+                            prefix = ri.run_name * ", "
+                        else
+                            prefix = ""
+                        end
+                        if nspecies > 1
+                            suffix = ", species $is"
+                        else
+                            suffix = ""
+                        end
+
+                        varname = "ion_constraints_A_coefficient"
+                        label = prefix * "(A-1)" * suffix
+                        data = get_variable(ri, varname; is=is, ir=ir0)
+                        data .-= 1.0
+                        ymin = min(ymin, minimum(data[:,2:end]))
+                        ymax = max(ymax, maximum(data[:,2:end]))
+                        animate_vs_z(ri, varname; label=label, data=data,
+                                     frame_index=frame_index, ax=ax, input=input)
+
+                        varname = "ion_constraints_B_coefficient"
+                        label = prefix * "B" * suffix
+                        data = get_variable(ri, varname; is=is, ir=ir0)
+                        ymin = min(ymin, minimum(data[:,2:end]))
+                        ymax = max(ymax, maximum(data[:,2:end]))
+                        animate_vs_z(ri, varname; label=label, data=data,
+                                     frame_index=frame_index, ax=ax, is=is, ir=ir0,
+                                     input=input)
+
+                        varname = "ion_constraints_C_coefficient"
+                        label = prefix * "C" * suffix
+                        data = get_variable(ri, varname; is=is, ir=ir0)
+                        ymin = min(ymin, minimum(data[:,2:end]))
+                        ymax = max(ymax, maximum(data[:,2:end]))
+                        animate_vs_z(ri, varname; label=label, data=data,
+                                     frame_index=frame_index, ax=ax, is=is, ir=ir0,
+                                     input=input)
+                    end
+                end
+                put_legend_right(fig, ax)
+                ylims!(ax, ymin, ymax)
+                save_animation(fig, frame_index, nt,
+                               plot_prefix * "ion_constraints." * input.animation_ext)
+            end
+
+            # Neutrals
+            if any(ri.n_neutral_species > 1
+                   && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                   for ri ∈ run_info)
+
+                frame_index = Observable(1)
+                fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
+
+                # Calculate plot limits manually so we can exclude the first time point, which
+                # often has a large value for (A-1) due to the way initialisation is done,
+                # which can make the subsequent values hard to see.
+                ymin = Inf
+                ymax = -Inf
+                for ri ∈ run_info
+                    if !(ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                        continue
+                    end
+                    nspecies = ri.n_neutral_species
+                    for is ∈ 1:nspecies
+                        if length(run_info) > 1
+                            prefix = ri.run_name * ", "
+                        else
+                            prefix = ""
+                        end
+                        if nspecies > 1
+                            suffix = ", species $is"
+                        else
+                            suffix = ""
+                        end
+
+                        varname = "neutral_constraints_A_coefficient"
+                        label = prefix * "(A-1)" * suffix
+                        data = get_variable(ri, varname; is=is, ir=ir0)
+                        data .-= 1.0
+                        ymin = min(ymin, minimum(data[:,2:end]))
+                        ymax = max(ymax, maximum(data[:,2:end]))
+                        animate_vs_z(ri, varname; label=label, data=data,
+                                     frame_index=frame_index, ax=ax, input=input)
+
+                        varname = "neutral_constraints_B_coefficient"
+                        label = prefix * "B" * suffix
+                        data = get_variable(ri, varname; is=is, ir=ir0)
+                        ymin = min(ymin, minimum(data[:,2:end]))
+                        ymax = max(ymax, maximum(data[:,2:end]))
+                        animate_vs_z(ri, varname; label=label, data=data,
+                                     frame_index=frame_index, ax=ax, is=is, ir=ir0,
+                                     input=input)
+
+                        varname = "neutral_constraints_C_coefficient"
+                        label = prefix * "C" * suffix
+                        data = get_variable(ri, varname; is=is, ir=ir0)
+                        ymin = min(ymin, minimum(data[:,2:end]))
+                        ymax = max(ymax, maximum(data[:,2:end]))
+                        animate_vs_z(ri, varname; label=label, data=data,
+                                     frame_index=frame_index, ax=ax, is=is, ir=ir0,
+                                     input=input)
+                    end
+                end
+                put_legend_right(fig, ax)
+                ylims!(ax, ymin, ymax)
+                save_animation(fig, frame_index, nt,
+                               plot_prefix * "neutral_constraints." * input.animation_ext)
+            end
+
+            # Electrons
+            if any(ri.composition.electron_physics == kinetic_electrons for ri ∈ run_info)
+
+                frame_index = Observable(1)
+                fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
+
+                # Calculate plot limits manually so we can exclude the first time point, which
+                # often has a large value for (A-1) due to the way initialisation is done,
+                # which can make the subsequent values hard to see.
+                ymin = Inf
+                ymax = -Inf
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        prefix = ri.run_name * ", "
+                    else
+                        prefix = ""
+                    end
+
+                    varname = "electron_constraints_A_coefficient"
+                    label = prefix * "(A-1)"
+                    data = get_variable(ri, varname; ir=ir0)
+                    data .-= 1.0
+                    ymin = min(ymin, minimum(data[:,2:end]))
+                    ymax = max(ymax, maximum(data[:,2:end]))
+                    animate_vs_z(ri, varname; label=label, data=data,
+                                 frame_index=frame_index, ax=ax, input=input)
+
+                    varname = "electron_constraints_B_coefficient"
+                    label = prefix * "B"
+                    data = get_variable(ri, varname; ir=ir0)
+                    ymin = min(ymin, minimum(data[:,2:end]))
+                    ymax = max(ymax, maximum(data[:,2:end]))
+                    animate_vs_z(ri, varname; label=label, data=data,
+                                 frame_index=frame_index, ax=ax, ir=ir0, input=input)
+
+                    varname = "electron_constraints_C_coefficient"
+                    label = prefix * "C"
+                    data = get_variable(ri, varname; ir=ir0)
+                    ymin = min(ymin, minimum(data[:,2:end]))
+                    ymax = max(ymax, maximum(data[:,2:end]))
+                    animate_vs_z(ri, varname; label=label, data=data,
+                                 frame_index=frame_index, ax=ax, ir=ir0, input=input)
+                end
+                put_legend_right(fig, ax)
+                ylims!(ax, ymin, ymax)
+                save_animation(fig, frame_index, nt,
+                               plot_prefix * "electron_constraints." * input.animation_ext)
+            end
+        end
+    catch e
+        println("Error in constraints_plots(). Error was ", e)
+    end
 end
 
 """
@@ -5772,7 +6160,7 @@ end
                    field_sym_label, norm_label, plot_dims, animate_dims)
 
 Utility function for making plots to avoid duplicated code in
-[`compare_charged_pdf_symbolic_test`](@ref) and
+[`compare_ion_pdf_symbolic_test`](@ref) and
 [`compare_neutral_pdf_symbolic_test`](@ref).
 
 The information for the run to analyse is passed in `run_info` (as returned by
@@ -5922,7 +6310,7 @@ function _MMS_pdf_plots(run_info, input, variable_name, plot_prefix, field_label
 end
 
 """
-    compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
+    compare_ion_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
                                       input=nothing)
 
 Compare the computed and manufactured solutions for the ion distribution function.
@@ -5943,7 +6331,7 @@ Note: when calculating error norms, data is loaded only for 1 time point and for
 chunk that is the same size as computed by 1 block of the simulation at run time. This
 should prevent excessive memory requirements for this function.
 """
-function compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
+function compare_ion_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
                                            input=nothing)
 
     field_label = L"\tilde{f}_i"
@@ -6473,7 +6861,7 @@ function manufactured_solutions_analysis_dfns(run_info; plot_prefix)
         println_to_stdout_and_file(io, "# ", run_info.run_name)
         println_to_stdout_and_file(io, join(run_info.time, " "), " # time / (Lref/cref): ")
 
-        compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=io, input=input)
+        compare_ion_pdf_symbolic_test(run_info, plot_prefix; io=io, input=input)
 
         if run_info.n_neutral_species > 0
             compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=io, input=input)
@@ -6739,7 +7127,7 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
             end
             data = get_variable(run_info, "CFL_ion_z")
             datamin = minimum(minimum(d) for d ∈ data)
-            animate_vs_vpa_z(run_info, "CFL_ion_z"; data=data,
+            animate_vs_vpa_z(run_info, "CFL_ion_z"; data=data, it=it,
                              outfile=plot_prefix * "CFL_ion_z_vs_vpa_z.gif",
                              colorscale=log10,
                              transform=x->positive_or_nan(x; epsilon=1.e-30),
@@ -6750,7 +7138,7 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                                             :rightspinevisible=>false))
             data = get_variable(run_info, "CFL_ion_vpa")
             datamin = minimum(minimum(d) for d ∈ data)
-            animate_vs_vpa_z(run_info, "CFL_ion_vpa"; data=data,
+            animate_vs_vpa_z(run_info, "CFL_ion_vpa"; data=data, it=it,
                              outfile=plot_prefix * "CFL_ion_vpa_vs_vpa_z.gif",
                              colorscale=log10,
                              transform=x->positive_or_nan(x; epsilon=1.e-30),
@@ -6762,7 +7150,7 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
             if any(ri.n_neutral_species > 0 for ri ∈ run_info)
                 data = get_variable(run_info, "CFL_neutral_z")
                 datamin = minimum(minimum(d) for d ∈ data)
-                animate_vs_vz_z(run_info, "CFL_neutral_z"; data=data,
+                animate_vs_vz_z(run_info, "CFL_neutral_z"; data=data, it=it,
                                 outfile=plot_prefix * "CFL_neutral_z_vs_vz_z.gif",
                                 colorscale=log10,
                                 transform=x->positive_or_nan(x; epsilon=1.e-30),
@@ -6773,7 +7161,7 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                                                :rightspinevisible=>false))
                 data = get_variable(run_info, "CFL_neutral_vz")
                 datamin = minimum(minimum(d) for d ∈ data)
-                animate_vs_vz_z(run_info, "CFL_neutral_vz"; data=data,
+                animate_vs_vz_z(run_info, "CFL_neutral_vz"; data=data, it=it,
                                 outfile=plot_prefix * "CFL_neutral_vz_vs_vz_z.gif",
                                 colorscale=log10,
                                 transform=x->positive_or_nan(x; epsilon=1.e-30),
