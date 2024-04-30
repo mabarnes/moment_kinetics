@@ -52,7 +52,7 @@ using ..velocity_moments: integrate_over_vspace
 using ..velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_qpar, get_pressure, get_rmom
 using ..looping
 using ..input_structs: fkpl_collisions_input, set_defaults_and_check_section!
-using ..reference_parameters: get_reference_collision_frequency
+using ..reference_parameters: get_reference_collision_frequency_ii
 using ..fokker_planck_calculus: init_Rosenbluth_potential_integration_weights!
 using ..fokker_planck_calculus: init_Rosenbluth_potential_boundary_integration_weights!
 using ..fokker_planck_calculus: allocate_boundary_integration_weights
@@ -82,7 +82,7 @@ frequency_option = "manual"
 """
 function setup_fkpl_collisions_input(toml_input::Dict, reference_params)
     # get reference collision frequency (note factor of 1/2 due to definition choices)
-    nuii_fkpl_default = 0.5*get_reference_collision_frequency(reference_params)
+    nuii_fkpl_default = 0.5*get_reference_collision_frequency_ii(reference_params)
     # read the input toml and specify a sensible default
     input_section = set_defaults_and_check_section!(toml_input, "fokker_planck_collisions",
        # begin default inputs (as kwargs)

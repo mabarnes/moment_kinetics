@@ -7,9 +7,10 @@ export equally_spaced_grid
 export set_element_boundaries
 
 using ..type_definitions: mk_float, mk_int
-using ..array_allocation: allocate_float, allocate_int
+using ..array_allocation: allocate_float, allocate_shared_float, allocate_int
 using ..calculus: derivative!
 using ..chebyshev: scaled_chebyshev_grid, scaled_chebyshev_radau_grid, setup_chebyshev_pseudospectral
+using ..communication
 using ..finite_differences: finite_difference_info
 using ..gauss_legendre: scaled_gauss_legendre_lobatto_grid, scaled_gauss_legendre_radau_grid, setup_gausslegendre_pseudospectral
 using ..quadrature: composite_simpson_weights
@@ -21,7 +22,7 @@ using MPI
 """
 structure containing basic information related to coordinates
 """
-struct coordinate
+struct coordinate{T <: AbstractVector{mk_float}}
     # name is the name of the variable associated with this coordiante
     name::String
     # n_global is the total number of grid points associated with this coordinate
@@ -76,6 +77,12 @@ struct coordinate
     scratch2::Array{mk_float,1}
     # scratch3 is an array used for intermediate calculations requiring n entries
     scratch3::Array{mk_float,1}
+    # scratch_shared is a shared-memory array used for intermediate calculations requiring
+    # n entries
+    scratch_shared::T
+    # scratch_shared2 is a shared-memory array used for intermediate calculations requiring
+    # n entries
+    scratch_shared2::T
     # scratch_2d and scratch2_2d are arrays used for intermediate calculations requiring
     # ngrid x nelement entries
     scratch_2d::Array{mk_float,2}
@@ -138,6 +145,22 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
     duniform_dgrid = allocate_float(input.ngrid, input.nelement_local)
     # scratch is an array used for intermediate calculations requiring n entries
     scratch = allocate_float(n_local)
+    if ignore_MPI
+        scratch_shared = allocate_float(n_local)
+        scratch_shared2 = allocate_float(n_local)
+    else
+        scratch_shared = allocate_shared_float(n_local)
+        scratch_shared2 = allocate_shared_float(n_local)
+    end
+    # Initialise scratch_shared and scratch_shared2 so that the debug checks do not
+    # complain when they get printed by `println(io, all_inputs)` in mk_input().
+    if block_rank[] == 0
+        scratch_shared .= NaN
+        scratch_shared2 .= NaN
+    end
+    if !ignore_MPI
+        _block_synchronize()
+    end
     # scratch_2d is an array used for intermediate calculations requiring ngrid x nelement entries
     scratch_2d = allocate_float(input.ngrid, input.nelement_local)
     # struct containing the advection speed options/inputs for this coordinate
@@ -167,7 +190,7 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
     coord = coordinate(input.name, n_global, n_local, input.ngrid,
         input.nelement_global, input.nelement_local, input.nrank, input.irank, input.L, grid,
         cell_width, igrid, ielement, imin, imax, igrid_full, input.discretization, input.fd_option, input.cheb_option,
-        input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
+        input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch), scratch_shared, scratch_shared2,
         scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
         local_io_range, global_io_range, element_scale, element_shift, input.element_spacing_option,
         element_boundaries)

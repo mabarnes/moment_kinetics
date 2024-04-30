@@ -6,7 +6,6 @@ function.
 module moment_constraints
 
 using ..communication: _block_synchronize
-using ..initial_conditions: enforce_zero_incoming_bc!
 using ..looping
 using ..velocity_moments: integrate_over_vspace, update_qpar!
 
@@ -69,12 +68,18 @@ function hard_force_moment_constraints!(f, moments, vpa)
         B = -A*I1/I2
 
         @. f1d = A*f1d + B*vpa.grid*f1d
+
+        C = NaN
     elseif moments.evolve_density
         I0 = integrate_over_vspace(f1d, vpa.wgts)
-        @. f1d = f1d / I0
+        A = 1.0 / I0
+        @. f1d = A * f1d
+
+        B = NaN
+        C = NaN
     end
 
-    return nothing
+    return A, B, C
 end
 
 """
@@ -113,12 +118,18 @@ function hard_force_moment_constraints_neutral!(f, moments, vz)
         B = -A*I1/I2
 
         @. f1d = A*f1d + B*vz.grid*f1d
+
+        C = NaN
     elseif moments.evolve_density
         I0 = integrate_over_vspace(f1d, vz.wgts)
-        @. f1d = f1d / I0
+        A = 1.0 / I0
+        @. f1d = A * f1d
+
+        B = NaN
+        C = NaN
     end
 
-    return nothing
+    return A, B, C
 end
 
 end

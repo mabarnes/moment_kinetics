@@ -27,10 +27,10 @@ function compare_collision_frequencies(input_file::String,
     # v_∥ dissipation term is D d^2f/dv_∥^2. Inserting factors of c_ref, this is a bit like
     # pitch angle scattering D cref^2 d^2f/dv_∥^2 ~ D d^2f/dξ^2, so D is similar to a
     # (normalised) collision frequency.
-    if num_diss_params.vpa_dissipation_coefficient < 0.0
+    if num_diss_params.ion.vpa_dissipation_coefficient < 0.0
         nu_vpa_diss = 0.0
     else
-        nu_vpa_diss = num_diss_params.vpa_dissipation_coefficient /
+        nu_vpa_diss = num_diss_params.ion.vpa_dissipation_coefficient /
                       dimensional_parameters["timenorm"]
     end
 
@@ -89,17 +89,17 @@ function compare_collision_frequencies(input_file::String,
     println("classical heat chi_i0 with effective rho_i ", effective_classical_heat_chi_i0)
 
     # Get numerical diffusion parameters
-    if num_diss_params.r_dissipation_coefficient < 0.0
+    if num_diss_params.ion.r_dissipation_coefficient < 0.0
         D_r = 0.0
     else
-        D_r = Unitful.upreferred(num_diss_params.r_dissipation_coefficient *
+        D_r = Unitful.upreferred(num_diss_params.ion.r_dissipation_coefficient *
                                  dimensional_parameters["Lnorm"]^2 /
                                  dimensional_parameters["timenorm"])
     end
-    if num_diss_params.z_dissipation_coefficient < 0.0
+    if num_diss_params.ion.z_dissipation_coefficient < 0.0
         D_z = 0.0
     else
-        D_z = Unitful.upreferred(num_diss_params.z_dissipation_coefficient *
+        D_z = Unitful.upreferred(num_diss_params.ion.z_dissipation_coefficient *
                                  dimensional_parameters["Lnorm"]^2 /
                                  dimensional_parameters["timenorm"])
     end

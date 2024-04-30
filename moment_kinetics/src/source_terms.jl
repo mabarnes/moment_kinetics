@@ -22,9 +22,9 @@ function source_terms!(pdf_out, fvec_in, moments, vpa, z, r, dt, spectral, compo
         @loop_s is begin
             @views source_terms_evolve_ppar_no_collisions!(
                 pdf_out[:,:,:,:,is], fvec_in.pdf[:,:,:,:,is], fvec_in.density[:,:,is],
-                fvec_in.upar[:,:,is], fvec_in.ppar[:,:,is], moments.charged.vth[:,:,is],
-                moments.charged.qpar[:,:,is], moments.charged.ddens_dz[:,:,is],
-                moments.charged.dvth_dz[:,:,is], moments.charged.dqpar_dz[:,:,is],
+                fvec_in.upar[:,:,is], fvec_in.ppar[:,:,is], moments.ion.vth[:,:,is],
+                moments.ion.qpar[:,:,is], moments.ion.ddens_dz[:,:,is],
+                moments.ion.dvth_dz[:,:,is], moments.ion.dqpar_dz[:,:,is],
                 moments, z, r, dt, spectral, ion_source_settings)
             if composition.n_neutral_species > 0
                 if abs(collisions.charge_exchange) > 0.0 || abs(collisions.ionization) > 0.0
@@ -41,8 +41,8 @@ function source_terms!(pdf_out, fvec_in, moments, vpa, z, r, dt, spectral, compo
         @loop_s is begin
             @views source_terms_evolve_density!(
                 pdf_out[:,:,:,:,is], fvec_in.pdf[:,:,:,:,is], fvec_in.density[:,:,is],
-                fvec_in.upar[:,:,is], moments.charged.ddens_dz[:,:,is],
-                moments.charged.dupar_dz[:,:,is], moments, z, r, dt, spectral,
+                fvec_in.upar[:,:,is], moments.ion.ddens_dz[:,:,is],
+                moments.ion.dupar_dz[:,:,is], moments, z, r, dt, spectral,
                 ion_source_settings)
         end
     end
@@ -65,9 +65,9 @@ function source_terms_evolve_density!(pdf_out, pdf_in, dens, upar, ddens_dz, dup
     end
 
     if ion_source_settings.active
-        source_amplitude = moments.charged.external_source_amplitude
+        source_density_amplitude = moments.ion.external_source_density_amplitude
         @loop_r_z ir iz begin
-            term = dt * source_amplitude[iz,ir] / dens[iz,ir]
+            term = dt * source_density_amplitude[iz,ir] / dens[iz,ir]
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir] -= term * pdf_in[ivpa,ivperp,iz,ir]
             end
@@ -97,11 +97,13 @@ function source_terms_evolve_ppar_no_collisions!(pdf_out, pdf_in, dens, upar, pp
     end
 
     if ion_source_settings.active
-        source_amplitude = moments.charged.external_source_amplitude
-        source_T = ion_source_settings.source_T
+        source_density_amplitude = moments.ion.external_source_density_amplitude
+        source_momentum_amplitude = moments.ion.external_source_momentum_amplitude
+        source_pressure_amplitude = moments.ion.external_source_pressure_amplitude
         @loop_r_z ir iz begin
-            term = dt * source_amplitude[iz,ir] *
-                   (1.5/dens[iz,ir] - (0.25 * source_T + 0.5 * upar[iz,ir]^2) / ppar[iz,ir])
+            term = dt * (1.5 * source_density_amplitude[iz,ir] / dens[iz,ir] -
+                         (0.5 * source_pressure_amplitude[iz,ir] +
+                          source_momentum_amplitude[iz,ir]) / ppar[iz,ir])
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir] -= term * pdf_in[ivpa,ivperp,iz,ir]
             end
@@ -191,9 +193,9 @@ function source_terms_evolve_density_neutral!(pdf_out, pdf_in, dens, upar, ddens
     end
 
     if neutral_source_settings.active
-        source_amplitude = moments.neutral.external_source_amplitude
+        source_density_amplitude = moments.neutral.external_source_density_amplitude
         @loop_r_z ir iz begin
-            term = dt * source_amplitude[iz,ir] / dens[iz,ir]
+            term = dt * source_density_amplitude[iz,ir] / dens[iz,ir]
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 pdf_out[ivz,ivr,ivzeta,iz,ir] -= term * pdf_in[ivz,ivr,ivzeta,iz,ir]
             end
@@ -222,11 +224,13 @@ function source_terms_evolve_ppar_no_collisions_neutral!(pdf_out, pdf_in, dens, 
     end
 
     if neutral_source_settings.active
-        source_amplitude = moments.neutral.external_source_amplitude
-        source_T = neutral_source_settings.source_T
+        source_density_amplitude = moments.neutral.external_source_density_amplitude
+        source_momentum_amplitude = moments.neutral.external_source_momentum_amplitude
+        source_pressure_amplitude = moments.neutral.external_source_pressure_amplitude
         @loop_r_z ir iz begin
-            term = dt * source_amplitude[iz,ir] *
-                   (1.5/dens[iz,ir] - (0.25 * source_T + 0.5 * upar[iz,ir]^2) / ppar[iz,ir])
+            term = dt * (1.5 * source_density_amplitude[iz,ir] / dens[iz,ir] -
+                         (0.5 * source_pressure_amplitude[iz,ir] +
+                          source_momentum_amplitude[iz,ir]) / ppar[iz,ir])
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 pdf_out[ivz,ivr,ivzeta,iz,ir] -= term * pdf_in[ivz,ivr,ivzeta,iz,ir]
             end
@@ -257,7 +261,7 @@ end
 """
 advance the dfn with an arbitrary source function 
 """
-function source_terms_manufactured!(pdf_charged_out, pdf_neutral_out, vz, vr, vzeta, vpa, vperp, z, r, t, dt, composition, manufactured_source_list)
+function source_terms_manufactured!(pdf_ion_out, pdf_neutral_out, vz, vr, vzeta, vpa, vperp, z, r, t, dt, composition, manufactured_source_list)
     if manufactured_source_list.time_independent_sources
         # the (time-independent) manufactured source arrays
         Source_i = manufactured_source_list.Source_i_array
@@ -267,7 +271,7 @@ function source_terms_manufactured!(pdf_charged_out, pdf_neutral_out, vz, vr, vz
 
         @loop_s is begin
             @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-                pdf_charged_out[ivpa,ivperp,iz,ir,is] += dt*Source_i[ivpa,ivperp,iz,ir]
+                pdf_ion_out[ivpa,ivperp,iz,ir,is] += dt*Source_i[ivpa,ivperp,iz,ir]
             end
         end
 
@@ -288,7 +292,7 @@ function source_terms_manufactured!(pdf_charged_out, pdf_neutral_out, vz, vr, vz
 
         @loop_s is begin
             @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-                pdf_charged_out[ivpa,ivperp,iz,ir,is] += dt*Source_i_func(vpa.grid[ivpa],vperp.grid[ivperp],z.grid[iz],r.grid[ir],t)
+                pdf_ion_out[ivpa,ivperp,iz,ir,is] += dt*Source_i_func(vpa.grid[ivpa],vperp.grid[ivperp],z.grid[iz],r.grid[ir],t)
             end
         end
 

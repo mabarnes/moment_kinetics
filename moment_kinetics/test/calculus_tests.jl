@@ -43,6 +43,8 @@ function runtests()
                     discretization, fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x'
+                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
+                # errors due to communicators not being fully set up.
                 x, spectral = define_coordinate(input; ignore_MPI=true)
                 # create array for the function f(x) to be differentiated/integrated
                 f = Array{Float64,1}(undef, x.n)
@@ -93,6 +95,8 @@ function runtests()
                     "finite_difference", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x'
+                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
+                # errors due to communicators not being fully set up.
                 x, spectral = define_coordinate(input; ignore_MPI=true)
 
                 # create array for the derivative df/dx and the expected result
@@ -143,6 +147,8 @@ function runtests()
                     "finite_difference", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x'
+                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
+                # errors due to communicators not being fully set up.
                 x, spectral = define_coordinate(input; ignore_MPI=true)
 
                 # create array for the derivative df/dx and the expected result
@@ -189,6 +195,8 @@ function runtests()
                     "finite_difference", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x'
+                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
+                # errors due to communicators not being fully set up.
                 x, spectral = define_coordinate(input; ignore_MPI=true)
 
                 # create array for the derivative df/dx and the expected result
@@ -243,6 +251,8 @@ function runtests()
                     "finite_difference", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
+                # errors due to communicators not being fully set up.
                 x, spectral = define_coordinate(input; ignore_MPI=true)
 
                 # create array for the derivative df/dx and the expected result
@@ -459,6 +469,8 @@ function runtests()
                     "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
+                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
+                # errors due to communicators not being fully set up.
                 x, spectral = define_coordinate(input; ignore_MPI=true)
 
                 offset = randn(rng)
@@ -655,6 +667,8 @@ function runtests()
                     "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
+                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
+                # errors due to communicators not being fully set up.
                 x, spectral = define_coordinate(input; ignore_MPI=true)
 
                 offset = randn(rng)
@@ -698,6 +712,8 @@ function runtests()
                     "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
+                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
+                # errors due to communicators not being fully set up.
                 x, spectral = define_coordinate(input; ignore_MPI=true)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
@@ -748,6 +764,8 @@ function runtests()
                     "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
+                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
+                # errors due to communicators not being fully set up.
                 x, spectral = define_coordinate(input; ignore_MPI=true)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
@@ -884,6 +902,8 @@ function runtests()
                     "gausslegendre_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
+                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
+                # errors due to communicators not being fully set up.
                 x, spectral = define_coordinate(input; ignore_MPI=true, init_YY=false)
 
                 offset = randn(rng)
@@ -1001,6 +1021,8 @@ function runtests()
                     "gausslegendre_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
+                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
+                # errors due to communicators not being fully set up.
                 x, spectral = define_coordinate(input; ignore_MPI=true, init_YY=false)
 
                 offset = randn(rng)
@@ -1045,6 +1067,8 @@ function runtests()
                     "gausslegendre_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
+                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
+                # errors due to communicators not being fully set up.
                 x, spectral = define_coordinate(input; ignore_MPI=true, init_YY=false)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
@@ -1096,6 +1120,8 @@ function runtests()
                     "gausslegendre_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
+                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
+                # errors due to communicators not being fully set up.
                 x, spectral = define_coordinate(input; ignore_MPI=true, init_YY=false)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
@@ -1310,6 +1336,8 @@ function runtests()
                     "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
+                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
+                # errors due to communicators not being fully set up.
                 x, spectral = define_coordinate(input; ignore_MPI=true)
 
                 offset = randn(rng)
@@ -1418,6 +1446,8 @@ function runtests()
                     "gausslegendre_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
+                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
+                # errors due to communicators not being fully set up.
                 x, spectral = define_coordinate(input; ignore_MPI=true, init_YY=false)
 
                 offset = randn(rng)

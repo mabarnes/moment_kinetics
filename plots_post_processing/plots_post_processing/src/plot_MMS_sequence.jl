@@ -14,16 +14,16 @@ using SpecialFunctions: erfi
 using LaTeXStrings
 # modules
 using ..post_processing_input: pp
-using ..plots_post_processing: compare_charged_pdf_symbolic_test, compare_fields_symbolic_test
+using ..plots_post_processing: compare_ion_pdf_symbolic_test, compare_fields_symbolic_test
 using ..plots_post_processing: compare_moments_symbolic_test, compare_neutral_pdf_symbolic_test
-using ..plots_post_processing: allocate_global_zr_neutral_moments, allocate_global_zr_charged_moments
+using ..plots_post_processing: allocate_global_zr_neutral_moments, allocate_global_zr_ion_moments
 using ..plots_post_processing: allocate_global_zr_fields, get_composition
 using ..plots_post_processing: get_coords_nelement, get_coords_ngrid
 using moment_kinetics.array_allocation: allocate_float
 using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.load_data: open_readonly_output_file
 using moment_kinetics.load_data: load_fields_data, load_pdf_data
-using moment_kinetics.load_data: load_charged_particle_moments_data, load_neutral_particle_moments_data
+using moment_kinetics.load_data: load_ion_moments_data, load_neutral_particle_moments_data
 using moment_kinetics.load_data: load_neutral_pdf_data, load_time_data, load_species_data
 using moment_kinetics.load_data: load_block_data, load_coordinate_data, load_input
 using moment_kinetics.load_data: read_distributed_zr_data!, construct_global_zr_coords
@@ -198,7 +198,7 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         # allocate arrays to contain the global fields as a function of (z,r,t)
         phi, Ez, Er = allocate_global_zr_fields(z.n_global,r.n_global,ntime)
         density, parallel_flow, parallel_pressure, parallel_heat_flux,
-            thermal_speed = allocate_global_zr_charged_moments(z.n_global,r.n_global,n_ion_species,ntime)
+            thermal_speed = allocate_global_zr_ion_moments(z.n_global,r.n_global,n_ion_species,ntime)
         if n_neutral_species > 0
             neutral_density, neutral_uz, neutral_pz, 
              neutral_qz, neutral_thermal_speed = allocate_global_zr_neutral_moments(z.n_global,r.n_global,n_neutral_species,ntime)
@@ -216,7 +216,7 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         read_distributed_zr_data!(phi,"phi",run_names,"moments",nbs,z.n,r.n,iskip) 
         read_distributed_zr_data!(Ez,"Ez",run_names,"moments",nbs,z.n,r.n,iskip) 
         read_distributed_zr_data!(Er,"Er",run_names,"moments",nbs,z.n,r.n,iskip) 
-        # charged particle moments
+        # ion particle moments
         read_distributed_zr_data!(density,"density",run_names,"moments",nbs,z.n,r.n,iskip) 
         read_distributed_zr_data!(parallel_flow,"parallel_flow",run_names,"moments",nbs,z.n,r.n,iskip) 
         read_distributed_zr_data!(parallel_pressure,"parallel_pressure",run_names,"moments",nbs,z.n,r.n,iskip) 
@@ -298,7 +298,7 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         # use final time point for analysis
         ion_density_error_sequence[isim] = ion_density_error_t[end] 
         
-        ion_pdf_error_t = compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,"ion",
+        ion_pdf_error_t = compare_ion_pdf_symbolic_test(run_name,manufactured_solns_list,"ion",
          L"\widetilde{f}_i",L"\widetilde{f}^{sym}_i",L"\sum || \widetilde{f}_i - \widetilde{f}_i^{sym} ||^2","pdf")
         ion_pdf_error_sequence[isim] = ion_pdf_error_t[end]
         

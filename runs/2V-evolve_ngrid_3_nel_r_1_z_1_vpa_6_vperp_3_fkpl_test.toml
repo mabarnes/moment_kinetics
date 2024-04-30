@@ -90,7 +90,7 @@ nwrite_dfns = 5000
 n_rk_stages = 4
 split_operators = false
 
-#[numerical_dissipation]
+#[ion_numerical_dissipation]
 #vpa_dissipation_coefficient = 0.0
 #vperp_dissipation_coefficient = 0.0
 #z_dissipation_coefficient = 0.1

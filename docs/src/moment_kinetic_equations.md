@@ -1018,7 +1018,7 @@ and for neutrals where several of the ionization terms cancel
   & \qquad-\frac{w_{\|,n}}{2}\frac{1}{p_{\|,n}}\left(-\frac{\partial q_{\|,n}}{\partial z}
   - R_{in}\left(n_{i}p_{\|,n} - n_{n}p_{\|,i}
   - n_{n}n_{i}\left(u_{n} - u_{i}\right)^{2}\right)
-  + \int dv_\parallel S_{n} + u_{n}^2\int dv_\parallel v_\parallel^2 S_{n}
+  + \int dv_\parallel v_\parallel^2 S_{n} + u_{n}^2\int dv_\parallel S_{n}
   + v_{\mathrm{th},n}w_{\|,n}\frac{\partial p_{\|,n}}{\partial z}\right) \\
   & \qquad\left. + \frac{w_{\parallel,n}}{2}\frac{1}{n_{n}}\int dv_\parallel S_{n}
   + \frac{w_{\|,n}^{2}}{2}\frac{v_{\mathrm{th},n}}{n_{n}}\frac{\partial n_{n}}{\partial z}\right]\frac{\partial g_{n}}{\partial w_{\|,n}} \\

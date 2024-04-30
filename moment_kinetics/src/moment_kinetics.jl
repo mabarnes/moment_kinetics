@@ -41,7 +41,6 @@ include("em_fields.jl")
 include("bgk.jl")
 include("manufactured_solns.jl") # MRH Here?
 include("external_sources.jl")
-include("initial_conditions.jl")
 include("moment_constraints.jl")
 include("fokker_planck_test.jl")
 include("fokker_planck_calculus.jl")
@@ -54,6 +53,7 @@ include("vperp_advection.jl")
 include("neutral_r_advection.jl")
 include("neutral_z_advection.jl")
 include("neutral_vz_advection.jl")
+include("boundary_conditions.jl")
 include("charge_exchange.jl")
 include("ionization.jl")
 include("krook_collisions.jl")
@@ -65,8 +65,9 @@ include("numerical_dissipation.jl")
 include("moment_kinetics_input.jl")
 include("utils.jl")
 include("load_data.jl")
-include("parameter_scans.jl")
 include("analysis.jl")
+include("initial_conditions.jl")
+include("parameter_scans.jl")
 include("time_advance.jl")
 
 using TimerOutputs
@@ -76,15 +77,14 @@ using Primes
 
 using .file_io: setup_file_io, finish_file_io
 using .file_io: write_data_to_ascii
-using .file_io: write_moments_data_to_binary, write_dfns_data_to_binary
+using .file_io: write_all_moments_data_to_binary, write_all_dfns_data_to_binary
 using .command_line_options: get_options
 using .communication
 using .communication: _block_synchronize
 using .debugging
 using .external_sources
 using .input_structs
-using .initial_conditions: allocate_pdf_and_moments, init_pdf_and_moments!,
-                           enforce_boundary_conditions!
+using .initial_conditions: allocate_pdf_and_moments, init_pdf_and_moments!
 using .load_data: reload_evolving_fields!
 using .looping
 using .moment_constraints: hard_force_moment_constraints!
@@ -92,7 +92,11 @@ using .looping: debug_setup_loop_ranges_split_one_combination!
 using .moment_kinetics_input: mk_input, read_input_file
 using .time_advance: setup_time_advance!, time_advance!
 using .type_definitions: mk_int
-using .utils: to_minutes
+using .utils: to_minutes, get_default_restart_filename,
+              get_prefix_iblock_and_move_existing_file
+using .em_fields: setup_em_fields
+using .time_advance: setup_dummy_and_buffer_arrays
+using .time_advance: allocate_advection_structs
 
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
@@ -192,75 +196,6 @@ function run_moment_kinetics()
 end
 
 """
-Append a number to the filename, to get a new, non-existing filename to backup the file
-to.
-"""
-function get_backup_filename(filename)
-    if !isfile(filename)
-        error("Requested to restart from $filename, but this file does not exist")
-    end
-    counter = 1
-    temp, extension = splitext(filename)
-    extension = extension[2:end]
-    temp, iblock_or_type = splitext(temp)
-    iblock_or_type = iblock_or_type[2:end]
-    iblock = nothing
-    basename = nothing
-    type = nothing
-    if iblock_or_type == "dfns"
-        iblock = nothing
-        type = iblock_or_type
-        basename = temp
-        parallel_io = true
-    else
-        # Filename had an iblock, so we are not using parallel I/O, but actually want to
-        # use the iblock for this block, not necessarily for the exact file that was
-        # passed.
-        iblock = iblock_index[]
-        basename, type = splitext(temp)
-        type = type[2:end]
-        parallel_io = false
-    end
-    if type != "dfns"
-        error("Must pass the '.dfns.h5' output file for restarting. Got $filename.")
-    end
-    backup_dfns_filename = ""
-    if parallel_io
-        # Using parallel I/O
-        while true
-            backup_dfns_filename = "$(basename)_$(counter).$(type).$(extension)"
-            if !isfile(backup_dfns_filename)
-                break
-            end
-            counter += 1
-        end
-        # Create dfns_filename here even though it is the filename passed in, as
-        # parallel_io=false branch needs to get the right `iblock` for this block.
-        dfns_filename = "$(basename).dfns.$(extension)"
-        moments_filename = "$(basename).moments.$(extension)"
-        backup_moments_filename = "$(basename)_$(counter).moments.$(extension)"
-    else
-        while true
-            backup_dfns_filename = "$(basename)_$(counter).$(type).$(iblock).$(extension)"
-            if !isfile(backup_dfns_filename)
-                break
-            end
-            counter += 1
-        end
-        # Create dfns_filename here even though it is almost the filename passed in, in
-        # order to get the right `iblock` for this block.
-        dfns_filename = "$(basename).dfns.$(iblock).$(extension)"
-        moments_filename = "$(basename).moments.$(iblock).$(extension)"
-        backup_moments_filename = "$(basename)_$(counter).moments.$(iblock).$(extension)"
-    end
-    backup_dfns_filename == "" && error("Failed to find a name for backup file.")
-    backup_prefix_iblock = ("$(basename)_$(counter)", iblock)
-    original_prefix_iblock = (basename, iblock)
-    return dfns_filename, backup_dfns_filename, parallel_io, moments_filename,
-           backup_moments_filename, backup_prefix_iblock, original_prefix_iblock
-end
-
-"""
 Perform all the initialization steps for a run.
 
 If `backup_filename` is `nothing`, set up for a regular run; if a filename is passed,
@@ -313,11 +248,27 @@ function setup_moment_kinetics(input_dict::AbstractDict;
             vperp=vperp.n, vpa=vpa.n, vzeta=vzeta.n, vr=vr.n, vz=vz.n)
     end
 
+    # create the "fields" structure that contains arrays
+    # for the electrostatic potential phi and the electromagnetic fields
+    fields = setup_em_fields(vperp.n, z.n, r.n, composition.n_ion_species,
+                             drive_input.force_phi, drive_input.amplitude,
+                             drive_input.frequency, drive_input.force_Er_zero_at_wall)
+
     # Allocate arrays and create the pdf and moments structs
     pdf, moments, boundary_distributions =
         allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
                                  evolve_moments, collisions, external_source_settings,
                                  num_diss_params)
+
+    # create structs containing the information needed to treat advection in z, r, vpa, vperp, and vz
+    # for ions, electrons and neutrals
+    # NB: the returned advection_structs are yet to be initialized
+    advection_structs = allocate_advection_structs(composition, z, r, vpa, vperp, vz, vr, vzeta)
+
+    # setup dummy arrays & buffer arrays for z r MPI                             
+    n_neutral_species_alloc = max(1, composition.n_neutral_species)
+    scratch_dummy = setup_dummy_and_buffer_arrays(r.n, z.n, vpa.n, vperp.n, vz.n, vr.n, vzeta.n, 
+        composition.n_ion_species, n_neutral_species_alloc)
 
     if restart === false
         restarting = false
@@ -335,55 +286,14 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     else
         restarting = true
 
-        run_name = input_dict["run_name"]
-        base_directory = get(input_dict, "base_directory", "runs")
-        output_dir = joinpath(base_directory, run_name)
         if restart === true
-            run_name = input_dict["run_name"]
-            io_settings = get(input_dict, "output", Dict{String,Any}())
-            binary_format = get(io_settings, "binary_format", hdf5)
-            if binary_format === hdf5
-                ext = "h5"
-            elseif binary_format === netcdf
-                ext = "cdf"
-            else
-                error("Unrecognized binary_format '$binary_format'")
-            end
-            restart_filename_pattern = joinpath(output_dir, run_name * ".dfns*." * ext)
-            restart_filename_glob = glob(restart_filename_pattern)
-            if length(restart_filename_glob) == 0
-                error("No output file to restart from found matching the pattern "
-                      * "$restart_filename_pattern")
-            end
-            restart_filename = restart_filename_glob[1]
+            restart_filename = get_default_restart_filename(io_input, "dfns")
         else
             restart_filename = restart
         end
 
-        # Move the output file being restarted from to make sure it doesn't get
-        # overwritten.
-        dfns_filename, backup_dfns_filename, parallel_io, moments_filename,
-        backup_moments_filename, backup_prefix_iblock, original_prefix_iblock =
-            get_backup_filename(restart_filename)
-
-        # Ensure every process got the filenames and checked files exist before moving
-        # files
-        MPI.Barrier(comm_world)
-
-        if abspath(output_dir) == abspath(dirname(dfns_filename))
-            # Only move the file if it is in our current run directory. Otherwise we are
-            # restarting from another run, and will not be overwriting the file.
-            if (parallel_io && global_rank[] == 0) || (!parallel_io && block_rank[] == 0)
-                mv(dfns_filename, backup_dfns_filename)
-                mv(moments_filename, backup_moments_filename)
-            end
-        else
-            # Reload from dfns_filename without moving the file
-            backup_prefix_iblock = original_prefix_iblock
-        end
-
-        # Ensure files have been moved before any process tries to read from them
-        MPI.Barrier(comm_world)
+        backup_prefix_iblock = get_prefix_iblock_and_move_existing_file(restart_filename,
+                                                                        io_input.output_dir)
 
         # Reload pdf and moments from an existing output file
         code_time, dt, dt_before_last_fail, previous_runs_info, restart_time_index =
@@ -399,17 +309,22 @@ function setup_moment_kinetics(input_dict::AbstractDict;
 
         _block_synchronize()
     end
+
+    # Broadcast code_time from the root process of each shared-memory block (on which it
+    # might have been loaded from a restart file).
+    code_time = MPI.Bcast(code_time, 0, comm_block[])
+
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
 
-    moments, fields, spectral_objects, advect_objects,
-    scratch, advance, t_params, fp_arrays, gyroavs, scratch_dummy, manufactured_source_list =
-        setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, gyrophase, vz_spectral,
-            vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral,
-            r_spectral, composition, drive_input, moments, t_input, code_time, dt,
+    moments, spectral_objects, scratch, advance, t_params, fp_arrays, gyroavs,
+    manufactured_source_list =
+        setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrophase,
+            vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
+            z_spectral, r_spectral, composition, moments, t_input, code_time, dt,
             dt_before_last_fail, collisions, species, geometry, boundary_distributions,
             external_source_settings, num_diss_params, manufactured_solns_input,
-            restarting)
+            advection_structs, scratch_dummy, restarting)
 
     # This is the closest we can get to the end time of the setup before writing it to the
     # output file
@@ -421,20 +336,21 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         moments.evolve_upar, moments.evolve_ppar, external_source_settings, input_dict,
         restart_time_index, previous_runs_info, time_for_setup)
     # write initial data to ascii files
-    write_data_to_ascii(moments, fields, vpa, vperp, z, r, code_time,
+    write_data_to_ascii(pdf, moments, fields, vpa, vperp, z, r, code_time,
         composition.n_ion_species, composition.n_neutral_species, ascii_io)
     # write initial data to binary files
 
-    write_moments_data_to_binary(moments, fields, code_time, composition.n_ion_species,
-        composition.n_neutral_species, io_moments, 1, 0.0, t_params, r, z)
-    write_dfns_data_to_binary(pdf.charged.norm, pdf.neutral.norm, moments, fields,
-         code_time, composition.n_ion_species, composition.n_neutral_species, io_dfns, 1,
-         0.0, t_params, r, z, vperp, vpa, vzeta, vr, vz)
+    write_all_moments_data_to_binary(moments, fields, code_time,
+        composition.n_ion_species, composition.n_neutral_species, io_moments, 1, 0.0, t_params, r,
+        z)
+    write_all_dfns_data_to_binary(pdf, moments, fields, code_time,
+        composition.n_ion_species, composition.n_neutral_species, io_dfns, 1, 0.0,
+        t_params, r, z, vperp, vpa, vzeta, vr, vz)
 
     begin_s_r_z_vperp_region()
 
     return pdf, scratch, code_time, t_params, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
-           moments, fields, spectral_objects, advect_objects,
+           moments, fields, spectral_objects, advection_structs,
            composition, collisions, geometry, gyroavs, boundary_distributions,
            external_source_settings, num_diss_params, advance, fp_arrays, scratch_dummy,
            manufactured_source_list, ascii_io, io_moments, io_dfns

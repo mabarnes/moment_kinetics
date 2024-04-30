@@ -10,7 +10,7 @@ using Statistics: mean
 using SpecialFunctions: erfi
 using LaTeXStrings
 # modules
-using ..plots_post_processing: allocate_global_zr_neutral_moments, allocate_global_zr_charged_moments
+using ..plots_post_processing: allocate_global_zr_neutral_moments, allocate_global_zr_ion_moments
 using ..plots_post_processing: allocate_global_zr_fields#, get_coords_nelement
 using moment_kinetics.array_allocation: allocate_float
 using moment_kinetics.type_definitions: mk_float, mk_int

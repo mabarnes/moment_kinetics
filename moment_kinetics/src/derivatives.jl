@@ -19,7 +19,7 @@ using ..looping
 Centered derivatives
 df/dr group of rountines for
 fields & moments -> [z,r]
-dfns (charged) -> [vpa,vperp,z,r,s]
+dfns (ion) -> [vpa,vperp,z,r,s]
 dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 """
 
@@ -30,6 +30,8 @@ function derivative_r!(dfdr::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
         dfdr_upper_endpoints::AbstractArray{mk_float,1},
         r_receive_buffer1::AbstractArray{mk_float,1},
         r_receive_buffer2::AbstractArray{mk_float,1}, r_spectral, r)
+
+        begin_z_region()
 
 	# differentiate f w.r.t r
 	@loop_z iz begin
@@ -87,12 +89,14 @@ function derivative_r!(dfdr::AbstractArray{mk_float,3}, f::AbstractArray{mk_floa
 end
 
 #df/dr
-#5D version for f[vpa,vperp,z,r,s] -> charged particle dfn (species indexing taken outside this loop)
+#5D version for f[vpa,vperp,z,r,s] -> ion particle dfn
 function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
         dfdr_lower_endpoints::AbstractArray{mk_float,4},
         dfdr_upper_endpoints::AbstractArray{mk_float,4},
         r_receive_buffer1::AbstractArray{mk_float,4},
         r_receive_buffer2::AbstractArray{mk_float,4}, r_spectral, r)
+
+        begin_s_z_vperp_vpa_region()
 
 	# differentiate f w.r.t r
 	@loop_s_z_vperp_vpa is iz ivperp ivpa begin
@@ -118,6 +122,8 @@ function derivative_r!(dfdr::AbstractArray{mk_float,6}, f::AbstractArray{mk_floa
         r_receive_buffer1::AbstractArray{mk_float,5},
         r_receive_buffer2::AbstractArray{mk_float,5}, r_spectral, r)
 
+        begin_sn_z_vzeta_vr_vz_region()
+
 	# differentiate f w.r.t r
 	@loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
 		@views derivative!(dfdr[ivz,ivr,ivzeta,iz,:,isn], f[ivz,ivr,ivzeta,iz,:,isn], r, r_spectral)
@@ -139,7 +145,7 @@ end
 Centered derivatives
 df/dz group of rountines for
 fields & moments -> [z,r]
-dfns (charged) -> [vpa,vperp,z,r,s]
+dfns (ion) -> [vpa,vperp,z,r,s]
 dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 """
 
@@ -150,6 +156,8 @@ function derivative_z!(dfdz::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
         dfdz_upper_endpoints::AbstractArray{mk_float,1},
         z_send_buffer::AbstractArray{mk_float,1},
         z_receive_buffer::AbstractArray{mk_float,1}, z_spectral, z)
+
+        begin_r_region()
 
 	# differentiate f w.r.t z
 	@loop_r ir begin
@@ -206,12 +214,14 @@ function derivative_z!(dfdz::AbstractArray{mk_float,3}, f::AbstractArray{mk_floa
     end
 end
 
-#5D version for f[vpa,vperp,z,r,s] -> dfn charged particles
+#5D version for f[vpa,vperp,z,r,s] -> dfn ions
 function derivative_z!(dfdz::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
         dfdz_lower_endpoints::AbstractArray{mk_float,4},
         dfdz_upper_endpoints::AbstractArray{mk_float,4},
         z_send_buffer::AbstractArray{mk_float,4},
         z_receive_buffer::AbstractArray{mk_float,4}, z_spectral, z)
+
+        begin_s_r_vperp_vpa_region()
 
 	# differentiate f w.r.t z
 	@loop_s_r_vperp_vpa is ir ivperp ivpa begin
@@ -237,6 +247,8 @@ function derivative_z!(dfdz::AbstractArray{mk_float,6}, f::AbstractArray{mk_floa
         z_send_buffer::AbstractArray{mk_float,5},
         z_receive_buffer::AbstractArray{mk_float,5}, z_spectral, z)
 
+        begin_sn_r_vzeta_vr_vz_region()
+
 	# differentiate f w.r.t z
 	@loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
 		@views derivative!(dfdz[ivz,ivr,ivzeta,:,ir,isn], f[ivz,ivr,ivzeta,:,ir,isn], z, z_spectral)
@@ -258,7 +270,7 @@ end
 Upwind derivatives
 df/dr group of rountines for
 fields & moments -> [z,r]
-dfns (charged) -> [vpa,vperp,z,r,s]
+dfns (ion) -> [vpa,vperp,z,r,s]
 dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 """
 
@@ -271,6 +283,8 @@ function derivative_r!(dfdr::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
         dfdr_upper_endpoints::AbstractArray{mk_float,1},
         r_receive_buffer1::AbstractArray{mk_float,1},
         r_receive_buffer2::AbstractArray{mk_float,1}, r_spectral, r)
+
+    begin_z_region()
 
     # differentiate f w.r.t r
     @loop_z iz begin
@@ -335,7 +349,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,3}, f::AbstractArray{mk_floa
 end
 
 #df/dr
-#5D version for f[vpa,vperp,z,r,s] -> charged particle dfn (species indexing taken outside this loop)
+#5D version for f[vpa,vperp,z,r,s] -> ion particle dfn
 function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
         advect, adv_fac_lower_buffer::AbstractArray{mk_float,4},
         adv_fac_upper_buffer::AbstractArray{mk_float,4},
@@ -343,6 +357,8 @@ function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
         dfdr_upper_endpoints::AbstractArray{mk_float,4},
         r_receive_buffer1::AbstractArray{mk_float,4},
         r_receive_buffer2::AbstractArray{mk_float,4}, r_spectral, r)
+
+        begin_s_z_vperp_vpa_region()
 
 	# differentiate f w.r.t r
 	@loop_s_z_vperp_vpa is iz ivperp ivpa begin
@@ -373,6 +389,8 @@ function derivative_r!(dfdr::AbstractArray{mk_float,6}, f::AbstractArray{mk_floa
         r_receive_buffer1::AbstractArray{mk_float,5},
         r_receive_buffer2::AbstractArray{mk_float,5}, r_spectral, r)
 
+        begin_sn_z_vzeta_vr_vz_region()
+
 	# differentiate f w.r.t r
 	@loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
 		@views derivative!(dfdr[ivz,ivr,ivzeta,iz,:,isn], f[ivz,ivr,ivzeta,iz,:,isn],
@@ -398,7 +416,7 @@ end
 Upwind derivatives
 df/dz group of rountines for
 fields & moments -> [z,r]
-dfns (charged) -> [vpa,vperp,z,r,s]
+dfns (ion) -> [vpa,vperp,z,r,s]
 dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 """
 
@@ -410,6 +428,8 @@ function derivative_z!(dfdz::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
         dfdz_upper_endpoints::AbstractArray{mk_float,1},
         z_send_buffer::AbstractArray{mk_float,1},
         z_receive_buffer::AbstractArray{mk_float,1}, z_spectral, z)
+
+    begin_r_region()
 
     # differentiate f w.r.t z
     @loop_r ir begin
@@ -472,7 +492,7 @@ function derivative_z!(dfdz::AbstractArray{mk_float,3}, f::AbstractArray{mk_floa
     end
 end
 
-#5D version for f[vpa,vperp,z,r,s] -> dfn charged particles
+#5D version for f[vpa,vperp,z,r,s] -> dfn ion particles
 function derivative_z!(dfdz::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
         advect, adv_fac_lower_buffer::AbstractArray{mk_float,4},
         adv_fac_upper_buffer::AbstractArray{mk_float,4},
@@ -480,6 +500,8 @@ function derivative_z!(dfdz::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
         dfdz_upper_endpoints::AbstractArray{mk_float,4},
         z_send_buffer::AbstractArray{mk_float,4},
         z_receive_buffer::AbstractArray{mk_float,4}, z_spectral, z)
+
+        begin_s_r_vperp_vpa_region()
 
 	# differentiate f w.r.t z
 	@loop_s_r_vperp_vpa is ir ivperp ivpa begin
@@ -509,6 +531,8 @@ function derivative_z!(dfdz::AbstractArray{mk_float,6}, f::AbstractArray{mk_floa
         dfdz_upper_endpoints::AbstractArray{mk_float,5},
         z_send_buffer::AbstractArray{mk_float,5},
         z_receive_buffer::AbstractArray{mk_float,5}, z_spectral, z)
+
+        begin_sn_r_vzeta_vr_vz_region()
 
 	# differentiate f w.r.t z
 	@loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin

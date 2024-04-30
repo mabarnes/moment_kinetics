@@ -28,7 +28,7 @@ function charge_exchange_collisions_1V!(f_out, f_neutral_out, fvec_in, moments,
                 f_out[:,1,:,:,is], fvec_in.pdf[:,1,:,:,is],
                 fvec_in.pdf_neutral[:,1,1,:,:,is],
                 fvec_in.density_neutral[:,:,is], fvec_in.upar[:,:,is],
-                fvec_in.uz_neutral[:,:,is], moments.charged.vth[:,:,is],
+                fvec_in.uz_neutral[:,:,is], moments.ion.vth[:,:,is],
                 moments.neutral.vth[:,:,is], moments, vpa, vz, charge_exchange_frequency,
                 vz_spectral, dt)
         end
@@ -42,7 +42,7 @@ function charge_exchange_collisions_1V!(f_out, f_neutral_out, fvec_in, moments,
                 f_neutral_out[:,1,1,:,:,isn], fvec_in.pdf_neutral[:,1,1,:,:,isn],
                 fvec_in.pdf[:,1,:,:,isn], fvec_in.density[:,:,isn],
                 fvec_in.uz_neutral[:,:,isn], fvec_in.upar[:,:,isn],
-                moments.neutral.vth[:,:,isn], moments.charged.vth[:,:,isn], moments,
+                moments.neutral.vth[:,:,isn], moments.ion.vth[:,:,isn], moments,
                 vz, vpa, charge_exchange_frequency, vpa_spectral, dt)
         end
     else
@@ -135,7 +135,7 @@ function charge_exchange_collisions_single_species!(f_out, pdf_in, pdf_other,
     end
 end
 
-function charge_exchange_collisions_3V!(f_out, f_neutral_out, f_neutral_gav_in, f_charged_vrvzvzeta_in, fvec_in, composition, vz, vr, vzeta, vpa, vperp, z, r,
+function charge_exchange_collisions_3V!(f_out, f_neutral_out, f_neutral_gav_in, f_ion_vrvzvzeta_in, fvec_in, composition, vz, vr, vzeta, vpa, vperp, z, r,
                                      charge_exchange_frequency, dt)
     # This routine assumes a 3V model with:
     @boundscheck vz.n == size(f_neutral_out,1) || throw(BoundsError(f_neutral_out))
@@ -144,12 +144,12 @@ function charge_exchange_collisions_3V!(f_out, f_neutral_out, f_neutral_gav_in, 
     @boundscheck z.n == size(f_neutral_out,4) || throw(BoundsError(f_neutral_out))
     @boundscheck r.n == size(f_neutral_out,5) || throw(BoundsError(f_neutral_out))
     @boundscheck composition.n_neutral_species == size(f_neutral_out,6) || throw(BoundsError(f_neutral_out))
-    @boundscheck vz.n == size(f_charged_vrvzvzeta_in,1) || throw(BoundsError(f_charged_vrvzvzeta_in))
-    @boundscheck vr.n == size(f_charged_vrvzvzeta_in,2) || throw(BoundsError(f_charged_vrvzvzeta_in))
-    @boundscheck vzeta.n == size(f_charged_vrvzvzeta_in,3) || throw(BoundsError(f_charged_vrvzvzeta_in))
-    @boundscheck z.n == size(f_charged_vrvzvzeta_in,4) || throw(BoundsError(f_charged_vrvzvzeta_in))
-    @boundscheck r.n == size(f_charged_vrvzvzeta_in,5) || throw(BoundsError(f_charged_vrvzvzeta_in))
-    @boundscheck composition.n_neutral_species == size(f_charged_vrvzvzeta_in,6) || throw(BoundsError(f_charged_vrvzvzeta_in))
+    @boundscheck vz.n == size(f_ion_vrvzvzeta_in,1) || throw(BoundsError(f_ion_vrvzvzeta_in))
+    @boundscheck vr.n == size(f_ion_vrvzvzeta_in,2) || throw(BoundsError(f_ion_vrvzvzeta_in))
+    @boundscheck vzeta.n == size(f_ion_vrvzvzeta_in,3) || throw(BoundsError(f_ion_vrvzvzeta_in))
+    @boundscheck z.n == size(f_ion_vrvzvzeta_in,4) || throw(BoundsError(f_ion_vrvzvzeta_in))
+    @boundscheck r.n == size(f_ion_vrvzvzeta_in,5) || throw(BoundsError(f_ion_vrvzvzeta_in))
+    @boundscheck composition.n_neutral_species == size(f_ion_vrvzvzeta_in,6) || throw(BoundsError(f_ion_vrvzvzeta_in))
     @boundscheck vpa.n == size(f_out,1) || throw(BoundsError(f_out))
     @boundscheck vperp.n == size(f_out,2) || throw(BoundsError(f_out))
     @boundscheck z.n == size(f_out,3) || throw(BoundsError(f_out))
@@ -181,7 +181,7 @@ function charge_exchange_collisions_3V!(f_out, f_neutral_out, f_neutral_gav_in, 
         for is ∈ 1:composition.n_ion_species
             f_neutral_out[ivz,ivr,ivzeta,iz,ir,isn] +=
                 dt*charge_exchange_frequency*(
-                    f_charged_vrvzvzeta_in[ivz,ivr,ivzeta,iz,ir,is]*fvec_in.density_neutral[iz,ir,isn]
+                    f_ion_vrvzvzeta_in[ivz,ivr,ivzeta,iz,ir,is]*fvec_in.density_neutral[iz,ir,isn]
                     - fvec_in.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]*fvec_in.density[iz,ir,is])
         end
     end

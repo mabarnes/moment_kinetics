@@ -87,7 +87,7 @@ vzeta_discretization = "chebyshev_pseudospectral"
  use_vpabar_in_mms_dfni=true
  alpha_switch=1.0
  type="default"
-[numerical_dissipation]
+[ion_numerical_dissipation]
 vpa_dissipation_coefficient = 0.001
 vperp_dissipation_coefficient = 0.0
 #z_dissipation_coefficient = 0.1

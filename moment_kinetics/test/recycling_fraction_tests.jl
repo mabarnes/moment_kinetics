@@ -105,7 +105,8 @@ test_input_split3 = merge(test_input_split2,
                                "vpa_nelement" => 31,
                                "vz_nelement" => 31,
                                "evolve_moments_parallel_pressure" => true,
-                               "numerical_dissipation" => Dict{String,Any}("force_minimum_pdf_value" => 0.0, "vpa_dissipation_coefficient" => 1e-2)))
+                               "ion_numerical_dissipation" => Dict{String,Any}("force_minimum_pdf_value" => 0.0, "vpa_dissipation_coefficient" => 1e-2),
+                               "neutral_numerical_dissipation" => Dict{String,Any}("force_minimum_pdf_value" => 0.0, "vz_dissipation_coefficient" => 1e-2)))
 test_input_split3["timestepping"] = merge(test_input_split3["timestepping"],
                                            Dict("dt" => 1.0e-5))
 
@@ -165,6 +166,10 @@ Run a test for a single set of parameters
 function run_test(test_input, expected_phi; rtol=4.e-14, atol=1.e-15, args...)
     # by passing keyword arguments to run_test, args becomes a Tuple of Pairs which can be
     # used to update the default inputs
+
+    # Make a copy to make sure nothing modifies the input Dicts defined in this test
+    # script.
+    test_input = deepcopy(test_input)
 
     # Convert keyword arguments to a unique name
     name = test_input["run_name"]

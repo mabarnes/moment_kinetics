@@ -84,10 +84,16 @@ active = true
 source_type = "recycling"
 recycling_controller_fraction = 0.25
 
-[numerical_dissipation]
+[ion_numerical_dissipation]
 #vpa_dissipation_coefficient = 1.0e-1
 #vpa_dissipation_coefficient = 1.0e-2
 #vpa_dissipation_coefficient = 1.0e-3
+#force_minimum_pdf_value = 0.0
+
+[neutral_numerical_dissipation]
+#vz_dissipation_coefficient = 1.0e-1
+#vz_dissipation_coefficient = 1.0e-2
+#vz_dissipation_coefficient = 1.0e-3
 #force_minimum_pdf_value = 0.0
 
 [krook_collisions]
