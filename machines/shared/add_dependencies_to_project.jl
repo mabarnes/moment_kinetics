@@ -101,6 +101,9 @@ elseif Sys.isapple()
             MPIPreferences.use_system_binary()
         catch
             println("Failed to auto-detect path of MPI library...")
+
+            local mpi_library_path
+
             default_mpi_library_path = get(mk_preferences, "mpi_library_path", "")
             mpi_library_path = get_input_with_path_completion(
                 "\nEnter the full path to your MPI library (e.g. something like "
@@ -110,6 +113,8 @@ elseif Sys.isapple()
             end
 
             MPIPreferences.use_system_binary(library_names=mpi_library_path)
+
+            global mk_preferences, local_preferences
 
             # Just got the value for the setting, now write it to LocalPreferences.toml
             mk_preferences["mpi_library_path"] = mpi_library_path
