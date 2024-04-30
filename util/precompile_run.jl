@@ -67,7 +67,8 @@ for input ∈ [base_input, cheb_input, wall_bc_input, wall_bc_cheb_input]
 end
 
 collisions_input = merge(wall_bc_cheb_input, Dict("n_neutral_species" => 0,
-                                                  "nuii" => 1.0,
+                                                  "krook_collisions" => Dict{String,Any}("use_krook" => true),
+                                                  "fokker_planck_collisions" => Dict{String,Any}("use_fokker_planck" => true, "self_collisions" => true, "slowing_down_test" => true),
                                                   "vperp_discretization" => "gausslegendre_pseudospectral",
                                                   "vpa_discretization" => "gausslegendre_pseudospectral",
                                                  ))
