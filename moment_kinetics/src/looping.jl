@@ -145,7 +145,7 @@ function get_local_range(sub_block_rank, sub_block_size, dim_size)
     # This calculation is not at all optimized, but is not going to take long, and is
     # only done in initialization, so it is more important to be simple and robust.
 
-    if dim_size == 0
+    if dim_size == 0 || sub_block_rank ≥ sub_block_size
         # No processor includes a grid point
         return 1:0
     end
@@ -269,6 +269,10 @@ function get_ranges_from_split(block_rank, effective_block_size, split, dim_size
     if block_rank ≥ effective_block_size
         # This process is not needed by this split
         return [1:0 for _ ∈ dim_sizes_list]
+    end
+    if effective_block_size < prod(split)
+        error("effective_block_size=$effective_block_size is smaller than "
+              * "prod(split)=", prod(split))
     end
 
     # Get rank of this process in each sub-block (with sub-block sizes given by split).
