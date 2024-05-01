@@ -72,7 +72,11 @@ collisions_input = merge(wall_bc_cheb_input, Dict("n_neutral_species" => 0,
                                                   "vperp_discretization" => "gausslegendre_pseudospectral",
                                                   "vpa_discretization" => "gausslegendre_pseudospectral",
                                                  ))
-push!(inputs_list, collisions_input)
+# add an additional input for every geometry option available in addition to the default
+geo_input1 = merge(wall_bc_cheb_input, Dict("n_neutral_species" => 0,
+                                            "geometry" => Dict{String,Any}("option" => "1D-mirror", "DeltaB" => 0.5, "pitch" => 0.5, "rhostar" => 1.0))) 
+
+push!(inputs_list, collisions_input, geo_input1)
 
 for input in inputs_list
     run_moment_kinetics(input)
