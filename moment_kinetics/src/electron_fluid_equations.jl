@@ -9,6 +9,7 @@ export calculate_electron_qpar_from_pdf!
 export update_electron_vth_temperature!
 
 using ..communication
+using ..derivatives: derivative_z!
 using ..looping
 using ..input_structs: boltzmann_electron_response_with_simple_sheath
 using ..input_structs: braginskii_fluid, kinetic_electrons

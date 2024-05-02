@@ -295,7 +295,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
             speedup_hack!(scratch[istage+1], scratch[istage], z_speedup_fac, z, vpa;
                           evolve_ppar=evolve_ppar)
 
-            rk_update_variable!(scratch, :pdf_electron, t_params, istage)
+            rk_update_variable!(scratch, nothing, :pdf_electron, t_params, istage)
 
             latest_pdf = scratch[istage+1].pdf_electron
             begin_r_z_vperp_vpa_region()
@@ -403,7 +403,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                 end
             end
             if evolve_ppar
-                rk_update_variable!(scratch, :electron_ppar, t_params, istage)
+                rk_update_variable!(scratch, nothing, :electron_ppar, t_params, istage)
                 moments_struct_ppar = moments.electron.ppar
                 scratch_ppar = scratch[istage+1].electron_ppar
                 @loop_r_z ir iz begin
@@ -1278,7 +1278,7 @@ function electron_adaptive_timestep_update!(scratch, t, t_params, moments, z_adv
 
     # Calculate error ion distribution functions
     # Note rk_error_variable!() stores the calculated error in `scratch[2]`.
-    rk_error_variable!(scratch, :pdf_electron, t_params)
+    rk_error_variable!(scratch, nothing, :pdf_electron, t_params)
     pdf_error = local_error_norm(scratch[2].pdf_electron,
                                  scratch[t_params.n_rk_stages+1].pdf_electron,
                                  t_params.rtol, t_params.atol; method=error_norm_method,
@@ -1290,7 +1290,7 @@ function electron_adaptive_timestep_update!(scratch, t, t_params, moments, z_adv
     # Calculate error for moments, if necessary
     if evolve_ppar
         begin_r_z_region()
-        rk_error_variable!(scratch, :electron_ppar, t_params)
+        rk_error_variable!(scratch, nothing, :electron_ppar, t_params)
         p_err = local_error_norm(scratch[2].electron_ppar,
                                  scratch[t_params.n_rk_stages+1].electron_ppar,
                                  t_params.rtol, t_params.atol; method=error_norm_method,

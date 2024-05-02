@@ -73,7 +73,8 @@ using ..electron_fluid_equations: calculate_electron_density!
 using ..electron_fluid_equations: calculate_electron_upar_from_charge_conservation!
 using ..electron_fluid_equations: calculate_electron_qpar!, electron_fluid_qpar_boundary_condition!
 using ..electron_fluid_equations: calculate_electron_parallel_friction_force!
-using ..electron_fluid_equations: electron_energy_equation!, update_electron_vth_temperature!
+using ..electron_fluid_equations: electron_energy_equation!,
+                                  update_electron_vth_temperature!
 using ..input_structs: braginskii_fluid
 using ..derivatives: derivative_z!
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
