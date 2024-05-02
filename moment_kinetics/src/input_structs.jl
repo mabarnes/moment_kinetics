@@ -38,7 +38,7 @@ end
 an option but known at compile time when a `time_info` struct is passed as a function
 argument.
 """
-struct time_info{Terrorsum <: Real}
+struct time_info{Terrorsum <: Real, Trkimp, Timpzero}
     n_variables::mk_int
     nstep::mk_int
     end_time::mk_float
@@ -59,6 +59,8 @@ struct time_info{Terrorsum <: Real}
     dfns_output_times::Vector{mk_float}
     type::String
     rk_coefs::Array{mk_float,2}
+    rk_coefs_implicit::Trkimp
+    implicit_coefficient_is_zero::Timpzero
     n_rk_stages::mk_int
     rk_order::mk_int
     adaptive::Bool

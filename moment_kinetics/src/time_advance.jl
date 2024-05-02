@@ -233,7 +233,8 @@ Create a [`input_structs.time_info`](@ref) struct using the settings in `t_input
 """
 function setup_time_info(t_input, n_variables, code_time, dt_reload,
                          dt_before_last_fail_reload, manufactured_solns_input, io_input)
-    rk_coefs, n_rk_stages, rk_order, adaptive, low_storage, CFL_prefactor =
+    rk_coefs, rk_coefs_implicit, implicit_coefficient_is_zero, n_rk_stages, rk_order,
+    adaptive, low_storage, CFL_prefactor =
         setup_runge_kutta_coefficients!(t_input.type,
                                         t_input.CFL_prefactor,
                                         t_input.split_operators)
@@ -296,8 +297,9 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      next_output_time, dt_before_output, dt_before_last_fail,
                      CFL_prefactor, step_to_output, Ref(0), Ref(0), mk_int[], mk_int[],
                      t_input.nwrite, t_input.nwrite_dfns, moments_output_times,
-                     dfns_output_times, t_input.type, rk_coefs, n_rk_stages, rk_order,
-                     adaptive, low_storage, t_input.rtol, t_input.atol, t_input.atol_upar,
+                     dfns_output_times, t_input.type, rk_coefs, rk_coefs_implicit,
+                     implicit_coefficient_is_zero, n_rk_stages, rk_order, adaptive,
+                     low_storage, t_input.rtol, t_input.atol, t_input.atol_upar,
                      t_input.step_update_prefactor, t_input.max_increase_factor,
                      t_input.max_increase_factor_near_last_fail,
                      t_input.last_fail_proximity_factor, t_input.minimum_dt,
@@ -422,7 +424,13 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
 
     # create an array of structs containing scratch arrays for the pdf and low-order moments
     # that may be evolved separately via fluid equations
-    scratch = setup_scratch_arrays(moments, pdf.ion.norm, pdf.neutral.norm, t_params.n_rk_stages)
+    n_rk_stages = t_params.n_rk_stages
+    scratch = setup_scratch_arrays(moments, pdf, n_rk_stages + 1)
+    if t_params.rk_coefs_implicit !== nothing
+        scratch_implicit = setup_scratch_arrays(moments, pdf, n_rk_stages)
+    else
+        scratch_implicit = nothing
+    end
     # setup dummy arrays & buffer arrays for z r MPI
     n_neutral_species_alloc = max(1,composition.n_neutral_species)
     # create arrays for Fokker-Planck collisions 
@@ -644,8 +652,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     # Ensure all processes are synchronized at the end of the setup
     _block_synchronize()
 
-    return moments, spectral_objects, scratch, advance, t_params, fp_arrays, gyroavs,
-           manufactured_source_list
+    return moments, spectral_objects, scratch, scratch_implicit, advance, t_params,
+           fp_arrays, gyroavs, manufactured_source_list
 end
 
 """
@@ -937,16 +945,19 @@ end
 create an array of structs containing scratch arrays for the normalised pdf and low-order moments
 that may be evolved separately via fluid equations
 """
-function setup_scratch_arrays(moments, pdf_ion_in, pdf_neutral_in, n_rk_stages)
-    # create n_rk_stages+1 structs, each of which will contain one pdf,
-    # one density, and one parallel flow array
-    scratch = Vector{scratch_pdf{5,3,6,3}}(undef, n_rk_stages+1)
-    pdf_dims = size(pdf_ion_in)
+function setup_scratch_arrays(moments, pdf, n)
+    # will create n_rk_stages+1 structs, each of which will contain one pdf,
+    # density, parallel flow, parallel pressure, and perpendicular pressure array for ions
+    # (possibly) the same for electrons, and the same for neutrals. The actual array will
+    # be created at the end of the first step of the loop below, once we have a
+    # `scratch_pdf` object of the correct type.
+    scratch = Vector{scratch_pdf{5,3,6,3}}(undef, n)
+    pdf_dims = size(pdf.ion.norm)
     moment_dims = size(moments.ion.dens)
-    pdf_neutral_dims = size(pdf_neutral_in)
+    pdf_neutral_dims = size(pdf.neutral.norm)
     moment_neutral_dims = size(moments.neutral.dens)
     # populate each of the structs
-    for istage ∈ 1:n_rk_stages+1
+    for istage ∈ 1:n
         # Allocate arrays in temporary variables so that we can identify them
         # by source line when using @debug_shared_array
         pdf_array = allocate_shared_float(pdf_dims...)
@@ -967,13 +978,13 @@ function setup_scratch_arrays(moments, pdf_ion_in, pdf_neutral_in, n_rk_stages)
                                       pdf_neutral_array, density_neutral_array,
                                       uz_neutral_array, pz_neutral_array)
         @serial_region begin
-            scratch[istage].pdf .= pdf_ion_in
+            scratch[istage].pdf .= pdf.ion.norm
             scratch[istage].density .= moments.ion.dens
             scratch[istage].upar .= moments.ion.upar
             scratch[istage].ppar .= moments.ion.ppar
             scratch[istage].pperp .= moments.ion.pperp
 
-            scratch[istage].pdf_neutral .= pdf_neutral_in
+            scratch[istage].pdf_neutral .= pdf.neutral.norm
             scratch[istage].density_neutral .= moments.neutral.dens
             scratch[istage].uz_neutral .= moments.neutral.uz
             scratch[istage].pz_neutral .= moments.neutral.pz
@@ -992,7 +1003,7 @@ time integrator can be used without severe CFL condition
 """
 function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
-           composition, collisions, geometry, gyroavs, boundary_distributions, 
+           composition, collisions, geometry, gyroavs, boundary_distributions,
            external_source_settings, num_diss_params, advance, fp_arrays, scratch_dummy,
            manufactured_source_list, ascii_io, io_moments, io_dfns)
 
@@ -1063,16 +1074,21 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
         
         if t_params.split_operators
             # MRH NOT SUPPORTED
-            time_advance_split_operators!(pdf, scratch, t, t_params, vpa, z,
-                vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-                composition, collisions, external_source_settings, num_diss_params,
-                advance, t_params.step_counter[])
+            time_advance_split_operators!(pdf, scratch, scratch_implicit, t, t_params,
+                                          vpa, z, vpa_spectral, z_spectral, moments,
+                                          fields, vpa_advect, z_advect, composition,
+                                          collisions, external_source_settings,
+                                          num_diss_params, advance,
+                                          t_params.step_counter[])
         else
-            time_advance_no_splitting!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
-                moments, fields, spectral_objects, advect_objects,
-                composition, collisions, geometry, gyroavs, boundary_distributions,
-                external_source_settings, num_diss_params, advance, fp_arrays,  scratch_dummy,
-                manufactured_source_list, diagnostic_checks, t_params.step_counter[])
+            time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, vz,
+                                       vr, vzeta, vpa, vperp, gyrophase, z, r, moments,
+                                       fields, spectral_objects, advect_objects,
+                                       composition, collisions, geometry, gyroavs,
+                                       boundary_distributions, external_source_settings,
+                                       num_diss_params, advance, fp_arrays,
+                                       scratch_dummy, manufactured_source_list,
+                                       diagnostic_checks, t_params.step_counter[])
         end
         # update the time
         t += t_params.previous_dt[]
@@ -1302,9 +1318,11 @@ end
 
 """
 """
-function time_advance_split_operators!(pdf, scratch, t, t_params, vpa, z,
-    vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-    composition, collisions, external_source_settings, num_diss_params, advance, istep)
+function time_advance_split_operators!(pdf, scratch, scratch_implicit, t, t_params, vpa,
+                                       z, vpa_spectral, z_spectral, moments, fields,
+                                       vpa_advect, z_advect, composition, collisions,
+                                       external_source_settings, num_diss_params, advance,
+                                       istep)
 
     # define some abbreviated variables for tidiness
     n_ion_species = composition.n_ion_species
@@ -1317,7 +1335,7 @@ function time_advance_split_operators!(pdf, scratch, t, t_params, vpa, z,
         # advance the operator-split 1D advection equation in vpa
         # vpa-advection only applies for ion species
         advance.vpa_advection = true
-        time_advance_no_splitting!(pdf, scratch, t, t_params, vpa, z,
+        time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, vpa, z,
             vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
             composition, collisions, external_source_settings, num_diss_params, advance,
             istep)
@@ -1325,7 +1343,7 @@ function time_advance_split_operators!(pdf, scratch, t, t_params, vpa, z,
         # z_advection! advances the operator-split 1D advection equation in z
         # apply z-advection operation to all species (ion and neutral)
         advance.z_advection = true
-        time_advance_no_splitting!(pdf, scratch, t, t_params, vpa, z,
+        time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, vpa, z,
             vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
             composition, collisions, external_source_settings, num_diss_params, advance,
             istep)
@@ -1334,7 +1352,7 @@ function time_advance_split_operators!(pdf, scratch, t, t_params, vpa, z,
         if composition.n_neutral_species > 0
             if collisions.charge_exchange > 0.0
                 advance.cx_collisions = true
-                time_advance_no_splitting!(pdf, scratch, t, t_params, vpa, z,
+                time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, vpa, z,
                     vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
                     composition, collisions, external_source_settings, num_diss_params,
                     advance, istep)
@@ -1342,7 +1360,7 @@ function time_advance_split_operators!(pdf, scratch, t, t_params, vpa, z,
             end
             if collisions.ionization > 0.0
                 advance.ionization_collisions = true
-                time_advance_no_splitting!(pdf, scratch, t, t_params, z, vpa,
+                time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, z, vpa,
                     z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
                     composition, collisions, external_source_settings, num_diss_params,
                     advance, istep)
@@ -1351,7 +1369,7 @@ function time_advance_split_operators!(pdf, scratch, t, t_params, vpa, z,
         end
         if collisions.krook_collision_frequency_prefactor  > 0.0
             advance.krook_collisions_ii = true
-            time_advance_no_splitting!(pdf, scratch, t, t_params, z, vpa,
+            time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, z, vpa,
                 z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
                 z_SL, vpa_SL, composition, collisions, sources, num_diss_params,
                 advance, istep)
@@ -1361,7 +1379,7 @@ function time_advance_split_operators!(pdf, scratch, t, t_params, vpa, z,
         # to the kinetic equation
         if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
             advance.source_terms = true
-            time_advance_no_splitting!(pdf, scratch, t, t_params, vpa, z,
+            time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
                 composition, collisions, external_source_settings, num_diss_params,
                 advance, istep)
@@ -1370,7 +1388,7 @@ function time_advance_split_operators!(pdf, scratch, t, t_params, vpa, z,
         # use the continuity equation to update the density
         if moments.evolve_density
             advance.continuity = true
-            time_advance_no_splitting!(pdf, scratch, t, t_params, vpa, z,
+            time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
                 composition, collisions, external_source_settings, num_diss_params,
                 advance, istep)
@@ -1379,7 +1397,7 @@ function time_advance_split_operators!(pdf, scratch, t, t_params, vpa, z,
         # use force balance to update the parallel flow
         if moments.evolve_upar
             advance.force_balance = true
-            time_advance_no_splitting!(pdf, scratch, t, t_params, vpa, z,
+            time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
                 composition, collisions, external_source_settings, num_diss_params,
                 advance, istep)
@@ -1388,7 +1406,7 @@ function time_advance_split_operators!(pdf, scratch, t, t_params, vpa, z,
         # use the energy equation to update the parallel pressure
         if moments.evolve_ppar
             advance.energy = true
-            time_advance_no_splitting!(pdf, scratch, t, t_params, vpa, z,
+            time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
                 composition, collisions, external_source_settings, num_diss_params,
                 advance, istep)
@@ -1398,7 +1416,7 @@ function time_advance_split_operators!(pdf, scratch, t, t_params, vpa, z,
         # use the energy equation to update the parallel pressure
         if moments.evolve_ppar
             advance.energy = true
-            time_advance_no_splitting!(pdf, scratch, t, t_params, vpa, z,
+            time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
                 composition, collisions, external_source_settings, num_diss_params,
                 advance, istep)
@@ -1407,7 +1425,7 @@ function time_advance_split_operators!(pdf, scratch, t, t_params, vpa, z,
         # use force balance to update the parallel flow
         if moments.evolve_upar
             advance.force_balance = true
-            time_advance_no_splitting!(pdf, scratch, t, t_params, vpa, z,
+            time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
                 composition, collisions, external_source_settings, num_diss_params,
                 advance, istep)
@@ -1416,7 +1434,7 @@ function time_advance_split_operators!(pdf, scratch, t, t_params, vpa, z,
         # use the continuity equation to update the density
         if moments.evolve_density
             advance.continuity = true
-            time_advance_no_splitting!(pdf, scratch, t, t_params, vpa, z,
+            time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
                 composition, collisions, external_source_settings, num_diss_params,
                 advance, istep)
@@ -1426,7 +1444,7 @@ function time_advance_split_operators!(pdf, scratch, t, t_params, vpa, z,
         # to the kinetic equation
         if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
             advance.source_terms = true
-            time_advance_no_splitting!(pdf, scratch, t, t_params, vpa, z,
+            time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
                 composition, collisions, external_source_settings, num_diss_params,
                 advance, istep)
@@ -1436,7 +1454,7 @@ function time_advance_split_operators!(pdf, scratch, t, t_params, vpa, z,
         if composition.n_neutral_species > 0
             if collisions.ionization > 0.0
                 advance.ionization = true
-                time_advance_no_splitting!(pdf, scratch, t, t_params, z, vpa,
+                time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, z, vpa,
                     z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
                     composition, collisions, external_source_settings, num_diss_params,
                     advance, istep)
@@ -1444,7 +1462,7 @@ function time_advance_split_operators!(pdf, scratch, t, t_params, vpa, z,
             end
             if collisions.charge_exchange > 0.0
                 advance.cx_collisions = true
-                time_advance_no_splitting!(pdf, scratch, t, t_params, vpa, z,
+                time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, vpa, z,
                     vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
                     composition, collisions, external_source_settings, num_diss_params,
                     advance, istep)
@@ -1454,7 +1472,7 @@ function time_advance_split_operators!(pdf, scratch, t, t_params, vpa, z,
         # z_advection! advances the operator-split 1D advection equation in z
         # apply z-advection operation to all species (ion and neutral)
         advance.z_advection = true
-        time_advance_no_splitting!(pdf, scratch, t, t_params, vpa, z,
+        time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, vpa, z,
             vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
             composition, collisions, external_source_settings, num_diss_params, advance,
             istep)
@@ -1462,7 +1480,7 @@ function time_advance_split_operators!(pdf, scratch, t, t_params, vpa, z,
         # advance the operator-split 1D advection equation in vpa
         # vpa-advection only applies for ion species
         advance.vpa_advection = true
-        time_advance_no_splitting!(pdf, scratch, t, t_params, vpa, z,
+        time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, vpa, z,
             vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
             composition, collisions, external_source_settings, num_diss_params, advance,
             istep)
@@ -1473,16 +1491,19 @@ end
 
 """
 """
-function time_advance_no_splitting!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
-           moments, fields, spectral_objects, advect_objects,
-           composition, collisions, geometry, gyroavs, boundary_distributions,
-           external_source_settings, num_diss_params, advance, fp_arrays, scratch_dummy,
-           manufactured_source_list, diagnostic_checks, istep)
+function time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, vz, vr,
+                                    vzeta, vpa, vperp, gyrophase, z, r, moments, fields,
+                                    spectral_objects, advect_objects, composition,
+                                    collisions, geometry, gyroavs, boundary_distributions,
+                                    external_source_settings, num_diss_params, advance,
+                                    fp_arrays, scratch_dummy, manufactured_source_list,
+                                    diagnostic_checks, istep)
 
-    ssp_rk!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
-        moments, fields, spectral_objects, advect_objects, composition, collisions,
-        geometry, gyroavs, boundary_distributions, external_source_settings, num_diss_params,
-        advance, fp_arrays, scratch_dummy, manufactured_source_list, diagnostic_checks, istep)
+    ssp_rk!(pdf, scratch, scratch_implicit, t, t_params, vz, vr, vzeta, vpa, vperp,
+            gyrophase, z, r, moments, fields, spectral_objects, advect_objects,
+            composition, collisions, geometry, gyroavs, boundary_distributions,
+            external_source_settings, num_diss_params, advance, fp_arrays, scratch_dummy,
+            manufactured_source_list, diagnostic_checks, istep)
 
     return nothing
 end
@@ -1491,7 +1512,7 @@ end
 Use the result of the forward-Euler timestep and the previous Runge-Kutta stages to
 compute the updated pdfs, and any evolved moments.
 """
-function rk_update!(scratch, moments, t_params, istage, composition)
+function rk_update!(scratch, scratch_implicit, moments, t_params, istage, composition)
     begin_s_r_z_region()
 
     new_scratch = scratch[istage+1]
@@ -1503,17 +1524,17 @@ function rk_update!(scratch, moments, t_params, istage, composition)
     ##
     # here we seem to have duplicate arrays for storing n, u||, p||, etc, but not for vth
     # 'scratch' is for the multiple stages of time advanced quantities, but 'moments' can be updated directly at each stage
-    rk_update_variable!(scratch, :pdf, t_params, istage)
+    rk_update_variable!(scratch, scratch_implicit, :pdf, t_params, istage)
     # use Runge Kutta to update any velocity moments evolved separately from the pdf
-    rk_update_evolved_moments!(scratch, moments, t_params, istage)
+    rk_update_evolved_moments!(scratch, scratch_implicit, moments, t_params, istage)
 
     if composition.n_neutral_species > 0
         ##
         # update the neutral particle distribution and moments
         ##
-        rk_update_variable!(scratch, :pdf_neutral, t_params, istage; neutrals=true)
+        rk_update_variable!(scratch, scratch_implicit, :pdf_neutral, t_params, istage; neutrals=true)
         # use Runge Kutta to update any velocity moments evolved separately from the pdf
-        rk_update_evolved_moments_neutral!(scratch, moments, t_params, istage)
+        rk_update_evolved_moments_neutral!(scratch, scratch_implicit, moments, t_params, istage)
     end
 end
 
@@ -1639,14 +1660,20 @@ function apply_all_bcs_constraints_update_moments!(
 end
 
 """
-    adaptive_timestep_update!(scratch, t_params, rk_coefs, moments, n_neutral_species)
+    adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, moments,
+                              fields, composition, collisions, geometry,
+                              external_source_settings, spectral_objects,
+                              advect_objects, gyroavs, num_diss_params, advance,
+                              scratch_dummy, r, z, vperp, vpa, vzeta, vr, vz)
 
 Check the error estimate for the embedded RK method and adjust the timestep if
 appropriate.
 """
-function adaptive_timestep_update!(scratch, t, t_params, moments, fields, composition,
-                                   collisions, geometry, external_source_settings,
-                                   advect_objects, r, z, vperp, vpa, vzeta, vr, vz)
+function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, moments,
+                                   fields, composition, collisions, geometry,
+                                   external_source_settings, spectral_objects,
+                                   advect_objects, gyroavs, num_diss_params, advance,
+                                   scratch_dummy, r, z, vperp, vpa, vzeta, vr, vz)
     #error_norm_method = "Linf"
     error_norm_method = "L2"
 
@@ -1715,10 +1742,11 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
 
     # Calculate error for ion distribution functions
     # Note rk_error_variable!() stores the calculated error in `scratch[2]`.
-    rk_error_variable!(scratch, :pdf, t_params)
-    ion_pdf_error = local_error_norm(scratch[2].pdf, scratch[end].pdf, t_params.rtol,
-                                     t_params.atol; method=error_norm_method,
-                                     skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
+    rk_error_variable!(scratch, scratch_implicit, :pdf, t_params)
+    ion_pdf_error = local_error_norm(scratch[2].pdf, scratch[t_params.n_rk_stages+1].pdf,
+                                     t_params.rtol, t_params.atol;
+                                     method=error_norm_method, skip_r_inner=skip_r_inner,
+                                     skip_z_lower=skip_z_lower,
                                      error_sum_zero=t_params.error_sum_zero)
     push!(error_norms, ion_pdf_error)
     push!(total_points,
@@ -1727,8 +1755,9 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
     # Calculate error for ion moments, if necessary
     if moments.evolve_density
         begin_s_r_z_region()
-        rk_error_variable!(scratch, :density, t_params)
-        ion_n_err = local_error_norm(scratch[2].density, scratch[end].density,
+        rk_error_variable!(scratch, scratch_implicit, :density, t_params)
+        ion_n_err = local_error_norm(scratch[2].density,
+                                     scratch[t_params.n_rk_stages+1].density,
                                      t_params.rtol, t_params.atol;
                                      method=error_norm_method, skip_r_inner=skip_r_inner,
                                      skip_z_lower=skip_z_lower,
@@ -1738,8 +1767,9 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
     end
     if moments.evolve_upar
         begin_s_r_z_region()
-        rk_error_variable!(scratch, :upar, t_params)
-        ion_u_err = local_error_norm(scratch[2].upar, scratch[end].upar, t_params.rtol,
+        rk_error_variable!(scratch, scratch_implicit, :upar, t_params)
+        ion_u_err = local_error_norm(scratch[2].upar,
+                                     scratch[t_params.n_rk_stages+1].upar, t_params.rtol,
                                      t_params.atol; method=error_norm_method,
                                      skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
                                      error_sum_zero=t_params.error_sum_zero)
@@ -1748,8 +1778,9 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
     end
     if moments.evolve_ppar
         begin_s_r_z_region()
-        rk_error_variable!(scratch, :ppar, t_params)
-        ion_p_err = local_error_norm(scratch[2].ppar, scratch[end].ppar, t_params.rtol,
+        rk_error_variable!(scratch, scratch_implicit, :ppar, t_params)
+        ion_p_err = local_error_norm(scratch[2].ppar,
+                                     scratch[t_params.n_rk_stages+1].ppar, t_params.rtol,
                                      t_params.atol; method=error_norm_method,
                                      skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
                                      error_sum_zero=t_params.error_sum_zero)
@@ -1790,7 +1821,7 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         push!(CFL_limits, t_params.CFL_prefactor * neutral_vz_CFL)
 
         # Calculate error for neutral distribution functions
-        rk_error_variable!(scratch, :pdf_neutral, t_params; neutrals=true)
+        rk_error_variable!(scratch, scratch_implicit, :pdf_neutral, t_params; neutrals=true)
         neut_pdf_error = local_error_norm(scratch[2].pdf_neutral,
                                           scratch[end].pdf_neutral, t_params.rtol,
                                           t_params.atol; method=error_norm_method,
@@ -1805,7 +1836,7 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         # Calculate error for neutral moments, if necessary
         if moments.evolve_density
             begin_sn_r_z_region()
-            rk_error_variable!(scratch, :density_neutral, t_params; neutrals=true)
+            rk_error_variable!(scratch, scratch_implicit, :density_neutral, t_params; neutrals=true)
             neut_n_err = local_error_norm(scratch[2].density_neutral,
                                           scratch[end].density_neutral, t_params.rtol,
                                           t_params.atol, true; method=error_norm_method,
@@ -1817,8 +1848,9 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         end
         if moments.evolve_upar
             begin_sn_r_z_region()
-            rk_error_variable!(scratch, :uz_neutral, t_params; neutrals=true)
-            neut_u_err = local_error_norm(scratch[2].uz_neutral, scratch[end].uz_neutral,
+            rk_error_variable!(scratch, scratch_implicit, :uz_neutral, t_params; neutrals=true)
+            neut_u_err = local_error_norm(scratch[2].uz_neutral,
+                                          scratch[t_params.n_rk_stages+1].uz_neutral,
                                           t_params.rtol, t_params.atol, true;
                                           method=error_norm_method,
                                           skip_r_inner=skip_r_inner,
@@ -1829,8 +1861,9 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
         end
         if moments.evolve_ppar
             begin_sn_r_z_region()
-            rk_error_variable!(scratch, :pz_neutral, t_params; neutrals=true)
-            neut_p_err = local_error_norm(scratch[2].pz_neutral, scratch[end].pz_neutral,
+            rk_error_variable!(scratch, scratch_implicit, :pz_neutral, t_params; neutrals=true)
+            neut_p_err = local_error_norm(scratch[2].pz_neutral,
+                                          scratch[t_params.n_rk_stages+1].pz_neutral,
                                           t_params.rtol, t_params.atol, true;
                                           method=error_norm_method,
                                           skip_r_inner=skip_r_inner,
@@ -1943,10 +1976,11 @@ end
 
 """
 """
-function ssp_rk!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
-           moments, fields, spectral_objects, advect_objects, composition, collisions,
-           geometry, gyroavs, boundary_distributions, external_source_settings, num_diss_params,
-           advance, fp_arrays, scratch_dummy, manufactured_source_list,diagnostic_checks, istep)
+function ssp_rk!(pdf, scratch, scratch_implicit, t, t_params, vz, vr, vzeta, vpa, vperp,
+                 gyrophase, z, r, moments, fields, spectral_objects, advect_objects,
+                 composition, collisions, geometry, gyroavs, boundary_distributions,
+                 external_source_settings, num_diss_params, advance, fp_arrays,
+                 scratch_dummy, manufactured_source_list,diagnostic_checks, istep)
 
     begin_s_r_z_region()
 
@@ -1982,22 +2016,34 @@ function ssp_rk!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyrophase
     end
 
     for istage ∈ 1:n_rk_stages
+        if global_rank[] == 0
+            println("ion step ", t_params.step_counter[], ".", istage, " ", t)
+        end
         # do an Euler time advance, with scratch[2] containing the advanced quantities
         # and scratch[1] containing quantities at time level n
         update_solution_vector!(scratch, moments, istage, composition, vpa, vperp, z, r)
         # calculate f^{(1)} = fⁿ + Δt*G[fⁿ] = scratch[2].pdf
-        euler_time_advance!(scratch[istage+1], scratch[istage],
-            pdf, fields, moments,
-            advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t,
-            t_params.dt[], spectral_objects, composition,
-            collisions, geometry, scratch_dummy, manufactured_source_list,
-            external_source_settings, num_diss_params, advance, fp_arrays, istage)
+        euler_time_advance!(scratch[istage+1], old_scratch, pdf, fields, moments,
+                            advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z,
+                            r, t, t_params.dt[], spectral_objects, composition,
+                            collisions, geometry, scratch_dummy,
+                            manufactured_source_list, external_source_settings,
+                            num_diss_params, advance, fp_arrays, istage)
+
         diagnostic_moments = diagnostic_checks && istage == n_rk_stages
         rk_update!(scratch, scratch_implicit, moments, t_params, istage, composition)
         apply_all_bcs_constraints_update_moments!(
             scratch[istage+1], moments, fields, boundary_distributions, vz, vr, vzeta,
             vpa, vperp, z, r, spectral_objects, advect_objects, composition, geometry,
             gyroavs, num_diss_params, advance, scratch_dummy, diagnostic_moments)
+    end
+
+    if t_params.adaptive
+        adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, moments, fields,
+                                  composition, collisions, geometry,
+                                  external_source_settings, spectral_objects,
+                                  advect_objects, gyroavs, num_diss_params, advance,
+                                  scratch_dummy, r, z, vperp, vpa, vzeta, vr, vz)
     end
 
     istage = n_rk_stages+1
@@ -2292,13 +2338,22 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     return nothing
 end
 
+function backward_euler!(fvec_out, fvec_in, pdf, fields, moments, advect_objects, vz, vr,
+                         vzeta, vpa, vperp, gyrophase, z, r, t, dt, spectral_objects,
+                         composition, collisions, geometry, scratch_dummy,
+                         manufactured_source_list, external_source_settings,
+                         num_diss_params, advance, fp_arrays, istage)
+
+    # No terms supported here yet
+
+    return nothing
+end
+
 """
 update the vector containing the pdf and any evolved moments of the pdf
 for use in the Runge-Kutta time advance
 """
-function update_solution_vector!(evolved, moments, istage, composition, vpa, vperp, z, r)
-    new_evolved = evolved[istage+1]
-    old_evolved = evolved[istage]
+function update_solution_vector!(new_evolved, old_evolved, moments, composition, vpa, vperp, z, r)
     begin_s_r_z_region()
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         new_evolved.pdf[ivpa,ivperp,iz,ir,is] = old_evolved.pdf[ivpa,ivperp,iz,ir,is]
