@@ -1686,7 +1686,6 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
 
     new_scratch = scratch[istage+1]
     old_scratch = scratch[istage]
-    rk_coefs = t_params.rk_coefs[:,istage]
 
     z_spectral, r_spectral, vpa_spectral, vperp_spectral = spectral_objects.z_spectral, spectral_objects.r_spectral, spectral_objects.vpa_spectral, spectral_objects.vperp_spectral
     vzeta_spectral, vr_spectral, vz_spectral = spectral_objects.vzeta_spectral, spectral_objects.vr_spectral, spectral_objects.vz_spectral
@@ -1754,11 +1753,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         # and is already updated;
         # otherwise update assuming electron temperature is fixed in time
         if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
-            begin_r_z_region()
-            @loop_r_z ir iz begin
-                new_scratch.electron_ppar[iz,ir] = (rk_coefs[1]*moments.electron.ppar[iz,ir] 
-                    + rk_coefs[2]*old_scratch.electron_ppar[iz,ir] + rk_coefs[3]*new_scratch.electron_ppar[iz,ir])
-            end
+            rk_update_variable!(scratch, :electron_ppar, t_params, istage)
         else
             begin_r_z_region()
             @loop_r_z ir iz begin
