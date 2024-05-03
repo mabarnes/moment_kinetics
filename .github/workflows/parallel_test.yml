@@ -21,7 +21,7 @@ jobs:
         with:
           version: '1.10'
           arch: x64
-      - uses: julia-actions/cache@v1
+      - uses: julia-actions/cache@v2
       - run: |
           touch Project.toml
           julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["MPI", "MPIPreferences"]); using MPIPreferences; MPIPreferences.use_jll_binary("OpenMPI_jll")'
@@ -53,7 +53,7 @@ jobs:
       - uses: julia-actions/setup-julia@latest
         with:
           version: '1.10'
-      - uses: julia-actions/cache@v1
+      - uses: julia-actions/cache@v2
       - run: |
           export MPILIBPATH=$(find /opt/homebrew/Cellar/open-mpi/ -name libmpi.dylib)
           touch Project.toml
