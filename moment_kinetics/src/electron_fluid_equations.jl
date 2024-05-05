@@ -13,7 +13,8 @@ using ..derivatives: derivative_z!
 using ..looping
 using ..input_structs: boltzmann_electron_response_with_simple_sheath
 using ..input_structs: braginskii_fluid, kinetic_electrons
-using ..moment_kinetics_structs: electron_pdf_substruct
+using ..moment_kinetics_structs: electron_pdf_substruct, moments_electron_substruct
+using ..type_definitions: mk_float
 using ..velocity_moments: integrate_over_vspace
 
 using MPI
@@ -122,7 +123,8 @@ an isotropic distribution in f_e so that p_e = n_e T_e = ppar_e
 function electron_energy_equation!(ppar_out, ppar_in, electron_density, electron_upar,
                                    ion_upar, ion_ppar, density_neutral, uz_neutral,
                                    pz_neutral, moments, collisions, dt, composition,
-                                   electron_source_settings, num_diss_params, z)
+                                   electron_source_settings, num_diss_params, z;
+                                   conduction=true)
     begin_r_z_region()
     # define some abbreviated variables for convenient use in rest of function
     me_over_mi = composition.me_over_mi
@@ -131,8 +133,12 @@ function electron_energy_equation!(ppar_out, ppar_in, electron_density, electron
     # arising from derivatives of ppar, qpar and upar
     @loop_r_z ir iz begin
         ppar_out[iz,ir] -= dt*(electron_upar[iz,ir]*moments.dppar_dz[iz,ir]
-                               + moments.dqpar_dz[iz,ir]
                                + 3*ppar_in[iz,ir]*moments.dupar_dz[iz,ir])
+    end
+    if conduction
+        @loop_r_z ir iz begin
+            ppar_out[iz,ir] -= dt*moments.dqpar_dz[iz,ir]
+        end
     end
     # @loop_r_z ir iz begin
     #     ppar_out[iz,ir] -= dt*(electron_upar[iz,ir]*moments.dppar_dz[iz,ir]
@@ -189,6 +195,47 @@ function electron_energy_equation!(ppar_out, ppar_in, electron_density, electron
         @loop_r_z ir iz begin
             ppar_out[iz,ir] += dt * source_amplitude[iz,ir]
         end
+    end
+
+    return nothing
+end
+
+"""
+Add just the braginskii conduction contribution to the electron pressure, and assume that
+we have to calculate qpar and dqpar_dz from ppar within this function (they are not
+pre-calculated).
+"""
+function electron_braginskii_conduction!(ppar_out::AbstractVector{mk_float},
+                                         ppar_in::AbstractVector{mk_float},
+                                         dens::AbstractVector{mk_float},
+                                         upar_e::AbstractVector{mk_float},
+                                         upar_i::AbstractVector{mk_float},
+                                         electron_moments, collisions, composition, z,
+                                         z_spectral, scratch_dummy, dt, ir)
+
+    buffer_r_1 = @view scratch_dummy.buffer_rs_1[ir,1]
+    buffer_r_2 = @view scratch_dummy.buffer_rs_2[ir,1]
+    buffer_r_3 = @view scratch_dummy.buffer_rs_3[ir,1]
+    buffer_r_4 = @view scratch_dummy.buffer_rs_4[ir,1]
+
+    temp = @view electron_moments.temp[:,ir]
+    dT_dz = @view electron_moments.dT_dz[:,ir]
+    qpar = @view electron_moments.qpar[:,ir]
+    dqpar_dz = @view electron_moments.dqpar_dz[:,ir]
+
+    update_electron_temperature!(temp, ppar_in, dens, composition)
+    derivative_z!(dT_dz, temp, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4, z_spectral,
+                  z)
+    electron_moments.qpar_updated[] = false
+    calculate_electron_qpar!(electron_moments, nothing, ppar_in, upar_e, upar_i,
+                             collisions.nu_ei, composition.me_over_mi,
+                             composition.electron_physics, nothing)
+    electron_fluid_qpar_boundary_condition!(ppar_in, upar_e, dens, electron_moments, z)
+    derivative_z!(dqpar_dz, qpar, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
+                  z_spectral, z)
+
+    @loop_r_z ir iz begin
+        ppar_out[iz,ir] -= dt*electron_moments.dqpar_dz[iz,ir]
     end
 
     return nothing
@@ -384,6 +431,17 @@ function update_electron_vth_temperature!(moments, ppar, dens, composition)
         vth[iz,ir] = sqrt(temp[iz,ir] / composition.me_over_mi)
     end
     moments.electron.temp_updated[] = true
+
+    return nothing
+end
+
+function update_electron_temperature!(temp, ppar, dens, composition)
+    begin_z_region()
+
+    @loop_z iz begin
+        p = max(ppar[iz], 0.0)
+        temp[iz] = 2 * p / dens[iz]
+    end
 
     return nothing
 end

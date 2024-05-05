@@ -109,6 +109,7 @@ mutable struct advance_info
     force_balance::Bool
     energy::Bool
     electron_energy::Bool
+    electron_conduction::Bool
     neutral_external_source::Bool
     neutral_source_terms::Bool
     neutral_continuity::Bool
