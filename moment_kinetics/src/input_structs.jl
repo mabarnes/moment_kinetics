@@ -79,6 +79,7 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     last_fail_proximity_factor::mk_float
     minimum_dt::mk_float
     maximum_dt::mk_float
+    implicit_braginskii_conduction::Bool
     implicit_ion_advance::Bool
     implicit_vpa_advection::Bool
     write_after_fixed_step_count::Bool
@@ -121,6 +122,7 @@ mutable struct advance_info
     force_balance::Bool
     energy::Bool
     electron_energy::Bool
+    electron_conduction::Bool
     neutral_external_source::Bool
     neutral_source_terms::Bool
     neutral_continuity::Bool

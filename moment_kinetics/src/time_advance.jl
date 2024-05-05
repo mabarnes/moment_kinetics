@@ -81,7 +81,9 @@ using ..electron_fluid_equations: calculate_electron_density!
 using ..electron_fluid_equations: calculate_electron_upar_from_charge_conservation!
 using ..electron_fluid_equations: calculate_electron_qpar!, electron_fluid_qpar_boundary_condition!
 using ..electron_fluid_equations: calculate_electron_parallel_friction_force!
-using ..electron_fluid_equations: electron_energy_equation!, update_electron_vth_temperature!
+using ..electron_fluid_equations: electron_energy_equation!, update_electron_vth_temperature!,
+                                  electron_braginskii_conduction!,
+                                  implicit_braginskii_conduction!
 using ..input_structs: braginskii_fluid
 using ..derivatives: derivative_z!
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
@@ -359,6 +361,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
 
     if rk_coefs_implicit === nothing
         # Not an IMEX scheme, so cannot have any implicit terms
+        t_input["implicit_braginskii_conduction"] = false
         t_input["implicit_ion_advance"] = false
         t_input["implicit_vpa_advection"] = false
     end
@@ -402,6 +405,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      t_input["max_increase_factor_near_last_fail"],
                      t_input["last_fail_proximity_factor"], t_input["minimum_dt"],
                      t_input["maximum_dt"],
+                     electron !== nothing && t_input["implicit_braginskii_conduction"],
                      electron !== nothing && t_input["implicit_ion_advance"],
                      electron !== nothing && t_input["implicit_vpa_advection"],
                      t_input["write_after_fixed_step_count"], error_sum_zero,
@@ -597,6 +601,14 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
 
     # Set up parameters for Jacobian-free Newton-Krylov solver used for implicit part of
     # timesteps.
+    if t_params.implicit_braginskii_conduction
+        # Should really have options to set solver tolerance, etc.
+        electron_conduction_nl_solve_parameters = setup_nonlinear_solve(input_dict, (z=z,);
+                                                                        default_rtol=t_params.rtol / 10.0,
+                                                                        default_atol=t_params.atol / 10.0)
+    else
+       electron_conduction_nl_solve_parameters = nothing
+    end
     if t_params.implicit_ion_advance
         # Implicit solve for vpa_advection term should be done in serial, as it will be
         # called within a parallelised s_r_z_vperp loop.
@@ -628,7 +640,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         error("Cannot use implicit_ion_advance and implicit_vpa_advection at the same "
               * "time")
     end
-    nl_solver_params = (ion_advance=nl_solver_ion_advance_params,
+    nl_solver_params = (electron_conduction=electron_conduction_nl_solve_parameters,
+                        ion_advance=nl_solver_ion_advance_params,
                         vpa_advection=nl_solver_vpa_advection_params,)
 
     begin_serial_region()
@@ -996,6 +1009,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
     advance_force_balance = false
     advance_energy = false
     advance_electron_energy = false
+    advance_electron_conduction = false
     advance_neutral_z_advection = false
     advance_neutral_r_advection = false
     advance_neutral_vz_advection = false
@@ -1115,8 +1129,21 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         end
         # if treating the electrons as a fluid with Braginskii closure, or
         # moment-kinetically then advance the electron energy equation
-        if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
+        if composition.electron_physics == kinetic_electrons
             advance_electron_energy = true
+            advance_electron_conduction = true
+        elseif composition.electron_physics == braginskii_fluid
+            if t_params.implicit_braginskii_conduction
+                # if treating the electrons as a fluid with Braginskii closure, and using
+                # an IMEX scheme, advance the conduction part of the electron energy
+                # equation implicitly.
+                advance_electron_energy = true
+                advance_electron_conduction = false
+            else
+                # If not using an IMEX scheme, treat the conduction explicitly.
+                advance_electron_energy = true
+                advance_electron_conduction = true
+            end
         end
 
         # *_diffusion flags are set regardless of whether diffusion is included in explicit or
@@ -1146,7 +1173,8 @@ function setup_advance_flags(moments, composition, t_params, collisions,
                         advance_external_source, advance_ion_numerical_dissipation,
                         advance_neutral_numerical_dissipation, advance_sources,
                         advance_continuity, advance_force_balance, advance_energy,
-                        advance_electron_energy, advance_neutral_external_source,
+                        advance_electron_energy, advance_electron_conduction,
+                        advance_neutral_external_source,
                         advance_neutral_sources, advance_neutral_continuity,
                         advance_neutral_force_balance, advance_neutral_energy,
                         manufactured_solns_test, r_diffusion, vpa_diffusion,
@@ -1185,6 +1213,7 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
     advance_force_balance = false
     advance_energy = false
     advance_electron_energy = false
+    advance_electron_conduction = false
     advance_neutral_z_advection = false
     advance_neutral_r_advection = false
     advance_neutral_vz_advection = false
@@ -1255,6 +1284,13 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
     vperp_diffusion = ((num_diss_params.ion.vperp_dissipation_coefficient > 0.0) || (collisions.fkpl.nuii > 0.0 && vperp.n > 1))
     vz_diffusion = (num_diss_params.neutral.vz_dissipation_coefficient > 0.0)
 
+    if t_params.implicit_braginskii_conduction
+        # if treating the electrons as a fluid with Braginskii closure, and using an IMEX
+        # scheme, advance the conduction part of the electron energy equation implicitly.
+        advance_electron_energy = false
+        advance_electron_conduction = true
+    end
+
     manufactured_solns_test = manufactured_solns_input.use_for_advance
 
     return advance_info(advance_vpa_advection, advance_vperp_advection, advance_z_advection, advance_r_advection,
@@ -1267,8 +1303,8 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
                         explicit_weakform_fp_collisions,
                         advance_external_source, advance_ion_numerical_dissipation,
                         advance_neutral_numerical_dissipation, advance_sources,
-                        advance_continuity, advance_electron_energy,
-                        advance_force_balance, advance_energy,
+                        advance_continuity, advance_force_balance, advance_energy,
+                        advance_electron_energy, advance_electron_conduction,
                         advance_neutral_external_source, advance_neutral_sources,
                         advance_neutral_continuity, advance_neutral_force_balance,
                         advance_neutral_energy, manufactured_solns_test, r_diffusion,
@@ -3064,7 +3100,18 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
                                   fvec_in.ppar, fvec_in.density_neutral,
                                   fvec_in.uz_neutral, fvec_in.pz_neutral,
                                   moments.electron, collisions, dt, composition,
-                                  external_source_settings.electron, num_diss_params, z)
+                                  external_source_settings.electron, num_diss_params, z;
+                                  conduction=advance.electron_conduction)
+    elseif advance.electron_conduction
+        # Explicit version of the implicit part of the IMEX timestep, need to evaluate
+        # only the conduction term.
+        for ir ∈ 1:r.n
+            @views electron_braginskii_conduction!(
+                fvec_out.electron_ppar[:,ir], fvec_in.electron_ppar[:,ir],
+                fvec_in.electron_density[:,ir], fvec_in.electron_upar[:,ir],
+                fvec_in.upar[:,ir], moments.electron, collisions, composition, z,
+                z_spectral, scratch_dummy, dt, ir)
+        end
     end
     # reset "xx.updated" flags to false since ff has been updated
     # and the corresponding moments have not
@@ -3083,6 +3130,13 @@ function backward_euler!(fvec_out, fvec_in, pdf, fields, moments, advect_objects
     vz_spectral, vr_spectral, vzeta_spectral = spectral_objects.vz_spectral, spectral_objects.vr_spectral, spectral_objects.vzeta_spectral
     vpa_advect, vperp_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.vperp_advect, advect_objects.r_advect, advect_objects.z_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
+
+    if advance.electron_conduction
+        success = implicit_braginskii_conduction!(fvec_out, fvec_in, moments, z, r, dt,
+                                                  z_spectral, composition, collisions,
+                                                  scratch_dummy,
+                                                  nl_solver_params.electron_conduction)
+    end
 
     if nl_solver_params.ion_advance !== nothing
         success = implicit_ion_advance!(fvec_out, fvec_in, pdf, fields, moments,

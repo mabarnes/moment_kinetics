@@ -221,6 +221,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         last_fail_proximity_factor=1.05,
         minimum_dt=0.0,
         maximum_dt=Inf,
+        implicit_braginskii_conduction=true,
         implicit_ion_advance=true,
         implicit_vpa_advection=false,
         write_after_fixed_step_count=false,
