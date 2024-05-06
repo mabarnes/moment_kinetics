@@ -4078,6 +4078,11 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
 
         speed = allocate_float(nz, nvpa, nvperp, nr, nspecies, nt)
         Er = get_variable(run_info, "Er")
+        gEr = allocate_float(nvperp, nz, nr, nspecies, nt)
+        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz
+            # Don't support gyroaveraging here (yet)
+            gEr[:,iz,ir,is,it] .= Er[iz,ir,it]
+        end
 
         setup_distributed_memory_MPI(1,1,1,1)
         setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
@@ -4088,11 +4093,11 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             # Only need some struct with a 'speed' variable
             advect = (speed=@view(speed[:,:,:,:,is,it]),)
             # Only need Er
-            fields = (Er=@view(Er[:,:,it]),)
+            fields = (gEr=@view(gEr[:,:,:,is,it]),)
             @views update_speed_z!(advect, upar[:,:,is,it], vth[:,:,is,it],
                                    run_info.evolve_upar, run_info.evolve_ppar, fields,
                                    run_info.vpa, run_info.vperp, run_info.z, run_info.r,
-                                   run_info.time[it], run_info.geometry)
+                                   run_info.time[it], run_info.geometry, is)
         end
 
         # Horrible hack so that we can get the speed back without rearranging the
