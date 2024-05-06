@@ -591,6 +591,10 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     # computing the electrostatic potential (and components of the electric field)
     calculate_electron_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, 
                                            electron_mom_diss_coeff, composition.electron_physics)
+    # calculate the electron-ion parallel friction force
+    calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, moments.electron.dens,
+        moments.electron.upar, moments.ion.upar, moments.electron.dT_dz,
+        composition.me_over_mi, collisions.nu_ei, composition.electron_physics)
     # initialize the electrostatic potential
     begin_serial_region()
     update_phi!(fields, scratch[1], vperp, z, r, composition, collisions, moments, z_spectral, r_spectral, scratch_dummy, gyroavs)
@@ -816,10 +820,6 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         if composition.electron_physics == braginskii_fluid
             electron_fluid_qpar_boundary_condition!(moments.electron, z)
         end
-        # calculate the electron-ion parallel friction force
-        calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, moments.electron.dens,
-            moments.electron.upar, moments.ion.upar, moments.electron.dT_dz,
-            composition.me_over_mi, collisions.nu_ei, composition.electron_physics)
         # update the electron moment entries in the scratch array
         begin_r_z_region()
         @loop_r_z ir iz begin
@@ -837,6 +837,10 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
             scratch[1].pz_neutral[iz,ir,isn] = moments.neutral.pz[iz,ir,isn]
         end
     end
+    # calculate the electron-ion parallel friction force
+    calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, moments.electron.dens,
+        moments.electron.upar, moments.ion.upar, moments.electron.dT_dz,
+        composition.me_over_mi, collisions.nu_ei, composition.electron_physics)
 
     calculate_ion_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, 
                                       ion_mom_diss_coeff)
