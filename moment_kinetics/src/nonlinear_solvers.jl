@@ -131,7 +131,7 @@ function newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, v, w, nl_solv
         println("\nNewton ", counter)
 
         # Damping coefficient used to make Newton iteration more stable
-        d = (1.0 - d_min) * exp(-residual_norm) + d_min
+        d = (1.0 - d_min) * exp(-residual_norm / (100.0 * atol)) + d_min
         println("d=$d")
 
         if left_preconditioner === nothing
@@ -143,7 +143,9 @@ function newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, v, w, nl_solv
 
         # Solve (approximately?):
         #   J δx = -RHS(x)
-        linear_atol = (linear_atol_max - linear_atol_min) * (1.0 - exp(-residual_norm)) + linear_atol_min
+        linear_atol = exp((log(linear_atol_max) - log(linear_atol_min))
+                          * (1.0 - exp(-residual_norm / (100.0 * atol)))
+                          + log(linear_atol_min))
         println("linear_atol=$linear_atol")
         #parallel_map((x)->((1.0 - d) * x), delta_x, delta_x)
         @serial_region begin
