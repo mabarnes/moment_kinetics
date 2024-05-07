@@ -116,7 +116,7 @@ function newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, v, w, nl_solv
     linear_counter = 0
     linear_atol_max = 1.0e-3
     linear_atol_min = atol
-    d_min = 0.01
+    d_min = 0.1
 
     #parallel_map(()->0.0, delta_x)
     begin_serial_region()
