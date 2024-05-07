@@ -887,7 +887,10 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
     end
 
     @serial_region begin
-        if !just_completed_output_step && t + t_params.dt[] >= t_params.next_output_time[]
+        current_time = t + t_params.previous_dt[]
+        if (!t_params.write_after_fixed_step_count && !just_completed_output_step
+            && (current_time + t_params.dt[] >= t_params.next_output_time[]))
+
             t_params.dt_before_output[] = t_params.dt[]
             t_params.dt[] = t_params.next_output_time[] - current_time
             t_params.step_to_output[] = true

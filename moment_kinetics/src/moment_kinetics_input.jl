@@ -211,6 +211,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         last_fail_proximity_factor=1.05,
         minimum_dt=0.0,
         maximum_dt=Inf,
+        write_after_fixed_step_count=false,
         high_precision_error_sum=false,
        )
     if timestepping_section["nwrite"] > timestepping_section["nstep"]
