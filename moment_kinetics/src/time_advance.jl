@@ -308,7 +308,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
 
     end_time = code_time + t_input.dt * t_input.nstep
     epsilon = 1.e-11
-    if adaptive
+    if adaptive || t_input.write_after_fixed_step_count
         if t_input.nwrite == 0
             moments_output_times = [end_time]
         else
@@ -368,7 +368,8 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      t_input.step_update_prefactor, t_input.max_increase_factor,
                      t_input.max_increase_factor_near_last_fail,
                      t_input.last_fail_proximity_factor, t_input.minimum_dt,
-                     t_input.maximum_dt, error_sum_zero, t_input.split_operators,
+                     t_input.maximum_dt, t_input.write_after_fixed_step_count,
+                     error_sum_zero, t_input.split_operators,
                      t_input.steady_state_residual, t_input.converged_residual_value,
                      manufactured_solns_input.use_for_advance, t_input.stopfile_name,
                      debug_io, electron_t_params)
@@ -1280,7 +1281,7 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
     moments_output_counter = 1
     dfns_output_counter = 1
     @serial_region begin
-        if t_params.adaptive
+        if t_params.adaptive && !t_params.write_after_fixed_step_count
             t_params.next_output_time[] =
                 min(t_params.moments_output_times[moments_output_counter],
                     t_params.dfns_output_times[dfns_output_counter])
@@ -1300,7 +1301,7 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
     end
     while true
         
-        if t_params.adaptive
+        if t_params.adaptive && !t_params.write_after_fixed_step_count
             maybe_write_moments = (t + t_params.dt[] ≥ t_params.moments_output_times[moments_output_counter] - epsilon
                                    || t + t_params.dt[] ≥ t_params.end_time - epsilon)
             maybe_write_dfns = (t + t_params.dt[] ≥ t_params.dfns_output_times[dfns_output_counter] - epsilon
@@ -1347,7 +1348,7 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
             finish_now = true
         end
 
-        if t_params.adaptive
+        if t_params.adaptive && !t_params.write_after_fixed_step_count
             write_moments = (t ≥ t_params.moments_output_times[moments_output_counter] - epsilon
                              || t ≥ t_params.end_time - epsilon)
             write_dfns = (t ≥ t_params.dfns_output_times[dfns_output_counter] - epsilon

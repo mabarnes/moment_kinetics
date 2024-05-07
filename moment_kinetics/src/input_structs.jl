@@ -72,6 +72,7 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron}
     last_fail_proximity_factor::mk_float
     minimum_dt::mk_float
     maximum_dt::mk_float
+    write_after_fixed_step_count::Bool
     error_sum_zero::Terrorsum
     split_operators::Bool
     steady_state_residual::Bool

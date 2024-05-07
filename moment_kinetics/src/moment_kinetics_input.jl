@@ -221,6 +221,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         last_fail_proximity_factor=1.05,
         minimum_dt=0.0,
         maximum_dt=Inf,
+        write_after_fixed_step_count=false,
         high_precision_error_sum=false,
        )
     if timestepping_section["nwrite"] > timestepping_section["nstep"]
@@ -254,6 +255,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         last_fail_proximity_factor=timestepping_section["last_fail_proximity_factor"],
         minimum_dt=timestepping_section["minimum_dt"] * sqrt(composition.me_over_mi),
         maximum_dt=timestepping_section["maximum_dt"] * sqrt(composition.me_over_mi),
+        write_after_fixed_step_count=timestepping_section["write_after_fixed_step_count"],
         high_precision_error_sum=timestepping_section["high_precision_error_sum"],
         initialization_residual_value=1.0,
         no_restart=false,
