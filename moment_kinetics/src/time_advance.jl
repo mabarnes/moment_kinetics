@@ -22,7 +22,6 @@ using ..velocity_moments: update_neutral_density!, update_neutral_qz!
 using ..velocity_moments: update_neutral_uzeta!, update_neutral_uz!, update_neutral_ur!
 using ..velocity_moments: update_neutral_pzeta!, update_neutral_pz!, update_neutral_pr!
 using ..velocity_moments: calculate_ion_moment_derivatives!, calculate_neutral_moment_derivatives!
-using ..velocity_moments: update_chodura!
 using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
 using ..boundary_conditions: enforce_boundary_conditions!
 using ..boundary_conditions: enforce_neutral_boundary_conditions!
@@ -1070,9 +1069,6 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
         end
 
         if write_moments || write_dfns || finish_now
-            # update the diagnostic chodura condition
-            update_chodura!(moments,scratch[end].pdf,vpa,vperp,z,r,spectral_objects.r_spectral,composition,geometry,scratch_dummy,advect_objects.z_advect)
-
             # Always synchronise here, regardless of if we changed region or not
             begin_serial_region(no_synchronize=true)
             _block_synchronize()
