@@ -1313,9 +1313,6 @@ function time_advance!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyr
         end
 
         if write_moments || write_dfns || finish_now
-            # update the diagnostic chodura condition
-            update_chodura!(moments,scratch[t_params.n_rk_stages+1].pdf,vpa,vperp,z,r,spectral_objects.r_spectral,composition,geometry,scratch_dummy,advect_objects.z_advect)
-
             # Always synchronise here, regardless of if we changed region or not
             begin_serial_region(no_synchronize=true)
             _block_synchronize()
