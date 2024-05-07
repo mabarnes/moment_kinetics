@@ -124,11 +124,11 @@ function newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, v, w, nl_solv
     close_linear_counter = -1
     while residual_norm > atol
         counter += 1
-        println("\nNewton ", counter)
+        #println("\nNewton ", counter)
 
         # Damping coefficient used to make Newton iteration more stable
         d = (1.0 - d_min) * exp(-residual_norm / (100.0 * atol)) + d_min
-        println("d=$d")
+        #println("d=$d")
 
         if left_preconditioner === nothing
             left_preconditioner = identity
@@ -142,7 +142,7 @@ function newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, v, w, nl_solv
         linear_atol = exp((log(linear_atol_max) - log(linear_atol_min))
                           * (1.0 - exp(-residual_norm / (100.0 * atol)))
                           + log(linear_atol_min))
-        println("linear_atol=$linear_atol")
+        #println("linear_atol=$linear_atol")
         parallel_map((delta_x)->((1.0 - d) * delta_x), delta_x, delta_x)
         linear_its = linear_solve!(x, rhs_func!, residual, delta_x, v, w; coords=coords,
                                    atol=linear_atol,
@@ -166,7 +166,7 @@ function newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, v, w, nl_solv
         # grid. This is unlike the norms needed in `linear_solve!()`.
         residual_norm = distributed_norm(residual, coords; per_grid_point=true)
 
-        println("Newton residual ", residual_norm, " ", linear_its)
+        #println("Newton residual ", residual_norm, " ", linear_its, " $atol")
 
         if residual_norm < 0.1 && close_counter < 0 && close_linear_counter < 0
             close_counter = counter
@@ -178,13 +178,15 @@ function newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, v, w, nl_solv
             break
         end
     end
-    println("Newton iterations: ", counter)
-    println("Total linear iterations: ", linear_counter)
-    println("Linear iterations per Newton: ", linear_counter / counter)
-
-    println("Newton iterations after close: ", counter - close_counter)
-    println("Total linear iterations after close: ", linear_counter - close_linear_counter)
-    println("Linear iterations per Newton after close: ", (linear_counter - close_linear_counter) / (counter - close_counter))
+#    println("Newton iterations: ", counter)
+#    println("Final residual: ", residual_norm)
+#    println("Total linear iterations: ", linear_counter)
+#    println("Linear iterations per Newton: ", linear_counter / counter)
+#
+#    println("Newton iterations after close: ", counter - close_counter)
+#    println("Total linear iterations after close: ", linear_counter - close_linear_counter)
+#    println("Linear iterations per Newton after close: ", (linear_counter - close_linear_counter) / (counter - close_counter))
+#    println()
 end
 
 """
