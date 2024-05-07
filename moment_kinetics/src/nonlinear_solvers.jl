@@ -174,7 +174,7 @@ function newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, v, w, nl_solv
         end
 
         if counter > 100000
-            println("maximum iteration limit reached")
+            error("maximum iteration limit reached")
             break
         end
     end
