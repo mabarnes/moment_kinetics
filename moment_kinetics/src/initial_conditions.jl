@@ -336,7 +336,9 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
     # calculate the initial electron parallel heat flux;
     # if using kinetic electrons, this relies on the electron pdf, which itself relies on the electron heat flux
     if composition.electron_physics == braginskii_fluid
-        electron_fluid_qpar_boundary_condition!(moments.electron, z)
+        electron_fluid_qpar_boundary_condition!(
+            moments.electron.ppar, moments.electron.upar, moments.electron.dens,
+            moments.electron, z)
         if restart_electron_physics ∉ (nothing, braginskii_fluid, kinetic_electrons)
             # Restarting from Boltzmann. If we use an exactly constant T_e profile,
             # qpar for the electrons will be non-zero only at the boundary points,
@@ -412,7 +414,9 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
         moments.electron.upar, moments.ion.upar, collisions.nu_ei, composition.me_over_mi,
         composition.electron_physics, vpa)
     if composition.electron_physics == braginskii_fluid
-        electron_fluid_qpar_boundary_condition!(moments.electron, z)
+        electron_fluid_qpar_boundary_condition!(
+            moments.electron.ppar, moments.electron.upar, moments.electron.dens,
+            moments.electron, z)
     end
     # calculate the zed derivative of the initial electron parallel heat flux
     @views derivative_z!(moments.electron.dqpar_dz, moments.electron.qpar, 

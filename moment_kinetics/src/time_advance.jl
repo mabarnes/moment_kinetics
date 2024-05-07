@@ -818,7 +818,9 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
             moments.electron.upar, moments.ion.upar, collisions.nu_ei,
             composition.me_over_mi, composition.electron_physics, vpa)
         if composition.electron_physics == braginskii_fluid
-            electron_fluid_qpar_boundary_condition!(moments.electron, z)
+            electron_fluid_qpar_boundary_condition!(
+                moments.electron.ppar, moments.electron.upar, moments.electron.dens,
+                moments.electron, z)
         end
         # update the electron moment entries in the scratch array
         begin_r_z_region()
@@ -1867,7 +1869,9 @@ function rk_update!(scratch, scratch_implicit, pdf, moments, fields,
             new_scratch.electron_ppar, new_scratch.electron_upar, new_scratch.upar,
             collisions.nu_ei, composition.me_over_mi, composition.electron_physics, vpa)
         if composition.electron_physics == braginskii_fluid
-            electron_fluid_qpar_boundary_condition!(moments.electron, z)
+            electron_fluid_qpar_boundary_condition!(
+                new_scratch.electron_ppar, new_scratch.electron_upar,
+                new_scratch.electron_density, moments.electron, z)
         elseif composition.electron_physics == kinetic_electrons
             max_electron_pdf_iterations = 100000
 
