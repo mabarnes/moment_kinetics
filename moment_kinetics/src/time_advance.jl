@@ -1847,7 +1847,9 @@ function rk_update!(scratch, scratch_implicit, pdf, moments, fields,
         # and is already updated;
         # otherwise update assuming electron temperature is fixed in time
         if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
-            rk_update_variable!(scratch, scratch_implicit, :electron_ppar, t_params, istage)
+            if update_pdf
+                rk_update_variable!(scratch, scratch_implicit, :electron_ppar, t_params, istage)
+            end
         else
             begin_r_z_region()
             @loop_r_z ir iz begin
