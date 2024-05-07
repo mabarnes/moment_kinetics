@@ -53,6 +53,8 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron}
     failure_counter::Ref{mk_int}
     failure_caused_by::Vector{mk_int}
     limit_caused_by::Vector{mk_int}
+    nwrite_moments::mk_int
+    nwrite_dfns::mk_int
     moments_output_times::Vector{mk_float}
     dfns_output_times::Vector{mk_float}
     type::String
