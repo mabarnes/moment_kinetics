@@ -135,7 +135,10 @@ function calculate_electron_moments!(scratch, pdf, moments, composition, collisi
                              scratch.electron_upar, scratch.upar, collisions.nu_ei,
                              composition.me_over_mi, composition.electron_physics, vpa)
     if composition.electron_physics == braginskii_fluid
-        electron_fluid_qpar_boundary_condition!(moments.electron, z)
+        electron_fluid_qpar_boundary_condition!(scratch.electron_ppar,
+                                                scratch.electron_upar,
+                                                scratch.electron_density,
+                                                moments.electron, z)
     end
     return nothing
 end
@@ -421,7 +424,7 @@ end
 Impose fluid approximation to electron sheath boundary condition on the parallel heat
 flux. See Stangeby textbook, equations (2.89) and (2.90).
 """
-function electron_fluid_qpar_boundary_condition!(electron_moments, z)
+function electron_fluid_qpar_boundary_condition!(ppar, upar, dens, electron_moments, z)
     begin_r_region()
 
     if z.irank == 0 && (z.irank == z.nrank - 1)
@@ -436,10 +439,10 @@ function electron_fluid_qpar_boundary_condition!(electron_moments, z)
 
     @loop_r ir begin
         for iz ∈ z_indices
-            ppar = electron_moments.ppar[iz,ir]
-            upar = electron_moments.upar[iz,ir]
-            dens = electron_moments.dens[iz,ir]
-            particle_flux = dens * upar
+            this_ppar = ppar[iz,ir]
+            this_upar = electron_moments.upar[iz,ir]
+            this_dens = electron_moments.dens[iz,ir]
+            particle_flux = this_dens * this_upar
             T_e = electron_moments.temp[iz,ir]
 
             # Stangeby (2.90)
@@ -450,7 +453,7 @@ function electron_fluid_qpar_boundary_condition!(electron_moments, z)
 
             # E.g. Helander&Sigmar (2.14), neglecting electron viscosity and kinetic
             # energy fluxes due to small mass ratio
-            conductive_heat_flux = total_heat_flux - 2.5 * ppar * upar
+            conductive_heat_flux = total_heat_flux - 2.5 * this_ppar * this_upar
 
             electron_moments.qpar[iz,ir] = conductive_heat_flux
         end
