@@ -3460,6 +3460,9 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         vz_chunk_size = 1
     end
 
+    # Get variable names just from the first restart, for simplicity
+    variable_names = get_variable_keys(get_group(fids0[1], "dynamic_data"))
+
     if parallel_io
         files = fids0
     else
@@ -3487,7 +3490,8 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
                 vz_spectral=vz_spectral, r_chunk_size=r_chunk_size,
                 z_chunk_size=z_chunk_size, vperp_chunk_size=vperp_chunk_size,
                 vpa_chunk_size=vpa_chunk_size, vzeta_chunk_size=vzeta_chunk_size,
-                vr_chunk_size=vr_chunk_size, vz_chunk_size=vz_chunk_size, dfns=dfns)
+                vr_chunk_size=vr_chunk_size, vz_chunk_size=vz_chunk_size,
+                variable_names=variable_names, dfns=dfns)
 
     return run_info
 end
