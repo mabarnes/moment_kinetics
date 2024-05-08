@@ -7302,6 +7302,41 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing, electro
 
             put_legend_right(limits_fig, ax)
 
+            # Plot nonlinear solver diagnostics (if any)
+            nl_solvers_fig, ax = get_1d_ax(; xlabel="time", ylabel="iterations per solve/nonlinear-iteration")
+            has_nl_solver = false
+
+            for ri ∈ run_info
+                if length(run_info) == 1
+                    prefix = ""
+                else
+                    prefix = ri.run_name * " "
+                end
+                if it !== nothing
+                    time = ri.time[it]
+                else
+                    time = ri.time
+                end
+
+                nl_nonlinear_iterations_names = Tuple(v for v ∈ ri.variable_names
+                                                      if occursin("_nonlinear_iterations", v))
+                if nl_nonlinear_iterations_names != ()
+                    has_nl_solver = true
+                    nl_prefixes = (split(v, "_nonlinear_iterations")[1]
+                                   for v ∈ nl_nonlinear_iterations_names)
+                    for p ∈ nl_prefixes
+                        nonlinear_iterations = get_variable(ri, "$(p)_nonlinear_iterations_per_solve")
+                        linear_iterations = get_variable(ri, "$(p)_linear_iterations_per_nonlinear_iteration")
+                        plot_1d(time, nonlinear_iterations, label=prefix * " " * p * " NL per solve", ax=ax)
+                        plot_1d(time, linear_iterations, label=prefix * " " * p * " L per NL", ax=ax)
+                    end
+                end
+            end
+
+            if has_nl_solver
+                put_legend_right(nl_solvers_fig, ax)
+            end
+
 
             if plot_prefix !== nothing
                 outfile = plot_prefix * electron_prefix * "timestep_diagnostics.pdf"
@@ -7312,11 +7347,19 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing, electro
 
                 outfile = plot_prefix * electron_prefix * "timestep_limits.pdf"
                 save(outfile, limits_fig)
+
+                if has_nl_solver
+                    outfile = plot_prefix * electron_prefix * "nonlinear_solver_iterations.pdf"
+                    save(outfile, nl_solvers_fig)
+                end
             else
                 display(steps_fig)
                 display(dt_fig)
                 display(CFL_fig)
                 display(limits_fig)
+                if has_nl_solver
+                    display(nl_solvers_fig)
+                end
             end
         end
 
