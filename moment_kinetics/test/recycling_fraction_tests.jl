@@ -91,6 +91,10 @@ test_input = Dict("n_ion_species" => 1,
                                        "source_strength" => 2.0,
                                        "source_T" => 2.0))
 
+if global_size[] > 2 && global_size[] % 2 == 0
+    # Test using distributed-memory
+    test_input["z_nelement_local"] = test_input["z_nelement"] ÷ 2
+end
 
 test_input_split1 = merge(test_input,
                           Dict("run_name" => "split1",
