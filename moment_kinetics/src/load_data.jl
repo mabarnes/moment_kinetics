@@ -3717,6 +3717,20 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             variable[it] = min_CFL
         end
         variable = select_slice_of_variable(variable; kwargs...)
+    elseif occursin("_nonlinear_iterations_per_solve", variable_name)
+        prefix = split(variable_name, "_nonlinear_iterations_per_solve")[1]
+        nl_nsolves = get_per_step_from_cumulative_variable(
+            run_info, "$(prefix)_n_solves"; kwargs...)
+        nl_iterations = get_per_step_from_cumulative_variable(
+            run_info, "$(prefix)_nonlinear_iterations"; kwargs...)
+        variable = nl_iterations ./ nl_nsolves
+    elseif occursin("_linear_iterations_per_nonlinear_iteration", variable_name)
+        prefix = split(variable_name, "_linear_iterations_per_nonlinear_iteration")[1]
+        nl_iterations = get_per_step_from_cumulative_variable(
+            run_info, "$(prefix)_nonlinear_iterations"; kwargs...)
+        nl_linear_iterations = get_per_step_from_cumulative_variable(
+            run_info, "$(prefix)_linear_iterations"; kwargs...)
+        variable = nl_linear_iterations ./ nl_iterations
     else
         variable = postproc_load_variable(run_info, variable_name; kwargs...)
     end
