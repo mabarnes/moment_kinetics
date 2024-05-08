@@ -756,7 +756,7 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
     # Use current_dt instead of t_params.dt[] here because we are about to write to
     # the shared-memory variable t_params.dt[] below, and we do not want to add an extra
     # _block_synchronize() call after reading it here.
-    if error_norm > 1.0 && current_dt > t_params.minimum_dt
+    if (error_norm > 1.0 || isnan(error_norm)) && current_dt > t_params.minimum_dt
         # Timestep failed, reduce timestep and re-try
 
         # Set scratch[end] equal to scratch[1] to start the timestep over
