@@ -118,11 +118,7 @@ function newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, v, w, nl_solv
     linear_atol_min = atol
     d_min = 0.1
 
-    #parallel_map(()->0.0, delta_x)
-    begin_serial_region()
-    @serial_region begin
-        delta_x .= 0.0
-    end
+    parallel_map(()->0.0, delta_x)
 
     close_counter = -1
     close_linear_counter = -1
@@ -147,26 +143,22 @@ function newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, v, w, nl_solv
                           * (1.0 - exp(-residual_norm / (100.0 * atol)))
                           + log(linear_atol_min))
         println("linear_atol=$linear_atol")
-        #parallel_map((x)->((1.0 - d) * x), delta_x, delta_x)
-        @serial_region begin
-            delta_x .= (1.0 - d) .* delta_x
-        end
+        parallel_map((delta_x)->((1.0 - d) * delta_x), delta_x, delta_x)
         linear_its = linear_solve!(x, rhs_func!, residual, delta_x, v, w; coords=coords,
                                    atol=linear_atol,
                                    restart=nl_solver_params.linear_restart,
                                    max_restarts=nl_solver_params.linear_max_restarts,
                                    left_preconditioner=left_preconditioner,
                                    right_preconditioner=right_preconditioner,
-                                   distributed_norm=distributed_norm, H=nl_solver_params.H,
-                                   V=nl_solver_params.V, rhs_delta=rhs_delta,
+                                   H=nl_solver_params.H, V=nl_solver_params.V,
+                                   rhs_delta=rhs_delta,
                                    initial_guess=nl_solver_params.linear_initial_guess,
-                                   distributed_dot=distributed_dot)
+                                   distributed_norm=distributed_norm,
+                                   distributed_dot=distributed_dot,
+                                   parallel_map=parallel_map)
         linear_counter += linear_its
 
-        begin_serial_region()
-        @serial_region begin
-            @. x = x + d * delta_x
-        end
+        parallel_map((x,delta_x) -> x + d * delta_x, x, x, delta_x)
         rhs_func!(residual, x)
 
         # For the Newton iteration, we want the norm divided by the (sqrt of the) number
@@ -316,7 +308,8 @@ end
 
 function linear_solve!(x, rhs_func!, rhs0, delta_x, v, w; coords, atol, restart,
                        max_restarts, left_preconditioner, right_preconditioner,
-                       distributed_norm, H, V, rhs_delta, initial_guess, distributed_dot)
+                       H, V, rhs_delta, initial_guess, distributed_norm, distributed_dot,
+                       parallel_map)
     # Solve (approximately?):
     #   J δx = rhs0
 
@@ -326,38 +319,24 @@ function linear_solve!(x, rhs_func!, rhs0, delta_x, v, w; coords, atol, restart,
     function approximate_Jacobian_vector_product!(v)
         right_preconditioner(v)
 
-        begin_serial_region()
-        @serial_region begin
-            @. v = x + epsilon * v
-        end
+        parallel_map((x,v) -> x + epsilon * v, v, x, v)
         rhs_func!(rhs_delta, v)
-        begin_serial_region()
-        @serial_region begin
-            @. v = (rhs_delta - rhs0) * inv_epsilon
-        end
+        parallel_map((rhs_delta, rhs0) -> (rhs_delta - rhs0) * inv_epsilon,
+                     v, rhs_delta, rhs0)
         left_preconditioner(v)
         return v
     end
 
     # To start with we use 'w' as a buffer to make a copy of rhs0 to which we can apply
     # the left-preconditioner.
-    begin_serial_region()
-    @serial_region begin
-        v .= delta_x
-    end
+    parallel_map((delta_x) -> delta_x, v, delta_x)
     left_preconditioner(rhs0)
     # This function transforms the data stored in 'v' from δx to ≈J.δx
     approximate_Jacobian_vector_product!(v)
     # Now we actually set 'w' as the first Krylov vector, and normalise it.
-    begin_serial_region()
-    @serial_region begin
-        w .= .-rhs0 .- v
-    end
+    parallel_map((rhs0, v) -> -rhs0 - v, w, rhs0, v)
     beta = distributed_norm(w, coords)
-    begin_serial_region()
-    @serial_region begin
-        @. V[:,1] = w / beta
-    end
+    parallel_map((w) -> w/beta, @view(V[:,1]), w)
 
     lsq_result = nothing
     residual = Inf
@@ -369,31 +348,25 @@ function linear_solve!(x, rhs_func!, rhs0, delta_x, v, w; coords, atol, restart,
             #println("Linear ", counter)
 
             # Compute next Krylov vector
-            begin_serial_region()
-            @serial_region begin
-                w .= V[:,i]
-            end
+            parallel_map((V) -> V, w, @view(V[:,i]))
             approximate_Jacobian_vector_product!(w)
 
             # Gram-Schmidt orthogonalization
             for j ∈ 1:i
-                begin_serial_region()
-                @serial_region begin
-                    @views v .= V[:,j]
-                end
+                parallel_map((V) -> V, v, @view(V[:,j]))
                 w_dot_Vj = distributed_dot(w, v)
                 begin_serial_region()
                 @serial_region begin
                     H[j,i] = w_dot_Vj
-                    @views @. w -= H[j,i] * V[:,j]
                 end
+                parallel_map((w, V) -> w - H[j,i] * V, w, w, @view(V[:,j]))
             end
             norm_w = distributed_norm(w, coords)
             begin_serial_region()
             @serial_region begin
                 H[i+1,i] = norm_w
-                @. V[:,i+1] = w / H[i+1,i]
             end
+            parallel_map((w) -> w / H[i+1,i], @view(V[:,i+1]), w)
 
             function temporary_residual!(result, guess)
                 #println("temporary residual ", size(result), " ", size(@view(H[1:i+1,1:i])), " ", size(guess))
@@ -425,10 +398,12 @@ function linear_solve!(x, rhs_func!, rhs0, delta_x, v, w; coords, atol, restart,
             y = nothing
         end
         y = MPI.bcast(y, comm_world; root=0)
-        begin_serial_region()
-        @serial_region begin
-            delta_x .= delta_x .+ sum(y[i] .* V[:,i] for i ∈ 1:length(y))
-        end
+
+        # The following is the `parallel_map()` version of
+        #    delta_x .= delta_x .+ sum(y[i] .* V[:,i] for i ∈ 1:length(y))
+        # slightly abusing splatting to get the sum into a lambda-function.
+        parallel_map((delta_x, V...) -> delta_x + sum(this_y * this_V for (this_y, this_V) ∈ zip(y, V)),
+                     delta_x, delta_x, (@view(V[:,i]) for i ∈ 1:length(y))...)
         right_preconditioner(delta_x)
 
         if residual < atol || restart_counter > max_restarts
@@ -439,23 +414,16 @@ function linear_solve!(x, rhs_func!, rhs0, delta_x, v, w; coords, atol, restart,
 
         # Store J.delta_x in the variable delta_x, to use it to calculate the new first
         # Krylov vector v/beta.
-        begin_serial_region()
-        @serial_region begin
-            v .= delta_x
-        end
+        parallel_map((delta_x) -> delta_x, v, delta_x)
         approximate_Jacobian_vector_product!(v)
 
-        begin_serial_region()
-        @serial_region begin
-            # Note rhs0 has already had the left_preconditioner!() applied to it.
-            v .= .-rhs0 .- v
-        end
+        # Note rhs0 has already had the left_preconditioner!() applied to it.
+        parallel_map((rhs0, v) -> -rhs0 - v, v, rhs0, v)
         beta = distributed_norm(v, coords)
-        begin_serial_region()
-        @serial_region begin
-            V .= 0.0
-            @. V[:,1] = v / beta
+        for i ∈ 2:length(y)
+            parallel_map(() -> 0.0, @view(V[:,i]))
         end
+        parallel_map((v) -> v/beta, @view(V[:,1]), v)
     end
 
     return counter
