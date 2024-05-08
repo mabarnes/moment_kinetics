@@ -57,7 +57,7 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
                        Tchodura_upper, Texti1, Texti2, Texti3, Texti4,
                        Texti5, Textn1, Textn2, Textn3, Textn4, Textn5, Texte1, Texte2,
                        Texte3, Texte4, Tconstri, Tconstrn, Tconstre, Tint, Tfailcause,
-                       Telectrontime, Telectronint, Telectronfailcause}
+                       Telectrontime, Telectronint, Telectronfailcause, Tnldiagnostics}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the time variable
@@ -159,6 +159,10 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
     # Last successful timestep before most recent electron pseudo-timestep failure, used
     # by adaptve timestepping algorithm
     electron_dt_before_last_fail::Telectrontime
+    # Variables recording diagnostic information about non-linear solvers (used for
+    # implicit parts of timestep). These are stored in nested NamedTuples so that we can
+    # write diagnostics generically for as many nonlinear solvers as are created.
+    nl_solver_diagnostics::Tnldiagnostics
 
     # Use parallel I/O?
     parallel_io::Bool
@@ -278,7 +282,7 @@ open the necessary output files
 function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vperp, z, r,
                        composition, collisions, evolve_density, evolve_upar, evolve_ppar,
                        external_source_settings, input_dict, restart_time_index,
-                       previous_runs_info, time_for_setup)
+                       previous_runs_info, time_for_setup, nl_solver_params)
     begin_serial_region()
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -307,13 +311,14 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
                                       external_source_settings, input_dict,
                                       io_input.parallel_io, comm_inter_block[], run_id,
                                       restart_time_index, previous_runs_info,
-                                      time_for_setup)
+                                      time_for_setup, nl_solver_params)
         io_dfns = setup_dfns_io(out_prefix, io_input.binary_format,
                                 boundary_distributions, r, z, vperp, vpa, vzeta, vr, vz,
                                 composition, collisions, evolve_density, evolve_upar,
                                 evolve_ppar, external_source_settings, input_dict,
                                 io_input.parallel_io, comm_inter_block[], run_id,
-                                restart_time_index, previous_runs_info, time_for_setup)
+                                restart_time_index, previous_runs_info, time_for_setup,
+                                nl_solver_params)
 
         return ascii, io_moments, io_dfns
     end
@@ -867,7 +872,8 @@ define dynamic (time-evolving) moment variables for writing to the hdf5 file
 function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                           r::coordinate, z::coordinate, parallel_io,
                                           external_source_settings, evolve_density,
-                                          evolve_upar, evolve_ppar, electron_physics)
+                                          evolve_upar, evolve_ppar, electron_physics,
+                                          nl_solver_params)
     @serial_region begin
         dynamic = create_io_group(fid, "dynamic_data", description="time evolving variables")
 
@@ -961,6 +967,21 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
             description="Last successful timestep before most recent timestep failure, "
                         * "used by adaptve timestepping algorithm")
 
+        io_nl_solver_diagnostics = NamedTuple(
+            term=>(n_solves=create_dynamic_variable!(
+                                dynamic, "$(term)_n_solves", mk_int; parallel_io=parallel_io,
+                                description="Number of nonlinear solves for $term"),
+                   nonlinear_iterations=create_dynamic_variable!(
+                                            dynamic, "$(term)_nonlinear_iterations", mk_int;
+                                            parallel_io=parallel_io,
+                                            description="Number of nonlinear iterations for $term"),
+                   linear_iterations=create_dynamic_variable!(
+                                         dynamic, "$(term)_linear_iterations", mk_int;
+                                         parallel_io=parallel_io,
+                                         description="Number of linear iterations for $term"),
+                  )
+            for term ∈ keys(nl_solver_params) if term !== nothing)
+
         return io_moments_info(fid, io_time, io_phi, io_Er, io_Ez, io_density, io_upar,
                                io_ppar, io_pperp, io_qpar, io_vth, io_dSdt, io_chodura_lower, io_chodura_upper,
                                io_electron_density, io_electron_upar, io_electron_ppar, io_electron_qpar, io_electron_vth,
@@ -995,7 +1016,8 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                io_electron_step_counter, io_electron_dt,
                                io_electron_failure_counter, io_electron_failure_caused_by,
                                io_electron_limit_caused_by,
-                               io_electron_dt_before_last_fail, parallel_io)
+                               io_electron_dt_before_last_fail, io_nl_solver_diagnostics,
+                               parallel_io)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -1457,7 +1479,8 @@ file
 """
 function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz, composition,
                                        parallel_io, external_source_settings,
-                                       evolve_density, evolve_upar, evolve_ppar)
+                                       evolve_density, evolve_upar, evolve_ppar,
+                                       nl_solver_params)
 
     @serial_region begin
         io_moments = define_dynamic_moment_variables!(fid, composition.n_ion_species,
@@ -1466,7 +1489,8 @@ function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz, com
                                                       external_source_settings,
                                                       evolve_density, evolve_upar,
                                                       evolve_ppar,
-                                                      composition.electron_physics)
+                                                      composition.electron_physics,
+                                                      nl_solver_params)
 
         dynamic = get_group(fid, "dynamic_data")
 
@@ -1547,7 +1571,7 @@ function setup_moments_io(prefix, binary_format, vz, vr, vzeta, vpa, vperp, r, z
                           composition, collisions, evolve_density, evolve_upar,
                           evolve_ppar, external_source_settings, input_dict, parallel_io,
                           io_comm, run_id, restart_time_index, previous_runs_info,
-                          time_for_setup)
+                          time_for_setup, nl_solver_params)
     @serial_region begin
         moments_prefix = string(prefix, ".moments")
         if !parallel_io
@@ -1577,7 +1601,7 @@ function setup_moments_io(prefix, binary_format, vz, vr, vzeta, vpa, vperp, r, z
         io_moments = define_dynamic_moment_variables!(
             fid, composition.n_ion_species, composition.n_neutral_species, r, z,
             parallel_io, external_source_settings, evolve_density, evolve_upar,
-            evolve_ppar, composition.electron_physics)
+            evolve_ppar, composition.electron_physics, nl_solver_params)
 
         close(fid)
 
@@ -1601,6 +1625,15 @@ function reopen_moments_io(file_info)
         function getvar(name)
             if name ∈ variable_list
                 return dyn[name]
+            elseif name == "nl_solver_diagnostics"
+                nl_names = (name for name ∈ variable_list
+                            if occursin("_nonlinear_iterations", name))
+                nl_prefixes = (split(name, "_nonlinear_iterations")[1]
+                               for name ∈ nl_names)
+                return NamedTuple(Symbol(term)=>(n_solves=dyn["$(term)_n_solves"],
+                                                 nonlinear_iterations=dyn["$(term)_nonlinear_iterations"],
+                                                 linear_iterations=dyn["$(term)_linear_iterations"])
+                                  for term ∈ nl_prefixes)
             else
                 return nothing
             end
@@ -1646,11 +1679,13 @@ function reopen_moments_io(file_info)
                                getvar("time_for_run"), getvar("step_counter"),
                                getvar("dt"), getvar("failure_counter"),
                                getvar("failure_caused_by"), getvar("limit_caused_by"),
-                               getvar("dt_before_last_fail"),getvar("electron_step_counter"),
-                               getvar("electron_dt"), getvar("electron_failure_counter"),
+                               getvar("dt_before_last_fail"),
+                               getvar("electron_step_counter"), getvar("electron_dt"),
+                               getvar("electron_failure_counter"),
                                getvar("electron_failure_caused_by"),
                                getvar("electron_limit_caused_by"),
-                               getvar("electron_dt_before_last_fail"), parallel_io)
+                               getvar("electron_dt_before_last_fail"),
+                               getvar("nl_solver_diagnostics"), parallel_io)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -1664,7 +1699,7 @@ function setup_dfns_io(prefix, binary_format, boundary_distributions, r, z, vper
                        vzeta, vr, vz, composition, collisions, evolve_density,
                        evolve_upar, evolve_ppar, external_source_settings, input_dict,
                        parallel_io, io_comm, run_id, restart_time_index,
-                       previous_runs_info, time_for_setup)
+                       previous_runs_info, time_for_setup, nl_solver_params)
 
     @serial_region begin
         dfns_prefix = string(prefix, ".dfns")
@@ -1700,7 +1735,8 @@ function setup_dfns_io(prefix, binary_format, boundary_distributions, r, z, vper
         ### in a struct for later access ###
         io_dfns = define_dynamic_dfn_variables!(
             fid, r, z, vperp, vpa, vzeta, vr, vz, composition, parallel_io,
-            external_source_settings, evolve_density, evolve_upar, evolve_ppar)
+            external_source_settings, evolve_density, evolve_upar, evolve_ppar,
+            nl_solver_params)
 
         close(fid)
 
@@ -1724,6 +1760,15 @@ function reopen_dfns_io(file_info)
         function getvar(name)
             if name ∈ variable_list
                 return dyn[name]
+            elseif name == "nl_solver_diagnostics"
+                nl_names = (name for name ∈ variable_list
+                            if occursin("_nonlinear_iterations", name))
+                nl_prefixes = (split(name, "_nonlinear_iterations")[1]
+                               for name ∈ nl_names)
+                return NamedTuple(Symbol(term)=>(n_solves=dyn["$(term)_n_solves"],
+                                                 nonlinear_iterations=dyn["$(term)_nonlinear_iterations"],
+                                                 linear_iterations=dyn["$(term)_linear_iterations"])
+                                  for term ∈ nl_prefixes)
             else
                 return nothing
             end
@@ -1776,7 +1821,8 @@ function reopen_dfns_io(file_info)
                                      getvar("electron_failure_counter"),
                                      getvar("electron_failure_caused_by"),
                                      getvar("electron_limit_caused_by"),
-                                     getvar("electron_dt_before_last_fail"), parallel_io)
+                                     getvar("electron_dt_before_last_fail"),
+                                     getvar("nl_solver_diagnostics"), parallel_io)
 
         return io_dfns_info(fid, getvar("f"), getvar("f_electron"), getvar("f_neutral"),
                             parallel_io, io_moments)
@@ -1813,7 +1859,8 @@ file
 """
 function write_all_moments_data_to_binary(moments, fields, t, n_ion_species,
                                           n_neutral_species, io_or_file_info_moments,
-                                          t_idx, time_for_run, t_params, r, z)
+                                          t_idx, time_for_run, t_params, nl_solver_params,
+                                          r, z)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -1852,6 +1899,17 @@ function write_all_moments_data_to_binary(moments, fields, t, n_ion_species,
                               only_root=true)
         append_to_dynamic_var(io_moments.dt_before_last_fail,
                               t_params.dt_before_last_fail[], t_idx, parallel_io)
+        for (k,v) ∈ pairs(nl_solver_params)
+            if v === nothing
+                continue
+            end
+            append_to_dynamic_var(io_moments.nl_solver_diagnostics[k].n_solves,
+                                  v.n_solves[], t_idx, parallel_io)
+            append_to_dynamic_var(io_moments.nl_solver_diagnostics[k].nonlinear_iterations,
+                                  v.nonlinear_iterations[], t_idx, parallel_io)
+            append_to_dynamic_var(io_moments.nl_solver_diagnostics[k].linear_iterations,
+                                  v.linear_iterations[], t_idx, parallel_io)
+        end
 
         closefile && close(io_moments.fid)
     end
@@ -2116,8 +2174,8 @@ binary output file
 """
 function write_all_dfns_data_to_binary(pdf, moments, fields, t, n_ion_species,
                                        n_neutral_species, io_or_file_info_dfns, t_idx,
-                                       time_for_run, t_params, r, z, vperp, vpa, vzeta,
-                                        vr, vz)
+                                       time_for_run, t_params, nl_solver_params, r, z,
+                                       vperp, vpa, vzeta, vr, vz)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -2133,7 +2191,7 @@ function write_all_dfns_data_to_binary(pdf, moments, fields, t, n_ion_species,
         # This also updates the time.
         write_all_moments_data_to_binary(moments, fields, t, n_ion_species,
                                          n_neutral_species, io_dfns.io_moments, t_idx,
-                                         time_for_run, t_params, r, z)
+                                         time_for_run, t_params, nl_solver_params, r, z)
 
         # add the distribution function data at this time slice to the output file
         write_ion_dfns_data_to_binary(pdf.ion.norm, n_ion_species, io_dfns, t_idx, r, z,
@@ -2501,7 +2559,7 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
                     #qr_neutral=nothing, qzeta_neutral=nothing,
                     vth_neutral=nothing,
                     phi=nothing, Er=nothing, Ez=nothing,
-                    istage=0, label="")
+                    istage=0, label="", nl_solver_params=())
     global debug_output_file
 
     # Only read/write from first process in each 'block'
@@ -2534,11 +2592,12 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
                                                           external_source_settings,
                                                           evolve_density, evolve_upar,
                                                           evolve_ppar,
-                                                          composition.electron_physics)
+                                                          composition.electron_physics,
+                                                          nl_solver_params)
             io_dfns = define_dynamic_dfn_variables!(
                 fid, r, z, vperp, vpa, vzeta, vr, vz, composition.n_ion_species,
                 composition.n_neutral_species, false, external_source_settings,
-                evolve_density, evolve_upar, evolve_ppar)
+                evolve_density, evolve_upar, evolve_ppar, nl_solver_params)
 
             # create the "istage" variable, used to identify the rk stage where
             # `debug_dump()` was called

@@ -1570,7 +1570,8 @@ function time_advance!(pdf, scratch, scratch_implicit, t, t_params, vz, vr, vzet
             write_all_moments_data_to_binary(moments, fields, t,
                                              composition.n_ion_species,
                                              composition.n_neutral_species, io_moments,
-                                             iwrite_moments, time_for_run, t_params, r, z)
+                                             iwrite_moments, time_for_run, t_params,
+                                             nl_solver_params, r, z)
 
             if t_params.steady_state_residual
                 # Calculate some residuals to see how close simulation is to steady state
@@ -1653,8 +1654,9 @@ function time_advance!(pdf, scratch, scratch_implicit, t, t_params, vz, vr, vzet
             write_all_dfns_data_to_binary(pdf, moments, fields, t,
                                           composition.n_ion_species,
                                           composition.n_neutral_species, io_dfns,
-                                          iwrite_dfns, time_for_run, t_params, r, z, vperp, vpa,
-                                          vzeta, vr, vz)
+                                          iwrite_dfns, time_for_run, t_params,
+                                          nl_solver_params, r, z, vperp, vpa, vzeta, vr,
+                                          vz)
             iwrite_dfns += 1
             begin_s_r_z_vperp_region()
             @debug_detect_redundant_block_synchronize begin

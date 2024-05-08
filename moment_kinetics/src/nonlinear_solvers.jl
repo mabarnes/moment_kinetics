@@ -43,6 +43,9 @@ struct nl_solver_info{TH,TV,Tlig}
     H::TH
     V::TV
     linear_initial_guess::Tlig
+    n_solves::Ref{mk_int}
+    nonlinear_iterations::Ref{mk_int}
+    linear_iterations::Ref{mk_int}
 end
 
 """
@@ -73,7 +76,8 @@ function setup_nonlinear_solve(input_dict, coords; default_atol=1.0e-6)
     end
 
     return nl_solver_info(nl_solver_input.atol, linear_restart,
-                          nl_solver_input.linear_max_restarts, H, V, linear_initial_guess)
+                          nl_solver_input.linear_max_restarts, H, V, linear_initial_guess,
+                          Ref(0), Ref(0), Ref(0))
 end
 
 """
@@ -178,6 +182,9 @@ function newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, v, w, nl_solv
             break
         end
     end
+    nl_solver_params.n_solves[] += 1
+    nl_solver_params.nonlinear_iterations[] += counter
+    nl_solver_params.linear_iterations[] += linear_counter
 #    println("Newton iterations: ", counter)
 #    println("Final residual: ", residual_norm)
 #    println("Total linear iterations: ", linear_counter)
