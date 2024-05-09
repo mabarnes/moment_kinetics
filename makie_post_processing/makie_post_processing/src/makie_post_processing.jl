@@ -7083,63 +7083,70 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                 # Accuracy limit counters
                 counter += 1
                 plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                        label=prefix * "ion pdf RK accuracy", ax=ax)
+                        label=prefix * "ion pdf RK accuracy", ax=ax, linestyle=:dash)
                 if ri.evolve_density
                     counter += 1
                     plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                            label=prefix * "ion density RK accuracy", ax=ax)
+                            label=prefix * "ion density RK accuracy", ax=ax,
+                            linestyle=:dash)
                 end
                 if ri.evolve_upar
                     counter += 1
                     plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                    label=prefix * "ion upar RK accuracy", ax=ax)
+                            label=prefix * "ion upar RK accuracy", ax=ax,
+                            linestyle=:dash)
                 end
                 if ri.evolve_ppar
                     counter += 1
                     plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                            label=prefix * "ion ppar RK accuracy", ax=ax)
+                            label=prefix * "ion ppar RK accuracy", ax=ax,
+                            linestyle=:dash)
                 end
                 if ri.n_neutral_species > 0
                     counter += 1
                     plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                            label=prefix * "neutral pdf RK accuracy", ax=ax)
+                            label=prefix * "neutral pdf RK accuracy", ax=ax,
+                            linestyle=:dash)
                     if ri.evolve_density
                         counter += 1
                         plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                                label=prefix * "neutral density RK accuracy", ax=ax)
+                                label=prefix * "neutral density RK accuracy", ax=ax,
+                                linestyle=:dash)
                     end
                     if ri.evolve_upar
                         counter += 1
                         plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                                label=prefix * "neutral uz RK accuracy", ax=ax)
+                                label=prefix * "neutral uz RK accuracy", ax=ax,
+                                linestyle=:dash)
                     end
                     if ri.evolve_ppar
                         counter += 1
                         plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                                label=prefix * "neutral pz RK accuracy", ax=ax)
+                                label=prefix * "neutral pz RK accuracy", ax=ax,
+                                linestyle=:dash)
                     end
                 end
 
                 # Ion z advection
                 counter += 1
                 plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                        label=prefix * "ion z advect", ax=ax)
+                        label=prefix * "ion z advect", ax=ax, linestyle=:dot)
 
                 # Ion vpa advection
                 counter += 1
                 plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                        label=prefix * "ion vpa advect", ax=ax)
+                        label=prefix * "ion vpa advect", ax=ax, linestyle=:dot)
 
                 if ri.n_neutral_species > 0
                     # Ion z advection
                     counter += 1
                     plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                            label=prefix * "neutral z advect", ax=ax)
+                            label=prefix * "neutral z advect", ax=ax, linestyle=:dot)
 
                     # Ion vpa advection
                     counter += 1
                     plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                            label=prefix * "neutral vz advect", ax=ax)
+                            label=prefix * "neutral vz advect", ax=ax, linestyle=:dot)
                 end
 
                 if counter > size(limit_caused_by_per_output, 1)
