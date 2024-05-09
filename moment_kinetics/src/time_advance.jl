@@ -231,8 +231,8 @@ end
 
 Create a [`input_structs.time_info`](@ref) struct using the settings in `t_input`.
 """
-function setup_time_info(t_input, code_time, dt_reload, dt_before_last_fail_reload,
-                         manufactured_solns_input, io_input)
+function setup_time_info(t_input, n_variables, code_time, dt_reload,
+                         dt_before_last_fail_reload, manufactured_solns_input, io_input)
     rk_coefs, n_rk_stages, rk_order, adaptive, low_storage, CFL_prefactor =
         setup_runge_kutta_coefficients!(t_input.type,
                                         t_input.CFL_prefactor,
@@ -286,9 +286,10 @@ function setup_time_info(t_input, code_time, dt_reload, dt_before_last_fail_relo
     else
         error_sum_zero = 0.0
     end
-    return time_info(t_input.nstep, end_time, dt_shared, previous_dt_shared, next_output_time,
-                     dt_before_output, dt_before_last_fail, CFL_prefactor, step_to_output,
-                     Ref(0), Ref(0), mk_int[], mk_int[], moments_output_times,
+    return time_info(n_variables, t_input.nstep, end_time, dt_shared, previous_dt_shared,
+                     next_output_time, dt_before_output, dt_before_last_fail,
+                     CFL_prefactor, step_to_output, Ref(0), Ref(0), mk_int[], mk_int[],
+                     t_input.nwrite, t_input.nwrite_dfns, moments_output_times,
                      dfns_output_times, t_input.type, rk_coefs, n_rk_stages, rk_order,
                      adaptive, low_storage, t_input.rtol, t_input.atol, t_input.atol_upar,
                      t_input.step_update_prefactor, t_input.max_increase_factor,
@@ -318,50 +319,85 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
     ion_mom_diss_coeff = num_diss_params.ion.moment_dissipation_coefficient
-    electron_mom_diss_coeff = num_diss_params.electron.moment_dissipation_coefficient
     neutral_mom_diss_coeff = num_diss_params.neutral.moment_dissipation_coefficient
 
-    t_params = setup_time_info(t_input, code_time, dt_reload, dt_before_last_fail_reload,
-                               manufactured_solns_input, io_input)
+    n_variables = 1 # pdf
+    if moments.evolve_density
+        # ion density
+        n_variables += 1
+    end
+    if moments.evolve_upar
+        # ion flow
+        n_variables += 1
+    end
+    if moments.evolve_ppar
+        # ion pressure
+        n_variables += 1
+    end
+    if composition.n_neutral_species > 0
+        # neutral pdf
+        n_variables += 1
+        if moments.evolve_density
+            # neutral density
+            n_variables += 1
+        end
+        if moments.evolve_upar
+            # neutral flow
+            n_variables += 1
+        end
+        if moments.evolve_ppar
+            # neutral pressure
+            n_variables += 1
+        end
+    end
+    t_params = setup_time_info(t_input, n_variables, code_time, dt_reload,
+                               dt_before_last_fail_reload, manufactured_solns_input,
+                               io_input)
 
     # Make Vectors that count which variable caused timestep limits and timestep failures
     # the right length. Do this setup even when not using adaptive timestepping, because
     # it is easier than modifying the file I/O according to whether we are using adaptive
     # timestepping.
     #
-    # Entries for limit by accuracy (which is an average over all variables),
-    # max_increase_factor, minimum_dt and maximum_dt
-    push!(t_params.limit_caused_by, 0, 0, 0, 0, 0)
+    # Entries for limit by max_increase_factor, max_increase_factor_near_last_fail,
+    # minimum_dt and maximum_dt.
+    push!(t_params.limit_caused_by, 0, 0, 0, 0)
 
     # ion pdf
-    push!(t_params.limit_caused_by, 0, 0)
+    push!(t_params.limit_caused_by, 0, 0, 0) # RK accuracy plus 2 CFL limits
     push!(t_params.failure_caused_by, 0)
     if moments.evolve_density
         # ion density
+        push!(t_params.limit_caused_by, 0) # RK accuracy
         push!(t_params.failure_caused_by, 0)
     end
     if moments.evolve_upar
         # ion flow
+        push!(t_params.limit_caused_by, 0) # RK accuracy
         push!(t_params.failure_caused_by, 0)
     end
     if moments.evolve_ppar
         # ion pressure
+        push!(t_params.limit_caused_by, 0) # RK accuracy
         push!(t_params.failure_caused_by, 0)
     end
     if composition.n_neutral_species > 0
         # neutral pdf
-        push!(t_params.limit_caused_by, 0, 0)
+        push!(t_params.limit_caused_by, 0, 0, 0) # RK accuracy plus 2 CFL limits
         push!(t_params.failure_caused_by, 0)
         if moments.evolve_density
             # neutral density
+            push!(t_params.limit_caused_by, 0) # RK accuracy
             push!(t_params.failure_caused_by, 0)
         end
         if moments.evolve_upar
             # neutral flow
+            push!(t_params.limit_caused_by, 0) # RK accuracy
             push!(t_params.failure_caused_by, 0)
         end
         if moments.evolve_ppar
             # neutral pressure
+            push!(t_params.limit_caused_by, 0) # RK accuracy
             push!(t_params.failure_caused_by, 0)
         end
     end

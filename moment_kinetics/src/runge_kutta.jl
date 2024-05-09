@@ -706,10 +706,10 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
         CFL_limits = MPI.Allreduce(CFL_limits, min, comm_inter_block[])
         CFL_limit_caused_by = argmin(CFL_limits)
         CFL_limit = CFL_limits[CFL_limit_caused_by]
-        # Reserve first five entries of t_params.limit_caused_by for accuracy,
-        # max_increase_factor, max_increase_factor_near_fail, minimum_dt and maximum_dt
-        # limits.
-        this_limit_caused_by = CFL_limit_caused_by + 5
+        # Reserve first four entries of t_params.limit_caused_by for max_increase_factor,
+        # max_increase_factor_near_fail, minimum_dt and maximum_dt limits, then the next
+        # `n_variables` for RK accuracy limits.
+        this_limit_caused_by = CFL_limit_caused_by + 4 + t_params.n_variables
     end
 
     if error_norm_method == "Linf"
@@ -717,10 +717,12 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
         error_norms = MPI.Reduce(error_norms, max, comm_block[]; root=0)
 
         error_norm = nothing
+        max_error_variable_index = -1
         @serial_region begin
             # Get maximum error over all blocks
             error_norms = MPI.Allreduce(error_norms, max, comm_inter_block[])
-            error_norm = maximum(error_norms)
+            max_error_variable_index = argmax(error_norms)
+            error_norm = error_norms[max_error_variable_index]
         end
         error_norm = MPI.bcast(error_norm, 0, comm_block[])
     elseif error_norm_method == "L2"
@@ -728,6 +730,7 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
         error_norms = MPI.Reduce(error_norms, +, comm_block[]; root=0)
 
         error_norm = nothing
+        max_error_variable_index = -1
         @serial_region begin
             # Get maximum error over all blocks
             error_norms = MPI.Allreduce(error_norms, +, comm_inter_block[])
@@ -740,6 +743,9 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
             # larger number of points in the distribution functions does not mean that
             # error on the moments is ignored.
             error_norm = mean(error_norms)
+
+            # Record which variable had the maximum error
+            max_error_variable_index = argmax(error_norms)
         end
 
         error_norm = MPI.bcast(error_norm, 0, comm_block[])
@@ -790,7 +796,6 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
 
             # Call the 'cause' of the timestep failure the variable that has the biggest
             # error norm here
-            max_error_variable_index = argmax(error_norms)
             t_params.failure_caused_by[max_error_variable_index] += 1
 
             #println("t=$t, timestep failed, error_norm=$error_norm, error_norms=$error_norms, decreasing timestep to ", t_params.dt[])
@@ -821,12 +826,15 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
                 if t_params.dt[] > CFL_limit
                     t_params.dt[] = CFL_limit
                 else
-                    this_limit_caused_by = 1
+                    # Reserve first four entries of t_params.limit_caused_by for
+                    # max_increase_factor, max_increase_factor_near_fail, minimum_dt and
+                    # maximum_dt limits.
+                    this_limit_caused_by = 4 + max_error_variable_index
                 end
 
                 # Limit so timestep cannot increase by a large factor, which might lead to
                 # numerical instability in some cases.
-                max_cap_limit_caused_by = 2
+                max_cap_limit_caused_by = 1
                 if isinf(t_params.max_increase_factor_near_last_fail)
                     # Not using special timestep limiting near last failed dt value
                     max_cap = t_params.max_increase_factor * t_params.previous_dt[]
@@ -843,7 +851,7 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
                         max_cap = max(slow_increase_threshold,
                                       t_params.max_increase_factor_near_last_fail *
                                       t_params.previous_dt[])
-                        max_cap_limit_caused_by = 3
+                        max_cap_limit_caused_by = 2
                     end
                 end
                 if t_params.dt[] > max_cap
@@ -854,13 +862,13 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
                 # Prevent timestep from going below minimum_dt
                 if t_params.dt[] < t_params.minimum_dt
                     t_params.dt[] = t_params.minimum_dt
-                    this_limit_caused_by = 4
+                    this_limit_caused_by = 3
                 end
 
                 # Prevent timestep from going above maximum_dt
                 if t_params.dt[] > t_params.maximum_dt
                     t_params.dt[] = t_params.maximum_dt
-                    this_limit_caused_by = 5
+                    this_limit_caused_by = 4
                 end
 
                 t_params.limit_caused_by[this_limit_caused_by] += 1

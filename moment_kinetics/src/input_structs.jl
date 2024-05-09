@@ -39,6 +39,7 @@ an option but known at compile time when a `time_info` struct is passed as a fun
 argument.
 """
 struct time_info{Terrorsum <: Real}
+    n_variables::mk_int
     nstep::mk_int
     end_time::mk_float
     dt::MPISharedArray{mk_float,1}
