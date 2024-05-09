@@ -83,7 +83,7 @@ struct gausslegendre_base_info
     Y31::Array{mk_float,3}
 end
 
-struct gausslegendre_info <: weak_discretization_info
+struct gausslegendre_info{T} <: weak_discretization_info
     lobatto::gausslegendre_base_info
     radau::gausslegendre_base_info
     # global (1D) mass matrix
@@ -96,21 +96,26 @@ struct gausslegendre_info <: weak_discretization_info
     # global (1D) weak Laplacian derivative matrix
     L_matrix::Array{mk_float,2}
     # global (1D) LU object
-    mass_matrix_lu::T where T
+    mass_matrix_lu::T
     # dummy matrix for local operators
     Qmat::Array{mk_float,2}
 end
 
-function setup_gausslegendre_pseudospectral(coord;init_YY=true)
-    lobatto = setup_gausslegendre_pseudospectral_lobatto(coord,init_YY=init_YY)
-    radau = setup_gausslegendre_pseudospectral_radau(coord,init_YY=init_YY)
+function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
+    lobatto = setup_gausslegendre_pseudospectral_lobatto(coord,collision_operator_dim=collision_operator_dim)
+    radau = setup_gausslegendre_pseudospectral_radau(coord,collision_operator_dim=collision_operator_dim)
+
+    if collision_operator_dim
+        S_matrix = allocate_float(coord.n,coord.n)
+        setup_global_weak_form_matrix!(S_matrix, lobatto, radau, coord, "S")
+    else
+        S_matrix = allocate_float(0, 0)
+    end
     mass_matrix = allocate_float(coord.n,coord.n)
-    S_matrix = allocate_float(coord.n,coord.n)
     K_matrix = allocate_float(coord.n,coord.n)
     L_matrix = allocate_float(coord.n,coord.n)
     
     setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M")
-    setup_global_weak_form_matrix!(S_matrix, lobatto, radau, coord, "S")
     setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms")
     setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms")
     mass_matrix_lu = lu(sparse(mass_matrix))
@@ -118,7 +123,7 @@ function setup_gausslegendre_pseudospectral(coord;init_YY=true)
     return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),K_matrix,L_matrix,mass_matrix_lu,Qmat)
 end
 
-function setup_gausslegendre_pseudospectral_lobatto(coord;init_YY=true)
+function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_dim=true)
     x, w = gausslobatto(coord.ngrid)
     Dmat = allocate_float(coord.ngrid, coord.ngrid)
     gausslobattolegendre_differentiation_matrix!(Dmat,x,coord.ngrid)
@@ -127,37 +132,38 @@ function setup_gausslegendre_pseudospectral_lobatto(coord;init_YY=true)
     GaussLegendre_weak_product_matrix!(M0,coord.ngrid,x,w,"M0")
     M1 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(M1,coord.ngrid,x,w,"M1")
-    M2 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(M2,coord.ngrid,x,w,"M2")
-    S0 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(S0,coord.ngrid,x,w,"S0")
-    S1 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(S1,coord.ngrid,x,w,"S1")
     K0 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(K0,coord.ngrid,x,w,"K0")
     K1 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(K1,coord.ngrid,x,w,"K1")
-    K2 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(K2,coord.ngrid,x,w,"K2")
     P0 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(P0,coord.ngrid,x,w,"P0")
-    P1 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(P1,coord.ngrid,x,w,"P1")
-    P2 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(P2,coord.ngrid,x,w,"P2")
     D0 = allocate_float(coord.ngrid)
     #@. D0 = Dmat[1,:] # values at lower extreme of element
     GaussLegendre_derivative_vector!(D0,-1.0,coord.ngrid,x,w)
     
-    Y00 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y01 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y10 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y11 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y20 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y21 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y30 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y31 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    if init_YY
+    if collision_operator_dim
+        M2 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(M2,coord.ngrid,x,w,"M2")
+        S0 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(S0,coord.ngrid,x,w,"S0")
+        S1 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(S1,coord.ngrid,x,w,"S1")
+        K2 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(K2,coord.ngrid,x,w,"K2")
+        P1 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(P1,coord.ngrid,x,w,"P1")
+        P2 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(P2,coord.ngrid,x,w,"P2")
+
+        Y00 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y01 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y10 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y11 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y20 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y21 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y30 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y31 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
         GaussLegendre_weak_product_matrix!(Y00,coord.ngrid,x,w,"Y00")
         GaussLegendre_weak_product_matrix!(Y01,coord.ngrid,x,w,"Y01")
         GaussLegendre_weak_product_matrix!(Y10,coord.ngrid,x,w,"Y10")
@@ -166,12 +172,28 @@ function setup_gausslegendre_pseudospectral_lobatto(coord;init_YY=true)
         GaussLegendre_weak_product_matrix!(Y21,coord.ngrid,x,w,"Y21")
         GaussLegendre_weak_product_matrix!(Y30,coord.ngrid,x,w,"Y30")
         GaussLegendre_weak_product_matrix!(Y31,coord.ngrid,x,w,"Y31")
+    else
+        M2 = allocate_float(0, 0)
+        S0 = allocate_float(0, 0)
+        S1 = allocate_float(0, 0)
+        K2 = allocate_float(0, 0)
+        P1 = allocate_float(0, 0)
+        P2 = allocate_float(0, 0)
+
+        Y00 = allocate_float(0, 0, 0)
+        Y01 = allocate_float(0, 0, 0)
+        Y10 = allocate_float(0, 0, 0)
+        Y11 = allocate_float(0, 0, 0)
+        Y20 = allocate_float(0, 0, 0)
+        Y21 = allocate_float(0, 0, 0)
+        Y30 = allocate_float(0, 0, 0)
+        Y31 = allocate_float(0, 0, 0)
     end
     return gausslegendre_base_info(Dmat,M0,M1,M2,S0,S1,
             K0,K1,K2,P0,P1,P2,D0,Y00,Y01,Y10,Y11,Y20,Y21,Y30,Y31)
 end
 
-function setup_gausslegendre_pseudospectral_radau(coord;init_YY=true)
+function setup_gausslegendre_pseudospectral_radau(coord; collision_operator_dim=true)
     # Gauss-Radau points on [-1,1)
     x, w = gaussradau(coord.ngrid)
     # Gauss-Radau points on (-1,1] 
@@ -184,35 +206,36 @@ function setup_gausslegendre_pseudospectral_radau(coord;init_YY=true)
     GaussLegendre_weak_product_matrix!(M0,coord.ngrid,xreverse,wreverse,"M0",radau=true)
     M1 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(M1,coord.ngrid,xreverse,wreverse,"M1",radau=true)
-    M2 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(M2,coord.ngrid,xreverse,wreverse,"M2",radau=true)
-    S0 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(S0,coord.ngrid,xreverse,wreverse,"S0",radau=true)
-    S1 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(S1,coord.ngrid,xreverse,wreverse,"S1",radau=true)
     K0 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(K0,coord.ngrid,xreverse,wreverse,"K0",radau=true)
     K1 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(K1,coord.ngrid,xreverse,wreverse,"K1",radau=true)
-    K2 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(K2,coord.ngrid,xreverse,wreverse,"K2",radau=true)
     P0 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(P0,coord.ngrid,xreverse,wreverse,"P0",radau=true)
-    P1 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(P1,coord.ngrid,xreverse,wreverse,"P1",radau=true)
-    P2 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(P2,coord.ngrid,xreverse,wreverse,"P2",radau=true)
     D0 = allocate_float(coord.ngrid)
     GaussLegendre_derivative_vector!(D0,-1.0,coord.ngrid,xreverse,wreverse,radau=true)
-    Y00 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y01 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y10 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y11 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y20 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y21 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y30 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y31 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    if init_YY 
+    if collision_operator_dim
+        M2 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(M2,coord.ngrid,xreverse,wreverse,"M2",radau=true)
+        S0 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(S0,coord.ngrid,xreverse,wreverse,"S0",radau=true)
+        S1 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(S1,coord.ngrid,xreverse,wreverse,"S1",radau=true)
+        K2 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(K2,coord.ngrid,xreverse,wreverse,"K2",radau=true)
+        P1 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(P1,coord.ngrid,xreverse,wreverse,"P1",radau=true)
+        P2 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(P2,coord.ngrid,xreverse,wreverse,"P2",radau=true)
+
+        Y00 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y01 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y10 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y11 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y20 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y21 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y30 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y31 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
         GaussLegendre_weak_product_matrix!(Y00,coord.ngrid,xreverse,wreverse,"Y00",radau=true)
         GaussLegendre_weak_product_matrix!(Y01,coord.ngrid,xreverse,wreverse,"Y01",radau=true)
         GaussLegendre_weak_product_matrix!(Y10,coord.ngrid,xreverse,wreverse,"Y10",radau=true)
@@ -221,6 +244,22 @@ function setup_gausslegendre_pseudospectral_radau(coord;init_YY=true)
         GaussLegendre_weak_product_matrix!(Y21,coord.ngrid,xreverse,wreverse,"Y21",radau=true)
         GaussLegendre_weak_product_matrix!(Y30,coord.ngrid,xreverse,wreverse,"Y30",radau=true)
         GaussLegendre_weak_product_matrix!(Y31,coord.ngrid,xreverse,wreverse,"Y31",radau=true)
+    else
+        M2 = allocate_float(0, 0)
+        S0 = allocate_float(0, 0)
+        S1 = allocate_float(0, 0)
+        K2 = allocate_float(0, 0)
+        P1 = allocate_float(0, 0)
+        P2 = allocate_float(0, 0)
+
+        Y00 = allocate_float(0, 0, 0)
+        Y01 = allocate_float(0, 0, 0)
+        Y10 = allocate_float(0, 0, 0)
+        Y11 = allocate_float(0, 0, 0)
+        Y20 = allocate_float(0, 0, 0)
+        Y21 = allocate_float(0, 0, 0)
+        Y30 = allocate_float(0, 0, 0)
+        Y31 = allocate_float(0, 0, 0)
     end
     return gausslegendre_base_info(Dmat,M0,M1,M2,S0,S1,
             K0,K1,K2,P0,P1,P2,D0,Y00,Y01,Y10,Y11,Y20,Y21,Y30,Y31)
