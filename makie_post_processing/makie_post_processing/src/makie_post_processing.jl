@@ -7197,52 +7197,62 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing, electro
                 if electron
                     counter += 1
                     plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                            label=prefix * "electron pdf RK accuracy", ax=ax)
+                            label=prefix * "electron pdf RK accuracy", ax=ax,
+                            linestyle=:dash)
                     counter += 1
                     plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                            label=prefix * "electron ppar RK accuracy", ax=ax)
+                            label=prefix * "electron ppar RK accuracy", ax=ax,
+                            linestyle=:dash)
                 else
                     counter += 1
                     plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                            label=prefix * "ion pdf RK accuracy", ax=ax)
+                            label=prefix * "ion pdf RK accuracy", ax=ax, linestyle=:dash)
                     if ri.evolve_density
                         counter += 1
                         plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                                label=prefix * "ion density RK accuracy", ax=ax)
+                                label=prefix * "ion density RK accuracy", ax=ax,
+                                linestyle=:dash)
                     end
                     if ri.evolve_upar
                         counter += 1
                         plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                                label=prefix * "ion upar RK accuracy", ax=ax)
+                                label=prefix * "ion upar RK accuracy", ax=ax,
+                                linestyle=:dash)
                     end
                     if ri.evolve_ppar
                         counter += 1
                         plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                                label=prefix * "ion ppar RK accuracy", ax=ax)
+                                label=prefix * "ion ppar RK accuracy", ax=ax,
+                                linestyle=:dash)
                     end
                     if ri.composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
                         counter += 1
                         plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                                label=prefix * "electron ppar RK accuracy", ax=ax)
+                                label=prefix * "electron ppar RK accuracy", ax=ax,
+                                linestyle=:dash)
                     end
                     if ri.n_neutral_species > 0
                         counter += 1
                         plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                                label=prefix * "neutral pdf RK accuracy", ax=ax)
+                                label=prefix * "neutral pdf RK accuracy", ax=ax,
+                                linestyle=:dash)
                         if ri.evolve_density
                             counter += 1
                             plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                                    label=prefix * "neutral density RK accuracy", ax=ax)
+                                    label=prefix * "neutral density RK accuracy", ax=ax,
+                                    linestyle=:dash)
                         end
                         if ri.evolve_upar
                             counter += 1
                             plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                                    label=prefix * "neutral uz RK accuracy", ax=ax)
+                                    label=prefix * "neutral uz RK accuracy", ax=ax,
+                                    linestyle=:dash)
                         end
                         if ri.evolve_ppar
                             counter += 1
                             plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                                    label=prefix * "neutral pz RK accuracy", ax=ax)
+                                    label=prefix * "neutral pz RK accuracy", ax=ax,
+                                    linestyle=:dash)
                         end
                     end
                 end
@@ -7255,7 +7265,7 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing, electro
                     label = prefix * "ion z advect"
                 end
                 plot_1d(time, @view limit_caused_by_per_output[counter,:]; label=label,
-                        ax=ax)
+                        ax=ax, linestyle=:dot)
 
                 # vpa advection
                 counter += 1
@@ -7265,18 +7275,18 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing, electro
                     label = prefix * "ion vpa advect"
                 end
                 plot_1d(time, @view limit_caused_by_per_output[counter,:]; label=label,
-                        ax=ax)
+                        ax=ax, linestyle=:dot)
 
                 if !electron && ri.n_neutral_species > 0
                     # Neutral z advection
                     counter += 1
                     plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                            label=prefix * "neutral z advect", ax=ax)
+                            label=prefix * "neutral z advect", ax=ax, linestyle=:dot)
 
                     # Neutral vz advection
                     counter += 1
                     plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                            label=prefix * "neutral vz advect", ax=ax)
+                            label=prefix * "neutral vz advect", ax=ax, linestyle=:dot)
                 end
 
                 if counter > size(limit_caused_by_per_output, 1)
