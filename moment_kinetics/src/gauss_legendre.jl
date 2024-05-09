@@ -27,8 +27,7 @@ using LinearAlgebra: mul!, lu, LU
 using SparseArrays: sparse, AbstractSparseArray
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
-import ..calculus: elementwise_derivative!, elementwise_apply_Kmat!,
-                   elementwise_apply_Lmat!, mass_matrix_solve!
+import ..calculus: elementwise_derivative!, mass_matrix_solve!
 import ..interpolation: single_element_interpolate!
 using ..lagrange_polynomials: lagrange_poly
 using ..moment_kinetics_structs: weak_discretization_info
@@ -83,20 +82,20 @@ struct gausslegendre_base_info
     Y31::Array{mk_float,3}
 end
 
-struct gausslegendre_info{T} <: weak_discretization_info
+struct gausslegendre_info{TSparse, TLU} <: weak_discretization_info
     lobatto::gausslegendre_base_info
     radau::gausslegendre_base_info
     # global (1D) mass matrix
     mass_matrix::Array{mk_float,2}
     # global (1D) weak derivative matrix
     #S_matrix::Array{mk_float,2}
-    S_matrix::AbstractSparseArray{mk_float,Ti,2} where Ti
+    S_matrix::TSparse
     # global (1D) weak second derivative matrix
-    K_matrix::Array{mk_float,2}
+    K_matrix::TSparse
     # global (1D) weak Laplacian derivative matrix
-    L_matrix::Array{mk_float,2}
+    L_matrix::TSparse
     # global (1D) LU object
-    mass_matrix_lu::T
+    mass_matrix_lu::TLU
     # dummy matrix for local operators
     Qmat::Array{mk_float,2}
 end
@@ -114,13 +113,14 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
     mass_matrix = allocate_float(coord.n,coord.n)
     K_matrix = allocate_float(coord.n,coord.n)
     L_matrix = allocate_float(coord.n,coord.n)
-    
+
     setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M")
     setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms")
     setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms")
     mass_matrix_lu = lu(sparse(mass_matrix))
     Qmat = allocate_float(coord.ngrid,coord.ngrid)
-    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),K_matrix,L_matrix,mass_matrix_lu,Qmat)
+
+    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),sparse(K_matrix),sparse(L_matrix),mass_matrix_lu,Qmat)
 end
 
 function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_dim=true)
@@ -306,84 +306,6 @@ end
 # Spectral element method does not use upwinding within an element
 function elementwise_derivative!(coord, ff, adv_fac, spectral::gausslegendre_info)
     return elementwise_derivative!(coord, ff, spectral)
-end
-
-function elementwise_apply_Kmat!(coord, ff, gausslegendre::gausslegendre_info)
-    df = coord.scratch_2d
-    # define local variable nelement for convenience
-    nelement = coord.nelement_local
-    # check array bounds
-    @boundscheck nelement == size(df,2) && coord.ngrid == size(df,1) || throw(BoundsError(df))
-    
-    # variable k will be used to avoid double counting of overlapping point
-    k = 0
-    j = 1 # the first element
-    imin = coord.imin[j]-k
-    # imax is the maximum index on the full grid for this (jth) element
-    imax = coord.imax[j]        
-    get_KK_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord,explicit_BC_terms=true)
-    #println(gausslegendre.Qmat)
-    @views mul!(df[:,j],gausslegendre.Qmat[:,:],ff[imin:imax])
-    zero_gradient_bc_lower_boundary = false#true
-    if coord.radau_first_element && zero_gradient_bc_lower_boundary
-       # set the 1st point of the RHS vector to zero 
-       # consistent with use with the mass matrix with D f = 0 boundary conditions
-       df[1,j] = 0.0
-    end
-    # calculate the derivative on each element
-    @inbounds for j ∈ 2:nelement
-        k = 1 
-        imin = coord.imin[j]-k
-        # imax is the maximum index on the full grid for this (jth) element
-        imax = coord.imax[j]
-        #@views mul!(df[:,j],gausslegendre.lobatto.Kmat[:,:],ff[imin:imax])
-        get_KK_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord,explicit_BC_terms=true)
-        #println(gausslegendre.Qmat)
-        @views mul!(df[:,j],gausslegendre.Qmat[:,:],ff[imin:imax])
-    end
-    #for j in 1:nelement
-    #    println(df[:,j])
-    #end
-    return nothing
-end
-
-function elementwise_apply_Lmat!(coord, ff, gausslegendre::gausslegendre_info)
-    df = coord.scratch_2d
-    # define local variable nelement for convenience
-    nelement = coord.nelement_local
-    # check array bounds
-    @boundscheck nelement == size(df,2) && coord.ngrid == size(df,1) || throw(BoundsError(df))
-    
-    # variable k will be used to avoid double counting of overlapping point
-    k = 0
-    j = 1 # the first element
-    imin = coord.imin[j]-k
-    # imax is the maximum index on the full grid for this (jth) element
-    imax = coord.imax[j]        
-    get_LL_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord,explicit_BC_terms=true)
-    #println(gausslegendre.Qmat)
-    @views mul!(df[:,j],gausslegendre.Qmat[:,:],ff[imin:imax])
-    zero_gradient_bc_lower_boundary = false#true
-    if coord.name == "vperp" && zero_gradient_bc_lower_boundary
-       # set the 1st point of the RHS vector to zero 
-       # consistent with use with the mass matrix with D f = 0 boundary conditions
-       df[1,j] = 0.0
-    end
-    # calculate the derivative on each element
-    @inbounds for j ∈ 2:nelement
-        k = 1 
-        imin = coord.imin[j]-k
-        # imax is the maximum index on the full grid for this (jth) element
-        imax = coord.imax[j]
-        #@views mul!(df[:,j],gausslegendre.lobatto.Kmat[:,:],ff[imin:imax])
-        get_LL_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord,explicit_BC_terms=true)
-        #println(gausslegendre.Qmat)
-        @views mul!(df[:,j],gausslegendre.Qmat[:,:],ff[imin:imax])
-    end
-    #for j in 1:nelement
-    #    println(df[:,j])
-    #end
-    return nothing
 end
 
 function single_element_interpolate!(result, newgrid, f, imin, imax, coord, gausslegendre::gausslegendre_base_info)
@@ -880,8 +802,7 @@ end
 """
 A function that assigns the local weak-form matrices to 
 a global array QQ_global for later solving weak form of required
-1D equation. This function only supports fully local grids 
-that have coord.nelement_local = coord.nelement_global.
+1D equation.
 
 The 'option' variable is a flag for 
 choosing the type of matrix to be constructed. 
