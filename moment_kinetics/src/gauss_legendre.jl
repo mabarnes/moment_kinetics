@@ -29,6 +29,8 @@ using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 import ..calculus: elementwise_derivative!, elementwise_apply_Kmat!,
                    elementwise_apply_Lmat!, mass_matrix_solve!
+import ..interpolation: single_element_interpolate!
+using ..lagrange_polynomials: lagrange_poly
 using ..moment_kinetics_structs: weak_discretization_info
 
 
@@ -342,6 +344,17 @@ function elementwise_apply_Lmat!(coord, ff, gausslegendre::gausslegendre_info)
     #for j in 1:nelement
     #    println(df[:,j])
     #end
+    return nothing
+end
+
+function single_element_interpolate!(result, newgrid, f, imin, imax, coord, gausslegendre::gausslegendre_base_info)
+    for i ∈ 1:length(newgrid)
+        result[i] = 0.0
+        for j ∈ 1:coord.ngrid
+            @views result[i] += f[j] * lagrange_poly(j, coord.grid[imin:imax], newgrid[i])
+        end
+    end
+
     return nothing
 end
 
