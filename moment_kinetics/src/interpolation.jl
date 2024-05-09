@@ -9,7 +9,24 @@ export interpolate_to_grid_z
 
 using ..array_allocation: allocate_float
 using ..moment_kinetics_structs: null_spatial_dimension_info, null_velocity_dimension_info
-using ..type_definitions: mk_float
+using ..type_definitions: mk_float, mk_int
+
+"""
+    single_element_interpolate!(result, newgrid, f, imin, imax, coord, spectral)
+
+Interpolation within a single element.
+
+`f` is an array with the values of the input variable in the element to be interpolated.
+`imin` and `imax` give the start and end points of the element in the grid (used to
+calculate shift and scale factors to a normalised grid).
+
+`newgrid` gives the points within the element where output is required. `result` is filled
+with the interpolated values at those points.
+
+`coord` is the `coordinate` struct for the dimension along which interpolation is being
+done. `spectral` is the corresponding `discretization_info`.
+"""
+function single_element_interpolate! end
 
 """
 Interpolation from a regular grid to a 1d grid with arbitrary spacing
@@ -29,6 +46,63 @@ spectral : discretization_info
     is used.
 """
 function interpolate_to_grid_1d! end
+
+function interpolate_to_grid_1d!(result, newgrid, f, coord, spectral)
+    # define local variable nelement for convenience
+    nelement = coord.nelement_local
+
+    n_new = size(newgrid)[1]
+    # Find which points belong to which element.
+    # kstart[j] contains the index of the first point in newgrid that is within element
+    # j, and kstart[nelement+1] is n_new if the last point is within coord.grid, or the
+    # index of the first element outside coord.grid otherwise.
+    # Assumes points in newgrid are sorted.
+    # May not be the most efficient algorithm.
+    # Find start/end points for each element, storing their indices in kstart
+    kstart = Vector{mk_int}(undef, nelement+1)
+    # set the starting index by finding the start of coord.grid
+    kstart[1] = searchsortedfirst(newgrid, coord.grid[1])
+    # check to see if any of the newgrid points are to the left of the first grid point
+    for j ∈ 1:kstart[1]-1
+        # if the new grid location is outside the bounds of the original grid,
+        # extrapolate f with Gaussian-like decay beyond the domain
+        result[j] = f[1] * exp(-(coord.grid[1] - newgrid[j])^2)
+    end
+    @inbounds for j ∈ 1:nelement
+        # Search from kstart[j] to try to speed up the sort, but means result of
+        # searchsortedfirst() is offset by kstart[j]-1 from the beginning of newgrid.
+        kstart[j+1] = kstart[j] - 1 + @views searchsortedfirst(newgrid[kstart[j]:end], coord.grid[coord.imax[j]])
+    end
+
+    # First element includes both boundary points, while all others have only one (to
+    # avoid duplication), so calculate the first element outside the loop.
+    if kstart[1] < kstart[2]
+        imin = coord.imin[1]
+        imax = coord.imax[1]
+        kmin = kstart[1]
+        kmax = kstart[2] - 1
+        @views single_element_interpolate!(result[kmin:kmax], newgrid[kmin:kmax],
+                                           f[imin:imax], imin, imax, coord,
+                                           spectral.lobatto)
+    end
+    @inbounds for j ∈ 2:nelement
+        kmin = kstart[j]
+        kmax = kstart[j+1] - 1
+        if kmin <= kmax
+            imin = coord.imin[j] - 1
+            imax = coord.imax[j]
+            @views single_element_interpolate!(result[kmin:kmax], newgrid[kmin:kmax],
+                                               f[imin:imax], imin, imax, coord,
+                                               spectral.lobatto)
+        end
+    end
+
+    for k ∈ kstart[nelement+1]:n_new
+        result[k] = f[end] * exp(-(newgrid[k] - coord.grid[end])^2)
+    end
+
+    return nothing
+end
 
 function interpolate_to_grid_1d!(result, new_grid, f, coord,
                                  spectral::null_spatial_dimension_info)
