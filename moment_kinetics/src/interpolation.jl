@@ -76,6 +76,11 @@ function interpolate_to_grid_1d!(result, newgrid, f, coord, spectral)
 
     # First element includes both boundary points, while all others have only one (to
     # avoid duplication), so calculate the first element outside the loop.
+    if coord.radau_first_element && coord.irank == 0
+        first_element_spectral = spectral.radau
+    else
+        first_element_spectral = spectral.lobatto
+    end
     if kstart[1] < kstart[2]
         imin = coord.imin[1]
         imax = coord.imax[1]
@@ -83,7 +88,7 @@ function interpolate_to_grid_1d!(result, newgrid, f, coord, spectral)
         kmax = kstart[2] - 1
         @views single_element_interpolate!(result[kmin:kmax], newgrid[kmin:kmax],
                                            f[imin:imax], imin, imax, coord,
-                                           spectral.lobatto)
+                                           first_element_spectral)
     end
     @inbounds for j ∈ 2:nelement
         kmin = kstart[j]
