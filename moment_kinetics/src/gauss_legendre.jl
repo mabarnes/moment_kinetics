@@ -237,7 +237,7 @@ function elementwise_derivative!(coord, ff, gausslegendre::gausslegendre_info)
     imin = coord.imin[j]-k
     # imax is the maximum index on the full grid for this (jth) element
     imax = coord.imax[j]        
-    if coord.name == "vperp" && coord.irank == 0 # differentiate this element with the Radau scheme
+    if coord.radau_first_element && coord.irank == 0 # differentiate this element with the Radau scheme
         @views mul!(df[:,j],gausslegendre.radau.Dmat[:,:],ff[imin:imax])
     else #differentiate using the Lobatto scheme
         @views mul!(df[:,j],gausslegendre.lobatto.Dmat[:,:],ff[imin:imax])
@@ -284,7 +284,7 @@ function elementwise_apply_Kmat!(coord, ff, gausslegendre::gausslegendre_info)
     #println(gausslegendre.Qmat)
     @views mul!(df[:,j],gausslegendre.Qmat[:,:],ff[imin:imax])
     zero_gradient_bc_lower_boundary = false#true
-    if coord.name == "vperp" && zero_gradient_bc_lower_boundary
+    if coord.radau_first_element && zero_gradient_bc_lower_boundary
        # set the 1st point of the RHS vector to zero 
        # consistent with use with the mass matrix with D f = 0 boundary conditions
        df[1,j] = 0.0
