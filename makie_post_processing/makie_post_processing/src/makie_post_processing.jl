@@ -7153,7 +7153,8 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing, electro
             ylims!(ax, 0.0, 4.0 * maxval)
             put_legend_right(CFL_fig, ax)
 
-            limits_fig, ax = get_1d_ax(; xlabel="time", ylabel="number of limits per factor per output")
+            limits_fig, ax = get_1d_ax(; xlabel="time", ylabel="number of limits per factor per output",
+                                       size=(600, 500))
 
             for ri ∈ run_info
                 if length(run_info) == 1
@@ -7171,11 +7172,6 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing, electro
                     get_variable(ri, "$(electron_prefix)limit_caused_by_per_output";
                                  it=it)
                 counter = 0
-
-                # Accuracy limit counter
-                counter += 1
-                plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                        label=prefix * "RK accuracy", ax=ax)
 
                 # Maximum timestep increase limit counter
                 counter += 1
@@ -7196,6 +7192,60 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing, electro
                 counter += 1
                 plot_1d(time, @view limit_caused_by_per_output[counter,:];
                         label=prefix * "max timestep", ax=ax)
+
+                # Accuracy limit counters
+                if electron
+                    counter += 1
+                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                            label=prefix * "electron pdf RK accuracy", ax=ax)
+                    counter += 1
+                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                            label=prefix * "electron ppar RK accuracy", ax=ax)
+                else
+                    counter += 1
+                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                            label=prefix * "ion pdf RK accuracy", ax=ax)
+                    if ri.evolve_density
+                        counter += 1
+                        plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                label=prefix * "ion density RK accuracy", ax=ax)
+                    end
+                    if ri.evolve_upar
+                        counter += 1
+                        plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                label=prefix * "ion upar RK accuracy", ax=ax)
+                    end
+                    if ri.evolve_ppar
+                        counter += 1
+                        plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                label=prefix * "ion ppar RK accuracy", ax=ax)
+                    end
+                    if ri.composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
+                        counter += 1
+                        plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                label=prefix * "electron ppar RK accuracy", ax=ax)
+                    end
+                    if ri.n_neutral_species > 0
+                        counter += 1
+                        plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                label=prefix * "neutral pdf RK accuracy", ax=ax)
+                        if ri.evolve_density
+                            counter += 1
+                            plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                    label=prefix * "neutral density RK accuracy", ax=ax)
+                        end
+                        if ri.evolve_upar
+                            counter += 1
+                            plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                    label=prefix * "neutral uz RK accuracy", ax=ax)
+                        end
+                        if ri.evolve_ppar
+                            counter += 1
+                            plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                    label=prefix * "neutral pz RK accuracy", ax=ax)
+                        end
+                    end
+                end
 
                 # z advection
                 counter += 1
