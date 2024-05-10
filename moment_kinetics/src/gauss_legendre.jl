@@ -837,11 +837,16 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
     # N.B. QQ varies with ielement for vperp, but not vpa
     # a radau element is used for the vperp grid (see get_QQ_local!())
     get_QQ_local!(QQ_j,j,lobatto,radau,coord,option)
-    QQ_global[imin[j],imin[j]:imax[j]] .+= QQ_j[1,:]
+    if coord.bc == "periodic" && coord.nrank == 1
+        QQ_global[imax[end], imin[j]:imax[j]] .+= QQ_j[1,:] ./ 2.0
+        QQ_global[imin[j],imin[j]:imax[j]] .+= QQ_j[1,:] ./ 2.0
+    else
+        QQ_global[imin[j],imin[j]:imax[j]] .+= QQ_j[1,:]
+    end
     for k in 2:imax[j]-imin[j] 
         QQ_global[k,imin[j]:imax[j]] .+= QQ_j[k,:]
     end
-    if coord.nelement_local > 1
+    if coord.nelement_local > 1 || (coord.bc == "periodic" && coord.nrank == 1)
         QQ_global[imax[j],imin[j]:imax[j]] .+= QQ_j[ngrid,:]./2.0
     else
         QQ_global[imax[j],imin[j]:imax[j]] .+= QQ_j[ngrid,:]
@@ -856,7 +861,12 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
         end
         # upper boundary assembly on element 
         if j == coord.nelement_local
-            QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]
+            if coord.bc == "periodic" && coord.nrank == 1
+                QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:] / 2.0
+                QQ_global[imin[1],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:] / 2.0
+            else
+                QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]
+            end
         else 
             QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]./2.0
         end
@@ -960,30 +970,32 @@ function get_KK_local!(QQ,ielement,
             if ielement > 1 || coord.irank > 0 # lobatto points
                 @. QQ =  (shift_factor/scale_factor)*lobatto.K0 + lobatto.K1 - lobatto.P0
                 # boundary terms from integration by parts
-                if explicit_BC_terms && ielement == 1
+                if explicit_BC_terms && ielement == 1 && coord.irank == 0
                     imin = coord.imin[ielement] - 1
                     @. QQ[1,:] -= coord.grid[imin]*lobatto.Dmat[1,:]/scale_factor
                 end
-                if explicit_BC_terms && ielement == nelement
+                if explicit_BC_terms && ielement == nelement && coord.irank == coord.nrank - 1
                     imax = coord.imax[ielement]
                     @. QQ[coord.ngrid,:] += coord.grid[imax]*lobatto.Dmat[coord.ngrid,:]/scale_factor  
                 end
             else # radau points 
                 @. QQ =  (shift_factor/scale_factor)*radau.K0 + radau.K1 - radau.P0
                 # boundary terms from integration by parts
-                if explicit_BC_terms && ielement == nelement  
+                if explicit_BC_terms && ielement == nelement && coord.irank == coord.nrank - 1 
                     imax = coord.imax[ielement]
                     @. QQ[coord.ngrid,:] += coord.grid[imax]*radau.Dmat[coord.ngrid,:]/scale_factor
                 end
             end
         else # assume integrals of form int^infty_-infty (.) d vpa
             @. QQ = lobatto.K0/scale_factor
-            # boundary terms from integration by parts
-            if explicit_BC_terms && ielement == 1
-                @. QQ[1,:] -= lobatto.Dmat[1,:]/scale_factor
-            end
-            if explicit_BC_terms && ielement == nelement
-                @. QQ[coord.ngrid,:] += lobatto.Dmat[coord.ngrid,:]/scale_factor
+            if coord.bc !== "periodic"
+                # boundary terms from integration by parts
+                if explicit_BC_terms && ielement == 1 && coord.irank == 0
+                    @. QQ[1,:] -= lobatto.Dmat[1,:]/scale_factor
+                end
+                if explicit_BC_terms && ielement == nelement && coord.irank == coord.nrank - 1
+                    @. QQ[coord.ngrid,:] += lobatto.Dmat[coord.ngrid,:]/scale_factor
+                end
             end
         end
         return nothing
@@ -1028,18 +1040,18 @@ function get_LL_local!(QQ,ielement,
             if ielement > 1 || coord.irank > 0 # lobatto points
                 @. QQ =  (shift_factor/scale_factor)*lobatto.K0 + lobatto.K1
                 # boundary terms from integration by parts
-                if explicit_BC_terms && ielement == 1
+                if explicit_BC_terms && ielement == 1 && coord.irank == 0
                     imin = coord.imin[ielement] - 1
                     @. QQ[1,:] -= coord.grid[imin]*lobatto.Dmat[1,:]/scale_factor
                 end
-                if explicit_BC_terms && ielement == nelement
+                if explicit_BC_terms && ielement == nelement && coord.irank == coord.nrank - 1
                     imax = coord.imax[ielement]
                     @. QQ[coord.ngrid,:] += coord.grid[imax]*lobatto.Dmat[coord.ngrid,:]/scale_factor
                 end
             else # radau points 
                 @. QQ =  (shift_factor/scale_factor)*radau.K0 + radau.K1
                 # boundary terms from integration by parts
-                if explicit_BC_terms && ielement == nelement
+                if explicit_BC_terms && ielement == nelement && coord.irank == coord.nrank - 1
                     imax = coord.imax[ielement]
                     @. QQ[coord.ngrid,:] += coord.grid[imax]*radau.Dmat[coord.ngrid,:]/scale_factor
                 end
@@ -1047,10 +1059,10 @@ function get_LL_local!(QQ,ielement,
         else # d^2 (.) d vpa^2 -- assume integrals of form int^infty_-infty (.) d vpa
             @. QQ = lobatto.K0/scale_factor
             # boundary terms from integration by parts
-            if explicit_BC_terms && ielement == 1
+            if explicit_BC_terms && ielement == 1 && coord.irank == 0
                 @. QQ[1,:] -= lobatto.Dmat[1,:]/scale_factor
             end
-            if explicit_BC_terms && ielement == nelement
+            if explicit_BC_terms && ielement == nelement && coord.irank == coord.nrank - 1
                 @. QQ[coord.ngrid,:] += lobatto.Dmat[coord.ngrid,:]/scale_factor
             end
         end
