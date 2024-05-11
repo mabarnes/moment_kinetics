@@ -59,6 +59,7 @@ using ..force_balance: force_balance!, neutral_force_balance!
 using ..energy_equation: energy_equation!, neutral_energy_equation!
 using ..em_fields: setup_em_fields, update_phi!
 using ..fokker_planck: init_fokker_planck_collisions_weak_form, explicit_fokker_planck_collisions_weak_form!
+using ..fokker_planck: explicit_fp_collisions_weak_form_Maxwellian_cross_species!
 using ..gyroaverages: init_gyro_operators, gyroaverage_pdf!
 using ..manufactured_solns: manufactured_sources
 using ..advection: advection_info
@@ -2570,9 +2571,18 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     # advance with the Fokker-Planck self-collision operator
     if advance.explicit_weakform_fp_collisions
         update_entropy_diagnostic = (istage == 1)
-        explicit_fokker_planck_collisions_weak_form!(fvec_out.pdf,fvec_in.pdf,moments.ion.dSdt,composition,collisions,dt,
-                                             fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,scratch_dummy,
+        if collisions.fkpl.self_collisions
+            # self collisions for each species
+            explicit_fokker_planck_collisions_weak_form!(fvec_out.pdf,fvec_in.pdf,moments.ion.dSdt,composition,
+                                 collisions,dt,fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,scratch_dummy,
+                                                     diagnose_entropy_production = update_entropy_diagnostic)
+        end
+        if collisions.fkpl.slowing_down_test
+        # include cross-collsions with fixed Maxwellian backgrounds
+            explicit_fp_collisions_weak_form_Maxwellian_cross_species!(fvec_out.pdf,fvec_in.pdf,moments.ion.dSdt,
+                             composition,collisions,dt,fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,
                                              diagnose_entropy_production = update_entropy_diagnostic)
+        end
     end
     
     # End of advance for distribution function

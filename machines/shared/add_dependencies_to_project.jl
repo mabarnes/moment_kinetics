@@ -101,6 +101,9 @@ elseif Sys.isapple()
             MPIPreferences.use_system_binary()
         catch
             println("Failed to auto-detect path of MPI library...")
+
+            local mpi_library_path
+
             default_mpi_library_path = get(mk_preferences, "mpi_library_path", "")
             mpi_library_path = get_input_with_path_completion(
                 "\nEnter the full path to your MPI library (e.g. something like "
@@ -110,20 +113,27 @@ elseif Sys.isapple()
             end
 
             MPIPreferences.use_system_binary(library_names=mpi_library_path)
-        end
 
-        # Just got the value for the setting, now write it to LocalPreferences.toml
-        mk_preferences["mpi_library_path"] = mpi_library_path
-        open(local_preferences_filename, "w") do io
-            TOML.print(io, local_preferences, sorted=true)
+            global mk_preferences, local_preferences
+
+            # Just got the value for the setting, now write it to LocalPreferences.toml
+            mk_preferences["mpi_library_path"] = mpi_library_path
+            open(local_preferences_filename, "w") do io
+                TOML.print(io, local_preferences, sorted=true)
+            end
+            # Re-read local_preferences file, so we can modify it again below, keeping the
+            # changes here
+            local_preferences = TOML.parsefile(local_preferences_filename)
+            mk_preferences = local_preferences["moment_kinetics"]
         end
-        # Re-read local_preferences file, so we can modify it again below, keeping the
-        # changes here
-        local_preferences = TOML.parsefile(local_preferences_filename)
-        mk_preferences = local_preferences["moment_kinetics"]
     else
-        mpi_library_path = mk_preferences["mpi_library_path"]
-        MPIPreferences.use_system_binary(library_names=mpi_library_path)
+        if "mpi_library_path" ∈ keys(mk_preferences)
+            mpi_library_path = mk_preferences["mpi_library_path"]
+            MPIPreferences.use_system_binary(library_names=mpi_library_path)
+        else
+            # Must have auto-detected MPI library before, so do the same here
+            MPIPreferences.use_system_binary()
+        end
     end
 else
     # If settings for MPI library are not given explicitly, then auto-detection by

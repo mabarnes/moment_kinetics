@@ -29,6 +29,7 @@ export enforce_zero_bc!
 export allocate_rosenbluth_potential_boundary_data
 export calculate_rosenbluth_potential_boundary_data_exact!
 export test_rosenbluth_potential_boundary_data
+export interpolate_2D_vspace!
 
 # Import moment_kinetics so that we can refer to it in docstrings
 import moment_kinetics
@@ -38,6 +39,7 @@ using ..array_allocation: allocate_float, allocate_shared_float
 using ..calculus: derivative!
 using ..communication
 using ..communication: MPISharedArray, global_rank
+using ..lagrange_polynomials: lagrange_poly
 using ..looping
 using moment_kinetics.gauss_legendre: get_QQ_local!
 using Dates
@@ -504,28 +506,6 @@ function get_nodes(coord,iel)
     (imin, imax) = get_imin_imax(coord,iel)
     nodes = coord.grid[imin:imax]
     return nodes
-end
-"""
-Lagrange polynomial
-args: 
-j - index of l_j from list of nodes
-x_nodes - array of x node values
-x - point where interpolated value is returned
-"""
-function lagrange_poly(j,x_nodes,x)
-    # get number of nodes
-    n = size(x_nodes,1)
-    # location where l(x0) = 1
-    x0 = x_nodes[j]
-    # evaluate polynomial
-    poly = 1.0
-    for i in 1:j-1
-            poly *= (x - x_nodes[i])/(x0 - x_nodes[i])
-    end
-    for i in j+1:n
-            poly *= (x - x_nodes[i])/(x0 - x_nodes[i])
-    end
-    return poly
 end
 
 # Function to get the local integration grid and quadrature weights
@@ -2315,6 +2295,99 @@ function enforce_vpavperp_BCs!(pdf,vpa,vperp,vpa_spectral,vperp_spectral)
         @views @. buffer = D0[2:ngrid_vperp] * pdf[ivpa,2:ngrid_vperp]
         pdf[ivpa,1] = -sum(buffer)/D0[1]
     end
+end
+
+"""
+function to interpolate f(vpa,vperp) from one 
+velocity grid to another, assuming that both 
+grids are represented by vpa, vperp in normalised units,
+but have different normalisation factors 
+defining the meaning of these grids in physical units.
+
+E.g. vpai, vperpi = ci * vpa, ci * vperp
+     vpae, vperpe = ce * vpa, ce * vperp
+     
+with ci = sqrt(Ti/mi), ce = sqrt(Te/mi)
+
+scalefac = ci / ce is the ratio of the
+two reference speeds
+
+"""
+function interpolate_2D_vspace!(pdf_out,pdf_in,vpa,vperp,scalefac)
+    
+    begin_anyv_vperp_vpa_region()
+    # loop over points in the output interpolated dataset
+    @loop_vperp ivperp begin
+        vperp_val = vperp.grid[ivperp]*scalefac
+        # get element for interpolation data
+        iel_vperp = ielement_loopup(vperp_val,vperp)
+        if iel_vperp < 1 # vperp_interp outside of range of vperp.grid
+            @loop_vpa ivpa begin
+                pdf_out[ivpa,ivperp] = 0.0
+            end
+            continue
+        else
+            # get nodes for interpolation
+            ivperpmin, ivperpmax = vperp.igrid_full[1,iel_vperp], vperp.igrid_full[vperp.ngrid,iel_vperp]
+            vperp_nodes = vperp.grid[ivperpmin:ivperpmax]
+            #print("vperp: ",iel_vperp, " ", vperp_nodes," ",vperp_val)
+                   
+        end
+        @loop_vpa ivpa begin
+            vpa_val = vpa.grid[ivpa]*scalefac
+            # get element for interpolation data
+            iel_vpa = ielement_loopup(vpa_val,vpa)
+            if iel_vpa < 1 # vpa_interp outside of range of vpa.grid
+                pdf_out[ivpa,ivperp] = 0.0
+                continue
+            else
+                # get nodes for interpolation
+                ivpamin, ivpamax = vpa.igrid_full[1,iel_vpa], vpa.igrid_full[vpa.ngrid,iel_vpa]
+                vpa_nodes = vpa.grid[ivpamin:ivpamax]
+                #print("vpa: ", iel_vpa, " ", vpa_nodes," ",vpa_val)
+                   
+                # do the interpolation
+                pdf_out[ivpa,ivperp] = 0.0
+                for ivperpgrid in 1:vperp.ngrid
+                   # index for referencing pdf_in on orginal grid
+                   ivperpp = vperp.igrid_full[ivperpgrid,iel_vperp]
+                   # interpolating polynomial value at ivperpp for interpolation
+                   vperppoly = lagrange_poly(ivperpgrid,vperp_nodes,vperp_val)
+                   for ivpagrid in 1:vpa.ngrid
+                       # index for referencing pdf_in on orginal grid
+                       ivpap = vpa.igrid_full[ivpagrid,iel_vpa]
+                       # interpolating polynomial value at ivpap for interpolation
+                       vpapoly = lagrange_poly(ivpagrid,vpa_nodes,vpa_val)
+                       pdf_out[ivpa,ivperp] += vpapoly*vperppoly*pdf_in[ivpap,ivperpp]
+                   end
+                end
+            end
+        end
+    end
+    return nothing
+end
+
+"""
+function to find the element in which x sits
+"""
+function ielement_loopup(x,coord)
+    xebs = coord.element_boundaries
+    nelement = coord.nelement_global
+    zero = 1.0e-14
+    ielement = -1
+    # find the element
+    for j in 1:nelement
+        # check for internal points
+        if (x - xebs[j])*(xebs[j+1] - x) > zero
+            ielement = j
+            break
+        # check for boundary points
+        elseif (abs(x-xebs[j]) < 100*zero) || (abs(x-xebs[j+1]) < 100*zero && j == nelement)
+            ielement = j
+            break
+        end
+    end
+    return ielement
 end
 
 end

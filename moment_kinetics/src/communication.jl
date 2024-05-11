@@ -120,7 +120,7 @@ function __init__()
     if !MPI.Initialized()
         MPI.Init()
     end
-
+    
     comm_world.val = MPI.COMM_WORLD.val
 
     global_rank[] = MPI.Comm_rank(comm_world)
