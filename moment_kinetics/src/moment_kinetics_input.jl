@@ -680,19 +680,20 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         species.electron.z_IC.density_amplitude, species.electron.z_IC.density_phase,
         species.electron.z_IC.upar_amplitude, species.electron.z_IC.upar_phase,
         species.electron.z_IC.temperature_amplitude, species.electron.z_IC.temperature_phase,
-        species.electron.z_IC.monomial_degree)
+        species.electron.z_IC.monomial_degree, 0.0, 0.0, 0.0, 0.0)
     r_IC = initial_condition_input(species.electron.r_IC.initialization_option,
         species.electron.r_IC.width, species.electron.r_IC.wavenumber,
         species.electron.r_IC.density_amplitude, species.electron.r_IC.density_phase,
         species.electron.r_IC.upar_amplitude, species.electron.r_IC.upar_phase,
         species.electron.r_IC.temperature_amplitude, species.electron.r_IC.temperature_phase,
-        species.electron.r_IC.monomial_degree)
+        species.electron.r_IC.monomial_degree, 0.0, 0.0, 0.0, 0.0)
     vpa_IC = initial_condition_input(species.electron.vpa_IC.initialization_option,
         species.electron.vpa_IC.width, species.electron.vpa_IC.wavenumber,
         species.electron.vpa_IC.density_amplitude, species.electron.vpa_IC.density_phase,
         species.electron.vpa_IC.upar_amplitude, species.electron.vpa_IC.upar_phase,
         species.electron.vpa_IC.temperature_amplitude,
-        species.electron.vpa_IC.temperature_phase, species.electron.vpa_IC.monomial_degree)
+        species.electron.vpa_IC.temperature_phase,
+        species.electron.vpa_IC.monomial_degree, 0.0, 0.0, 0.0, 0.0)
     species_electron_immutable = species_parameters("electron", species.electron.initial_temperature,
         species.electron.initial_density, z_IC, r_IC, vpa_IC)
     species_immutable = (ion = species_ion_immutable, electron = species_electron_immutable, neutral = species_neutral_immutable)
