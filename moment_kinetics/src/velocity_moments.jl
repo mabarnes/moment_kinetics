@@ -868,9 +868,11 @@ function calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z, z
                              buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
                              buffer_r_5, buffer_r_6, z_spectral, z)
 
-        # centred second derivative for dissipation
-        @views second_derivative_z!(moments.ion.d2ppar_dz2, ppar, buffer_r_1, buffer_r_2,
-                                    buffer_r_3, buffer_r_4, z_spectral, z)
+        if ion_mom_diss_coeff > 0.0
+            # centred second derivative for dissipation
+            @views second_derivative_z!(moments.ion.d2ppar_dz2, ppar, buffer_r_1,
+                                        buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+        end
 
         @views derivative_z!(moments.ion.dqpar_dz, qpar, buffer_r_1,
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
@@ -1422,9 +1424,12 @@ function calculate_neutral_moment_derivatives!(moments, scratch, scratch_dummy, 
                              buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
                              buffer_r_5, buffer_r_6, z_spectral, z; neutrals=true)
 
-        # centred second derivative for dissipation
-        @views second_derivative_z!(moments.neutral.d2pz_dz2, pz, buffer_r_1, buffer_r_2,
-                                    buffer_r_3, buffer_r_4, z_spectral, z; neutrals=true)
+        if neutral_mom_diss_coeff > 0.0
+            # centred second derivative for dissipation
+            @views second_derivative_z!(moments.neutral.d2pz_dz2, pz, buffer_r_1,
+                                        buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z;
+                                        neutrals=true)
+        end
 
         @views derivative_z!(moments.neutral.dqz_dz, qz, buffer_r_1,
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z;
