@@ -30,17 +30,6 @@ Result is stored in coord.scratch_2d.
 function elementwise_derivative! end
 
 """
-    elementwise_second_derivative!(coord, f, spectral)
-
-Generic function for element-by-element second derivatives.
-
-Note: no upwinding versions of second deriatives.
-
-Result is stored in coord.scratch_2d.
-"""
-function elementwise_second_derivative! end
-
-"""
     derivative!(df, f, coord, adv_fac, spectral)
 
 Upwinding derivative.
@@ -172,6 +161,10 @@ function second_derivative!(d2f, f, coord, spectral::weak_discretization_info; h
     end
 
     # solve weak form matrix problem M * g = K * f to obtain g = d^2 f / d coord^2
+    if coord.nrank > 1
+        error("mass_matrix_solve!() does not support a "
+              * "distributed coordinate")
+    end
     mass_matrix_solve!(d2f, coord.scratch, spectral)
 end
 
@@ -194,6 +187,10 @@ function laplacian_derivative!(d2f, f, coord, spectral::weak_discretization_info
     end
 
     # solve weak form matrix problem M * g = K * f to obtain g = d^2 f / d coord^2
+    if coord.nrank > 1
+        error("mass_matrix_solve!() does not support a "
+              * "distributed coordinate")
+    end
     mass_matrix_solve!(d2f, coord.scratch, spectral)
 end
 
