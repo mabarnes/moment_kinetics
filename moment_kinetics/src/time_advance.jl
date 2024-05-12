@@ -35,7 +35,7 @@ using ..neutral_r_advection: update_speed_neutral_r!, neutral_advection_r!
 using ..neutral_z_advection: update_speed_neutral_z!, neutral_advection_z!
 using ..neutral_vz_advection: update_speed_neutral_vz!, neutral_advection_vz!
 using ..vperp_advection: update_speed_vperp!, vperp_advection!
-using ..vpa_advection: update_speed_vpa!, vpa_advection!
+using ..vpa_advection: update_speed_vpa!, vpa_advection!, implicit_vpa_advection!
 using ..charge_exchange: charge_exchange_collisions_1V!, charge_exchange_collisions_3V!
 using ..ionization: ionization_collisions_1V!, ionization_collisions_3V!, constant_ionization_source!
 using ..krook_collisions: krook_collisions!
@@ -289,6 +289,11 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         dfns_output_times = mk_float[]
     end
 
+    if rk_coefs_implicit === nothing
+        # Not an IMEX scheme, so cannot have any implicit terms
+        t_input["implicit_vpa_advection"] = false
+    end
+
     if t_input["high_precision_error_sum"]
         error_sum_zero = Float128(0.0)
     else
@@ -304,8 +309,8 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      t_input["step_update_prefactor"], t_input["max_increase_factor"],
                      t_input["max_increase_factor_near_last_fail"],
                      t_input["last_fail_proximity_factor"], t_input["minimum_dt"],
-                     t_input["maximum_dt"],
-                     t_input["write_after_fixed_step_count"],
+                     t_input["maximum_dt"], t_input["implicit_vpa_advection"],
+                     t_input["write_after_fixed_step_count"], error_sum_zero,
                      t_input["split_operators"], t_input["steady_state_residual"],
                      t_input["converged_residual_value"],
                      manufactured_solns_input.use_for_advance, t_input["stopfile_name"])
@@ -325,7 +330,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                              dt_before_last_fail_reload, collisions, species, geometry,
                              boundary_distributions, external_source_settings,
                              num_diss_params, manufactured_solns_input, advection_structs,
-                             scratch_dummy, restarting)
+                             scratch_dummy, restarting, input_dict)
     # define some local variables for convenience/tidiness
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
@@ -375,7 +380,11 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     push!(t_params.limit_caused_by, 0, 0, 0, 0)
 
     # ion pdf
-    push!(t_params.limit_caused_by, 0, 0, 0) # RK accuracy plus 2 CFL limits
+    push!(t_params.limit_caused_by, 0) # RK accuracy
+    push!(t_params.limit_caused_by, 0) # z-advection CFL limit
+    if !t_params.implicit_vpa_advection
+        push!(t_params.limit_caused_by, 0) # vpa-advection CFL limit
+    end
     push!(t_params.failure_caused_by, 0)
     if moments.evolve_density
         # ion density
@@ -429,7 +438,17 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
 
     # Set up parameters for Jacobian-free Newton-Krylov solver used for implicit part of
     # timesteps.
-    nl_solver_params = ()
+    if t_params.implicit_vpa_advection
+        # Implicit solve for vpa_advection term should be done in serial, as it will be
+        # called within a parallelised s_r_z_vperp loop.
+        nl_solver_vpa_advection_params = setup_nonlinear_solve(input_dict, (vpa=vpa,);
+                                                               default_rtol=t_params.rtol,
+                                                               default_atol=t_params.atol,
+                                                               serial_solve=true)
+    else
+        nl_solver_vpa_advection_params = nothing
+    end
+    nl_solver_params = (vpa_advection=nl_solver_vpa_advection_params,)
 
     begin_serial_region()
 
@@ -711,7 +730,9 @@ function setup_advance_flags(moments, composition, t_params, collisions,
     # otherwise, check to see if the flags need to be set to true
     if !t_params.split_operators
         # default for non-split operators is to include both vpa and z advection together
-        advance_vpa_advection = vpa.n > 1 && z.n > 1
+        # If using an IMEX scheme and implicit vpa advection has been requested, then vpa
+        # advection is not included in the explicit part of the timestep.
+        advance_vpa_advection = vpa.n > 1 && z.n > 1 && !t_params.implicit_vpa_advection
         advance_vperp_advection = vperp.n > 1 && z.n > 1
         advance_z_advection = z.n > 1
         advance_r_advection = r.n > 1
@@ -870,6 +891,9 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
     explicit_weakform_fp_collisions = false
     if t_params.split_operators
         error("Implicit timesteps do not support `t_params.split_operators=true`")
+    end
+    if t_params.implicit_vpa_advection
+        advance_vpa_advection = true
     end
 
     manufactured_solns_test = manufactured_solns_input.use_for_advance
@@ -1799,19 +1823,21 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
     end
     push!(CFL_limits, t_params.CFL_prefactor * ion_z_CFL)
 
-    # ion vpa-advection
-    begin_r_z_vperp_region()
-    ion_vpa_CFL = Inf
-    update_speed_vpa!(vpa_advect, fields, scratch[end], moments, vpa, vperp, z, r,
-                      composition, collisions, external_source_settings.ion, t,
-                      geometry)
-    @loop_s is begin
-        this_minimum = get_minimum_CFL_vpa(vpa_advect[is].speed, vpa)
-        @serial_region begin
-            ion_vpa_CFL = min(ion_vpa_CFL, this_minimum)
+    if !t_params.implicit_vpa_advection
+        # ion vpa-advection
+        begin_r_z_vperp_region()
+        ion_vpa_CFL = Inf
+        update_speed_vpa!(vpa_advect, fields, scratch[end], moments, vpa, vperp, z, r,
+                          composition, collisions, external_source_settings.ion, t,
+                          geometry)
+        @loop_s is begin
+            this_minimum = get_minimum_CFL_vpa(vpa_advect[is].speed, vpa)
+            @serial_region begin
+                ion_vpa_CFL = min(ion_vpa_CFL, this_minimum)
+            end
         end
+        push!(CFL_limits, t_params.CFL_prefactor * ion_vpa_CFL)
     end
-    push!(CFL_limits, t_params.CFL_prefactor * ion_vpa_CFL)
 
     # To avoid double counting points when we use distributed-memory MPI, skip the
     # inner/lower point in r and z if this process is not the first block in that
@@ -2472,7 +2498,18 @@ function backward_euler!(fvec_out, fvec_in, pdf, fields, moments, advect_objects
                          manufactured_source_list, external_source_settings,
                          num_diss_params, nl_solver_params, advance, fp_arrays, istage)
 
-    # No terms supported here yet
+    vpa_spectral, vperp_spectral, r_spectral, z_spectral = spectral_objects.vpa_spectral, spectral_objects.vperp_spectral, spectral_objects.r_spectral, spectral_objects.z_spectral
+    vz_spectral, vr_spectral, vzeta_spectral = spectral_objects.vz_spectral, spectral_objects.vr_spectral, spectral_objects.vzeta_spectral
+    vpa_advect, vperp_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.vperp_advect, advect_objects.r_advect, advect_objects.z_advect
+    neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
+
+    if advance.vpa_advection
+        implicit_vpa_advection!(fvec_out.pdf, fvec_in, fields, moments, vpa_advect, vpa,
+                                vperp, z, r, dt, t, vpa_spectral, composition, collisions,
+                                external_source_settings.ion, geometry, nl_solver_params,
+                                num_diss_params.ion.vpa_dissipation_coefficient > 0.0,
+                                num_diss_params.ion.force_minimum_pdf_value)
+    end
 
     return nothing
 end

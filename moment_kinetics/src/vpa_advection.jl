@@ -6,8 +6,13 @@ export vpa_advection!
 export update_speed_vpa!
 
 using ..advection: advance_f_local!
+using ..boundary_conditions: enforce_v_boundary_condition_local!
 using ..communication
 using ..looping
+using ..moment_constraints: hard_force_moment_constraints!
+using ..nonlinear_solvers: newton_solve!
+
+using ..boundary_conditions: vpagrid_to_dzdt
 
 """
 """
@@ -28,6 +33,133 @@ function vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, vperp, z, 
                                     advect[is], ivperp, iz, ir, vpa, dt, vpa_spectral)
         end
     end
+end
+
+"""
+"""
+function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, vperp, z,
+                                 r, dt, t, vpa_spectral, composition, collisions,
+                                 ion_source_settings, geometry, nl_solver_params,
+                                 vpa_diffusion, minval)
+
+    if vperp.n > 1 && (moments.evolve_density || moments.evolve_upar || moments.evolve_ppar)
+        error("Moment constraints in implicit_vpa_advection!() do not support 2V runs yet")
+    end
+
+    # calculate the advection speed corresponding to current f
+    update_speed_vpa!(advect, fields, fvec_in, moments, vpa, vperp, z, r, composition,
+                      collisions, ion_source_settings, t, geometry)
+
+
+    begin_s_r_z_vperp_region()
+    coords = (vpa=vpa,)
+    vpa_bc = vpa.bc
+    @loop_s is begin
+        @loop_r_z_vperp ir iz ivperp begin
+            f_old = @view fvec_in.pdf[:,ivperp,iz,ir,is]
+            this_f_out = @view f_out[:,ivperp,iz,ir,is]
+            speed = @view advect[is].speed[:,ivperp,iz,ir]
+
+            # Define a function whose input is `f_new`, so that when it's output
+            # `residual` is zero, f_new is the result of a backward-Euler timestep:
+            #   (f_new - f_old) / dt = RHS(f_new)
+            # ⇒ f_new - f_old - dt*RHS(f_new) = 0
+            function residual_func!(residual, f_new)
+                # Boundary condition
+                enforce_v_boundary_condition_local!(f_new, vpa_bc, speed, vpa_diffusion,
+                                                    vpa, vpa_spectral)
+
+                # Moment constraints
+                # When we implement 2V moment kinetics, the constraints will couple vpa
+                # and vperp dimensions, so this will no longer be a 1V operation.
+                #hard_force_moment_constraints!(f_new, moments, vpa)
+
+                # Minimum value constraint
+                #if minval !== nothing
+                #    @. f_new = max(f_new, minval)
+                #end
+
+                residual .= f_old
+                advance_f_local!(residual, f_new, advect[is], ivperp, iz, ir, vpa, dt,
+                                 vpa_spectral)
+
+                if z.bc == "wall"
+                    # Wall boundary conditions. Note that as density, upar, ppar do not
+                    # change in this implicit step, f_new, f_old, and residual will all be
+                    # zero at exactly the same set of grid points, so it is reasonable to
+                    # zero-out `residual` to impose the boundary condition.
+                    zero = 1.0e-14
+                    if z.irank == 0 && iz == 1
+                        @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, moments.ion.vth[iz,ir,is],
+                                                         fvec_in.upar[iz,ir,is],
+                                                         moments.evolve_ppar,
+                                                         moments.evolve_upar)
+                        @loop_vpa ivpa begin
+                            # for left boundary in zed (z = -Lz/2), want
+                            # f(z=-Lz/2, v_parallel > 0) = 0
+                            if vpa.scratch[ivpa] > zero
+                                residual[ivpa] = 0.0
+                            end
+                        end
+                    end
+                    # absolute velocity at right boundary
+                    if z.irank == z.nrank - 1 && iz == z.n
+                        @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, moments.ion.vth[iz,ir,is],
+                                                          fvec_in.upar[iz,ir,is],
+                                                          moments.evolve_ppar,
+                                                          moments.evolve_upar)
+                        @loop_vpa ivpa begin
+                            # for right boundary in zed (z = Lz/2), want
+                            # f(z=Lz/2, v_parallel < 0) = 0
+                            if vpa.scratch[ivpa] < -zero
+                                residual[ivpa] = 0.0
+                            end
+                        end
+                    end
+                end
+
+                # Now
+                #   residual = f_old + dt*RHS(f_new)
+                # so update to desired residual
+                @. residual = f_new - residual
+            end
+
+            # Buffers
+            # Note vpa,scratch is used by advance_f!, so we cannot use it here.
+            residual = vpa.scratch2
+            delta_x = vpa.scratch3
+            rhs_delta = vpa.scratch4
+            v = vpa.scratch5
+            w = vpa.scratch6
+
+            # Use forward-Euler step for initial guess
+            # By passing this_f_out, which is equal to f_old at this point, the 'residual'
+            # is
+            #   f_new - f_old - dt*RHS(f_old) = -dt*RHS(f_old)
+            # so to get a forward-Euler step we have to subtract this 'residual'
+            residual_func!(residual, this_f_out)
+            this_f_out .-= residual
+
+            newton_solve!(this_f_out, residual_func!, residual, delta_x, rhs_delta, v, w,
+                          nl_solver_params.vpa_advection, coords=coords)
+
+            # Boundary condition on final result
+            enforce_v_boundary_condition_local!(this_f_out, vpa_bc, speed, vpa_diffusion,
+                                                vpa, vpa_spectral)
+
+            # Moment constraints on final result
+            # When we implement 2V moment kinetics, the constraints will couple vpa
+            # and vperp dimensions, so this will no longer be a 1V operation.
+            hard_force_moment_constraints!(this_f_out, moments, vpa)
+
+            # Minimum value constraint on final result
+            if minval !== nothing
+                @. this_f_out = max(this_f_out, minval)
+            end
+        end
+    end
+
+    return nothing
 end
 
 """

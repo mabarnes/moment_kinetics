@@ -47,6 +47,7 @@ include("moment_constraints.jl")
 include("fokker_planck_test.jl")
 include("fokker_planck_calculus.jl")
 include("fokker_planck.jl")
+include("boundary_conditions.jl")
 include("advection.jl")
 include("vpa_advection.jl")
 include("z_advection.jl")
@@ -55,7 +56,6 @@ include("vperp_advection.jl")
 include("neutral_r_advection.jl")
 include("neutral_z_advection.jl")
 include("neutral_vz_advection.jl")
-include("boundary_conditions.jl")
 include("charge_exchange.jl")
 include("ionization.jl")
 include("krook_collisions.jl")
@@ -326,7 +326,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
             z_spectral, r_spectral, composition, moments, t_input, code_time, dt,
             dt_before_last_fail, collisions, species, geometry, boundary_distributions,
             external_source_settings, num_diss_params, manufactured_solns_input,
-            advection_structs, scratch_dummy, restarting)
+            advection_structs, scratch_dummy, restarting, input_dict)
 
     # This is the closest we can get to the end time of the setup before writing it to the
     # output file

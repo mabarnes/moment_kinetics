@@ -225,6 +225,9 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
         # of grid points, so we can use a tolerance that is independent of the size of the
         # grid. This is unlike the norms needed in `linear_solve!()`.
         residual_norm = distributed_error_norm(residual, coords)
+        if isnan(residual_norm)
+            error("NaN in Newton iteration at iteration $counter")
+        end
         if residual_norm > previous_residual_norm
             # Do a line search between x and x+delta_x to try to find an update that does
             # decrease residual_norm
@@ -507,7 +510,7 @@ function parallel_map_vpa(func, result::AbstractArray{mk_float, 1},
     # called inside a parallelised s_r_z_vperp loop.
     if length(args) == 0
         for i ∈ eachindex(result)
-            result = func()
+            result[i] = func()
         end
     else
         map!(func, result, args...)
