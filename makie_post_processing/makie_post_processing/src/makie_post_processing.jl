@@ -6893,9 +6893,9 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
 
         input = Dict_to_NamedTuple(input_dict["timestep_diagnostics"])
 
-         steps_fig = nothing
-         dt_fig = nothing
-         CFL_fig = nothing
+        steps_fig = nothing
+        dt_fig = nothing
+        CFL_fig = nothing
 
         if input.plot
             # Plot numbers of steps and numbers of failures
@@ -6916,13 +6916,19 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                     prefix = ri.run_name * " "
                 end
 
-                plot_1d(ri.time, get_variable(ri, "steps_per_output"; it=it);
+                if it !== nothing
+                    time = ri.time[it]
+                else
+                    time = ri.time
+                end
+
+                plot_1d(time, get_variable(ri, "steps_per_output"; it=it);
                         label=prefix * "steps", ax=ax)
                 # Fudge to create an invisible line on ax_failures that cycles the line colors
                 # and adds a label for "steps_per_output" to the plot because we create the
                 # legend from ax_failures.
-                plot_1d([ri.time[1]], [0]; label=prefix * "steps", ax=ax_failures)
-                plot_1d(ri.time, get_variable(ri, "failures_per_output"; it=it);
+                plot_1d([time[1]], [0]; label=prefix * "steps", ax=ax_failures)
+                plot_1d(time, get_variable(ri, "failures_per_output"; it=it);
                         label=prefix * "failures", ax=ax_failures)
 
                 failure_caused_by_per_output = get_variable(ri,
@@ -6931,52 +6937,52 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                 counter = 0
                 # Ion pdf failure counter
                 counter += 1
-                plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                plot_1d(time, @view failure_caused_by_per_output[counter,:];
                         label=prefix * "failures caused by f_ion", ax=ax_failures)
                 if ri.evolve_density
                     # Ion density failure counter
                     counter += 1
-                    plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                    plot_1d(time, @view failure_caused_by_per_output[counter,:];
                             linestyle=:dash, label=prefix * "failures caused by n_ion",
                             ax=ax_failures)
                 end
                 if ri.evolve_upar
                     # Ion flow failure counter
                     counter += 1
-                    plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                    plot_1d(time, @view failure_caused_by_per_output[counter,:];
                             linestyle=:dash, label=prefix * "failures caused by u_ion",
                             ax=ax_failures)
                 end
                 if ri.evolve_ppar
                     # Ion flow failure counter
                     counter += 1
-                    plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                    plot_1d(time, @view failure_caused_by_per_output[counter,:];
                             linestyle=:dash, label=prefix * "failures caused by p_ion",
                             ax=ax_failures)
                 end
                 if ri.n_neutral_species > 0
                     # Neutral pdf failure counter
                     counter += 1
-                    plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                    plot_1d(time, @view failure_caused_by_per_output[counter,:];
                             label=prefix * "failures caused by f_neutral", ax=ax_failures)
                     if ri.evolve_density
                         # Neutral density failure counter
                         counter += 1
-                        plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                        plot_1d(time, @view failure_caused_by_per_output[counter,:];
                                 linestyle=:dash,
                                 label=prefix * "failures caused by n_neutral", ax=ax_failures)
                     end
                     if ri.evolve_upar
                         # Neutral flow failure counter
                         counter += 1
-                        plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                        plot_1d(time, @view failure_caused_by_per_output[counter,:];
                                 linestyle=:dash,
                                 label=prefix * "failures caused by u_neutral", ax=ax_failures)
                     end
                     if ri.evolve_ppar
                         # Neutral flow failure counter
                         counter += 1
-                        plot_1d(ri.time, @view failure_caused_by_per_output[counter,:];
+                        plot_1d(time, @view failure_caused_by_per_output[counter,:];
                                 linestyle=:dash,
                                 label=prefix * "failures caused by p_neutral", ax=ax_failures)
                     end
@@ -7016,6 +7022,11 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                 else
                     prefix = ri.run_name * " "
                 end
+                if it !== nothing
+                    time = ri.time[it]
+                else
+                    time = ri.time
+                end
                 CFL_vars = ["minimum_CFL_ion_z", "minimum_CFL_ion_vpa"]
                 if ri.n_neutral_species > 0
                     push!(CFL_vars, "minimum_CFL_neutral_z", "minimum_CFL_neutral_vz")
@@ -7023,7 +7034,7 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                 for varname ∈ CFL_vars
                     var = get_variable(ri, varname)
                     maxval = min(maxval, maximum(var))
-                    plot_1d(ri.time, var; ax=ax, label=prefix*varname)
+                    plot_1d(time, var; ax=ax, label=prefix*varname)
                 end
             end
             ylims!(ax, 0.0, 4.0 * maxval)
@@ -7037,56 +7048,59 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                 else
                     prefix = ri.run_name * " "
                 end
+                if it !== nothing
+                    time = ri.time[it]
+                else
+                    time = ri.time
+                end
 
                 limit_caused_by_per_output = get_variable(ri,
                                                           "limit_caused_by_per_output";
                                                           it=it)
                 counter = 0
 
-                # Accuracy limit counter
-                counter += 1
-                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                plot_1d(time, @view limit_caused_by_per_output[counter,:];
                         label=prefix * "RK accuracy", ax=ax)
 
                 # Maximum timestep increase limit counter
                 counter += 1
-                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                plot_1d(time, @view limit_caused_by_per_output[counter,:];
                         label=prefix * "max timestep increase", ax=ax)
 
                 # Slower maximum timestep increase near last failure limit counter
                 counter += 1
-                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                plot_1d(time, @view limit_caused_by_per_output[counter,:];
                         label=prefix * "max timestep increase near last fail", ax=ax)
 
                 # Minimum timestep limit counter
                 counter += 1
-                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                plot_1d(time, @view limit_caused_by_per_output[counter,:];
                         label=prefix * "min timestep", ax=ax)
 
                 # Maximum timestep limit counter
                 counter += 1
-                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                plot_1d(time, @view limit_caused_by_per_output[counter,:];
                         label=prefix * "max timestep", ax=ax)
 
                 # Ion z advection
                 counter += 1
-                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                plot_1d(time, @view limit_caused_by_per_output[counter,:];
                         label=prefix * "ion z advect", ax=ax)
 
                 # Ion vpa advection
                 counter += 1
-                plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                plot_1d(time, @view limit_caused_by_per_output[counter,:];
                         label=prefix * "ion vpa advect", ax=ax)
 
                 if ri.n_neutral_species > 0
                     # Ion z advection
                     counter += 1
-                    plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
                             label=prefix * "neutral z advect", ax=ax)
 
                     # Ion vpa advection
                     counter += 1
-                    plot_1d(ri.time, @view limit_caused_by_per_output[counter,:];
+                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
                             label=prefix * "neutral vz advect", ax=ax)
                 end
 
