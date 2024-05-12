@@ -13,6 +13,8 @@ using ..moment_constraints: hard_force_moment_constraints!
 using ..nonlinear_solvers: newton_solve!
 
 using ..boundary_conditions: vpagrid_to_dzdt
+using LinearAlgebra
+using SparseArrays
 
 """
 """
@@ -60,6 +62,107 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
             this_f_out = @view f_out[:,ivperp,iz,ir,is]
             speed = @view advect[is].speed[:,ivperp,iz,ir]
 
+            if z.irank == 0 && iz == 1
+                @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, moments.ion.vth[iz,ir,is],
+                                                 fvec_in.upar[iz,ir,is],
+                                                 moments.evolve_ppar,
+                                                 moments.evolve_upar)
+                icut_lower_z = vpa.n
+                for ivpa ∈ vpa.n:-1:1
+                    # for left boundary in zed (z = -Lz/2), want
+                    # f(z=-Lz/2, v_parallel > 0) = 0
+                    if vpa.scratch[ivpa] ≤ zero
+                        icut_lower_z = ivpa + 1
+                        break
+                    end
+                end
+            end
+            if z.irank == z.nrank - 1 && iz == z.n
+                @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, moments.ion.vth[iz,ir,is],
+                                                 fvec_in.upar[iz,ir,is],
+                                                 moments.evolve_ppar,
+                                                 moments.evolve_upar)
+                icut_upper_z = 0
+                for ivpa ∈ 1:vpa.n
+                    # for right boundary in zed (z = Lz/2), want
+                    # f(z=Lz/2, v_parallel < 0) = 0
+                    if vpa.scratch[ivpa] ≥ -zero
+                        icut_upper_z = ivpa - 1
+                        break
+                    end
+                end
+            end
+
+            advection_matrix = allocate_float(vpa.n, vpa.n)
+            advection_matrix .= 0.0
+            for i ∈ 1:vpa.nelement_local
+                imin = vpa.imin[i] - (i != 1)
+                imax = vpa.imax[i]
+                if i == 1
+                    advection_matrix[imin,imin:imax] .+= vpa_spectral.lobatto.Dmat[1,:] ./ vpa.element_scale[i]
+                else
+                    if speed[imin] < 0.0
+                        advection_matrix[imin,imin:imax] .+= vpa_spectral.lobatto.Dmat[1,:] ./ vpa.element_scale[i]
+                    elseif speed[imin] > 0.0
+                        # Do nothing
+                    else
+                        advection_matrix[imin,imin:imax] .+= 0.5 .* vpa_spectral.lobatto.Dmat[1,:] ./ vpa.element_scale[i]
+                    end
+                end
+                advection_matrix[imin+1:imax-1,imin:imax] .+= vpa_spectral.lobatto.Dmat[2:end-1,:] ./ vpa.element_scale[i]
+                if i == vpa.nelement_local
+                    advection_matrix[imax,imin:imax] .+= vpa_spectral.lobatto.Dmat[end,:] ./ vpa.element_scale[i]
+                else
+                    if speed[imax] < 0.0
+                        # Do nothing
+                    elseif speed[imax] > 0.0
+                        advection_matrix[imax,imin:imax] .+= vpa_spectral.lobatto.Dmat[end,:] ./ vpa.element_scale[i]
+                    else
+                        advection_matrix[imax,imin:imax] .+= 0.5 .* vpa_spectral.lobatto.Dmat[end,:] ./ vpa.element_scale[i]
+                    end
+                end
+            end
+            # Multiply by advection speed
+            for i ∈ 1:vpa.n
+                advection_matrix[i,:] .*= dt * speed[i]
+            end
+            for i ∈ 1:vpa.n
+                advection_matrix[i,i] += 1.0
+            end
+            # hacky (?) Dirichlet boundary conditions
+            this_f_out[1] = 0.0
+            this_f_out[end] = 0.0
+            advection_matrix[1,:] .= 0.0
+            advection_matrix[1,1] = 1.0
+            advection_matrix[end,:] .= 0.0
+            advection_matrix[end,end] = 1.0
+
+            if z.bc == "wall"
+                if z.irank == 0 && iz == 1
+                    # Set equal df/dt equal to f on points that should be set to zero for
+                    # boundary condition. The vector that the inverse of the advection matrix
+                    # acts on should have zeros there already.
+                    # I comes from LinearAlgebra and represents identity matrix
+                    advection_matrix[icut_lower_z:end,icut_lower_z:end] .= I
+                end
+                if z.irank == z.nrank - 1 && iz == z.n
+                    # Set equal df/dt equal to f on points that should be set to zero for
+                    # boundary condition. The vector that the inverse of the advection matrix
+                    # acts on should have zeros there already.
+                    # I comes from LinearAlgebra and represents identity matrix
+                    advection_matrix[1:icut_upper_z,1:icut_upper_z] .= I
+                end
+            end
+
+            advection_matrix = sparse(advection_matrix)
+            preconditioner_lu = lu(advection_matrix)
+            preconditioner = (x) -> ldiv!(preconditioner_lu, x)
+
+            #left_preconditioner = preconditioner
+            right_preconditioner = identity
+            left_preconditioner = identity
+            #right_preconditioner = preconditioner
+
             # Define a function whose input is `f_new`, so that when it's output
             # `residual` is zero, f_new is the result of a backward-Euler timestep:
             #   (f_new - f_old) / dt = RHS(f_new)
@@ -90,31 +193,11 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
                     # zero-out `residual` to impose the boundary condition.
                     zero = 1.0e-14
                     if z.irank == 0 && iz == 1
-                        @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, moments.ion.vth[iz,ir,is],
-                                                         fvec_in.upar[iz,ir,is],
-                                                         moments.evolve_ppar,
-                                                         moments.evolve_upar)
-                        @loop_vpa ivpa begin
-                            # for left boundary in zed (z = -Lz/2), want
-                            # f(z=-Lz/2, v_parallel > 0) = 0
-                            if vpa.scratch[ivpa] > zero
-                                residual[ivpa] = 0.0
-                            end
-                        end
+                        residual[icut_lower_z:end] .= 0.0
                     end
                     # absolute velocity at right boundary
                     if z.irank == z.nrank - 1 && iz == z.n
-                        @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, moments.ion.vth[iz,ir,is],
-                                                          fvec_in.upar[iz,ir,is],
-                                                          moments.evolve_ppar,
-                                                          moments.evolve_upar)
-                        @loop_vpa ivpa begin
-                            # for right boundary in zed (z = Lz/2), want
-                            # f(z=Lz/2, v_parallel < 0) = 0
-                            if vpa.scratch[ivpa] < -zero
-                                residual[ivpa] = 0.0
-                            end
-                        end
+                        residual[1:icut_upper_z] .= 0.0
                     end
                 end
 
@@ -141,7 +224,9 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
             this_f_out .-= residual
 
             newton_solve!(this_f_out, residual_func!, residual, delta_x, rhs_delta, v, w,
-                          nl_solver_params.vpa_advection, coords=coords)
+                          nl_solver_params.vpa_advection, coords=coords,
+                          left_preconditioner=left_preconditioner,
+                          right_preconditioner=right_preconditioner)
 
             # Boundary condition on final result
             enforce_v_boundary_condition_local!(this_f_out, vpa_bc, speed, vpa_diffusion,
