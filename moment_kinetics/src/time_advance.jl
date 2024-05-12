@@ -236,9 +236,9 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                          dt_before_last_fail_reload, manufactured_solns_input, io_input)
     rk_coefs, rk_coefs_implicit, implicit_coefficient_is_zero, n_rk_stages, rk_order,
     adaptive, low_storage, CFL_prefactor =
-        setup_runge_kutta_coefficients!(t_input.type,
-                                        t_input.CFL_prefactor,
-                                        t_input.split_operators)
+        setup_runge_kutta_coefficients!(t_input["type"],
+                                        t_input["CFL_prefactor"],
+                                        t_input["split_operators"])
 
     if !adaptive
         # No adaptive timestep, want to use the value from the input file even when we are
@@ -253,32 +253,32 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
     dt_before_last_fail = allocate_shared_float(1)
     step_to_output = allocate_shared_bool(1)
     if block_rank[] == 0
-        dt_shared[] = dt_reload === nothing ? t_input.dt : dt_reload
-        previous_dt_shared[] = dt_reload === nothing ? t_input.dt : dt_reload
+        dt_shared[] = dt_reload === nothing ? t_input["dt"] : dt_reload
+        previous_dt_shared[] = dt_reload === nothing ? t_input["dt"] : dt_reload
         next_output_time[] = 0.0
-        dt_before_output[] = dt_reload === nothing ? t_input.dt : dt_reload
+        dt_before_output[] = dt_reload === nothing ? t_input["dt"] : dt_reload
         dt_before_last_fail[] = dt_before_last_fail_reload === nothing ? Inf : dt_before_last_fail_reload
         step_to_output[] = false
     end
     _block_synchronize()
 
-    end_time = code_time + t_input.dt * t_input.nstep
+    end_time = code_time + t_input["dt"] * t_input["nstep"]
     epsilon = 1.e-11
-    if adaptive || t_input.write_after_fixed_step_count
-        if t_input.nwrite == 0
+    if adaptive || t_input["write_after_fixed_step_count"]
+        if t_input["nwrite"] == 0
             moments_output_times = [end_time]
         else
-            moments_output_times = [code_time + i*t_input.dt
-                                    for i ∈ t_input.nwrite:t_input.nwrite:t_input.nstep]
+            moments_output_times = [code_time + i*t_input["dt"]
+                                    for i ∈ t_input["nwrite"]:t_input["nwrite"]:t_input["nstep"]]
         end
         if moments_output_times[end] < end_time - epsilon
             push!(moments_output_times, end_time)
         end
-        if t_input.nwrite_dfns == 0
+        if t_input["nwrite_dfns"] == 0
             dfns_output_times = [end_time]
         else
-            dfns_output_times = [code_time + i*t_input.dt
-                                 for i ∈ t_input.nwrite_dfns:t_input.nwrite_dfns:t_input.nstep]
+            dfns_output_times = [code_time + i*t_input["dt"]
+                                 for i ∈ t_input["nwrite_dfns"]:t_input["nwrite_dfns"]:t_input["nstep"]]
         end
         if dfns_output_times[end] < end_time - epsilon
             push!(dfns_output_times, end_time)
@@ -289,25 +289,26 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         dfns_output_times = mk_float[]
     end
 
-    if t_input.high_precision_error_sum
+    if t_input["high_precision_error_sum"]
         error_sum_zero = Float128(0.0)
     else
         error_sum_zero = 0.0
     end
-    return time_info(n_variables, t_input.nstep, end_time, dt_shared, previous_dt_shared,
+    return time_info(n_variables, t_input["nstep"], end_time, dt_shared, previous_dt_shared,
                      next_output_time, dt_before_output, dt_before_last_fail,
                      CFL_prefactor, step_to_output, Ref(0), Ref(0), mk_int[], mk_int[],
-                     t_input.nwrite, t_input.nwrite_dfns, moments_output_times,
-                     dfns_output_times, t_input.type, rk_coefs, rk_coefs_implicit,
+                     t_input["nwrite"], t_input["nwrite_dfns"], moments_output_times,
+                     dfns_output_times, t_input["type"], rk_coefs, rk_coefs_implicit,
                      implicit_coefficient_is_zero, n_rk_stages, rk_order, adaptive,
-                     low_storage, t_input.rtol, t_input.atol, t_input.atol_upar,
-                     t_input.step_update_prefactor, t_input.max_increase_factor,
-                     t_input.max_increase_factor_near_last_fail,
-                     t_input.last_fail_proximity_factor, t_input.minimum_dt,
-                     t_input.maximum_dt, t_input.write_after_fixed_step_count,
-                     error_sum_zero, t_input.split_operators,
-                     t_input.steady_state_residual, t_input.converged_residual_value,
-                     manufactured_solns_input.use_for_advance, t_input.stopfile_name)
+                     low_storage, t_input["rtol"], t_input["atol"], t_input["atol_upar"],
+                     t_input["step_update_prefactor"], t_input["max_increase_factor"],
+                     t_input["max_increase_factor_near_last_fail"],
+                     t_input["last_fail_proximity_factor"], t_input["minimum_dt"],
+                     t_input["maximum_dt"],
+                     t_input["write_after_fixed_step_count"],
+                     t_input["split_operators"], t_input["steady_state_residual"],
+                     t_input["converged_residual_value"],
+                     manufactured_solns_input.use_for_advance, t_input["stopfile_name"])
 end
 
 """
