@@ -29,6 +29,7 @@ export setup_nonlinear_solve, newton_solve!
 
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication
+using ..coordinates: coordinate
 using ..input_structs
 using ..looping
 using ..type_definitions: mk_float, mk_int
@@ -36,8 +37,9 @@ using ..type_definitions: mk_float, mk_int
 using LinearAlgebra
 using MINPACK
 using MPI
+using SparseArrays
 
-struct nl_solver_info{TH,TV,Tlig}
+struct nl_solver_info{TH,TV,Tlig,Tprecon}
     rtol::mk_float
     atol::mk_float
     linear_rtol::mk_float
@@ -50,7 +52,10 @@ struct nl_solver_info{TH,TV,Tlig}
     n_solves::Ref{mk_int}
     nonlinear_iterations::Ref{mk_int}
     linear_iterations::Ref{mk_int}
+    stage_counter::Ref{mk_int}
     serial_solve::Bool
+    preconditioner_update_interval::mk_int
+    preconditioners::Tprecon
 end
 
 """
@@ -58,9 +63,13 @@ end
 `coords` is a NamedTuple of coordinates corresponding to the dimensions of the variable
 that will be solved. The entries in `coords` should be ordered the same as the memory
 layout of the variable to be solved (i.e. fastest-varying first).
+
+The nonlinear solver will be called inside a loop over `outer_coords`, so we might need
+for example a preconditioner object for each point in that outer loop.
 """
-function setup_nonlinear_solve(input_dict, coords; default_rtol=1.0e-5,
-                               default_atol=1.0e-12, serial_solve=false)
+function setup_nonlinear_solve(input_dict, coords, outer_coords=(); default_rtol=1.0e-5,
+                               default_atol=1.0e-12, serial_solve=false,
+                               preconditioner_type=nothing)
     nl_solver_section = set_defaults_and_check_section!(
         input_dict, "nonlinear_solver";
         rtol=default_rtol,
@@ -69,8 +78,12 @@ function setup_nonlinear_solve(input_dict, coords; default_rtol=1.0e-5,
         linear_atol=1.0e-15,
         linear_restart=10,
         linear_max_restarts=0,
+        preconditioner_update_interval=300,
        )
     nl_solver_input = Dict_to_NamedTuple(nl_solver_section)
+
+    total_size_coords = prod(isa(c, coordinate) ? c.n : c for c ∈ values(coords))
+    outer_coord_sizes = Tuple(isa(c, coordinate) ? c.n : c for c ∈ outer_coords)
 
     linear_restart = nl_solver_input.linear_restart
 
@@ -90,12 +103,23 @@ function setup_nonlinear_solve(input_dict, coords; default_rtol=1.0e-5,
         end
     end
 
+    if preconditioner_type == "lu"
+        # Create dummy LU solver objects so we can create an array for preconditioners.
+        # These will be calculated properly within the time loop.
+        preconditioners = fill(lu(sparse(1.0*I, total_size_coords, total_size_coords)),
+                               reverse(outer_coord_sizes))
+    else
+        preconditioners = nothing
+    end
+
     linear_initial_guess = zeros(linear_restart)
 
     return nl_solver_info(nl_solver_input.rtol, nl_solver_input.atol,
                           nl_solver_input.linear_rtol, nl_solver_input.linear_atol,
                           linear_restart, nl_solver_input.linear_max_restarts, H, V,
-                          linear_initial_guess, Ref(0), Ref(0), Ref(0), serial_solve)
+                          linear_initial_guess, Ref(0), Ref(0), Ref(0), Ref(0),
+                          serial_solve, nl_solver_input.preconditioner_update_interval,
+                          preconditioners)
 end
 
 """

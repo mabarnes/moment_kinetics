@@ -441,10 +441,11 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     if t_params.implicit_vpa_advection
         # Implicit solve for vpa_advection term should be done in serial, as it will be
         # called within a parallelised s_r_z_vperp loop.
-        nl_solver_vpa_advection_params = setup_nonlinear_solve(input_dict, (vpa=vpa,);
-                                                               default_rtol=t_params.rtol,
-                                                               default_atol=t_params.atol,
-                                                               serial_solve=true)
+        nl_solver_vpa_advection_params =
+            setup_nonlinear_solve(input_dict, (vpa=vpa,),
+                                  (composition.n_ion_species, r, z, vperp);
+                                  default_rtol=t_params.rtol, default_atol=t_params.atol,
+                                  serial_solve=true, preconditioner_type="lu")
     else
         nl_solver_vpa_advection_params = nothing
     end
@@ -2506,7 +2507,8 @@ function backward_euler!(fvec_out, fvec_in, pdf, fields, moments, advect_objects
     if advance.vpa_advection
         implicit_vpa_advection!(fvec_out.pdf, fvec_in, fields, moments, vpa_advect, vpa,
                                 vperp, z, r, dt, t, vpa_spectral, composition, collisions,
-                                external_source_settings.ion, geometry, nl_solver_params,
+                                external_source_settings.ion, geometry,
+                                nl_solver_params.vpa_advection,
                                 num_diss_params.ion.vpa_dissipation_coefficient > 0.0,
                                 num_diss_params.ion.force_minimum_pdf_value)
     end
