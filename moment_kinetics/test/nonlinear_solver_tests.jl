@@ -14,8 +14,8 @@ using moment_kinetics.type_definitions: mk_float, mk_int
 using MPI
 
 function linear_test()
-    @testset "linear test" begin
-        println("    - linear test")
+    println("    - linear test")
+    @testset "linear test $coord_names" for coord_names ∈ ((:z,), (:vpa,))
         # Test represents constant-coefficient diffusion, in 1D steady state, with a
         # central finite-difference discretisation of the second derivative.
         #
@@ -64,7 +64,7 @@ function linear_test()
                                zeros(mk_float, 0), zeros(mk_float, 0), "",
                                zeros(mk_float, 0), false, zeros(mk_float, 0, 0, 0),
                                zeros(mk_float, 0, 0))
-        coords = (z=the_coord,)
+        coords = NamedTuple(c => the_coord for c ∈ coord_names)
 
         function rhs_func!(residual, x)
             begin_serial_region()
@@ -112,8 +112,8 @@ function linear_test()
 end
 
 function nonlinear_test()
-    @testset "non-linear test" begin
-        println("    - non-linear test")
+    println("    - non-linear test")
+    @testset "non-linear test" for coord_names ∈ ((:z,), (:vpa,))
         # Test represents constant-coefficient diffusion, in 1D steady state, with a
         # central finite-difference discretisation of the second derivative.
         #
@@ -149,7 +149,7 @@ function nonlinear_test()
                                zeros(mk_float, 0), zeros(mk_float, 0), "",
                                zeros(mk_float, 0), false, zeros(mk_float, 0, 0, 0),
                                zeros(mk_float, 0, 0))
-        coords = (z=the_coord)
+        coords = NamedTuple(c => the_coord for c ∈ coord_names)
 
         function rhs_func!(residual, x)
             begin_serial_region()
