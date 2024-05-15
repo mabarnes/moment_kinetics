@@ -830,7 +830,9 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         # flag to determine if a d^2/dr^2 operator is present
         r_diffusion = (advance_numerical_dissipation && num_diss_params.ion.r_dissipation_coefficient > 0.0)
         # flag to determine if a d^2/dvpa^2 operator is present
-        vpa_diffusion = ((advance_numerical_dissipation && num_diss_params.ion.vpa_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
+        # When using implicit_vpa_advection, the vpa diffusion is included in the implicit
+        # step
+        vpa_diffusion = !t_params.implicit_vpa_advection && ((advance_numerical_dissipation && num_diss_params.ion.vpa_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
         vperp_diffusion = ((advance_numerical_dissipation && num_diss_params.ion.vperp_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
         vz_diffusion = (advance_numerical_dissipation && num_diss_params.neutral.vz_dissipation_coefficient > 0.0)
     end
@@ -895,6 +897,7 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
     end
     if t_params.implicit_vpa_advection
         advance_vpa_advection = true
+        vpa_diffusion = true
     end
 
     manufactured_solns_test = manufactured_solns_input.use_for_advance
@@ -2508,9 +2511,8 @@ function backward_euler!(fvec_out, fvec_in, pdf, fields, moments, advect_objects
         implicit_vpa_advection!(fvec_out.pdf, fvec_in, fields, moments, vpa_advect, vpa,
                                 vperp, z, r, dt, t, vpa_spectral, composition, collisions,
                                 external_source_settings.ion, geometry,
-                                nl_solver_params.vpa_advection,
-                                num_diss_params.ion.vpa_dissipation_coefficient > 0.0,
-                                num_diss_params.ion.force_minimum_pdf_value)
+                                nl_solver_params.vpa_advection, advance.vpa_diffusion,
+                                num_diss_params)
     end
 
     return nothing

@@ -14,6 +14,7 @@ using ..nonlinear_solvers: newton_solve!
 
 using ..array_allocation: allocate_float
 using ..boundary_conditions: vpagrid_to_dzdt
+using ..calculus: second_derivative!
 using LinearAlgebra
 using SparseArrays
 
@@ -43,8 +44,7 @@ end
 function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, vperp, z,
                                  r, dt, t, vpa_spectral, composition, collisions,
                                  ion_source_settings, geometry, nl_solver_params,
-                                 vpa_diffusion, minval)
-
+                                 vpa_diffusion, num_diss_params)
     if vperp.n > 1 && (moments.evolve_density || moments.evolve_upar || moments.evolve_ppar)
         error("Moment constraints in implicit_vpa_advection!() do not support 2V runs yet")
     end
@@ -57,6 +57,8 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
     begin_s_r_z_vperp_region()
     coords = (vpa=vpa,)
     vpa_bc = vpa.bc
+    minval = num_diss_params.ion.force_minimum_pdf_value
+    vpa_dissipation_coefficient = num_diss_params.ion.vpa_dissipation_coefficient
     zero = 1.0e-14
     @loop_s is begin
         @loop_r_z_vperp ir iz ivperp begin
@@ -190,6 +192,11 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
                 residual .= f_old
                 advance_f_local!(residual, f_new, advect[is], ivperp, iz, ir, vpa, dt,
                                  vpa_spectral)
+
+                if vpa_diffusion
+                    second_derivative!(vpa.scratch, f_new, vpa, vpa_spectral)
+                    @. residual += dt * vpa_dissipation_coefficient * vpa.scratch
+                end
 
                 # Now
                 #   residual = f_old + dt*RHS(f_new)
