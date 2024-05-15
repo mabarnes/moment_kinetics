@@ -134,6 +134,10 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
                 for i ∈ 1:vpa.n
                     advection_matrix[i,i] += 1.0
                 end
+                # This allocates a new matrix - to avoid this would need to pre-allocate a
+                # suitable buffer somewhere and use `mul!()`.
+                advection_matrix = vpa_spectral.mass_matrix * advection_matrix
+                @. advection_matrix -= dt * vpa_dissipation_coefficient * vpa_spectral.K_matrix
                 # hacky (?) Dirichlet boundary conditions
                 this_f_out[1] = 0.0
                 this_f_out[end] = 0.0
@@ -168,7 +172,36 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
                 nl_solver_params.preconditioners[ivperp,iz,ir,is] = lu(advection_matrix)
             end
 
-            preconditioner = (x) -> ldiv!(nl_solver_params.preconditioners[ivperp,iz,ir,is], x)
+            function preconditioner(x)
+                # Multiply by mass matrix, storing result in vpa.scratch
+                mul!(vpa.scratch, vpa_spectral.mass_matrix, x)
+
+                # Handle boundary conditions
+                enforce_v_boundary_condition_local!(vpa.scratch, vpa_bc, speed, vpa_diffusion,
+                                                    vpa, vpa_spectral)
+
+                if z.bc == "wall"
+                    # Wall boundary conditions. Note that as density, upar, ppar do not
+                    # change in this implicit step, f_new, f_old, and residual should all
+                    # be zero at exactly the same set of grid points, so it is reasonable
+                    # to zero-out `residual` to impose the boundary condition. We impose
+                    # this after subtracting f_old in case rounding errors, etc. mean that
+                    # at some point f_old had a different boundary condition cut-off
+                    # index.
+                    if z.irank == 0 && iz == 1
+                        vpa.scratch[icut_lower_z:end] .= 0.0
+#                        println("at icut_lower_z ", f_new[icut_lower_z], " ", f_old[icut_lower_z])
+                    end
+                    # absolute velocity at right boundary
+                    if z.irank == z.nrank - 1 && iz == z.n
+                        vpa.scratch[1:icut_upper_z] .= 0.0
+                    end
+                end
+
+                # Do LU application on vpa.scratch, storing result in x
+                ldiv!(x, nl_solver_params.preconditioners[ivperp,iz,ir,is], vpa.scratch)
+                return nothing
+            end
             #left_preconditioner = preconditioner
             right_preconditioner = identity
             left_preconditioner = identity
