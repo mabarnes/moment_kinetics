@@ -177,10 +177,6 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
             #   (f_new - f_old) / dt = RHS(f_new)
             # ⇒ f_new - f_old - dt*RHS(f_new) = 0
             function residual_func!(residual, f_new)
-                # Boundary condition
-                enforce_v_boundary_condition_local!(f_new, vpa_bc, speed, vpa_diffusion,
-                                                    vpa, vpa_spectral)
-
                 # Moment constraints
                 # When we implement 2V moment kinetics, the constraints will couple vpa
                 # and vperp dimensions, so this will no longer be a 1V operation.
@@ -195,11 +191,23 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
                 advance_f_local!(residual, f_new, advect[is], ivperp, iz, ir, vpa, dt,
                                  vpa_spectral)
 
+                # Now
+                #   residual = f_old + dt*RHS(f_new)
+                # so update to desired residual
+                @. residual = f_new - residual
+
+                # Boundary condition
+                enforce_v_boundary_condition_local!(residual, vpa_bc, speed, vpa_diffusion,
+                                                    vpa, vpa_spectral)
+
                 if z.bc == "wall"
                     # Wall boundary conditions. Note that as density, upar, ppar do not
-                    # change in this implicit step, f_new, f_old, and residual will all be
-                    # zero at exactly the same set of grid points, so it is reasonable to
-                    # zero-out `residual` to impose the boundary condition.
+                    # change in this implicit step, f_new, f_old, and residual should all
+                    # be zero at exactly the same set of grid points, so it is reasonable
+                    # to zero-out `residual` to impose the boundary condition. We impose
+                    # this after subtracting f_old in case rounding errors, etc. mean that
+                    # at some point f_old had a different boundary condition cut-off
+                    # index.
                     if z.irank == 0 && iz == 1
                         residual[icut_lower_z:end] .= 0.0
                     end
@@ -208,11 +216,6 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
                         residual[1:icut_upper_z] .= 0.0
                     end
                 end
-
-                # Now
-                #   residual = f_old + dt*RHS(f_new)
-                # so update to desired residual
-                @. residual = f_new - residual
             end
 
             # Buffers
