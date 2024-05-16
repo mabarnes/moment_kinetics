@@ -140,4 +140,68 @@ function hard_force_moment_constraints_neutral!(f, moments, vz)
     return A, B, C
 end
 
+"""
+    moment_constraints_on_residual!(residual, f, moments, vpa)
+
+A 'residual' (used in implicit timestepping) is an update to the distribution function
+\$f_\\mathrm{new} = f_\\mathrm{old} + \\mathtt{residual}\$. \$f_\\mathrm{new}\$ should
+obey the moment constraints ([Constraints on normalized distribution function](@ref)), and
+\$f_\\mathrm{old}\$ already obeys the constraints, which means that the first 3 moments of
+`residual` should be zero. We impose this constraint by adding corrections proportional to
+`f`.
+```math
+r = \\hat{r} + (A + B w_{\\|} + C w_{\\|}^2) f
+```
+
+Note this function assumes the input is given at a single spatial position.
+"""
+function moment_constraints_on_residual!(residual::AbstractArray{T,N},
+                                         f::AbstractArray{T,N}, moments, vpa) where {T,N}
+    if N == 2
+        f1d = @view f[:,1]
+        r1d = @view residual[:,1]
+    end
+    if moments.evolve_ppar
+        I0 = integrate_over_vspace(f1d, vpa.wgts)
+        I1 = integrate_over_vspace(f1d, vpa.grid, vpa.wgts)
+        I2 = integrate_over_vspace(f1d, vpa.grid, 2, vpa.wgts)
+        I3 = integrate_over_vspace(f1d, vpa.grid, 3, vpa.wgts)
+        I4 = integrate_over_vspace(f1d, vpa.grid, 4, vpa.wgts)
+        J0 = integrate_over_vspace(r1d, vpa.wgts)
+        J1 = integrate_over_vspace(r1d, vpa.grid, vpa.wgts)
+        J2 = integrate_over_vspace(r1d, vpa.grid, 2, vpa.wgts)
+
+        A = ((I2*J2 - J0*I4)*(I2*I4 - I3^2) + (I2*I3 - I1*I4)*(J2*I3 - J1*I4)) /
+            ((I0*I4 - I2^2)*(I2*I4 - I3^2) - (I2*I3 - I1*I4)^2)
+        B = (J2*I3 - J1*I4 + (I2*I3 - I1*I4)*A) / (I2*I4 - I3^2)
+        C = -(J2 + I2*A + I3*B) / I4
+
+        @. r1d = r1d + (A + B*vpa.grid + C*vpa.grid*vpa.grid) * f1d
+    elseif moments.evolve_upar
+        I0 = integrate_over_vspace(f1d, vpa.wgts)
+        I1 = integrate_over_vspace(f1d, vpa.grid, vpa.wgts)
+        I2 = integrate_over_vspace(f1d, vpa.grid, 2, vpa.wgts)
+        J0 = integrate_over_vspace(r1d, vpa.wgts)
+        J1 = integrate_over_vspace(r1d, vpa.grid, vpa.wgts)
+
+        A = (I1*J1 - J0*I2) / (I0*I2 - I1^2)
+        B = -(J1 + I1*A) / I2
+
+        @. r1d = r1d + (A + B*vpa.grid) * f1d
+
+        C = NaN
+    elseif moments.evolve_density
+        I0 = integrate_over_vspace(f1d, vpa.wgts)
+        J0 = integrate_over_vspace(r1d, vpa.wgts)
+        A = -J0 / I0
+        @. f1d = A * f1d
+        @. r1d = r1d + A * f1d
+
+        B = NaN
+        C = NaN
+    end
+
+    return A, B, C
+end
+
 end
