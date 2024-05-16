@@ -9,7 +9,8 @@ using ..advection: advance_f_local!
 using ..boundary_conditions: enforce_v_boundary_condition_local!
 using ..communication
 using ..looping
-using ..moment_constraints: hard_force_moment_constraints!
+using ..moment_constraints: hard_force_moment_constraints!,
+                            moment_constraints_on_residual!
 using ..nonlinear_solvers: newton_solve!
 
 using ..array_allocation: allocate_float
@@ -212,16 +213,30 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
             #   (f_new - f_old) / dt = RHS(f_new)
             # ⇒ f_new - f_old - dt*RHS(f_new) = 0
             function residual_func!(residual, f_new)
-                # Moment constraints
-                # When we implement 2V moment kinetics, the constraints will couple vpa
-                # and vperp dimensions, so this will no longer be a 1V operation.
-                #hard_force_moment_constraints!(f_new, moments, vpa)
+                function apply_bc!(x)
+                    # Boundary condition
+                    enforce_v_boundary_condition_local!(x, vpa_bc, speed, vpa_diffusion,
+                                                        vpa, vpa_spectral)
 
-                # Minimum value constraint
-                #if minval !== nothing
-                #    @. f_new = max(f_new, minval)
-                #end
+                    if z.bc == "wall"
+                        # Wall boundary conditions. Note that as density, upar, ppar do not
+                        # change in this implicit step, f_new, f_old, and residual should all
+                        # be zero at exactly the same set of grid points, so it is reasonable
+                        # to zero-out `residual` to impose the boundary condition. We impose
+                        # this after subtracting f_old in case rounding errors, etc. mean that
+                        # at some point f_old had a different boundary condition cut-off
+                        # index.
+                        if z.irank == 0 && iz == 1
+                            x[icut_lower_z:end] .= 0.0
+                        end
+                        # absolute velocity at right boundary
+                        if z.irank == z.nrank - 1 && iz == z.n
+                            x[1:icut_upper_z] .= 0.0
+                        end
+                    end
+                end
 
+                apply_bc!(f_new)
                 residual .= f_old
                 advance_f_local!(residual, f_new, advect[is], ivperp, iz, ir, vpa, dt,
                                  vpa_spectral)
@@ -231,31 +246,20 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
                     @. residual += dt * vpa_dissipation_coefficient * vpa.scratch
                 end
 
+                # Make sure updated f will not contain negative values
+                #@. residual = max(residual, minval)
+
                 # Now
                 #   residual = f_old + dt*RHS(f_new)
                 # so update to desired residual
                 @. residual = f_new - residual
 
-                # Boundary condition
-                enforce_v_boundary_condition_local!(residual, vpa_bc, speed, vpa_diffusion,
-                                                    vpa, vpa_spectral)
+                apply_bc!(residual)
 
-                if z.bc == "wall"
-                    # Wall boundary conditions. Note that as density, upar, ppar do not
-                    # change in this implicit step, f_new, f_old, and residual should all
-                    # be zero at exactly the same set of grid points, so it is reasonable
-                    # to zero-out `residual` to impose the boundary condition. We impose
-                    # this after subtracting f_old in case rounding errors, etc. mean that
-                    # at some point f_old had a different boundary condition cut-off
-                    # index.
-                    if z.irank == 0 && iz == 1
-                        residual[icut_lower_z:end] .= 0.0
-                    end
-                    # absolute velocity at right boundary
-                    if z.irank == z.nrank - 1 && iz == z.n
-                        residual[1:icut_upper_z] .= 0.0
-                    end
-                end
+                # Impose moment constraints on residual
+                # When we implement 2V moment kinetics, the constraints will couple vpa
+                # and vperp dimensions, so this will no longer be a 1V operation.
+                moment_constraints_on_residual!(residual, f_new, moments, vpa)
             end
 
             # Buffers

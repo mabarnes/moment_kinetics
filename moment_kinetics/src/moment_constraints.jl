@@ -158,45 +158,49 @@ Note this function assumes the input is given at a single spatial position.
 function moment_constraints_on_residual!(residual::AbstractArray{T,N},
                                          f::AbstractArray{T,N}, moments, vpa) where {T,N}
     if N == 2
-        f1d = @view f[:,1]
-        r1d = @view residual[:,1]
+        f = @view f[:,1]
+        residual = @view residual[:,1]
     end
     if moments.evolve_ppar
-        I0 = integrate_over_vspace(f1d, vpa.wgts)
-        I1 = integrate_over_vspace(f1d, vpa.grid, vpa.wgts)
-        I2 = integrate_over_vspace(f1d, vpa.grid, 2, vpa.wgts)
-        I3 = integrate_over_vspace(f1d, vpa.grid, 3, vpa.wgts)
-        I4 = integrate_over_vspace(f1d, vpa.grid, 4, vpa.wgts)
-        J0 = integrate_over_vspace(r1d, vpa.wgts)
-        J1 = integrate_over_vspace(r1d, vpa.grid, vpa.wgts)
-        J2 = integrate_over_vspace(r1d, vpa.grid, 2, vpa.wgts)
+        I0 = integrate_over_vspace(f, vpa.wgts)
+        I1 = integrate_over_vspace(f, vpa.grid, vpa.wgts)
+        I2 = integrate_over_vspace(f, vpa.grid, 2, vpa.wgts)
+        I3 = integrate_over_vspace(f, vpa.grid, 3, vpa.wgts)
+        I4 = integrate_over_vspace(f, vpa.grid, 4, vpa.wgts)
+        J0 = integrate_over_vspace(residual, vpa.wgts)
+        J1 = integrate_over_vspace(residual, vpa.grid, vpa.wgts)
+        J2 = integrate_over_vspace(residual, vpa.grid, 2, vpa.wgts)
 
         A = ((I2*J2 - J0*I4)*(I2*I4 - I3^2) + (I2*I3 - I1*I4)*(J2*I3 - J1*I4)) /
             ((I0*I4 - I2^2)*(I2*I4 - I3^2) - (I2*I3 - I1*I4)^2)
         B = (J2*I3 - J1*I4 + (I2*I3 - I1*I4)*A) / (I2*I4 - I3^2)
         C = -(J2 + I2*A + I3*B) / I4
 
-        @. r1d = r1d + (A + B*vpa.grid + C*vpa.grid*vpa.grid) * f1d
+        @. residual = residual + (A + B*vpa.grid + C*vpa.grid*vpa.grid) * f
     elseif moments.evolve_upar
-        I0 = integrate_over_vspace(f1d, vpa.wgts)
-        I1 = integrate_over_vspace(f1d, vpa.grid, vpa.wgts)
-        I2 = integrate_over_vspace(f1d, vpa.grid, 2, vpa.wgts)
-        J0 = integrate_over_vspace(r1d, vpa.wgts)
-        J1 = integrate_over_vspace(r1d, vpa.grid, vpa.wgts)
+        I0 = integrate_over_vspace(f, vpa.wgts)
+        I1 = integrate_over_vspace(f, vpa.grid, vpa.wgts)
+        I2 = integrate_over_vspace(f, vpa.grid, 2, vpa.wgts)
+        J0 = integrate_over_vspace(residual, vpa.wgts)
+        J1 = integrate_over_vspace(residual, vpa.grid, vpa.wgts)
 
         A = (I1*J1 - J0*I2) / (I0*I2 - I1^2)
         B = -(J1 + I1*A) / I2
 
-        @. r1d = r1d + (A + B*vpa.grid) * f1d
+        @. residual = residual + (A + B*vpa.grid) * f
 
         C = NaN
     elseif moments.evolve_density
-        I0 = integrate_over_vspace(f1d, vpa.wgts)
-        J0 = integrate_over_vspace(r1d, vpa.wgts)
+        I0 = integrate_over_vspace(f, vpa.wgts)
+        J0 = integrate_over_vspace(residual, vpa.wgts)
         A = -J0 / I0
-        @. f1d = A * f1d
-        @. r1d = r1d + A * f1d
+        @. f = A * f
+        @. residual = residual + A * f
 
+        B = NaN
+        C = NaN
+    else
+        A = NaN
         B = NaN
         C = NaN
     end
