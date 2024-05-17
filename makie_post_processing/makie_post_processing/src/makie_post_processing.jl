@@ -7034,7 +7034,12 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                 for varname ∈ CFL_vars
                     var = get_variable(ri, varname)
                     maxval = min(maxval, maximum(var))
-                    plot_1d(time, var; ax=ax, label=prefix*varname)
+                    if occursin("neutral", varname)
+                        linestyle = :dash
+                    else
+                        linestyle = nothing
+                    end
+                    plot_1d(time, var; ax=ax, label=prefix*varname, linestyle=linestyle)
                 end
             end
             ylims!(ax, 0.0, 4.0 * maxval)
