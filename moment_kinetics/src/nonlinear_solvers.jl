@@ -203,6 +203,7 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
 
     close_counter = -1
     close_linear_counter = -1
+    success = true
     previous_residual_norm = residual_norm
     while residual_norm > 1.0
         counter += 1
@@ -293,7 +294,8 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
         end
 
         if counter > 100000
-            error("maximum iteration limit reached")
+            println("maximum iteration limit reached")
+            success = false
             break
         end
     end
@@ -309,6 +311,8 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
 #    println("Total linear iterations after close: ", linear_counter - close_linear_counter)
 #    println("Linear iterations per Newton after close: ", (linear_counter - close_linear_counter) / (counter - close_counter))
 #    println()
+
+    return success
 end
 
 """

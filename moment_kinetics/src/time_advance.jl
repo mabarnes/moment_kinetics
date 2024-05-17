@@ -421,6 +421,9 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
             push!(t_params.failure_caused_by, 0)
         end
     end
+    if t_params.rk_coefs_implicit !== nothing
+        push!(t_params.failure_caused_by, 0) # Nonlinear iteration fails to converge
+    end
 
     # create the 'advance' struct to be used in later Euler advance to
     # indicate which parts of the equations are to be advanced concurrently.
@@ -1772,7 +1775,7 @@ end
                               fields, composition, collisions, geometry,
                               external_source_settings, spectral_objects,
                               advect_objects, gyroavs, num_diss_params, advance,
-                              scratch_dummy, r, z, vperp, vpa, vzeta, vr, vz)
+                              scratch_dummy, r, z, vperp, vpa, vzeta, vr, vz, success)
 
 Check the error estimate for the embedded RK method and adjust the timestep if
 appropriate.
@@ -1781,7 +1784,8 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
                                    fields, composition, collisions, geometry,
                                    external_source_settings, spectral_objects,
                                    advect_objects, gyroavs, num_diss_params, advance,
-                                   scratch_dummy, r, z, vperp, vpa, vzeta, vr, vz)
+                                   scratch_dummy, r, z, vperp, vpa, vzeta, vr, vz,
+                                   success)
     #error_norm_method = "Linf"
     error_norm_method = "L2"
 
@@ -1985,7 +1989,8 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
     end
 
     adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, error_norms,
-                                       total_points, current_dt, error_norm_method)
+                                       total_points, current_dt, error_norm_method,
+                                       success)
 
     if t_params.previous_dt[] == 0.0
         # Re-update remaining velocity moments that are calculable from the evolved
@@ -2126,6 +2131,8 @@ function ssp_rk!(pdf, scratch, scratch_implicit, t, t_params, vz, vr, vzeta, vpa
         _block_synchronize()
     end
 
+    # success is set to false if an iteration failed to converge in an implicit solve
+    success = true
     for istage ∈ 1:n_rk_stages
         if global_rank[] == 0
             println("ion step ", t_params.step_counter[], ".", istage, " ", t)
@@ -2154,14 +2161,23 @@ function ssp_rk!(pdf, scratch, scratch_implicit, t, t_params, vz, vr, vzeta, vpa
                 # Note the timestep for this solve is rk_coefs_implict[istage,istage]*dt.
                 # The diagonal elements are equal to the Butcher 'a' coefficients
                 # rk_coefs_implicit[istage,istage]=a[istage,istage].
-                backward_euler!(scratch_implicit[istage], scratch[istage], pdf,
-                                fields, moments, advect_objects, vz, vr, vzeta, vpa,
-                                vperp, gyrophase, z, r, t,
-                                t_params.dt[] * t_params.rk_coefs_implicit[istage,istage],
-                                spectral_objects, composition, collisions, geometry,
-                                scratch_dummy, manufactured_source_list,
-                                external_source_settings, num_diss_params,
-                                nl_solver_params, advance_implicit, fp_arrays, istage)
+                success = backward_euler!(scratch_implicit[istage], scratch[istage], pdf,
+                                          fields, moments, advect_objects, vz, vr, vzeta,
+                                          vpa, vperp, gyrophase, z, r, t, t_params.dt[] *
+                                          t_params.rk_coefs_implicit[istage,istage],
+                                          spectral_objects, composition, collisions,
+                                          geometry, scratch_dummy,
+                                          manufactured_source_list,
+                                          external_source_settings, num_diss_params,
+                                          nl_solver_params, advance_implicit, fp_arrays,
+                                          istage)
+                success = MPI.Allreduce(success, &, comm_world)
+                if !success
+                    # Jump to final stage, as passing `success = false` to the adaptive
+                    # timestep update function will signal a failed timestep, so that we
+                    # restart this timestep with a smaller `dt`.
+                    istage = n_rk_stages
+                end
                 # The result of the implicit solve gives the state vector at 'istage'
                 # which is used as input to the explicit part of the IMEX time step.
                 # Note that boundary conditions and constraints should already have been
@@ -2182,19 +2198,23 @@ function ssp_rk!(pdf, scratch, scratch_implicit, t, t_params, vz, vr, vzeta, vpa
         # quantities and scratch[istage] containing quantities at time level n, RK stage
         # istage
         # calculate f^{(1)} = fⁿ + Δt*G[fⁿ] = scratch[2].pdf
-        euler_time_advance!(scratch[istage+1], old_scratch, pdf, fields, moments,
-                            advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z,
-                            r, t, t_params.dt[], spectral_objects, composition,
-                            collisions, geometry, scratch_dummy,
-                            manufactured_source_list, external_source_settings,
-                            num_diss_params, advance, fp_arrays, istage)
+        if success
+            euler_time_advance!(scratch[istage+1], old_scratch, pdf, fields, moments,
+                                advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z,
+                                r, t, t_params.dt[], spectral_objects, composition,
+                                collisions, geometry, scratch_dummy,
+                                manufactured_source_list, external_source_settings,
+                                num_diss_params, advance, fp_arrays, istage)
 
-        diagnostic_moments = diagnostic_checks && istage == n_rk_stages
-        rk_update!(scratch, scratch_implicit, moments, t_params, istage, composition)
-        apply_all_bcs_constraints_update_moments!(
-            scratch[istage+1], moments, fields, boundary_distributions, vz, vr, vzeta,
-            vpa, vperp, z, r, spectral_objects, advect_objects, composition, geometry,
-            gyroavs, num_diss_params, advance, scratch_dummy, diagnostic_moments)
+            diagnostic_moments = diagnostic_checks && istage == n_rk_stages
+            rk_update!(scratch, scratch_implicit, moments, t_params, istage, composition)
+            apply_all_bcs_constraints_update_moments!(
+                scratch[istage+1], moments, fields, boundary_distributions, vz, vr, vzeta,
+                vpa, vperp, z, r, spectral_objects, advect_objects, composition, geometry,
+                gyroavs, num_diss_params, advance, scratch_dummy, diagnostic_moments)
+        else
+            break
+        end
     end
 
     if t_params.adaptive
@@ -2202,7 +2222,9 @@ function ssp_rk!(pdf, scratch, scratch_implicit, t, t_params, vz, vr, vzeta, vpa
                                   composition, collisions, geometry,
                                   external_source_settings, spectral_objects,
                                   advect_objects, gyroavs, num_diss_params, advance,
-                                  scratch_dummy, r, z, vperp, vpa, vzeta, vr, vz)
+                                  scratch_dummy, r, z, vperp, vpa, vzeta, vr, vz, success)
+    elseif !success
+        error("Implicit part of timestep failed")
     end
 
     istage = n_rk_stages+1
@@ -2509,14 +2531,18 @@ function backward_euler!(fvec_out, fvec_in, pdf, fields, moments, advect_objects
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
     if advance.vpa_advection
-        implicit_vpa_advection!(fvec_out.pdf, fvec_in, fields, moments, vpa_advect, vpa,
-                                vperp, z, r, dt, t, vpa_spectral, composition, collisions,
-                                external_source_settings.ion, geometry,
-                                nl_solver_params.vpa_advection, advance.vpa_diffusion,
-                                num_diss_params)
+        success = implicit_vpa_advection!(fvec_out.pdf, fvec_in, fields, moments,
+                                          vpa_advect, vpa, vperp, z, r, dt, t,
+                                          vpa_spectral, composition, collisions,
+                                          external_source_settings.ion, geometry,
+                                          nl_solver_params.vpa_advection,
+                                          advance.vpa_diffusion, num_diss_params)
+        if !success
+            return success
+        end
     end
 
-    return nothing
+    return true
 end
 
 """

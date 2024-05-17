@@ -7257,6 +7257,14 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                                 linestyle=:dash,
                                 label=prefix * "failures caused by p_neutral", ax=ax_failures)
                     end
+                    if occursin("ARK", ri.t_input["type"])
+                        # Nonlinear iteration failed to converge in implicit part of
+                        # timestep
+                        counter += 1
+                        plot_1d(time, @view failure_caused_by_per_output[counter,:];
+                                linestyle=:dot,
+                                label=prefix * "nonlinear iteration convergence failure", ax=ax_failures)
+                    end
                 end
 
                 if counter > size(failure_caused_by_per_output, 1)

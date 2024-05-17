@@ -278,10 +278,13 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
             residual_func!(residual, this_f_out)
             this_f_out .-= residual
 
-            newton_solve!(this_f_out, residual_func!, residual, delta_x, rhs_delta, v, w,
-                          nl_solver_params, coords=coords,
-                          left_preconditioner=left_preconditioner,
-                          right_preconditioner=right_preconditioner)
+            success = newton_solve!(this_f_out, residual_func!, residual, delta_x,
+                                    rhs_delta, v, w, nl_solver_params, coords=coords,
+                                    left_preconditioner=left_preconditioner,
+                                    right_preconditioner=right_preconditioner)
+            if !success
+                return success
+            end
 
             # Boundary condition on final result
             enforce_v_boundary_condition_local!(this_f_out, vpa_bc, speed, vpa_diffusion,
@@ -301,7 +304,7 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
 
     nl_solver_params.stage_counter[] += 1
 
-    return nothing
+    return true
 end
 
 """

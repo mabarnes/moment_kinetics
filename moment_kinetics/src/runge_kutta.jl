@@ -961,7 +961,8 @@ end
 Use the calculated `CFL_limits` and `error_norms` to update the timestep in `t_params`.
 """
 function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, error_norms,
-                                            total_points, current_dt, error_norm_method)
+                                            total_points, current_dt, error_norm_method,
+                                            success)
     # Get global minimum of CFL limits
     CFL_limit = nothing
     this_limit_caused_by = nothing
@@ -1019,10 +1020,50 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
 
     just_completed_output_step = false
 
-    # Use current_dt instead of t_params.dt[] here because we are about to write to
-    # the shared-memory variable t_params.dt[] below, and we do not want to add an extra
-    # _block_synchronize() call after reading it here.
-    if (error_norm > 1.0 || isnan(error_norm)) && current_dt > t_params.minimum_dt
+    if !success
+        # Iteration failed in implicit part of timestep try decreasing timestep
+
+        # Set scratch[end] equal to scratch[1] to start the timestep over
+        scratch_temp = scratch[t_params.n_rk_stages+1]
+        scratch[t_params.n_rk_stages+1] = scratch[1]
+        scratch[1] = scratch_temp
+
+        @serial_region begin
+            t_params.failure_counter[] += 1
+
+            if t_params.previous_dt[] > 0.0
+                # If previous_dt=0, the previous step was also a failure so only update
+                # dt_before_last_fail when previous_dt>0
+                t_params.dt_before_last_fail[] = t_params.previous_dt[]
+            end
+
+            # If we were trying to take a step to the output timestep, dt will be smaller on
+            # the re-try, so will not reach the output time.
+            t_params.step_to_output[] = false
+
+            # Decrease timestep by 1/2 - this factor should probably be settable!
+            # Note when nonlinear solve iteration fails, we do not enforce
+            # minimum_dt, as the timesolver must error if we do not decrease dt.
+            if t_params.dt[] > t_params.minimum_dt
+                # ...but try decreasing just to minimum_dt first, if the dt is still
+                # bigger than this.
+                t_params.dt[] = max(t_params.dt[] / 2.0, t_params.minimum_dt)
+            else
+                t_params.dt[] = t_params.dt[] / 2.0
+            end
+
+            # Don't update the simulation time, as this step failed
+            t_params.previous_dt[] = 0.0
+
+            # Call the 'cause' of the timestep failure the variable that has the biggest
+            # error norm here
+            t_params.failure_caused_by[end] += 1
+        end
+    elseif (error_norm > 1.0 || isnan(error_norm)) && current_dt > t_params.minimum_dt
+        # Use current_dt instead of t_params.dt[] here because we are about to write to
+        # the shared-memory variable t_params.dt[] below, and we do not want to add an
+        # extra _block_synchronize() call after reading it here.
+        #
         # Timestep failed, reduce timestep and re-try
 
         # Set scratch[end] equal to scratch[1] to start the timestep over
@@ -1048,14 +1089,6 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
             t_params.dt[] = max(t_params.dt[] / 2.0,
                                 t_params.dt[] * t_params.step_update_prefactor * error_norm^(-1.0/t_params.rk_order))
             t_params.dt[] = max(t_params.dt[], t_params.minimum_dt)
-
-            minimum_dt = 1.e-14
-            if t_params.dt[] < minimum_dt
-                println("Time advance failed: trying to set dt=$(t_params.dt[]) less than "
-                        * "$minimum_dt at t=$t. Ending run.")
-                # Set dt negative to signal an error
-                t_params.dt[] = -1.0
-            end
 
             # Don't update the simulation time, as this step failed
             t_params.previous_dt[] = 0.0
@@ -1151,6 +1184,14 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
     end
 
     @serial_region begin
+        minimum_dt = 1.e-14
+        if t_params.dt[] < minimum_dt
+            println("Time advance failed: trying to set dt=$(t_params.dt[]) less than "
+                    * "$minimum_dt at t=$t. Ending run.")
+            # Set dt negative to signal an error
+            t_params.dt[] = -1.0
+        end
+
         current_time = t + t_params.previous_dt[]
         if (!t_params.write_after_fixed_step_count && !just_completed_output_step
             && (current_time + t_params.dt[] >= t_params.next_output_time[]))
