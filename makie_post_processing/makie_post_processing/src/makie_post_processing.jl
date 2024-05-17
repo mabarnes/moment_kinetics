@@ -7033,7 +7033,7 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                 end
                 for varname ∈ CFL_vars
                     var = get_variable(ri, varname)
-                    maxval = min(maxval, maximum(var))
+                    maxval = NaNMath.min(maxval, NaNMath.maximum(var))
                     if occursin("neutral", varname)
                         linestyle = :dash
                     else
