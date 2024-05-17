@@ -444,7 +444,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         nl_solver_vpa_advection_params =
             setup_nonlinear_solve(input_dict, (vpa=vpa,),
                                   (composition.n_ion_species, r, z, vperp);
-                                  default_rtol=t_params.rtol, default_atol=t_params.atol,
+                                  default_rtol=t_params.rtol / 10.0,
+                                  default_atol=t_params.atol / 10.0,
                                   serial_solve=true, preconditioner_type="lu")
     else
         nl_solver_vpa_advection_params = nothing
