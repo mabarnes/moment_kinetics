@@ -77,6 +77,10 @@ function hard_force_moment_constraints!(f, moments, vpa)
 
         B = NaN
         C = NaN
+    else
+        A = NaN
+        B = NaN
+        C = NaN
     end
 
     return A, B, C
@@ -125,6 +129,10 @@ function hard_force_moment_constraints_neutral!(f, moments, vz)
         A = 1.0 / I0
         @. f1d = A * f1d
 
+        B = NaN
+        C = NaN
+    else
+        A = NaN
         B = NaN
         C = NaN
     end
