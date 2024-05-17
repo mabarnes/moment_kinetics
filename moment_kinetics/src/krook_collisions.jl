@@ -15,7 +15,7 @@ Structure the namelist as follows.
 
 [krook_collisions]
 use_krook = true
-krook_collision_frequency_prefactor = 1.0
+nuii0 = 1.0
 frequency_option = "manual"
 """
 function setup_krook_collisions_input(toml_input::Dict, reference_params)
@@ -71,7 +71,7 @@ function get_collision_frequency_ii(collisions, n, vth)
         # types of the arguments (we don't want to be 'type unstable' for array inputs by
         # returning a scalar from this branch but an array from the "reference_parameters"
         # branch).
-        return @. krook_collision_frequency_prefactor + 0.0 * n
+        return @. nuii0 + 0.0 * n
     else
         error("Unrecognised option [krook_collisions] "
               * "frequency_option=$(frequency_option)")
