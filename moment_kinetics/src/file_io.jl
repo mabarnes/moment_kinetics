@@ -198,7 +198,7 @@ open the necessary output files
 function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vperp, z, r,
                        composition, collisions, evolve_density, evolve_upar, evolve_ppar,
                        external_source_settings, input_dict, restart_time_index,
-                       previous_runs_info, time_for_setup, nl_solver_params)
+                       previous_runs_info, time_for_setup, t_params, nl_solver_params)
     begin_serial_region()
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -226,14 +226,14 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
                                       external_source_settings, input_dict,
                                       io_input.parallel_io, comm_inter_block[], run_id,
                                       restart_time_index, previous_runs_info,
-                                      time_for_setup, nl_solver_params)
+                                      time_for_setup, t_params, nl_solver_params)
         io_dfns = setup_dfns_io(out_prefix, io_input.binary_format,
                                 boundary_distributions, r, z, vperp, vpa, vzeta, vr, vz,
                                 composition, collisions, evolve_density, evolve_upar,
                                 evolve_ppar, external_source_settings, input_dict,
                                 io_input.parallel_io, comm_inter_block[], run_id,
                                 restart_time_index, previous_runs_info, time_for_setup,
-                                nl_solver_params)
+                                t_params, nl_solver_params)
 
         return ascii, io_moments, io_dfns
     end
@@ -649,7 +649,7 @@ define dynamic (time-evolving) moment variables for writing to the hdf5 file
 function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                           r::coordinate, z::coordinate, parallel_io,
                                           external_source_settings, evolve_density,
-                                          evolve_upar, evolve_ppar,
+                                          evolve_upar, evolve_ppar, t_params,
                                           nl_solver_params)
     @serial_region begin
         dynamic = create_io_group(fid, "dynamic_data", description="time evolving variables")
@@ -700,19 +700,13 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
             dynamic, "failure_counter", mk_int; parallel_io=parallel_io,
             description="cumulative number of timestep failures for the run")
 
-        n_failure_vars = 1 + evolve_density + evolve_upar + evolve_ppar
-        if n_neutral_species > 0
-            n_failure_vars *= 2
-        end
+        n_failure_vars = length(t_params.failure_caused_by)
         io_failure_caused_by = create_dynamic_variable!(
             dynamic, "failure_caused_by", mk_int; diagnostic_var_size=n_failure_vars,
             parallel_io=parallel_io,
             description="cumulative count of how many times each variable caused a "
                         * "timestep failure for the run")
-        n_limit_vars = 4 + 1 + evolve_density + evolve_upar + evolve_ppar + 1 + (nl_solver_params.vpa_advection === nothing)
-        if n_neutral_species > 0
-            n_limit_vars += 1 + evolve_density + evolve_upar + evolve_ppar + 2
-        end
+        n_limit_vars = length(t_params.limit_caused_by)
         io_limit_caused_by = create_dynamic_variable!(
             dynamic, "limit_caused_by", mk_int; diagnostic_var_size=n_limit_vars,
             parallel_io=parallel_io,
@@ -1095,7 +1089,7 @@ file
 """
 function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz, composition,
                                        parallel_io, external_source_settings,
-                                       evolve_density, evolve_upar, evolve_ppar,
+                                       evolve_density, evolve_upar, evolve_ppar, t_params,
                                        nl_solver_params)
 
     @serial_region begin
@@ -1104,7 +1098,7 @@ function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz, com
                                                       parallel_io,
                                                       external_source_settings,
                                                       evolve_density, evolve_upar,
-                                                      evolve_ppar,
+                                                      evolve_ppar, t_params,
                                                       nl_solver_params)
 
         dynamic = get_group(fid, "dynamic_data")
@@ -1176,7 +1170,7 @@ function setup_moments_io(prefix, binary_format, vz, vr, vzeta, vpa, vperp, r, z
                           composition, collisions, evolve_density, evolve_upar,
                           evolve_ppar, external_source_settings, input_dict, parallel_io,
                           io_comm, run_id, restart_time_index, previous_runs_info,
-                          time_for_setup, nl_solver_params)
+                          time_for_setup, t_params, nl_solver_params)
     @serial_region begin
         moments_prefix = string(prefix, ".moments")
         if !parallel_io
@@ -1206,7 +1200,7 @@ function setup_moments_io(prefix, binary_format, vz, vr, vzeta, vpa, vperp, r, z
         io_moments = define_dynamic_moment_variables!(
             fid, composition.n_ion_species, composition.n_neutral_species, r, z,
             parallel_io, external_source_settings, evolve_density, evolve_upar,
-            evolve_ppar, nl_solver_params)
+            evolve_ppar, t_params, nl_solver_params)
 
         close(fid)
 
@@ -1286,7 +1280,7 @@ function setup_dfns_io(prefix, binary_format, boundary_distributions, r, z, vper
                        vzeta, vr, vz, composition, collisions, evolve_density,
                        evolve_upar, evolve_ppar, external_source_settings, input_dict,
                        parallel_io, io_comm, run_id, restart_time_index,
-                       previous_runs_info, time_for_setup, nl_solver_params)
+                       previous_runs_info, time_for_setup, t_params, nl_solver_params)
 
     @serial_region begin
         dfns_prefix = string(prefix, ".dfns")
@@ -1322,7 +1316,7 @@ function setup_dfns_io(prefix, binary_format, boundary_distributions, r, z, vper
         ### in a struct for later access ###
         io_dfns = define_dynamic_dfn_variables!(
             fid, r, z, vperp, vpa, vzeta, vr, vz, composition, parallel_io,
-            external_source_settings, evolve_density, evolve_upar, evolve_ppar,
+            external_source_settings, evolve_density, evolve_upar, evolve_ppar, t_params,
             nl_solver_params)
 
         close(fid)
@@ -1958,7 +1952,7 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
                     #qr_neutral=nothing, qzeta_neutral=nothing,
                     vth_neutral=nothing,
                     phi=nothing, Er=nothing, Ez=nothing,
-                    istage=0, label="", nl_solver_params=())
+                    istage=0, label="", t_params=nothing, nl_solver_params=())
     global debug_output_file
 
     # Only read/write from first process in each 'block'
@@ -1990,12 +1984,12 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
                                                           r, z, false,
                                                           external_source_settings,
                                                           evolve_density, evolve_upar,
-                                                          evolve_ppar,
+                                                          evolve_ppar, t_params,
                                                           nl_solver_params)
             io_dfns = define_dynamic_dfn_variables!(
                 fid, r, z, vperp, vpa, vzeta, vr, vz, composition.n_ion_species,
                 composition.n_neutral_species, false, external_source_settings,
-                evolve_density, evolve_upar, evolve_ppar, nl_solver_params)
+                evolve_density, evolve_upar, evolve_ppar, t_params, nl_solver_params)
 
             # create the "istage" variable, used to identify the rk stage where
             # `debug_dump()` was called

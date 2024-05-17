@@ -336,7 +336,8 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     ascii_io, io_moments, io_dfns = setup_file_io(io_input, boundary_distributions, vz,
         vr, vzeta, vpa, vperp, z, r, composition, collisions, moments.evolve_density,
         moments.evolve_upar, moments.evolve_ppar, external_source_settings, input_dict,
-        restart_time_index, previous_runs_info, time_for_setup, nl_solver_params)
+        restart_time_index, previous_runs_info, time_for_setup, t_params,
+        nl_solver_params)
     # write initial data to ascii files
     write_data_to_ascii(pdf, moments, fields, vpa, vperp, z, r, code_time,
         composition.n_ion_species, composition.n_neutral_species, ascii_io)
