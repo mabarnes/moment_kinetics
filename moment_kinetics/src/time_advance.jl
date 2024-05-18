@@ -796,7 +796,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         end
         advance_external_source = external_source_settings.ion.active
         advance_neutral_external_source = external_source_settings.neutral.active
-        advance_numerical_dissipation = true
+        advance_numerical_dissipation = !t_params.implicit_vpa_advection
         # if evolving the density, must advance the continuity equation,
         # in addition to including sources arising from the use of a modified distribution
         # function in the kinetic equation
@@ -831,14 +831,18 @@ function setup_advance_flags(moments, composition, t_params, collisions,
             end
         end
 
+        # *_diffusion flags are set regardless of whether diffusion is included in explicit or
+        # implicit part of timestep, because they are used for boundary conditions, not to
+        # controll which terms are advanced.
+        #
         # flag to determine if a d^2/dr^2 operator is present
-        r_diffusion = (advance_numerical_dissipation && num_diss_params.ion.r_dissipation_coefficient > 0.0)
+        r_diffusion = (num_diss_params.ion.r_dissipation_coefficient > 0.0)
         # flag to determine if a d^2/dvpa^2 operator is present
         # When using implicit_vpa_advection, the vpa diffusion is included in the implicit
         # step
-        vpa_diffusion = !t_params.implicit_vpa_advection && ((advance_numerical_dissipation && num_diss_params.ion.vpa_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
-        vperp_diffusion = ((advance_numerical_dissipation && num_diss_params.ion.vperp_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
-        vz_diffusion = (advance_numerical_dissipation && num_diss_params.neutral.vz_dissipation_coefficient > 0.0)
+        vpa_diffusion = ((num_diss_params.ion.vpa_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
+        vperp_diffusion = ((num_diss_params.ion.vperp_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
+        vz_diffusion = (num_diss_params.neutral.vz_dissipation_coefficient > 0.0)
     end
 
     manufactured_solns_test = manufactured_solns_input.use_for_advance
@@ -901,8 +905,20 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
     end
     if t_params.implicit_vpa_advection
         advance_vpa_advection = true
-        vpa_diffusion = true
+        advance_numerical_dissipation = true
     end
+    # *_diffusion flags are set regardless of whether diffusion is included in explicit or
+    # implicit part of timestep, because they are used for boundary conditions, not to
+    # controll which terms are advanced.
+    #
+    # flag to determine if a d^2/dr^2 operator is present
+    r_diffusion = (num_diss_params.ion.r_dissipation_coefficient > 0.0)
+    # flag to determine if a d^2/dvpa^2 operator is present
+    # When using implicit_vpa_advection, the vpa diffusion is included in the implicit
+    # step
+    vpa_diffusion = ((num_diss_params.ion.vpa_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
+    vperp_diffusion = ((num_diss_params.ion.vperp_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
+    vz_diffusion = (num_diss_params.neutral.vz_dissipation_coefficient > 0.0)
 
     manufactured_solns_test = manufactured_solns_input.use_for_advance
 
