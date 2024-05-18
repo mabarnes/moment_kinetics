@@ -1488,27 +1488,15 @@ function time_advance_no_splitting!(pdf, scratch, t, t_params, vz, vr, vzeta, vp
 end
 
 """
-use information obtained from the Runge-Kutta stages to compute the updated pdf;
-for the quantities (density, upar, ppar, vth, qpar and phi) that are derived
-from the 'true', un-modified pdf, either: update them using info from Runge Kutta
-stages, if the quantities are evolved separately from the modified pdf;
-or update them by taking the appropriate velocity moment of the evolved pdf
+Use the result of the forward-Euler timestep and the previous Runge-Kutta stages to
+compute the updated pdfs, and any evolved moments.
 """
-function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr, vzeta,
-                    vpa, vperp, z, r, spectral_objects, advect_objects, t, t_params,
-                    istage, composition, collisions, geometry, external_source_settings,
-                    gyroavs, num_diss_params, advance, scratch_dummy, diagnostic_moments,
-                    istep)
+function rk_update!(scratch, moments, t_params, istage, composition)
     begin_s_r_z_region()
 
     new_scratch = scratch[istage+1]
     old_scratch = scratch[istage]
     rk_coefs = t_params.rk_coefs[:,istage]
-
-    z_spectral, r_spectral, vpa_spectral, vperp_spectral = spectral_objects.z_spectral, spectral_objects.r_spectral, spectral_objects.vpa_spectral, spectral_objects.vperp_spectral
-    vzeta_spectral, vr_spectral, vz_spectral = spectral_objects.vzeta_spectral, spectral_objects.vr_spectral, spectral_objects.vz_spectral
-    vpa_advect, vperp_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.vperp_advect, advect_objects.r_advect, advect_objects.z_advect
-    neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
     ##
     # update the ion distribution and moments
@@ -1519,49 +1507,6 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     # use Runge Kutta to update any velocity moments evolved separately from the pdf
     rk_update_evolved_moments!(scratch, moments, t_params, istage)
 
-    # Ensure there are no negative values in the pdf before applying boundary
-    # conditions, so that negative deviations do not mess up the integral-constraint
-    # corrections in the sheath boundary conditions.
-    force_minimum_pdf_value!(new_scratch.pdf, num_diss_params.ion.force_minimum_pdf_value)
-
-    # Enforce boundary conditions in z and vpa on the distribution function.
-    # Must be done after Runge Kutta update so that the boundary condition applied to
-    # the updated pdf is consistent with the updated moments - otherwise different upar
-    # between 'pdf', 'old_scratch' and 'new_scratch' might mean a point that should be
-    # set to zero at the sheath boundary according to the final upar has a non-zero
-    # contribution from one or more of the terms.
-    # NB: probably need to do the same for the evolved moments
-    enforce_boundary_conditions!(new_scratch, moments,
-        boundary_distributions.pdf_rboundary_ion, vpa.bc, z.bc, r.bc, vpa, vperp, z,
-        r, vpa_spectral, vperp_spectral, 
-        vpa_advect, vperp_advect, z_advect, r_advect, composition, scratch_dummy,
-        advance.r_diffusion, advance.vpa_diffusion, advance.vperp_diffusion)
-
-    if moments.evolve_density && moments.enforce_conservation
-        begin_s_r_z_region()
-        A = moments.ion.constraints_A_coefficient
-        B = moments.ion.constraints_B_coefficient
-        C = moments.ion.constraints_C_coefficient
-        @loop_s_r_z is ir iz begin
-            (A[iz,ir,is], B[iz,ir,is], C[iz,ir,is]) =
-                @views hard_force_moment_constraints!(new_scratch.pdf[:,:,iz,ir,is],
-                                                     moments, vpa)
-        end
-    end
-
-    function update_derived_ion_moments_and_derivatives()
-        # update remaining velocity moments that are calculable from the evolved pdf
-        # Note these may be needed for the boundary condition on the neutrals, so must be
-        # calculated before that is applied. Also may be needed to calculate advection speeds
-        # for for CFL stability limit calculations in adaptive_timestep_update!().
-        update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
-            r_spectral, geometry, gyroavs, scratch_dummy, z_advect, diagnostic_moments)
-
-        calculate_ion_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
-                                          num_diss_params.ion.moment_dissipation_coefficient)
-    end
-    update_derived_ion_moments_and_derivatives()
-
     if composition.n_neutral_species > 0
         ##
         # update the neutral particle distribution and moments
@@ -1569,109 +1514,127 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         rk_update_variable!(scratch, :pdf_neutral, t_params, istage; neutrals=true)
         # use Runge Kutta to update any velocity moments evolved separately from the pdf
         rk_update_evolved_moments_neutral!(scratch, moments, t_params, istage)
+    end
+end
 
+"""
+Apply boundary conditions and moment constraints to updated pdfs and calculate derived
+moments and moment derivatives
+"""
+function apply_all_bcs_constraints_update_moments!(
+        this_scratch, moments, fields, boundary_distributions, vz, vr, vzeta, vpa, vperp,
+        z, r, spectral_objects, advect_objects, composition, geometry, gyroavs,
+        num_diss_params, advance, scratch_dummy, diagnostic_moments; pdf_bc_constraints=true)
+
+    begin_s_r_z_region()
+
+    z_spectral, r_spectral, vpa_spectral, vperp_spectral = spectral_objects.z_spectral, spectral_objects.r_spectral, spectral_objects.vpa_spectral, spectral_objects.vperp_spectral
+    vzeta_spectral, vr_spectral, vz_spectral = spectral_objects.vzeta_spectral, spectral_objects.vr_spectral, spectral_objects.vz_spectral
+    vpa_advect, vperp_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.vperp_advect, advect_objects.r_advect, advect_objects.z_advect
+    neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
+
+    if pdf_bc_constraints
         # Ensure there are no negative values in the pdf before applying boundary
         # conditions, so that negative deviations do not mess up the integral-constraint
         # corrections in the sheath boundary conditions.
-        force_minimum_pdf_value_neutral!(new_scratch.pdf_neutral, num_diss_params.neutral.force_minimum_pdf_value)
+        force_minimum_pdf_value!(this_scratch.pdf, num_diss_params.ion.force_minimum_pdf_value)
 
         # Enforce boundary conditions in z and vpa on the distribution function.
-        # Must be done after Runge Kutta update so that the boundary condition applied to
-        # the updated pdf is consistent with the updated moments - otherwise different upar
-        # between 'pdf', 'old_scratch' and 'new_scratch' might mean a point that should be
-        # set to zero at the sheath boundary according to the final upar has a non-zero
-        # contribution from one or more of the terms.
-        # NB: probably need to do the same for the evolved moments
-        # Note, so far vr and vzeta do not need advect objects, so pass `nothing` for
-        # those as a placeholder
-        enforce_neutral_boundary_conditions!(new_scratch.pdf_neutral, new_scratch.pdf,
-            boundary_distributions, new_scratch.density_neutral, new_scratch.uz_neutral,
-            new_scratch.pz_neutral, moments, new_scratch.density, new_scratch.upar,
-            fields.Er, vzeta_spectral, vr_spectral, vz_spectral, neutral_r_advect,
-            neutral_z_advect, nothing, nothing, neutral_vz_advect, r, z, vzeta, vr, vz,
-            composition, geometry, scratch_dummy, advance.r_diffusion,
-            advance.vz_diffusion)
+        # Must be done after Runge Kutta update so that the boundary condition applied to the
+        # updated pdf is consistent with the updated moments - otherwise different upar
+        # between 'pdf', 'scratch[istage]' and 'scratch[istage+1]' might mean a point that
+        # should be set to zero at the sheath boundary according to the final upar has a
+        # non-zero contribution from one or more of the terms.  NB: probably need to do the
+        # same for the evolved moments
+        enforce_boundary_conditions!(this_scratch, moments,
+            boundary_distributions.pdf_rboundary_ion, vpa.bc, z.bc, r.bc, vpa, vperp, z, r,
+            vpa_spectral, vperp_spectral, vpa_advect, vperp_advect, z_advect, r_advect,
+            composition, scratch_dummy, advance.r_diffusion, advance.vpa_diffusion,
+            advance.vperp_diffusion)
 
         if moments.evolve_density && moments.enforce_conservation
-            begin_sn_r_z_region()
-            A = moments.neutral.constraints_A_coefficient
-            B = moments.neutral.constraints_B_coefficient
-            C = moments.neutral.constraints_C_coefficient
-            @loop_sn_r_z isn ir iz begin
-                (A[iz,ir,isn], B[iz,ir,isn], C[iz,ir,isn]) =
-                    @views hard_force_moment_constraints_neutral!(
-                        new_scratch.pdf_neutral[:,:,:,iz,ir,isn], moments, vz)
+            begin_s_r_z_region()
+            A = moments.ion.constraints_A_coefficient
+            B = moments.ion.constraints_B_coefficient
+            C = moments.ion.constraints_C_coefficient
+            @loop_s_r_z is ir iz begin
+                (A[iz,ir,is], B[iz,ir,is], C[iz,ir,is]) =
+                    @views hard_force_moment_constraints!(this_scratch.pdf[:,:,iz,ir,is],
+                                                          moments, vpa)
             end
         end
-
-        function update_derived_neutral_moments_and_derivatives()
-            # update remaining velocity moments that are calculable from the evolved pdf
-            update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z, r,
-                                            composition)
-            # update the thermal speed
-            begin_sn_r_z_region()
-            @loop_sn_r_z isn ir iz begin
-                moments.neutral.vth[iz,ir,isn] = sqrt(2.0*new_scratch.pz_neutral[iz,ir,isn]/new_scratch.density_neutral[iz,ir,isn])
-            end
-
-            # update the parallel heat flux
-            update_neutral_qz!(moments.neutral.qz, moments.neutral.qz_updated,
-                               new_scratch.density_neutral, new_scratch.uz_neutral,
-                               moments.neutral.vth, new_scratch.pdf_neutral, vz, vr, vzeta, z,
-                               r, composition, moments.evolve_density, moments.evolve_upar,
-                               moments.evolve_ppar)
-
-            calculate_neutral_moment_derivatives!(moments, new_scratch, scratch_dummy, z,
-                                                  z_spectral,
-                                                  num_diss_params.neutral.moment_dissipation_coefficient)
-        end
-        update_derived_neutral_moments_and_derivatives()
     end
 
+    # update remaining velocity moments that are calculable from the evolved pdf
+    # Note these may be needed for the boundary condition on the neutrals, so must be
+    # calculated before that is applied. Also may be needed to calculate advection speeds
+    # for for CFL stability limit calculations in adaptive_timestep_update!().
+    update_derived_moments!(this_scratch, moments, vpa, vperp, z, r, composition,
+        r_spectral, geometry, gyroavs, scratch_dummy, z_advect, diagnostic_moments)
+
+    calculate_ion_moment_derivatives!(moments, this_scratch, scratch_dummy, z, z_spectral,
+                                      num_diss_params.ion.moment_dissipation_coefficient)
+
     # update the electrostatic potential phi
-    update_phi!(fields, scratch[istage+1], vperp, z, r, composition, z_spectral,
-                r_spectral, scratch_dummy, gyroavs)
-    # _block_synchronize() here because phi needs to be read on different ranks than
-    # it was written on, even though the loop-type does not change here. However,
-    # after the final RK stage can skip if:
-    #  * evolving upar or ppar as synchronization will be triggered after moments
-    #    updates at the beginning of the next RK step
-    _block_synchronize()
+    update_phi!(fields, this_scratch, vperp, z, r, composition, z_spectral, r_spectral,
+                scratch_dummy, gyroavs)
 
-    if t_params.adaptive && istage == t_params.n_rk_stages
-        # Note the timestep update must be done before calculating derived moments and
-        # moment derivatives, because the timstep might need to be re-done with a smaller
-        # dt, in which case scratch[t_params.n_rk_stages+1] will be reset to the values
-        # from the beginning of the timestep here.
-        adaptive_timestep_update!(scratch, t, t_params, moments, fields, composition,
-                                  collisions, geometry, external_source_settings,
-                                  advect_objects, r, z, vperp, vpa, vzeta, vr, vz)
-        # Re-do this in case adaptive_timestep_update re-arranged the `scratch` vector
-        new_scratch = scratch[istage+1]
-        old_scratch = scratch[istage]
+    if composition.n_neutral_species > 0
+        if pdf_bc_constraints
+            # Ensure there are no negative values in the pdf before applying boundary
+            # conditions, so that negative deviations do not mess up the integral-constraint
+            # corrections in the sheath boundary conditions.
+            force_minimum_pdf_value_neutral!(this_scratch.pdf_neutral,
+                                             num_diss_params.neutral.force_minimum_pdf_value)
 
-        if t_params.previous_dt[] == 0.0
-            # Re-update remaining velocity moments that are calculable from the evolved
-            # pdf These need to be re-calculated because `new_scratch` was swapped with
-            # the beginning of the timestep, because the timestep failed
-            update_derived_ion_moments_and_derivatives()
-            if composition.n_neutral_species > 0
-                update_derived_neutral_moments_and_derivatives()
-            end
+            # Enforce boundary conditions in z and vpa on the distribution function.
+            # Must be done after Runge Kutta update so that the boundary condition applied to
+            # the updated pdf is consistent with the updated moments - otherwise different
+            # upar between 'pdf', 'scratch[istage]' and 'scratch[istage+1]' might mean a point
+            # that should be set to zero at the sheath boundary according to the final upar
+            # has a non-zero contribution from one or more of the terms.  NB: probably need to
+            # do the same for the evolved moments Note, so far vr and vzeta do not need advect
+            # objects, so pass `nothing` for those as a placeholder
+            enforce_neutral_boundary_conditions!(this_scratch.pdf_neutral, this_scratch.pdf,
+                boundary_distributions, this_scratch.density_neutral, this_scratch.uz_neutral,
+                this_scratch.pz_neutral, moments, this_scratch.density, this_scratch.upar,
+                fields.Er, vzeta_spectral, vr_spectral, vz_spectral, neutral_r_advect,
+                neutral_z_advect, nothing, nothing, neutral_vz_advect, r, z, vzeta, vr, vz,
+                composition, geometry, scratch_dummy, advance.r_diffusion,
+                advance.vz_diffusion)
 
-            # update the electrostatic potential phi
-            update_phi!(fields, scratch[istage+1], vperp, z, r, composition, z_spectral,
-                        r_spectral, scratch_dummy, gyroavs)
-            if !(( moments.evolve_upar || moments.evolve_ppar) &&
-                      istage == length(scratch)-1)
-                # _block_synchronize() here because phi needs to be read on different ranks than
-                # it was written on, even though the loop-type does not change here. However,
-                # after the final RK stage can skip if:
-                #  * evolving upar or ppar as synchronization will be triggered after moments
-                #    updates at the beginning of the next RK step
-                _block_synchronize()
+            if moments.evolve_density && moments.enforce_conservation
+                begin_sn_r_z_region()
+                A = moments.neutral.constraints_A_coefficient
+                B = moments.neutral.constraints_B_coefficient
+                C = moments.neutral.constraints_C_coefficient
+                @loop_sn_r_z isn ir iz begin
+                    (A[iz,ir,isn], B[iz,ir,isn], C[iz,ir,isn]) =
+                        @views hard_force_moment_constraints_neutral!(
+                            this_scratch.pdf_neutral[:,:,:,iz,ir,isn], moments, vz)
+                end
             end
         end
+
+        # update remaining velocity moments that are calculable from the evolved pdf
+        update_derived_moments_neutral!(this_scratch, moments, vz, vr, vzeta, z, r,
+                                        composition)
+        # update the thermal speed
+        begin_sn_r_z_region()
+        @loop_sn_r_z isn ir iz begin
+            moments.neutral.vth[iz,ir,isn] = sqrt(2.0*this_scratch.pz_neutral[iz,ir,isn]/this_scratch.density_neutral[iz,ir,isn])
+        end
+
+        # update the parallel heat flux
+        update_neutral_qz!(moments.neutral.qz, moments.neutral.qz_updated,
+                           this_scratch.density_neutral, this_scratch.uz_neutral,
+                           moments.neutral.vth, this_scratch.pdf_neutral, vz, vr, vzeta, z,
+                           r, composition, moments.evolve_density, moments.evolve_upar,
+                           moments.evolve_ppar)
+
+        calculate_neutral_moment_derivatives!(moments, this_scratch, scratch_dummy, z,
+                                              z_spectral,
+                                              num_diss_params.neutral.moment_dissipation_coefficient)
     end
 end
 
@@ -1881,6 +1844,17 @@ function adaptive_timestep_update!(scratch, t, t_params, moments, fields, compos
     adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, error_norms,
                                        total_points, current_dt, error_norm_method)
 
+    if t_params.previous_dt[] == 0.0
+        # Re-update remaining velocity moments that are calculable from the evolved
+        # pdf These need to be re-calculated because `scratch[istage+1]` is now the
+        # state at the beginning of the timestep, because the timestep failed
+        apply_all_bcs_constraints_update_moments!(
+            scratch[t_params.n_rk_stages+1], moments, fields, nothing, vz, vr, vzeta,
+            vpa, vperp, z, r, spectral_objects, advect_objects, composition, geometry,
+            gyroavs, num_diss_params, advance, scratch_dummy, false;
+            pdf_bc_constraints=false)
+    end
+
     return nothing
 end
 
@@ -2019,11 +1993,11 @@ function ssp_rk!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyrophase
             collisions, geometry, scratch_dummy, manufactured_source_list,
             external_source_settings, num_diss_params, advance, fp_arrays, istage)
         diagnostic_moments = diagnostic_checks && istage == n_rk_stages
-        @views rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr,
-                          vzeta, vpa, vperp, z, r, spectral_objects, advect_objects,
-                          t, t_params, istage, composition, collisions, geometry,
-                          external_source_settings, gyroavs, num_diss_params, advance,
-                          scratch_dummy, diagnostic_moments, istep)
+        rk_update!(scratch, scratch_implicit, moments, t_params, istage, composition)
+        apply_all_bcs_constraints_update_moments!(
+            scratch[istage+1], moments, fields, boundary_distributions, vz, vr, vzeta,
+            vpa, vperp, z, r, spectral_objects, advect_objects, composition, geometry,
+            gyroavs, num_diss_params, advance, scratch_dummy, diagnostic_moments)
     end
 
     istage = n_rk_stages+1
