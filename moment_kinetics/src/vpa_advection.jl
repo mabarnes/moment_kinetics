@@ -63,7 +63,7 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
     zero = 1.0e-14
     @loop_s is begin
         @loop_r_z_vperp ir iz ivperp begin
-            f_old = @view fvec_in.pdf[:,ivperp,iz,ir,is]
+            f_old_no_bc = @view fvec_in.pdf[:,ivperp,iz,ir,is]
             this_f_out = @view f_out[:,ivperp,iz,ir,is]
             speed = @view advect[is].speed[:,ivperp,iz,ir]
 
@@ -97,6 +97,34 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
                     end
                 end
             end
+
+            function apply_bc!(x)
+                # Boundary condition
+                enforce_v_boundary_condition_local!(x, vpa_bc, speed, vpa_diffusion,
+                                                    vpa, vpa_spectral)
+
+                if z.bc == "wall"
+                    # Wall boundary conditions. Note that as density, upar, ppar do not
+                    # change in this implicit step, f_new, f_old, and residual should all
+                    # be zero at exactly the same set of grid points, so it is reasonable
+                    # to zero-out `residual` to impose the boundary condition. We impose
+                    # this after subtracting f_old in case rounding errors, etc. mean that
+                    # at some point f_old had a different boundary condition cut-off
+                    # index.
+                    if z.irank == 0 && iz == 1
+                        x[icut_lower_z:end] .= 0.0
+                    end
+                    # absolute velocity at right boundary
+                    if z.irank == z.nrank - 1 && iz == z.n
+                        x[1:icut_upper_z] .= 0.0
+                    end
+                end
+            end
+
+            # Need to apply 'new' boundary conditions to `f_old`, so that by imposing them
+            # on `residual`, they are automatically imposed on `f_new`.
+            f_old = vpa.scratch7 .= f_old_no_bc
+            apply_bc!(f_old)
 
             if nl_solver_params.stage_counter[] % nl_solver_params.preconditioner_update_interval == 0
                 advection_matrix = allocate_float(vpa.n, vpa.n)
@@ -213,29 +241,6 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
             #   (f_new - f_old) / dt = RHS(f_new)
             # ⇒ f_new - f_old - dt*RHS(f_new) = 0
             function residual_func!(residual, f_new)
-                function apply_bc!(x)
-                    # Boundary condition
-                    enforce_v_boundary_condition_local!(x, vpa_bc, speed, vpa_diffusion,
-                                                        vpa, vpa_spectral)
-
-                    if z.bc == "wall"
-                        # Wall boundary conditions. Note that as density, upar, ppar do not
-                        # change in this implicit step, f_new, f_old, and residual should all
-                        # be zero at exactly the same set of grid points, so it is reasonable
-                        # to zero-out `residual` to impose the boundary condition. We impose
-                        # this after subtracting f_old in case rounding errors, etc. mean that
-                        # at some point f_old had a different boundary condition cut-off
-                        # index.
-                        if z.irank == 0 && iz == 1
-                            x[icut_lower_z:end] .= 0.0
-                        end
-                        # absolute velocity at right boundary
-                        if z.irank == z.nrank - 1 && iz == z.n
-                            x[1:icut_upper_z] .= 0.0
-                        end
-                    end
-                end
-
                 apply_bc!(f_new)
                 residual .= f_old
                 advance_f_local!(residual, f_new, advect[is], ivperp, iz, ir, vpa, dt,
@@ -255,11 +260,6 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
                 @. residual = f_new - residual
 
                 apply_bc!(residual)
-
-                # Impose moment constraints on residual
-                # When we implement 2V moment kinetics, the constraints will couple vpa
-                # and vperp dimensions, so this will no longer be a 1V operation.
-                moment_constraints_on_residual!(residual, f_new, moments, vpa)
             end
 
             # Buffers

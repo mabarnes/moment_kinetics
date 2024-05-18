@@ -2196,12 +2196,12 @@ function ssp_rk!(pdf, scratch, scratch_implicit, t, t_params, vz, vr, vzeta, vpa
                 # The result of the implicit solve gives the state vector at 'istage'
                 # which is used as input to the explicit part of the IMEX time step.
                 old_scratch = scratch_implicit[istage]
+                apply_all_bcs_constraints_update_moments!(
+                    scratch_implicit[istage], moments, fields, boundary_distributions, vz,
+                    vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects,
+                    composition, geometry, gyroavs, num_diss_params, advance,
+                    scratch_dummy, false)
             end
-            apply_all_bcs_constraints_update_moments!(
-                scratch_implicit[istage], moments, fields, boundary_distributions, vz, vr,
-                vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
-                geometry, gyroavs, num_diss_params, advance, scratch_dummy, false;
-                pdf_bc_constraints=false)
         else
             # Fully explicit method starts the forward-Euler step with the result from the
             # previous stage.
@@ -2220,12 +2220,22 @@ function ssp_rk!(pdf, scratch, scratch_implicit, t, t_params, vz, vr, vzeta, vpa
                             manufactured_source_list, external_source_settings,
                             num_diss_params, advance, fp_arrays, istage)
 
-        diagnostic_moments = diagnostic_checks && istage == n_rk_stages
         rk_update!(scratch, scratch_implicit, moments, t_params, istage, composition)
+
+        # Always apply boundary conditions and constraints here for explicit schemes. For
+        # IMEX schemes, only apply boundary conditions and constraints at the final RK
+        # stage - for other stages they are imposed after the implicit part of the step.
+        # If `implicit_coefficient_is_zero` is true for the next stage, then this step is
+        # explicit, so we need the bcs and constraints.
+        apply_bc_constraints = (t_params.rk_coefs_implicit === nothing
+                                || istage == n_rk_stages
+                                || t_params.implicit_coefficient_is_zero[istage+1])
+        diagnostic_moments = diagnostic_checks && istage == n_rk_stages
         apply_all_bcs_constraints_update_moments!(
             scratch[istage+1], moments, fields, boundary_distributions, vz, vr, vzeta,
             vpa, vperp, z, r, spectral_objects, advect_objects, composition, geometry,
-            gyroavs, num_diss_params, advance, scratch_dummy, diagnostic_moments)
+            gyroavs, num_diss_params, advance, scratch_dummy, diagnostic_moments;
+            pdf_bc_constraints=apply_bc_constraints)
     end
 
     if t_params.adaptive
