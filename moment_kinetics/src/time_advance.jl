@@ -2154,8 +2154,7 @@ function ssp_rk!(pdf, scratch, scratch_implicit, t, t_params, vz, vr, vzeta, vpa
                 # The result of the forward-Euler step is just a hack to store the
                 # (explicit) time-derivative of the implicitly advanced terms. The result
                 # is not used as input to the explicit part of the IMEX advance.
-                update_solution_vector!(scratch[istage+1], scratch[istage], moments,
-                                        composition, vpa, vperp, z, r)
+                old_scratch = scratch[istage]
             else
                 # Backward-Euler step for implicitly-evolved terms.
                 # Note the timestep for this solve is rk_coefs_implict[istage,istage]*dt.
@@ -2173,48 +2172,44 @@ function ssp_rk!(pdf, scratch, scratch_implicit, t, t_params, vz, vr, vzeta, vpa
                                           istage)
                 success = MPI.Allreduce(success, &, comm_world)
                 if !success
-                    # Jump to final stage, as passing `success = false` to the adaptive
-                    # timestep update function will signal a failed timestep, so that we
-                    # restart this timestep with a smaller `dt`.
-                    istage = n_rk_stages
+                    # Break out of the istage loop, as passing `success = false` to the
+                    # adaptive timestep update function will signal a failed timestep, so
+                    # that we restart this timestep with a smaller `dt`.
+                    break
                 end
                 # The result of the implicit solve gives the state vector at 'istage'
                 # which is used as input to the explicit part of the IMEX time step.
-                # Note that boundary conditions and constraints should already have been
-                # applied to the solution in `scratch_implicit[istage]`, as part of the
-                # `backward_euler!()` solve.
-                update_solution_vector!(scratch[istage+1], scratch_implicit[istage], moments,
-                                        composition, vpa, vperp, z, r)
+                old_scratch = scratch_implicit[istage]
             end
-            old_scratch = scratch_implicit[istage]
+            apply_all_bcs_constraints_update_moments!(
+                scratch_implicit[istage], moments, fields, boundary_distributions, vz, vr,
+                vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
+                geometry, gyroavs, num_diss_params, advance, scratch_dummy, false;
+                pdf_bc_constraints=false)
         else
             # Fully explicit method starts the forward-Euler step with the result from the
             # previous stage.
-            update_solution_vector!(scratch[istage+1], scratch[istage], moments,
-                                    composition, vpa, vperp, z, r)
             old_scratch = scratch[istage]
         end
+        update_solution_vector!(scratch[istage+1], old_scratch, moments, composition, vpa,
+                                vperp, z, r)
         # do an Euler time advance, with scratch[istage+1] containing the advanced
         # quantities and scratch[istage] containing quantities at time level n, RK stage
         # istage
         # calculate f^{(1)} = fⁿ + Δt*G[fⁿ] = scratch[2].pdf
-        if success
-            euler_time_advance!(scratch[istage+1], old_scratch, pdf, fields, moments,
-                                advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z,
-                                r, t, t_params.dt[], spectral_objects, composition,
-                                collisions, geometry, scratch_dummy,
-                                manufactured_source_list, external_source_settings,
-                                num_diss_params, advance, fp_arrays, istage)
+        euler_time_advance!(scratch[istage+1], old_scratch, pdf, fields, moments,
+                            advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z,
+                            r, t, t_params.dt[], spectral_objects, composition,
+                            collisions, geometry, scratch_dummy,
+                            manufactured_source_list, external_source_settings,
+                            num_diss_params, advance, fp_arrays, istage)
 
-            diagnostic_moments = diagnostic_checks && istage == n_rk_stages
-            rk_update!(scratch, scratch_implicit, moments, t_params, istage, composition)
-            apply_all_bcs_constraints_update_moments!(
-                scratch[istage+1], moments, fields, boundary_distributions, vz, vr, vzeta,
-                vpa, vperp, z, r, spectral_objects, advect_objects, composition, geometry,
-                gyroavs, num_diss_params, advance, scratch_dummy, diagnostic_moments)
-        else
-            break
-        end
+        diagnostic_moments = diagnostic_checks && istage == n_rk_stages
+        rk_update!(scratch, scratch_implicit, moments, t_params, istage, composition)
+        apply_all_bcs_constraints_update_moments!(
+            scratch[istage+1], moments, fields, boundary_distributions, vz, vr, vzeta,
+            vpa, vperp, z, r, spectral_objects, advect_objects, composition, geometry,
+            gyroavs, num_diss_params, advance, scratch_dummy, diagnostic_moments)
     end
 
     if t_params.adaptive

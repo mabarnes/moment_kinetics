@@ -285,20 +285,6 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
             if !success
                 return success
             end
-
-            # Boundary condition on final result
-            enforce_v_boundary_condition_local!(this_f_out, vpa_bc, speed, vpa_diffusion,
-                                                vpa, vpa_spectral)
-
-            # Moment constraints on final result
-            # When we implement 2V moment kinetics, the constraints will couple vpa
-            # and vperp dimensions, so this will no longer be a 1V operation.
-            hard_force_moment_constraints!(this_f_out, moments, vpa)
-
-            # Minimum value constraint on final result
-            if minval !== nothing
-                @. this_f_out = max(this_f_out, minval)
-            end
         end
     end
 
