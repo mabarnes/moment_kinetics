@@ -9,7 +9,7 @@ export setup_dummy_and_buffer_arrays
 
 using MPI
 using ..type_definitions: mk_float, mk_int
-using ..array_allocation: allocate_float, allocate_shared_float, allocate_shared_bool
+using ..array_allocation: allocate_float, allocate_shared_float, allocate_shared_int, allocate_shared_bool
 using ..communication
 using ..communication: _block_synchronize
 using ..debugging
@@ -25,9 +25,11 @@ using ..velocity_moments: calculate_ion_moment_derivatives!, calculate_neutral_m
 using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
 using ..boundary_conditions: enforce_boundary_conditions!
 using ..boundary_conditions: enforce_neutral_boundary_conditions!
+using ..boundary_conditions: vpagrid_to_dzdt, enforce_v_boundary_condition_local!
 using ..input_structs
 using ..moment_constraints: hard_force_moment_constraints!,
-                            hard_force_moment_constraints_neutral!
+                            hard_force_moment_constraints_neutral!,
+                            moment_constraints_on_residual!
 using ..advection: setup_advection
 using ..z_advection: update_speed_z!, z_advection!
 using ..r_advection: update_speed_r!, r_advection!
@@ -136,6 +138,13 @@ struct scratch_dummy_arrays
     # needs to be shared memory
     buffer_vpavperpzrs_1::MPISharedArray{mk_float,5}
     buffer_vpavperpzrs_2::MPISharedArray{mk_float,5}
+    # buffers to hold ion pdf for implicit solves
+    implicit_buffer_vpavperpzrs_1::MPISharedArray{mk_float,5}
+    implicit_buffer_vpavperpzrs_2::MPISharedArray{mk_float,5}
+    implicit_buffer_vpavperpzrs_3::MPISharedArray{mk_float,5}
+    implicit_buffer_vpavperpzrs_4::MPISharedArray{mk_float,5}
+    implicit_buffer_vpavperpzrs_5::MPISharedArray{mk_float,5}
+    implicit_buffer_vpavperpzrs_6::MPISharedArray{mk_float,5}
     
     buffer_vzvrvzetazsn_1::MPISharedArray{mk_float,5}
     buffer_vzvrvzetazsn_2::MPISharedArray{mk_float,5}
@@ -160,6 +169,8 @@ struct scratch_dummy_arrays
     buffer_vpavperp_2::MPISharedArray{mk_float,2}
     buffer_vpavperp_3::MPISharedArray{mk_float,2}
 
+    int_buffer_rs_1::MPISharedArray{mk_int,2}
+    int_buffer_rs_2::MPISharedArray{mk_int,2}
 end 
 
 struct advect_object_struct
@@ -296,6 +307,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
 
     if rk_coefs_implicit === nothing
         # Not an IMEX scheme, so cannot have any implicit terms
+        t_input["implicit_ion_advance"] = false
         t_input["implicit_vpa_advection"] = false
     end
 
@@ -314,7 +326,8 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      t_input["step_update_prefactor"], t_input["max_increase_factor"],
                      t_input["max_increase_factor_near_last_fail"],
                      t_input["last_fail_proximity_factor"], t_input["minimum_dt"],
-                     t_input["maximum_dt"], t_input["implicit_vpa_advection"],
+                     t_input["maximum_dt"], t_input["implicit_ion_advance"],
+                     t_input["implicit_vpa_advection"],
                      t_input["write_after_fixed_step_count"], error_sum_zero,
                      t_input["split_operators"], t_input["steady_state_residual"],
                      t_input["converged_residual_value"],
@@ -386,8 +399,10 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
 
     # ion pdf
     push!(t_params.limit_caused_by, 0) # RK accuracy
-    push!(t_params.limit_caused_by, 0) # z-advection CFL limit
-    if !t_params.implicit_vpa_advection
+    if !t_params.implicit_ion_advance
+        push!(t_params.limit_caused_by, 0) # z-advection CFL limit
+    end
+    if !(t_params.implicit_ion_advance || t_params.implicit_vpa_advection)
         push!(t_params.limit_caused_by, 0) # vpa-advection CFL limit
     end
     push!(t_params.failure_caused_by, 0)
@@ -446,6 +461,20 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
 
     # Set up parameters for Jacobian-free Newton-Krylov solver used for implicit part of
     # timesteps.
+    if t_params.implicit_ion_advance
+        # Implicit solve for vpa_advection term should be done in serial, as it will be
+        # called within a parallelised s_r_z_vperp loop.
+        nl_solver_ion_advance_params =
+            setup_nonlinear_solve(input_dict,
+                                  (s=composition.n_ion_species, r=r, z=z, vperp=vperp,
+                                   vpa=vpa),
+                                  ();
+                                  default_rtol=t_params.rtol / 10.0,
+                                  default_atol=t_params.atol / 10.0,
+                                  preconditioner_type="lu")
+    else
+        nl_solver_ion_advance_params = nothing
+    end
     if t_params.implicit_vpa_advection
         # Implicit solve for vpa_advection term should be done in serial, as it will be
         # called within a parallelised s_r_z_vperp loop.
@@ -458,7 +487,13 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     else
         nl_solver_vpa_advection_params = nothing
     end
-    nl_solver_params = (vpa_advection=nl_solver_vpa_advection_params,)
+    if nl_solver_ion_advance_params !== nothing &&
+            nl_solver_vpa_advection_params !== nothing
+        error("Cannot use implicit_ion_advance and implicit_vpa_advection at the same "
+              * "time")
+    end
+    nl_solver_params = (ion_advance=nl_solver_ion_advance_params,
+                        vpa_advection=nl_solver_vpa_advection_params,)
 
     begin_serial_region()
 
@@ -746,11 +781,11 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         # default for non-split operators is to include both vpa and z advection together
         # If using an IMEX scheme and implicit vpa advection has been requested, then vpa
         # advection is not included in the explicit part of the timestep.
-        advance_vpa_advection = vpa.n > 1 && z.n > 1 && !t_params.implicit_vpa_advection
-        advance_vperp_advection = vperp.n > 1 && z.n > 1
-        advance_z_advection = z.n > 1
-        advance_r_advection = r.n > 1
-        if collisions.fkpl.nuii > 0.0 && vperp.n > 1 
+        advance_vpa_advection = vpa.n > 1 && z.n > 1 && !(t_params.implicit_ion_advance || t_params.implicit_vpa_advection)
+        advance_vperp_advection = vperp.n > 1 && z.n > 1 && !t_params.implicit_ion_advance
+        advance_z_advection = z.n > 1 && !t_params.implicit_ion_advance
+        advance_r_advection = r.n > 1 && !t_params.implicit_ion_advance
+        if collisions.fkpl.nuii > 0.0 && vperp.n > 1 && !t_params.implicit_ion_advance
             explicit_weakform_fp_collisions = true
         else
             explicit_weakform_fp_collisions = false    
@@ -769,10 +804,10 @@ function setup_advance_flags(moments, composition, t_params, collisions,
             # account for charge exchange collisions
             if abs(collisions.charge_exchange) > 0.0
                 if vz.n == vpa.n && vperp.n == 1 && vr.n == 1 && vzeta.n == 1
-                    advance_ion_cx_1V = true
+                    advance_ion_cx_1V = !t_params.implicit_ion_advance
                     advance_neutral_cx_1V = true
                 elseif vperp.n > 1 && vr.n > 1 && vzeta.n > 1
-                    advance_ion_cx = true
+                    advance_ion_cx = !t_params.implicit_ion_advance
                     advance_neutral_cx = true
                 else
                     error("If any perpendicular velocity has length>1 they all must. "
@@ -786,10 +821,10 @@ function setup_advance_flags(moments, composition, t_params, collisions,
             # account for ionization collisions
             if abs(collisions.ionization) > 0.0
                 if vz.n == vpa.n && vperp.n == 1 && vr.n == 1 && vzeta.n == 1
-                    advance_ion_ionization_1V = true
+                    advance_ion_ionization_1V = !t_params.implicit_ion_advance
                     advance_neutral_ionization_1V = true
                 elseif vperp.n > 1 && vr.n > 1 && vzeta.n > 1
-                    advance_ion_ionization = true
+                    advance_ion_ionization = !t_params.implicit_ion_advance
                     advance_neutral_ionization = true
                 else
                     error("If any perpendicular velocity has length>1 they all must. "
@@ -801,20 +836,20 @@ function setup_advance_flags(moments, composition, t_params, collisions,
             end
         end
         # exception for the case where ions are evolved alone but sourced by ionization
-        if collisions.ionization > 0.0 && collisions.constant_ionization_rate
+        if collisions.ionization > 0.0 && collisions.constant_ionization_rate && !t_params.implicit_ion_advance
             advance_ionization_source = true
         end
         if collisions.krook.nuii0 > 0.0
-            advance_krook_collisions_ii = true
+            advance_krook_collisions_ii = !t_params.implicit_ion_advance
         end
-        advance_external_source = external_source_settings.ion.active
+        advance_external_source = external_source_settings.ion.active && !t_params.implicit_ion_advance
         advance_neutral_external_source = external_source_settings.neutral.active
-        advance_numerical_dissipation = !t_params.implicit_vpa_advection
+        advance_numerical_dissipation = !(t_params.implicit_ion_advance || t_params.implicit_vpa_advection)
         # if evolving the density, must advance the continuity equation,
         # in addition to including sources arising from the use of a modified distribution
         # function in the kinetic equation
         if moments.evolve_density
-            advance_sources = true
+            advance_sources = !t_params.implicit_ion_advance
             advance_continuity = true
             if composition.n_neutral_species > 0
                 advance_neutral_sources = true
@@ -825,7 +860,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         # in addition to including sources arising from the use of a modified distribution
         # function in the kinetic equation
         if moments.evolve_upar
-            advance_sources = true
+            advance_sources = !t_params.implicit_ion_advance
             advance_force_balance = true
             if composition.n_neutral_species > 0
                 advance_neutral_sources = true
@@ -836,7 +871,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         # in addition to including sources arising from the use of a modified distribution
         # function in the kinetic equation
         if moments.evolve_ppar
-            advance_sources = true
+            advance_sources = !t_params.implicit_ion_advance
             advance_energy = true
             if composition.n_neutral_species > 0
                 advance_neutral_sources = true
@@ -853,8 +888,8 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         # flag to determine if a d^2/dvpa^2 operator is present
         # When using implicit_vpa_advection, the vpa diffusion is included in the implicit
         # step
-        vpa_diffusion = ((num_diss_params.ion.vpa_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
-        vperp_diffusion = ((num_diss_params.ion.vperp_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
+        vpa_diffusion = ((num_diss_params.ion.vpa_dissipation_coefficient > 0.0) || (collisions.fkpl.nuii > 0.0 && vperp.n > 1))
+        vperp_diffusion = ((num_diss_params.ion.vperp_dissipation_coefficient > 0.0) || (collisions.fkpl.nuii > 0.0 && vperp.n > 1))
         vz_diffusion = (num_diss_params.neutral.vz_dissipation_coefficient > 0.0)
     end
 
@@ -922,7 +957,44 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
     if t_params.split_operators
         error("Implicit timesteps do not support `t_params.split_operators=true`")
     end
-    if t_params.implicit_vpa_advection
+    if t_params.implicit_ion_advance
+        advance_vpa_advection = vpa.n > 1 && z.n > 1
+        advance_vperp_advection = vperp.n > 1 && z.n > 1
+        advance_z_advection = z.n > 1
+        advance_r_advection = r.n > 1
+        if abs(collisions.charge_exchange) > 0.0
+            if vz.n == vpa.n && vperp.n == 1 && vr.n == 1 && vzeta.n == 1
+                advance_ion_cx_1V = true
+            elseif vperp.n > 1 && vr.n > 1 && vzeta.n > 1
+                advance_ion_cx = true
+            else
+                error("If any perpendicular velocity has length>1 they all must. "
+                      * "If all perpendicular velocities have length=1, then vpa and "
+                      * "vz should be the same.\n"
+                      * "vperp.n=$(vperp.n), vr.n=$(vr.n), vzeta.n=$(vzeta.n), "
+                      * "vpa.n=$(vpa.n), vz.n=$(vz.n)")
+            end
+        end
+        if abs(collisions.ionization) > 0.0
+            if vz.n == vpa.n && vperp.n == 1 && vr.n == 1 && vzeta.n == 1
+                advance_ion_ionization_1V = true
+            elseif vperp.n > 1 && vr.n > 1 && vzeta.n > 1
+                advance_ion_ionization = true
+            else
+                error("If any perpendicular velocity has length>1 they all must. "
+                      * "If all perpendicular velocities have length=1, then vpa and "
+                      * "vz should be the same.\n"
+                      * "vperp.n=$(vperp.n), vr.n=$(vr.n), vzeta.n=$(vzeta.n), "
+                      * "vpa.n=$(vpa.n), vz.n=$(vz.n)")
+            end
+        end
+        advance_ionization_source = collisions.ionization > 0.0 && collisions.constant_ionization_rate
+        advance_krook_collisions_ii = collisions.krook.nuii0 > 0.0
+        advance_external_source = external_source_settings.ion.active
+        advance_numerical_dissipation = true
+        advance_sources = moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
+        explicit_weakform_fp_collisions = collisions.fkpl.nuii > 0.0 && vperp.n > 1
+    elseif t_params.implicit_vpa_advection
         advance_vpa_advection = true
         advance_numerical_dissipation = true
     end
@@ -935,8 +1007,8 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
     # flag to determine if a d^2/dvpa^2 operator is present
     # When using implicit_vpa_advection, the vpa diffusion is included in the implicit
     # step
-    vpa_diffusion = ((num_diss_params.ion.vpa_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
-    vperp_diffusion = ((num_diss_params.ion.vperp_dissipation_coefficient > 0.0) || explicit_weakform_fp_collisions)
+    vpa_diffusion = ((num_diss_params.ion.vpa_dissipation_coefficient > 0.0) || (collisions.fkpl.nuii > 0.0 && vperp.n > 1))
+    vperp_diffusion = ((num_diss_params.ion.vperp_dissipation_coefficient > 0.0) || (collisions.fkpl.nuii > 0.0 && vperp.n > 1))
     vz_diffusion = (num_diss_params.neutral.vz_dissipation_coefficient > 0.0)
 
     manufactured_solns_test = manufactured_solns_input.use_for_advance
@@ -1018,6 +1090,13 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
 
     buffer_vpavperpzrs_1 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
     buffer_vpavperpzrs_2 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+
+    implicit_buffer_vpavperpzrs_1 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+    implicit_buffer_vpavperpzrs_2 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+    implicit_buffer_vpavperpzrs_3 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+    implicit_buffer_vpavperpzrs_4 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+    implicit_buffer_vpavperpzrs_5 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+    implicit_buffer_vpavperpzrs_6 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
     
     buffer_vzvrvzetazsn_1 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
     buffer_vzvrvzetazsn_2 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
@@ -1040,6 +1119,9 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
     buffer_vpavperp_2 = allocate_shared_float(nvpa,nvperp)
     buffer_vpavperp_3 = allocate_shared_float(nvpa,nvperp)
     
+    int_buffer_rs_1 = allocate_shared_int(nr,nspecies_ion)
+    int_buffer_rs_2 = allocate_shared_int(nr,nspecies_ion)
+
     return scratch_dummy_arrays(dummy_s,dummy_sr,dummy_vpavperp,dummy_zrs,dummy_zrsn,
         buffer_z_1,buffer_z_2,buffer_z_3,buffer_z_4,
         buffer_r_1,buffer_r_2,buffer_r_3,buffer_r_4,
@@ -1051,10 +1133,12 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
         buffer_vpavperpzs_1,buffer_vpavperpzs_2,buffer_vpavperpzs_3,buffer_vpavperpzs_4,buffer_vpavperpzs_5,buffer_vpavperpzs_6,
         buffer_vpavperprs_1,buffer_vpavperprs_2,buffer_vpavperprs_3,buffer_vpavperprs_4,buffer_vpavperprs_5,buffer_vpavperprs_6,
         buffer_vpavperpzrs_1,buffer_vpavperpzrs_2,
+        implicit_buffer_vpavperpzrs_1,implicit_buffer_vpavperpzrs_2,implicit_buffer_vpavperpzrs_3,implicit_buffer_vpavperpzrs_4,implicit_buffer_vpavperpzrs_5,implicit_buffer_vpavperpzrs_6,
         buffer_vzvrvzetazsn_1,buffer_vzvrvzetazsn_2,buffer_vzvrvzetazsn_3,buffer_vzvrvzetazsn_4,buffer_vzvrvzetazsn_5,buffer_vzvrvzetazsn_6,
         buffer_vzvrvzetarsn_1,buffer_vzvrvzetarsn_2,buffer_vzvrvzetarsn_3,buffer_vzvrvzetarsn_4,buffer_vzvrvzetarsn_5,buffer_vzvrvzetarsn_6,
         buffer_vzvrvzetazrsn_1, buffer_vzvrvzetazrsn_2,
-        buffer_vpavperp_1,buffer_vpavperp_2,buffer_vpavperp_3)
+        buffer_vpavperp_1,buffer_vpavperp_2,buffer_vpavperp_3,
+        int_buffer_rs_1,int_buffer_rs_2)
 
 end
 
@@ -1882,18 +1966,20 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
     # reduction over the shared-memory block, so all processes must calculate the same
     # species at the same time.
     begin_r_vperp_vpa_region(; no_synchronize=true)
-    ion_z_CFL = Inf
-    @loop_s is begin
-        update_speed_z!(z_advect[is], moments.ion.upar, moments.ion.vth, evolve_upar,
-                        evolve_ppar, fields, vpa, vperp, z, r, t, geometry, is)
-        this_minimum = get_minimum_CFL_z(z_advect[is].speed, z)
-        @serial_region begin
-            ion_z_CFL = min(ion_z_CFL, this_minimum)
+    if !t_params.implicit_ion_advance
+        ion_z_CFL = Inf
+        @loop_s is begin
+            update_speed_z!(z_advect[is], moments.ion.upar, moments.ion.vth, evolve_upar,
+                            evolve_ppar, fields, vpa, vperp, z, r, t, geometry, is)
+            this_minimum = get_minimum_CFL_z(z_advect[is].speed, z)
+            @serial_region begin
+                ion_z_CFL = min(ion_z_CFL, this_minimum)
+            end
         end
+        push!(CFL_limits, t_params.CFL_prefactor * ion_z_CFL)
     end
-    push!(CFL_limits, t_params.CFL_prefactor * ion_z_CFL)
 
-    if !t_params.implicit_vpa_advection
+    if !(t_params.implicit_ion_advance || t_params.implicit_vpa_advection)
         # ion vpa-advection
         begin_r_z_vperp_region()
         ion_vpa_CFL = Inf
@@ -2617,7 +2703,19 @@ function backward_euler!(fvec_out, fvec_in, pdf, fields, moments, advect_objects
     vpa_advect, vperp_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.vperp_advect, advect_objects.r_advect, advect_objects.z_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
-    if advance.vpa_advection
+    if nl_solver_params.ion_advance !== nothing
+        success = implicit_ion_advance!(fvec_out, fvec_in, pdf, fields, moments,
+                                        advect_objects, vz, vr, vzeta, vpa, vperp,
+                                        gyrophase, z, r, t, dt, spectral_objects,
+                                        composition, collisions, geometry, scratch_dummy,
+                                        manufactured_source_list,
+                                        external_source_settings, num_diss_params,
+                                        nl_solver_params.ion_advance, advance, fp_arrays,
+                                        istage)
+        if !success
+            return success
+        end
+    elseif advance.vpa_advection
         success = implicit_vpa_advection!(fvec_out.pdf, fvec_in, fields, moments,
                                           vpa_advect, vpa, vperp, z, r, dt, t,
                                           vpa_spectral, composition, collisions,
@@ -2630,6 +2728,249 @@ function backward_euler!(fvec_out, fvec_in, pdf, fields, moments, advect_objects
     end
 
     return true
+end
+
+"""
+    implicit_ion_advance!(fvec_out, fvec_in, pdf, fields, moments, advect_objects,
+                          vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t, dt,
+                          spectral_objects, composition, collisions, geometry,
+                          scratch_dummy, manufactured_source_list,
+                          external_source_settings, num_diss_params,
+                          nl_solver_params, advance, fp_arrays, istage)
+
+Do a backward-Euler timestep for all terms in the ion kinetic equation.
+"""
+function implicit_ion_advance!(fvec_out, fvec_in, pdf, fields, moments, advect_objects,
+                               vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t, dt,
+                               spectral_objects, composition, collisions, geometry,
+                               scratch_dummy, manufactured_source_list,
+                               external_source_settings, num_diss_params,
+                               nl_solver_params, advance, fp_arrays, istage)
+
+    vpa_spectral, vperp_spectral, r_spectral, z_spectral = spectral_objects.vpa_spectral, spectral_objects.vperp_spectral, spectral_objects.r_spectral, spectral_objects.z_spectral
+    vpa_advect, vperp_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.vperp_advect, advect_objects.r_advect, advect_objects.z_advect
+
+    # Make a copy of fvec_in.pdf so we can apply boundary conditions at the 'new'
+    # timestep, as these are the boundary conditions we need to apply the residual.
+    f_old = scratch_dummy.implicit_buffer_vpavperpzrs_1
+    begin_s_r_z_vperp_vpa_region()
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        f_old[ivpa,ivperp,iz,ir,is] = fvec_in.pdf[ivpa,ivperp,iz,ir,is]
+    end
+
+    coords = (s=composition.n_ion_species, r=r, z=z, vperp=vperp, vpa=vpa)
+    icut_lower_z = scratch_dummy.int_buffer_rs_1
+    icut_upper_z = scratch_dummy.int_buffer_rs_2
+    zero = 1.0e-14
+
+    begin_s_r_z_region()
+    @loop_s_r_z is ir iz begin
+        @views hard_force_moment_constraints!(f_old[:,:,iz,ir,is], moments, vpa)
+    end
+
+    begin_s_r_region()
+    @loop_s_r is ir begin
+        if z.irank == 0
+            iz = 1
+            @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, moments.ion.vth[iz,ir,is],
+                                             fvec_in.upar[iz,ir,is],
+                                             moments.evolve_ppar,
+                                             moments.evolve_upar)
+            icut_lower_z[ir,is] = vpa.n
+            for ivpa ∈ vpa.n:-1:1
+                # for left boundary in zed (z = -Lz/2), want
+                # f(z=-Lz/2, v_parallel > 0) = 0
+                if vpa.scratch[ivpa] ≤ zero
+                    icut_lower_z[ir,is] = ivpa + 1
+                    break
+                end
+            end
+        end
+        if z.irank == z.nrank - 1
+            iz = z.n
+            @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, moments.ion.vth[iz,ir,is],
+                                             fvec_in.upar[iz,ir,is],
+                                             moments.evolve_ppar,
+                                             moments.evolve_upar)
+            icut_upper_z[ir,is] = 0
+            for ivpa ∈ 1:vpa.n
+                # for right boundary in zed (z = Lz/2), want
+                # f(z=Lz/2, v_parallel < 0) = 0
+                if vpa.scratch[ivpa] ≥ -zero
+                    icut_upper_z[ir,is] = ivpa - 1
+                    break
+                end
+            end
+        end
+    end
+
+    if vpa.n > 1
+        # calculate the vpa advection speed, to ensure it is correct when used to apply the
+        # boundary condition
+        update_speed_vpa!(vpa_advect, fields, fvec_in, moments, vpa, vperp, z, r, composition,
+                          collisions, external_source_settings.ion, t, geometry)
+    end
+    if z.n > 1
+        @loop_s is begin
+            # get the updated speed along the z direction using the current f
+            @views update_speed_z!(z_advect[is], fvec_in.upar[:,:,is],
+                                   moments.ion.vth[:,:,is], moments.evolve_upar,
+                                   moments.evolve_ppar, fields, vpa, vperp, z, r, t,
+                                   geometry, is)
+        end
+    end
+    if r.n > 1
+        @loop_s is begin
+            # get the updated speed along the r direction using the current f
+            @views update_speed_r!(r_advect[is], fvec_in.upar[:,:,is],
+                                   moments.ion.vth[:,:,is], fields, moments.evolve_upar,
+                                   moments.evolve_ppar, vpa, vperp, z, r, geometry, is)
+        end
+    end
+    if vperp.n > 1
+        # calculate the vpa advection speed, to ensure it is correct when used to apply the
+        # boundary condition
+        begin_s_r_z_vpa_region()
+        @loop_s is begin
+            # get the updated speed along the r direction using the current f
+            @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r, z_advect[is],
+                                       r_advect[is], geometry)
+        end
+    end
+
+    function apply_bc!(x)
+        if vpa.n > 1
+            begin_s_r_z_vperp_region()
+            @loop_s_r_z_vperp is ir iz ivperp begin
+                @views enforce_v_boundary_condition_local!(x[:,ivperp,iz,ir,is], vpa.bc,
+                                                           vpa_advect[is].speed[:,ivperp,iz,ir],
+                                                           advance.vpa_diffusion, vpa,
+                                                           vpa_spectral)
+            end
+        end
+        if vperp.n > 1
+            begin_s_r_z_vpa_region()
+            enforce_vperp_boundary_condition!(x, vperp.bc, vperp, vperp_spectral,
+                                              vperp_adv, vperp_diffusion)
+        end
+
+        if z.bc == "wall" && (z.irank == 0 || z.irank == z.nrank - 1)
+            # Wall boundary conditions. Note that as density, upar, ppar do not
+            # change in this implicit step, f_new, f_old, and residual should all
+            # be zero at exactly the same set of grid points, so it is reasonable
+            # to zero-out `residual` to impose the boundary condition. We impose
+            # this after subtracting f_old in case rounding errors, etc. mean that
+            # at some point f_old had a different boundary condition cut-off
+            # index.
+            begin_s_r_vperp_region()
+            if z.irank == 0
+                iz = 1
+                @loop_s_r_vperp is ir ivperp begin
+                    x[icut_lower_z[ir,is]:end,ivperp,iz,ir,is] .= 0.0
+                end
+            end
+            if z.irank == z.nrank - 1
+                iz = z.n
+                @loop_s_r_vperp is ir ivperp begin
+                    x[1:icut_upper_z[ir,is],ivperp,iz,ir,is] .= 0.0
+                end
+            end
+        end
+
+        return nothing
+    end
+
+    # Use a forward-Euler step as the initial guess for fvec_out.pdf
+    euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, advect_objects, vz, vr,
+                        vzeta, vpa, vperp, gyrophase, z, r, t, dt, spectral_objects,
+                        composition, collisions, geometry, scratch_dummy,
+                        manufactured_source_list, external_source_settings,
+                        num_diss_params, advance, fp_arrays, istage)
+
+    # Apply the 'new' boundary conditions to f_old, so it has the same boundary conditions
+    # as we will apply to the residual, so that f_new obeys the 'new' boundary conditions.
+    apply_bc!(f_old)
+    # Also apply the bc to the forward-Euler updated values which are the initial state
+    # for 'f_new'.
+    apply_bc!(fvec_out.pdf)
+    hard_force_moment_constraints!(fvec_out.pdf, moments, vpa)
+
+    # Define a function whose input is `f_new`, so that when it's output
+    # `residual` is zero, f_new is the result of a backward-Euler timestep:
+    #   (f_new - f_old) / dt = RHS(f_new)
+    # ⇒ f_new - f_old - dt*RHS(f_new) = 0
+    function residual_func!(residual, f_new)
+        begin_s_r_z_vperp_vpa_region()
+        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+            residual[ivpa,ivperp,iz,ir,is] = f_old[ivpa,ivperp,iz,ir,is]
+        end
+
+        # scratch_pdf struct containing the array passed as f_new
+        new_scratch = scratch_pdf(f_new, fvec_out.density, fvec_out.upar, fvec_out.ppar,
+                                  fvec_out.pperp, fvec_out.temp_z_s, fvec_out.pdf_neutral,
+                                  fvec_out.density_neutral, fvec_out.uz_neutral,
+                                  fvec_out.pz_neutral)
+        # scratch_pdf struct containing the array passed as residual
+        residual_scratch = scratch_pdf(residual, fvec_out.density, fvec_out.upar,
+                                       fvec_out.ppar, fvec_out.pperp, fvec_out.temp_z_s,
+                                       fvec_out.pdf_neutral, fvec_out.density_neutral,
+                                       fvec_out.uz_neutral, fvec_out.pz_neutral)
+
+        euler_time_advance!(residual_scratch, new_scratch, pdf, fields, moments,
+                            advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z,
+                            r, t, dt, spectral_objects, composition, collisions, geometry,
+                            scratch_dummy, manufactured_source_list,
+                            external_source_settings, num_diss_params, advance, fp_arrays,
+                            istage)
+
+        # Make sure updated f will not contain negative values
+        #@. residual = max(residual, minval)
+
+        # Now
+        #   residual = f_old + dt*RHS(f_new)
+        # so update to desired residual
+        begin_s_r_z_vperp_vpa_region()
+        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+            residual[ivpa,ivperp,iz,ir,is] = f_new[ivpa,ivperp,iz,ir,is] - residual[ivpa,ivperp,iz,ir,is]
+        end
+
+        apply_bc!(residual)
+
+        begin_s_r_z_region()
+        @loop_s_r_z is ir iz begin
+            @views moment_constraints_on_residual!(residual[:,:,iz,ir,is],
+                                                   f_new[:,:,iz,ir,is], moments, vpa)
+        end
+
+        return nothing
+    end
+
+    # No preconditioning for now
+    left_preconditioner = identity
+    right_preconditioner = identity
+
+    # Buffers
+    # Note vpa,scratch is used by advance_f!, so we cannot use it here.
+    residual = scratch_dummy.implicit_buffer_vpavperpzrs_2
+    delta_x = scratch_dummy.implicit_buffer_vpavperpzrs_3
+    rhs_delta = scratch_dummy.implicit_buffer_vpavperpzrs_4
+    v = scratch_dummy.implicit_buffer_vpavperpzrs_5
+    w = scratch_dummy.implicit_buffer_vpavperpzrs_6
+
+    # Using the forward-Euler step seems (in at least one case) to slightly
+    # increase the number of iterations, so skip this.
+    ## Use forward-Euler step for initial guess
+    #residual_func!(residual, this_f_out)
+    #this_f_out .+= residual
+
+    success = newton_solve!(fvec_out.pdf, residual_func!, residual, delta_x,
+                            rhs_delta, v, w, nl_solver_params, coords=coords,
+                            left_preconditioner=left_preconditioner,
+                            right_preconditioner=right_preconditioner)
+
+    nl_solver_params.stage_counter[] += 1
+
+    return success
 end
 
 """

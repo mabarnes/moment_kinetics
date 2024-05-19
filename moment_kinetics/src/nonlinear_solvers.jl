@@ -82,19 +82,20 @@ function setup_nonlinear_solve(input_dict, coords, outer_coords=(); default_rtol
        )
     nl_solver_input = Dict_to_NamedTuple(nl_solver_section)
 
-    total_size_coords = prod(isa(c, coordinate) ? c.n : c for c ∈ values(coords))
+    coord_sizes = Tuple(isa(c, coordinate) ? c.n : c for c ∈ coords)
+    total_size_coords = prod(coord_sizes)
     outer_coord_sizes = Tuple(isa(c, coordinate) ? c.n : c for c ∈ outer_coords)
 
     linear_restart = nl_solver_input.linear_restart
 
     if serial_solve
         H = allocate_float(linear_restart + 1, linear_restart)
-        V = allocate_float((isa(c, coordinate) ? c.n : c for c ∈ values(coords))..., linear_restart+1)
+        V = allocate_float(reverse(coord_sizes)..., linear_restart+1)
         H .= 0.0
         V .= 0.0
     else
         H = allocate_shared_float(linear_restart + 1, linear_restart)
-        V = allocate_shared_float((isa(c, coordinate) ? c.n : c for c ∈ values(coords))..., linear_restart+1)
+        V = allocate_shared_float(reverse(coord_sizes)..., linear_restart+1)
 
         begin_serial_region()
         @serial_region begin
@@ -327,6 +328,8 @@ function get_distributed_error_norm(coords, rtol, atol, x)
         this_norm = distributed_error_norm_z
     elseif dims == (:vpa,)
         this_norm = distributed_error_norm_vpa
+    elseif dims == (:s, :r, :z, :vperp, :vpa)
+        this_norm = distributed_error_norm_s_r_z_vperp_vpa
     else
         error("dims=$dims is not supported yet. Need to write another "
               * "`distributed_error_norm_*()` function in nonlinear_solvers.jl")
@@ -387,6 +390,50 @@ function distributed_error_norm_vpa(residual::AbstractArray{mk_float, 1}, coords
     return residual_norm
 end
 
+function distributed_error_norm_s_r_z_vperp_vpa(residual::AbstractArray{mk_float, 5},
+                                                coords; rtol, atol, x)
+    n_ion_species = coords.s
+    r = coords.r
+    z = coords.z
+    vperp = coords.vperp
+    vpa = coords.vpa
+
+    begin_s_r_z_vperp_vpa_region()
+
+    local_norm = 0.0
+    if r.irank < r.nrank - 1
+        rend = r.n
+    else
+        rend = r.n + 1
+    end
+    if z.irank < z.nrank - 1
+        zend = z.n
+    else
+        zend = z.n + 1
+    end
+    @loop_s_r_z is ir iz begin
+        if ir == rend || iz == zend
+            continue
+        end
+        @loop_vperp_vpa ivperp ivpa begin
+            local_norm += (residual[ivpa,ivperp,iz,ir,is] / (rtol * abs(x[ivpa,ivperp,iz,ir,is]) + atol))^2
+        end
+    end
+
+    _block_synchronize()
+    block_norm = MPI.Reduce(local_norm, +, comm_block[])
+
+    if block_rank[] == 0
+        global_norm = MPI.Allreduce(block_norm, +, comm_inter_block[])
+        global_norm = sqrt(global_norm / (n_ion_species * r.n_global * z.n_global * vperp.n_global * vpa.n_global))
+    else
+        global_norm = nothing
+    end
+    global_norm = MPI.bcast(global_norm, comm_block[]; root=0)
+
+    return global_norm
+end
+
 """
     get_distributed_linear_norm(coords)
 
@@ -399,6 +446,8 @@ function get_distributed_linear_norm(coords)
         return distributed_linear_norm_z
     elseif dims == (:vpa,)
         return distributed_linear_norm_vpa
+    elseif dims == (:s, :r, :z, :vperp, :vpa)
+        return distributed_linear_norm_s_r_z_vperp_vpa
     else
         error("dims=$dims is not supported yet. Need to write another "
               * "`distributed_linear_norm_*()` function in nonlinear_solvers.jl")
@@ -445,6 +494,45 @@ function distributed_linear_norm_vpa(residual::AbstractArray{mk_float, 1}, coord
     return norm(residual)
 end
 
+function distributed_linear_norm_s_r_z_vperp_vpa(residual::AbstractArray{mk_float, 5}, coords)
+    r = coords.r
+    z = coords.z
+
+    begin_s_r_z_vperp_vpa_region()
+
+    local_norm = 0.0
+    if r.irank < r.nrank - 1
+        rend = r.n
+    else
+        rend = r.n + 1
+    end
+    if z.irank < z.nrank - 1
+        zend = z.n
+    else
+        zend = z.n + 1
+    end
+
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        if ir == rend || iz == zend
+            continue
+        end
+        local_norm += residual[ivpa,ivperp,iz,ir,is]^2
+    end
+
+    _block_synchronize()
+    block_norm = MPI.Reduce(local_norm, +, comm_block[])
+
+    if block_rank[] == 0
+        global_norm = MPI.Allreduce(block_norm, +, comm_inter_block[])
+        global_norm = sqrt(global_norm)
+    else
+        global_norm = nothing
+    end
+    global_norm = MPI.bcast(global_norm, comm_block[]; root=0)
+
+    return global_norm
+end
+
 """
     get_distributed_dot(coords)
 
@@ -457,13 +545,16 @@ function get_distributed_dot(coords)
         return distributed_dot_z
     elseif dims == (:vpa,)
         return distributed_dot_vpa
+    elseif dims == (:s, :r, :z, :vperp, :vpa)
+        return distributed_dot_s_r_z_vperp_vpa
     else
         error("dims=$dims is not supported yet. Need to write another "
               * "`distributed_dot_*()` function in nonlinear_solvers.jl")
     end
 end
 
-function distributed_dot_z(x::AbstractArray{mk_float, 1}, y::AbstractArray{mk_float, 1})
+function distributed_dot_z(x::AbstractArray{mk_float, 1}, y::AbstractArray{mk_float, 1},
+                           coords)
 
     begin_z_region()
 
@@ -496,10 +587,49 @@ function distributed_dot_z(x::AbstractArray{mk_float, 1}, y::AbstractArray{mk_fl
     return global_dot
 end
 
-function distributed_dot_vpa(x::AbstractArray{mk_float, 1}, y::AbstractArray{mk_float, 1})
+function distributed_dot_vpa(x::AbstractArray{mk_float, 1}, y::AbstractArray{mk_float, 1},
+                             coords)
     # No parallelism needed when the implicit solve is over vpa - assume that this will be
     # called inside a parallelised s_r_z_vperp loop.
     return dot(x, y)
+end
+
+function distributed_dot_s_r_z_vperp_vpa(x::AbstractArray{mk_float, 5},
+                                         y::AbstractArray{mk_float, 5}, coords)
+    r = coords.r
+    z = coords.z
+
+    begin_z_region()
+
+    local_dot = 0.0
+    if r.irank < r.nrank - 1
+        rend = r.n
+    else
+        rend = r.n + 1
+    end
+    if z.irank < z.nrank - 1
+        zend = z.n
+    else
+        zend = z.n + 1
+    end
+
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        if ir == rend || iz == zend
+            continue
+        end
+        local_dot += x[ivpa,ivperp,iz,ir,is] * y[ivpa,ivperp,iz,ir,is]
+    end
+
+    _block_synchronize()
+    block_dot = MPI.Reduce(local_dot, +, comm_block[])
+
+    if block_rank[] == 0
+        global_dot = MPI.Allreduce(block_dot, +, comm_inter_block[])
+    else
+        global_dot = nothing
+    end
+
+    return global_dot
 end
 
 """
@@ -514,6 +644,8 @@ function get_parallel_map(coords)
         return parallel_map_z
     elseif dims == (:vpa,)
         return parallel_map_vpa
+    elseif dims == (:s, :r, :z, :vperp, :vpa)
+        return parallel_map_s_r_z_vperp_vpa
     else
         error("dims=$dims is not supported yet. Need to write another "
               * "`parallel_map_*()` function in nonlinear_solvers.jl")
@@ -543,6 +675,18 @@ function parallel_map_vpa(func, result::AbstractArray{mk_float, 1},
     else
         map!(func, result, args...)
     end
+    return nothing
+end
+
+function parallel_map_s_r_z_vperp_vpa(func, result::AbstractArray{mk_float, 5},
+                                      args::AbstractArray{mk_float, 5}...)
+
+    begin_s_r_z_vperp_vpa_region()
+
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        result[ivpa,ivperp,iz,ir,is] = func((x[ivpa,ivperp,iz,ir,is] for x ∈ args)...)
+    end
+
     return nothing
 end
 
@@ -580,7 +724,7 @@ function linear_solve!(x, residual_func!, residual0, delta_x, v, w; coords, rtol
     # Now we actually set 'w' as the first Krylov vector, and normalise it.
     parallel_map((residual0, v) -> -residual0 - v, w, residual0, v)
     beta = distributed_norm(w, coords)
-    parallel_map((w) -> w/beta, @view(V[:,1]), w)
+    parallel_map((w) -> w/beta, selectdim(V,ndims(V),1), w)
 
     # Set tolerance for GMRES iteration to rtol times the initial residual, unless this is
     # so small that it is smaller than atol, in which case use atol instead.
@@ -596,13 +740,13 @@ function linear_solve!(x, residual_func!, residual0, delta_x, v, w; coords, rtol
             #println("Linear ", counter)
 
             # Compute next Krylov vector
-            parallel_map((V) -> V, w, @view(V[:,i]))
+            parallel_map((V) -> V, w, selectdim(V,ndims(V),i))
             approximate_Jacobian_vector_product!(w)
 
             # Gram-Schmidt orthogonalization
             for j ∈ 1:i
-                parallel_map((V) -> V, v, @view(V[:,j]))
-                w_dot_Vj = distributed_dot(w, v)
+                parallel_map((V) -> V, v, selectdim(V,ndims(V),j))
+                w_dot_Vj = distributed_dot(w, v, coords)
                 if serial_solve
                     H[j,i] = w_dot_Vj
                 else
@@ -611,7 +755,7 @@ function linear_solve!(x, residual_func!, residual0, delta_x, v, w; coords, rtol
                         H[j,i] = w_dot_Vj
                     end
                 end
-                parallel_map((w, V) -> w - H[j,i] * V, w, w, @view(V[:,j]))
+                parallel_map((w, V) -> w - H[j,i] * V, w, w, selectdim(V,ndims(V),j))
             end
             norm_w = distributed_norm(w, coords)
             if serial_solve
@@ -622,7 +766,7 @@ function linear_solve!(x, residual_func!, residual0, delta_x, v, w; coords, rtol
                     H[i+1,i] = norm_w
                 end
             end
-            parallel_map((w) -> w / H[i+1,i], @view(V[:,i+1]), w)
+            parallel_map((w) -> w / H[i+1,i], selectdim(V,ndims(V),i+1), w)
 
             function temporary_residual!(result, guess)
                 #println("temporary residual ", size(result), " ", size(@view(H[1:i+1,1:i])), " ", size(guess))
@@ -671,7 +815,7 @@ function linear_solve!(x, residual_func!, residual0, delta_x, v, w; coords, rtol
         #    delta_x .= delta_x .+ sum(y[i] .* V[:,i] for i ∈ 1:length(y))
         # slightly abusing splatting to get the sum into a lambda-function.
         parallel_map((delta_x, V...) -> delta_x + sum(this_y * this_V for (this_y, this_V) ∈ zip(y, V)),
-                     delta_x, delta_x, (@view(V[:,i]) for i ∈ 1:length(y))...)
+                     delta_x, delta_x, (selectdim(V,ndims(V),i) for i ∈ 1:length(y))...)
         right_preconditioner(delta_x)
 
         if residual < tol || restart_counter > max_restarts
@@ -689,9 +833,9 @@ function linear_solve!(x, residual_func!, residual0, delta_x, v, w; coords, rtol
         parallel_map((residual0, v) -> -residual0 - v, v, residual0, v)
         beta = distributed_norm(v, coords)
         for i ∈ 2:length(y)
-            parallel_map(() -> 0.0, @view(V[:,i]))
+            parallel_map(() -> 0.0, selectdim(V,ndims(V),i))
         end
-        parallel_map((v) -> v/beta, @view(V[:,1]), v)
+        parallel_map((v) -> v/beta, selectdim(V,ndims(V),1), v)
     end
 
     return counter

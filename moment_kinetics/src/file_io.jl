@@ -731,7 +731,7 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                          parallel_io=parallel_io,
                                          description="Number of linear iterations for $term"),
                   )
-            for term ∈ keys(nl_solver_params) if term !== nothing)
+            for (term, params) ∈ pairs(nl_solver_params) if params !== nothing)
 
         return io_moments_info(fid, io_time, io_phi, io_Er, io_Ez, io_density, io_upar,
                                io_ppar, io_pperp, io_qpar, io_vth, io_dSdt, io_chodura_lower, io_chodura_upper,

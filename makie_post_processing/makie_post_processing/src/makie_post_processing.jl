@@ -7306,8 +7306,11 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                 else
                     time = ri.time
                 end
-                CFL_vars = ["minimum_CFL_ion_z"]
-                if !ri.t_input["implicit_vpa_advection"]
+                CFL_vars = String[]
+                if !ri.t_input["implicit_ion_advance"]
+                    push!(CFL_vars, "minimum_CFL_ion_z")
+                end
+                if !(ri.t_input["implicit_ion_advance"] || ri.t_input["implicit_vpa_advection"])
                     push!(CFL_vars, "minimum_CFL_ion_vpa")
                 end
                 if ri.n_neutral_species > 0
@@ -7414,12 +7417,14 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                     end
                 end
 
-                # Ion z advection
-                counter += 1
-                plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                        label=prefix * "ion z advect", ax=ax, linestyle=:dot)
+                if !ri.t_input["implicit_ion_advance"]
+                    # Ion z advection
+                    counter += 1
+                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                            label=prefix * "ion z advect", ax=ax, linestyle=:dot)
+                end
 
-                if !ri.t_input["implicit_vpa_advection"]
+                if !(ri.t_input["implicit_ion_advance"] || ri.t_input["implicit_vpa_advection"])
                     # Ion vpa advection
                     counter += 1
                     plot_1d(time, @view limit_caused_by_per_output[counter,:];
