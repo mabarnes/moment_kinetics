@@ -36,8 +36,13 @@ using ..neutral_z_advection: update_speed_neutral_z!, neutral_advection_z!
 using ..neutral_vz_advection: update_speed_neutral_vz!, neutral_advection_vz!
 using ..vperp_advection: update_speed_vperp!, vperp_advection!
 using ..vpa_advection: update_speed_vpa!, vpa_advection!, implicit_vpa_advection!
-using ..charge_exchange: charge_exchange_collisions_1V!, charge_exchange_collisions_3V!
-using ..ionization: ionization_collisions_1V!, ionization_collisions_3V!, constant_ionization_source!
+using ..charge_exchange: ion_charge_exchange_collisions_1V!,
+                         neutral_charge_exchange_collisions_1V!,
+                         ion_charge_exchange_collisions_3V!,
+                         neutral_charge_exchange_collisions_3V!
+using ..ionization: ion_ionization_collisions_1V!, neutral_ionization_collisions_1V!,
+                    ion_ionization_collisions_3V!, neutral_ionization_collisions_3V!,
+                    constant_ionization_source!
 using ..krook_collisions: krook_collisions!
 using ..external_sources
 using ..nonlinear_solvers
@@ -706,10 +711,14 @@ function setup_advance_flags(moments, composition, t_params, collisions,
     advance_vperp_advection = false
     advance_z_advection = false
     advance_r_advection = false
-    advance_cx_1V = false
-    advance_cx = false
-    advance_ionization = false
-    advance_ionization_1V = false
+    advance_ion_cx_1V = false
+    advance_neutral_cx_1V = false
+    advance_ion_cx = false
+    advance_neutral_cx = false
+    advance_ion_ionization = false
+    advance_neutral_ionization = false
+    advance_ion_ionization_1V = false
+    advance_neutral_ionization_1V = false
     advance_ionization_source = false
     advance_krook_collisions_ii = false
     advance_external_source = false
@@ -760,9 +769,11 @@ function setup_advance_flags(moments, composition, t_params, collisions,
             # account for charge exchange collisions
             if abs(collisions.charge_exchange) > 0.0
                 if vz.n == vpa.n && vperp.n == 1 && vr.n == 1 && vzeta.n == 1
-                    advance_cx_1V = true
+                    advance_ion_cx_1V = true
+                    advance_neutral_cx_1V = true
                 elseif vperp.n > 1 && vr.n > 1 && vzeta.n > 1
-                    advance_cx = true
+                    advance_ion_cx = true
+                    advance_neutral_cx = true
                 else
                     error("If any perpendicular velocity has length>1 they all must. "
                           * "If all perpendicular velocities have length=1, then vpa and "
@@ -775,9 +786,11 @@ function setup_advance_flags(moments, composition, t_params, collisions,
             # account for ionization collisions
             if abs(collisions.ionization) > 0.0
                 if vz.n == vpa.n && vperp.n == 1 && vr.n == 1 && vzeta.n == 1
-                    advance_ionization_1V = true
+                    advance_ion_ionization_1V = true
+                    advance_neutral_ionization_1V = true
                 elseif vperp.n > 1 && vr.n > 1 && vzeta.n > 1
-                    advance_ionization = true
+                    advance_ion_ionization = true
+                    advance_neutral_ionization = true
                 else
                     error("If any perpendicular velocity has length>1 they all must. "
                           * "If all perpendicular velocities have length=1, then vpa and "
@@ -849,9 +862,11 @@ function setup_advance_flags(moments, composition, t_params, collisions,
 
     return advance_info(advance_vpa_advection, advance_vperp_advection, advance_z_advection, advance_r_advection,
                         advance_neutral_z_advection, advance_neutral_r_advection,
-                        advance_neutral_vz_advection, advance_cx, advance_cx_1V,
-                        advance_ionization, advance_ionization_1V,
-                        advance_ionization_source, advance_krook_collisions_ii,
+                        advance_neutral_vz_advection, advance_ion_cx, advance_neutral_cx,
+                        advance_ion_cx_1V, advance_neutral_cx_1V, advance_ion_ionization,
+                        advance_neutral_ionization, advance_ion_ionization_1V,
+                        advance_neutral_ionization_1V, advance_ionization_source,
+                        advance_krook_collisions_ii,
                         explicit_weakform_fp_collisions,
                         advance_external_source, advance_numerical_dissipation,
                         advance_sources, advance_continuity, advance_force_balance,
@@ -875,10 +890,14 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
     advance_vperp_advection = false
     advance_z_advection = false
     advance_r_advection = false
-    advance_cx_1V = false
-    advance_cx = false
-    advance_ionization = false
-    advance_ionization_1V = false
+    advance_ion_cx_1V = false
+    advance_neutral_cx_1V = false
+    advance_ion_cx = false
+    advance_neutral_cx = false
+    advance_ion_ionization = false
+    advance_neutral_ionization = false
+    advance_ion_ionization_1V = false
+    advance_neutral_ionization_1V = false
     advance_ionization_source = false
     advance_krook_collisions_ii = false
     advance_external_source = false
@@ -924,8 +943,10 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
 
     return advance_info(advance_vpa_advection, advance_vperp_advection, advance_z_advection, advance_r_advection,
                         advance_neutral_z_advection, advance_neutral_r_advection,
-                        advance_neutral_vz_advection, advance_cx, advance_cx_1V,
-                        advance_ionization, advance_ionization_1V,
+                        advance_neutral_vz_advection, advance_ion_cx, advance_neutral_cx,
+                        advance_ion_cx_1V, advance_neutral_cx_1V, advance_ion_ionization,
+                        advance_neutral_ionization, advance_ion_ionization_1V,
+                        advance_neutral_ionization_1V,
                         advance_ionization_source, advance_krook_collisions_ii,
                         explicit_weakform_fp_collisions,
                         advance_external_source, advance_numerical_dissipation,
@@ -1476,20 +1497,32 @@ function time_advance_split_operators!(pdf, scratch, scratch_implicit, t, t_para
         # account for charge exchange collisions between ions and neutrals
         if composition.n_neutral_species > 0
             if collisions.charge_exchange > 0.0
-                advance.cx_collisions = true
+                advance.ion_cx_collisions = true
                 time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, vpa, z,
                     vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
                     composition, collisions, external_source_settings, num_diss_params,
                     nl_solver_params, advance, advance_implicit, istep)
-                advance.cx_collisions = false
+                advance.ion_cx_collisions = false
+                advance.neutral_cx_collisions = true
+                time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, vpa, z,
+                    vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+                    composition, collisions, external_source_settings, num_diss_params,
+                    nl_solver_params, advance, advance_implicit, istep)
+                advance.neutral_cx_collisions = false
             end
             if collisions.ionization > 0.0
-                advance.ionization_collisions = true
+                advance.ion_ionization_collisions = true
                 time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, z, vpa,
                     z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
                     composition, collisions, external_source_settings, num_diss_params,
                     nl_solver_params, advance, advance_implicit, istep)
-                advance.ionization_collisions = false
+                advance.ion_ionization_collisions = false
+                advance.neutral_ionization_collisions = true
+                time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, z, vpa,
+                    z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
+                    composition, collisions, external_source_settings, num_diss_params,
+                    nl_solver_params, advance, advance_implicit, istep)
+                advance.neutral_ionization_collisions = false
             end
         end
         if collisions.krook_collision_frequency_prefactor  > 0.0
@@ -1578,20 +1611,32 @@ function time_advance_split_operators!(pdf, scratch, scratch_implicit, t, t_para
         # account for charge exchange collisions between ions and neutrals
         if composition.n_neutral_species > 0
             if collisions.ionization > 0.0
-                advance.ionization = true
+                advance.neutral_ionization = true
                 time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, z, vpa,
                     z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
                     composition, collisions, external_source_settings, num_diss_params,
                     nl_solver_params, advance, advance_implicit, istep)
-                advance.ionization = false
+                advance.neutral_ionization = false
+                advance.ion_ionization = true
+                time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, z, vpa,
+                    z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
+                    composition, collisions, external_source_settings, num_diss_params,
+                    nl_solver_params, advance, advance_implicit, istep)
+                advance.ion_ionization = false
             end
             if collisions.charge_exchange > 0.0
-                advance.cx_collisions = true
+                advance.neutral_cx_collisions = true
                 time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, vpa, z,
                     vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
                     composition, collisions, external_source_settings, num_diss_params,
                     nl_solver_params, advance, advance_implicit, istep)
-                advance.cx_collisions = false
+                advance.neutral_cx_collisions = false
+                advance.ion_cx_collisions = true
+                time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, vpa, z,
+                    vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+                    composition, collisions, external_source_settings, num_diss_params,
+                    nl_solver_params, advance, advance_implicit, istep)
+                advance.ion_cx_collisions = false
             end
         end
         # z_advection! advances the operator-split 1D advection equation in z
@@ -2405,31 +2450,52 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
         source_terms_manufactured!(fvec_out.pdf, fvec_out.pdf_neutral, vz, vr, vzeta, vpa, vperp, z, r, t, dt, composition, manufactured_source_list)
     end
 
-    if advance.cx_collisions || advance.ionization_collisions
+    if advance.ion_cx_collisions || advance.ion_ionization_collisions
         # gyroaverage neutral dfn and place it in the ion.buffer array for use in the collisions step
         vzvrvzeta_to_vpavperp!(pdf.ion.buffer, fvec_in.pdf_neutral, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, geometry, composition)
+    end
+    if advance.neutral_cx_collisions || advance.neutral_ionization_collisions
         # interpolate ion particle dfn and place it in the neutral.buffer array for use in the collisions step
         vpavperp_to_vzvrvzeta!(pdf.neutral.buffer, fvec_in.pdf, vz, vr, vzeta, vpa, vperp, z, r, geometry, composition)
     end
 
     # account for charge exchange collisions between ions and neutrals
-    if advance.cx_collisions_1V
-        charge_exchange_collisions_1V!(fvec_out.pdf, fvec_out.pdf_neutral, fvec_in,
-                                       moments, composition, vpa, vz,
-                                       collisions.charge_exchange, vpa_spectral,
-                                       vz_spectral, dt)
-    elseif advance.cx_collisions
-        charge_exchange_collisions_3V!(fvec_out.pdf, fvec_out.pdf_neutral, pdf.ion.buffer, pdf.neutral.buffer, fvec_in, composition,
-                                        vz, vr, vzeta, vpa, vperp, z, r, collisions.charge_exchange, dt)
+    if advance.ion_cx_collisions_1V
+        ion_charge_exchange_collisions_1V!(fvec_out.pdf, fvec_in, moments, composition,
+                                           vpa, vz, collisions.charge_exchange,
+                                           vpa_spectral, vz_spectral, dt)
+    elseif advance.ion_cx_collisions
+        ion_charge_exchange_collisions_3V!(fvec_out.pdf, pdf.ion.buffer, fvec_in,
+                                           composition, vz, vr, vzeta, vpa, vperp, z, r,
+                                           collisions.charge_exchange, dt)
+    end
+    if advance.neutral_cx_collisions_1V
+        neutral_charge_exchange_collisions_1V!(fvec_out.pdf_neutral, fvec_in, moments,
+                                               composition, vpa, vz,
+                                               collisions.charge_exchange, vpa_spectral,
+                                               vz_spectral, dt)
+    elseif advance.neutral_cx_collisions
+        neutral_charge_exchange_collisions_3V!(fvec_out.pdf_neutral, pdf.neutral.buffer,
+                                               fvec_in, composition, vz, vr, vzeta, vpa,
+                                               vperp, z, r, collisions.charge_exchange,
+                                               dt)
     end
     # account for ionization collisions between ions and neutrals
-    if advance.ionization_collisions_1V
-        ionization_collisions_1V!(fvec_out.pdf, fvec_out.pdf_neutral, fvec_in, vz, vpa,
-                                  vperp, z, r, vz_spectral, moments, composition,
-                                  collisions, dt)
-    elseif advance.ionization_collisions
-        ionization_collisions_3V!(fvec_out.pdf, fvec_out.pdf_neutral, pdf.ion.buffer, fvec_in, composition,
-                                        vz, vr, vzeta, vpa, vperp, z, r, collisions, dt)
+    if advance.ion_ionization_collisions_1V
+        ion_ionization_collisions_1V!(fvec_out.pdf, fvec_in, vz, vpa, vperp, z, r,
+                                      vz_spectral, moments, composition, collisions, dt)
+    elseif advance.ion_ionization_collisions
+        ion_ionization_collisions_3V!(fvec_out.pdf, pdf.ion.buffer, fvec_in, composition,
+                                      vz, vr, vzeta, vpa, vperp, z, r, collisions, dt)
+    end
+    if advance.neutral_ionization_collisions_1V
+        neutral_ionization_collisions_1V!(fvec_out.pdf_neutral, fvec_in, vz, vpa, vperp,
+                                          z, r, vz_spectral, moments, composition,
+                                          collisions, dt)
+    elseif advance.neutral_ionization_collisions
+        neutral_ionization_collisions_3V!(fvec_out.pdf_neutral, pdf.neutral.buffer, fvec_in,
+                                          composition, vz, vr, vzeta, vpa, vperp, z, r,
+                                          collisions, dt)
     end
     if advance.ionization_source
         constant_ionization_source!(fvec_out.pdf, fvec_in, vpa, vperp, z, r, moments,

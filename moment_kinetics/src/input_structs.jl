@@ -94,10 +94,14 @@ mutable struct advance_info
     neutral_z_advection::Bool
     neutral_r_advection::Bool
     neutral_vz_advection::Bool
-    cx_collisions::Bool
-    cx_collisions_1V::Bool
-    ionization_collisions::Bool
-    ionization_collisions_1V::Bool
+    ion_cx_collisions::Bool
+    neutral_cx_collisions::Bool
+    ion_cx_collisions_1V::Bool
+    neutral_cx_collisions_1V::Bool
+    ion_ionization_collisions::Bool
+    neutral_ionization_collisions::Bool
+    ion_ionization_collisions_1V::Bool
+    neutral_ionization_collisions_1V::Bool
     ionization_source::Bool
     krook_collisions_ii::Bool
     explicit_weakform_fp_collisions::Bool
