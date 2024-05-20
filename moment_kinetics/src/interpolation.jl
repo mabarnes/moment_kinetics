@@ -60,8 +60,27 @@ function interpolate_to_grid_1d!(result, newgrid, f, coord, spectral)
     # May not be the most efficient algorithm.
     # Find start/end points for each element, storing their indices in kstart
     kstart = Vector{mk_int}(undef, nelement+1)
-    # set the starting index by finding the start of coord.grid
-    kstart[1] = searchsortedfirst(newgrid, coord.grid[1])
+
+    # First element includes both boundary points, while all others have only one (to
+    # avoid duplication), so calculate the first element outside the loop.
+    if coord.radau_first_element && coord.irank == 0
+        first_element_spectral = spectral.radau
+        # For a grid with a Radau first element, the lower boundary of the first element
+        # is at coord=0, and the coordinate range is 0<coord<∞ so we will never need to to
+        # extrapolate to negative values, and points between coord=0 and coord.grid[1] are
+        # really within the first element, so the index for the first point greater than 0
+        # (the left boundary of the coordinate grid) in `newgrid` is always 1.
+        kstart[1] = 1
+
+        # In a coordinate with a Radau first element, no point should be less than zero.
+        # If bounds checking is enabled, check that first `newgrid` point is ≥0.
+        @boundscheck newgrid[1] ≥ 0.0
+    else
+        first_element_spectral = spectral.lobatto
+        # set the starting index by finding the start of coord.grid
+        kstart[1] = searchsortedfirst(newgrid, coord.grid[1])
+    end
+
     # check to see if any of the newgrid points are to the left of the first grid point
     for j ∈ 1:kstart[1]-1
         # if the new grid location is outside the bounds of the original grid,
@@ -74,13 +93,6 @@ function interpolate_to_grid_1d!(result, newgrid, f, coord, spectral)
         kstart[j+1] = kstart[j] - 1 + @views searchsortedfirst(newgrid[kstart[j]:end], coord.grid[coord.imax[j]])
     end
 
-    # First element includes both boundary points, while all others have only one (to
-    # avoid duplication), so calculate the first element outside the loop.
-    if coord.radau_first_element && coord.irank == 0
-        first_element_spectral = spectral.radau
-    else
-        first_element_spectral = spectral.lobatto
-    end
     if kstart[1] < kstart[2]
         imin = coord.imin[1]
         imax = coord.imax[1]
