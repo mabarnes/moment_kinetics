@@ -29,7 +29,7 @@ using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 import ..calculus: elementwise_derivative!, mass_matrix_solve!
 import ..interpolation: single_element_interpolate!
-using ..lagrange_polynomials: lagrange_poly
+using ..lagrange_polynomials: lagrange_poly_optimised
 using ..moment_kinetics_structs: weak_discretization_info
 
 
@@ -308,11 +308,23 @@ function elementwise_derivative!(coord, ff, adv_fac, spectral::gausslegendre_inf
     return elementwise_derivative!(coord, ff, spectral)
 end
 
-function single_element_interpolate!(result, newgrid, f, imin, imax, coord, gausslegendre::gausslegendre_base_info)
-    for i ∈ 1:length(newgrid)
-        result[i] = 0.0
-        for j ∈ 1:coord.ngrid
-            @views result[i] += f[j] * lagrange_poly(j, coord.grid[imin:imax], newgrid[i])
+function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, coord,
+                                     gausslegendre::gausslegendre_base_info)
+    n_new = length(newgrid)
+
+    i = 1
+    other_nodes = @view coord.other_nodes[:,i,ielement]
+    one_over_denominator = coord.one_over_denominator[i,ielement]
+    this_f = f[i]
+    for j ∈ 1:n_new
+        result[j] = this_f * lagrange_poly_optimised(other_nodes, one_over_denominator, newgrid[j])
+    end
+    for i ∈ 2:coord.ngrid
+        other_nodes = @view coord.other_nodes[:,i,ielement]
+        one_over_denominator = coord.one_over_denominator[i,ielement]
+        this_f = f[i]
+        for j ∈ 1:n_new
+            result[j] += this_f * lagrange_poly_optimised(other_nodes, one_over_denominator, newgrid[j])
         end
     end
 

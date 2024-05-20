@@ -99,7 +99,7 @@ function interpolate_to_grid_1d!(result, newgrid, f, coord, spectral)
         kmin = kstart[1]
         kmax = kstart[2] - 1
         @views single_element_interpolate!(result[kmin:kmax], newgrid[kmin:kmax],
-                                           f[imin:imax], imin, imax, coord,
+                                           f[imin:imax], imin, imax, 1, coord,
                                            first_element_spectral)
     end
     @inbounds for j ∈ 2:nelement
@@ -109,7 +109,7 @@ function interpolate_to_grid_1d!(result, newgrid, f, coord, spectral)
             imin = coord.imin[j] - 1
             imax = coord.imax[j]
             @views single_element_interpolate!(result[kmin:kmax], newgrid[kmin:kmax],
-                                               f[imin:imax], imin, imax, coord,
+                                               f[imin:imax], imin, imax, j, coord,
                                                spectral.lobatto)
         end
     end

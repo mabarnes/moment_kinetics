@@ -465,7 +465,8 @@ function chebyshev_spectral_derivative!(df,f)
     end
 end
 
-function single_element_interpolate!(result, newgrid, f, imin, imax, coord, chebyshev::chebyshev_base_info)
+function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, coord,
+                                     chebyshev::chebyshev_base_info)
     # Temporary buffer to store Chebyshev coefficients
     cheby_f = chebyshev.df
 
