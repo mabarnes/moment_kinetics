@@ -193,6 +193,7 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
     distributed_norm = get_distributed_norm(coords, rtol, atol, x)
     distributed_dot = get_distributed_dot(coords, rtol, atol, x)
     parallel_map = get_parallel_map(coords)
+    parallel_delta_x_calc = get_parallel_delta_x_calc(coords)
 
     residual_func!(residual, x)
     residual_norm = distributed_norm(residual)
@@ -232,6 +233,7 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
                                    distributed_norm=distributed_norm,
                                    distributed_dot=distributed_dot,
                                    parallel_map=parallel_map,
+                                   parallel_delta_x_calc=parallel_delta_x_calc,
                                    serial_solve=nl_solver_params.serial_solve)
         linear_counter += linear_its
 
@@ -567,39 +569,151 @@ function get_parallel_map(coords)
     end
 end
 
-function parallel_map_z(func, result::AbstractArray{mk_float, 1},
-                        args::AbstractArray{mk_float, 1}...)
+# Separate versions for different numbers of arguments as generator expressions result in
+# slow code
+
+function parallel_map_z(func, result::AbstractArray{mk_float, 1})
 
     begin_z_region()
 
     @loop_z iz begin
-        result[iz] = func((x[iz] for x ∈ args)...)
+        result[iz] = func()
+    end
+
+    return nothing
+end
+function parallel_map_z(func, result::AbstractArray{mk_float, 1}, x1)
+
+    begin_z_region()
+
+    @loop_z iz begin
+        result[iz] = func(x1[iz])
+    end
+
+    return nothing
+end
+function parallel_map_z(func, result::AbstractArray{mk_float, 1}, x1, x2)
+
+    begin_z_region()
+
+    @loop_z iz begin
+        result[iz] = func(x1[iz], x2[iz])
     end
 
     return nothing
 end
 
-function parallel_map_vpa(func, result::AbstractArray{mk_float, 1},
-                          args::AbstractArray{mk_float, 1}...)
+function parallel_map_vpa(func, result::AbstractArray{mk_float, 1})
     # No parallelism needed when the implicit solve is over vpa - assume that this will be
     # called inside a parallelised s_r_z_vperp loop.
-    if length(args) == 0
-        for i ∈ eachindex(result)
-            result[i] = func()
-        end
-    else
-        map!(func, result, args...)
+    for i ∈ eachindex(result)
+        result[i] = func()
+    end
+    return nothing
+end
+function parallel_map_vpa(func, result::AbstractArray{mk_float, 1}, x1)
+    # No parallelism needed when the implicit solve is over vpa - assume that this will be
+    # called inside a parallelised s_r_z_vperp loop.
+    for i ∈ eachindex(result)
+        result[i] = func(x1[i])
+    end
+    return nothing
+end
+function parallel_map_vpa(func, result::AbstractArray{mk_float, 1}, x1, x2)
+    # No parallelism needed when the implicit solve is over vpa - assume that this will be
+    # called inside a parallelised s_r_z_vperp loop.
+    for i ∈ eachindex(result)
+        result[i] = func(x1[i], x2[i])
     end
     return nothing
 end
 
-function parallel_map_s_r_z_vperp_vpa(func, result::AbstractArray{mk_float, 5},
-                                      args::AbstractArray{mk_float, 5}...)
+function parallel_map_s_r_z_vperp_vpa(func, result::AbstractArray{mk_float, 5})
 
     begin_s_r_z_vperp_vpa_region()
 
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-        result[ivpa,ivperp,iz,ir,is] = func((x[ivpa,ivperp,iz,ir,is] for x ∈ args)...)
+        result[ivpa,ivperp,iz,ir,is] = func()
+    end
+
+    return nothing
+end
+function parallel_map_s_r_z_vperp_vpa(func, result::AbstractArray{mk_float, 5}, x1)
+
+    begin_s_r_z_vperp_vpa_region()
+
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        result[ivpa,ivperp,iz,ir,is] = func(x1[ivpa,ivperp,iz,ir,is])
+    end
+
+    return nothing
+end
+function parallel_map_s_r_z_vperp_vpa(func, result::AbstractArray{mk_float, 5}, x1, x2)
+
+    begin_s_r_z_vperp_vpa_region()
+
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        result[ivpa,ivperp,iz,ir,is] = func(x1[ivpa,ivperp,iz,ir,is], x2[ivpa,ivperp,iz,ir,is])
+    end
+
+    return nothing
+end
+
+"""
+    get_parallel_delta_x_calc(coords)
+
+Get a parallelised function that calculates the update `delta_x` from the `V` matrix and
+the minimum residual coefficients `y`.
+"""
+function get_parallel_delta_x_calc(coords)
+    dims = keys(coords)
+    if dims == (:z,)
+        return parallel_delta_x_calc_z
+    elseif dims == (:vpa,)
+        return parallel_delta_x_calc_vpa
+    elseif dims == (:s, :r, :z, :vperp, :vpa)
+        return parallel_delta_x_calc_s_r_z_vperp_vpa
+    else
+        error("dims=$dims is not supported yet. Need to write another "
+              * "`parallel_delta_x_calc_*()` function in nonlinear_solvers.jl")
+    end
+end
+
+function parallel_delta_x_calc_z(delta_x::AbstractArray{mk_float, 1}, V, y)
+
+    begin_z_region()
+
+    ny = length(y)
+    @loop_z iz begin
+        for iy ∈ 1:ny
+            delta_x[iz] += y[iy] * V[iz,iy]
+        end
+    end
+
+    return nothing
+end
+
+function parallel_delta_x_calc_vpa(delta_x::AbstractArray{mk_float, 1}, V, y)
+    # No parallelism needed when the implicit solve is over vpa - assume that this will be
+    # called inside a parallelised s_r_z_vperp loop.
+    ny = length(y)
+    for ivpa ∈ eachindex(delta_x)
+        for iy ∈ 1:ny
+            delta_x[ivpa] += y[iy] * V[ivpa,iy]
+        end
+    end
+    return nothing
+end
+
+function parallel_delta_x_calc_s_r_z_vperp_vpa(delta_x::AbstractArray{mk_float, 5}, V, y)
+
+    begin_s_r_z_vperp_vpa_region()
+
+    ny = length(y)
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        for iy ∈ 1:ny
+            delta_x[ivpa,ivperp,iz,ir,is] += y[iy] * V[ivpa,ivperp,iz,ir,is,iy]
+        end
     end
 
     return nothing
@@ -612,7 +726,7 @@ at each step of the outer Newton iteration (in `newton_solve!()`).
 function linear_solve!(x, residual_func!, residual0, delta_x, v, w; coords, rtol, atol,
                        restart, max_restarts, left_preconditioner, right_preconditioner,
                        H, V, rhs_delta, initial_guess, distributed_norm, distributed_dot,
-                       parallel_map, serial_solve)
+                       parallel_map, parallel_delta_x_calc, serial_solve)
     # Solve (approximately?):
     #   J δx = residual0
 
@@ -730,8 +844,7 @@ function linear_solve!(x, residual_func!, residual0, delta_x, v, w; coords, rtol
         # The following is the `parallel_map()` version of
         #    delta_x .= delta_x .+ sum(y[i] .* V[:,i] for i ∈ 1:length(y))
         # slightly abusing splatting to get the sum into a lambda-function.
-        parallel_map((delta_x, V...) -> delta_x + sum(this_y * this_V for (this_y, this_V) ∈ zip(y, V)),
-                     delta_x, delta_x, (selectdim(V,ndims(V),i) for i ∈ 1:length(y))...)
+        parallel_delta_x_calc(delta_x, V, y)
         right_preconditioner(delta_x)
 
         if residual < tol || restart_counter > max_restarts
