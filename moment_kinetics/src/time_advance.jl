@@ -2763,6 +2763,9 @@ function implicit_ion_advance!(fvec_out, fvec_in, pdf, fields, moments, advect_o
     icut_upper_z = scratch_dummy.int_buffer_rs_2
     zero = 1.0e-14
 
+    rtol = nl_solver_params.rtol
+    atol = nl_solver_params.atol
+
     begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
         @views hard_force_moment_constraints!(f_old[:,:,iz,ir,is], moments, vpa)
@@ -2935,12 +2938,6 @@ function implicit_ion_advance!(fvec_out, fvec_in, pdf, fields, moments, advect_o
         end
 
         apply_bc!(residual)
-
-        begin_s_r_z_region()
-        @loop_s_r_z is ir iz begin
-            @views moment_constraints_on_residual!(residual[:,:,iz,ir,is],
-                                                   f_new[:,:,iz,ir,is], moments, vpa)
-        end
 
         return nothing
     end
