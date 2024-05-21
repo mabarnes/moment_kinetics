@@ -412,7 +412,8 @@ the existing tests below. To set up `moment_kinetics` to use the manufactured so
     add Symbolics
     ```
     if you will run the tests with MPI, make sure that MPI is also installed at this step.
-* Select an input file representing the desired test. For example, we can pick from the list below.
+* Select an input file representing the desired test. For example, we can pick from the list 
+  [MMS input TOML list](https://mabarnes.github.io/moment_kinetics/dev/manufactured_solution_test_examples/).
 * Run the input file using the usual command.
     ```
     julia> using moment_kinetics
