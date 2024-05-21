@@ -1059,7 +1059,9 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
             # error norm here
             t_params.failure_caused_by[end] += 1
         end
-    elseif (error_norm > 1.0 || isnan(error_norm)) && current_dt > t_params.minimum_dt
+    elseif (error_norm > 1.0 || isnan(error_norm)) && current_dt > t_params.minimum_dt * (1.0 + 1.0e-13)
+        # (1.0 + 1.0e-13) fudge factor accounts for possible rounding errors when
+        # t+dt=next_output_time.
         # Use current_dt instead of t_params.dt[] here because we are about to write to
         # the shared-memory variable t_params.dt[] below, and we do not want to add an
         # extra _block_synchronize() call after reading it here.
