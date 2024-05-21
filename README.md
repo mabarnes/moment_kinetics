@@ -401,8 +401,9 @@ and 2D2V or 2D3V (for neutral particles). To run these tests we run a normal `mo
 simulation, making use of the manufacted solutions test TOML options. We describe how to use 
 the existing tests below. To set up `moment_kinetics` to use the manufactured solutions features,
  take the following steps:
-* Install `moment_kinetics` using the instructions above, 
-  using the `plots_post_processing` project and make sure that the `Symbolics` package is installed.
+* Install `moment_kinetics` using the setup instructions above ([Setup](https://github.com/mabarnes/moment_kinetics/tree/mms_bugfixes_and_docs#setup)), 
+  using the `plots_post_processing` project and make sure that the `Symbolics` package is installed, e.g., if following
+  the manual setup instructions ([Manual setup](https://mabarnes.github.io/moment_kinetics/dev/manual_setup/)), these commands would be
     ```
     $ julia -O3 --project
     julia> ]
