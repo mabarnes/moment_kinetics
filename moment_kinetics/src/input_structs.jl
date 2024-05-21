@@ -107,7 +107,8 @@ mutable struct advance_info
     krook_collisions_ii::Bool
     explicit_weakform_fp_collisions::Bool
     external_source::Bool
-    numerical_dissipation::Bool
+    ion_numerical_dissipation::Bool
+    neutral_numerical_dissipation::Bool
     source_terms::Bool
     continuity::Bool
     force_balance::Bool
