@@ -7,6 +7,7 @@ module moment_constraints
 
 using ..communication: _block_synchronize
 using ..looping
+using ..type_definitions: mk_float
 using ..velocity_moments: integrate_over_vspace, update_qpar!
 
 export hard_force_moment_constraints!, hard_force_moment_constraints_neutral!
@@ -85,6 +86,16 @@ function hard_force_moment_constraints!(f, moments, vpa)
 
     return A, B, C
 end
+function hard_force_moment_constraints!(f::AbstractArray{mk_float,5}, moments, vpa)
+    A = moments.ion.constraints_A_coefficient
+    B = moments.ion.constraints_B_coefficient
+    C = moments.ion.constraints_C_coefficient
+    begin_s_r_z_region()
+    @loop_s_r_z is ir iz begin
+        A[iz,ir,is], B[iz,ir,is], C[iz,ir,is] =
+            hard_force_moment_constraints!(@view(f[:,:,iz,ir,is]), moments, vpa)
+    end
+end
 
 """
     hard_force_moment_constraints_neutral!(f, moments, vz)
@@ -138,6 +149,16 @@ function hard_force_moment_constraints_neutral!(f, moments, vz)
     end
 
     return A, B, C
+end
+function hard_force_moment_constraints_neutral!(f::AbstractArray{mk_float,6}, moments, vz)
+    A = moments.neutral.constraints_A_coefficient
+    B = moments.neutral.constraints_B_coefficient
+    C = moments.neutral.constraints_C_coefficient
+    begin_sn_r_z_region()
+    @loop_sn_r_z isn ir iz begin
+        A[iz,ir,isn], B[iz,ir,isn], C[iz,ir,isn] =
+            hard_force_moment_constraints_neutral!(@view(f[:,:,:,iz,ir,is]), moments, vz)
+    end
 end
 
 """
