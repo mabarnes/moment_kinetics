@@ -86,6 +86,6 @@ split_operators = false
  alpha_switch=1.0
  type="default"
 [ion_numerical_dissipation]
-#vpa_dissipation_coefficient = 0.1
+vpa_dissipation_coefficient = 0.01
 #z_dissipation_coefficient = 0.1
-r_dissipation_coefficient = 0.0
+#r_dissipation_coefficient = 0.0
