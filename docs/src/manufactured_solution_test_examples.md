@@ -42,6 +42,12 @@ runs/1D-mirror_MMS_ngrid_9_nel_r_1_z_32_vpa_32_vperp_16_diss.toml
 
 # 1D2V/1D3V test (with neutrals)
 
+* A test with periodic boundary conditions in 1D, Boltzmann
+  electrons, neutrals, and ions.
+```
+runs/1D-sound-wave_cheb_nel_r_1_z_2_vpa_4_vperp_4.toml
+```
+
 * A test with ions and neutral species and wall boundary conditions, 
   using the Boltzmann electron response to model the electron species.
 ```
