@@ -34,6 +34,20 @@ runs/1D-mirror_MMS_ngrid_9_nel_r_1_z_16_vpa_16_vperp_8_diss.toml
 runs/1D-mirror_MMS_ngrid_9_nel_r_1_z_32_vpa_32_vperp_16_diss.toml
 ```
 
+# 1D2V/1D3V test (with neutrals)
+
+* A test with ions and neutral species and wall boundary conditions, 
+  using the Boltzmann electron response to model the electron species.
+```
+runs/1D-wall_cheb-with-neutrals_nel_r_1_z_2_vpa_4_vperp_4.toml
+```
+
+* A test with neutral species and wall boundary conditions, using a simple
+  sheath model for electrons based on the Boltzmann electron response.
+```
+runs/1D-wall_cheb-with-neutrals-with-sheath_nel_r_1_z_2_vpa_4_vperp_4.toml
+```
+
 # 2D1V tests
 
 These tests are used to test the spatial advection in simple cases
@@ -52,6 +66,12 @@ These tests are used to test the spatial advection in cases
 with wall boundary conditions or geometrical features where
 two velocity dimensions are necessary.
 
+* 2D2V simulation with periodic boundary conditions, 
+  Boltzmann electrons and ions
+```
+runs/2D-sound-wave_cheb_ion_only_nel_r_2_z_2_vpa_4_vperp_4.toml
+```
+
 * 2D2V simulation of a open field lines in 1D magnetic mirror
   (no neutrals)
 ```
@@ -60,3 +80,26 @@ runs/2D-mirror_MMS_ngrid_5_nel_r_16_z_16_vpa_16_vperp_8_diss.toml
 runs/2D-mirror_MMS_ngrid_5_nel_r_32_z_32_vpa_16_vperp_16_diss.toml
 ```
 
+# 2D2V/2D3V tests
+
+These tests include a two-dimensional domain, ions, and neutrals 
+(which have three velocity dimensions).
+
+* 2D2V/2D3V simulation on a domain with wall boundaries, with
+  helical geometry, Boltzmann electrons, neutrals, and ions.
+```
+runs/2D-wall_cheb-with-neutrals_nel_r_2_z_2_vpa_4_vperp_4.toml
+```
+
+* 2D2V/2D3V simulation on a periodic domain, with
+  helical geometry, Boltzmann electrons, neutrals, and ions.
+```
+runs/2D-sound-wave_cheb_nel_r_2_z_2_vpa_4_vperp_4.toml
+```
+
+* 2D2V/2D3V simulation on a periodic domain, with
+  model charge exchange and ionisation collisions,
+  helical geometry, Boltzmann electrons, neutrals, and ions.
+```
+runs/2D-sound-wave_cheb_cxiz_nel_r_2_z_2_vpa_4_vperp_4.toml
+```
