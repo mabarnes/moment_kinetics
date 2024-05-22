@@ -1,6 +1,12 @@
 # List of Manufactured Solutions Test TOML inputs
 
 Here we list the existing manufactured solution test inputs.
+These inputs are examples only, and in most cases we only
+keep the lowest resolution examples. The user should copy
+these inputs and make a series of TOML with increasing resolutions
+to generate a series of simulations on which the numerical errors
+can be tested and compared to the expected scaling of the 
+numerical method employed.
 
 # 1D1V tests
 
