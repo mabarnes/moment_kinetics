@@ -2462,9 +2462,6 @@ function plot_1d(xcoord, data; ax=nothing, xlabel=nothing, ylabel=nothing, title
     if title !== nothing
         ax.title = title
     end
-    if yscale !== nothing
-        ax.yscale = yscale
-    end
 
     if transform !== identity
         # Use transform to allow user to do something like data = abs.(data)
@@ -2475,6 +2472,10 @@ function plot_1d(xcoord, data; ax=nothing, xlabel=nothing, ylabel=nothing, title
     end
 
     l = lines!(ax, xcoord, data; kwargs...)
+
+    if yscale !== nothing
+        ax.yscale = yscale
+    end
 
     if fig === nothing
         return l
