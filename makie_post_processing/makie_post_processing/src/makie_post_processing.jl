@@ -4412,18 +4412,80 @@ function plot_ion_pdf_2D_at_wall(run_info; plot_prefix)
                          && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
                          for ri ∈ run_info)
 
-    for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+8, "wall-"),
-                               (z_upper, z_upper-8:z_upper, "wall+"))
+    nt = minimum(ri.nt for ri ∈ run_info)
+
+    for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+4, "wall-"),
+                               (z_upper, z_upper-4:z_upper, "wall+"))
         f_input = copy(input_dict_dfns["f"])
         f_input["iz0"] = z
 
         if input.plot
-            plot_vs_vpa(run_info, "f"; is=1, input=f_input,
-                        outfile=plot_prefix * "pdf_$(label)_vs_vpa.pdf")
+            fig, ax = get_1d_ax(; xlabel="vpa", ylabel="f")
+            for iz ∈ z_range
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        run_label = ri.run_name * " "
+                    else
+                        run_label = ""
+                    end
+                    plot_vs_vpa(ri, "f"; is=1, iz=iz, input=f_input,
+                                label="$(run_label)iz=$iz", ax=ax)
+                end
+            end
+            put_legend_right(fig, ax)
+            outfile=plot_prefix * "pdf_$(label)_vs_vpa.pdf"
+            save(outfile, fig)
+
+            fig, ax = get_1d_ax(; xlabel="vpa", ylabel="f")
+            for iz ∈ z_range
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        run_label = ri.run_name * " "
+                    else
+                        run_label = ""
+                    end
+                    plot_vs_vpa(ri, "f"; is=1, iz=iz, input=f_input,
+                                label="$(run_label)iz=$iz", ax=ax, yscale=log10,
+                                transform=(x)->positive_or_nan(x; epsilon=1.e-20))
+                end
+            end
+            put_legend_right(fig, ax)
+            outfile=plot_prefix * "logpdf_$(label)_vs_vpa.pdf"
+            save(outfile, fig)
 
             if moment_kinetic
-                plot_f_unnorm_vs_vpa(run_info; input=f_input, is=1,
-                                     outfile=plot_prefix * "pdf_unnorm_$(label)_vs_vpa.pdf")
+                fig, ax = get_1d_ax(; xlabel="vpa_unnorm", ylabel="f_unnorm")
+                for iz ∈ z_range
+                    for ri ∈ run_info
+                        if length(run_info) > 1
+                            run_label = ri.run_name * " "
+                        else
+                            run_label = ""
+                        end
+                        plot_f_unnorm_vs_vpa(ri; input=f_input, is=1, iz=iz,
+                                             label="$(run_label)iz=$iz", ax=ax)
+                    end
+                end
+                put_legend_right(fig, ax)
+                outfile=plot_prefix * "pdf_unnorm_$(label)_vs_vpa.pdf"
+                save(outfile, fig)
+
+                fig, ax = get_1d_ax(; xlabel="vpa_unnorm", ylabel="f_unnorm")
+                for iz ∈ z_range
+                    for ri ∈ run_info
+                        if length(run_info) > 1
+                            run_label = ri.run_name * " "
+                        else
+                            run_label = ""
+                        end
+                        plot_f_unnorm_vs_vpa(ri; input=f_input, is=1, iz=iz,
+                                             label="$(run_label)iz=$iz", ax=ax, yscale=log10,
+                                             transform=(x)->positive_or_nan(x; epsilon=1.e-20))
+                    end
+                end
+                put_legend_right(fig, ax)
+                outfile=plot_prefix * "logpdf_unnorm_$(label)_vs_vpa.pdf"
+                save(outfile, fig)
             end
 
             plot_f_unnorm_vs_vpa(run_info; f_over_vpa2=true, input=f_input, is=1,
@@ -4451,12 +4513,80 @@ function plot_ion_pdf_2D_at_wall(run_info; plot_prefix)
         end
 
         if input.animate
-            animate_vs_vpa(run_info, "f"; is=1, input=f_input,
-                           outfile=plot_prefix * "pdf_$(label)_vs_vpa." * input.animation_ext)
+            fig, ax = get_1d_ax(; xlabel="vpa", ylabel="f")
+            frame_index = Observable(1)
+            for iz ∈ z_range
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        run_label = ri.run_name * " "
+                    else
+                        run_label = ""
+                    end
+                    animate_vs_vpa(ri, "f"; is=1, iz=iz, input=f_input,
+                                   label="$(run_label)iz=$iz", ax=ax,
+                                   frame_index=frame_index)
+                end
+            end
+            put_legend_right(fig, ax)
+            outfile=plot_prefix * "pdf_$(label)_vs_vpa." * input.animation_ext
+            save_animation(fig, frame_index, nt, outfile)
+
+            fig, ax = get_1d_ax(; xlabel="vpa", ylabel="f", yscale=log10)
+            frame_index = Observable(1)
+            for iz ∈ z_range
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        run_label = ri.run_name * " "
+                    else
+                        run_label = ""
+                    end
+                    animate_vs_vpa(ri, "f"; is=1, iz=iz, input=f_input,
+                                   label="$(run_label)iz=$iz", ax=ax,
+                                   frame_index=frame_index,
+                                   transform=(x)->positive_or_nan(x; epsilon=1.e-20))
+                end
+            end
+            put_legend_right(fig, ax)
+            outfile=plot_prefix * "logpdf_$(label)_vs_vpa." * input.animation_ext
+            save_animation(fig, frame_index, nt, outfile)
 
             if moment_kinetic
-                animate_f_unnorm_vs_vpa(run_info; input=f_input, is=1,
-                                        outfile=plot_prefix * "pdf_unnorm_$(label)_vs_vpa." * input.animation_ext)
+                fig, ax = get_1d_ax(; xlabel="vpa", ylabel="f")
+                frame_index = Observable(1)
+                for iz ∈ z_range
+                    for ri ∈ run_info
+                        if length(run_info) > 1
+                            run_label = ri.run_name * " "
+                        else
+                            run_label = ""
+                        end
+                        animate_f_unnorm_vs_vpa(ri; is=1, iz=iz, input=f_input,
+                                                label="$(run_label)iz=$iz", ax=ax,
+                                                frame_index=frame_index)
+                    end
+                end
+                put_legend_right(fig, ax)
+                outfile=plot_prefix * "pdf_unnorm_$(label)_vs_vpa." * input.animation_ext
+                save_animation(fig, frame_index, nt, outfile)
+
+                fig, ax = get_1d_ax(; xlabel="vpa", ylabel="f")
+                frame_index = Observable(1)
+                for iz ∈ z_range
+                    for ri ∈ run_info
+                        if length(run_info) > 1
+                            run_label = ri.run_name * " "
+                        else
+                            run_label = ""
+                        end
+                        animate_f_unnorm_vs_vpa(ri; is=1, iz=iz, input=f_input,
+                                                label="$(run_label)iz=$iz", ax=ax,
+                                                frame_index=frame_index, yscale=log10,
+                                                transform=(x)->positive_or_nan(x; epsilon=1.e-20))
+                    end
+                end
+                put_legend_right(fig, ax)
+                outfile=plot_prefix * "logpdf_unnorm_$(label)_vs_vpa." * input.animation_ext
+                save_animation(fig, frame_index, nt, outfile)
             end
 
             animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=true, input=f_input, is=1,
@@ -4537,19 +4667,82 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
     moment_kinetic = any(ri !== nothing
                          && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
                          for ri ∈ run_info)
+    nt = minimum(ri.nt for ri ∈ run_info)
 
-    for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+8, "wall-"),
-                               (z_upper, z_upper-8:z_upper, "wall+"))
+    for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+4, "wall-"),
+                               (z_upper, z_upper-4:z_upper, "wall+"))
         f_neutral_input = copy(input_dict_dfns["f_neutral"])
         f_neutral_input["iz0"] = z
 
         if input.plot
-            plot_vs_vz(run_info, "f_neutral"; is=1, input=f_neutral_input,
-                       outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz.pdf")
+            fig, ax = get_1d_ax(; xlabel="vz", ylabel="f_neutral")
+            for iz ∈ z_range
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        run_label = ri.run_name * " "
+                    else
+                        run_label = ""
+                    end
+                    plot_vs_vz(ri, "f_neutral"; is=1, iz=iz, input=f_neutral_input,
+                               label="$(run_label)iz=$iz", ax=ax)
+                end
+            end
+            put_legend_right(fig, ax)
+            outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz.pdf"
+            save(outfile, fig)
+
+            fig, ax = get_1d_ax(; xlabel="vz", ylabel="f_neutral")
+            for iz ∈ z_range
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        run_label = ri.run_name * " "
+                    else
+                        run_label = ""
+                    end
+                    plot_vs_vz(ri, "f_neutral"; is=1, iz=iz, input=f_neutral_input,
+                               label="$(run_label)iz=$iz", ax=ax, yscale=log10,
+                               transform=(x)->positive_or_nan(x; epsilon=1.e-20))
+                end
+            end
+            put_legend_right(fig, ax)
+            outfile=plot_prefix * "logpdf_neutral_$(label)_vs_vpa.pdf"
+            save(outfile, fig)
 
             if moment_kinetic
-                plot_f_unnorm_vs_vpa(run_info; input=f_neutral_input, neutral=true, is=1,
-                                     outfile=plot_prefix * "pdf_neutral_unnorm_$(label)_vs_vpa.pdf")
+                fig, ax = get_1d_ax(; xlabel="vz_unnorm", ylabel="f_neutral_unnorm")
+                for iz ∈ z_range
+                    for ri ∈ run_info
+                        if length(run_info) > 1
+                            run_label = ri.run_name * " "
+                        else
+                            run_label = ""
+                        end
+                        plot_f_unnorm_vs_vpa(ri; neutral=true, input=f_neutral_input,
+                                             is=1, iz=iz, label="$(run_label)iz=$iz",
+                                             ax=ax)
+                    end
+                end
+                put_legend_right(fig, ax)
+                outfile=plot_prefix * "pdf_neutral_unnorm_$(label)_vs_vpa.pdf"
+                save(outfile, fig)
+
+                fig, ax = get_1d_ax(; xlabel="vz_unnorm", ylabel="f_neutral_unnorm")
+                for iz ∈ z_range
+                    for ri ∈ run_info
+                        if length(run_info) > 1
+                            run_label = ri.run_name * " "
+                        else
+                            run_label = ""
+                        end
+                        plot_f_unnorm_vs_vpa(ri; neutral=true, input=f_neutral_input,
+                                             is=1, iz=iz, label="$(run_label)iz=$iz",
+                                             ax=ax, yscale=log10,
+                                             transform=(x)->positive_or_nan(x; epsilon=1.e-20))
+                    end
+                end
+                put_legend_right(fig, ax)
+                outfile=plot_prefix * "logpdf_neutral_unnorm_$(label)_vs_vpa.pdf"
+                save(outfile, fig)
             end
 
             if !is_1V
@@ -4592,12 +4785,81 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
         end
 
         if input.animate
-            animate_vs_vz(run_info, "f_neutral"; is=1, input=f_neutral_input,
-                          outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz." * input.animation_ext)
+            fig, ax = get_1d_ax(; xlabel="vz", ylabel="f_neutral")
+            frame_index = Observable(1)
+            for iz ∈ z_range
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        run_label = ri.run_name * " "
+                    else
+                        run_label = ""
+                    end
+                    animate_vs_vz(ri, "f_neutral"; is=1, iz=iz, input=f_neutral_input,
+                                  label="$(run_label)iz=$iz", ax=ax,
+                                  frame_index=frame_index)
+                end
+            end
+            put_legend_right(fig, ax)
+            outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz." * input.animation_ext
+            save_animation(fig, frame_index, nt, outfile)
+
+            fig, ax = get_1d_ax(; xlabel="vz", ylabel="f_neutral", yscale=log10)
+            frame_index = Observable(1)
+            for iz ∈ z_range
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        run_label = ri.run_name * " "
+                    else
+                        run_label = ""
+                    end
+                    animate_vs_vz(ri, "f_neutral"; is=1, iz=iz, input=f_neutral_input,
+                                  label="$(run_label)iz=$iz", ax=ax,
+                                  frame_index=frame_index,
+                                  transform=(x)->positive_or_nan(x; epsilon=1.e-20))
+                end
+            end
+            put_legend_right(fig, ax)
+            outfile=plot_prefix * "logpdf_neutral_$(label)_vs_vz." * input.animation_ext
+            save_animation(fig, frame_index, nt, outfile)
 
             if moment_kinetic
-                animate_f_unnorm_vs_vpa(run_info; input=f_neutral_input, neutral=true, is=1,
-                                        outfile=plot_prefix * "pdf_neutral_unnorm_$(label)_vs_vz." * input.animation_ext)
+                fig, ax = get_1d_ax(; xlabel="vz", ylabel="f_neutral")
+                frame_index = Observable(1)
+                for iz ∈ z_range
+                    for ri ∈ run_info
+                        if length(run_info) > 1
+                            run_label = ri.run_name * " "
+                        else
+                            run_label = ""
+                        end
+                        animate_f_unnorm_vs_vpa(ri; neutral=true, is=1, iz=iz,
+                                                input=f_neutral_input,
+                                                label="$(run_label)iz=$iz", ax=ax,
+                                                frame_index=frame_index)
+                    end
+                end
+                put_legend_right(fig, ax)
+                outfile=plot_prefix * "pdf_neutral_unnorm_$(label)_vs_vz." * input.animation_ext
+                save_animation(fig, frame_index, nt, outfile)
+
+                fig, ax = get_1d_ax(; xlabel="vz", ylabel="f_neutral")
+                frame_index = Observable(1)
+                for iz ∈ z_range
+                    for ri ∈ run_info
+                        if length(run_info) > 1
+                            run_label = ri.run_name * " "
+                        else
+                            run_label = ""
+                        end
+                        animate_f_unnorm_vs_vpa(ri; neutral=true, is=1, iz=iz,
+                                                input=f_neutral_input, label="$(run_label)iz=$iz",
+                                                ax=ax, frame_index=frame_index, yscale=log10,
+                                                transform=(x)->positive_or_nan(x; epsilon=1.e-20))
+                    end
+                end
+                put_legend_right(fig, ax)
+                outfile=plot_prefix * "logpdf_neutral_unnorm_$(label)_vs_vz." * input.animation_ext
+                save_animation(fig, frame_index, nt, outfile)
             end
 
             if !is_1V
