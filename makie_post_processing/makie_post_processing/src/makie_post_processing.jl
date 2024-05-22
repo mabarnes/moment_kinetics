@@ -7370,6 +7370,11 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                 plot_1d(time, @view limit_caused_by_per_output[counter,:];
                         label=prefix * "max timestep", ax=ax)
 
+                # High nonlinear iterations count
+                counter += 1
+                plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                        label=prefix * "high nl iterations", ax=ax)
+
                 # Accuracy limit counters
                 counter += 1
                 plot_1d(time, @view limit_caused_by_per_output[counter,:];

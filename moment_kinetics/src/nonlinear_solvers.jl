@@ -25,7 +25,7 @@ Useful references:
 """
 module nonlinear_solvers
 
-export setup_nonlinear_solve, newton_solve!
+export setup_nonlinear_solve, reset_nonlinear_per_stage_counters, newton_solve!
 
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication
@@ -42,6 +42,7 @@ using SparseArrays
 struct nl_solver_info{TH,TV,Tlig,Tprecon}
     rtol::mk_float
     atol::mk_float
+    nonlinear_max_iterations::mk_int
     linear_rtol::mk_float
     linear_atol::mk_float
     linear_restart::mk_int
@@ -54,6 +55,7 @@ struct nl_solver_info{TH,TV,Tlig,Tprecon}
     linear_iterations::Ref{mk_int}
     stage_counter::Ref{mk_int}
     serial_solve::Bool
+    max_nonlinear_iterations_this_step::Ref{mk_int}
     preconditioner_update_interval::mk_int
     preconditioners::Tprecon
 end
@@ -74,6 +76,7 @@ function setup_nonlinear_solve(input_dict, coords, outer_coords=(); default_rtol
         input_dict, "nonlinear_solver";
         rtol=default_rtol,
         atol=default_atol,
+        nonlinear_max_iterations=20,
         linear_rtol=1.0e-3,
         linear_atol=1.0e-15,
         linear_restart=10,
@@ -116,11 +119,27 @@ function setup_nonlinear_solve(input_dict, coords, outer_coords=(); default_rtol
     linear_initial_guess = zeros(linear_restart)
 
     return nl_solver_info(nl_solver_input.rtol, nl_solver_input.atol,
+                          nl_solver_input.nonlinear_max_iterations,
                           nl_solver_input.linear_rtol, nl_solver_input.linear_atol,
                           linear_restart, nl_solver_input.linear_max_restarts, H, V,
                           linear_initial_guess, Ref(0), Ref(0), Ref(0), Ref(0),
-                          serial_solve, nl_solver_input.preconditioner_update_interval,
-                          preconditioners)
+                          serial_solve, Ref(0),
+                          nl_solver_input.preconditioner_update_interval, preconditioners)
+end
+
+"""
+    reset_nonlinear_per_stage_counters(nl_solver_params::Union{nl_solver_info,Nothing})
+
+Reset the counters that hold per-step totals or maximums in `nl_solver_params`.
+"""
+function reset_nonlinear_per_stage_counters(nl_solver_params::Union{nl_solver_info,Nothing})
+    if nl_solver_params === nothing
+        return nothing
+    end
+
+    nl_solver_params.max_nonlinear_iterations_this_step[] = 0
+
+    return nothing
 end
 
 """
@@ -295,7 +314,7 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
             close_linear_counter = linear_counter
         end
 
-        if counter > 100000
+        if counter > nl_solver_params.nonlinear_max_iterations
             println("maximum iteration limit reached")
             success = false
             break
@@ -304,6 +323,8 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
     nl_solver_params.n_solves[] += 1
     nl_solver_params.nonlinear_iterations[] += counter
     nl_solver_params.linear_iterations[] += linear_counter
+    nl_solver_params.max_nonlinear_iterations_this_step[] =
+        max(counter, nl_solver_params.max_nonlinear_iterations_this_step[])
 #    println("Newton iterations: ", counter)
 #    println("Final residual: ", residual_norm)
 #    println("Total linear iterations: ", linear_counter)

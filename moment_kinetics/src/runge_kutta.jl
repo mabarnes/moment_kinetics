@@ -956,13 +956,14 @@ end
 
 """
     adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
-                                       total_points, current_dt, error_norm_method)
+                                       total_points, current_dt, error_norm_method,
+                                       success, nl_max_its_fraction)
 
 Use the calculated `CFL_limits` and `error_norms` to update the timestep in `t_params`.
 """
 function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, error_norms,
                                             total_points, current_dt, error_norm_method,
-                                            success)
+                                            success, nl_max_its_fraction)
     # Get global minimum of CFL limits
     CFL_limit = nothing
     this_limit_caused_by = nothing
@@ -972,9 +973,9 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
         CFL_limit_caused_by = argmin(CFL_limits)
         CFL_limit = CFL_limits[CFL_limit_caused_by]
         # Reserve first four entries of t_params.limit_caused_by for max_increase_factor,
-        # max_increase_factor_near_fail, minimum_dt and maximum_dt limits, then the next
-        # `n_variables` for RK accuracy limits.
-        this_limit_caused_by = CFL_limit_caused_by + 4 + t_params.n_variables
+        # max_increase_factor_near_fail, minimum_dt, maximum_dt limits and
+        # high_nl_iterations, then the next `n_variables` for RK accuracy limits.
+        this_limit_caused_by = CFL_limit_caused_by + 5 + t_params.n_variables
     end
 
     if error_norm_method == "Linf"
@@ -1131,8 +1132,8 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
                 else
                     # Reserve first four entries of t_params.limit_caused_by for
                     # max_increase_factor, max_increase_factor_near_fail, minimum_dt and
-                    # maximum_dt limits.
-                    this_limit_caused_by = 4 + max_error_variable_index
+                    # maximum_dt limits, high_nl_iterations.
+                    this_limit_caused_by = 5 + max_error_variable_index
                 end
 
                 # Limit so timestep cannot increase by a large factor, which might lead to
@@ -1172,6 +1173,17 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
                 if t_params.dt[] > t_params.maximum_dt
                     t_params.dt[] = t_params.maximum_dt
                     this_limit_caused_by = 4
+                end
+
+                if nl_max_its_fraction > 0.5 && t_params.previous_dt[] > 0.0
+                    # The last step took many nonlinear iterations, so do not allow the
+                    # timestep to increase.
+                    # If t_params.previous_dt[]==0.0, then the previous step failed so
+                    # timestep will not be increasing, so do not need this check.
+                    if t_params.dt[] > t_params.previous_dt[]
+                        t_params.dt[] = t_params.previous_dt[]
+                        this_limit_caused_by = 5
+                    end
                 end
 
                 t_params.limit_caused_by[this_limit_caused_by] += 1

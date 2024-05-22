@@ -394,8 +394,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     # timestepping.
     #
     # Entries for limit by max_increase_factor, max_increase_factor_near_last_fail,
-    # minimum_dt and maximum_dt.
-    push!(t_params.limit_caused_by, 0, 0, 0, 0)
+    # minimum_dt, maximum_dt and high_nl_iterations.
+    push!(t_params.limit_caused_by, 0, 0, 0, 0, 0)
 
     # ion pdf
     push!(t_params.limit_caused_by, 0) # RK accuracy
@@ -1924,7 +1924,8 @@ end
                               fields, composition, collisions, geometry,
                               external_source_settings, spectral_objects,
                               advect_objects, gyroavs, num_diss_params, advance,
-                              scratch_dummy, r, z, vperp, vpa, vzeta, vr, vz, success)
+                              scratch_dummy, r, z, vperp, vpa, vzeta, vr, vz,
+                              success, nl_max_its_fraction)
 
 Check the error estimate for the embedded RK method and adjust the timestep if
 appropriate.
@@ -1934,7 +1935,7 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
                                    external_source_settings, spectral_objects,
                                    advect_objects, gyroavs, num_diss_params, advance,
                                    scratch_dummy, r, z, vperp, vpa, vzeta, vr, vz,
-                                   success)
+                                   success, nl_max_its_fraction)
     #error_norm_method = "Linf"
     error_norm_method = "L2"
 
@@ -2141,7 +2142,7 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
 
     adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, error_norms,
                                        total_points, current_dt, error_norm_method,
-                                       success)
+                                       success, nl_max_its_fraction)
 
     if t_params.previous_dt[] == 0.0
         # Re-update remaining velocity moments that are calculable from the evolved
@@ -2374,14 +2375,26 @@ function ssp_rk!(pdf, scratch, scratch_implicit, t, t_params, vz, vr, vzeta, vpa
     end
 
     if t_params.adaptive
+        nl_max_its_fraction = 0.0
+        for p ∈ nl_solver_params
+            if p !== nothing
+                nl_max_its_fraction =
+                    max(p.max_nonlinear_iterations_this_step[] / p.nonlinear_max_iterations,
+                        nl_max_its_fraction)
+            end
+        end
         adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, moments, fields,
                                   composition, collisions, geometry,
                                   external_source_settings, spectral_objects,
                                   advect_objects, gyroavs, num_diss_params, advance,
-                                  scratch_dummy, r, z, vperp, vpa, vzeta, vr, vz, success)
+                                  scratch_dummy, r, z, vperp, vpa, vzeta, vr, vz, success,
+                                  nl_max_its_fraction)
     elseif !success
         error("Implicit part of timestep failed")
     end
+
+    reset_nonlinear_per_stage_counters(nl_solver_params.ion_advance)
+    reset_nonlinear_per_stage_counters(nl_solver_params.vpa_advection)
 
     istage = n_rk_stages+1
 
