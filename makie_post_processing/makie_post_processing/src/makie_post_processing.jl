@@ -4063,8 +4063,9 @@ end
 
 function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
                                  neutral=false, is=1, iz=nothing, fig=nothing, ax=nothing,
-                                 frame_index=nothing, outfile=nothing, transform=identity,
-                                 axis_args=Dict{Symbol,Any}(), kwargs...)
+                                 frame_index=nothing, outfile=nothing, yscale=nothing,
+                                 transform=identity, axis_args=Dict{Symbol,Any}(),
+                                 kwargs...)
     if input === nothing
         if neutral
             input = Dict_to_NamedTuple(input_dict_dfns["f_neutral"])
@@ -4142,20 +4143,27 @@ function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
 
         this_f_unnorm = get_this_f_unnorm(it)
 
-        this_fmin, this_fmax = NaNMath.extrema(transform(this_f_unnorm))
+        this_fmin, this_fmax = NaNMath.extrema(transform.(this_f_unnorm))
         fmin = min(fmin, this_fmin)
         fmax = max(fmax, this_fmax)
     end
     yheight = fmax - fmin
     xwidth = dzdtmax - dzdtmin
-    limits!(ax, dzdtmin - 0.01*xwidth, dzdtmax + 0.01*xwidth,
-            fmin - 0.01*yheight, fmax + 0.01*yheight)
+    if yscale ∈ (log, log10)
+        # Need to calclutate y offsets differently to non-logarithmic y-axis case, to
+        # ensure ymin is not negative.
+        limits!(ax, dzdtmin - 0.01*xwidth, dzdtmax + 0.01*xwidth,
+                fmin * (fmin/fmax)^0.01, fmax * (fmax/fmin)^0.01)
+    else
+        limits!(ax, dzdtmin - 0.01*xwidth, dzdtmax + 0.01*xwidth,
+                fmin - 0.01*yheight, fmax + 0.01*yheight)
+    end
 
     dzdt = @lift vpagrid_to_dzdt(run_info.vpa.grid, vth[$frame_index], upar[$frame_index],
                                  run_info.evolve_ppar, run_info.evolve_upar)
     f_unnorm = @lift transform.(get_this_f_unnorm($frame_index))
 
-    l = plot_1d(dzdt, f_unnorm; ax=ax, label=run_info.run_name, kwargs...)
+    l = plot_1d(dzdt, f_unnorm; ax=ax, label=run_info.run_name, yscale=yscale, kwargs...)
 
     if outfile !== nothing
         if fig === nothing
