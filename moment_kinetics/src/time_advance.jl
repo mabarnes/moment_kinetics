@@ -16,7 +16,7 @@ using ..debugging
 using ..file_io: write_data_to_ascii, write_all_moments_data_to_binary, write_all_dfns_data_to_binary, debug_dump
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf
-using ..velocity_moments: update_moments!, update_moments_neutral!, reset_moments_status!
+using ..velocity_moments: update_moments!, update_moments_neutral!, reset_moments_status!, update_derived_moments!, update_derived_moments_neutral!
 using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_pperp!, update_qpar!, update_vth!
 using ..velocity_moments: update_neutral_density!, update_neutral_qz!
 using ..velocity_moments: update_neutral_uzeta!, update_neutral_uz!, update_neutral_ur!
@@ -2169,89 +2169,6 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
 end
 
 """
-update velocity moments that are calculable from the evolved ion pdf
-"""
-function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
-    r_spectral, geometry, gyroavs, scratch_dummy, z_advect, diagnostic_moments)
-    
-    if composition.gyrokinetic_ions
-        ff = scratch_dummy.buffer_vpavperpzrs_1
-        # fill buffer with ring-averaged F (gyroaverage at fixed position)
-        gyroaverage_pdf!(ff,new_scratch.pdf,gyroavs,vpa,vperp,z,r,composition)
-    else
-        ff = new_scratch.pdf
-    end
-    
-    if !moments.evolve_density
-        update_density!(new_scratch.density, moments.ion.dens_updated,
-                        ff, vpa, vperp, z, r, composition)
-    end
-    if !moments.evolve_upar
-        update_upar!(new_scratch.upar, moments.ion.upar_updated, new_scratch.density,
-                     new_scratch.ppar, ff, vpa, vperp, z, r, composition,
-                     moments.evolve_density, moments.evolve_ppar)
-    end
-    if !moments.evolve_ppar
-        # update_ppar! calculates (p_parallel/m_s N_e c_s^2) + (n_s/N_e)*(upar_s/c_s)^2 = (1/√π)∫d(vpa/c_s) (vpa/c_s)^2 * (√π f_s c_s / N_e)
-        update_ppar!(new_scratch.ppar, moments.ion.ppar_updated, new_scratch.density,
-                     new_scratch.upar, ff, vpa, vperp, z, r, composition,
-                     moments.evolve_density, moments.evolve_upar)
-    end
-    update_pperp!(new_scratch.pperp, ff, vpa, vperp, z, r, composition)
-    
-    # if diagnostic time step/RK stage
-    # update the diagnostic chodura condition
-    if diagnostic_moments
-        update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
-    end
-    # update the thermal speed
-    begin_s_r_z_region()
-    try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
-        update_vth!(moments.ion.vth, new_scratch.ppar, new_scratch.pperp, new_scratch.density, vperp, z, r, composition)
-    catch e
-        if global_size[] > 1
-            println("ERROR: error calculating vth in time_advance.jl")
-            println(e)
-            display(stacktrace(catch_backtrace()))
-            flush(stdout)
-            flush(stderr)
-            MPI.Abort(comm_world, 1)
-        end
-        rethrow(e)
-    end
-    # update the parallel heat flux
-    update_qpar!(moments.ion.qpar, moments.ion.qpar_updated, new_scratch.density,
-                 new_scratch.upar, moments.ion.vth, ff, vpa, vperp, z, r,
-                 composition, moments.evolve_density, moments.evolve_upar,
-                 moments.evolve_ppar)
-    # add further moments to be computed here
-    
-end
-
-"""
-update velocity moments that are calculable from the evolved neutral pdf
-"""
-function update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z, r,
-                                         composition)
-    if !moments.evolve_density
-        update_neutral_density!(new_scratch.density_neutral, moments.neutral.dens_updated,
-                                new_scratch.pdf_neutral, vz, vr, vzeta, z, r, composition)
-    end
-    if !moments.evolve_upar
-        update_neutral_uz!(new_scratch.uz_neutral, moments.neutral.uz_updated,
-                           new_scratch.density_neutral, new_scratch.pz_neutral,
-                           new_scratch.pdf_neutral, vz, vr, vzeta, z, r, composition,
-                           moments.evolve_density, moments.evolve_ppar)
-    end
-    if !moments.evolve_ppar
-        update_neutral_pz!(new_scratch.pz_neutral, moments.neutral.pz_updated,
-                           new_scratch.density_neutral, new_scratch.uz_neutral,
-                           new_scratch.pdf_neutral, vz, vr, vzeta, z, r, composition,
-                           moments.evolve_density, moments.evolve_upar)
-    end
-end
-
-"""
 """
 function ssp_rk!(pdf, scratch, scratch_implicit, t, t_params, vz, vr, vzeta, vpa, vperp,
                  gyrophase, z, r, moments, fields, spectral_objects, advect_objects,
@@ -2330,8 +2247,8 @@ function ssp_rk!(pdf, scratch, scratch_implicit, t, t_params, vz, vr, vzeta, vpa
                                           geometry, scratch_dummy,
                                           manufactured_source_list,
                                           external_source_settings, num_diss_params,
-                                          nl_solver_params, advance_implicit, fp_arrays,
-                                          istage)
+                                          gyroavs, nl_solver_params, advance_implicit,
+                                          fp_arrays, istage)
                 success = MPI.Allreduce(success, &, comm_world)
                 if !success
                     # Break out of the istage loop, as passing `success = false` to the
@@ -2725,7 +2642,8 @@ function backward_euler!(fvec_out, fvec_in, pdf, fields, moments, advect_objects
                          vzeta, vpa, vperp, gyrophase, z, r, t, dt, spectral_objects,
                          composition, collisions, geometry, scratch_dummy,
                          manufactured_source_list, external_source_settings,
-                         num_diss_params, nl_solver_params, advance, fp_arrays, istage)
+                         num_diss_params, gyroavs, nl_solver_params, advance, fp_arrays,
+                         istage)
 
     vpa_spectral, vperp_spectral, r_spectral, z_spectral = spectral_objects.vpa_spectral, spectral_objects.vperp_spectral, spectral_objects.r_spectral, spectral_objects.z_spectral
     vz_spectral, vr_spectral, vzeta_spectral = spectral_objects.vz_spectral, spectral_objects.vr_spectral, spectral_objects.vzeta_spectral
@@ -2739,18 +2657,20 @@ function backward_euler!(fvec_out, fvec_in, pdf, fields, moments, advect_objects
                                         composition, collisions, geometry, scratch_dummy,
                                         manufactured_source_list,
                                         external_source_settings, num_diss_params,
-                                        nl_solver_params.ion_advance, advance, fp_arrays,
-                                        istage)
+                                        gyroavs, nl_solver_params.ion_advance, advance,
+                                        fp_arrays, istage)
         if !success
             return success
         end
     elseif advance.vpa_advection
         success = implicit_vpa_advection!(fvec_out.pdf, fvec_in, fields, moments,
-                                          vpa_advect, vpa, vperp, z, r, dt, t,
-                                          vpa_spectral, composition, collisions,
+                                          z_advect, vpa_advect, vpa, vperp, z, r, dt, t,
+                                          r_spectral, z_spectral, vpa_spectral,
+                                          composition, collisions,
                                           external_source_settings.ion, geometry,
                                           nl_solver_params.vpa_advection,
-                                          advance.vpa_diffusion, num_diss_params)
+                                          advance.vpa_diffusion, num_diss_params, gyroavs,
+                                          scratch_dummy)
         if !success
             return success
         end
@@ -2773,7 +2693,7 @@ function implicit_ion_advance!(fvec_out, fvec_in, pdf, fields, moments, advect_o
                                vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t, dt,
                                spectral_objects, composition, collisions, geometry,
                                scratch_dummy, manufactured_source_list,
-                               external_source_settings, num_diss_params,
+                               external_source_settings, num_diss_params, gyroavs,
                                nl_solver_params, advance, fp_arrays, istage)
 
     vpa_spectral, vperp_spectral, r_spectral, z_spectral = spectral_objects.vpa_spectral, spectral_objects.vperp_spectral, spectral_objects.r_spectral, spectral_objects.z_spectral
@@ -2947,6 +2867,14 @@ function implicit_ion_advance!(fvec_out, fvec_in, pdf, fields, moments, advect_o
                                        fvec_out.ppar, fvec_out.pperp, fvec_out.temp_z_s,
                                        fvec_out.pdf_neutral, fvec_out.density_neutral,
                                        fvec_out.uz_neutral, fvec_out.pz_neutral)
+
+        # Ensure moments are consistent with f_new
+        update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
+                                r_spectral, geometry, gyroavs, scratch_dummy, z_advect,
+                                false)
+        calculate_ion_moment_derivatives!(moments, new_scratch, scratch_dummy, z,
+                                          z_spectral,
+                                          num_diss_params.ion.moment_dissipation_coefficient)
 
         euler_time_advance!(residual_scratch, new_scratch, pdf, fields, moments,
                             advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z,

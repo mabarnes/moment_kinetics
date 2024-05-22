@@ -11,8 +11,9 @@ using ..communication
 using ..looping
 using ..moment_constraints: hard_force_moment_constraints!,
                             moment_constraints_on_residual!
-using ..moment_kinetics_structs: weak_discretization_info
+using ..moment_kinetics_structs: scratch_pdf, weak_discretization_info
 using ..nonlinear_solvers: newton_solve!
+using ..velocity_moments: update_derived_moments!, calculate_ion_moment_derivatives!
 
 using ..array_allocation: allocate_float
 using ..boundary_conditions: vpagrid_to_dzdt
@@ -43,20 +44,32 @@ end
 
 """
 """
-function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, vperp, z,
-                                 r, dt, t, vpa_spectral, composition, collisions,
+function implicit_vpa_advection!(f_out, fvec_in, fields, moments, z_advect, vpa_advect,
+                                 vpa, vperp, z, r, dt, t, r_spectral, z_spectral,
+                                 vpa_spectral, composition, collisions,
                                  ion_source_settings, geometry, nl_solver_params,
-                                 vpa_diffusion, num_diss_params)
+                                 vpa_diffusion, num_diss_params, gyroavs, scratch_dummy)
     if vperp.n > 1 && (moments.evolve_density || moments.evolve_upar || moments.evolve_ppar)
         error("Moment constraints in implicit_vpa_advection!() do not support 2V runs yet")
     end
 
     # calculate the advection speed corresponding to current f
-    update_speed_vpa!(advect, fields, fvec_in, moments, vpa, vperp, z, r, composition,
+    update_speed_vpa!(vpa_advect, fields, fvec_in, moments, vpa, vperp, z, r, composition,
                       collisions, ion_source_settings, t, geometry)
 
+    # Ensure moments are consistent with f_new
+    new_scratch = scratch_pdf(f_out, fvec_in.density, fvec_in.upar, fvec_in.ppar,
+                              fvec_in.pperp, fvec_in.temp_z_s, fvec_in.pdf_neutral,
+                              fvec_in.density_neutral, fvec_in.uz_neutral,
+                              fvec_in.pz_neutral)
+    update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
+                            r_spectral, geometry, gyroavs, scratch_dummy, z_advect, false)
+    calculate_ion_moment_derivatives!(moments, new_scratch, scratch_dummy, z,
+                                      z_spectral,
+                                      num_diss_params.ion.moment_dissipation_coefficient)
 
     begin_s_r_z_vperp_region()
+
     coords = (vpa=vpa,)
     vpa_bc = vpa.bc
     minval = num_diss_params.ion.force_minimum_pdf_value
@@ -66,7 +79,7 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
         @loop_r_z_vperp ir iz ivperp begin
             f_old_no_bc = @view fvec_in.pdf[:,ivperp,iz,ir,is]
             this_f_out = @view f_out[:,ivperp,iz,ir,is]
-            speed = @view advect[is].speed[:,ivperp,iz,ir]
+            speed = @view vpa_advect[is].speed[:,ivperp,iz,ir]
 
             if z.irank == 0 && iz == 1
                 @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, moments.ion.vth[iz,ir,is],
@@ -252,7 +265,7 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
             function residual_func!(residual, f_new)
                 apply_bc!(f_new)
                 residual .= f_old
-                advance_f_local!(residual, f_new, advect[is], ivperp, iz, ir, vpa, dt,
+                advance_f_local!(residual, f_new, vpa_advect[is], ivperp, iz, ir, vpa, dt,
                                  vpa_spectral)
 
                 if vpa_diffusion
