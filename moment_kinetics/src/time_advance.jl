@@ -458,6 +458,16 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                      external_source_settings, num_diss_params,
                                      manufactured_solns_input, r, z, vperp, vpa, vzeta,
                                      vr, vz)
+    # Check that no flags that shouldn't be are set in both advance and advance_implicit
+    for field ∈ fieldnames(advance_info)
+        if field ∈ (:r_diffusion, :vpa_diffusion, :vperp_diffusion, :vz_diffusion)
+            # These are meant to be set in both structs
+            continue
+        end
+        if getfield(advance, field) && getfield(advance_implicit, field)
+            error("$field is set to `true` in both `advance` and `advance_implicit`")
+        end
+    end
 
     # Set up parameters for Jacobian-free Newton-Krylov solver used for implicit part of
     # timesteps.
