@@ -11,6 +11,7 @@ using ..communication
 using ..looping
 using ..moment_constraints: hard_force_moment_constraints!,
                             moment_constraints_on_residual!
+using ..moment_kinetics_structs: weak_discretization_info
 using ..nonlinear_solvers: newton_solve!
 
 using ..array_allocation: allocate_float
@@ -163,10 +164,16 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
                 for i ∈ 1:vpa.n
                     advection_matrix[i,i] += 1.0
                 end
-                # This allocates a new matrix - to avoid this would need to pre-allocate a
-                # suitable buffer somewhere and use `mul!()`.
-                advection_matrix = vpa_spectral.mass_matrix * advection_matrix
-                @. advection_matrix -= dt * vpa_dissipation_coefficient * vpa_spectral.K_matrix
+
+                if isa(vpa_spectral, weak_discretization_info)
+                    # This allocates a new matrix - to avoid this would need to pre-allocate a
+                    # suitable buffer somewhere and use `mul!()`.
+                    advection_matrix = vpa_spectral.mass_matrix * advection_matrix
+                    @. advection_matrix -= dt * vpa_dissipation_coefficient * vpa_spectral.K_matrix
+                elseif vpa_dissipation_coefficient > 0.0
+                    error("Non-weak-form schemes cannot precondition diffusion")
+                end
+
                 # hacky (?) Dirichlet boundary conditions
                 this_f_out[1] = 0.0
                 this_f_out[end] = 0.0
@@ -202,8 +209,10 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, v
             end
 
             function preconditioner(x)
-                # Multiply by mass matrix, storing result in vpa.scratch
-                mul!(vpa.scratch, vpa_spectral.mass_matrix, x)
+                if isa(vpa_spectral, weak_discretization_info)
+                    # Multiply by mass matrix, storing result in vpa.scratch
+                    mul!(vpa.scratch, vpa_spectral.mass_matrix, x)
+                end
 
                 # Handle boundary conditions
                 enforce_v_boundary_condition_local!(vpa.scratch, vpa_bc, speed, vpa_diffusion,
