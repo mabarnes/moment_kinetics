@@ -40,6 +40,11 @@ These tests are used to test the spatial advection in simple cases
 with wall boundary conditions.
 
 * 2D1V test of wall boundary conditions and the E x B drift.
+  Numerical dissipation in the radial domain is imposed to stabilise
+  an instability that otherwise appears at the grid scale.
+```
+runs/2D-wall_MMS_nel_r_32_z_32_vpa_16_vperp_1_diss.toml
+```
 
 # 2D2V tests
 
