@@ -781,7 +781,7 @@ function linear_solve!(x, residual_func!, residual0, delta_x, v, w; coords, rtol
     #   J δx = residual0
 
     tol = max(rtol, atol)
-    epsilon = 1.0e-8 / tol
+    epsilon = 1.0e-6 / tol
     inv_epsilon = 1.0 / epsilon
 
     function approximate_Jacobian_vector_product!(v)
