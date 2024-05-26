@@ -2896,6 +2896,12 @@ function implicit_ion_advance!(fvec_out, fvec_in, pdf, fields, moments, advect_o
 
         apply_bc!(residual)
 
+        begin_s_r_z_region()
+        @loop_s_r_z is ir iz begin
+            @views moment_constraints_on_residual!(residual[:,:,iz,ir,is],
+                                                   f_new[:,:,iz,ir,is], moments, vpa)
+        end
+
         return nothing
     end
 
