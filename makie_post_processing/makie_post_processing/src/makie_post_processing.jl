@@ -7306,12 +7306,17 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                 else
                     time = ri.time
                 end
+
                 CFL_vars = String[]
-                if !ri.t_input["implicit_ion_advance"]
-                    push!(CFL_vars, "minimum_CFL_ion_z")
+                implicit_CFL_vars = String[]
+
+                push!(CFL_vars, "minimum_CFL_ion_z")
+                if ri.t_input["implicit_ion_advance"]
+                    push!(implicit_CFL_vars, "minimum_CFL_ion_z")
                 end
-                if !(ri.t_input["implicit_ion_advance"] || ri.t_input["implicit_vpa_advection"])
-                    push!(CFL_vars, "minimum_CFL_ion_vpa")
+                push!(CFL_vars, "minimum_CFL_ion_vpa")
+                if (ri.t_input["implicit_ion_advance"] || ri.t_input["implicit_vpa_advection"])
+                    push!(implicit_CFL_vars, "minimum_CFL_ion_vpa")
                 end
                 if ri.n_neutral_species > 0
                     push!(CFL_vars, "minimum_CFL_neutral_z", "minimum_CFL_neutral_vz")
@@ -7320,14 +7325,22 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
                     var = get_variable(ri, varname)
                     maxval = NaNMath.min(maxval, NaNMath.maximum(var))
                     if occursin("neutral", varname)
-                        linestyle = :dash
+                        if varname ∈ implicit_CFL_vars
+                            linestyle = :dashdot
+                        else
+                            linestyle = :dash
+                        end
                     else
-                        linestyle = nothing
+                        if varname ∈ implicit_CFL_vars
+                            linestyle = :dot
+                        else
+                            linestyle = nothing
+                        end
                     end
                     plot_1d(time, var; ax=ax, label=prefix*varname, linestyle=linestyle)
                 end
             end
-            ylims!(ax, 0.0, 4.0 * maxval)
+            ylims!(ax, 0.0, 10.0 * maxval)
             put_legend_right(CFL_fig, ax)
 
             limits_fig, ax = get_1d_ax(; xlabel="time", ylabel="number of limits per factor per output",
