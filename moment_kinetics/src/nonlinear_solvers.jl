@@ -307,7 +307,7 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
             # Do a line search between x and x+delta_x to try to find an update that does
             # decrease residual_norm
             s = 0.5
-            while s > 1.0e-5
+            while s > 1.0e-2
                 parallel_map((x,delta_x) -> x + s * delta_x, w, x, delta_x)
                 residual_func!(residual, x)
                 residual_norm = distributed_norm(residual)
