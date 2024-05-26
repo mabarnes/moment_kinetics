@@ -3434,6 +3434,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
 
         speed = allocate_float(nz, nvz, nvr, nvzeta, nr, nspecies, nt)
 
+        setup_distributed_memory_MPI(1,1,1,1)
         setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
                            vperp=run_info.vperp.n, vpa=run_info.vpa.n, vzeta=nvzeta,
                            vr=nvr, vz=nvz)
@@ -3525,6 +3526,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         nvz = run_info.vz.n
         speed = allocate_float(nvz, nvr, nvzeta, nz, nr, nspecies, nt)
 
+        setup_distributed_memory_MPI(1,1,1,1)
         setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
                            vperp=run_info.vperp.n, vpa=run_info.vpa.n, vzeta=nvzeta,
                            vr=nvr, vz=nvz)
