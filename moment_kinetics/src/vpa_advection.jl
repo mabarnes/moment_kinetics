@@ -140,122 +140,121 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, z_advect, vpa_
             f_old = vpa.scratch7 .= f_old_no_bc
             apply_bc!(f_old)
 
-            if nl_solver_params.stage_counter[] % nl_solver_params.preconditioner_update_interval == 0
-                advection_matrix = allocate_float(vpa.n, vpa.n)
-                advection_matrix .= 0.0
-                for i ∈ 1:vpa.nelement_local
-                    imin = vpa.imin[i] - (i != 1)
-                    imax = vpa.imax[i]
-                    if i == 1
-                        advection_matrix[imin,imin:imax] .+= vpa_spectral.lobatto.Dmat[1,:] ./ vpa.element_scale[i]
-                    else
-                        if speed[imin] < 0.0
-                            advection_matrix[imin,imin:imax] .+= vpa_spectral.lobatto.Dmat[1,:] ./ vpa.element_scale[i]
-                        elseif speed[imin] > 0.0
-                            # Do nothing
-                        else
-                            advection_matrix[imin,imin:imax] .+= 0.5 .* vpa_spectral.lobatto.Dmat[1,:] ./ vpa.element_scale[i]
-                        end
-                    end
-                    advection_matrix[imin+1:imax-1,imin:imax] .+= vpa_spectral.lobatto.Dmat[2:end-1,:] ./ vpa.element_scale[i]
-                    if i == vpa.nelement_local
-                        advection_matrix[imax,imin:imax] .+= vpa_spectral.lobatto.Dmat[end,:] ./ vpa.element_scale[i]
-                    else
-                        if speed[imax] < 0.0
-                            # Do nothing
-                        elseif speed[imax] > 0.0
-                            advection_matrix[imax,imin:imax] .+= vpa_spectral.lobatto.Dmat[end,:] ./ vpa.element_scale[i]
-                        else
-                            advection_matrix[imax,imin:imax] .+= 0.5 .* vpa_spectral.lobatto.Dmat[end,:] ./ vpa.element_scale[i]
-                        end
-                    end
-                end
-                # Multiply by advection speed
-                for i ∈ 1:vpa.n
-                    advection_matrix[i,:] .*= dt * speed[i]
-                end
-                for i ∈ 1:vpa.n
-                    advection_matrix[i,i] += 1.0
-                end
+            #if nl_solver_params.stage_counter[] % nl_solver_params.preconditioner_update_interval == 0
+            #    advection_matrix = allocate_float(vpa.n, vpa.n)
+            #    advection_matrix .= 0.0
+            #    for i ∈ 1:vpa.nelement_local
+            #        imin = vpa.imin[i] - (i != 1)
+            #        imax = vpa.imax[i]
+            #        if i == 1
+            #            advection_matrix[imin,imin:imax] .+= vpa_spectral.lobatto.Dmat[1,:] ./ vpa.element_scale[i]
+            #        else
+            #            if speed[imin] < 0.0
+            #                advection_matrix[imin,imin:imax] .+= vpa_spectral.lobatto.Dmat[1,:] ./ vpa.element_scale[i]
+            #            elseif speed[imin] > 0.0
+            #                # Do nothing
+            #            else
+            #                advection_matrix[imin,imin:imax] .+= 0.5 .* vpa_spectral.lobatto.Dmat[1,:] ./ vpa.element_scale[i]
+            #            end
+            #        end
+            #        advection_matrix[imin+1:imax-1,imin:imax] .+= vpa_spectral.lobatto.Dmat[2:end-1,:] ./ vpa.element_scale[i]
+            #        if i == vpa.nelement_local
+            #            advection_matrix[imax,imin:imax] .+= vpa_spectral.lobatto.Dmat[end,:] ./ vpa.element_scale[i]
+            #        else
+            #            if speed[imax] < 0.0
+            #                # Do nothing
+            #            elseif speed[imax] > 0.0
+            #                advection_matrix[imax,imin:imax] .+= vpa_spectral.lobatto.Dmat[end,:] ./ vpa.element_scale[i]
+            #            else
+            #                advection_matrix[imax,imin:imax] .+= 0.5 .* vpa_spectral.lobatto.Dmat[end,:] ./ vpa.element_scale[i]
+            #            end
+            #        end
+            #    end
+            #    # Multiply by advection speed
+            #    for i ∈ 1:vpa.n
+            #        advection_matrix[i,:] .*= dt * speed[i]
+            #    end
+            #    for i ∈ 1:vpa.n
+            #        advection_matrix[i,i] += 1.0
+            #    end
 
-                if isa(vpa_spectral, weak_discretization_info)
-                    # This allocates a new matrix - to avoid this would need to pre-allocate a
-                    # suitable buffer somewhere and use `mul!()`.
-                    advection_matrix = vpa_spectral.mass_matrix * advection_matrix
-                    @. advection_matrix -= dt * vpa_dissipation_coefficient * vpa_spectral.K_matrix
-                elseif vpa_dissipation_coefficient > 0.0
-                    error("Non-weak-form schemes cannot precondition diffusion")
-                end
+            #    if isa(vpa_spectral, weak_discretization_info)
+            #        # This allocates a new matrix - to avoid this would need to pre-allocate a
+            #        # suitable buffer somewhere and use `mul!()`.
+            #        advection_matrix = vpa_spectral.mass_matrix * advection_matrix
+            #        @. advection_matrix -= dt * vpa_dissipation_coefficient * vpa_spectral.K_matrix
+            #    elseif vpa_dissipation_coefficient > 0.0
+            #        error("Non-weak-form schemes cannot precondition diffusion")
+            #    end
 
-                # hacky (?) Dirichlet boundary conditions
-                this_f_out[1] = 0.0
-                this_f_out[end] = 0.0
-                advection_matrix[1,:] .= 0.0
-                advection_matrix[1,1] = 1.0
-                advection_matrix[end,:] .= 0.0
-                advection_matrix[end,end] = 1.0
+            #    # hacky (?) Dirichlet boundary conditions
+            #    this_f_out[1] = 0.0
+            #    this_f_out[end] = 0.0
+            #    advection_matrix[1,:] .= 0.0
+            #    advection_matrix[1,1] = 1.0
+            #    advection_matrix[end,:] .= 0.0
+            #    advection_matrix[end,end] = 1.0
 
-                if z.bc == "wall"
-                    if z.irank == 0 && iz == 1
-                        # Set equal df/dt equal to f on points that should be set to zero for
-                        # boundary condition. The vector that the inverse of the advection matrix
-                        # acts on should have zeros there already.
-                        advection_matrix[icut_lower_z:end,icut_lower_z:end] .= 0.0
-                        for i ∈ icut_lower_z:vpa.n
-                            advection_matrix[i,i] = 1.0
-                        end
-                    end
-                    if z.irank == z.nrank - 1 && iz == z.n
-                        # Set equal df/dt equal to f on points that should be set to zero for
-                        # boundary condition. The vector that the inverse of the advection matrix
-                        # acts on should have zeros there already.
-                        # I comes from LinearAlgebra and represents identity matrix
-                        advection_matrix[1:icut_upper_z,1:icut_upper_z] .= 0.0
-                        for i ∈ 1:icut_upper_z
-                            advection_matrix[i,i] = 1.0
-                        end
-                    end
-                end
+            #    if z.bc == "wall"
+            #        if z.irank == 0 && iz == 1
+            #            # Set equal df/dt equal to f on points that should be set to zero for
+            #            # boundary condition. The vector that the inverse of the advection matrix
+            #            # acts on should have zeros there already.
+            #            advection_matrix[icut_lower_z:end,icut_lower_z:end] .= 0.0
+            #            for i ∈ icut_lower_z:vpa.n
+            #                advection_matrix[i,i] = 1.0
+            #            end
+            #        end
+            #        if z.irank == z.nrank - 1 && iz == z.n
+            #            # Set equal df/dt equal to f on points that should be set to zero for
+            #            # boundary condition. The vector that the inverse of the advection matrix
+            #            # acts on should have zeros there already.
+            #            # I comes from LinearAlgebra and represents identity matrix
+            #            advection_matrix[1:icut_upper_z,1:icut_upper_z] .= 0.0
+            #            for i ∈ 1:icut_upper_z
+            #                advection_matrix[i,i] = 1.0
+            #            end
+            #        end
+            #    end
 
-                advection_matrix = sparse(advection_matrix)
-                nl_solver_params.preconditioners[ivperp,iz,ir,is] = lu(advection_matrix)
-            end
+            #    advection_matrix = sparse(advection_matrix)
+            #    nl_solver_params.preconditioners[ivperp,iz,ir,is] = lu(advection_matrix)
+            #end
 
-            function preconditioner(x)
-                if isa(vpa_spectral, weak_discretization_info)
-                    # Multiply by mass matrix, storing result in vpa.scratch
-                    mul!(vpa.scratch, vpa_spectral.mass_matrix, x)
-                end
+            #function preconditioner(x)
+            #    if isa(vpa_spectral, weak_discretization_info)
+            #        # Multiply by mass matrix, storing result in vpa.scratch
+            #        mul!(vpa.scratch, vpa_spectral.mass_matrix, x)
+            #    end
 
-                # Handle boundary conditions
-                enforce_v_boundary_condition_local!(vpa.scratch, vpa_bc, speed, vpa_diffusion,
-                                                    vpa, vpa_spectral)
+            #    # Handle boundary conditions
+            #    enforce_v_boundary_condition_local!(vpa.scratch, vpa_bc, speed, vpa_diffusion,
+            #                                        vpa, vpa_spectral)
 
-                if z.bc == "wall"
-                    # Wall boundary conditions. Note that as density, upar, ppar do not
-                    # change in this implicit step, f_new, f_old, and residual should all
-                    # be zero at exactly the same set of grid points, so it is reasonable
-                    # to zero-out `residual` to impose the boundary condition. We impose
-                    # this after subtracting f_old in case rounding errors, etc. mean that
-                    # at some point f_old had a different boundary condition cut-off
-                    # index.
-                    if z.irank == 0 && iz == 1
-                        vpa.scratch[icut_lower_z:end] .= 0.0
-#                        println("at icut_lower_z ", f_new[icut_lower_z], " ", f_old[icut_lower_z])
-                    end
-                    # absolute velocity at right boundary
-                    if z.irank == z.nrank - 1 && iz == z.n
-                        vpa.scratch[1:icut_upper_z] .= 0.0
-                    end
-                end
+            #    if z.bc == "wall"
+            #        # Wall boundary conditions. Note that as density, upar, ppar do not
+            #        # change in this implicit step, f_new, f_old, and residual should all
+            #        # be zero at exactly the same set of grid points, so it is reasonable
+            #        # to zero-out `residual` to impose the boundary condition. We impose
+            #        # this after subtracting f_old in case rounding errors, etc. mean that
+            #        # at some point f_old had a different boundary condition cut-off
+            #        # index.
+            #        if z.irank == 0 && iz == 1
+            #            vpa.scratch[icut_lower_z:end] .= 0.0
+#           #             println("at icut_lower_z ", f_new[icut_lower_z], " ", f_old[icut_lower_z])
+            #        end
+            #        # absolute velocity at right boundary
+            #        if z.irank == z.nrank - 1 && iz == z.n
+            #            vpa.scratch[1:icut_upper_z] .= 0.0
+            #        end
+            #    end
 
-                # Do LU application on vpa.scratch, storing result in x
-                ldiv!(x, nl_solver_params.preconditioners[ivperp,iz,ir,is], vpa.scratch)
-                return nothing
-            end
-            #left_preconditioner = preconditioner
-            right_preconditioner = identity
+            #    # Do LU application on vpa.scratch, storing result in x
+            #    ldiv!(x, nl_solver_params.preconditioners[ivperp,iz,ir,is], vpa.scratch)
+            #    return nothing
+            #end
             left_preconditioner = identity
+            right_preconditioner = identity
             #right_preconditioner = preconditioner
 
             # Define a function whose input is `f_new`, so that when it's output
