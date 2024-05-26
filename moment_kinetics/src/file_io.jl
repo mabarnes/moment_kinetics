@@ -1423,6 +1423,7 @@ function write_all_moments_data_to_binary(moments, fields, t, n_ion_species,
                                           n_neutral_species, io_or_file_info_moments,
                                           t_idx, time_for_run, t_params, nl_solver_params,
                                           r, z)
+
     @serial_region begin
         # Only read/write from first process in each 'block'
 

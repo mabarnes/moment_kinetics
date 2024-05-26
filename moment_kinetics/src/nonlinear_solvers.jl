@@ -25,7 +25,8 @@ Useful references:
 """
 module nonlinear_solvers
 
-export setup_nonlinear_solve, reset_nonlinear_per_stage_counters, newton_solve!
+export setup_nonlinear_solve, gather_nonlinear_solver_counters!,
+       reset_nonlinear_per_stage_counters, newton_solve!
 
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication
@@ -53,6 +54,9 @@ struct nl_solver_info{TH,TV,Tlig,Tprecon}
     n_solves::Ref{mk_int}
     nonlinear_iterations::Ref{mk_int}
     linear_iterations::Ref{mk_int}
+    global_n_solves::Ref{mk_int}
+    global_nonlinear_iterations::Ref{mk_int}
+    global_linear_iterations::Ref{mk_int}
     stage_counter::Ref{mk_int}
     serial_solve::Bool
     max_nonlinear_iterations_this_step::Ref{mk_int}
@@ -122,8 +126,8 @@ function setup_nonlinear_solve(input_dict, coords, outer_coords=(); default_rtol
                           nl_solver_input.nonlinear_max_iterations,
                           nl_solver_input.linear_rtol, nl_solver_input.linear_atol,
                           linear_restart, nl_solver_input.linear_max_restarts, H, V,
-                          linear_initial_guess, Ref(0), Ref(0), Ref(0), Ref(0),
-                          serial_solve, Ref(0),
+                          linear_initial_guess, Ref(0), Ref(0), Ref(0), Ref(0), Ref(0),
+                          Ref(0), Ref(0), serial_solve, Ref(0),
                           nl_solver_input.preconditioner_update_interval, preconditioners)
 end
 
@@ -140,6 +144,31 @@ function reset_nonlinear_per_stage_counters(nl_solver_params::Union{nl_solver_in
     nl_solver_params.max_nonlinear_iterations_this_step[] = 0
 
     return nothing
+end
+
+"""
+    gather_nonlinear_solver_counters!(nl_solver_params)
+
+Where necessary, gather the iteration counters for the nonlinear solvers.
+
+Where each solve runs in parallel using all processes, this is unnecessary as the count on
+each process already represents the global count. Where each solve uses only a subset of
+processes, the counters from different solves need to be added together to get the global
+total.
+"""
+function gather_nonlinear_solver_counters!(nl_solver_params)
+    if nl_solver_params.ion_advance !== nothing
+        # Solve runs in parallel on all processes, so no need to collect here
+        nl_solver_params.ion_advance.global_n_solves[] = nl_solver_params.ion_advance.n_solves[]
+        nl_solver_params.ion_advance.global_nonlinear_iterations[] = nl_solver_params.ion_advance.nonlinear_iterations[]
+        nl_solver_params.ion_advance.global_linear_iterations[] = nl_solver_params.ion_advance.linear_iterations[]
+    end
+    if nl_solver_params.vpa_advection !== nothing
+        # Solves are run in serial on separate processes, so need a global Allreduce
+        nl_solver_params.vpa_advection.global_n_solves[] = MPI.Allreduce(nl_solver_params.vpa_advection.n_solves[], +, comm_world)
+        nl_solver_params.vpa_advection.global_nonlinear_iterations[] = MPI.Allreduce(nl_solver_params.vpa_advection.nonlinear_iterations[], +, comm_world)
+        nl_solver_params.vpa_advection.global_linear_iterations[] = MPI.Allreduce(nl_solver_params.vpa_advection.linear_iterations[], +, comm_world)
+    end
 end
 
 """

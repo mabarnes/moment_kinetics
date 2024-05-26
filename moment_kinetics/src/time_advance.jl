@@ -1418,6 +1418,10 @@ function time_advance!(pdf, scratch, scratch_implicit, t, t_params, vz, vr, vzet
                 finish_now = true
             end
 
+            # Do MPI communication to add up counters from different processes, where
+            # necessary.
+            gather_nonlinear_solver_counters!(nl_solver_params)
+
             time_for_run = to_minutes(now() - start_time)
         end
         # write moments data to file
