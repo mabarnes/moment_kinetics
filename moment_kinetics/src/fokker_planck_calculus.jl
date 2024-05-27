@@ -2388,8 +2388,9 @@ end
 #
 #    begin_anyv_vperp_region()
 #    @loop_vperp ivperp begin
-#        @views interpolate_to_grid_1d!(pdf_buffer[:,ivperp], newgrid_vpa,
-#                                       pdf_in[:,ivperp], vpa, vpa_spectral)
+#        @views interpolate_to_grid_1d!(pdf_out[:,ivperp], newgrid_vpa,
+#                                       pdf_buffer[:,ivperp], vpa, vpa_spectral)
+
 #    end
 #end
 
