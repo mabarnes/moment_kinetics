@@ -1075,7 +1075,13 @@ function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, ti
                                     restart_evolve_density, restart_evolve_upar,
                                     restart_evolve_ppar)
 
-            t_params.dt[] = load_slice(dynamic, "electron_dt", time_index)
+            new_dt = load_slice(dynamic, "electron_dt", time_index)
+            if new_dt > 0.0
+                # if the reloaded electron_dt was 0.0, then the previous run would not
+                # have been using kinetic electrons, so we only use the value if it is
+                # positive
+                t_params.dt[] = new_dt
+            end
             t_params.previous_dt[] = t_params.dt[]
             t_params.dt_before_output[] = t_params.dt[]
             t_params.dt_before_last_fail[] =
