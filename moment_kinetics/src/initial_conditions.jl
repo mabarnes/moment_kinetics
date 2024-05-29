@@ -1080,6 +1080,15 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                                             right_weight*upper_z_pdf_buffer)
             end
 
+            # Add a non-flowing Maxwellian (that vanishes at the sheath entrance boundaries) to try to
+            # avoid the 'hole' in the distribution function that can drive instabilities.
+            @loop_z_vperp iz ivperp begin
+                @. pdf[:,ivperp,iz] += spec.z_IC.density_amplitude *
+                                      (1.0 - (2.0 * z.grid[iz] / z.L)^2) *
+                                      exp(-(vpa.grid^2 + vperp.grid[ivperp]^2)
+                                          / vth[iz]^2) / vth[iz]
+            end
+
             # Get the unnormalised pdf and the moments of the constructed full-f
             # distribution function (which will be modified from the input moments).
             convert_full_f_ion_to_normalised!(pdf, density, upar, ppar, vth, vperp,
@@ -1108,6 +1117,31 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
         # function passes through zero at upwind boundary
         @loop_z_vperp iz ivperp begin
             @. pdf[:,ivperp,iz] = (vpa.grid + 0.5*vpa.L)^spec.vpa_IC.monomial_degree
+        end
+    elseif spec.vpa_IC.initialization_option == "isotropic-beam"
+        v0 = spec.vpa_IC.v0 #0.5*sqrt(vperp.L^2 + (0.5*vpa.L)^2) # birth speed of beam
+        vth0 = spec.vpa_IC.vth0
+        v4norm = (v0^2)*(vth0^2) # spread of the beam in speed is vth0
+        @loop_z iz begin
+            @loop_vperp_vpa ivperp ivpa begin
+                v2 = (vpa.grid[ivpa])^2 + vperp.grid[ivperp]^2 - v0^2
+                pdf[ivpa,ivperp,iz] = exp(-(v2^2)/v4norm)
+            end
+            normfac = integrate_over_vspace(view(pdf,:,:,iz), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+            @. pdf[:,:,iz] /= normfac
+        end
+    elseif spec.vpa_IC.initialization_option == "directed-beam"
+        vpa0 = spec.vpa_IC.vpa0 #0.25*0.5*abs(vpa.L) # centre of beam in vpa
+        vperp0 = spec.vpa_IC.vperp0 #0.5*abs(vperp.L) # centre of beam in vperp
+        vth0 = spec.vpa_IC.vth0 #0.05*sqrt(vperp.L^2 + (0.5*vpa.L)^2) # width of beam in v 
+        @loop_z iz begin
+            @loop_vperp_vpa ivperp ivpa begin
+                v2 = (vpa.grid[ivpa] - vpa0)^2 + (vperp.grid[ivperp] - vperp0)^2
+                v2norm = vth0^2
+                pdf[ivpa,ivperp,iz] = exp(-v2/v2norm)
+            end
+            normfac = integrate_over_vspace(view(pdf,:,:,iz), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+            @. pdf[:,:,iz] /= normfac
         end
     end
     return nothing

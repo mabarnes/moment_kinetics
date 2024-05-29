@@ -18,7 +18,7 @@ Structure the namelist as follows.
 
 [krook_collisions]
 use_krook = true
-krook_collision_frequency_prefactor = 1.0
+nuii0 = 1.0
 frequency_option = "manual"
 """
 function setup_krook_collisions_input(toml_input::Dict, reference_params)
@@ -205,8 +205,8 @@ function krook_collisions!(pdf_out, fvec_in, moments, composition, collisions, v
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
                     (fvec_in.pdf[ivpa,ivperp,iz,ir,is]
-                     - exp(-((vpa.grid[ivpa] - fvec_in.upar[iz,ir,is])/vth)^2
-                           - (vperp.grid[ivperp]/vth)^2))
+                     - exp(-((vpa.grid[ivpa] - fvec_in.upar[iz,ir,is]))^2
+                           - (vperp.grid[ivperp])^2))
             end
         end
     elseif moments.evolve_upar

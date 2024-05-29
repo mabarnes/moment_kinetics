@@ -26,10 +26,15 @@ z_IC_upar_amplitude2 = 0.0
 z_IC_upar_phase2 = 0.0
 z_IC_temperature_amplitude2 = 0.0
 z_IC_temperature_phase2 = 0.0
+vpa_IC_option1 = "isotropic-beam"
+#vpa_IC_option1 = "directed-beam"
+#vpa_IC_v01 = 
+#vpa_IC_vth0 =
+#vpa_IC_vpa0 =
+#vpa_IC_vperp0 =
 charge_exchange_frequency = 0.0
 ionization_frequency = 0.0
 constant_ionization_rate = false
-
 z_ngrid = 1
 z_nelement = 1
 z_nelement_local = 1
@@ -41,25 +46,26 @@ r_nelement_local = 1
 r_bc = "periodic"
 r_discretization = "chebyshev_pseudospectral"
 vpa_ngrid = 5
-vpa_nelement = 8
+vpa_nelement = 32
 vpa_L = 6.0
 vpa_bc = "zero"
 vpa_discretization = "gausslegendre_pseudospectral"
 vperp_ngrid = 5
-vperp_nelement = 4
+vperp_nelement = 16
 vperp_L = 3.0
 vperp_discretization = "gausslegendre_pseudospectral"
 # Fokker-Planck operator requires the "gausslegendre_pseudospectral
 # options for the vpa and vperp grids
 
 [fokker_planck_collisions]
-use_fokker_planck = true
 # nuii sets the normalised input C[F,F] Fokker-Planck collision frequency
 nuii = 1.0
+slowing_down_test = true
 frequency_option = "manual"
+use_fokker_planck = true
 
 [timestepping]
-nstep = 200000
-dt = 1.0e-3
+nstep = 1000
+dt = 1.0e-5
 nwrite = 50
 nwrite_dfns = 50
