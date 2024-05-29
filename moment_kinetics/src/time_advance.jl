@@ -2217,9 +2217,6 @@ function ssp_rk!(pdf, scratch, scratch_implicit, t, t_params, vz, vr, vzeta, vpa
     # success is set to false if an iteration failed to converge in an implicit solve
     success = true
     for istage ∈ 1:n_rk_stages
-        if global_rank[] == 0
-            println("ion step ", t_params.step_counter[], ".", istage, " ", t)
-        end
         if t_params.rk_coefs_implicit !== nothing
             update_solution_vector!(scratch_implicit[istage], scratch[istage], moments,
                                     composition, vpa, vperp, z, r)
