@@ -309,7 +309,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                                                         vpa, vperp_spectral, vpa_spectral,
                                                         vpa_advect, moments,
                                                         num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                                                        composition.me_over_mi)
+                                                        composition.me_over_mi, 0.1 * t_params.rtol)
 
             begin_r_z_region()
             A = moments.electron.constraints_A_coefficient
@@ -625,7 +625,7 @@ end
 function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vperp, vpa,
                                                      vperp_spectral, vpa_spectral,
                                                      vpa_adv, moments, vpa_diffusion,
-                                                     me_over_mi)
+                                                     me_over_mi, newton_tol)
     # Enforce velocity-space boundary conditions
     if vpa.n > 1
         begin_r_z_vperp_region()
@@ -652,28 +652,154 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
 
     begin_r_region()
 
-    # pdf_adjustment_option determines the velocity-dependent pre-factor for the
-    # corrections to the pdf needed to ensure moment constraints are satisfied
-    #pdf_adjustment_option = "vpa4"
-    #pdf_adjustment_option = "vpa4_gaussian"
-    pdf_adjustment_option = "no1st_vpa2"
-
-    cutoff_step_width = 0.1
-
-    # wpa_values will be used to store the wpa = (vpa - upar)/vthe values corresponding to a vpa grid symmetric about vpa=0
-    #wpa_values = vpa.scratch
-    # interpolated_pdf will be used to store the pdf interpolated onto the vpa-symmetric grid
-    #interpolated_pdf = vpa.scratch2
+    newton_max_its = 100
     reversed_pdf = vpa.scratch
 
-    # ivpa_zero is the index of the interpolated_pdf corresponding to vpa = 0
-    #ivpa_zero = (vpa.n+1)÷2
+    function get_residual_and_coefficients_for_bc(a1, a1prime, a2, a2prime, b1, b1prime,
+                                                  c1, c1prime, c2, c2prime, d1, d1prime,
+                                                  e1, e1prime, e2, e2prime, u_over_vt)
+        alpha = a1 + 2.0 * a2
+        alphaprime = a1prime + 2.0 * a2prime
+        beta = c1 + 2.0 * c2
+        betaprime = c1prime + 2.0 * c2prime
+        gamma = u_over_vt^2 * alpha - 2.0 * u_over_vt * b1 + beta
+        gammaprime = u_over_vt^2 * alphaprime - 2.0 * u_over_vt * b1prime + betaprime
+        delta = u_over_vt^2 * beta - 2.0 * u_over_vt * d1 + e1 + 2.0 * e2
+        deltaprime = u_over_vt^2 * betaprime - 2.0 * u_over_vt * d1prime + e1prime + 2.0 * e2prime
+
+        A = (0.5 * beta - delta) / (beta * gamma - alpha * delta)
+        Aprime = (0.5 * betaprime - deltaprime
+                  - (0.5 * beta - delta) * (gamma * betaprime + beta * gammaprime - delta * alphaprime - alpha * deltaprime)
+                    / (beta * gamma - alpha * delta)
+                 ) / (beta * gamma - alpha * delta)
+        C = (1.0 - alpha * A) / beta
+        Cprime = -(A * alphaprime + alpha * Aprime) / beta - (1.0 - alpha * A) * betaprime / beta^2
+
+        epsilon = A * b1 + C * d1 - u_over_vt
+        epsilonprime = b1 * Aprime + A * b1prime + d1 * Cprime + C * d1prime
+
+        return epsilon, epsilonprime, A, C
+    end
 
     if z.irank == 0
+        if z.bc != "wall"
+            error("Options other than wall bc not implemented yet for electrons")
+        end
         @loop_r ir begin
-            # construct a grid of wpa = (vpa - upar)/vthe values corresponding to a vpa-symmetric grid
-            #@. wpa_values = vpa.grid #- upar[1,ir] / vthe[1,ir]
-            #wpa_of_minus_vpa = @. vpa.scratch3 = -vpa.grid - upar[1,ir] / vthe[1,ir]
+            # Impose sheath-edge boundary condition, while also imposing moment
+            # constraints and determining the cut-off velocity (and therefore the sheath
+            # potential).
+
+            # Delete the upar contribution here if ignoring the 'upar shift'
+            vpa_unnorm = @. vpa.scratch2 = vthe[1,ir] * vpa.grid + upar[1,ir]
+
+            u_over_vt = upar[1,ir] / vthe[1,ir]
+
+            # Initial guess for cut-off velocity is result from previous RK stage (which
+            # might be the previous timestep if this is the first stage). Recalculate this
+            # value from phi.
+            vmax = sqrt(phi[1,ir] / me_over_mi)
+
+            # -vmax is between vmax_ind-1 and vmax_ind
+            vmax_ind = searchsortedfirst(vpa_unnorm, -vmax)
+
+            # sigma is the location we use for w_∥(v_∥=0) - set to 0 to ignore the 'upar
+            # shift'
+            sigma = -u_over_vt
+
+            # sigma is between sigma_ind-1 and sigma_ind
+            sigma_ind = searchsortedfirst(vpa_unnorm, 0.0)
+
+            # sigma_fraction is the fraction of the distance between sigma_ind-1 and
+            # sigma_ind where sigma is.
+            sigma_fraction = (sigma - vpa_unnorm[sigma_ind-1]) / (vpa_unnorm[sigma_ind] - vpa_unnorm[sigma_ind-1])
+
+            # Per-grid-point contributions to moment integrals
+            # Note that we need to include the normalisation factor of 1/sqrt(pi) that
+            # would be factored in by integrate_over_vspace(). This will need to
+            # change/adapt when we support 2V as well as 1V.
+            density_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,1,ir] * vpa.wgts / sqrt(pi)
+            flow_integral_pieces = @views @. vpa.scratch4 = density_integral_pieces * vpa_unnorm / vthe[1,ir]
+            energy_integral_pieces = @views @. vpa.scratch5 = flow_integral_pieces * vpa_unnorm / vthe[1,ir]
+            cubic_integral_pieces = @views @. vpa.scratch6 = energy_integral_pieces * vpa_unnorm / vthe[1,ir]
+            quartic_integral_pieces = @views @. vpa.scratch7 = cubic_integral_pieces * vpa_unnorm / vthe[1,ir]
+
+            function get_integrals_and_derivatives(vmax, vmax_ind)
+                # vmax_fraction is the fraction of the distance between vmax_ind-1 and
+                # vmax_ind where -vmax is.
+                vmax_fraction = (-vmax - vpa_unnorm[vmax_ind-1]) / (vpa_unnorm[vmax_ind] - vpa_unnorm[vmax_ind-1])
+
+                function get_for_one_moment(integral_pieces, skip_part2=false)
+                    # Integral contribution from the cell containing vmax
+                    integral_vmax_cell = (0.5 * integral_pieces[vmax_ind-1] + 0.5 * integral_pieces[vmax_ind])
+
+                    part1 = sum(integral_pieces[1:vmax_ind-2])
+                    part1 += 0.5 * integral_pieces[vmax_ind-1] + vmax_fraction * integral_vmax_cell
+                    # part1prime is d(part1)/d(vmax)
+                    part1prime = -integral_vmax_cell / (vpa_unnorm[vmax_ind] - vpa_unnorm[vmax_ind-1])
+
+                    if skip_part2
+                        part2 = nothing
+                        part2prime = nothing
+                    else
+                        # Integral contribution from the cell containing sigma
+                        integral_sigma_cell = (0.5 * integral_pieces[sigma_ind-1] + 0.5 * integral_pieces[sigma_ind])
+
+                        part2 = sum(integral_pieces[vmax_ind+1:sigma_ind-2])
+                        part2 += (1.0 - vmax_fraction) * integral_vmax_cell + 0.5 * integral_pieces[vmax_ind] + 0.5 * integral_pieces[sigma_ind-1] + sigma_fraction * integral_sigma_cell
+                        # part2prime is d(part2)/d(vmax)
+                        part2prime = -part1prime
+                    end
+
+                    return part1, part1prime, part2, part2prime
+                end
+                a1, a1prime, a2, a2prime = get_for_one_moment(density_integral_pieces)
+                b1, b1prime, _, _ = get_for_one_moment(flow_integral_pieces, true)
+                c1, c1prime, c2, c2prime = get_for_one_moment(energy_integral_pieces)
+                d1, d1prime, _, _ = get_for_one_moment(cubic_integral_pieces, true)
+                e1, e1prime, e2, e2prime = get_for_one_moment(quartic_integral_pieces)
+
+                return get_residual_and_coefficients_for_bc(a1, a1prime, a2, a2prime, b1,
+                                                            b1prime, c1, c1prime, c2,
+                                                            c2prime, d1, d1prime, e1,
+                                                            e1prime, e2, e2prime,
+                                                            u_over_vt)
+            end
+
+            counter = 1
+            A = 1.0
+            C = 0.0
+            # Always do at least one update of vmax
+            epsilon, epsilonprime, A, C = get_integrals_and_derivatives(vmax, vmax_ind)
+            while true
+                # Newton iteration update. Note that primes denote derivatives with
+                # respect to vmax
+                delta_v = - epsilon / epsilonprime
+
+                # Prevent the step size from getting too big, to make Newton iteration
+                # more robust.
+                delta_v = min(delta_v, 0.1 * vthe[1,ir])
+                delta_v = max(delta_v, -0.1 * vthe[1,ir])
+
+                vmax = vmax + delta_v
+                vmax_ind = searchsortedfirst(vpa_unnorm, -vmax)
+
+                epsilon, epsilonprime, A, C = get_integrals_and_derivatives(vmax, vmax_ind)
+
+                if abs(epsilon) < newton_tol * abs(u_over_vt)
+                    break
+                end
+
+                if counter ≥ newton_max_its
+                    error("Newton iteration for electron lower-z boundary failed to "
+                          * "converge after $counter iterations")
+                end
+                counter += 1
+            end
+
+            # Adjust pdf so that after reflecting and cutting off tail, it will obey the
+            # constraints.
+            @. pdf[:,1,1,ir] *= A + C * vpa_unnorm^2 / vthe[1,ir]^2
 
             # Want to construct the w-grid corresponding to -vpa.
             #   wpa(vpa) = (vpa - upar)/vth
@@ -686,220 +812,29 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
             #  wpa(+vpa) as we are using a 'moment kinetic' approach.]
             # Need to reverse vpa.grid because the grid passed as the second argument of
             # interpolate_to_grid_1d!() needs to be sorted in increasing order.
-            #reversed_wpa_of_minus_vpa = vpa.scratch2 .= .-reverse(vpa.grid) .- 2.0 * upar[1,ir] / vthe[1,ir]
-            #reversed_wpa_of_minus_vpa = vpa.scratch2 .= .-reverse(vpa.grid) .- 1.5 * upar[1,ir] / vthe[1,ir]
-            reversed_wpa_of_minus_vpa = vpa.scratch2 .= .-reverse(vpa.grid)
+            reversed_wpa_of_minus_vpa = @. vpa.scratch3 = -vpa.grid + 2.0 * sigma
+            #reversed_wpa_of_minus_vpa = vpa.scratch3 .= .-vpa.grid
+            reverse!(reversed_wpa_of_minus_vpa)
+
             # interpolate the pdf onto this grid
             #@views interpolate_to_grid_1d!(interpolated_pdf, wpa_values, pdf[:,1,1,ir], vpa, vpa_spectral)
             @views interpolate_to_grid_1d!(reversed_pdf, reversed_wpa_of_minus_vpa, pdf[:,1,1,ir], vpa, vpa_spectral) # Could make this more efficient by only interpolating to the points needed below, by taking an appropriate view of wpa_of_minus_vpa. Also, in the element containing vpa=0, this interpolation depends on the values that will be replaced by the reflected, interpolated values, which is not ideal (maybe this element should be treated specially first?).
             reverse!(reversed_pdf)
-            # fill in the vpa > 0 points of the pdf by mirroring the vpa < 0 points
-            #@. interpolated_pdf[ivpa_zero+1:end] = interpolated_pdf[ivpa_zero-1:-1:1]
-            # construct a grid of vpa/vthe = wpa + upar/vthe values corresponding to the wpa-symmetric grid
-            #@. wpa_values = vpa.grid #+ upar[1,ir] / vthe[1,ir]
-            # interpolate back onto the original wpa grid
-            #@views interpolate_to_grid_1d!(pdf[:,1,1,ir], wpa_values, interpolated_pdf, vpa, vpa_spectral)
-            # construct wpa * pdf
-            #@. vpa.scratch3 = pdf[:,1,1,ir] * vpa.grid
-            # calculate the first moment of the normalised pdf
-            #first_vspace_moment = 0.0
-            #first_vspace_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-            # the initial max vpa index is the largest one possible; this will be reduced if the first moment is positive
-            ivpa = 0
-            ivpa_max = vpa.n + 1
-            # adjust the critical (cutoff) speed until the first moment is as close to zero as possible
-            # if the first moment is positive, then the cutoff speed needs to be reduced
-            upar_over_vth = upar[1,ir] / vthe[1,ir]
-            #println("upar=", upar[1,ir], " vthe=", vthe[1,ir])
-            #println("$first_vspace_moment, u/vth=$upar_over_vth")
-            vpa_unnorm = @. vpa.scratch3 = vthe[1,ir] * vpa.grid + upar[1,ir]
-            upar_integral = 0.0
-            #while first_vspace_moment > upar_over_vth # > 0.0
-            #    # zero out the pdf at the current cutoff velocity
-            #    pdf[ivpa_max,1,1,ir] = 0.0
-            #    # update wpa * pdf
-            #    vpa.scratch3[ivpa_max] = 0.0
-            #    # calculate the updated first moment of the normalised pdf
-            #    first_vspace_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-            #    #println("truncating pdf $ivpa_max, $first_vspace_moment, u/vth=$upar_over_vth")
-            #    if first_vspace_moment > upar_over_vth #0.0
-            #        ivpa_max -= 1
-            #    end
-            #end
-            upar0 = upar[1,ir]
-            if upar0 >= 0.0
-                error("In lower-z boundary condition, upar0=$upar0 has the wrong sign.")
-            elseif isnan(upar0)
-                error("In lower-z boundary condition, upar0=$upar0.")
-            end
-            #println("before pdf left ", pdf[:,1,1,ir])
-            while upar_integral > upar0 && ivpa_max > 1
-                ivpa += 1
-                ivpa_max -= 1
-                # zero out the reversed pdf at the current cutoff velocity
-                #reversed_pdf[ivpa_max] = 0.0
-                # calculate the updated first moment of the normalised pdf
-                upar_integral += vpa_unnorm[ivpa] * pdf[ivpa,1,1,ir] * vpa.wgts[ivpa]
-                #println("left ", ivpa, " ", upar_integral, " ", upar0)
-            end
-            if ivpa ≥ vpa.n
-                error("In lower-z boundary condition, upar_integral failed to reach upar0")
-            elseif ivpa ≤ 1
-                error("In lower-z boundary condition, ivpa=$ivpa ≤ 1")
-            end
-            integral_excess = upar_integral - upar0
-            fraction_of_pdf = integral_excess / (vpa_unnorm[ivpa] * vpa.wgts[ivpa]) / pdf[ivpa,1,1,ir]
-            #println("fraction_of_pdf=", fraction_of_pdf)
 
-            # Define so that when fraction_of_pdf=1 (when all of the contribution to the
-            # integral from the point at ivpa is required to make upar_integral<upar0) the
-            # cut-off velocity is half way between ivpa and ivpa+1, while when
-            # fraction_of_pdf=0 (none of the contribution to the integral from the point at
-            # ivpa is required to make upar_integral<upar0) the cut-off is half way between
-            # ivpa-1 and ivpa.
-            vmax = 0.5 * (vpa_unnorm[ivpa] + vpa_unnorm[ivpa+1]) +
-                   0.5 * fraction_of_pdf*(vpa_unnorm[ivpa-1] - vpa_unnorm[ivpa+1])
+            ivpa_max = searchsortedlast(vpa_unnorm, vmax)
+            reversed_pdf[ivpa_max+1:end] .= 0.0
+            # vmax_fraction is the fraction of the distance between ivpa_max and
+            # ivpa_max+1 where vmax is.
+            vmax_fraction = (vmax - vpa_unnorm[ivpa_max]) / (vpa_unnorm[ivpa_max+1] - vpa_unnorm[ivpa_max])
+            reversed_pdf[ivpa_max] *= vmax_fraction
 
-            #println("vmax=$vmax, v-no-interp=", vpa_unnorm[ivpa])
-            #wmax = (-vmax - upar[1,ir]) / vthe[1,ir]
-            #println("wmax=$wmax, w-no-interp", (vpa_unnorm[ivpa] - upar0)/vthe[1,ir])
-            #@loop_vpa ivpa begin
-            #    reversed_pdf[ivpa] *= 0.5*(1.0 - tanh((vpa.grid[ivpa] - wmax) / cutoff_step_width))
-            #end
-            reversed_pdf[ivpa_max+1:end] .= 0
-            reversed_pdf[ivpa_max] *= fraction_of_pdf
-            #println("first_vspace_moment=$first_vspace_moment, ivpa_max=$ivpa_max")
-            #println("done first cutoff loop")
             # update the electrostatic potential at the boundary to be the value corresponding to the updated cutoff velocity
-            #phi[1,ir] = me_over_mi * vthe[1,ir]^2 * vpa.grid[ivpa_max]^2
             phi[1,ir] = me_over_mi * vmax^2
-            iv0 = findfirst(x -> x>0.0, vpa_unnorm)
-            if iv0 === nothing
-                error("All unnormalised vpa values at lower-z sheath entrance are negative. "
-                      * "Cannot apply electron boundary condition.")
-            end
-            pdf[iv0:end,1,1,ir] .= reversed_pdf[iv0:end]
-            #println("check reversed change ", reversed_pdf[iv0:end])
-            #println("reversed_pdf ", reversed_pdf)
-            #println("after pdf left ", pdf[:,1,1,ir])
-            # obtain the normalisation constants needed to ensure the zeroth, first and second moments
-            # of the modified pdf are 1, 0 and 1/2 respectively
-            # will need vpa / vthe = wpa + upar/vthe
-            @. vpa.scratch2 = vpa.grid + upar[1,ir] / vthe[1,ir]
-            # first need to calculate int dwpa pdf = zeroth_moment
-            zeroth_moment = integrate_over_vspace(pdf[:,1,1,ir], vpa.wgts)
-            # calculate int dwpa wpa^2 * pdf = wpa2_moment
-            @. vpa.scratch3 = pdf[:,1,1,ir] * vpa.grid^2
-            wpa2_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-            # calculate int dwpa vpa^2 * pdf = vpa2_moment
-            @. vpa.scratch3 = pdf[:,1,1,ir] * vpa.scratch2^2
-            vpa2_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-            # calculate int dwpa vpa^2 * wpa * pdf = vpa2_wpa_moment
-            @. vpa.scratch3 = vpa.grid * vpa.scratch2^2 * pdf[:,1,1,ir]
-            vpa2_wpa_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-            # calculate int dwpa wpa^2 * vpa^2 * pdf = vpa2_wpa2_moment
-            @. vpa.scratch3 = vpa.grid^2 * vpa.scratch2^2 * pdf[:,1,1,ir]
-            vpa2_wpa2_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-            
-            normalisation_constant_A = 0.0
-            normalisation_constant_B = 0.0
-            normalisation_constant_C = 0.0
-            if pdf_adjustment_option == "absvpa"
-                # calculate int dwpa |vpa| * pdf = absvpa_moment
-                @. vpa.scratch3 = pdf[:,1,1,ir] * abs(vpa.scratch2)
-                absvpa_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # calculate int dwpa |vpa| * wpa * pdf = absvpa_wpa_moment
-                @. vpa.scratch3 *= vpa.grid
-                absvpa_wpa_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # calculate int dwpa |vpa| * wpa^2 * pdf = absvpa_wpa2_moment
-                @. vpa.scratch3 *= vpa.grid
-                absvpa_wpa2_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # assuming pdf_updated = pdf * (normalisation_constant_A + |vpa| * normalisation_constant_B + vpa^2 * normalisation_constant_C)
-                # calculate the 'B' normalisation constant
-                normalisation_constant_B = (0.5 - wpa2_moment / zeroth_moment) / 
-                    (absvpa_wpa2_moment  - absvpa_wpa_moment * vpa2_wpa2_moment / vpa2_wpa_moment
-                    + wpa2_moment / zeroth_moment * (absvpa_wpa_moment * vpa2_moment / vpa2_wpa_moment - absvpa_moment))
-                # calculate the 'A' normalisation constant
-                normalisation_constant_A = (1 + normalisation_constant_B * 
-                    (vpa2_moment * absvpa_wpa_moment / vpa2_wpa_moment - absvpa_moment)) / zeroth_moment
-                # calculate the 'C' normalisation constant
-                normalisation_constant_C = -normalisation_constant_B * absvpa_wpa_moment / vpa2_wpa_moment
-                # updated pdf is old pdf * (normalisation_constant_A + |vpa| * normalisation_constant_B + vpa^2 * normalisation_constant_C)
-                @. pdf[:,1,1,ir] *= (normalisation_constant_A + abs(vpa.scratch2) * normalisation_constant_B 
-                                    + vpa.scratch2^2 * normalisation_constant_C)
-            elseif pdf_adjustment_option == "vpa4"
-                # calculate int dwpa vpa^4 * pdf = vpa4_moment
-                @. vpa.scratch3 = vpa.scratch2^4 * pdf[:,1,1,ir]
-                vpa4_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # calculate int dwpa vpa^4 * wpa * pf = vpa4_wpa_moment
-                @. vpa.scratch3 *= vpa.grid
-                vpa4_wpa_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # calculate int dwpa vpa^4 * wpa^2 * pdf = vpa4_wpa2_moment
-                @. vpa.scratch3 *= vpa.grid
-                vpa4_wpa2_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # assuming pdf_updated = pdf * (normalisation_constant_A + vpa^2 * normalisation_constant_B + vpa^4 * normalisation_constant_C)
-                normalisation_constant_B = (0.5 - wpa2_moment / zeroth_moment) /
-                     (vpa2_wpa2_moment - vpa2_wpa_moment * vpa4_wpa2_moment / vpa4_wpa_moment
-                     + wpa2_moment / zeroth_moment * (vpa2_wpa_moment * vpa4_moment / vpa4_wpa_moment - vpa2_moment))
-                normalisation_constant_A = (1 + normalisation_constant_B 
-                    * (vpa2_wpa_moment * vpa4_moment / vpa4_wpa_moment - vpa2_moment)) / zeroth_moment
-                normalisation_constant_C = -normalisation_constant_B * vpa2_wpa_moment / vpa4_wpa_moment
-                @. pdf[:,1,1,ir] *= (normalisation_constant_A + vpa.scratch2^2 * normalisation_constant_B 
-                                    + vpa.scratch2^4 * normalisation_constant_C)
-            elseif pdf_adjustment_option == "vpa4_gaussian"
-                afac = 0.1
-                bfac = 0.2
-                # calculate int dwpa vpa^2 * exp(-vpa^2) * pdf = vpa2_moment
-                @. vpa.scratch3 = pdf[:,1,1,ir] * vpa.scratch2^2 * exp(-afac * vpa.scratch2^2)
-                vpa2_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # calculate int dwpa vpa^2 * exp(-vpa^2) * wpa * pdf = vpa2_wpa_moment
-                @. vpa.scratch3 *= vpa.grid
-                vpa2_wpa_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # calculate int dwpa wpa^2 * vpa^2 * exp(-vpa^2) * pdf = vpa2_wpa2_moment
-                @. vpa.scratch3 *= vpa.grid
-                vpa2_wpa2_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # calculate int dwpa vpa^4 * exp(-vpa^2) * pdf = vpa4_moment
-                @. vpa.scratch3 = vpa.scratch2^4 * exp(-bfac * vpa.scratch2^2) * pdf[:,1,1,ir]
-                vpa4_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # calculate int dwpa vpa^4 * wpa * pf = vpa4_wpa_moment
-                @. vpa.scratch3 *= vpa.grid
-                vpa4_wpa_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # calculate int dwpa vpa^4 * wpa^2 * pdf = vpa4_wpa2_moment
-                @. vpa.scratch3 *= vpa.grid
-                vpa4_wpa2_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # assuming pdf_updated = pdf * (normalisation_constant_A + vpa^2 * normalisation_constant_B + exp(-vpa^2) * vpa^4 * normalisation_constant_C)
-                normalisation_constant_B = (0.5 - wpa2_moment / zeroth_moment) /
-                     (vpa2_wpa2_moment - vpa2_wpa_moment * vpa4_wpa2_moment / vpa4_wpa_moment
-                     + wpa2_moment / zeroth_moment * (vpa2_wpa_moment * vpa4_moment / vpa4_wpa_moment - vpa2_moment))
-                normalisation_constant_A = (1 + normalisation_constant_B 
-                    * (vpa2_wpa_moment * vpa4_moment / vpa4_wpa_moment - vpa2_moment)) / zeroth_moment
-                normalisation_constant_C = -normalisation_constant_B * vpa2_wpa_moment / vpa4_wpa_moment
-                #normalisation_constant_B = (0.5 - wpa2_moment / zeroth_moment) /
-                #                           (vpa2_wpa2_moment
-                #                            - wpa2_moment / zeroth_moment * vpa2_moment)
-                #normalisation_constant_A = (1 - normalisation_constant_B 
-                #                                * vpa2_moment) / zeroth_moment
-                #normalisation_constant_C = 0.0
-                @. pdf[:,1,1,ir] *= (normalisation_constant_A + exp(-afac * vpa.scratch2^2) * vpa.scratch2^2 * normalisation_constant_B 
-                                    + exp(-bfac * vpa.scratch2^2) * vpa.scratch2^4 * normalisation_constant_C)
-            elseif pdf_adjustment_option == "no1st_vpa2"
-                normalisation_constant_C = (1.0 - 0.5*zeroth_moment/wpa2_moment) /
-                                           (vpa2_moment - zeroth_moment*vpa2_wpa2_moment / wpa2_moment)
-                normalisation_constant_A = (0.5 - normalisation_constant_C*vpa2_wpa2_moment) / wpa2_moment
-                @. pdf[:,1,1,ir] *= (normalisation_constant_A + vpa.scratch2^2 * normalisation_constant_C)
-            else
-                println("pdf_adjustment_option not recognised")
-                stop()
-            end
+            pdf[sigma_ind:end,1,1,ir] .= reversed_pdf[sigma_ind:end]
 
-            moments.electron.constraints_A_coefficient[1,ir] = normalisation_constant_A
-            moments.electron.constraints_B_coefficient[1,ir] = normalisation_constant_B
-            moments.electron.constraints_C_coefficient[1,ir] = normalisation_constant_C
-
-            # smooth the pdf at the boundary
-            #for ivpa ∈ 2:ivpa_max-1
-            #    pdf[ivpa,1,1,ir] = (pdf[ivpa-1,1,1,ir] + pdf[ivpa+1,1,1,ir]) / 2.0
-            #end
+            moments.electron.constraints_A_coefficient[1,ir] = A
+            moments.electron.constraints_B_coefficient[1,ir] = 0.0
+            moments.electron.constraints_C_coefficient[1,ir] = C
         end
     end
 
@@ -911,308 +846,162 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
     # the electrostatic potential at the boundary, which determines the critical speed, is unknown a priori;
     # use the constraint that the first moment of the normalised pdf be zero to choose the potential.
     
-    # io_pdf_stages = open("pdf_stages.txt", "w")
-    # zeroth_vspace_moment = integrate_over_vspace(pdf[:,1,end,1], vpa.wgts)
-    # @. vpa.scratch3 = pdf[:,1,end,1] * vpa.grid
-    # first_vspace_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-    # @. vpa.scratch3 = pdf[:,1,end,1] * vpa.grid^2
-    # second_vspace_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-    # @loop_vpa ivpa begin
-    #     println(io_pdf_stages, "vpa: ", vpa.grid[ivpa], " pdf: ", pdf[ivpa,1,end,1], " zeroth_vspace_moment: ", zeroth_vspace_moment, 
-    #         " first_vspace_moment: ", first_vspace_moment, " second_vspace_moment: ", second_vspace_moment, " stage: ", 0)
-    # end
-    # println(io_pdf_stages,"")
-
     if z.irank == z.nrank - 1
+        if z.bc != "wall"
+            error("Options other than wall bc not implemented yet for electrons")
+        end
         @loop_r ir begin
-            # construct a grid of wpa = (vpa - upar)/vthe values corresponding to a vpa-symmetric grid
-            #@. wpa_values = vpa.grid # - upar[end,ir] / vthe[end,ir]
-            # Need to reverse vpa.grid because the grid passed as the second argument of
-            # interpolate_to_grid_1d!() needs to be sorted in increasing order.
+            # Impose sheath-edge boundary condition, while also imposing moment
+            # constraints and determining the cut-off velocity (and therefore the sheath
+            # potential).
 
+            # Delete the upar contribution here if ignoring the 'upar shift'
+            vpa_unnorm = @. vpa.scratch2 = vthe[end,ir] * vpa.grid + upar[end,ir]
+
+            u_over_vt = upar[end,ir] / vthe[end,ir]
+
+            # Initial guess for cut-off velocity is result from previous RK stage (which
+            # might be the previous timestep if this is the first stage). Recalculate this
+            # value from phi.
+            vmax = sqrt(phi[end,ir] / me_over_mi)
+
+            # -vmax is between vmax_ind and vmax_ind+1
+            vmax_ind = searchsortedlast(vpa_unnorm, vmax)
+
+            # sigma is the location we use for w_∥(v_∥=0) - set to 0 to ignore the 'upar
+            # shift'
+            sigma = -u_over_vt
+
+            # sigma is between sigma_ind and sigma_ind+1
+            sigma_ind = searchsortedlast(vpa_unnorm, 0.0)
+
+            # sigma_fraction is the fraction of the distance between sigma_ind+1 and
+            # sigma_ind where sigma is.
+            sigma_fraction = (sigma - vpa_unnorm[sigma_ind+1]) / (vpa_unnorm[sigma_ind] - vpa_unnorm[sigma_ind+1])
+
+            # Per-grid-point contributions to moment integrals
+            # Note that we need to include the normalisation factor of 1/sqrt(pi) that
+            # would be factored in by integrate_over_vspace(). This will need to
+            # change/adapt when we support 2V as well as 1V.
+            density_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,end,ir] * vpa.wgts / sqrt(pi)
+            flow_integral_pieces = @views @. vpa.scratch4 = density_integral_pieces * vpa_unnorm / vthe[end,ir]
+            energy_integral_pieces = @views @. vpa.scratch5 = flow_integral_pieces * vpa_unnorm / vthe[end,ir]
+            cubic_integral_pieces = @views @. vpa.scratch6 = energy_integral_pieces * vpa_unnorm / vthe[end,ir]
+            quartic_integral_pieces = @views @. vpa.scratch7 = cubic_integral_pieces * vpa_unnorm / vthe[end,ir]
+
+            function get_integrals_and_derivatives(vmax, vmax_ind)
+                # vmax_fraction is the fraction of the distance between vmax_ind and
+                # vmax_ind+1 where vmax is.
+                vmax_fraction = (vmax - vpa_unnorm[vmax_ind+1]) / (vpa_unnorm[vmax_ind] - vpa_unnorm[vmax_ind+1])
+
+                function get_for_one_moment(integral_pieces, skip_part2=false)
+                    # Integral contribution from the cell containing vmax
+                    integral_vmax_cell = (0.5 * integral_pieces[vmax_ind] + 0.5 * integral_pieces[vmax_ind+1])
+
+                    part1 = sum(integral_pieces[vmax_ind+2:end])
+                    part1 += 0.5 * integral_pieces[vmax_ind+1] + vmax_fraction * integral_vmax_cell
+                    # part1prime is d(part1)/d(vmax)
+                    part1prime = integral_vmax_cell / (vpa_unnorm[vmax_ind] - vpa_unnorm[vmax_ind+1])
+
+                    if skip_part2
+                        part2 = nothing
+                        part2prime = nothing
+                    else
+                        # Integral contribution from the cell containing sigma
+                        integral_sigma_cell = (0.5 * integral_pieces[sigma_ind] + 0.5 * integral_pieces[sigma_ind+1])
+
+                        part2 = sum(integral_pieces[sigma_ind+2:vmax_ind-1])
+                        part2 += (1.0 - vmax_fraction) * integral_vmax_cell + 0.5 * integral_pieces[vmax_ind] + 0.5 * integral_pieces[sigma_ind+1] + sigma_fraction * integral_sigma_cell
+                        # part2prime is d(part2)/d(vmax)
+                        part2prime = -part1prime
+                    end
+
+                    return part1, part1prime, part2, part2prime
+                end
+                a1, a1prime, a2, a2prime = get_for_one_moment(density_integral_pieces)
+                b1, b1prime, _, _ = get_for_one_moment(flow_integral_pieces, true)
+                c1, c1prime, c2, c2prime = get_for_one_moment(energy_integral_pieces)
+                d1, d1prime, _, _ = get_for_one_moment(cubic_integral_pieces, true)
+                e1, e1prime, e2, e2prime = get_for_one_moment(quartic_integral_pieces)
+
+                return get_residual_and_coefficients_for_bc(a1, a1prime, a2, a2prime, b1,
+                                                            b1prime, c1, c1prime, c2,
+                                                            c2prime, d1, d1prime, e1,
+                                                            e1prime, e2, e2prime,
+                                                            u_over_vt)
+            end
+
+            counter = 1
+            # Always do at least one update of vmax
+            epsilon, epsilonprime, A, C = get_integrals_and_derivatives(vmax, vmax_ind)
+            while true
+                # Newton iteration update. Note that primes denote derivatives with
+                # respect to vmax
+                delta_v = - epsilon / epsilonprime
+
+                # Prevent the step size from getting too big, to make Newton iteration
+                # more robust.
+                delta_v = min(delta_v, 0.1 * vthe[1,ir])
+                delta_v = max(delta_v, -0.1 * vthe[1,ir])
+
+                vmax = vmax + delta_v
+                vmax_ind = searchsortedlast(vpa_unnorm, vmax)
+
+                epsilon, epsilonprime, A, C = get_integrals_and_derivatives(vmax, vmax_ind)
+
+                if abs(epsilon) < newton_tol * abs(u_over_vt)
+                    break
+                end
+
+                if counter ≥ newton_max_its
+                    error("Newton iteration for electron upper-z boundary failed to "
+                          * "converge after $counter iterations")
+                end
+                counter += 1
+            end
+
+            # Adjust pdf so that after reflecting and cutting off tail, it will obey the
+            # constraints.
+            @. pdf[:,1,end,ir] *= A + C * vpa_unnorm^2 / vthe[end,ir]^2
+
+            # Want to construct the w-grid corresponding to -vpa.
+            #   wpa(vpa) = (vpa - upar)/vth
+            #   ⇒ vpa = vth*wpa(vpa) + upar
+            #   wpa(-vpa) = (-vpa - upar)/vth
+            #             = (-(vth*wpa(vpa) + upar) - upar)/vth
+            #             = (-vth*wpa - 2*upar)/vth
+            #             = -wpa - 2*upar/vth
             # [Note that `vpa.grid` is slightly mis-named here - it contains the values of
             #  wpa(+vpa) as we are using a 'moment kinetic' approach.]
             # Need to reverse vpa.grid because the grid passed as the second argument of
             # interpolate_to_grid_1d!() needs to be sorted in increasing order.
-            #reversed_wpa_of_minus_vpa = vpa.scratch2 .= .-reverse(vpa.grid) .- 2.0 * upar[end,ir] / vthe[end,ir]
-            #reversed_wpa_of_minus_vpa = vpa.scratch2 .= .-reverse(vpa.grid) .- 1.5 * upar[end,ir] / vthe[end,ir]
-            reversed_wpa_of_minus_vpa = vpa.scratch2 .= .-reverse(vpa.grid)
+            reversed_wpa_of_minus_vpa = @. vpa.scratch3 = -vpa.grid + 2.0 * sigma
+            #reversed_wpa_of_minus_vpa = vpa.scratch3 .= .-vpa.grid
+            reverse!(reversed_wpa_of_minus_vpa)
+
             # interpolate the pdf onto this grid
-            #@views interpolate_to_grid_1d!(interpolated_pdf, wpa_values, pdf[:,1,end,ir], vpa, vpa_spectral)
+            #@views interpolate_to_grid_1d!(interpolated_pdf, wpa_values, pdf[:,1,1,ir], vpa, vpa_spectral)
             @views interpolate_to_grid_1d!(reversed_pdf, reversed_wpa_of_minus_vpa, pdf[:,1,end,ir], vpa, vpa_spectral) # Could make this more efficient by only interpolating to the points needed below, by taking an appropriate view of wpa_of_minus_vpa. Also, in the element containing vpa=0, this interpolation depends on the values that will be replaced by the reflected, interpolated values, which is not ideal (maybe this element should be treated specially first?).
             reverse!(reversed_pdf)
-            # fill in the vpa < 0 points of the pdf by mirroring the vpa > 0 points
-            #@. interpolated_pdf[ivpa_zero-1:-1:1] = interpolated_pdf[ivpa_zero+1:end]
-            # construct a grid of vpa/vthe = wpa + upar/vthe values corresponding to the wpa-symmetric grid
-            #@. wpa_values = vpa.grid #+ upar[end,ir] / vthe[end,ir]
-            # interpolate back onto the original wpa grid
-            #@views interpolate_to_grid_1d!(pdf[:,1,end,ir], wpa_values, interpolated_pdf, vpa, vpa_spectral)
 
-            # zeroth_vspace_moment = integrate_over_vspace(pdf[:,1,end,1], vpa.wgts)
-            # @. vpa.scratch3 = pdf[:,1,end,1] * vpa.grid
-            # first_vspace_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-            # @. vpa.scratch3 *= vpa.grid
-            # second_vspace_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-            # @loop_vpa ivpa begin
-            #     println(io_pdf_stages, "vpa: ", vpa.grid[ivpa], " pdf: ", pdf[ivpa,1,end,ir], " zeroth_vspace_moment: ", zeroth_vspace_moment, 
-            #         " first_vspace_moment: ", first_vspace_moment, " second_vspace_moment: ", second_vspace_moment, " stage: ", 1)
-            # end
-            # println(io_pdf_stages,"")
-
-            # construct wpa * pdf
-            #@. vpa.scratch3 = pdf[:,1,end,ir] * vpa.grid
-            # calculate the first moment of the normalised pdf
-            #first_vspace_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-            # the initial min vpa index is the smallest one possible; this will be increased if the first moment is negative
-            ivpa = vpa.n+1
-            ivpa_min = 0
-            # adjust the critical (cutoff) speed until the first moment is as close to zero as possible
-            # if the first moment is negative, then the magnitude of the cutoff speed needs to be reduced
-            upar_over_vth = upar[end,ir] / vthe[end,ir]
-            #println("$first_vspace_moment, u/vth=$upar_over_vth")
-            vpa_unnorm = @. vpa.scratch3 = vthe[end,ir] * vpa.grid + upar[end,ir]
-            upar_integral = 0.0
-            #while first_vspace_moment < upar_over_vth # < 0.0
-            #    # zero out the pdf at the current cutoff velocity
-            #    pdf[ivpa_min,1,end,ir] = 0.0
-            #    # update wpa * pdf
-            #    vpa.scratch3[ivpa_min] = 0.0
-            #    # calculate the updated first moment of the normalised pdf
-            #    first_vspace_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-            #    if first_vspace_moment < upar_over_vth
-            #        ivpa_min += 1
-            #    end
-            #end
-            upar_end = upar[end,ir]
-            if upar_end <= 0.0
-                error("In upper-z boundary condition, upar_end=$upar_end has the wrong sign.")
-            elseif isnan(upar_end)
-                error("In upper-z boundary condition, upar_end=$upar_end.")
-            end
-            #println("before pdf ", pdf[:,1,end,ir])
-            while upar_integral < upar_end && ivpa > 1
-                ivpa -= 1
-                ivpa_min += 1
-                # zero out the reversed pdf at the current cutoff velocity
-                #reversed_pdf[ivpa_min] = 0.0
-                # calculate the updated first moment of the normalised pdf
-                upar_integral += vpa_unnorm[ivpa] * pdf[ivpa,1,end,ir] * vpa.wgts[ivpa]
-                #println("right ", ivpa, " ", upar_integral, " ", upar_end)
-            end
-            if ivpa ≤ 1
-                error("In upper-z boundary condition, upar_integral failed to reach upar_end")
-            elseif ivpa ≥ vpa.n
-                error("In upper-z boundary condition, ivpa=$ivpa ≥ vpa.n=$(vpa.n)")
-            end
-            integral_excess = upar_integral - upar_end
-            fraction_of_pdf = integral_excess / (vpa_unnorm[ivpa] * vpa.wgts[ivpa]) / pdf[ivpa,1,end,ir]
-            #println("B fraction_of_pdf=", fraction_of_pdf)
-
-            # Define so that when fraction_of_pdf=1 (when all of the contribution to the
-            # integral from the point at ivpa is required to make upar_integral>upar_end) the
-            # cut-off velocity is half way between ivpa-1 and ivpa, while when
-            # fraction_of_pdf=0 (none of the contribution to the integral from the point at
-            # ivpa is required to make upar_integral>upar_end) the cut-off is half way between
-            # ivpa and ivpa+1.
-            vmin = 0.5 * (vpa_unnorm[ivpa-1] + vpa_unnorm[ivpa]) +
-                   0.5 * fraction_of_pdf*(vpa_unnorm[ivpa+1] - vpa_unnorm[ivpa-1])
-
-            #println("vmin=$vmin, v-no-interp=", vpa_unnorm[ivpa])
-            #wmin = (-vmin - upar[end,ir]) / vthe[end,ir]
-            #@loop_vpa ivpa begin
-            #    reversed_pdf[ivpa] *= 0.5*(1.0 + tanh((vpa.grid[ivpa] - wmin) / cutoff_step_width))
-            #end
-            reversed_pdf[1:ivpa_min-1] .= 0
-            reversed_pdf[ivpa_min] *= fraction_of_pdf
-            #println("done second cutoff loop")
-
-            # zeroth_vspace_moment = integrate_over_vspace(pdf[:,1,end,1], vpa.wgts)
-            # @. vpa.scratch3 = pdf[:,1,end,1] * vpa.grid
-            # first_vspace_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-            # @. vpa.scratch3 *= vpa.grid
-            # second_vspace_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-            # @loop_vpa ivpa begin
-            #     println(io_pdf_stages, "vpa: ", vpa.grid[ivpa], " pdf: ", pdf[ivpa,1,end,ir], " zeroth_vspace_moment: ", zeroth_vspace_moment, 
-            #         " first_vspace_moment: ", first_vspace_moment, " second_vspace_moment: ", second_vspace_moment, " stage: ", 2)
-            # end
-            # println(io_pdf_stages,"")
+            ivpa_min = searchsortedfirst(vpa_unnorm, -vmax)
+            reversed_pdf[1:ivpa_min-1] .= 0.0
+            # vmax_fraction is the fraction of the distance between ivpa_min and
+            # ivpa_min-1 where -vmax is.
+            vmax_fraction = (-vmax - vpa_unnorm[ivpa_min]) / (vpa_unnorm[ivpa_min-1] - vpa_unnorm[ivpa_min])
+            reversed_pdf[ivpa_min] *= vmax_fraction
 
             # update the electrostatic potential at the boundary to be the value corresponding to the updated cutoff velocity
-            #phi[end,ir] = me_over_mi * vthe[end,ir]^2 * vpa.grid[ivpa_min]^2
-            phi[end,ir] = me_over_mi * vmin^2
-            iv0 = findlast(x -> x<0.0, vpa_unnorm)
-            if iv0 === nothing
-                error("All unnormalised vpa values at upper-z sheath entrance are positive. "
-                      * "Cannot apply electron boundary condition.")
-            end
-            pdf[1:iv0,1,end,ir] .= reversed_pdf[1:iv0]
-            #println("after pdf ", pdf[:,1,end,ir])
-            # obtain the normalisation constants needed to ensure the zeroth, first and second moments
-            # of the modified pdf are 1, 0 and 1/2 respectively
-            # will need vpa / vthe = wpa + upar/vthe
-            @. vpa.scratch2 = vpa.grid + upar[end,ir] / vthe[end,ir]
-            # first need to calculate int dwpa pdf = zeroth_moment
-            zeroth_moment = integrate_over_vspace(pdf[:,1,end,ir], vpa.wgts)
-            # calculate int dwpa wpa^2 * pdf = wpa2_moment
-            @. vpa.scratch3 = pdf[:,1,end,ir] * vpa.grid^2
-            wpa2_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-            # calculate int dwpa vpa^2 * pdf = vpa2_moment
-            @. vpa.scratch3 = pdf[:,1,end,ir] * vpa.scratch2^2
-            vpa2_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-            # calculate int dwpa vpa^2 * wpa * pdf = vpa2_wpa_moment
-            @. vpa.scratch3 = vpa.grid * vpa.scratch2^2 * pdf[:,1,end,ir]
-            vpa2_wpa_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-            # calculate int dwpa wpa^2 * vpa^2 * pdf = vpa2_wpa2_moment
-            @. vpa.scratch3 = vpa.grid^2 * vpa.scratch2^2 * pdf[:,1,end,ir]
-            vpa2_wpa2_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-            
-            normalisation_constant_A = 0.0
-            normalisation_constant_B = 0.0
-            normalisation_constant_C = 0.0
-            if pdf_adjustment_option == "absvpa"
-                # calculate int dwpa |vpa| * pdf = absvpa_moment
-                @. vpa.scratch3 = pdf[:,1,end,ir] * abs(vpa.scratch2)
-                absvpa_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # calculate int dwpa |vpa| * wpa * pdf = absvpa_wpa_moment
-                @. vpa.scratch3 *= vpa.grid
-                absvpa_wpa_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # calculate int dwpa |vpa| * wpa^2 * pdf = absvpa_wpa2_moment
-                @. vpa.scratch3 *= vpa.grid
-                absvpa_wpa2_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # assuming pdf_updated = pdf * (normalisation_constant_A + |vpa| * normalisation_constant_B + vpa^2 * normalisation_constant_C)
-                # calculate the 'B' normalisation constant
-                normalisation_constant_B = (0.5 - wpa2_moment / zeroth_moment) / 
-                    (absvpa_wpa2_moment  - absvpa_wpa_moment * vpa2_wpa2_moment / vpa2_wpa_moment
-                    + wpa2_moment / zeroth_moment * (absvpa_wpa_moment * vpa2_moment / vpa2_wpa_moment - absvpa_moment))
-                # calculate the 'A' normalisation constant
-                normalisation_constant_A = (1 + normalisation_constant_B * 
-                    (vpa2_moment * absvpa_wpa_moment / vpa2_wpa_moment - absvpa_moment)) / zeroth_moment
-                # calculate the 'C' normalisation constant
-                normalisation_constant_C = -normalisation_constant_B * absvpa_wpa_moment / vpa2_wpa_moment
-                # updated pdf is old pdf * (normalisation_constant_A + |vpa| * normalisation_constant_B + vpa^2 * normalisation_constant_C)
-                @. pdf[:,1,end,ir] *= (normalisation_constant_A + abs(vpa.scratch2) * normalisation_constant_B 
-                                    + vpa.scratch2^2 * normalisation_constant_C)
-            elseif pdf_adjustment_option == "vpa4"
-                # calculate int dwpa vpa^4 * pdf = vpa4_moment
-                @. vpa.scratch3 = vpa.scratch2^4 * pdf[:,1,end,ir]
-                vpa4_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # calculate int dwpa vpa^4 * wpa * pf = vpa4_wpa_moment
-                @. vpa.scratch3 *= vpa.grid
-                vpa4_wpa_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # calculate int dwpa vpa^4 * wpa^2 * pdf = vpa4_wpa2_moment
-                @. vpa.scratch3 *= vpa.grid
-                vpa4_wpa2_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # assuming pdf_updated = pdf * (normalisation_constant_A + vpa^2 * normalisation_constant_B + vpa^4 * normalisation_constant_C)
-                normalisation_constant_B = (0.5 - wpa2_moment / zeroth_moment) /
-                     (vpa2_wpa2_moment - vpa2_wpa_moment * vpa4_wpa2_moment / vpa4_wpa_moment
-                     + wpa2_moment / zeroth_moment * (vpa2_wpa_moment * vpa4_moment / vpa4_wpa_moment - vpa2_moment))
-                normalisation_constant_A = (1 + normalisation_constant_B 
-                    * (vpa2_wpa_moment * vpa4_moment / vpa4_wpa_moment - vpa2_moment)) / zeroth_moment
-                normalisation_constant_C = -normalisation_constant_B * vpa2_wpa_moment / vpa4_wpa_moment
-                @. pdf[:,1,end,ir] *= (normalisation_constant_A + vpa.scratch2^2 * normalisation_constant_B 
-                                    + vpa.scratch2^4 * normalisation_constant_C)
-            elseif pdf_adjustment_option == "vpa4_gaussian"
-                afac = 0.1
-                bfac = 0.2
-                # calculate int dwpa vpa^2 * exp(-vpa^2) * pdf = vpa2_moment
-                @. vpa.scratch3 = pdf[:,1,end,ir] * vpa.scratch2^2 * exp(-afac * vpa.scratch2^2)
-                vpa2_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # calculate int dwpa vpa^2 * exp(-vpa^2) * wpa * pdf = vpa2_wpa_moment
-                @. vpa.scratch3 *= vpa.grid
-                vpa2_wpa_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # calculate int dwpa wpa^2 * vpa^2 * exp(-vpa^2) * pdf = vpa2_wpa2_moment
-                @. vpa.scratch3 *= vpa.grid
-                vpa2_wpa2_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # calculate int dwpa vpa^4 * exp(-vpa^2) * pdf = vpa4_moment
-                @. vpa.scratch3 = vpa.scratch2^4 * exp(-bfac * vpa.scratch2^2) * pdf[:,1,end,ir]
-                vpa4_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # calculate int dwpa vpa^4 * wpa * pf = vpa4_wpa_moment
-                @. vpa.scratch3 *= vpa.grid
-                vpa4_wpa_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # calculate int dwpa vpa^4 * wpa^2 * pdf = vpa4_wpa2_moment
-                @. vpa.scratch3 *= vpa.grid
-                vpa4_wpa2_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-                # assuming pdf_updated = pdf * (normalisation_constant_A + vpa^2 * normalisation_constant_B + exp(-vpa^2) * vpa^4 * normalisation_constant_C)
-                normalisation_constant_B = (0.5 - wpa2_moment / zeroth_moment) /
-                     (vpa2_wpa2_moment - vpa2_wpa_moment * vpa4_wpa2_moment / vpa4_wpa_moment
-                     + wpa2_moment / zeroth_moment * (vpa2_wpa_moment * vpa4_moment / vpa4_wpa_moment - vpa2_moment))
-                normalisation_constant_A = (1 + normalisation_constant_B 
-                    * (vpa2_wpa_moment * vpa4_moment / vpa4_wpa_moment - vpa2_moment)) / zeroth_moment
-                normalisation_constant_C = -normalisation_constant_B * vpa2_wpa_moment / vpa4_wpa_moment
-                #normalisation_constant_B = (0.5 - wpa2_moment / zeroth_moment) /
-                #                           (vpa2_wpa2_moment
-                #                            - wpa2_moment / zeroth_moment * vpa2_moment)
-                #normalisation_constant_A = (1 - normalisation_constant_B 
-                #                                * vpa2_moment) / zeroth_moment
-                #normalisation_constant_C = 0.0
-                @. pdf[:,1,end,ir] *= (normalisation_constant_A + exp(-afac * vpa.scratch2^2) * vpa.scratch2^2 * normalisation_constant_B 
-                                    + exp(-bfac * vpa.scratch2^2) * vpa.scratch2^4 * normalisation_constant_C)
-            elseif pdf_adjustment_option == "no1st_vpa2"
-                normalisation_constant_C = (1.0 - 0.5*zeroth_moment/wpa2_moment) /
-                                           (vpa2_moment - zeroth_moment*vpa2_wpa2_moment / wpa2_moment)
-                normalisation_constant_A = (0.5 - normalisation_constant_C*vpa2_wpa2_moment) / wpa2_moment
-                @. pdf[:,1,end,ir] *= (normalisation_constant_A + vpa.scratch2^2 * normalisation_constant_C)
-            else
-                println("pdf_adjustment_option not recognised")
-                stop()
-            end
+            phi[end,ir] = me_over_mi * vmax^2
+            pdf[1:sigma_ind,1,end,ir] .= reversed_pdf[1:sigma_ind]
 
-            moments.electron.constraints_A_coefficient[end,ir] = normalisation_constant_A
-            moments.electron.constraints_B_coefficient[end,ir] = normalisation_constant_B
-            moments.electron.constraints_C_coefficient[end,ir] = normalisation_constant_C
-
-            # smooth the pdf at the boundary
-            #for ivpa ∈ ivpa_min+1:vpa.n-1
-            #    pdf[ivpa,1,end,ir] = (pdf[ivpa-1,1,end,ir] + pdf[ivpa+1,1,end,ir]) / 2.0
-            #end
-
-            # zeroth_vspace_moment = integrate_over_vspace(pdf[:,1,end,1], vpa.wgts)
-            # @. vpa.scratch3 = pdf[:,1,end,1] * vpa.grid
-            # first_vspace_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-            # @. vpa.scratch3 *= vpa.grid
-            # second_vspace_moment = integrate_over_vspace(vpa.scratch3, vpa.wgts)
-            # @loop_vpa ivpa begin
-            #     println(io_pdf_stages, "vpa: ", vpa.grid[ivpa], " pdf: ", pdf[ivpa,1,end,ir], " zeroth_vspace_moment: ", zeroth_vspace_moment, 
-            #         " first_vspace_moment: ", first_vspace_moment, " second_vspace_moment: ", second_vspace_moment, " stage: ", 3)
-            # end
-            # println(io_pdf_stages,"")
+            moments.electron.constraints_A_coefficient[end,ir] = A
+            moments.electron.constraints_B_coefficient[end,ir] = 0.0
+            moments.electron.constraints_C_coefficient[end,ir] = C
         end
     end
 
-    # # initialise the electron pdf for positive vpa to be the mirror reflection about vpa = 0
-    # ivpa_zero = (vpa.n+1)÷2
-    # ivpa_max = vpa.n
-    # @. pdf[ivpa_zero+1:end,:,1,:] = pdf[ivpa_zero-1:-1:1,:,1,:]
-    # # calculate the zeroth v-space moment of the normalised electron pdf:
-    # # if unity to within specified tolerance, then the boundary condition is satisfied;
-    # # otherwise, modify the cutoff velocity and repeat
-    # @loop_r ir begin
-    #     unity = 2.0
-    #     while unity > 1.0
-    #         unity = integrate_over_vspace(pdf[:,1,1,ir], vpa.wgts)
-    #         # if unity > 1.0, then the cutoff velocity is too high so reduce it
-    #         if unity > 1.0
-    #             pdf[ivpa_max,1,1,ir] = 0.0
-    #             ivpa_max -= 1
-    #         end
-    #     end
-    #     phi[1,ir] = vthe[1,ir]^2 * vpa.grid[ivpa_max]^2
-    # end
-    # # repeat the above procedure for the boundary at z_max
-    # @. pdf[ivpa_zero-1:-1:1,:,end,:] = pdf[ivpa_zero+1:end,:,end,:]
-    # ivpa_max = 1
-    # @loop_r ir begin
-    #     unity = 2.0
-    #     while unity > 1.0
-    #         unity = integrate_over_vspace(pdf[:,1,end,ir], vpa.wgts)
-    #         if unity > 1.0
-    #             pdf[ivpa_max,1,end,ir] = 0.0
-    #             ivpa_max += 1
-    #         end
-    #         phi[end,ir] = vthe[end,ir]^2 * vpa.grid[ivpa_max]^2
-    #     end
-    #     #println("unity: ", unity)
-    # end
+    return nothing
 end
 
 """

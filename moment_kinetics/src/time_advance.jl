@@ -651,6 +651,14 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     # Now that `t_params` and `scratch` have been created, initialize electrons if
     # necessary
     if composition.electron_physics != restart_electron_physics
+        begin_serial_region()
+        @serial_region begin
+            # zero-initialise phi here, because the boundary points of phi are used as an
+            # effective 'cache' for the sheath-boundary cutoff speed for the electrons, so
+            # needs to be initialised to something, but phi cannot be calculated properly
+            # until after the electrons are initialised.
+            fields.phi .= 0.0
+        end
         initialize_electrons!(pdf, moments, fields, geometry, composition, r, z,
                               vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
                               vperp_spectral, vpa_spectral, collisions, gyroavs,
