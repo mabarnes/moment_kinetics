@@ -232,7 +232,6 @@ function neutral_ionization_collisions_3V!(f_neutral_out, fvec_in, composition, 
     # neutral "ionization" (depopulation) rate =   -  f_n  n_e R_ion
     #NB: used quasineutrality to replace electron density n_e with ion density
     #NEEDS GENERALISATION TO n_ion_species > 1 (missing species charge: Sum_i Z_i n_i = n_e)
-    # for ion species we need gyroaveraged neutral pdf, which is not stored in fvec (scratch[istage])
     begin_sn_r_z_vzeta_vr_vz_region()
     @loop_sn isn begin
         for is ∈ 1:composition.n_ion_species

@@ -2524,9 +2524,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
                                           z, r, vz_spectral, moments, composition,
                                           collisions, dt)
     elseif advance.neutral_ionization_collisions
-        neutral_ionization_collisions_3V!(fvec_out.pdf_neutral, pdf.neutral.buffer, fvec_in,
-                                          composition, vz, vr, vzeta, vpa, vperp, z, r,
-                                          collisions, dt)
+        neutral_ionization_collisions_3V!(fvec_out.pdf_neutral, fvec_in, composition, vz,
+                                          vr, vzeta, vpa, vperp, z, r, collisions, dt)
     end
     if advance.ionization_source
         constant_ionization_source!(fvec_out.pdf, fvec_in, vpa, vperp, z, r, moments,
