@@ -257,9 +257,10 @@ end
 function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z,
                                vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
                                vperp_spectral, vpa_spectral, collisions, gyroavs,
-                               external_source_settings, scratch_dummy, scratch, t_params,
-                               t_input, num_diss_params, advection_structs, io_input,
-                               input_dict; restart_electron_physics)
+                               external_source_settings, scratch_dummy, scratch,
+                               scratch_electron, t_params, t_input, num_diss_params,
+                               advection_structs, io_input, input_dict;
+                               restart_electron_physics)
     
     moments.electron.dens_updated[] = false
     # initialise the electron density profile
@@ -436,12 +437,15 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
         scratch[1].electron_pperp .= 0.0 #moments.electron.pperp
         scratch[1].electron_temp .= moments.electron.temp
     end
-    # get the initial electrostatic potential and parallel electric field
-    update_phi!(fields, scratch[1], vperp, z, r, composition, collisions, moments,
-                z_spectral, r_spectral, scratch_dummy, gyroavs)
+    if scratch_electron !== nothing
+        begin_serial_region()
+        @serial_region begin
+            scratch_electron[1].electron_ppar .= moments.electron.ppar
+        end
+    end
 
     # initialize the electron pdf that satisfies the electron kinetic equation
-    initialize_electron_pdf!(scratch, pdf, moments, fields.phi, r, z, vpa, vperp,
+    initialize_electron_pdf!(scratch_electron, pdf, moments, fields.phi, r, z, vpa, vperp,
                              vzeta, vr, vz, z_spectral, vperp_spectral, vpa_spectral,
                              advection_structs.electron_z_advect,
                              advection_structs.electron_vpa_advect, scratch_dummy,

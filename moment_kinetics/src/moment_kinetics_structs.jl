@@ -9,8 +9,7 @@ using ..type_definitions: mk_float
 
 """
 """
-struct scratch_pdf{n_distribution_ion, n_moment, 
-                   n_distribution_electron, n_moment_electron, 
+struct scratch_pdf{n_distribution_ion, n_moment, n_moment_electron,
                    n_distribution_neutral, n_moment_neutral}
     # ions
     pdf::MPISharedArray{mk_float, n_distribution_ion}
@@ -20,7 +19,6 @@ struct scratch_pdf{n_distribution_ion, n_moment,
     pperp::MPISharedArray{mk_float, n_moment}
     temp_z_s::MPISharedArray{mk_float, n_moment}
     # electrons
-    pdf_electron::MPISharedArray{mk_float, n_distribution_electron}
     electron_density::MPISharedArray{mk_float, n_moment_electron}
     electron_upar::MPISharedArray{mk_float, n_moment_electron}
     electron_ppar::MPISharedArray{mk_float, n_moment_electron}
@@ -31,6 +29,14 @@ struct scratch_pdf{n_distribution_ion, n_moment,
     density_neutral::MPISharedArray{mk_float, n_moment_neutral}
     uz_neutral::MPISharedArray{mk_float, n_moment_neutral}
     pz_neutral::MPISharedArray{mk_float, n_moment_neutral}
+end
+
+"""
+"""
+struct scratch_electron_pdf{n_distribution_electron, n_moment_electron}
+    # electrons
+    pdf_electron::MPISharedArray{mk_float, n_distribution_electron}
+    electron_ppar::MPISharedArray{mk_float, n_moment_electron}
 end
 
 """
