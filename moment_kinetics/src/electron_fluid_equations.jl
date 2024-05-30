@@ -113,7 +113,8 @@ function calculate_electron_upar_from_charge_conservation!(upar_e, updated, dens
     return nothing
 end
 
-function calculate_electron_moments!(scratch, moments, composition, collisions, r, z, vpa)
+function calculate_electron_moments!(scratch, pdf, moments, composition, collisions, r, z,
+                                     vpa)
     calculate_electron_density!(scratch.electron_density, moments.electron.dens_updated,
                                 scratch.density)
     calculate_electron_upar_from_charge_conservation!(
@@ -130,10 +131,9 @@ function calculate_electron_moments!(scratch, moments, composition, collisions, 
     end
     update_electron_vth_temperature!(moments, scratch.electron_ppar,
                                      scratch.electron_density, composition)
-    calculate_electron_qpar!(moments.electron, scratch.pdf_electron,
-                             scratch.electron_ppar, scratch.electron_upar, scratch.upar,
-                             collisions.nu_ei, composition.me_over_mi,
-                             composition.electron_physics, vpa)
+    calculate_electron_qpar!(moments.electron, pdf.electron, scratch.electron_ppar,
+                             scratch.electron_upar, scratch.upar, collisions.nu_ei,
+                             composition.me_over_mi, composition.electron_physics, vpa)
     if composition.electron_physics == braginskii_fluid
         electron_fluid_qpar_boundary_condition!(moments.electron, z)
     end

@@ -2095,10 +2095,10 @@ Apply boundary conditions and moment constraints to updated pdfs and calculate d
 moments and moment derivatives
 """
 function apply_all_bcs_constraints_update_moments!(
-        this_scratch, moments, fields, boundary_distributions, scratch_electron, vz, vr,
-        vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
-        collisions, geometry, gyroavs, num_diss_params, advance, scratch_dummy,
-        diagnostic_moments; pdf_bc_constraints=true)
+        this_scratch, pdf, moments, fields, boundary_distributions, scratch_electron, vz,
+        vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
+        collisions, geometry, gyroavs, external_source_settings, num_diss_params,
+        t_params, advance, scratch_dummy, diagnostic_moments; pdf_bc_constraints=true)
 
     begin_s_r_z_region()
 
@@ -2149,7 +2149,7 @@ function apply_all_bcs_constraints_update_moments!(
     calculate_ion_moment_derivatives!(moments, this_scratch, scratch_dummy, z, z_spectral,
                                       num_diss_params.ion.moment_dissipation_coefficient)
 
-    calculate_electron_moments!(this_scratch, moments, composition, collisions, r, z,
+    calculate_electron_moments!(this_scratch, pdf, moments, composition, collisions, r, z,
                                 vpa)
     calculate_electron_moment_derivatives!(moments, this_scratch, scratch_dummy, z,
                                            z_spectral,
@@ -2270,7 +2270,7 @@ Check the error estimate for the embedded RK method and adjust the timestep if
 appropriate.
 """
 function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron, t,
-                                   t_params, moments, fields, boundary_distributions,
+                                   t_params, pdf, moments, fields, boundary_distributions,
                                    composition, collisions, geometry,
                                    external_source_settings, spectral_objects,
                                    advect_objects, gyroavs, num_diss_params, advance,
@@ -2361,6 +2361,10 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron, 
         begin_s_r_z_region()
         rk_loworder_solution!(scratch, scratch_implicit, :ppar, t_params)
     end
+    if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
+        begin_r_z_region()
+        rk_loworder_solution!(scratch, scratch_implicit, :electron_ppar, t_params)
+    end
     if n_neutral_species > 0
         begin_sn_r_z_vzeta_vr_region()
         rk_loworder_solution!(scratch, scratch_implicit, :pdf_neutral, t_params; neutrals=true)
@@ -2380,16 +2384,19 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron, 
 
     # Apply boundary conditions and constraints
     apply_all_bcs_constraints_update_moments!(
-        scratch[2], moments, fields, boundary_distributions, vz, vr, vzeta,
-        vpa, vperp, z, r, spectral_objects, advect_objects, composition, geometry,
-        gyroavs, num_diss_params, advance, scratch_dummy, false)
+        scratch[2], pdf, moments, fields, boundary_distributions, scratch_electron, vz,
+        vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
+        collisions, geometry, gyroavs, external_source_settings, num_diss_params,
+        t_params, advance, scratch_dummy, false)
 
     # Re-calculate moment derivatives in the `moments` struct, in case they were changed
     # by the previous call
     apply_all_bcs_constraints_update_moments!(
-        scratch[t_params.n_rk_stages+1], moments, fields, boundary_distributions, vz, vr,
-        vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition, geometry,
-        gyroavs, num_diss_params, advance, scratch_dummy, false; pdf_bc_constraints=false)
+        scratch[t_params.n_rk_stages+1], pdf, moments, fields, boundary_distributions,
+        scratch_electron, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
+        advect_objects, composition, collisions, geometry, gyroavs,
+        external_source_settings, num_diss_params, t_params, advance, scratch_dummy,
+        false; pdf_bc_constraints=false)
 
     # Calculate the timstep error estimates
     ion_pdf_error = local_error_norm(scratch[2].pdf, scratch[t_params.n_rk_stages+1].pdf,
@@ -2436,7 +2443,6 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron, 
 
     if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
         begin_r_z_region()
-        rk_error_variable!(scratch, scratch_implicit, :electron_ppar, t_params)
         electron_p_err = local_error_norm(scratch[2].electron_ppar,
                                           scratch[t_params.n_rk_stages+1].electron_ppar,
                                           t_params.rtol, t_params.atol;
@@ -2542,10 +2548,10 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron, 
         # pdf These need to be re-calculated because `scratch[istage+1]` is now the
         # state at the beginning of the timestep, because the timestep failed
         apply_all_bcs_constraints_update_moments!(
-            scratch[t_params.n_rk_stages+1], moments, fields, nothing, nothing, vz, vr,
-            vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
-            collisions, geometry, gyroavs, num_diss_params, advance, scratch_dummy, false;
-            pdf_bc_constraints=false)
+            scratch[t_params.n_rk_stages+1], pdf, moments, fields, nothing, nothing, vz,
+            vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
+            collisions, geometry, gyroavs, external_source_settings, num_diss_params,
+            t_params, advance, scratch_dummy, false; pdf_bc_constraints=false)
     end
 
     if composition.electron_physics == kinetic_electrons
@@ -2669,10 +2675,11 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t, t_params, 
                 # which is used as input to the explicit part of the IMEX time step.
                 old_scratch = scratch_implicit[istage]
                 apply_all_bcs_constraints_update_moments!(
-                    scratch_implicit[istage], moments, fields, boundary_distributions,
-                    scratch_electron, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
-                    advect_objects, composition, collisions, geometry, gyroavs,
-                    num_diss_params, advance, scratch_dummy, false)
+                    scratch_implicit[istage], pdf, moments, fields,
+                    boundary_distributions, scratch_electron, vz, vr, vzeta, vpa, vperp,
+                    z, r, spectral_objects, advect_objects, composition, collisions,
+                    geometry, gyroavs, external_source_settings, num_diss_params,
+                    t_params, advance, scratch_dummy, false)
             end
         else
             # Fully explicit method starts the forward-Euler step with the result from the
@@ -2704,10 +2711,11 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t, t_params, 
                                 || t_params.implicit_coefficient_is_zero[istage+1])
         diagnostic_moments = diagnostic_checks && istage == n_rk_stages
         apply_all_bcs_constraints_update_moments!(
-            scratch[istage+1], moments, fields, boundary_distributions, scratch_electron,
-            vz, vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects,
-            composition, collisions, geometry, gyroavs, num_diss_params, advance,
-            scratch_dummy, diagnostic_moments; pdf_bc_constraints=apply_bc_constraints)
+            scratch[istage+1], pdf, moments, fields, boundary_distributions,
+            scratch_electron, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
+            advect_objects, composition, collisions, geometry, gyroavs,
+            external_source_settings, num_diss_params, t_params, advance, scratch_dummy,
+            diagnostic_moments; pdf_bc_constraints=apply_bc_constraints)
     end
 
     if t_params.adaptive
