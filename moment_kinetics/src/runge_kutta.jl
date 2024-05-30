@@ -1251,6 +1251,11 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
             t_params.dt_before_output[] = t_params.dt[]
             t_params.dt[] = t_params.next_output_time[] - current_time
             t_params.step_to_output[] = true
+
+            if t_params.dt[] < 0.0
+                error("When trying to step to next output time, made negative timestep "
+                      * "dt=$(t_params.dt[])")
+            end
         end
     end
 
