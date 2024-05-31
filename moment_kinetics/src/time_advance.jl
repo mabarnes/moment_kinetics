@@ -426,14 +426,11 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     electron_mom_diss_coeff = num_diss_params.electron.moment_dissipation_coefficient
     neutral_mom_diss_coeff = num_diss_params.neutral.moment_dissipation_coefficient
 
-    if composition.electron_physics == braginskii_fluid &&
-            restart_electron_physics !== braginskii_fluid
+    if composition.electron_physics != restart_electron_physics
 
-        # When restarting braginskii_fluid from a different electron physics type, and
+        # When restarting from a different electron physics type, and
         # using an adaptive timestep, do not want to keep the `dt` from the previous
-        # simulation, as the diffusive behaviour of braginskii fluid means the CFL
-        # condition is likely to be very restrictive, so we probably need to reset to a
-        # small initial timestep.
+        # simulation, in case the new electron physics requires a smaller ion timestep.
         dt_reload = nothing
     end
 
