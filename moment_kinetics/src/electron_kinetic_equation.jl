@@ -192,13 +192,12 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         do_debug_io = false
     end
     @serial_region begin
-        if io_electron === nothing || do_debug_io
-            # When doing debug_io, we don't want to make the adaptive timestep adjust to
-            # output at specific times - instead we just output after a fixed number of
-            # steps, however long those steps were.
-            t_params.next_output_time[] = Inf
-        else
+        if t_params.adaptive && !t_params.write_after_fixed_step_count && io_electron !== nothing
             t_params.next_output_time[] = dfns_output_times[1]
+        else
+            # Using fixed output step count, so we don't want to make the adaptive
+            # timestep adjust to output at specific times.
+            t_params.next_output_time[] = Inf
         end
     end
 
@@ -467,7 +466,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         end
 
         if text_output
-            if (mod(t_params.step_counter[] - initial_step_counter, t_params.nwrite)==1)
+            if (mod(t_params.step_counter[] - initial_step_counter, t_params.nwrite_moments)==1)
                 begin_serial_region()
                 @serial_region begin
                     @loop_vpa ivpa begin
@@ -488,7 +487,8 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                 end
             end
         end
-        if ((time ≥ dfns_output_times[output_counter - initial_output_counter] - epsilon)
+        if ((t_params.adaptive && (time ≥ dfns_output_times[output_counter - initial_output_counter] - epsilon))
+            || (!t_params.adaptive && t_params.step_counter[] % t_params.nwrite_moments == 0)
             || (do_debug_io && (t_params.step_counter[] % debug_io_nwrite == 0)))
 
             begin_serial_region()
@@ -516,7 +516,8 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                 end
             end
             output_counter += 1
-            if output_counter - initial_output_counter ≤ length(dfns_output_times)
+            if t_params.adaptive && !t_params.write_after_fixed_step_count &&
+                    (output_counter - initial_output_counter ≤ length(dfns_output_times))
                 @serial_region begin
                     t_params.next_output_time[] =
                         dfns_output_times[output_counter - initial_output_counter]
