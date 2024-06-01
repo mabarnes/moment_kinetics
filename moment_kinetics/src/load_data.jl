@@ -57,7 +57,8 @@ const ion_moment_variables = ("density", "parallel_flow", "parallel_pressure",
                               "collision_frequency_ei", "sound_speed", "mach_number")
 const electron_moment_variables = ("electron_density", "electron_parallel_flow",
                                    "electron_parallel_pressure", "electron_thermal_speed",
-                                   "electron_temperature", "electron_parallel_heat_flux")
+                                   "electron_temperature", "electron_parallel_heat_flux",
+                                   "electron_dudz", "electron_dpdz", "electron_dqdz")
 const neutral_moment_variables = ("density_neutral", "uz_neutral", "pz_neutral",
                                   "thermal_speed_neutral", "temperature_neutral",
                                   "qz_neutral")
@@ -4060,6 +4061,24 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
     elseif variable_name == "electron_temperature"
         vth = postproc_load_variable(run_info, "electron_thermal_speed"; kwargs...)
         variable = run_info.composition.me_over_mi .* vth.^2
+    elseif variable_name == "electron_dudz"
+        upar = postproc_load_variable(run_info, "electron_parallel_flow"; kwargs...)
+        variable = similar(upar)
+        for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n
+            @views derivative!(variable[:,ir,it], upar[:,ir,it], run_info.z, run_info.z_spectral)
+        end
+    elseif variable_name == "electron_dpdz"
+        ppar = postproc_load_variable(run_info, "electron_parallel_pressure"; kwargs...)
+        variable = similar(ppar)
+        for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n
+            @views derivative!(variable[:,ir,it], ppar[:,ir,it], run_info.z, run_info.z_spectral)
+        end
+    elseif variable_name == "electron_dqdz"
+        qpar = postproc_load_variable(run_info, "electron_parallel_heat_flux"; kwargs...)
+        variable = similar(qpar)
+        for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n
+            @views derivative!(variable[:,ir,it], qpar[:,ir,it], run_info.z, run_info.z_spectral)
+        end
     elseif variable_name == "temperature_neutral"
         vth = postproc_load_variable(run_info, "thermal_speed_neutral"; kwargs...)
         variable = vth.^2
