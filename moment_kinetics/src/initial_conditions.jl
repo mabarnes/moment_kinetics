@@ -680,6 +680,13 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
                              vperp, vpa)
         finish_electron_io(io_initial_electron)
 
+        # No need to do electron I/O (apart from possibly debug I/O) any more, so if
+        # adaptive timestep is used, it does not need to adjust to output times.
+        resize!(t_params.moments_output_times, 0)
+        resize!(t_params.dfns_output_times, 0)
+        t_params.moments_output_counter[] = 1
+        t_params.dfns_output_counter[] = 1
+
     end
     return nothing
 end
