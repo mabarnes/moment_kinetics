@@ -48,8 +48,13 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     dt_before_output::MPISharedArray{mk_float,1}
     dt_before_last_fail::MPISharedArray{mk_float,1}
     CFL_prefactor::mk_float
-    step_to_output::MPISharedArray{Bool,1}
+    step_to_moments_output::MPISharedArray{Bool,1}
+    step_to_dfns_output::MPISharedArray{Bool,1}
+    write_moments_output::MPISharedArray{Bool,1}
+    write_dfns_output::MPISharedArray{Bool,1}
     step_counter::Ref{mk_int}
+    moments_output_counter::Ref{mk_int}
+    dfns_output_counter::Ref{mk_int}
     failure_counter::Ref{mk_int}
     failure_caused_by::Vector{mk_int}
     limit_caused_by::Vector{mk_int}

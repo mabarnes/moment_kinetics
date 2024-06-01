@@ -313,14 +313,20 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
     next_output_time = allocate_shared_float(1)
     dt_before_output = allocate_shared_float(1)
     dt_before_last_fail = allocate_shared_float(1)
-    step_to_output = allocate_shared_bool(1)
+    step_to_moments_output = allocate_shared_bool(1)
+    step_to_dfns_output = allocate_shared_bool(1)
+    write_moments_output = allocate_shared_bool(1)
+    write_dfns_output = allocate_shared_bool(1)
     if block_rank[] == 0
         dt_shared[] = dt_reload === nothing ? t_input["dt"] : dt_reload
         previous_dt_shared[] = dt_reload === nothing ? t_input["dt"] : dt_reload
         next_output_time[] = 0.0
         dt_before_output[] = dt_reload === nothing ? t_input["dt"] : dt_reload
         dt_before_last_fail[] = dt_before_last_fail_reload === nothing ? Inf : dt_before_last_fail_reload
-        step_to_output[] = false
+        step_to_moments_output[] = false
+        step_to_dfns_output[] = false
+        write_moments_output[] = false
+        write_dfns_output[] = false
     end
     _block_synchronize()
 
@@ -385,9 +391,11 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
     end
     return time_info(n_variables, t_input["nstep"], end_time, dt_shared, previous_dt_shared,
                      next_output_time, dt_before_output, dt_before_last_fail,
-                     CFL_prefactor, step_to_output, Ref(0), Ref(0), mk_int[], mk_int[],
-                     t_input["nwrite"], t_input["nwrite_dfns"], moments_output_times,
-                     dfns_output_times, t_input["type"], rk_coefs, rk_coefs_implicit,
+                     CFL_prefactor, step_to_moments_output, step_to_dfns_output,
+                     write_moments_output, write_dfns_output, Ref(0), Ref(2), Ref(2),
+                     Ref(0), mk_int[], mk_int[], t_input["nwrite"],
+                     t_input["nwrite_dfns"], moments_output_times, dfns_output_times,
+                     t_input["type"], rk_coefs, rk_coefs_implicit,
                      implicit_coefficient_is_zero, n_rk_stages, rk_order, adaptive,
                      low_storage, t_input["rtol"], t_input["atol"], t_input["atol_upar"],
                      t_input["step_update_prefactor"], t_input["max_increase_factor"],
@@ -1546,16 +1554,6 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t, t_pa
     start_time = now()
 
     epsilon = 1.e-11
-    moments_output_counter = 1
-    dfns_output_counter = 1
-    @serial_region begin
-        if t_params.adaptive && !t_params.write_after_fixed_step_count
-            t_params.next_output_time[] =
-                min(t_params.moments_output_times[moments_output_counter],
-                    t_params.dfns_output_times[dfns_output_counter])
-        end
-    end
-    _block_synchronize()
 
     # main time advance loop
     iwrite_moments = 2
@@ -1570,10 +1568,8 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t, t_pa
     while true
         
         if t_params.adaptive && !t_params.write_after_fixed_step_count
-            maybe_write_moments = (t + t_params.dt[] ≥ t_params.moments_output_times[moments_output_counter] - epsilon
-                                   || t + t_params.dt[] ≥ t_params.end_time - epsilon)
-            maybe_write_dfns = (t + t_params.dt[] ≥ t_params.dfns_output_times[dfns_output_counter] - epsilon
-                                || t + t_params.dt[] ≥ t_params.end_time - epsilon)
+            maybe_write_moments = t_params.step_to_moments_output[]
+            maybe_write_dfns = t_params.step_to_dfns_output[]
         else
             maybe_write_moments = (t_params.step_counter[] % t_params.nwrite_moments == 0
                                    || t_params.step_counter[] >= t_params.nstep)
@@ -1624,10 +1620,14 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t, t_pa
         end
 
         if t_params.adaptive && !t_params.write_after_fixed_step_count
-            write_moments = (t ≥ t_params.moments_output_times[moments_output_counter] - epsilon
-                             || t ≥ t_params.end_time - epsilon)
-            write_dfns = (t ≥ t_params.dfns_output_times[dfns_output_counter] - epsilon
-                          || t ≥ t_params.end_time - epsilon)
+            write_moments = t_params.write_moments_output[]
+            write_dfns = t_params.write_dfns_output[]
+
+            _block_synchronize()
+            @serial_region begin
+                t_params.write_moments_output[] = false
+                t_params.write_dfns_output[] = false
+            end
         else
             write_moments = (t_params.step_counter[] % t_params.nwrite_moments == 0
                              || t_params.step_counter[] >= t_params.nstep)
@@ -1635,26 +1635,10 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t, t_pa
                           || t_params.step_counter[] >= t_params.nstep)
         end
         if write_moments
-            moments_output_counter += 1
-            if moments_output_counter ≤ length(t_params.moments_output_times)
-                @serial_region begin
-                    t_params.next_output_time[] =
-                        min(t_params.moments_output_times[moments_output_counter],
-                            t_params.dfns_output_times[dfns_output_counter])
-                end
-            end
-            write_moments = true
+            t_params.moments_output_counter[] += 1
         end
         if write_dfns
-            dfns_output_counter += 1
-            if dfns_output_counter ≤ length(t_params.dfns_output_times)
-                @serial_region begin
-                    t_params.next_output_time[] =
-                        min(t_params.moments_output_times[moments_output_counter],
-                            t_params.dfns_output_times[dfns_output_counter])
-                end
-            end
-            write_dfns = true
+            t_params.dfns_output_counter[] += 1
         end
 
         if write_moments || write_dfns || finish_now
@@ -1705,7 +1689,7 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t, t_pa
             @serial_region begin
                 if global_rank[] == 0
                     print("writing moments output ",
-                          rpad(string(moments_output_counter - 1), 4), "  ",
+                          rpad(string(t_params.moments_output_counter[] - 1), 4), "  ",
                           "t = ", rpad(string(round(t, sigdigits=6)), 7), "  ",
                           "nstep = ", rpad(string(t_params.step_counter[]), 7), "  ")
                     if t_params.adaptive
@@ -1795,7 +1779,7 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t, t_pa
             @serial_region begin
                 if global_rank[] == 0
                     println("writing distribution functions output ",
-                            rpad(string(dfns_output_counter  - 1), 4), "  ",
+                            rpad(string(t_params.dfns_output_counter[] - 1), 4), "  ",
                             "t = ", rpad(string(round(t, sigdigits=6)), 7), "  ",
                             "nstep = ", rpad(string(t_params.step_counter[]), 7), "  ",
                             Dates.format(now(), dateformat"H:MM:SS"))
