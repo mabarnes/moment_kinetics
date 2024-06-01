@@ -190,7 +190,8 @@ function nonlinear_test()
                              Dict{String,Any}("rtol" => 0.0,
                                               "atol" => atol,
                                               "linear_restart" => restart,
-                                              "linear_max_restarts" => max_restarts)),
+                                              "linear_max_restarts" => max_restarts,
+                                              "nonlinear_max_iterations" => 100)),
             coords)
 
         newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, v, w, nl_solver_params;
