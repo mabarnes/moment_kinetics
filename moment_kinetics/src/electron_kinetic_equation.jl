@@ -60,7 +60,7 @@ function update_electron_pdf!(scratch, pdf, moments, phi, r, z, vperp, vpa, z_sp
         vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy, t_params,
         collisions, composition, external_source_settings, num_diss_params,
         max_electron_pdf_iterations; io_electron=nothing, initial_time=0.0,
-        initial_output_counter=0, residual_tolerance=nothing, evolve_ppar=false)
+        residual_tolerance=nothing, evolve_ppar=false)
 
     # set the method to use to solve the electron kinetic equation
     solution_method = "artificial_time_derivative"
@@ -73,7 +73,6 @@ function update_electron_pdf!(scratch, pdf, moments, phi, r, z, vperp, vpa, z_sp
             vpa_spectral, z_advect, vpa_advect, scratch_dummy, t_params,
             external_source_settings, num_diss_params, max_electron_pdf_iterations;
             io_electron=io_electron, initial_time=initial_time,
-            initial_output_counter=initial_output_counter,
             residual_tolerance=residual_tolerance, evolve_ppar=evolve_ppar)
     elseif solution_method == "shooting_method"
         dens = moments.electron.dens
@@ -138,7 +137,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         composition, r, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
         vpa_advect, scratch_dummy, t_params, external_source_settings, num_diss_params,
         max_electron_pdf_iterations; io_electron=nothing, initial_time=0.0,
-        initial_output_counter=0, residual_tolerance=nothing, evolve_ppar=false)
+        residual_tolerance=nothing, evolve_ppar=false)
 
     begin_r_z_region()
 
@@ -190,15 +189,6 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         debug_io_nwrite = t_params.debug_io[3]
     else
         do_debug_io = false
-    end
-    @serial_region begin
-        if t_params.adaptive && !t_params.write_after_fixed_step_count && io_electron !== nothing
-            t_params.next_output_time[] = dfns_output_times[1]
-        else
-            # Using fixed output step count, so we don't want to make the adaptive
-            # timestep adjust to output at specific times.
-            t_params.next_output_time[] = Inf
-        end
     end
 
     #z_speedup_fac = 20.0
@@ -252,13 +242,13 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         end
     end
 
-    output_counter = initial_output_counter
     begin_serial_region()
-    output_counter += 1
+    t_params.moments_output_counter[] += 1
     @serial_region begin
         if io_electron !== nothing
             write_electron_state(scratch[1].pdf_electron, moments, t_params, time,
-                                 io_electron, output_counter, r, z, vperp, vpa)
+                                 io_electron, t_params.moments_output_counter[], r, z,
+                                 vperp, vpa)
         end
     end
     # evolve (artificially) in time until the residual is less than the tolerance
@@ -487,14 +477,14 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                 end
             end
         end
-        if ((t_params.adaptive && (time ≥ dfns_output_times[output_counter - initial_output_counter] - epsilon))
+        if ((t_params.adaptive && t_params.write_moments_output[])
             || (!t_params.adaptive && t_params.step_counter[] % t_params.nwrite_moments == 0)
             || (do_debug_io && (t_params.step_counter[] % debug_io_nwrite == 0)))
 
             begin_serial_region()
             @serial_region begin
                 if text_output
-                    if (mod(output_counter, 100) == 0)
+                    if (mod(t_params.moments_output_counter[], 100) == 0)
                         @loop_vpa ivpa begin
                             @loop_z iz begin
                                 println(io_pdf, "z: ", z.grid[iz], " wpa: ", vpa.grid[ivpa], " pdf: ", new_pdf[ivpa, 1, iz, 1], " time: ", time, " residual: ", residual[ivpa, 1, iz, 1])
@@ -515,20 +505,14 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                     println(io_vth,"")
                 end
             end
-            output_counter += 1
-            if t_params.adaptive && !t_params.write_after_fixed_step_count &&
-                    io_electron !== nothing &&
-                    (output_counter - initial_output_counter ≤ length(dfns_output_times))
-                @serial_region begin
-                    t_params.next_output_time[] =
-                        dfns_output_times[output_counter - initial_output_counter]
-                end
-            end
+            t_params.moments_output_counter[] += 1
             @serial_region begin
                 if io_electron !== nothing
+                    t_params.write_moments_output[] = false
                     write_electron_state(scratch[t_params.n_rk_stages+1].pdf_electron,
                                          moments, t_params, time, io_electron,
-                                         output_counter, r, z, vperp, vpa)
+                                         t_params.moments_output_counter[], r, z, vperp,
+                                         vpa)
                 end
             end
         end
@@ -566,9 +550,10 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         end
         if !electron_pdf_converged || do_debug_io
             if io_electron !== nothing && io_electron !== true
-                output_counter += 1
+                t_params.moments_output_counter[] += 1
                 write_electron_state(final_scratch_pdf, moments, t_params, time,
-                                     io_electron, output_counter, r, z, vperp, vpa)
+                                     io_electron, t_params.moments_output_counter[], r, z,
+                                     vperp, vpa)
                 finish_electron_io(io_electron)
             end
         end
@@ -578,7 +563,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         error("!!!max number of iterations for electron pdf update exceeded!!!\n"
               * "Stopping at $(Dates.format(now(), dateformat"H:MM:SS"))")
     end
-    return time, output_counter
+    return time
 end
 
 function speedup_hack!(fvec_out, fvec_in, z_speedup_fac, z, vpa; evolve_ppar=false)

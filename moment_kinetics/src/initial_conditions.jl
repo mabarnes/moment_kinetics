@@ -639,7 +639,7 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
                                             t_params, t_params.debug_io[2], -1, nothing,
                                             "electron_debug")
         end
-        electron_pseudotime, n_debug_outputs =
+        electron_pseudotime =
             @views update_electron_pdf!(scratch, pdf.electron.norm, moments, phi, r, z,
                                         vperp, vpa, z_spectral, vperp_spectral,
                                         vpa_spectral, z_advect, vpa_advect, scratch_dummy,
@@ -656,7 +656,7 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
         if global_rank[] == 0
             println("Initializing electrons - evolving pdf_electron only to steady state")
         end
-        electron_pseudotime, n_debug_outputs =
+        electron_pseudotime =
             @views update_electron_pdf!(scratch, pdf.electron.norm, moments, phi, r, z,
                                         vperp, vpa, z_spectral, vperp_spectral,
                                         vpa_spectral, z_advect, vpa_advect, scratch_dummy,
@@ -664,8 +664,7 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
                                         external_source_settings, num_diss_params,
                                         max_electron_pdf_iterations;
                                         io_electron=io_initial_electron,
-                                        initial_time=electron_pseudotime,
-                                        initial_output_counter=n_debug_outputs)
+                                        initial_time=electron_pseudotime)
 
         begin_r_z_vperp_vpa_region()
         @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
@@ -675,9 +674,10 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
 
         # Write the converged initial state for the electrons to a file so that it can be
         # re-used if the simulation is re-run.
-        t_idx = n_debug_outputs + 1
+        t_params.moments_output_counter[] += 1
         write_electron_state(pdf.electron.norm, moments, t_params, electron_pseudotime,
-                             io_initial_electron, t_idx, r, z, vperp, vpa)
+                             io_initial_electron, t_params.moments_output_counter[], r, z,
+                             vperp, vpa)
         finish_electron_io(io_initial_electron)
 
     end
