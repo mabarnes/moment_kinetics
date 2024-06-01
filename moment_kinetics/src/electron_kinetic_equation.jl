@@ -517,6 +517,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
             end
             output_counter += 1
             if t_params.adaptive && !t_params.write_after_fixed_step_count &&
+                    io_electron !== nothing &&
                     (output_counter - initial_output_counter ≤ length(dfns_output_times))
                 @serial_region begin
                     t_params.next_output_time[] =
