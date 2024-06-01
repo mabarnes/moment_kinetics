@@ -117,7 +117,7 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
             collisions.nu_ei, moments.electron.parallel_friction,
             composition.n_neutral_species, collisions.charge_exchange_electron, composition.me_over_mi,
             fvec.density_neutral, fvec.uz_neutral, fvec.electron_upar)
-        calculate_phi_from_Epar!(fields.phi, fields.Ez, z)
+        calculate_phi_from_Epar!(fields.phi, fields.Ez, r, z)
     end
     ## can calculate phi at z = L and hence phi_wall(z=L) using jpar_i at z =L if needed
     _block_synchronize()
@@ -169,15 +169,26 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
     return nothing
 end
 
-function calculate_phi_from_Epar!(phi, Epar, z)
-    # simple calculation of phi from Epar for now, with zero phi assumed at boundary
+function calculate_phi_from_Epar!(phi, Epar, r, z)
+    # simple calculation of phi from Epar for now. Assume phi is already set at the
+    # lower-ze boundary, e.g. by the kinetic electron boundary condition.
     begin_serial_region()
 
     dz = z.cell_width
     @serial_region begin
-        phi[1,:] .= 3.0
-        @loop_r_z ir iz begin
-            if iz > 1
+        # Need to broadcast the lower-z boundary value, because we only communicate
+        # delta_phi below, rather than passing the boundary values directly from block to
+        # block.
+        phi[1,:] .= MPI.bcast(@view(phi[1,:]), z.comm; root=0)
+
+        if z.irank == z.nrank - 1
+            # Don't want to change the upper-z boundary value, so save it here so we can
+            # restore it at the end
+            @views @. r.scratch = phi[end,:]
+        end
+
+        @loop_r ir begin
+            for iz ∈ 2:z.n
                 phi[iz,ir] = phi[iz-1,ir] - dz[iz-1]*Epar[iz,ir]
             end
         end
@@ -192,6 +203,11 @@ function calculate_phi_from_Epar!(phi, Epar, z)
                     phi[iz,ir] += delta_phi[ir]
                 end
             end
+        end
+
+        if z.irank == z.nrank - 1
+            # Restore the upper-z boundary value
+            @views @. phi[end,:] = r.scratch
         end
     end
 
