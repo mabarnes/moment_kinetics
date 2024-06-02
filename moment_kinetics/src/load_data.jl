@@ -577,7 +577,7 @@ end
 """
 Reload pdf and moments from an existing output file.
 """
-function reload_evolving_fields!(pdf, moments, boundary_distributions,
+function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                                  restart_prefix_iblock, time_index, composition, geometry,
                                  r, z, vpa, vperp, vzeta, vr, vz)
     code_time = 0.0
@@ -642,6 +642,10 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                 get_reload_ranges(parallel_io, restart_r, restart_z, restart_vperp,
                                   restart_vpa, restart_vzeta, restart_vr, restart_vz)
 
+            fields.phi .= reload_electron_moment("phi", dynamic, time_index, r, z,
+                                                 r_range, z_range, restart_r,
+                                                 restart_r_spectral, restart_z,
+                                                 restart_z_spectral, interpolation_needed)
             moments.ion.dens .= reload_moment("density", dynamic, time_index, r, z,
                                               r_range, z_range, restart_r,
                                               restart_r_spectral, restart_z,
