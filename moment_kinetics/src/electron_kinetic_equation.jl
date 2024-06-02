@@ -688,6 +688,12 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
 
             # -vmax is between vmax_ind-1 and vmax_ind
             vmax_ind = searchsortedfirst(vpa_unnorm, -vmax)
+            if vmax_ind < 2
+                error("In lower-z electron bc, failed to find vpa=-vmax point, vmax_ind=$vmax_ind")
+            end
+            if vmax_ind > vpa.n
+                error("In lower-z electron bc, failed to find vpa=-vmax point, vmax_ind=$vmax_ind")
+            end
 
             # sigma is the location we use for w_∥(v_∥=0) - set to 0 to ignore the 'upar
             # shift'
@@ -695,6 +701,12 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
 
             # sigma is between sigma_ind-1 and sigma_ind
             sigma_ind = searchsortedfirst(vpa_unnorm, 0.0)
+            if sigma_ind < 2
+                error("In lower-z electron bc, failed to find vpa=0 point, sigma_ind=$sigma_ind")
+            end
+            if sigma_ind > vpa.n
+                error("In lower-z electron bc, failed to find vpa=0 point, sigma_ind=$sigma_ind")
+            end
 
             # sigma_fraction is the fraction of the distance between sigma_ind-1 and
             # sigma_ind where sigma is.
@@ -853,6 +865,12 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
 
             # -vmax is between vmax_ind and vmax_ind+1
             vmax_ind = searchsortedlast(vpa_unnorm, vmax)
+            if vmax_ind < 1
+                error("In upper-z electron bc, failed to find vpa=vmax point, vmax_ind=$vmax_ind")
+            end
+            if vmax_ind > vpa.n - 1
+                error("In upper-z electron bc, failed to find vpa=vmax point, vmax_ind=$vmax_ind")
+            end
 
             # sigma is the location we use for w_∥(v_∥=0) - set to 0 to ignore the 'upar
             # shift'
@@ -860,6 +878,12 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
 
             # sigma is between sigma_ind and sigma_ind+1
             sigma_ind = searchsortedlast(vpa_unnorm, 0.0)
+            if sigma_ind < 1
+                error("In upper-z electron bc, failed to find vpa=0 point, sigma_ind=$sigma_ind")
+            end
+            if sigma_ind > vpa.n - 1
+                error("In upper-z electron bc, failed to find vpa=0 point, sigma_ind=$sigma_ind")
+            end
 
             # sigma_fraction is the fraction of the distance between sigma_ind+1 and
             # sigma_ind where sigma is.
