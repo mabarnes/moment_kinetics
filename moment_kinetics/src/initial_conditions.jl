@@ -557,6 +557,10 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
         else
             restart_filename = get_default_restart_filename(io_input, "initial_electron";
                                                             error_if_no_file_found=false)
+            # Synchronize to ensure that some processes do not detect the restart file
+            # when they should not, because this function gets called after the other
+            # processes create the file.
+            MPI.Barrier(comm_world)
         end
         if restart_filename === nothing
             # No file to restart from
@@ -582,27 +586,24 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
             # might have been loaded from a restart file).
             code_time = MPI.Bcast(code_time, 0, comm_block[])
         end
-        # Set to `true` rather than `nothing` so that processes that are not writing
-        # output (i.e. not rank-0 of their shared-memory block) know that 'initial
-        # electron output' is being written (so that they know not to activate 'debug
-        # I/O').
-        io_initial_electron = true
-        @serial_region begin
-            # Setup I/O for initial electron state
-            io_initial_electron = setup_electron_io(io_input, vpa, vperp, z, r,
-                                                    composition, collisions,
-                                                    moments.evolve_density,
-                                                    moments.evolve_upar,
-                                                    moments.evolve_ppar,
-                                                    external_source_settings, t_params,
-                                                    input_dict, restart_time_index,
-                                                    previous_runs_info,
-                                                    "initial_electron")
+        # Setup I/O for initial electron state
+        io_initial_electron = setup_electron_io(io_input, vpa, vperp, z, r,
+                                                composition, collisions,
+                                                moments.evolve_density,
+                                                moments.evolve_upar,
+                                                moments.evolve_ppar,
+                                                external_source_settings, t_params,
+                                                input_dict, restart_time_index,
+                                                previous_runs_info,
+                                                "initial_electron")
 
+        begin_serial_region()
+        @serial_region begin
             # update the electron pdf in the first scratch
             scratch[1].pdf_electron .= pdf.electron.norm
         end
 
+        begin_r_z_region()
         @loop_r_z ir iz begin
             # update the electron thermal speed using the updated electron parallel pressure
             moments.electron.vth[iz,ir] = sqrt(abs(2.0 * moments.electron.ppar[iz,ir] / (moments.electron.dens[iz,ir] * composition.me_over_mi)))
