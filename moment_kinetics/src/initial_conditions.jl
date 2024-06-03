@@ -640,6 +640,15 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
                                             t_params, t_params.debug_io[2], -1, nothing,
                                             "electron_debug")
         end
+        if code_time > 0.0
+            tind = searchsortedfirst(t_params.moments_output_times, code_time)
+            n_truncated = length(t_params.moments_output_times) - tind
+            truncated_times = t_params.moments_output_times[tind+1:end]
+            resize!(t_params.moments_output_times, n_truncated)
+            t_params.moments_output_times .= truncated_times
+            resize!(t_params.dfns_output_times, n_truncated)
+            t_params.dfns_output_times .= truncated_times
+        end
         electron_pseudotime =
             @views update_electron_pdf!(scratch, pdf.electron.norm, moments, phi, r, z,
                                         vperp, vpa, z_spectral, vperp_spectral,
