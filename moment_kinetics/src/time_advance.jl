@@ -483,6 +483,10 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         # ion pressure
         n_variables += 1
     end
+    if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
+        # electron pressure
+        n_variables += 1
+    end
     if composition.n_neutral_species > 0
         # neutral pdf
         n_variables += 1

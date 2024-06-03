@@ -7528,15 +7528,16 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing, electro
                             label=prefix * "ion upar RK accuracy", ax=ax,
                             linestyle=:dash)
                 end
-                if electron || ri.evolve_ppar
+                if !electron && ri.evolve_ppar
                     counter += 1
-                    if electron
-                        label = prefix * "electron ppar RK accuracy"
-                    else
-                        label = prefix * "ion ppar RK accuracy"
-                    end
                     plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                            label=label, ax=ax,
+                            label=prefix * "ion ppar RK accuracy", ax=ax,
+                            linestyle=:dash)
+                end
+                if electron || ri.composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
+                    counter += 1
+                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                            label=prefix * "electron ppar RK accuracy", ax=ax,
                             linestyle=:dash)
                 end
                 if !electron && ri.n_neutral_species > 0
