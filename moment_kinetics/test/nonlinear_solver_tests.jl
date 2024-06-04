@@ -2,7 +2,7 @@ module NonlinearSolverTests
 
 include("setup.jl")
 
-using moment_kinetics.array_allocation: allocate_shared_float
+using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
 using moment_kinetics.communication
 using moment_kinetics.coordinates: coordinate
 using moment_kinetics.input_structs: advection_input
@@ -15,7 +15,7 @@ using MPI
 
 function linear_test()
     println("    - linear test")
-    @testset "linear test $coord_names" for coord_names ∈ ((:z,), (:vpa,))
+    @testset "linear test $coord_names" for (coord_names, serial_solve) ∈ (((:z,), false), ((:vpa,), true))
         # Test represents constant-coefficient diffusion, in 1D steady state, with a
         # central finite-difference discretisation of the second derivative.
         #
@@ -67,28 +67,48 @@ function linear_test()
         coords = NamedTuple(c => the_coord for c ∈ coord_names)
 
         function rhs_func!(residual, x)
-            begin_serial_region()
-            @serial_region begin
+            if serial_solve
                 residual .= A * x - b
+            else
+                begin_serial_region()
+                @serial_region begin
+                    residual .= A * x - b
+                end
             end
             return nothing
         end
 
-        x = allocate_shared_float(n)
-        residual = allocate_shared_float(n)
-        delta_x = allocate_shared_float(n)
-        rhs_delta = allocate_shared_float(n)
-        v = allocate_shared_float(n)
-        w = allocate_shared_float(n)
+        if serial_solve
+            x = allocate_float(n)
+            residual = allocate_float(n)
+            delta_x = allocate_float(n)
+            rhs_delta = allocate_float(n)
+            v = allocate_float(n)
+            w = allocate_float(n)
 
-        begin_serial_region()
-        @serial_region begin
             x .= 0.0
             residual .= 0.0
             delta_x .= 0.0
             rhs_delta .= 0.0
             v .= 0.0
             w .= 0.0
+        else
+            x = allocate_shared_float(n)
+            residual = allocate_shared_float(n)
+            delta_x = allocate_shared_float(n)
+            rhs_delta = allocate_shared_float(n)
+            v = allocate_shared_float(n)
+            w = allocate_shared_float(n)
+
+            begin_serial_region()
+            @serial_region begin
+                x .= 0.0
+                residual .= 0.0
+                delta_x .= 0.0
+                rhs_delta .= 0.0
+                v .= 0.0
+                w .= 0.0
+            end
         end
 
         nl_solver_params = setup_nonlinear_solve(
@@ -97,23 +117,29 @@ function linear_test()
                                               "atol" => atol,
                                               "linear_restart" => restart,
                                               "linear_max_restarts" => max_restarts)),
-            coords)
+            coords; serial_solve=serial_solve)
 
         newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, v, w, nl_solver_params;
                       coords)
 
-        begin_serial_region()
-        @serial_region begin
+        if serial_solve
             x_direct = A \ b
 
             @test isapprox(x, x_direct; atol=100.0*atol)
+        else
+            begin_serial_region()
+            @serial_region begin
+                x_direct = A \ b
+
+                @test isapprox(x, x_direct; atol=100.0*atol)
+            end
         end
     end
 end
 
 function nonlinear_test()
     println("    - non-linear test")
-    @testset "non-linear test" for coord_names ∈ ((:z,), (:vpa,))
+    @testset "non-linear test" for (coord_names, serial_solve) ∈ (((:z,), false), ((:vpa,), true))
         # Test represents constant-coefficient diffusion, in 1D steady state, with a
         # central finite-difference discretisation of the second derivative.
         #
@@ -152,8 +178,7 @@ function nonlinear_test()
         coords = NamedTuple(c => the_coord for c ∈ coord_names)
 
         function rhs_func!(residual, x)
-            begin_serial_region()
-            @serial_region begin
+            if serial_solve
                 i = 1
                 D = abs(x[i])^2.5
                 residual[i] = D * (- 2.0 * x[i] + x[i+1]) - b[i]
@@ -164,25 +189,57 @@ function nonlinear_test()
                 i = n
                 D = abs(x[i])^2.5
                 residual[i] = D * (x[i-1] - 2.0 * x[i]) - b[i]
+            else
+                begin_serial_region()
+                @serial_region begin
+                    i = 1
+                    D = abs(x[i])^2.5
+                    residual[i] = D * (- 2.0 * x[i] + x[i+1]) - b[i]
+                    for i ∈ 2:n-1
+                        D = abs(x[i])^2.5
+                        residual[i] = D * (x[i-1] - 2.0 * x[i] + x[i+1]) - b[i]
+                    end
+                    i = n
+                    D = abs(x[i])^2.5
+                    residual[i] = D * (x[i-1] - 2.0 * x[i]) - b[i]
+                end
             end
             return nothing
         end
 
-        x = allocate_shared_float(n)
-        residual = allocate_shared_float(n)
-        delta_x = allocate_shared_float(n)
-        rhs_delta = allocate_shared_float(n)
-        v = allocate_shared_float(n)
-        w = allocate_shared_float(n)
+        if serial_solve
+            x = allocate_float(n)
+            residual = allocate_float(n)
+            delta_x = allocate_float(n)
+            rhs_delta = allocate_float(n)
+            v = allocate_float(n)
+            w = allocate_float(n)
+        else
+            x = allocate_shared_float(n)
+            residual = allocate_shared_float(n)
+            delta_x = allocate_shared_float(n)
+            rhs_delta = allocate_shared_float(n)
+            v = allocate_shared_float(n)
+            w = allocate_shared_float(n)
+        end
 
-        begin_serial_region()
-        @serial_region begin
+        if serial_solve
             x .= 1.0
             residual .= 0.0
             delta_x .= 0.0
             rhs_delta .= 0.0
             v .= 0.0
             w .= 0.0
+        else
+            begin_serial_region()
+            @serial_region begin
+                x .= 1.0
+                residual .= 0.0
+                delta_x .= 0.0
+                rhs_delta .= 0.0
+                v .= 0.0
+                w .= 0.0
+            end
         end
 
         nl_solver_params = setup_nonlinear_solve(
@@ -192,16 +249,20 @@ function nonlinear_test()
                                               "linear_restart" => restart,
                                               "linear_max_restarts" => max_restarts,
                                               "nonlinear_max_iterations" => 100)),
-            coords)
+            coords; serial_solve=serial_solve)
 
         newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, v, w, nl_solver_params;
                       coords)
 
         rhs_func!(residual, x)
 
-        begin_serial_region()
-        @serial_region begin
+        if serial_solve
             @test isapprox(residual, zeros(n); atol=4.0*atol)
+        else
+            begin_serial_region()
+            @serial_region begin
+                @test isapprox(residual, zeros(n); atol=4.0*atol)
+            end
         end
     end
 end
