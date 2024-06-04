@@ -39,6 +39,7 @@ using ..array_allocation: allocate_float, allocate_shared_float
 using ..calculus: derivative!
 using ..communication
 using ..communication: MPISharedArray, global_rank
+using ..lagrange_polynomials: lagrange_poly
 using ..looping
 using moment_kinetics.gauss_legendre: get_QQ_local!
 using Dates
@@ -505,28 +506,6 @@ function get_nodes(coord,iel)
     (imin, imax) = get_imin_imax(coord,iel)
     nodes = coord.grid[imin:imax]
     return nodes
-end
-"""
-Lagrange polynomial
-args: 
-j - index of l_j from list of nodes
-x_nodes - array of x node values
-x - point where interpolated value is returned
-"""
-function lagrange_poly(j,x_nodes,x)
-    # get number of nodes
-    n = size(x_nodes,1)
-    # location where l(x0) = 1
-    x0 = x_nodes[j]
-    # evaluate polynomial
-    poly = 1.0
-    for i in 1:j-1
-            poly *= (x - x_nodes[i])/(x0 - x_nodes[i])
-    end
-    for i in j+1:n
-            poly *= (x - x_nodes[i])/(x0 - x_nodes[i])
-    end
-    return poly
 end
 
 # Function to get the local integration grid and quadrature weights
