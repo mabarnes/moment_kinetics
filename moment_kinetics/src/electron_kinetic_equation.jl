@@ -1408,7 +1408,8 @@ function electron_kinetic_equation_euler_update!(fvec_out, fvec_in, moments, z, 
     if external_source_settings.electron.active
         external_electron_source!(fvec_out.pdf_electron, fvec_in.pdf_electron,
                                   moments.electron.dens, moments.electron.upar, moments,
-                                  external_source_settings.electron, vperp, vpa, dt)
+                                  composition, external_source_settings.electron, vperp,
+                                  vpa, dt)
     end
 
     if evolve_ppar

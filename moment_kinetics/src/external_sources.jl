@@ -745,15 +745,18 @@ end
 Add external source term to the electron kinetic equation.
 """
 function external_electron_source!(pdf_out, pdf_in, electron_density, electron_upar,
-                                   moments, electron_source_settings, vperp, vpa, dt)
+                                   moments, composition, electron_source_settings, vperp,
+                                   vpa, dt)
     begin_r_z_vperp_region()
+
+    me_over_mi = composition.me_over_mi
 
     source_amplitude = moments.electron.external_source_amplitude
     source_T = electron_source_settings.source_T
     if vperp.n == 1
-        vth_factor = 1.0 / sqrt(source_T)
+        vth_factor = 1.0 / sqrt(source_T / me_over_mi)
     else
-        vth_factor = 1.0 / source_T^1.5
+        vth_factor = 1.0 / (source_T / me_over_mi)^1.5
     end
     vpa_grid = vpa.grid
     vperp_grid = vperp.grid
@@ -771,7 +774,7 @@ function external_electron_source!(pdf_out, pdf_in, electron_density, electron_u
             vpa_unnorm = vpa_grid[ivpa] * this_vth + this_upar
             pdf_out[ivpa,ivperp,iz,ir] +=
                 this_prefactor *
-                exp(-(vperp_unnorm^2 + vpa_unnorm^2) / source_T)
+                exp(-(vperp_unnorm^2 + vpa_unnorm^2) * me_over_mi / source_T)
         end
     end
 
