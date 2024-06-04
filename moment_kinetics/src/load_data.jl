@@ -5,6 +5,7 @@ module load_data
 export open_readonly_output_file
 export load_fields_data
 export load_ion_moments_data
+export load_electron_moments_data
 export load_neutral_particle_moments_data
 export load_pdf_data
 export load_neutral_pdf_data
@@ -506,6 +507,31 @@ function load_ion_moments_data(fid; printout=false, extended_moments = false)
     else
         return density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed
     end
+end
+
+"""
+"""
+function load_electron_moments_data(fid; printout=false)
+    if printout
+        print("Loading electron velocity moments data...")
+    end
+
+    group = get_group(fid, "dynamic_data")
+
+    # Read electron parallel pressure
+    parallel_pressure = load_variable(group, "electron_parallel_pressure")
+
+    # Read electron parallel heat flux
+    parallel_heat_flux = load_variable(group, "electron_parallel_heat_flux")
+
+    # Read electron thermal speed
+    thermal_speed = load_variable(group, "electron_thermal_speed")
+
+    if printout
+        println("done.")
+    end
+
+    return parallel_pressure, parallel_heat_flux, thermal_speed
 end
 
 function load_neutral_particle_moments_data(fid; printout=false)
