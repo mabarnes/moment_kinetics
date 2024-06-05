@@ -2549,6 +2549,7 @@ function ssp_rk!(pdf, scratch, scratch_implicit, t, t_params, vz, vr, vzeta, vpa
                 # is not used as input to the explicit part of the IMEX advance.
                 update_solution_vector!(scratch[istage+1], scratch[istage], moments,
                                         composition, vpa, vperp, z, r)
+                old_scratch = scratch[istage]
             else
                 # Backward-Euler step for implicitly-evolved terms.
                 # Note the timestep for this solve is rk_coefs_implict[istage,istage]*dt.
@@ -2569,8 +2570,8 @@ function ssp_rk!(pdf, scratch, scratch_implicit, t, t_params, vz, vr, vzeta, vpa
                 # `backward_euler!()` solve.
                 update_solution_vector!(scratch[istage+1], scratch_implicit[istage], moments,
                                         composition, vpa, vperp, z, r)
+                old_scratch = scratch_implicit[istage]
             end
-            old_scratch = scratch_implicit[istage]
         else
             # Fully explicit method starts the forward-Euler step with the result from the
             # previous stage.
