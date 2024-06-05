@@ -192,8 +192,9 @@ function convert_butcher_tableau_for_moment_kinetics(a, b,
                                  sum(b_implicit[1,i] * k_implicit[i] for i ∈ 1:n_rk_stages))
 
     if adaptive
-        y_err = sum((b[2,i] - b[1,i]) * k[i] for i ∈ 1:n_rk_stages) +
-                sum((b_implicit[2,i] - b_implicit[1,i]) * k_implicit[i] for i ∈ 1:n_rk_stages)
+        y_loworder = yn +
+                     sum(b[2,i] * k[i] for i ∈ 1:n_rk_stages) +
+                     sum(b_implicit[2,i] * k_implicit[i] for i ∈ 1:n_rk_stages)
     end
 
     # Define expressions for y_tilde[i] using the rk_coefs as used in moment_kinetics
@@ -312,7 +313,7 @@ function convert_butcher_tableau_for_moment_kinetics(a, b,
     if adaptive
         i = n_rk_stages + 1
         lhs = Symbolics.coeff(y_rk_coefs_err, yn)
-        rhs = Symbolics.coeff(y_err, yn)
+        rhs = Symbolics.coeff(y_loworder, yn)
         if isa(lhs, Number) && lhs == 0 && isa(rhs, Number) && rhs == 0
             push!(rk_coefs_equations, rk_coefs[1,i] ~ 0)
         else
@@ -320,7 +321,7 @@ function convert_butcher_tableau_for_moment_kinetics(a, b,
         end
         for j ∈ 1:n_rk_stages
             lhs = Symbolics.coeff(y_rk_coefs_err, k[j])
-            rhs = Symbolics.coeff(y_err, k[j])
+            rhs = Symbolics.coeff(y_loworder, k[j])
             if isa(lhs, Number) && lhs == 0 && isa(rhs, Number) && rhs == 0
                 push!(rk_coefs_equations, rk_coefs[j+1,i] ~ 0)
             else
@@ -330,7 +331,7 @@ function convert_butcher_tableau_for_moment_kinetics(a, b,
         i = n_rk_stages + 2
         for j ∈ 1:n_rk_stages
             lhs = Symbolics.coeff(y_rk_coefs_err, k_implicit[j])
-            rhs = Symbolics.coeff(y_err, k_implicit[j])
+            rhs = Symbolics.coeff(y_loworder, k_implicit[j])
             if isa(lhs, Number) && lhs == 0 && isa(rhs, Number) && rhs == 0
                 push!(rk_coefs_equations, rk_coefs_implicit[j,i] ~ 0)
             else
@@ -458,11 +459,11 @@ function convert_butcher_tableau_for_moment_kinetics(a::Matrix{Rational{Int64}},
 end
 
 function convert_rk_coefs_to_butcher_tableau(rk_coefs::AbstractArray{T,N},
+                                             adaptive,
                                              rk_coefs_implicit=zeros(T, size(rk_coefs, 1) - 1, size(rk_coefs, 2) + 1),
                                              implicit_coefficient_is_zero=nothing
                                             ) where {T,N}
     using_rationals = eltype(rk_coefs) <: Rational || eltype(rk_coefs_implicit) <: Rational
-    adaptive = (abs(sum(rk_coefs[:,end]) + sum(rk_coefs_implicit[:,end])) < 1.0e-13)
     low_storage = size(rk_coefs, 1) == 3
     if adaptive
         n_rk_stages = size(rk_coefs, 2) - 1
@@ -510,13 +511,13 @@ function convert_rk_coefs_to_butcher_tableau(rk_coefs::AbstractArray{T,N},
     if adaptive
         if low_storage
             i = n_rk_stages + 1
-            y_err = rk_coefs[1,i]*y_tilde[1] + rk_coefs[2,i]*y_tilde[n_rk_stages] + rk_coefs[3,i]*y_tilde[n_rk_stages+1] +
-                    rk_coefs_implicit[1,i+1]*y[1] + rk_coefs_implicit[2,i+1]*y[n_rk_stages-1] + rk_coefs_implicit[3,i+1]*y[n_rk_stages]
+            y_loworder = rk_coefs[1,i]*y_tilde[1] + rk_coefs[2,i]*y_tilde[n_rk_stages] + rk_coefs[3,i]*y_tilde[n_rk_stages+1] +
+                         rk_coefs_implicit[1,i+1]*y[1] + rk_coefs_implicit[2,i+1]*y[n_rk_stages-1] + rk_coefs_implicit[3,i+1]*y[n_rk_stages]
         else
-            y_err = sum(rk_coefs[j,n_rk_stages+1]*y_tilde[j] for j ∈ 1:n_rk_stages+1) +
-                    sum(rk_coefs_implicit[j,n_rk_stages+2]*y[j] for j ∈ 1:n_rk_stages)
+            y_loworder = sum(rk_coefs[j,n_rk_stages+1]*y_tilde[j] for j ∈ 1:n_rk_stages+1) +
+                         sum(rk_coefs_implicit[j,n_rk_stages+2]*y[j] for j ∈ 1:n_rk_stages)
         end
-        y_err = simplify(expand(y_err))
+        y_loworder = simplify(expand(y_loworder))
     end
 
     # Set up equations to solve for each y_tilde[i] and y[i] in terms of k[i] and
@@ -545,17 +546,13 @@ function convert_rk_coefs_to_butcher_tableau(rk_coefs::AbstractArray{T,N},
         b_implicit[1, j] = Symbolics.coeff(y_tilde_k_expressions[n_rk_stages+1], k_implicit[j])
     end
     if adaptive
-        error_coeffs = zeros(T, n_rk_stages)
-        error_coeffs_implicit = zeros(T, n_rk_stages)
-        y_k_err = substitute(y_err, Dict(y_tilde[i] => y_tilde_k_expressions[i] for i ∈ 1:n_rk_stages+1))
-        y_k_err = substitute(y_k_err, Dict(y[i] => y_k_expressions[i] for i ∈ 1:n_rk_stages))
-        y_k_err = simplify(expand(y_k_err))
+        y_k_loworder = substitute(y_loworder, Dict(y_tilde[i] => y_tilde_k_expressions[i] for i ∈ 1:n_rk_stages+1))
+        y_k_loworder = substitute(y_k_loworder, Dict(y[i] => y_k_expressions[i] for i ∈ 1:n_rk_stages))
+        y_k_loworder = simplify(expand(y_k_loworder))
         for j ∈ 1:n_rk_stages
-            error_coeffs[j] = Symbolics.coeff(y_k_err, k[j])
-            error_coeffs_implicit[j] = Symbolics.coeff(y_k_err, k_implicit[j])
+            b[2,j] = Symbolics.coeff(y_k_loworder, k[j])
+            b_implicit[2,j] = Symbolics.coeff(y_k_loworder, k_implicit[j])
         end
-        @. b[2,:] = error_coeffs + b[1,:]
-        @. b_implicit[2,:] = error_coeffs_implicit + b_implicit[1,:]
     end
 
     a = zeros(T, n_rk_stages, n_rk_stages)
@@ -615,10 +612,13 @@ function convert_and_check_butcher_tableau(name, a, b,
     if size(b, 1) > 1
         # Adaptive timestep
         error_sum = sum(rk_coefs[:,end]) + sum(rk_coefs_implicit[:,end])
-        if abs(error_sum) > 1.0e-13
-            error("Sum of error coefficients should be 0. Got ", error_sum, " ≈ ", Float64(error_sum))
+        if abs(error_sum - 1) > 1.0e-13
+            error("Sum of loworder coefficients should be 1. Got ", error_sum, " ≈ ", Float64(error_sum))
         end
         check_end -= 1
+        adaptive = true
+    else
+        adaptive = false
     end
     for i ∈ 1:check_end
         if low_storage
@@ -654,7 +654,7 @@ function convert_and_check_butcher_tableau(name, a, b,
 
     # Consistency check: converting back should give the original a, b.
     a_check, b_check, a_check_implicit, b_check_implicit =
-        convert_rk_coefs_to_butcher_tableau(rk_coefs, rk_coefs_implicit, implicit_coefficient_is_zero)
+        convert_rk_coefs_to_butcher_tableau(rk_coefs, adaptive, rk_coefs_implicit, implicit_coefficient_is_zero)
 
     if eltype(a) == Rational
         if a_check != a
@@ -704,7 +704,7 @@ function convert_and_check_butcher_tableau(name, a, b,
     end
 end
 
-function convert_and_check_rk_coefs(name, rk_coefs,
+function convert_and_check_rk_coefs(name, rk_coefs, adaptive=false,
                                     rk_coefs_implicit=zeros(eltype(rk_coefs),
                                                             size(rk_coefs, 1),
                                                             size(rk_coefs, 2) + 1),
@@ -717,7 +717,7 @@ function convert_and_check_rk_coefs(name, rk_coefs,
     if imex
         print("rk_coefs_implicit="); display(rk_coefs_implicit)
     end
-    a, b, a_implicit, b_implicit = convert_rk_coefs_to_butcher_tableau(rk_coefs, rk_coefs_implicit, implicit_coefficient_is_zero)
+    a, b, a_implicit, b_implicit = convert_rk_coefs_to_butcher_tableau(rk_coefs, adaptive, rk_coefs_implicit, implicit_coefficient_is_zero)
     print("a="); display(a)
     print("b="); display(b)
     if imex
@@ -907,6 +907,12 @@ end
 convert_and_check_butcher_tableau(
     "Fekete 4(3)",
     construct_fekete_3rd_order(4)...
+   )
+
+convert_and_check_butcher_tableau(
+    "Fekete 4(3) not low-storage",
+    construct_fekete_3rd_order(4)...;
+    low_storage=false
    )
 
 """

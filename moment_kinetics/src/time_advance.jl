@@ -66,7 +66,7 @@ using ..gyroaverages: init_gyro_operators, gyroaverage_pdf!
 using ..manufactured_solns: manufactured_sources
 using ..advection: advection_info
 using ..runge_kutta: rk_update_evolved_moments!, rk_update_evolved_moments_neutral!,
-                     rk_update_variable!, rk_error_variable!,
+                     rk_update_variable!, rk_loworder_solution!,
                      setup_runge_kutta_coefficients!, local_error_norm,
                      adaptive_timestep_update_t_params!
 using ..utils: to_minutes, get_minimum_CFL_z, get_minimum_CFL_vpa,
@@ -2021,8 +2021,8 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
     skip_z_lower = z.irank != 0
 
     # Calculate error for ion distribution functions
-    # Note rk_error_variable!() stores the calculated error in `scratch[2]`.
-    rk_error_variable!(scratch, scratch_implicit, :pdf, t_params)
+    # Note we store the calculated error in `scratch[2]`.
+    rk_loworder_solution!(scratch, scratch_implicit, :pdf, t_params)
     ion_pdf_error = local_error_norm(scratch[2].pdf, scratch[t_params.n_rk_stages+1].pdf,
                                      t_params.rtol, t_params.atol;
                                      method=error_norm_method, skip_r_inner=skip_r_inner,
@@ -2035,7 +2035,7 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
     # Calculate error for ion moments, if necessary
     if moments.evolve_density
         begin_s_r_z_region()
-        rk_error_variable!(scratch, scratch_implicit, :density, t_params)
+        rk_loworder_solution!(scratch, scratch_implicit, :density, t_params)
         ion_n_err = local_error_norm(scratch[2].density,
                                      scratch[t_params.n_rk_stages+1].density,
                                      t_params.rtol, t_params.atol;
@@ -2047,7 +2047,7 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
     end
     if moments.evolve_upar
         begin_s_r_z_region()
-        rk_error_variable!(scratch, scratch_implicit, :upar, t_params)
+        rk_loworder_solution!(scratch, scratch_implicit, :upar, t_params)
         ion_u_err = local_error_norm(scratch[2].upar,
                                      scratch[t_params.n_rk_stages+1].upar, t_params.rtol,
                                      t_params.atol; method=error_norm_method,
@@ -2058,7 +2058,7 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
     end
     if moments.evolve_ppar
         begin_s_r_z_region()
-        rk_error_variable!(scratch, scratch_implicit, :ppar, t_params)
+        rk_loworder_solution!(scratch, scratch_implicit, :ppar, t_params)
         ion_p_err = local_error_norm(scratch[2].ppar,
                                      scratch[t_params.n_rk_stages+1].ppar, t_params.rtol,
                                      t_params.atol; method=error_norm_method,
@@ -2101,7 +2101,7 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
         push!(CFL_limits, t_params.CFL_prefactor * neutral_vz_CFL)
 
         # Calculate error for neutral distribution functions
-        rk_error_variable!(scratch, scratch_implicit, :pdf_neutral, t_params; neutrals=true)
+        rk_loworder_solution!(scratch, scratch_implicit, :pdf_neutral, t_params; neutrals=true)
         neut_pdf_error = local_error_norm(scratch[2].pdf_neutral,
                                           scratch[end].pdf_neutral, t_params.rtol,
                                           t_params.atol; method=error_norm_method,
@@ -2116,7 +2116,7 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
         # Calculate error for neutral moments, if necessary
         if moments.evolve_density
             begin_sn_r_z_region()
-            rk_error_variable!(scratch, scratch_implicit, :density_neutral, t_params; neutrals=true)
+            rk_loworder_solution!(scratch, scratch_implicit, :density_neutral, t_params; neutrals=true)
             neut_n_err = local_error_norm(scratch[2].density_neutral,
                                           scratch[end].density_neutral, t_params.rtol,
                                           t_params.atol, true; method=error_norm_method,
@@ -2128,7 +2128,7 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
         end
         if moments.evolve_upar
             begin_sn_r_z_region()
-            rk_error_variable!(scratch, scratch_implicit, :uz_neutral, t_params; neutrals=true)
+            rk_loworder_solution!(scratch, scratch_implicit, :uz_neutral, t_params; neutrals=true)
             neut_u_err = local_error_norm(scratch[2].uz_neutral,
                                           scratch[t_params.n_rk_stages+1].uz_neutral,
                                           t_params.rtol, t_params.atol, true;
@@ -2141,7 +2141,7 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
         end
         if moments.evolve_ppar
             begin_sn_r_z_region()
-            rk_error_variable!(scratch, scratch_implicit, :pz_neutral, t_params; neutrals=true)
+            rk_loworder_solution!(scratch, scratch_implicit, :pz_neutral, t_params; neutrals=true)
             neut_p_err = local_error_norm(scratch[2].pz_neutral,
                                           scratch[t_params.n_rk_stages+1].pz_neutral,
                                           t_params.rtol, t_params.atol, true;
