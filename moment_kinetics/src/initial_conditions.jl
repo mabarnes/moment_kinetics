@@ -402,12 +402,12 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
                 @. moments.electron.vth = sqrt(moments.electron.temp /
                                                composition.me_over_mi)
                 @. moments.electron.ppar = 0.5 * moments.electron.dens * moments.electron.temp
-                @views derivative_z!(moments.electron.dT_dz, moments.electron.temp,
-                                     scratch_dummy.buffer_rs_1[:,1],
-                                     scratch_dummy.buffer_rs_2[:,1],
-                                     scratch_dummy.buffer_rs_3[:,1],
-                                     scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
             end
+            @views derivative_z!(moments.electron.dT_dz, moments.electron.temp,
+                                 scratch_dummy.buffer_rs_1[:,1],
+                                 scratch_dummy.buffer_rs_2[:,1],
+                                 scratch_dummy.buffer_rs_3[:,1],
+                                 scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
         end
     end
     moments.electron.qpar_updated[] = false
