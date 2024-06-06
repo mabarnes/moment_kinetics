@@ -16,7 +16,8 @@ using ..communication
 using ..interpolation: interpolate_to_grid_1d!
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
-using ..electron_fluid_equations: calculate_electron_qpar_from_pdf!
+using ..electron_fluid_equations: update_electron_vth_temperature!,
+                                  calculate_electron_qpar_from_pdf!
 using ..electron_fluid_equations: electron_energy_equation!
 using ..electron_z_advection: electron_z_advection!, update_electron_speed_z!
 using ..electron_vpa_advection: electron_vpa_advection!, update_electron_speed_vpa!
@@ -24,7 +25,7 @@ using ..external_sources: external_electron_source!
 using ..file_io: get_electron_io_info, write_electron_state, finish_electron_io
 using ..krook_collisions: electron_krook_collisions!
 using ..moment_constraints: hard_force_moment_constraints!
-using ..runge_kutta: rk_update_variable!, rk_error_variable!, local_error_norm,
+using ..runge_kutta: rk_update_variable!, rk_loworder_solution!, local_error_norm,
                      adaptive_timestep_update_t_params!
 using ..utils: get_minimum_CFL_z, get_minimum_CFL_vpa
 using ..velocity_moments: integrate_over_vspace
@@ -286,37 +287,29 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
 
             rk_update_variable!(scratch, nothing, :pdf_electron, t_params, istage)
 
-            latest_pdf = scratch[istage+1].pdf_electron
-            begin_r_z_vperp_vpa_region()
-            @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-                latest_pdf[ivpa,ivperp,iz,ir] = max(latest_pdf[ivpa,ivperp,iz,ir], 0.0)
-            end
+            if evolve_ppar
+                rk_update_variable!(scratch, nothing, :electron_ppar, t_params, istage)
 
-            # enforce the boundary condition(s) on the electron pdf
-            enforce_boundary_condition_on_electron_pdf!(scratch[istage+1].pdf_electron, phi,
-                                                        moments.electron.vth,
-                                                        moments.electron.upar, z, vperp,
-                                                        vpa, vperp_spectral, vpa_spectral,
-                                                        vpa_advect, moments,
-                                                        num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                                                        composition.me_over_mi, 0.1 * t_params.rtol)
-
-            begin_r_z_region()
-            A = moments.electron.constraints_A_coefficient
-            B = moments.electron.constraints_B_coefficient
-            C = moments.electron.constraints_C_coefficient
-            @loop_r_z ir iz begin
-                if (iz == 1 && z.irank == 0) || (iz == z.n && z.irank == z.nrank - 1)
-                    continue
+                begin_r_z_region()
+                moments_struct_ppar = moments.electron.ppar
+                scratch_ppar = scratch[istage+1].electron_ppar
+                @loop_r_z ir iz begin
+                    moments_struct_ppar[iz,ir] = scratch_ppar[iz,ir]
                 end
-                (A[iz,ir], B[iz,ir], C[iz,ir]) =
-                    @views hard_force_moment_constraints!(latest_pdf[:,:,iz,ir],
-                                                          (evolve_density=true,
-                                                           evolve_upar=true,
-                                                           evolve_ppar=true), vpa)
+                _block_synchronize()
+
+                update_electron_vth_temperature!(moments, moments_struct_ppar,
+                                                 moments.electron.dens, composition)
             end
+
+            apply_electron_bc_and_constraints!(scratch[istage+1], phi, moments, z, vperp,
+                                               vpa, vperp_spectral, vpa_spectral,
+                                               vpa_advect, num_diss_params, composition,
+                                               t_params)
+
+            latest_pdf = scratch[istage+1].pdf_electron
             
-            function update_derived_moments_and_derivatives()
+            function update_derived_moments_and_derivatives(update_vth=false)
                 # update the electron heat flux
                 moments.electron.qpar_updated[] = false
                 calculate_electron_qpar_from_pdf!(moments.electron.qpar,
@@ -342,12 +335,16 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                     this_dens = moments.electron.dens
                     this_vth = moments.electron.vth
                     this_dvth_dz = moments.electron.dvth_dz
+                    if update_vth
+                        @loop_r_z ir iz begin
+                            # update the electron thermal speed using the updated electron
+                            # parallel pressure
+                            this_vth[iz,ir] = sqrt(abs(2.0 * this_ppar[iz,ir] /
+                                                       (this_dens[iz,ir] *
+                                                        composition.me_over_mi)))
+                        end
+                    end
                     @loop_r_z ir iz begin
-                        # update the electron thermal speed using the updated electron
-                        # parallel pressure
-                        this_vth[iz,ir] = sqrt(abs(2.0 * this_ppar[iz,ir] /
-                                                   (this_dens[iz,ir] *
-                                                    composition.me_over_mi)))
                         # update the z-derivative of the electron thermal speed from the
                         # z-derivatives of the electron density and parallel pressure
                         this_dvth_dz[iz,ir] = 0.5 * this_vth[iz,ir] *
@@ -376,8 +373,10 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
 
             if t_params.adaptive && istage == t_params.n_rk_stages
                 electron_adaptive_timestep_update!(scratch, time, t_params, moments,
-                                                   z_advect, vpa_advect, r, z, vperp, vpa,
-                                                   external_source_settings;
+                                                   phi, z_advect, vpa_advect, composition,
+                                                   r, z, vperp, vpa, vperp_spectral,
+                                                   vpa_spectral, external_source_settings,
+                                                   num_diss_params;
                                                    evolve_ppar=evolve_ppar)
                 # Re-do this in case electron_adaptive_timestep_update!() re-arranged the
                 # `scratch` vector
@@ -388,17 +387,8 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                     # Re-calculate moments and moment derivatives as the timstep needs to
                     # be re-done with a smaller dt, so scratch[t_params.n_rk_stages+1] has
                     # been reset to the values from the beginning of the timestep here.
-                    update_derived_moments_and_derivatives()
+                    update_derived_moments_and_derivatives(true)
                 end
-            end
-            if evolve_ppar
-                rk_update_variable!(scratch, nothing, :electron_ppar, t_params, istage)
-                moments_struct_ppar = moments.electron.ppar
-                scratch_ppar = scratch[istage+1].electron_ppar
-                @loop_r_z ir iz begin
-                    moments_struct_ppar[iz,ir] = scratch_ppar[iz,ir]
-                end
-                _block_synchronize()
             end
         end
 
@@ -606,6 +596,40 @@ function speedup_hack!(fvec_out, fvec_in, z_speedup_fac, z, vpa; evolve_ppar=fal
             (pdf_out[ivpa,ivperp,iz,ir] - pdf_in[ivpa,ivperp,iz,ir])
     end
     return nothing
+end
+
+function apply_electron_bc_and_constraints!(this_scratch, phi, moments, z, vperp, vpa,
+                                            vperp_spectral, vpa_spectral, vpa_advect,
+                                            num_diss_params, composition, t_params)
+    latest_pdf = this_scratch.pdf_electron
+
+    begin_r_z_vperp_vpa_region()
+    @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+        latest_pdf[ivpa,ivperp,iz,ir] = max(latest_pdf[ivpa,ivperp,iz,ir], 0.0)
+    end
+
+    # enforce the boundary condition(s) on the electron pdf
+    enforce_boundary_condition_on_electron_pdf!(latest_pdf, phi, moments.electron.vth,
+                                                moments.electron.upar, z, vperp, vpa,
+                                                vperp_spectral, vpa_spectral, vpa_advect,
+                                                moments,
+                                                num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
+                                                composition.me_over_mi, 0.1 * t_params.rtol)
+
+    begin_r_z_region()
+    A = moments.electron.constraints_A_coefficient
+    B = moments.electron.constraints_B_coefficient
+    C = moments.electron.constraints_C_coefficient
+    @loop_r_z ir iz begin
+        if (iz == 1 && z.irank == 0) || (iz == z.n && z.irank == z.nrank - 1)
+            continue
+        end
+        (A[iz,ir], B[iz,ir], C[iz,ir]) =
+            @views hard_force_moment_constraints!(latest_pdf[:,:,iz,ir],
+                                                  (evolve_density=true,
+                                                   evolve_upar=true,
+                                                   evolve_ppar=true), vpa)
+    end
 end
 
 function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vperp, vpa,
@@ -1015,14 +1039,20 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
 end
 
 """
-    electron_adaptive_timestep_update!(scratch, t_params, rk_coefs, moments)
+    electron_adaptive_timestep_update!(scratch, t, t_params, moments, phi, z_advect,
+                                       vpa_advect, composition, r, z, vperp, vpa,
+                                       vperp_spectral, vpa_spectral,
+                                       external_source_settings, num_diss_params;
+                                       evolve_ppar=false)
 
 Check the error estimate for the embedded RK method and adjust the timestep if
 appropriate.
 """
-function electron_adaptive_timestep_update!(scratch, t, t_params, moments, z_advect,
-                                            vpa_advect, r, z, vperp, vpa,
-                                            external_source_settings; evolve_ppar=false)
+function electron_adaptive_timestep_update!(scratch, t, t_params, moments, phi, z_advect,
+                                            vpa_advect, composition, r, z, vperp, vpa,
+                                            vperp_spectral, vpa_spectral,
+                                            external_source_settings, num_diss_params;
+                                            evolve_ppar=false)
     #error_norm_method = "Linf"
     error_norm_method = "L2"
 
@@ -1077,8 +1107,29 @@ function electron_adaptive_timestep_update!(scratch, t, t_params, moments, z_adv
     skip_z_lower = z.irank != 0
 
     # Calculate error ion distribution functions
-    # Note rk_error_variable!() stores the calculated error in `scratch[2]`.
-    rk_error_variable!(scratch, nothing, :pdf_electron, t_params)
+    # Note rk_loworder_solution!() stores the calculated error in `scratch[2]`.
+    rk_loworder_solution!(scratch, nothing, :pdf_electron, t_params)
+    if evolve_ppar
+        begin_r_z_region()
+        rk_loworder_solution!(scratch, nothing, :electron_ppar, t_params)
+
+        # Make vth consistent with `scratch[2]`, as it is needed for the electron pdf
+        # boundary condition.
+        update_electron_vth_temperature!(moments, scratch[2].electron_ppar,
+                                         moments.electron.dens, composition)
+    end
+    apply_electron_bc_and_constraints!(scratch[t_params.n_rk_stages+1], phi, moments, z,
+                                       vperp, vpa, vperp_spectral, vpa_spectral,
+                                       vpa_advect, num_diss_params, composition, t_params)
+    if evolve_ppar
+        # Reset vth in the `moments` struct to the result consistent with full-accuracy RK
+        # solution.
+        begin_r_z_region()
+        update_electron_vth_temperature!(moments,
+                                         scratch[t_params.n_rk_stages+1].electron_ppar,
+                                         moments.electron.dens, composition)
+    end
+
     pdf_error = local_error_norm(scratch[2].pdf_electron,
                                  scratch[t_params.n_rk_stages+1].pdf_electron,
                                  t_params.rtol, t_params.atol; method=error_norm_method,
@@ -1090,7 +1141,6 @@ function electron_adaptive_timestep_update!(scratch, t, t_params, moments, z_adv
     # Calculate error for moments, if necessary
     if evolve_ppar
         begin_r_z_region()
-        rk_error_variable!(scratch, nothing, :electron_ppar, t_params)
         p_err = local_error_norm(scratch[2].electron_ppar,
                                  scratch[t_params.n_rk_stages+1].electron_ppar,
                                  t_params.rtol, t_params.atol; method=error_norm_method,
