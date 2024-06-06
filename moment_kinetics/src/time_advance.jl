@@ -1945,11 +1945,11 @@ Check the error estimate for the embedded RK method and adjust the timestep if
 appropriate.
 """
 function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, moments,
-                                   fields, composition, collisions, geometry,
-                                   external_source_settings, spectral_objects,
-                                   advect_objects, gyroavs, num_diss_params, advance,
-                                   scratch_dummy, r, z, vperp, vpa, vzeta, vr, vz,
-                                   success, nl_max_its_fraction)
+                                   fields, boundary_distributions, composition,
+                                   collisions, geometry, external_source_settings,
+                                   spectral_objects, advect_objects, gyroavs,
+                                   num_diss_params, advance, scratch_dummy, r, z, vperp,
+                                   vpa, vzeta, vr, vz, success, nl_max_its_fraction)
     #error_norm_method = "Linf"
     error_norm_method = "L2"
 
@@ -2020,9 +2020,52 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
     skip_r_inner = r.irank != 0
     skip_z_lower = z.irank != 0
 
-    # Calculate error for ion distribution functions
-    # Note we store the calculated error in `scratch[2]`.
+    # Calculate low-order approximations, from which the timestep error can be estimated.
+    # Note we store the calculated low-order approxmation in `scratch[2]`.
     rk_loworder_solution!(scratch, scratch_implicit, :pdf, t_params)
+    if moments.evolve_density
+        begin_s_r_z_region()
+        rk_loworder_solution!(scratch, scratch_implicit, :density, t_params)
+    end
+    if moments.evolve_upar
+        begin_s_r_z_region()
+        rk_loworder_solution!(scratch, scratch_implicit, :upar, t_params)
+    end
+    if moments.evolve_ppar
+        begin_s_r_z_region()
+        rk_loworder_solution!(scratch, scratch_implicit, :ppar, t_params)
+    end
+    if n_neutral_species > 0
+        begin_sn_r_z_vzeta_vr_region()
+        rk_loworder_solution!(scratch, scratch_implicit, :pdf_neutral, t_params; neutrals=true)
+        if moments.evolve_density
+            begin_sn_r_z_region()
+            rk_loworder_solution!(scratch, scratch_implicit, :density_neutral, t_params; neutrals=true)
+        end
+        if moments.evolve_upar
+            begin_sn_r_z_region()
+            rk_loworder_solution!(scratch, scratch_implicit, :uz_neutral, t_params; neutrals=true)
+        end
+        if moments.evolve_ppar
+            begin_sn_r_z_region()
+            rk_loworder_solution!(scratch, scratch_implicit, :pz_neutral, t_params; neutrals=true)
+        end
+    end
+
+    # Apply boundary conditions and constraints
+    apply_all_bcs_constraints_update_moments!(
+        scratch[2], moments, fields, boundary_distributions, vz, vr, vzeta,
+        vpa, vperp, z, r, spectral_objects, advect_objects, composition, geometry,
+        gyroavs, num_diss_params, advance, scratch_dummy, false)
+
+    # Re-calculate moment derivatives in the `moments` struct, in case they were changed
+    # by the previous call
+    apply_all_bcs_constraints_update_moments!(
+        scratch[t_params.n_rk_stages+1], moments, fields, boundary_distributions, vz, vr,
+        vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition, geometry,
+        gyroavs, num_diss_params, advance, scratch_dummy, false; pdf_bc_constraints=false)
+
+    # Calculate the timstep error estimates
     ion_pdf_error = local_error_norm(scratch[2].pdf, scratch[t_params.n_rk_stages+1].pdf,
                                      t_params.rtol, t_params.atol;
                                      method=error_norm_method, skip_r_inner=skip_r_inner,
@@ -2035,7 +2078,6 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
     # Calculate error for ion moments, if necessary
     if moments.evolve_density
         begin_s_r_z_region()
-        rk_loworder_solution!(scratch, scratch_implicit, :density, t_params)
         ion_n_err = local_error_norm(scratch[2].density,
                                      scratch[t_params.n_rk_stages+1].density,
                                      t_params.rtol, t_params.atol;
@@ -2047,7 +2089,6 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
     end
     if moments.evolve_upar
         begin_s_r_z_region()
-        rk_loworder_solution!(scratch, scratch_implicit, :upar, t_params)
         ion_u_err = local_error_norm(scratch[2].upar,
                                      scratch[t_params.n_rk_stages+1].upar, t_params.rtol,
                                      t_params.atol; method=error_norm_method,
@@ -2058,7 +2099,6 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
     end
     if moments.evolve_ppar
         begin_s_r_z_region()
-        rk_loworder_solution!(scratch, scratch_implicit, :ppar, t_params)
         ion_p_err = local_error_norm(scratch[2].ppar,
                                      scratch[t_params.n_rk_stages+1].ppar, t_params.rtol,
                                      t_params.atol; method=error_norm_method,
@@ -2101,7 +2141,6 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
         push!(CFL_limits, t_params.CFL_prefactor * neutral_vz_CFL)
 
         # Calculate error for neutral distribution functions
-        rk_loworder_solution!(scratch, scratch_implicit, :pdf_neutral, t_params; neutrals=true)
         neut_pdf_error = local_error_norm(scratch[2].pdf_neutral,
                                           scratch[end].pdf_neutral, t_params.rtol,
                                           t_params.atol; method=error_norm_method,
@@ -2116,7 +2155,6 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
         # Calculate error for neutral moments, if necessary
         if moments.evolve_density
             begin_sn_r_z_region()
-            rk_loworder_solution!(scratch, scratch_implicit, :density_neutral, t_params; neutrals=true)
             neut_n_err = local_error_norm(scratch[2].density_neutral,
                                           scratch[end].density_neutral, t_params.rtol,
                                           t_params.atol, true; method=error_norm_method,
@@ -2128,7 +2166,6 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
         end
         if moments.evolve_upar
             begin_sn_r_z_region()
-            rk_loworder_solution!(scratch, scratch_implicit, :uz_neutral, t_params; neutrals=true)
             neut_u_err = local_error_norm(scratch[2].uz_neutral,
                                           scratch[t_params.n_rk_stages+1].uz_neutral,
                                           t_params.rtol, t_params.atol, true;
@@ -2141,7 +2178,6 @@ function adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, momen
         end
         if moments.evolve_ppar
             begin_sn_r_z_region()
-            rk_loworder_solution!(scratch, scratch_implicit, :pz_neutral, t_params; neutrals=true)
             neut_p_err = local_error_norm(scratch[2].pz_neutral,
                                           scratch[t_params.n_rk_stages+1].pz_neutral,
                                           t_params.rtol, t_params.atol, true;
@@ -2312,8 +2348,8 @@ function ssp_rk!(pdf, scratch, scratch_implicit, t, t_params, vz, vr, vzeta, vpa
             end
         end
         adaptive_timestep_update!(scratch, scratch_implicit, t, t_params, moments, fields,
-                                  composition, collisions, geometry,
-                                  external_source_settings, spectral_objects,
+                                  boundary_distributions, composition, collisions,
+                                  geometry, external_source_settings, spectral_objects,
                                   advect_objects, gyroavs, num_diss_params, advance,
                                   scratch_dummy, r, z, vperp, vpa, vzeta, vr, vz, success,
                                   nl_max_its_fraction)
