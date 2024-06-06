@@ -544,6 +544,12 @@ Impose fluid approximation to electron sheath boundary condition on the parallel
 flux. See Stangeby textbook, equations (2.89) and (2.90).
 """
 function electron_fluid_qpar_boundary_condition!(ppar, upar, dens, electron_moments, z)
+    if z.bc == "periodic"
+        # Nothing to do as z-derivative used to calculate qpar already imposed
+        # periodicity.
+        return nothing
+    end
+
     begin_r_region()
 
     if z.irank == 0 && (z.irank == z.nrank - 1)
