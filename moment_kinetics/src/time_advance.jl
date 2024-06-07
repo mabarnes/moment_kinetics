@@ -2211,6 +2211,8 @@ function apply_all_bcs_constraints_update_moments!(
             moments.neutral.pz[iz,ir,isn] = this_scratch.pz_neutral[iz,ir,isn]
         end
         @loop_r_z ir iz begin
+            moments.electron.dens[iz,ir] = this_scratch.electron_density[iz,ir]
+            moments.electron.upar[iz,ir] = this_scratch.electron_upar[iz,ir]
             moments.electron.ppar[iz,ir] = this_scratch.electron_ppar[iz,ir]
         end
 
