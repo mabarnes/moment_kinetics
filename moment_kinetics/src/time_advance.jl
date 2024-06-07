@@ -2144,6 +2144,8 @@ function apply_all_bcs_constraints_update_moments!(
     vpa_advect, vperp_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.vperp_advect, advect_objects.r_advect, advect_objects.z_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
+    success = true
+
     if pdf_bc_constraints
         # Ensure there are no negative values in the pdf before applying boundary
         # conditions, so that negative deviations do not mess up the integral-constraint
@@ -2216,13 +2218,17 @@ function apply_all_bcs_constraints_update_moments!(
         # (because this function is being called after a failed timestep, to reset to the
         # state at the beginning of the step), we also do not need to update the
         # electrons.
-        if update_electrons
-            update_electron_pdf!(scratch_electron, pdf.electron.norm, moments, fields.phi,
-                                 r, z, vperp, vpa, z_spectral, vperp_spectral,
-                                 vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-                                 t_params.electron, collisions, composition,
-                                 external_source_settings, num_diss_params,
-                                 max_electron_pdf_iterations)
+        # Note that if some solve for the implicit timestep already failed, we will reset
+        # to the beginning of the ion/neutral timestep, so the electron solution
+        # calculated here would be discarded - we might as well skip calculating it in
+        # that case.
+        if update_electrons && success
+            _, kinetic_electron_success = update_electron_pdf!(
+               scratch_electron, pdf.electron.norm, moments, fields.phi, r, z, vperp, vpa,
+               z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
+               scratch_dummy, t_params.electron, collisions, composition,
+               external_source_settings, num_diss_params, max_electron_pdf_iterations)
+            success = success && kinetic_electron_success
         end
     end
     # update the electron parallel friction force
@@ -2292,6 +2298,8 @@ function apply_all_bcs_constraints_update_moments!(
                                               z_spectral,
                                               num_diss_params.neutral.moment_dissipation_coefficient)
     end
+
+    return success
 end
 
 """
@@ -2712,12 +2720,19 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t, t_params, 
                 # The result of the implicit solve gives the state vector at 'istage'
                 # which is used as input to the explicit part of the IMEX time step.
                 old_scratch = scratch_implicit[istage]
-                apply_all_bcs_constraints_update_moments!(
+                kinetic_electron_success = apply_all_bcs_constraints_update_moments!(
                     scratch_implicit[istage], pdf, moments, fields,
                     boundary_distributions, scratch_electron, vz, vr, vzeta, vpa, vperp,
                     z, r, spectral_objects, advect_objects, composition, collisions,
                     geometry, gyroavs, external_source_settings, num_diss_params,
                     t_params, advance, scratch_dummy, false)
+                success = success && kinetic_electron_success
+                if !success
+                    # Break out of the istage loop, as passing `success = false` to the
+                    # adaptive timestep update function will signal a failed timestep, so
+                    # that we restart this timestep with a smaller `dt`.
+                    break
+                end
             end
         else
             # Fully explicit method starts the forward-Euler step with the result from the
@@ -2748,13 +2763,20 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t, t_params, 
                                 || istage == n_rk_stages
                                 || t_params.implicit_coefficient_is_zero[istage+1])
         diagnostic_moments = diagnostic_checks && istage == n_rk_stages
-        apply_all_bcs_constraints_update_moments!(
+        kinetic_electron_success = apply_all_bcs_constraints_update_moments!(
             scratch[istage+1], pdf, moments, fields, boundary_distributions,
             scratch_electron, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
             advect_objects, composition, collisions, geometry, gyroavs,
             external_source_settings, num_diss_params, t_params, advance, scratch_dummy,
             diagnostic_moments; pdf_bc_constraints=apply_bc_constraints,
             update_electrons=apply_bc_constraints)
+        success = success && kinetic_electron_success
+        if !success
+            # Break out of the istage loop, as passing `success = false` to the
+            # adaptive timestep update function will signal a failed timestep, so
+            # that we restart this timestep with a smaller `dt`.
+            break
+        end
     end
 
     if t_params.adaptive

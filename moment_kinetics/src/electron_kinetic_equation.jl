@@ -1,6 +1,5 @@
 module electron_kinetic_equation
 
-using Dates
 using LinearAlgebra
 using MPI
 
@@ -549,11 +548,11 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         end
     end
     if !electron_pdf_converged
-        # need to exit or handle this appropriately
-        error("!!!max number of iterations for electron pdf update exceeded!!!\n"
-              * "Stopping at $(Dates.format(now(), dateformat"H:MM:SS"))")
+        success = false
+    else
+        success = true
     end
-    return time
+    return time, success
 end
 
 function speedup_hack!(fvec_out, fvec_in, z_speedup_fac, z, vpa; evolve_ppar=false)

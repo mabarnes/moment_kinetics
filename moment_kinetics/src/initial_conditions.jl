@@ -11,6 +11,7 @@ export create_boundary_distributions
 export create_pdf
 
 # package
+using Dates
 using SpecialFunctions: erfc
 # modules
 using ..type_definitions: mk_float, mk_int
@@ -653,7 +654,7 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
             resize!(t_params.dfns_output_times, n_truncated)
             t_params.dfns_output_times .= truncated_times
         end
-        electron_pseudotime =
+        electron_pseudotime, success =
             @views update_electron_pdf!(scratch, pdf.electron.norm, moments, phi, r, z,
                                         vperp, vpa, z_spectral, vperp_spectral,
                                         vpa_spectral, z_advect, vpa_advect, scratch_dummy,
@@ -664,13 +665,17 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
                                         initial_time=code_time,
                                         residual_tolerance=t_input["initialization_residual_value"],
                                         evolve_ppar=true)
+        if !success
+            error("!!!max number of iterations for electron pdf update exceeded!!!\n"
+                  * "Stopping at $(Dates.format(now(), dateformat"H:MM:SS"))")
+        end
 
         # Now run without evolve_ppar=true to get pdf_electron fully to steady state,
         # ready for the start of the ion time advance.
         if global_rank[] == 0
             println("Initializing electrons - evolving pdf_electron only to steady state")
         end
-        electron_pseudotime =
+        electron_pseudotime, success =
             @views update_electron_pdf!(scratch, pdf.electron.norm, moments, phi, r, z,
                                         vperp, vpa, z_spectral, vperp_spectral,
                                         vpa_spectral, z_advect, vpa_advect, scratch_dummy,
@@ -679,6 +684,10 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
                                         max_electron_pdf_iterations;
                                         io_electron=io_initial_electron,
                                         initial_time=electron_pseudotime)
+        if !success
+            error("!!!max number of iterations for electron pdf update exceeded!!!\n"
+                  * "Stopping at $(Dates.format(now(), dateformat"H:MM:SS"))")
+        end
 
         begin_r_z_vperp_vpa_region()
         @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
