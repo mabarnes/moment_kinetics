@@ -914,7 +914,7 @@ function local_error_norm(f_loworder::MPISharedArray{mk_float,4},
         end
         # Will sum results from different processes in shared memory block after returning
         # from this function.
-        nvpa, nvperp, nz, nr, nspecies = size(f_loworder)
+        nvpa, nvperp, nz, nr = size(f_loworder)
         if skip_r_inner
             nr -= 1
         end
