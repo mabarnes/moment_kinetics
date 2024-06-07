@@ -112,14 +112,16 @@ end
         println("made inputs")
         println("vpa: ngrid: ",ngrid," nelement: ",nelement_local_vpa, " Lvpa: ",Lvpa)
         println("vperp: ngrid: ",ngrid," nelement: ",nelement_local_vperp, " Lvperp: ",Lvperp)
-        vpa, vpa_spectral = define_coordinate(vpa_input)
-        vperp, vperp_spectral = define_coordinate(vperp_input)
+        #vpa, vpa_spectral = define_coordinate(vpa_input,ignore_MPI=false)
+        #vperp, vperp_spectral = define_coordinate(vperp_input,ignore_MPI=false)
         
         # Set up MPI
         if standalone
             initialize_comms!()
         end
         setup_distributed_memory_MPI(1,1,1,1)
+        vpa, vpa_spectral = define_coordinate(vpa_input,ignore_MPI=false)
+        vperp, vperp_spectral = define_coordinate(vperp_input,ignore_MPI=false)
         looping.setup_loop_ranges!(block_rank[], block_size[];
                                        s=1, sn=1,
                                        r=1, z=1, vperp=vperp.n, vpa=vpa.n,
