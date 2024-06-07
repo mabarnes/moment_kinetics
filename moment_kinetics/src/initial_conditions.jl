@@ -665,7 +665,7 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
                                         initial_time=code_time,
                                         residual_tolerance=t_input["initialization_residual_value"],
                                         evolve_ppar=true)
-        if !success
+        if success != ""
             error("!!!max number of iterations for electron pdf update exceeded!!!\n"
                   * "Stopping at $(Dates.format(now(), dateformat"H:MM:SS"))")
         end
@@ -684,7 +684,7 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
                                         max_electron_pdf_iterations;
                                         io_electron=io_initial_electron,
                                         initial_time=electron_pseudotime)
-        if !success
+        if success != ""
             error("!!!max number of iterations for electron pdf update exceeded!!!\n"
                   * "Stopping at $(Dates.format(now(), dateformat"H:MM:SS"))")
         end

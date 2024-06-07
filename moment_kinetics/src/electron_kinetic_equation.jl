@@ -548,9 +548,9 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         end
     end
     if !electron_pdf_converged
-        success = false
+        success = "kinetic-electrons"
     else
-        success = true
+        success = ""
     end
     return time, success
 end
@@ -1150,7 +1150,7 @@ function electron_adaptive_timestep_update!(scratch, t, t_params, moments, phi, 
     end
 
     adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, error_norms,
-                                       total_points, current_dt, error_norm_method, true,
+                                       total_points, current_dt, error_norm_method, "",
                                        0.0, electron=true)
 
     return nothing

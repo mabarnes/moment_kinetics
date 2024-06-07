@@ -7413,6 +7413,13 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing, electro
                                 linestyle=:dot,
                                 label=prefix * "nonlinear iteration convergence failure", ax=ax_failures)
                     end
+                    if ri.composition.electron_physics == kinetic_electrons
+                        # Kinetic electron iteration failed to converge
+                        counter += 1
+                        plot_1d(time, @view failure_caused_by_per_output[counter,:];
+                                linestyle=:dot,
+                                label=prefix * "nonlinear iteration convergence failure", ax=ax_failures)
+                    end
                 end
 
                 if counter > size(failure_caused_by_per_output, 1)

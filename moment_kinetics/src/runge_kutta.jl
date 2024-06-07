@@ -1056,7 +1056,7 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
         error("Unrecognized error_norm_method '$method'")
     end
 
-    if !success
+    if success != ""
         # Iteration failed in implicit part of timestep try decreasing timestep
 
         # Set scratch[end] equal to scratch[1] to start the timestep over
@@ -1088,8 +1088,20 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
             t_params.previous_dt[] = 0.0
 
             # Call the 'cause' of the timestep failure the variable that has the biggest
-            # error norm here
-            t_params.failure_caused_by[end] += 1
+            # error norm here.
+            # Could do with a better way to sort the different possible types of
+            # convergence failure...
+            if t_params.rk_coefs_implicit !== nothing && composition.electron_physics == kinetic_electrons
+                if success == "nonlinear-solver"
+                    t_params.failure_caused_by[end-1] += 1
+                elseif success == "kinetic-electrons"
+                    t_params.failure_caused_by[end] += 1
+                else
+                    error("Unrecognised cause of convergence failure: \"$success\"")
+                end
+            else
+                t_params.failure_caused_by[end] += 1
+            end
 
             # If we were trying to take a step to the output timestep, dt will be smaller on
             # the re-try, so will not reach the output time.

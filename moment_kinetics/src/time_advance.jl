@@ -549,7 +549,10 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
         # electron pressure
         push!(t_params.limit_caused_by, 0) # RK accuracy
-        push!(t_params.failure_caused_by, 0)
+        push!(t_params.failure_caused_by, 0) # RK accuracy for electron_ppar
+        if composition.electron_physics == kinetic_electrons
+            push!(t_params.failure_caused_by, 0) # Convergence failure for kinetic electron solve
+        end
     end
     if composition.n_neutral_species > 0
         # neutral pdf
@@ -2144,7 +2147,7 @@ function apply_all_bcs_constraints_update_moments!(
     vpa_advect, vperp_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.vperp_advect, advect_objects.r_advect, advect_objects.z_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
-    success = true
+    success = ""
 
     if pdf_bc_constraints
         # Ensure there are no negative values in the pdf before applying boundary
@@ -2224,13 +2227,13 @@ function apply_all_bcs_constraints_update_moments!(
         # to the beginning of the ion/neutral timestep, so the electron solution
         # calculated here would be discarded - we might as well skip calculating it in
         # that case.
-        if update_electrons && success
+        if update_electrons && success == ""
             _, kinetic_electron_success = update_electron_pdf!(
                scratch_electron, pdf.electron.norm, moments, fields.phi, r, z, vperp, vpa,
                z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
                scratch_dummy, t_params.electron, collisions, composition,
                external_source_settings, num_diss_params, max_electron_pdf_iterations)
-            success = success && kinetic_electron_success
+            success = kinetic_electron_success
         end
     end
     # update the electron parallel friction force
@@ -2677,7 +2680,7 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t, t_params, 
     end
 
     # success is set to false if an iteration failed to converge in an implicit solve
-    success = true
+    success = ""
     for istage ∈ 1:n_rk_stages
         if t_params.rk_coefs_implicit !== nothing
             update_solution_vector!(scratch_implicit[istage], scratch[istage], moments,
@@ -2702,19 +2705,21 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t, t_params, 
                 # Note the timestep for this solve is rk_coefs_implict[istage,istage]*dt.
                 # The diagonal elements are equal to the Butcher 'a' coefficients
                 # rk_coefs_implicit[istage,istage]=a[istage,istage].
-                success = backward_euler!(scratch_implicit[istage], scratch[istage], pdf,
-                                          fields, moments, advect_objects, vz, vr, vzeta,
-                                          vpa, vperp, gyrophase, z, r, t, t_params.dt[] *
-                                          t_params.rk_coefs_implicit[istage,istage],
-                                          spectral_objects, composition, collisions,
-                                          geometry, scratch_dummy,
-                                          manufactured_source_list,
-                                          external_source_settings, num_diss_params,
-                                          gyroavs, nl_solver_params, advance_implicit,
-                                          fp_arrays, istage)
-                success = MPI.Allreduce(success, &, comm_world)
-                if !success
-                    # Break out of the istage loop, as passing `success = false` to the
+                nl_success = backward_euler!(scratch_implicit[istage], scratch[istage],
+                                             pdf, fields, moments, advect_objects, vz, vr,
+                                             vzeta, vpa, vperp, gyrophase, z, r, t,
+                                             t_params.dt[] *
+                                             t_params.rk_coefs_implicit[istage,istage],
+                                             spectral_objects, composition, collisions,
+                                             geometry, scratch_dummy,
+                                             manufactured_source_list,
+                                             external_source_settings, num_diss_params,
+                                             gyroavs, nl_solver_params, advance_implicit,
+                                             fp_arrays, istage)
+                nl_success = MPI.Allreduce(nl_success, &, comm_world)
+                if !nl_success
+                    success = "nonlinear-solver"
+                    # Break out of the istage loop, as passing `success != ""` to the
                     # adaptive timestep update function will signal a failed timestep, so
                     # that we restart this timestep with a smaller `dt`.
                     break
@@ -2722,15 +2727,14 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t, t_params, 
                 # The result of the implicit solve gives the state vector at 'istage'
                 # which is used as input to the explicit part of the IMEX time step.
                 old_scratch = scratch_implicit[istage]
-                kinetic_electron_success = apply_all_bcs_constraints_update_moments!(
+                success = apply_all_bcs_constraints_update_moments!(
                     scratch_implicit[istage], pdf, moments, fields,
                     boundary_distributions, scratch_electron, vz, vr, vzeta, vpa, vperp,
                     z, r, spectral_objects, advect_objects, composition, collisions,
                     geometry, gyroavs, external_source_settings, num_diss_params,
                     t_params, advance, scratch_dummy, false)
-                success = success && kinetic_electron_success
-                if !success
-                    # Break out of the istage loop, as passing `success = false` to the
+                if success != ""
+                    # Break out of the istage loop, as passing `success != ""` to the
                     # adaptive timestep update function will signal a failed timestep, so
                     # that we restart this timestep with a smaller `dt`.
                     break
@@ -2765,16 +2769,15 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t, t_params, 
                                 || istage == n_rk_stages
                                 || t_params.implicit_coefficient_is_zero[istage+1])
         diagnostic_moments = diagnostic_checks && istage == n_rk_stages
-        kinetic_electron_success = apply_all_bcs_constraints_update_moments!(
+        success = apply_all_bcs_constraints_update_moments!(
             scratch[istage+1], pdf, moments, fields, boundary_distributions,
             scratch_electron, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
             advect_objects, composition, collisions, geometry, gyroavs,
             external_source_settings, num_diss_params, t_params, advance, scratch_dummy,
             diagnostic_moments; pdf_bc_constraints=apply_bc_constraints,
             update_electrons=apply_bc_constraints)
-        success = success && kinetic_electron_success
-        if !success
-            # Break out of the istage loop, as passing `success = false` to the
+        if success != ""
+            # Break out of the istage loop, as passing `success != ""` to the
             # adaptive timestep update function will signal a failed timestep, so
             # that we restart this timestep with a smaller `dt`.
             break
@@ -2797,7 +2800,7 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t, t_params, 
                                   advect_objects, gyroavs, num_diss_params,
                                   advance, scratch_dummy, r, z, vperp, vpa,
                                   vzeta, vr, vz, success, nl_max_its_fraction)
-    elseif !success
+    elseif success != ""
         error("Implicit part of timestep failed")
     end
 
