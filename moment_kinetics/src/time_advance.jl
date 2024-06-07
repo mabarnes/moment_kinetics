@@ -2195,7 +2195,7 @@ function apply_all_bcs_constraints_update_moments!(
                                            num_diss_params.electron.moment_dissipation_coefficient, 
                                            composition.electron_physics)
     if composition.electron_physics == kinetic_electrons
-        max_electron_pdf_iterations = 100000
+        max_electron_pdf_iterations = 1000
 
         # Copy ion and electron moments from `scratch` into `moments` to be used in
         # electron kinetic equation update
