@@ -69,8 +69,10 @@ type = "Fekete4(3)"
 nstep = 1000000
 dt = 1.0e-6
 minimum_dt = 1.0e-6
+max_increase_factor_near_last_fail = 1.001
+last_fail_proximity_factor = 1.1
 nwrite = 10000
-nwrite_dfns = 100000
+nwrite_dfns = 10000
 steady_state_residual = true
 converged_residual_value = 1.0e-3
 
