@@ -2134,7 +2134,8 @@ function apply_all_bcs_constraints_update_moments!(
         this_scratch, pdf, moments, fields, boundary_distributions, scratch_electron, vz,
         vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
         collisions, geometry, gyroavs, external_source_settings, num_diss_params,
-        t_params, advance, scratch_dummy, diagnostic_moments; pdf_bc_constraints=true)
+        t_params, advance, scratch_dummy, diagnostic_moments; pdf_bc_constraints=true,
+        update_electrons=true)
 
     begin_s_r_z_region()
 
@@ -2215,7 +2216,7 @@ function apply_all_bcs_constraints_update_moments!(
         # (because this function is being called after a failed timestep, to reset to the
         # state at the beginning of the step), we also do not need to update the
         # electrons.
-        if pdf_bc_constraints
+        if update_electrons
             update_electron_pdf!(scratch_electron, pdf.electron.norm, moments, fields.phi,
                                  r, z, vperp, vpa, z_spectral, vperp_spectral,
                                  vpa_spectral, z_advect, vpa_advect, scratch_dummy,
@@ -2423,7 +2424,7 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron, 
         scratch[2], pdf, moments, fields, boundary_distributions, scratch_electron, vz,
         vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
         collisions, geometry, gyroavs, external_source_settings, num_diss_params,
-        t_params, advance, scratch_dummy, false)
+        t_params, advance, scratch_dummy, false; update_electrons=false)
 
     # Re-calculate moment derivatives in the `moments` struct, in case they were changed
     # by the previous call
@@ -2432,7 +2433,7 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron, 
         scratch_electron, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
         advect_objects, composition, collisions, geometry, gyroavs,
         external_source_settings, num_diss_params, t_params, advance, scratch_dummy,
-        false; pdf_bc_constraints=false)
+        false; pdf_bc_constraints=false, update_electrons=false)
 
     # Calculate the timstep error estimates
     ion_pdf_error = local_error_norm(scratch[2].pdf, scratch[t_params.n_rk_stages+1].pdf,
@@ -2587,7 +2588,8 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron, 
             scratch[t_params.n_rk_stages+1], pdf, moments, fields, nothing, nothing, vz,
             vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
             collisions, geometry, gyroavs, external_source_settings, num_diss_params,
-            t_params, advance, scratch_dummy, false; pdf_bc_constraints=false)
+            t_params, advance, scratch_dummy, false; pdf_bc_constraints=false,
+            update_electrons=false)
     end
 
     if composition.electron_physics == kinetic_electrons
@@ -2751,7 +2753,8 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t, t_params, 
             scratch_electron, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
             advect_objects, composition, collisions, geometry, gyroavs,
             external_source_settings, num_diss_params, t_params, advance, scratch_dummy,
-            diagnostic_moments; pdf_bc_constraints=apply_bc_constraints)
+            diagnostic_moments; pdf_bc_constraints=apply_bc_constraints,
+            update_electrons=apply_bc_constraints)
     end
 
     if t_params.adaptive
