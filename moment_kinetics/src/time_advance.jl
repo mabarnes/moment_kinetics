@@ -2590,18 +2590,6 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron, 
                                        total_points, current_dt, error_norm_method,
                                        success, nl_max_its_fraction)
 
-    if t_params.previous_dt[] == 0.0
-        # Re-update remaining velocity moments that are calculable from the evolved
-        # pdf These need to be re-calculated because `scratch[istage+1]` is now the
-        # state at the beginning of the timestep, because the timestep failed
-        apply_all_bcs_constraints_update_moments!(
-            scratch[t_params.n_rk_stages+1], pdf, moments, fields, nothing, nothing, vz,
-            vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
-            collisions, geometry, gyroavs, external_source_settings, num_diss_params,
-            t_params, advance, scratch_dummy, false; pdf_bc_constraints=false,
-            update_electrons=false)
-    end
-
     if composition.electron_physics == kinetic_electrons
         if t_params.previous_dt[] == 0.0
             # Reset electron pdf to its value at the beginning of this step.
@@ -2621,6 +2609,18 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron, 
                     pdf.electron.norm[ivpa,ivperp,iz,ir]
             end
         end
+    end
+
+    if t_params.previous_dt[] == 0.0
+        # Re-update remaining velocity moments that are calculable from the evolved
+        # pdf These need to be re-calculated because `scratch[istage+1]` is now the
+        # state at the beginning of the timestep, because the timestep failed
+        apply_all_bcs_constraints_update_moments!(
+            scratch[t_params.n_rk_stages+1], pdf, moments, fields, nothing, nothing, vz,
+            vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
+            collisions, geometry, gyroavs, external_source_settings, num_diss_params,
+            t_params, advance, scratch_dummy, false; pdf_bc_constraints=false,
+            update_electrons=false)
     end
 
     return nothing
