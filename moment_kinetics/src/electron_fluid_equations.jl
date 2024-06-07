@@ -419,7 +419,7 @@ function calculate_electron_qpar!(electron_moments, pdf, ppar_e, upar_e, upar_i,
                                   me_over_mi, electron_model, vpa)
     # only calculate qpar_e if needs updating
     qpar_updated = electron_moments.qpar_updated
-    if !qpar_updated[]
+    #if !qpar_updated[]
         qpar_e = electron_moments.qpar
         vth_e = electron_moments.vth
         dTe_dz = electron_moments.dT_dz
@@ -453,7 +453,7 @@ function calculate_electron_qpar!(electron_moments, pdf, ppar_e, upar_e, upar_i,
                 qpar_e[iz,ir] = 0.0
             end
         end
-    end
+    #end
     # qpar has been updated
     qpar_updated[] = true
     return nothing
