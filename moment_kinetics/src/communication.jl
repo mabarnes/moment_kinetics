@@ -531,6 +531,11 @@ end
     # instances, so their is_read and is_written members can be checked and
     # reset by _block_synchronize()
     const global_debugmpisharedarray_store = Vector{DebugMPISharedArray}(undef, 0)
+    # 'anyv' regions require a separate array store, because within an anyv region,
+    # processes in the same shared memory block may still not be synchronized if they are
+    # in different anyv sub-blocks, so debug checks within an anyv region should only
+    # consider the anyv-specific arrays.
+    const global_anyv_debugmpisharedarray_store = Vector{DebugMPISharedArray}(undef, 0)
 end
 
 """
@@ -646,7 +651,11 @@ function allocate_shared(T, dims; comm=nothing, maybe_debug=true)
         # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
         if maybe_debug
             debug_array = DebugMPISharedArray(array, comm)
-            push!(global_debugmpisharedarray_store, debug_array)
+            if comm == comm_anyv_subblock[]
+                push!(global_anyv_debugmpisharedarray_store, debug_array)
+            else
+                push!(global_debugmpisharedarray_store, debug_array)
+            end
             return debug_array
         end
     end
@@ -775,11 +784,17 @@ end
     Raises an error if any array has been accessed incorrectly since the previous call
     to _block_synchronize()
 
-    Can be added when debugging to help in down where an error occurs.
+    Can be added when debugging to help pin down where an error occurs.
     """
-    function debug_check_shared_memory(; kwargs...)
-        for (arraynum, array) ∈ enumerate(global_debugmpisharedarray_store)
-            debug_check_shared_array(array; kwargs...)
+    function debug_check_shared_memory(; comm=comm_block[], kwargs...)
+        if comm == comm_anyv_subblock[]
+            for (arraynum, array) ∈ enumerate(global_anyv_debugmpisharedarray_store)
+                debug_check_shared_array(array; comm=comm, kwargs...)
+            end
+        else
+            for (arraynum, array) ∈ enumerate(global_debugmpisharedarray_store)
+                debug_check_shared_array(array; comm=comm, kwargs...)
+            end
         end
         return nothing
     end
@@ -960,7 +975,7 @@ function _anyv_subblock_synchronize()
         # * If an element is written to, only the rank that writes to it should read it.
         #
         @debug_detect_redundant_block_synchronize previous_was_unnecessary = true
-        for (arraynum, array) ∈ enumerate(global_debugmpisharedarray_store)
+        for (arraynum, array) ∈ enumerate(global_anyv_debugmpisharedarray_store)
 
             debug_check_shared_array(array; comm=comm_anyv_subblock[])
 
@@ -1074,6 +1089,7 @@ end
 """
 function free_shared_arrays()
     @debug_shared_array resize!(global_debugmpisharedarray_store, 0)
+    @debug_shared_array resize!(global_anyv_debugmpisharedarray_store, 0)
 
     for w ∈ global_Win_store
         MPI.free(w)
