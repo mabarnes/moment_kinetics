@@ -100,7 +100,7 @@ const anyv_subblock_size = Ref{mk_int}()
 
 """
 """
-const anyv_isubblock_index = Ref{mk_int}()
+const anyv_isubblock_index = Ref{Union{mk_int,Nothing}}()
 
 """
 """
@@ -567,6 +567,19 @@ Array{mk_float}
 function allocate_shared(T, dims; comm=nothing, maybe_debug=true)
     if comm === nothing
         comm = comm_block[]
+    elseif comm == MPI.COMM_NULL
+        # If `comm` is a null communicator (on this process), then this array is just a
+        # dummy that will not be used.
+        array = Array{T}(undef, (0 for _ ∈ dims)...)
+
+        @debug_shared_array begin
+            # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
+            if maybe_debug
+                array = DebugMPISharedArray(array, comm)
+            end
+        end
+
+        return array
     end
     br = MPI.Comm_rank(comm)
     bs = MPI.Comm_size(comm)
@@ -909,6 +922,10 @@ sub-blocks, depending on how the species and spatial dimensions are split up.
 `_anyv_subblock_synchronize()`.
 """
 function _anyv_subblock_synchronize()
+    if comm_anyv_subblock[] == MPI.COMM_NULL
+        # No synchronization to do for a null communicator
+        return nothing
+    end
 
     MPI.Barrier(comm_anyv_subblock[])
 
