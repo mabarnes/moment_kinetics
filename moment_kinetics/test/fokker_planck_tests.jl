@@ -279,7 +279,8 @@ function runtests()
                  calculate_GG=true, calculate_dGdvperp=true)
             # extract C[Fs,Fs'] result
             # and Rosenbluth potentials for testing
-            begin_vperp_vpa_region()
+            begin_s_r_z_anyv_region()
+            begin_anyv_vperp_vpa_region()
             @loop_vperp_vpa ivperp ivpa begin
                 G_M_num[ivpa,ivperp] = fkpl_arrays.GG[ivpa,ivperp]
                 H_M_num[ivpa,ivperp] = fkpl_arrays.HH[ivpa,ivperp]
@@ -419,7 +420,8 @@ function runtests()
                     conserving_corrections!(fkpl_arrays.CC,Fs_M,vpa,vperp,dummy_array)
                 end
                 # extract C[Fs,Fs'] result
-                begin_vperp_vpa_region()
+                begin_s_r_z_anyv_region()
+                begin_anyv_vperp_vpa_region()
                 @loop_vperp_vpa ivperp ivpa begin
                     C_M_num[ivpa,ivperp] = fkpl_arrays.CC[ivpa,ivperp]
                 end
@@ -579,7 +581,8 @@ function runtests()
                     density_conserving_correction!(fkpl_arrays.CC,Fs_M,vpa,vperp,dummy_array)
                 end
                 # extract C[Fs,Fs'] result
-                begin_vperp_vpa_region()
+                begin_s_r_z_anyv_region()
+                begin_anyv_vperp_vpa_region()
                 @loop_vperp_vpa ivperp ivpa begin
                     C_M_num[ivpa,ivperp] = fkpl_arrays.CC[ivpa,ivperp]
                 end
