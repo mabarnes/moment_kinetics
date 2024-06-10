@@ -15,10 +15,11 @@ export H_Maxwellian, G_Maxwellian
 export Cssp_fully_expanded_form, calculate_collisional_fluxes
 
 export print_test_data, fkpl_error_data, allocate_error_data
-
+export save_fkpl_error_data
 #using Plots
 #using LaTeXStrings
-using Measures
+#using Measures
+using HDF5
 using ..type_definitions: mk_float, mk_int
 using SpecialFunctions: erf
 using ..velocity_moments: get_density
@@ -337,6 +338,49 @@ function allocate_error_data()
     return fkpl_error_data(C_M,H_M,dHdvpa_M,dHdvperp_M,
         G_M,dGdvperp_M,d2Gdvpa2_M,d2Gdvperpdvpa_M,d2Gdvperp2_M,
         moments)
+end
+
+function save_fkpl_error_data(outdir,ncore,ngrid,nelement_list,
+    max_C_err, max_H_err, max_G_err, max_dHdvpa_err, max_dHdvperp_err,
+    max_d2Gdvperp2_err, max_d2Gdvpa2_err, max_d2Gdvperpdvpa_err, max_dGdvperp_err, 
+    L2_C_err, L2_H_err, L2_G_err, L2_dHdvpa_err, L2_dHdvperp_err, L2_d2Gdvperp2_err,
+    L2_d2Gdvpa2_err, L2_d2Gdvperpdvpa_err, L2_dGdvperp_err,
+    n_err, u_err, p_err, calculate_times, init_times, expected_t_2, expected_t_3,
+    expected_diff, expected_integral)
+    filename = outdir*"fkpl_error_data_ngrid_"*string(ngrid)*"_ncore_"*string(ncore)*".h5"
+    fid = h5open(filename, "w")
+    fid["ncore"] = ncore
+    fid["ngrid"] = ngrid
+    fid["nelement_list"] = nelement_list
+    fid["max_C_err"] = max_C_err
+    fid["max_H_err"] = max_H_err
+    fid["max_G_err"] = max_G_err
+    fid["max_dHdvpa_err"] = max_dHdvpa_err
+    fid["max_dHdvperp_err"] = max_dHdvperp_err
+    fid["max_d2Gdvperp2_err"] = max_d2Gdvperp2_err
+    fid["max_d2Gdvpa2_err"] = max_d2Gdvpa2_err
+    fid["max_d2Gdvperpdvpa_err"] = max_d2Gdvperpdvpa_err
+    fid["max_dGdvperp_err"] = max_dGdvperp_err
+    fid["L2_C_err"] = L2_C_err
+    fid["L2_H_err"] = L2_H_err
+    fid["L2_G_err"] = L2_G_err
+    fid["L2_dHdvpa_err"] = L2_dHdvpa_err
+    fid["L2_dHdvperp_err"] = L2_dHdvperp_err
+    fid["L2_d2Gdvperp2_err"] = L2_d2Gdvperp2_err
+    fid["L2_d2Gdvpa2_err"] = L2_d2Gdvpa2_err
+    fid["L2_d2Gdvperpdvpa_err"] = L2_d2Gdvperpdvpa_err
+    fid["L2_dGdvperp_err"] = L2_dGdvperp_err
+    fid["n_err"] = n_err
+    fid["u_err"] = u_err
+    fid["p_err"] = p_err
+    fid["calculate_times"] = calculate_times
+    fid["init_times"] = init_times
+    fid["expected_t_2"] = expected_t_2
+    fid["expected_t_3"] = expected_t_3
+    fid["expected_diff"] = expected_diff
+    fid["expected_integral"] = expected_integral
+    close(fid)
+    return nothing
 end
 
 end
