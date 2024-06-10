@@ -664,7 +664,9 @@ function conserving_corrections!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
 
     # Broadcast x0, x1, x2 to all processes in the 'anyv' subblock
     param_vec = [x0, x1, x2, upar]
-    MPI.Bcast!(param_vec, 0, comm_anyv_subblock[])
+    if comm_anyv_subblock[] != MPI.COMM_NULL
+        MPI.Bcast!(param_vec, 0, comm_anyv_subblock[])
+    end
     (x0, x1, x2, upar) = param_vec
     
     # correct CC
@@ -695,7 +697,9 @@ function density_conserving_correction!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
 
     # Broadcast x0 to all processes in the 'anyv' subblock
     param_vec = [x0]
-    MPI.Bcast!(param_vec, 0, comm_anyv_subblock[])
+    if comm_anyv_subblock[] != MPI.COMM_NULL
+        MPI.Bcast!(param_vec, 0, comm_anyv_subblock[])
+    end
     x0 = param_vec[1]
     
     # correct CC
