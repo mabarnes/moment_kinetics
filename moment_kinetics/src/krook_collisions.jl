@@ -115,8 +115,8 @@ function krook_collisions!(pdf_out, fvec_in, moments, composition, collisions, v
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
                     (fvec_in.pdf[ivpa,ivperp,iz,ir,is]
-                     - exp(-((vpa.grid[ivpa] - fvec_in.upar[iz,ir,is])/vth)^2
-                           - (vperp.grid[ivperp]/vth)^2))
+                     - exp(-((vpa.grid[ivpa] - fvec_in.upar[iz,ir,is]))^2
+                           - (vperp.grid[ivperp])^2))
             end
         end
     elseif moments.evolve_upar

@@ -636,6 +636,15 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                                             right_weight*upper_z_pdf_buffer)
             end
 
+            # Add a non-flowing Maxwellian (that vanishes at the sheath entrance boundaries) to try to
+            # avoid the 'hole' in the distribution function that can drive instabilities.
+            @loop_z_vperp iz ivperp begin
+                @. pdf[:,ivperp,iz] += spec.z_IC.density_amplitude *
+                                      (1.0 - (2.0 * z.grid[iz] / z.L)^2) *
+                                      exp(-(vpa.grid^2 + vperp.grid[ivperp]^2)
+                                          / vth[iz]^2) / vth[iz]
+            end
+
             # Get the unnormalised pdf and the moments of the constructed full-f
             # distribution function (which will be modified from the input moments).
             convert_full_f_ion_to_normalised!(pdf, density, upar, ppar, vth, vperp,

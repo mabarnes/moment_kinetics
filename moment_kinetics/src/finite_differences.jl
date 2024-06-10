@@ -3,8 +3,8 @@
 module finite_differences
 
 using ..type_definitions: mk_float
-import ..calculus: elementwise_derivative!, elementwise_second_derivative!,
-                   second_derivative!
+import ..calculus: elementwise_derivative!, second_derivative!,
+                   derivative_elements_to_full_grid!
 using ..moment_kinetics_structs: discretization_info
 
 """
