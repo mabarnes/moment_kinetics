@@ -15,7 +15,7 @@ export H_Maxwellian, G_Maxwellian
 export Cssp_fully_expanded_form, calculate_collisional_fluxes
 
 export print_test_data, fkpl_error_data, allocate_error_data
-export save_fkpl_error_data
+export save_fkpl_error_data, save_fkpl_integration_error_data
 #using Plots
 #using LaTeXStrings
 #using Measures
@@ -380,6 +380,35 @@ function save_fkpl_error_data(outdir,ncore,ngrid,nelement_list,
     fid["expected_diff"] = expected_diff
     fid["expected_integral"] = expected_integral
     close(fid)
+    println("Saving error data: ",filename)
+    return nothing
+end
+
+function save_fkpl_integration_error_data(outdir,ncore,ngrid,nelement_list,
+    max_dfsdvpa_err, max_dfsdvperp_err, max_d2fsdvperpdvpa_err,
+    max_H_err, max_G_err, max_dHdvpa_err, max_dHdvperp_err,
+    max_d2Gdvperp2_err, max_d2Gdvpa2_err, max_d2Gdvperpdvpa_err, max_dGdvperp_err, 
+    expected_diff, expected_integral)
+    filename = outdir*"fkpl_integration_error_data_ngrid_"*string(ngrid)*"_ncore_"*string(ncore)*".h5"
+    fid = h5open(filename, "w")
+    fid["ncore"] = ncore
+    fid["ngrid"] = ngrid
+    fid["nelement_list"] = nelement_list
+    fid["max_dfsdvpa_err"] = max_dfsdvpa_err
+    fid["max_dfsdvperp_err"] = max_dfsdvperp_err
+    fid["max_d2fsdvperpdvpa_err"] = max_d2fsdvperpdvpa_err
+    fid["max_H_err"] = max_H_err
+    fid["max_G_err"] = max_G_err
+    fid["max_dHdvpa_err"] = max_dHdvpa_err
+    fid["max_dHdvperp_err"] = max_dHdvperp_err
+    fid["max_d2Gdvperp2_err"] = max_d2Gdvperp2_err
+    fid["max_d2Gdvpa2_err"] = max_d2Gdvpa2_err
+    fid["max_d2Gdvperpdvpa_err"] = max_d2Gdvperpdvpa_err
+    fid["max_dGdvperp_err"] = max_dGdvperp_err
+    fid["expected_diff"] = expected_diff
+    fid["expected_integral"] = expected_integral
+    close(fid)
+    println("Saving error data: ",filename)
     return nothing
 end
 
