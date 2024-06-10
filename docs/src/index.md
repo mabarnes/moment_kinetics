@@ -18,6 +18,7 @@ Pages = ["getting_started.md",
          "manual_setup.md",
          "machine_setup_notes.md",
          "parameter_scans.md",
+         "manufactured_solution_test_examples.md",
         ]
 ```
 
