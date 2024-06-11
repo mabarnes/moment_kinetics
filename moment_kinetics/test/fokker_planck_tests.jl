@@ -53,14 +53,12 @@ function create_grids(ngrid,nelement_vpa,nelement_vperp;
         #println("made inputs")
         #println("vpa: ngrid: ",ngrid," nelement: ",nelement_local_vpa, " Lvpa: ",Lvpa)
         #println("vperp: ngrid: ",ngrid," nelement: ",nelement_local_vperp, " Lvperp: ",Lvperp)
-        #vpa, vpa_spectral = define_coordinate(vpa_input,ignore_MPI=true)
-        #vperp, vperp_spectral = define_coordinate(vperp_input,ignore_MPI=true)
         
         # Set up MPI
         initialize_comms!()
         setup_distributed_memory_MPI(1,1,1,1)
-        vpa, vpa_spectral = define_coordinate(vpa_input,ignore_MPI=false)
-        vperp, vperp_spectral = define_coordinate(vperp_input,ignore_MPI=false)
+        vpa, vpa_spectral = define_coordinate(vpa_input)
+        vperp, vperp_spectral = define_coordinate(vperp_input)
         looping.setup_loop_ranges!(block_rank[], block_size[];
                                        s=1, sn=1,
                                        r=1, z=1, vperp=vperp.n, vpa=vpa.n,
@@ -281,7 +279,8 @@ function runtests()
                  calculate_GG=true, calculate_dGdvperp=true)
             # extract C[Fs,Fs'] result
             # and Rosenbluth potentials for testing
-            begin_vperp_vpa_region()
+            begin_s_r_z_anyv_region()
+            begin_anyv_vperp_vpa_region()
             @loop_vperp_vpa ivperp ivpa begin
                 G_M_num[ivpa,ivperp] = fkpl_arrays.GG[ivpa,ivperp]
                 H_M_num[ivpa,ivperp] = fkpl_arrays.HH[ivpa,ivperp]
@@ -421,7 +420,8 @@ function runtests()
                     conserving_corrections!(fkpl_arrays.CC,Fs_M,vpa,vperp,dummy_array)
                 end
                 # extract C[Fs,Fs'] result
-                begin_vperp_vpa_region()
+                begin_s_r_z_anyv_region()
+                begin_anyv_vperp_vpa_region()
                 @loop_vperp_vpa ivperp ivpa begin
                     C_M_num[ivpa,ivperp] = fkpl_arrays.CC[ivpa,ivperp]
                 end
@@ -581,7 +581,8 @@ function runtests()
                     density_conserving_correction!(fkpl_arrays.CC,Fs_M,vpa,vperp,dummy_array)
                 end
                 # extract C[Fs,Fs'] result
-                begin_vperp_vpa_region()
+                begin_s_r_z_anyv_region()
+                begin_anyv_vperp_vpa_region()
                 @loop_vperp_vpa ivperp ivpa begin
                     C_M_num[ivpa,ivperp] = fkpl_arrays.CC[ivpa,ivperp]
                 end

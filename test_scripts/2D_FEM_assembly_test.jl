@@ -113,16 +113,14 @@ end
         println("made inputs")
         println("vpa: ngrid: ",ngrid," nelement: ",nelement_local_vpa, " Lvpa: ",Lvpa)
         println("vperp: ngrid: ",ngrid," nelement: ",nelement_local_vperp, " Lvperp: ",Lvperp)
-        #vpa, vpa_spectral = define_coordinate(vpa_input,ignore_MPI=false)
-        #vperp, vperp_spectral = define_coordinate(vperp_input,ignore_MPI=false)
         
         # Set up MPI
         if standalone
             initialize_comms!()
         end
         setup_distributed_memory_MPI(1,1,1,1)
-        vpa, vpa_spectral = define_coordinate(vpa_input,ignore_MPI=false)
-        vperp, vperp_spectral = define_coordinate(vperp_input,ignore_MPI=false)
+        vpa, vpa_spectral = define_coordinate(vpa_input)
+        vperp, vperp_spectral = define_coordinate(vperp_input)
         looping.setup_loop_ranges!(block_rank[], block_size[];
                                        s=1, sn=1,
                                        r=1, z=1, vperp=vperp.n, vpa=vpa.n,
@@ -231,7 +229,6 @@ end
         ms = 1.0
         msp = 1.0
         nussp = 1.0
-        begin_serial_region()
         for ivperp in 1:vperp.n
             for ivpa in 1:vpa.n
                 Fs_M[ivpa,ivperp] = F_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
@@ -283,7 +280,8 @@ end
              algebraic_solve_for_d2Gdvperp2=false,calculate_GG=true,calculate_dGdvperp=true)
         # extract C[Fs,Fs'] result
         # and Rosenbluth potentials for testing
-        begin_vperp_vpa_region()
+        begin_s_r_z_anyv_region()
+        begin_anyv_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
             C_M_num[ivpa,ivperp] = fkpl_arrays.CC[ivpa,ivperp]
             G_M_num[ivpa,ivperp] = fkpl_arrays.GG[ivpa,ivperp]
