@@ -1852,6 +1852,11 @@ each file is only written by one process).
 """
 function append_to_dynamic_var end
 
+function append_to_dynamic_var(data::Nothing, args...; kwargs...)
+    # Variable was not created to save, so nothing to do.
+    return nothing
+end
+
 @debug_shared_array begin
     function append_to_dynamic_var(data::DebugMPISharedArray, args...; kwargs...)
         return append_to_dynamic_var(data.data, args...; kwargs...)
