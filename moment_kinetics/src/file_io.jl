@@ -493,6 +493,11 @@ attributes of the variable.
 """
 function write_single_value! end
 
+# Convert Enum values to String to be written to file
+function write_single_value!(file_or_group, name, data::Enum; kwargs...)
+    return write_single_value!(file_or_group, name, string(data); kwargs...)
+end
+
 """
 write some overview information for the simulation to the binary file
 """
@@ -559,7 +564,9 @@ function write_provenance_tracking_info!(fid, parallel_io, run_id, restart_time_
         # Convert input_dict into a TOML-formatted string so that we can store it in a
         # single variable.
         io_buffer = IOBuffer()
-        TOML.print(io_buffer, input_dict)
+        # The `mk_to_toml` function allows converting extra types (e.g. Enum) to things
+        # that can be printed to a TOML string/file.
+        TOML.print(mk_to_toml, io_buffer, input_dict)
         input_string = String(take!(io_buffer))
         write_single_value!(provenance_tracking, "input", input_string,
                             parallel_io=parallel_io,

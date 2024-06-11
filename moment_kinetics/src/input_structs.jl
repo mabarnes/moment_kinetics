@@ -8,6 +8,7 @@ export time_info
 export advection_input, advection_input_mutable
 export grid_input, grid_input_mutable
 export initial_condition_input, initial_condition_input_mutable
+export mk_to_toml
 export species_parameters, species_parameters_mutable
 export species_composition
 export drive_input, drive_input_mutable
@@ -651,16 +652,29 @@ Utility method for converting a string to an Enum when getting from a Dict, base
 type of the default value
 """
 function get(d::Dict, key, default::Enum)
-    valstring = get(d, key, nothing)
-    if valstring == nothing
+    val_maybe_string = get(d, key, nothing)
+    if val_maybe_string == nothing
         return default
+    elseif isa(val_maybe_string, Enum)
+        return val_maybe_string
     # instances(typeof(default)) gets the possible values of the Enum. Then convert to
     # Symbol, then to String.
-    elseif valstring ∈ (split(s, ".")[end] for s ∈ String.(Symbol.(instances(typeof(default)))))
-        return eval(Symbol(valstring))
+    elseif val_maybe_string ∈ Tuple(split(s, ".")[end] for s ∈ string.(instances(typeof(default))))
+        return eval(Symbol(val_maybe_string))
     else
-        error("Expected a $(typeof(default)), but '$valstring' is not in "
+        error("Expected a $(typeof(default)), but '$val_maybe_string' is not in "
               * "$(instances(typeof(default)))")
+    end
+end
+
+"""
+Convert some types used by moment_kinetics to types that are supported by TOML
+"""
+function mk_to_toml(value)
+    if isa(value, Enum)
+        return string(value)
+    else
+        return value
     end
 end
 
@@ -733,12 +747,9 @@ function set_defaults_and_check_section!(options::AbstractDict, section_name;
     end
 
     # Set default values if a key was not set explicitly
-    explicit_keys = keys(section)
     for (key_sym, value) ∈ kwargs
         key = String(key_sym)
-        if !(key ∈ explicit_keys)
-            section[key] = value
-        end
+        section[key] = get(section, key, value)
     end
 
     return section
