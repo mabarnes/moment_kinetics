@@ -308,6 +308,18 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         # No adaptive timestep, want to use the value from the input file even when we are
         # restarting
         dt_reload = nothing
+
+        # Makes no sense to use write_error_diagnostics because non-adaptive schemes have
+        # no error estimate
+        input_dict["write_error_diagnostics"] = false
+    end
+
+    if adaptive && t_input["write_error_diagnostics"] && !t_input["write_after_fixed_step_count"]
+        println("WARNING: using adaptive timestepping, so short, random-length timesteps "
+                * "before output is written will make diagnostics from "
+                * "`write_error_diagnostics=true` hard to interpret. If these "
+                * "diagnostics are important, suggest using "
+                * "`write_after_fixed_step_count=true`.")
     end
 
     dt_shared = allocate_shared_float(1)

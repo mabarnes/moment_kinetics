@@ -225,6 +225,8 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         implicit_ion_advance=true,
         implicit_vpa_advection=false,
         write_after_fixed_step_count=false,
+        write_error_diagnostics=false,
+        write_steady_state_diagnostics=false,
         high_precision_error_sum=false,
        )
     if timestepping_section["nwrite"] > timestepping_section["nstep"]
@@ -259,6 +261,8 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         minimum_dt=timestepping_section["minimum_dt"] * sqrt(composition.me_over_mi),
         maximum_dt=timestepping_section["maximum_dt"] * sqrt(composition.me_over_mi),
         write_after_fixed_step_count=false,
+        write_error_diagnostics=false,
+        write_steady_state_diagnostics=false,
         high_precision_error_sum=timestepping_section["high_precision_error_sum"],
         initialization_residual_value=1.0,
         no_restart=false,
@@ -725,6 +729,10 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     io_settings["run_id"] = run_id
     io_settings["output_dir"] = output_dir
     io_settings["run_name"] = run_name
+    io_settings["write_error_diagnostics"] = timestepping_section["write_error_diagnostics"]
+    io_settings["write_steady_state_diagnostics"] = timestepping_section["write_steady_state_diagnostics"]
+    io_settings["write_electron_error_diagnostics"] = timestepping_section["electron_t_input"]["write_error_diagnostics"]
+    io_settings["write_electron_steady_state_diagnostics"] = timestepping_section["electron_t_input"]["write_steady_state_diagnostics"]
     io_immutable = Dict_to_NamedTuple(io_settings)
 
     # initialize z grid and write grid point locations to file
