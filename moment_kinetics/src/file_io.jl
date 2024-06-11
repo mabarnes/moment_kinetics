@@ -57,7 +57,8 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
                        Tchodura_upper, Texti1, Texti2, Texti3, Texti4,
                        Texti5, Textn1, Textn2, Textn3, Textn4, Textn5, Texte1, Texte2,
                        Texte3, Texte4, Tconstri, Tconstrn, Tconstre, Tint, Tfailcause,
-                       Telectrontime, Telectronint, Telectronfailcause, Tnldiagnostics}
+                       Telectrontime, Telectronint, Telectronfailcause, Tnldiagnostics,
+                       Tinput}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the time variable
@@ -164,15 +165,15 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
     # write diagnostics generically for as many nonlinear solvers as are created.
     nl_solver_diagnostics::Tnldiagnostics
 
-    # Use parallel I/O?
-    parallel_io::Bool
+    # Settings for I/O
+    io_input::Tinput
  end
 
 """
 structure containing the data/metadata needed for binary file i/o
 distribution function data only
 """
-struct io_dfns_info{Tfile, Tfi, Tfe, Tfn, Tmoments}
+struct io_dfns_info{Tfile, Tfi, Tfe, Tfn, Tmoments, Tinput}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the ion species distribution function variable
@@ -182,8 +183,8 @@ struct io_dfns_info{Tfile, Tfi, Tfe, Tfn, Tmoments}
     # handle for the neutral species distribution function variable
     f_neutral::Tfn
 
-    # Use parallel I/O?
-    parallel_io::Bool
+    # Settings for I/O
+    io_input::Tinput
 
     # Handles for moment variables
     io_moments::Tmoments
@@ -194,7 +195,8 @@ structure containing the data/metadata needed for binary file i/o
 for electron initialization
 """
 struct io_initial_electron_info{Tfile, Ttime, Tfe, Tmom, Texte1, Texte2, Texte3, Texte4,
-                                Tconstr, Telectrontime, Telectronint, Telectronfailcause}
+                                Tconstr, Telectrontime, Telectronint, Telectronfailcause,
+                                Tinput}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the pseudotime variable
@@ -234,8 +236,8 @@ struct io_initial_electron_info{Tfile, Ttime, Tfe, Tmom, Texte1, Texte2, Texte3,
     # by adaptve timestepping algorithm
     electron_dt_before_last_fail::Telectrontime
 
-    # Use parallel I/O?
-    parallel_io::Bool
+    # Settings for I/O
+    io_input::Tinput
 end
 
 """
@@ -305,20 +307,18 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
 
         run_id = io_input.run_id
 
-        io_moments = setup_moments_io(out_prefix, io_input.binary_format, vz, vr, vzeta,
-                                      vpa, vperp, r, z, composition, collisions,
-                                      evolve_density, evolve_upar, evolve_ppar,
-                                      external_source_settings, input_dict,
-                                      io_input.parallel_io, comm_inter_block[], run_id,
+        io_moments = setup_moments_io(out_prefix, io_input, vz, vr, vzeta, vpa, vperp, r,
+                                      z, composition, collisions, evolve_density,
+                                      evolve_upar, evolve_ppar, external_source_settings,
+                                      input_dict, comm_inter_block[], run_id,
                                       restart_time_index, previous_runs_info,
                                       time_for_setup, t_params, nl_solver_params)
-        io_dfns = setup_dfns_io(out_prefix, io_input.binary_format,
-                                boundary_distributions, r, z, vperp, vpa, vzeta, vr, vz,
-                                composition, collisions, evolve_density, evolve_upar,
-                                evolve_ppar, external_source_settings, input_dict,
-                                io_input.parallel_io, comm_inter_block[], run_id,
-                                restart_time_index, previous_runs_info, time_for_setup,
-                                t_params, nl_solver_params)
+        io_dfns = setup_dfns_io(out_prefix, io_input, boundary_distributions, r, z, vperp,
+                                vpa, vzeta, vr, vz, composition, collisions,
+                                evolve_density, evolve_upar, evolve_ppar,
+                                external_source_settings, input_dict, comm_inter_block[],
+                                run_id, restart_time_index, previous_runs_info,
+                                time_for_setup, t_params, nl_solver_params)
 
         return ascii, io_moments, io_dfns
     end
@@ -350,8 +350,7 @@ function setup_electron_io(io_input, vpa, vperp, z, r, composition, collisions,
         if !parallel_io
             electrons_prefix *= ".$(iblock_index[])"
         end
-        fid, file_info = open_output_file(electrons_prefix, io_input.binary_format,
-                                          parallel_io, io_comm)
+        fid, file_info = open_output_file(electrons_prefix, io_input, io_comm)
 
         # write a header to the output file
         add_attribute!(fid, "file_info",
@@ -417,7 +416,7 @@ function get_electron_io_info(io_input, prefix_label)
         error("Unrecognized binary_format=$(io_input.binary_format)")
     end
 
-    return (filename, io_input.parallel_io, comm_inter_block[])
+    return (filename, io_input, comm_inter_block[])
 end
 
 """
@@ -425,8 +424,8 @@ Reopen an existing initial electron output file to append more data
 """
 function reopen_initial_electron_io(file_info)
     @serial_region begin
-        filename, parallel_io, io_comm = file_info
-        fid = reopen_output_file(filename, parallel_io, io_comm)
+        filename, io_input, io_comm = file_info
+        fid = reopen_output_file(filename, io_input, io_comm)
         dyn = get_group(fid, "dynamic_data")
 
         variable_list = get_variable_keys(dyn)
@@ -456,7 +455,7 @@ function reopen_initial_electron_io(file_info)
                                         getvar("electron_failure_caused_by"),
                                         getvar("electron_limit_caused_by"),
                                         getvar("electron_dt_before_last_fail"),
-                                        parallel_io)
+                                        io_input)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -870,11 +869,12 @@ function create_dynamic_variable! end
 define dynamic (time-evolving) moment variables for writing to the hdf5 file
 """
 function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
-                                          r::coordinate, z::coordinate, parallel_io,
+                                          r::coordinate, z::coordinate, io_input,
                                           external_source_settings, evolve_density,
                                           evolve_upar, evolve_ppar, electron_physics,
                                           t_params, nl_solver_params)
     @serial_region begin
+        parallel_io = io_input.parallel_io
         dynamic = create_io_group(fid, "dynamic_data", description="time evolving variables")
 
         io_time = create_dynamic_variable!(dynamic, "time", mk_float; parallel_io=parallel_io,
@@ -1006,7 +1006,7 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                io_electron_failure_counter, io_electron_failure_caused_by,
                                io_electron_limit_caused_by,
                                io_electron_dt_before_last_fail, io_nl_solver_diagnostics,
-                               parallel_io)
+                               io_input)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -1467,14 +1467,15 @@ define dynamic (time-evolving) distribution function variables for writing to th
 file
 """
 function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz, composition,
-                                       parallel_io, external_source_settings,
+                                       io_input, external_source_settings,
                                        evolve_density, evolve_upar, evolve_ppar, t_params,
                                        nl_solver_params)
 
     @serial_region begin
+        parallel_io = io_input.parallel_io
         io_moments = define_dynamic_moment_variables!(fid, composition.n_ion_species,
                                                       composition.n_neutral_species, r, z,
-                                                      parallel_io,
+                                                      io_input,
                                                       external_source_settings,
                                                       evolve_density, evolve_upar,
                                                       evolve_ppar,
@@ -1528,25 +1529,25 @@ function open_output_file_implementation end
 """
 Open an output file, selecting the backend based on io_option
 """
-function open_output_file(prefix, binary_format, parallel_io, io_comm)
-    check_io_implementation(binary_format)
+function open_output_file(prefix, io_input, io_comm)
+    check_io_implementation(io_input.binary_format)
 
-    return open_output_file_implementation(Val(binary_format), prefix, parallel_io,
+    return open_output_file_implementation(Val(io_input.binary_format), prefix, io_input,
                                            io_comm)
 end
 
 """
 Re-open an existing output file, selecting the backend based on io_option
 """
-function reopen_output_file(filename, parallel_io, io_comm)
+function reopen_output_file(filename, io_input, io_comm)
     prefix, format_string = splitext(filename)
     if format_string == ".h5"
         check_io_implementation(hdf5)
-        return open_output_file_implementation(Val(hdf5), prefix, parallel_io, io_comm,
+        return open_output_file_implementation(Val(hdf5), prefix, io_input, io_comm,
                                                "r+")[1]
     elseif format_string == ".cdf"
         check_io_implementation(netcdf)
-        return open_output_file_implementation(Val(netcdf), prefix, parallel_io, io_comm,
+        return open_output_file_implementation(Val(netcdf), prefix, io_input, io_comm,
                                                "a")[1]
     else
         error("Unsupported I/O format $binary_format")
@@ -1556,17 +1557,18 @@ end
 """
 setup file i/o for moment variables
 """
-function setup_moments_io(prefix, binary_format, vz, vr, vzeta, vpa, vperp, r, z,
+function setup_moments_io(prefix, io_input, vz, vr, vzeta, vpa, vperp, r, z,
                           composition, collisions, evolve_density, evolve_upar,
-                          evolve_ppar, external_source_settings, input_dict, parallel_io,
+                          evolve_ppar, external_source_settings, input_dict,
                           io_comm, run_id, restart_time_index, previous_runs_info,
                           time_for_setup, t_params, nl_solver_params)
     @serial_region begin
         moments_prefix = string(prefix, ".moments")
+        parallel_io = io_input.parallel_io
         if !parallel_io
             moments_prefix *= ".$(iblock_index[])"
         end
-        fid, file_info = open_output_file(moments_prefix, binary_format, parallel_io, io_comm)
+        fid, file_info = open_output_file(moments_prefix, io_input, io_comm)
 
         # write a header to the output file
         add_attribute!(fid, "file_info", "Output moments data from the moment_kinetics code")
@@ -1589,7 +1591,7 @@ function setup_moments_io(prefix, binary_format, vz, vr, vzeta, vpa, vperp, r, z
         ### in a struct for later access ###
         io_moments = define_dynamic_moment_variables!(
             fid, composition.n_ion_species, composition.n_neutral_species, r, z,
-            parallel_io, external_source_settings, evolve_density, evolve_upar,
+            io_input, external_source_settings, evolve_density, evolve_upar,
             evolve_ppar, composition.electron_physics, t_params, nl_solver_params)
 
         close(fid)
@@ -1606,8 +1608,8 @@ Reopen an existing moments output file to append more data
 """
 function reopen_moments_io(file_info)
     @serial_region begin
-        filename, parallel_io, io_comm = file_info
-        fid = reopen_output_file(filename, parallel_io, io_comm)
+        filename, io_input, io_comm = file_info
+        fid = reopen_output_file(filename, io_input, io_comm)
         dyn = get_group(fid, "dynamic_data")
 
         variable_list = get_variable_keys(dyn)
@@ -1673,7 +1675,7 @@ function reopen_moments_io(file_info)
                                getvar("electron_failure_caused_by"),
                                getvar("electron_limit_caused_by"),
                                getvar("electron_dt_before_last_fail"),
-                               getvar("nl_solver_diagnostics"), parallel_io)
+                               getvar("nl_solver_diagnostics"), io_input)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -1683,18 +1685,19 @@ end
 """
 setup file i/o for distribution function variables
 """
-function setup_dfns_io(prefix, binary_format, boundary_distributions, r, z, vperp, vpa,
-                       vzeta, vr, vz, composition, collisions, evolve_density,
-                       evolve_upar, evolve_ppar, external_source_settings, input_dict,
-                       parallel_io, io_comm, run_id, restart_time_index,
-                       previous_runs_info, time_for_setup, t_params, nl_solver_params)
+function setup_dfns_io(prefix, io_input, boundary_distributions, r, z, vperp, vpa, vzeta,
+                       vr, vz, composition, collisions, evolve_density, evolve_upar,
+                       evolve_ppar, external_source_settings, input_dict, io_comm, run_id,
+                       restart_time_index, previous_runs_info, time_for_setup, t_params,
+                       nl_solver_params)
 
     @serial_region begin
         dfns_prefix = string(prefix, ".dfns")
+        parallel_io = io_input.parallel_io
         if !parallel_io
             dfns_prefix *= ".$(iblock_index[])"
         end
-        fid, file_info = open_output_file(dfns_prefix, binary_format, parallel_io, io_comm)
+        fid, file_info = open_output_file(dfns_prefix, io_input, io_comm)
 
         # write a header to the output file
         add_attribute!(fid, "file_info",
@@ -1722,7 +1725,7 @@ function setup_dfns_io(prefix, binary_format, boundary_distributions, r, z, vper
         ### create variables for time-dependent quantities and store them ###
         ### in a struct for later access ###
         io_dfns = define_dynamic_dfn_variables!(
-            fid, r, z, vperp, vpa, vzeta, vr, vz, composition, parallel_io,
+            fid, r, z, vperp, vpa, vzeta, vr, vz, composition, io_input,
             external_source_settings, evolve_density, evolve_upar, evolve_ppar, t_params,
             nl_solver_params)
 
@@ -1740,8 +1743,8 @@ Reopen an existing distribution-functions output file to append more data
 """
 function reopen_dfns_io(file_info)
     @serial_region begin
-        filename, parallel_io, io_comm = file_info
-        fid = reopen_output_file(filename, parallel_io, io_comm)
+        filename, io_input, io_comm = file_info
+        fid = reopen_output_file(filename, io_input, io_comm)
         dyn = get_group(fid, "dynamic_data")
 
         variable_list = get_variable_keys(dyn)
@@ -1810,10 +1813,10 @@ function reopen_dfns_io(file_info)
                                      getvar("electron_failure_caused_by"),
                                      getvar("electron_limit_caused_by"),
                                      getvar("electron_dt_before_last_fail"),
-                                     getvar("nl_solver_diagnostics"), parallel_io)
+                                     getvar("nl_solver_diagnostics"), io_input)
 
         return io_dfns_info(fid, getvar("f"), getvar("f_electron"), getvar("f_neutral"),
-                            parallel_io, io_moments)
+                            io_input, io_moments)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -1861,7 +1864,7 @@ function write_all_moments_data_to_binary(moments, fields, t, n_ion_species,
             closefile = true
         end
 
-        parallel_io = io_moments.parallel_io
+        parallel_io = io_moments.io_input.parallel_io
 
         # add the time for this time slice to the hdf5 file
         append_to_dynamic_var(io_moments.time, t, t_idx, parallel_io)
@@ -1915,7 +1918,7 @@ function write_em_fields_data_to_binary(fields, io_moments::io_moments_info, t_i
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        parallel_io = io_moments.parallel_io
+        parallel_io = io_moments.io_input.parallel_io
 
         # add the electrostatic potential and electric field components at this time slice to the hdf5 file
         append_to_dynamic_var(io_moments.phi, fields.phi, t_idx, parallel_io, z, r)
@@ -1936,7 +1939,7 @@ function write_ion_moments_data_to_binary(moments, n_ion_species,
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        parallel_io = io_moments.parallel_io
+        parallel_io = io_moments.io_input.parallel_io
 
         # add the density data at this time slice to the output file
         append_to_dynamic_var(io_moments.density, moments.ion.dens, t_idx,
@@ -2029,7 +2032,7 @@ function write_electron_moments_data_to_binary(moments, t_params,
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        parallel_io = io_moments.parallel_io
+        parallel_io = io_moments.io_input.parallel_io
 
         append_to_dynamic_var(io_moments.electron_density, moments.electron.dens, t_idx,
                               parallel_io, z, r)
@@ -2098,7 +2101,7 @@ function write_neutral_moments_data_to_binary(moments, n_neutral_species,
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        parallel_io = io_moments.parallel_io
+        parallel_io = io_moments.io_input.parallel_io
 
         append_to_dynamic_var(io_moments.density_neutral, moments.neutral.dens, t_idx,
                               parallel_io, z, r, n_neutral_species)
@@ -2207,7 +2210,7 @@ function write_ion_dfns_data_to_binary(ff, n_ion_species, io_dfns::io_dfns_info,
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        parallel_io = io_dfns.parallel_io
+        parallel_io = io_dfns.io_input.parallel_io
 
         append_to_dynamic_var(io_dfns.f, ff, t_idx, parallel_io, vpa, vperp, z, r,
                               n_ion_species)
@@ -2226,7 +2229,7 @@ function write_electron_dfns_data_to_binary(ff_electron,
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        parallel_io = io_dfns.parallel_io
+        parallel_io = io_dfns.io_input.parallel_io
 
         if io_dfns.f_electron !== nothing
             append_to_dynamic_var(io_dfns.f_electron, ff_electron, t_idx, parallel_io,
@@ -2247,7 +2250,7 @@ function write_neutral_dfns_data_to_binary(ff_neutral, n_neutral_species,
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        parallel_io = io_dfns.parallel_io
+        parallel_io = io_dfns.io_input.parallel_io
 
         if n_neutral_species > 0
             append_to_dynamic_var(io_dfns.f_neutral, ff_neutral, t_idx, parallel_io, vz,
@@ -2277,7 +2280,7 @@ function write_electron_state(pdf, moments, t_params, t, io_or_file_info_initial
             closefile = true
         end
 
-        parallel_io = io_initial_electron.parallel_io
+        parallel_io = io_initial_electron.io_input.parallel_io
 
         # add the pseudo-time for this time slice to the hdf5 file
         append_to_dynamic_var(io_initial_electron.pseudotime, t, t_idx, parallel_io)
@@ -2577,7 +2580,7 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
             ### in a struct for later access ###
             io_moments = define_dynamic_moment_variables!(fid, composition.n_ion_species,
                                                           composition.n_neutral_species,
-                                                          r, z, false,
+                                                          r, z, nothing,
                                                           external_source_settings,
                                                           evolve_density, evolve_upar,
                                                           evolve_ppar,
@@ -2585,7 +2588,7 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
                                                           nl_solver_params)
             io_dfns = define_dynamic_dfn_variables!(
                 fid, r, z, vperp, vpa, vzeta, vr, vz, composition.n_ion_species,
-                composition.n_neutral_species, false, external_source_settings,
+                composition.n_neutral_species, nothing, external_source_settings,
                 evolve_density, evolve_upar, evolve_ppar, t_params, nl_solver_params)
 
             # create the "istage" variable, used to identify the rk stage where

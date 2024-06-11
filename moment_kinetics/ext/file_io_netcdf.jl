@@ -21,9 +21,9 @@ function io_has_parallel(::Val{netcdf})
     return false
 end
 
-function open_output_file_implementation(::Val{netcdf}, prefix, parallel_io, io_comm,
+function open_output_file_implementation(::Val{netcdf}, prefix, io_input, io_comm,
                                          mode="c")
-    parallel_io && error("NetCDF interface does not support parallel I/O")
+    io_input.parallel_io && error("NetCDF interface does not support parallel I/O")
 
     # the netcdf file will be given by output_dir/run_name with .cdf appended
     filename = string(prefix, ".cdf")
@@ -32,7 +32,7 @@ function open_output_file_implementation(::Val{netcdf}, prefix, parallel_io, io_
     # create the new NetCDF file
     fid = NCDataset(filename, mode)
 
-    return fid, (filename, parallel_io, io_comm)
+    return fid, (filename, io_input, io_comm)
 end
 
 function create_io_group(parent::NCDataset, name; description=nothing)
