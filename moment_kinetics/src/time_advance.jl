@@ -893,14 +893,22 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                     composition)
         end
 
-        # update scratch arrays in case they were affected by applying boundary conditions
-        # or constraints to the pdf
+        # Update scratch arrays in case they were affected by applying boundary conditions
+        # or constraints to the pdf.
+        # Also update scratch[t_params.n_rk_stages+1] as this will be used for the I/O at
+        # the initial time.
         begin_s_r_z_region()
         @loop_s_r_z is ir iz begin
             scratch[1].pdf[:,:,iz,ir,is] .= pdf.ion.norm[:,:,iz,ir,is]
             scratch[1].density[iz,ir,is] = moments.ion.dens[iz,ir,is]
             scratch[1].upar[iz,ir,is] = moments.ion.upar[iz,ir,is]
             scratch[1].ppar[iz,ir,is] = moments.ion.ppar[iz,ir,is]
+            scratch[1].pperp[iz,ir,is] = moments.ion.pperp[iz,ir,is]
+            scratch[t_params.n_rk_stages+1].pdf[:,:,iz,ir,is] .= pdf.ion.norm[:,:,iz,ir,is]
+            scratch[t_params.n_rk_stages+1].density[iz,ir,is] = moments.ion.dens[iz,ir,is]
+            scratch[t_params.n_rk_stages+1].upar[iz,ir,is] = moments.ion.upar[iz,ir,is]
+            scratch[t_params.n_rk_stages+1].ppar[iz,ir,is] = moments.ion.ppar[iz,ir,is]
+            scratch[t_params.n_rk_stages+1].pperp[iz,ir,is] = moments.ion.pperp[iz,ir,is]
         end
 
         # update the electron density, parallel flow and parallel pressure (and temperature)
@@ -939,13 +947,19 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                 moments.electron.ppar, moments.electron.upar, moments.electron.dens,
                 moments.electron, z)
         end
-        # update the electron moment entries in the scratch array
+        # Update the electron moment entries in the scratch array.
+        # Also update scratch[t_params.n_rk_stages+1] as this will be used for the I/O at
+        # the initial time.
         begin_r_z_region()
         @loop_r_z ir iz begin
             scratch[1].electron_density[iz,ir] = moments.electron.dens[iz,ir]
             scratch[1].electron_upar[iz,ir] = moments.electron.upar[iz,ir]
             scratch[1].electron_ppar[iz,ir] = moments.electron.ppar[iz,ir]
             scratch[1].electron_temp[iz,ir] = moments.electron.temp[iz,ir]
+            scratch[t_params.n_rk_stages+1].electron_density[iz,ir] = moments.electron.dens[iz,ir]
+            scratch[t_params.n_rk_stages+1].electron_upar[iz,ir] = moments.electron.upar[iz,ir]
+            scratch[t_params.n_rk_stages+1].electron_ppar[iz,ir] = moments.electron.ppar[iz,ir]
+            scratch[t_params.n_rk_stages+1].electron_temp[iz,ir] = moments.electron.temp[iz,ir]
         end
 
         begin_sn_r_z_region(no_synchronize=true)
@@ -954,6 +968,10 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
             scratch[1].density_neutral[iz,ir,isn] = moments.neutral.dens[iz,ir,isn]
             scratch[1].uz_neutral[iz,ir,isn] = moments.neutral.uz[iz,ir,isn]
             scratch[1].pz_neutral[iz,ir,isn] = moments.neutral.pz[iz,ir,isn]
+            scratch[t_params.n_rk_stages+1].pdf_neutral[:,:,:,iz,ir,isn] .= pdf.neutral.norm[:,:,:,iz,ir,isn]
+            scratch[t_params.n_rk_stages+1].density_neutral[iz,ir,isn] = moments.neutral.dens[iz,ir,isn]
+            scratch[t_params.n_rk_stages+1].uz_neutral[iz,ir,isn] = moments.neutral.uz[iz,ir,isn]
+            scratch[t_params.n_rk_stages+1].pz_neutral[iz,ir,isn] = moments.neutral.pz[iz,ir,isn]
         end
     end
     # calculate the electron-ion parallel friction force
@@ -1752,7 +1770,7 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t, t_pa
             write_data_to_ascii(pdf, moments, fields, vpa, vperp, z, r, t,
                                 composition.n_ion_species, composition.n_neutral_species,
                                 ascii_io)
-            write_all_moments_data_to_binary(moments, fields, t,
+            write_all_moments_data_to_binary(scratch, moments, fields, t,
                                              composition.n_ion_species,
                                              composition.n_neutral_species, io_moments,
                                              iwrite_moments, time_for_run, t_params,
@@ -1836,7 +1854,7 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t, t_pa
                     flush(stdout)
                 end
             end
-            write_all_dfns_data_to_binary(pdf, moments, fields, t,
+            write_all_dfns_data_to_binary(scratch, scratch_electron, moments, fields, t,
                                           composition.n_ion_species,
                                           composition.n_neutral_species, io_dfns,
                                           iwrite_dfns, time_for_run, t_params,

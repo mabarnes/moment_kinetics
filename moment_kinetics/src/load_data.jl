@@ -1067,17 +1067,6 @@ function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, ti
                 get_reload_ranges(parallel_io, restart_r, restart_z, restart_vperp,
                                   restart_vpa, restart_vzeta, restart_vr, restart_vz)
 
-            moments.electron.dens .=
-                reload_electron_moment("electron_density", dynamic, time_index, r, z,
-                                       r_range, z_range, restart_r, restart_r_spectral,
-                                       restart_z, restart_z_spectral,
-                                       interpolation_needed)
-            moments.electron.dens_updated[] = true
-            moments.electron.upar .=
-                reload_electron_moment("electron_parallel_flow", dynamic, time_index, r,
-                                       z, r_range, z_range, restart_r, restart_r_spectral,
-                                       restart_z, restart_z_spectral,
-                                       interpolation_needed)
             moments.electron.upar_updated[] = true
             moments.electron.ppar .=
                 reload_electron_moment("electron_parallel_pressure", dynamic, time_index,

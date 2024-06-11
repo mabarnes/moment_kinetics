@@ -547,11 +547,12 @@ function initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z
     return nothing
 end
 
-function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, vzeta, vr,
-                                  vz, z_spectral, vperp_spectral, vpa_spectral, z_advect,
-                                  vpa_advect, scratch_dummy, collisions, composition,
-                                  geometry, external_source_settings, num_diss_params,
-                                  t_params, t_input, io_input, input_dict)
+function initialize_electron_pdf!(scratch_electron, pdf, moments, phi, r, z, vpa, vperp,
+                                  vzeta, vr, vz, z_spectral, vperp_spectral, vpa_spectral,
+                                  z_advect, vpa_advect, scratch_dummy, collisions,
+                                  composition, geometry, external_source_settings,
+                                  num_diss_params, t_params, t_input, io_input,
+                                  input_dict)
 
     # now that the initial electron pdf is given, the electron parallel heat flux should be updated
     # if using kinetic electrons
@@ -604,8 +605,8 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
 
         begin_serial_region()
         @serial_region begin
-            # update the electron pdf in the first scratch
-            scratch[1].pdf_electron .= pdf.electron.norm
+            # update the electron pdf in the first scratch_electron
+            scratch_electron[1].pdf_electron .= pdf.electron.norm
         end
 
         begin_r_z_region()
@@ -655,8 +656,8 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
             t_params.dfns_output_times .= truncated_times
         end
         electron_pseudotime, success =
-            @views update_electron_pdf!(scratch, pdf.electron.norm, moments, phi, r, z,
-                                        vperp, vpa, z_spectral, vperp_spectral,
+            @views update_electron_pdf!(scratch_electron, pdf.electron.norm, moments, phi,
+                                        r, z, vperp, vpa, z_spectral, vperp_spectral,
                                         vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                                         t_params, collisions, composition,
                                         external_source_settings, num_diss_params,
@@ -676,8 +677,8 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
             println("Initializing electrons - evolving pdf_electron only to steady state")
         end
         electron_pseudotime, success =
-            @views update_electron_pdf!(scratch, pdf.electron.norm, moments, phi, r, z,
-                                        vperp, vpa, z_spectral, vperp_spectral,
+            @views update_electron_pdf!(scratch_electron, pdf.electron.norm, moments, phi,
+                                        r, z, vperp, vpa, z_spectral, vperp_spectral,
                                         vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                                         t_params, collisions, composition,
                                         external_source_settings, num_diss_params,
@@ -698,7 +699,7 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
         # Write the converged initial state for the electrons to a file so that it can be
         # re-used if the simulation is re-run.
         t_params.moments_output_counter[] += 1
-        write_electron_state(pdf.electron.norm, moments, t_params, electron_pseudotime,
+        write_electron_state(scratch_electron, moments, t_params, electron_pseudotime,
                              io_initial_electron, t_params.moments_output_counter[], r, z,
                              vperp, vpa)
         finish_electron_io(io_initial_electron)

@@ -204,9 +204,9 @@ struct io_initial_electron_info{Tfile, Ttime, Tfe, Tmom, Texte1, Texte2, Texte3,
     # handle for the electron distribution function variable
     f_electron::Tfe
     # handle for the electron density variable
-    electron_density::Tmom
+    electron_density::Union{Tmom,Nothing}
     # handle for the electron parallel flow variable
-    electron_parallel_flow::Tmom
+    electron_parallel_flow::Union{Tmom,Nothing}
     # handle for the electron parallel pressure variable
     electron_parallel_pressure::Tmom
     # handle for the electron parallel heat flux variable
@@ -392,7 +392,9 @@ function setup_electron_io(io_input, vpa, vperp, z, r, composition, collisions,
             define_dynamic_electron_moment_variables!(fid, r, z, parallel_io,
                                                       external_source_settings,
                                                       evolve_density, evolve_upar,
-                                                      evolve_ppar, kinetic_electrons, t_params)
+                                                      evolve_ppar, kinetic_electrons,
+                                                      t_params;
+                                                      electron_only_io=true)
 
         close(fid)
 
@@ -1209,21 +1211,26 @@ define dynamic (time-evolving) electron moment variables for writing to the hdf5
 """
 function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordinate,
         parallel_io, external_source_settings, evolve_density, evolve_upar, evolve_ppar,
-        electron_physics, t_params)
+        electron_physics, t_params; electron_only_io=false)
 
     dynamic = get_group(fid, "dynamic_data")
 
-    # io_density is the handle for the ion particle density
-    io_electron_density = create_dynamic_variable!(dynamic, "electron_density", mk_float, z, r;
-                                          parallel_io=parallel_io,
-                                          description="electron species density",
-                                          units="n_ref")
+    if !electron_only_io
+        # io_density is the handle for the ion particle density
+        io_electron_density = create_dynamic_variable!(dynamic, "electron_density", mk_float, z, r;
+                                              parallel_io=parallel_io,
+                                              description="electron species density",
+                                              units="n_ref")
 
-    # io_electron_upar is the handle for the electron parallel flow density
-    io_electron_upar = create_dynamic_variable!(dynamic, "electron_parallel_flow", mk_float, z, r;
-                                       parallel_io=parallel_io,
-                                       description="electron species parallel flow",
-                                       units="c_ref = sqrt(2*T_ref/mi)")
+        # io_electron_upar is the handle for the electron parallel flow density
+        io_electron_upar = create_dynamic_variable!(dynamic, "electron_parallel_flow", mk_float, z, r;
+                                           parallel_io=parallel_io,
+                                           description="electron species parallel flow",
+                                           units="c_ref = sqrt(2*T_ref/mi)")
+    else
+        io_electron_density = nothing
+        io_electron_upar = nothing
+    end
 
     # io_electron_ppar is the handle for the electron parallel pressure
     io_electron_ppar = create_dynamic_variable!(dynamic, "electron_parallel_pressure", mk_float, z, r;
@@ -1848,7 +1855,7 @@ end
 write time-dependent moments data for ions, electrons and neutrals to the binary output
 file
 """
-function write_all_moments_data_to_binary(moments, fields, t, n_ion_species,
+function write_all_moments_data_to_binary(scratch, moments, fields, t, n_ion_species,
                                           n_neutral_species, io_or_file_info_moments,
                                           t_idx, time_for_run, t_params, nl_solver_params,
                                           r, z)
@@ -1871,13 +1878,14 @@ function write_all_moments_data_to_binary(moments, fields, t, n_ion_species,
 
         write_em_fields_data_to_binary(fields, io_moments, t_idx, r, z)
 
-        write_ion_moments_data_to_binary(moments, n_ion_species, io_moments, t_idx, r, z)
+        write_ion_moments_data_to_binary(scratch, moments, n_ion_species, t_params,
+                                         io_moments, t_idx, r, z)
 
-        write_electron_moments_data_to_binary(moments, t_params.electron, io_moments,
-                                              t_idx, r, z)
+        write_electron_moments_data_to_binary(scratch, moments, t_params,
+                                              t_params.electron, io_moments, t_idx, r, z)
 
-        write_neutral_moments_data_to_binary(moments, n_neutral_species, io_moments,
-                                             t_idx, r, z)
+        write_neutral_moments_data_to_binary(scratch, moments, n_neutral_species,
+                                             t_params, io_moments, t_idx, r, z)
 
         append_to_dynamic_var(io_moments.time_for_run, time_for_run, t_idx, parallel_io)
         append_to_dynamic_var(io_moments.step_counter, t_params.step_counter[], t_idx, parallel_io)
@@ -1934,7 +1942,7 @@ write time-dependent moments data for ions to the binary output file
 
 Note: should only be called from within a function that (re-)opens the output file.
 """
-function write_ion_moments_data_to_binary(moments, n_ion_species,
+function write_ion_moments_data_to_binary(scratch, moments, n_ion_species, t_params,
                                           io_moments::io_moments_info, t_idx, r, z)
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -1942,14 +1950,17 @@ function write_ion_moments_data_to_binary(moments, n_ion_species,
         parallel_io = io_moments.io_input.parallel_io
 
         # add the density data at this time slice to the output file
-        append_to_dynamic_var(io_moments.density, moments.ion.dens, t_idx,
-                              parallel_io, z, r, n_ion_species)
-        append_to_dynamic_var(io_moments.parallel_flow, moments.ion.upar, t_idx,
-                              parallel_io, z, r, n_ion_species)
-        append_to_dynamic_var(io_moments.parallel_pressure, moments.ion.ppar, t_idx,
-                              parallel_io, z, r, n_ion_species)
-        append_to_dynamic_var(io_moments.perpendicular_pressure, moments.ion.pperp, t_idx,
-                              parallel_io, z, r, n_ion_species)
+        append_to_dynamic_var(io_moments.density, scratch[t_params.n_rk_stages+1].density,
+                              t_idx, parallel_io, z, r, n_ion_species)
+        append_to_dynamic_var(io_moments.parallel_flow,
+                              scratch[t_params.n_rk_stages+1].upar, t_idx, parallel_io, z,
+                              r, n_ion_species)
+        append_to_dynamic_var(io_moments.parallel_pressure,
+                              scratch[t_params.n_rk_stages+1].ppar, t_idx, parallel_io, z,
+                              r, n_ion_species)
+        append_to_dynamic_var(io_moments.perpendicular_pressure,
+                              scratch[t_params.n_rk_stages+1].pperp, t_idx, parallel_io,
+                              z, r, n_ion_species)
         append_to_dynamic_var(io_moments.parallel_heat_flux, moments.ion.qpar, t_idx,
                               parallel_io, z, r, n_ion_species)
         append_to_dynamic_var(io_moments.thermal_speed, moments.ion.vth, t_idx,
@@ -2026,7 +2037,7 @@ write time-dependent moments data for electrons to the binary output file
 
 Note: should only be called from within a function that (re-)opens the output file.
 """
-function write_electron_moments_data_to_binary(moments, t_params,
+function write_electron_moments_data_to_binary(scratch, moments, t_params, electron_t_params,
                                                io_moments::Union{io_moments_info,io_initial_electron_info},
                                                t_idx, r, z)
     @serial_region begin
@@ -2034,12 +2045,21 @@ function write_electron_moments_data_to_binary(moments, t_params,
 
         parallel_io = io_moments.io_input.parallel_io
 
-        append_to_dynamic_var(io_moments.electron_density, moments.electron.dens, t_idx,
-                              parallel_io, z, r)
-        append_to_dynamic_var(io_moments.electron_parallel_flow, moments.electron.upar,
-                              t_idx, parallel_io, z, r)
+        if io_moments.electron_density !== nothing
+            append_to_dynamic_var(io_moments.electron_density,
+                                  scratch[t_params.n_rk_stages+1].electron_density, t_idx,
+                                  parallel_io, z, r)
+        end
+
+        if io_moments.electron_parallel_flow !== nothing
+            append_to_dynamic_var(io_moments.electron_parallel_flow,
+                                  scratch[t_params.n_rk_stages+1].electron_upar, t_idx,
+                                  parallel_io, z, r)
+        end
+
         append_to_dynamic_var(io_moments.electron_parallel_pressure,
-                              moments.electron.ppar, t_idx, parallel_io, z, r)
+                              scratch[t_params.n_rk_stages+1].electron_ppar, t_idx,
+                              parallel_io, z, r)
         append_to_dynamic_var(io_moments.electron_parallel_heat_flux,
                               moments.electron.qpar, t_idx, parallel_io, z, r)
         append_to_dynamic_var(io_moments.electron_thermal_speed, moments.electron.vth,
@@ -2068,19 +2088,26 @@ function write_electron_moments_data_to_binary(moments, t_params,
                               moments.electron.constraints_C_coefficient, t_idx,
                               parallel_io, z, r)
 
-        if t_params !== nothing
+        if electron_t_params !== nothing
             # Save timestepping info
-            append_to_dynamic_var(io_moments.electron_step_counter, t_params.step_counter[], t_idx, parallel_io)
-            append_to_dynamic_var(io_moments.electron_dt, t_params.dt_before_output[], t_idx, parallel_io)
-            append_to_dynamic_var(io_moments.electron_failure_counter, t_params.failure_counter[], t_idx, parallel_io)
-            append_to_dynamic_var(io_moments.electron_failure_caused_by, t_params.failure_caused_by,
-                                  t_idx, parallel_io, length(t_params.failure_caused_by);
+            append_to_dynamic_var(io_moments.electron_step_counter,
+                                  electron_t_params.step_counter[], t_idx, parallel_io)
+            append_to_dynamic_var(io_moments.electron_dt,
+                                  electron_t_params.dt_before_output[], t_idx,
+                                  parallel_io)
+            append_to_dynamic_var(io_moments.electron_failure_counter,
+                                  electron_t_params.failure_counter[], t_idx, parallel_io)
+            append_to_dynamic_var(io_moments.electron_failure_caused_by,
+                                  electron_t_params.failure_caused_by, t_idx, parallel_io,
+                                  length(electron_t_params.failure_caused_by);
                                   only_root=true)
-            append_to_dynamic_var(io_moments.electron_limit_caused_by, t_params.limit_caused_by, t_idx,
-                                  parallel_io, length(t_params.limit_caused_by);
+            append_to_dynamic_var(io_moments.electron_limit_caused_by,
+                                  electron_t_params.limit_caused_by, t_idx, parallel_io,
+                                  length(electron_t_params.limit_caused_by);
                                   only_root=true)
             append_to_dynamic_var(io_moments.electron_dt_before_last_fail,
-                                  t_params.dt_before_last_fail[], t_idx, parallel_io)
+                                  electron_t_params.dt_before_last_fail[], t_idx,
+                                  parallel_io)
         end
     end
 
@@ -2092,8 +2119,9 @@ write time-dependent moments data for neutrals to the binary output file
 
 Note: should only be called from within a function that (re-)opens the output file.
 """
-function write_neutral_moments_data_to_binary(moments, n_neutral_species,
-                                              io_moments::io_moments_info, t_idx, r, z)
+function write_neutral_moments_data_to_binary(scratch, moments, n_neutral_species,
+                                              t_params, io_moments::io_moments_info,
+                                              t_idx, r, z)
     if n_neutral_species ≤ 0
         return nothing
     end
@@ -2103,11 +2131,14 @@ function write_neutral_moments_data_to_binary(moments, n_neutral_species,
 
         parallel_io = io_moments.io_input.parallel_io
 
-        append_to_dynamic_var(io_moments.density_neutral, moments.neutral.dens, t_idx,
+        append_to_dynamic_var(io_moments.density_neutral,
+                              scratch[t_params.n_rk_stages+1].density_neutral, t_idx,
                               parallel_io, z, r, n_neutral_species)
-        append_to_dynamic_var(io_moments.uz_neutral, moments.neutral.uz, t_idx,
+        append_to_dynamic_var(io_moments.uz_neutral,
+                              scratch[t_params.n_rk_stages+1].uz_neutral, t_idx,
                               parallel_io, z, r, n_neutral_species)
-        append_to_dynamic_var(io_moments.pz_neutral, moments.neutral.pz, t_idx,
+        append_to_dynamic_var(io_moments.pz_neutral,
+                              scratch[t_params.n_rk_stages+1].pz_neutral, t_idx,
                               parallel_io, z, r, n_neutral_species)
         append_to_dynamic_var(io_moments.qz_neutral, moments.neutral.qz, t_idx,
                               parallel_io, z, r, n_neutral_species)
@@ -2164,10 +2195,11 @@ end
 write time-dependent distribution function data for ions, electrons and neutrals to the
 binary output file
 """
-function write_all_dfns_data_to_binary(pdf, moments, fields, t, n_ion_species,
-                                       n_neutral_species, io_or_file_info_dfns, t_idx,
-                                       time_for_run, t_params, nl_solver_params, r, z,
-                                       vperp, vpa, vzeta, vr, vz)
+function write_all_dfns_data_to_binary(scratch, scratch_electron, moments, fields, t,
+                                       n_ion_species, n_neutral_species,
+                                       io_or_file_info_dfns, t_idx, time_for_run,
+                                       t_params, nl_solver_params, r, z, vperp, vpa,
+                                       vzeta, vr, vz)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -2181,18 +2213,18 @@ function write_all_dfns_data_to_binary(pdf, moments, fields, t, n_ion_species,
 
         # Write the moments for this time slice to the output file.
         # This also updates the time.
-        write_all_moments_data_to_binary(moments, fields, t, n_ion_species,
+        write_all_moments_data_to_binary(scratch, moments, fields, t, n_ion_species,
                                          n_neutral_species, io_dfns.io_moments, t_idx,
                                          time_for_run, t_params, nl_solver_params, r, z)
 
         # add the distribution function data at this time slice to the output file
-        write_ion_dfns_data_to_binary(pdf.ion.norm, n_ion_species, io_dfns, t_idx, r, z,
-                                      vperp, vpa)
-        if pdf.electron !== nothing
-            write_electron_dfns_data_to_binary(pdf.electron.norm, io_dfns, t_idx, r, z,
-                                               vperp, vpa)
+        write_ion_dfns_data_to_binary(scratch, t_params, n_ion_species, io_dfns, t_idx, r,
+                                      z, vperp, vpa)
+        if scratch_electron !== nothing
+            write_electron_dfns_data_to_binary(scratch_electron, t_params, io_dfns, t_idx,
+                                               r, z, vperp, vpa)
         end
-        write_neutral_dfns_data_to_binary(pdf.neutral.norm, n_neutral_species, io_dfns,
+        write_neutral_dfns_data_to_binary(scratch, t_params, n_neutral_species, io_dfns,
                                           t_idx, r, z, vzeta, vr, vz)
 
         closefile && close(io_dfns.fid)
@@ -2205,15 +2237,15 @@ write time-dependent distribution function data for ions to the binary output fi
 
 Note: should only be called from within a function that (re-)opens the output file.
 """
-function write_ion_dfns_data_to_binary(ff, n_ion_species, io_dfns::io_dfns_info, t_idx, r,
-                                       z, vperp, vpa)
+function write_ion_dfns_data_to_binary(scratch, t_params, n_ion_species,
+                                       io_dfns::io_dfns_info, t_idx, r, z, vperp, vpa)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
         parallel_io = io_dfns.io_input.parallel_io
 
-        append_to_dynamic_var(io_dfns.f, ff, t_idx, parallel_io, vpa, vperp, z, r,
-                              n_ion_species)
+        append_to_dynamic_var(io_dfns.f, scratch[t_params.n_rk_stages+1].pdf, t_idx,
+                              parallel_io, vpa, vperp, z, r, n_ion_species)
     end
     return nothing
 end
@@ -2223,7 +2255,7 @@ write time-dependent distribution function data for electrons to the binary outp
 
 Note: should only be called from within a function that (re-)opens the output file.
 """
-function write_electron_dfns_data_to_binary(ff_electron,
+function write_electron_dfns_data_to_binary(scratch_electron, t_params,
                                             io_dfns::Union{io_dfns_info,io_initial_electron_info},
                                             t_idx, r, z, vperp, vpa)
     @serial_region begin
@@ -2232,8 +2264,9 @@ function write_electron_dfns_data_to_binary(ff_electron,
         parallel_io = io_dfns.io_input.parallel_io
 
         if io_dfns.f_electron !== nothing
-            append_to_dynamic_var(io_dfns.f_electron, ff_electron, t_idx, parallel_io,
-                                  vpa, vperp, z, r)
+            append_to_dynamic_var(io_dfns.f_electron,
+                                  scratch_electron[t_params.electron.n_rk_stages+1].pdf_electron,
+                                  t_idx, parallel_io, vpa, vperp, z, r)
         end
     end
     return nothing
@@ -2244,7 +2277,7 @@ write time-dependent distribution function data for neutrals to the binary outpu
 
 Note: should only be called from within a function that (re-)opens the output file.
 """
-function write_neutral_dfns_data_to_binary(ff_neutral, n_neutral_species,
+function write_neutral_dfns_data_to_binary(scratch, t_params, n_neutral_species,
                                            io_dfns::io_dfns_info, t_idx, r, z, vzeta, vr,
                                            vz)
     @serial_region begin
@@ -2253,21 +2286,22 @@ function write_neutral_dfns_data_to_binary(ff_neutral, n_neutral_species,
         parallel_io = io_dfns.io_input.parallel_io
 
         if n_neutral_species > 0
-            append_to_dynamic_var(io_dfns.f_neutral, ff_neutral, t_idx, parallel_io, vz,
-                                  vr, vzeta, z, r, n_neutral_species)
+            append_to_dynamic_var(io_dfns.f_neutral,
+                                  scratch[t_params.n_rk_stages+1].pdf_neutral, t_idx,
+                                  parallel_io, vz, vr, vzeta, z, r, n_neutral_species)
         end
     end
     return nothing
 end
 
 """
-    write_electron_state(pdf, moments, t_params, t, io_initial_electron,
+    write_electron_state(scratch_electron, moments, t_params, t, io_initial_electron,
                          t_idx, r, z, vperp, vpa)
 
 Write the electron state to an output file.
 """
-function write_electron_state(pdf, moments, t_params, t, io_or_file_info_initial_electron,
-                              t_idx, r, z, vperp, vpa)
+function write_electron_state(scratch_electron, moments, t_params, t,
+                              io_or_file_info_initial_electron, t_idx, r, z, vperp, vpa)
 
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -2285,11 +2319,11 @@ function write_electron_state(pdf, moments, t_params, t, io_or_file_info_initial
         # add the pseudo-time for this time slice to the hdf5 file
         append_to_dynamic_var(io_initial_electron.pseudotime, t, t_idx, parallel_io)
 
-        write_electron_dfns_data_to_binary(pdf, io_initial_electron, t_idx, r, z, vperp,
-                                           vpa)
+        write_electron_dfns_data_to_binary(scratch_electron, t_params,
+                                           io_initial_electron, t_idx, r, z, vperp, vpa)
 
-        write_electron_moments_data_to_binary(moments, t_params, io_initial_electron,
-                                              t_idx, r, z)
+        write_electron_moments_data_to_binary(scratch_electron, moments, t_params,
+                                              t_params, io_initial_electron, t_idx, r, z)
 
         closefile && close(io_initial_electron.fid)
     end

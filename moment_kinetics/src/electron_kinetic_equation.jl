@@ -246,9 +246,12 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
     t_params.moments_output_counter[] += 1
     @serial_region begin
         if io_electron !== nothing
-            write_electron_state(scratch[1].pdf_electron, moments, t_params, time,
-                                 io_electron, t_params.moments_output_counter[], r, z,
-                                 vperp, vpa)
+            # Copy scratch arrays in order to save initial state - not optimal, but should
+            # be done at most once or twice while initialising a simulation
+            scratch[t_params.n_rk_stages+1].pdf_electron .= scratch[1].pdf_electron
+            scratch[t_params.n_rk_stages+1].electron_ppar .= scratch[1].electron_ppar
+            write_electron_state(scratch, moments, t_params, time, io_electron,
+                                 t_params.moments_output_counter[], r, z, vperp, vpa)
         end
     end
     # evolve (artificially) in time until the residual is less than the tolerance
@@ -498,8 +501,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
             @serial_region begin
                 if io_electron !== nothing
                     t_params.write_moments_output[] = false
-                    write_electron_state(scratch[t_params.n_rk_stages+1].pdf_electron,
-                                         moments, t_params, time, io_electron,
+                    write_electron_state(scratch, moments, t_params, time, io_electron,
                                          t_params.moments_output_counter[], r, z, vperp,
                                          vpa)
                 end
@@ -540,9 +542,8 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         if !electron_pdf_converged || do_debug_io
             if io_electron !== nothing && io_electron !== true
                 t_params.moments_output_counter[] += 1
-                write_electron_state(final_scratch_pdf, moments, t_params, time,
-                                     io_electron, t_params.moments_output_counter[], r, z,
-                                     vperp, vpa)
+                write_electron_state(scratch, moments, t_params, time, io_electron,
+                                     t_params.moments_output_counter[], r, z, vperp, vpa)
                 finish_electron_io(io_electron)
             end
         end
