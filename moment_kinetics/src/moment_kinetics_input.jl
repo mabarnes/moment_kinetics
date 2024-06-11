@@ -703,12 +703,17 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     drive_immutable = drive_input(drive.force_phi, drive.amplitude, drive.frequency, force_Er_zero)
 
     # inputs for file I/O
+    io_settings = set_defaults_and_check_section!(
+        scan_input, "output";
+        ascii_output=false,
+        binary_format=hdf5,
+        parallel_io=nothing,
+       )
+    if io_settings["parallel_io"] === nothing
+        io_settings["parallel_io"] = io_has_parallel(Val(io_settings["binary_format"]))
+    end
     # Make copy of the section to avoid modifying the passed-in Dict
-    io_settings = copy(get(scan_input, "output", Dict{String,Any}()))
-    io_settings["ascii_output"] = get(io_settings, "ascii_output", false)
-    io_settings["binary_format"] = get(io_settings, "binary_format", hdf5)
-    io_settings["parallel_io"] = get(io_settings, "parallel_io",
-                                     io_has_parallel(Val(io_settings["binary_format"])))
+    io_settings = copy(io_settings)
     run_id = string(uuid4())
     if !ignore_MPI
         # Communicate run_id to all blocks
@@ -718,8 +723,9 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         run_id = string(run_id_chars...)
     end
     io_settings["run_id"] = run_id
-    io_immutable = io_input(; output_dir=output_dir, run_name=run_name,
-                              Dict(Symbol(k)=>v for (k,v) in io_settings)...)
+    io_settings["output_dir"] = output_dir
+    io_settings["run_name"] = run_name
+    io_immutable = Dict_to_NamedTuple(io_settings)
 
     # initialize z grid and write grid point locations to file
     if ignore_MPI
