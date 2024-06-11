@@ -266,10 +266,10 @@ function makie_post_process(run_dir::Union{String,Tuple},
         end
     end
 
-    timestep_diagnostics(run_info; plot_prefix=plot_prefix)
+    timestep_diagnostics(run_info, run_info_dfns; plot_prefix=plot_prefix)
     if any(ri.composition.electron_physics ==
            moment_kinetics.input_structs.kinetic_electrons for ri ∈ run_info)
-        timestep_diagnostics(run_info; plot_prefix=plot_prefix, electron=true)
+        timestep_diagnostics(run_info, run_info_dfns; plot_prefix=plot_prefix, electron=true)
     end
 
     do_steady_state_residuals = any(input_dict[v]["steady_state_residual"]
@@ -807,6 +807,12 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         this_input_dict, "timestep_diagnostics";
         plot=true,
         animate_CFL=false,
+        plot_timestep_residual=false,
+        animate_timestep_residual=false,
+        plot_timestep_error=false,
+        animate_timestep_error=false,
+        plot_steady_state_residual=false,
+        animate_steady_state_residual=false,
        )
 
     return nothing
@@ -7268,7 +7274,7 @@ function manufactured_solutions_analysis_dfns(run_info; plot_prefix)
 end
 
 """
-    timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing)
+    timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=nothing)
 
 Plot a time-trace of some adaptive-timestep diagnostics: steps per output, timestep
 failures per output, how many times per output each variable caused a timestep failure,
@@ -7279,7 +7285,8 @@ will be saved with the format `plot_prefix_timestep_diagnostics.pdf`.
 
 `it` can be used to select a subset of the time points by passing a range.
 """
-function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing, electron=false)
+function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=nothing,
+                              electron=false)
     try
         if !isa(run_info, Tuple)
             run_info = (run_info,)
@@ -7797,6 +7804,164 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing, electro
                                                :topspinevisible=>false,
                                                :leftspinevisible=>false,
                                                :rightspinevisible=>false))
+            end
+        end
+
+        if run_info_dfns[1].dfns
+            this_input_dict = input_dict_dfns
+        else
+            this_input_dict = input_dict
+        end
+        if electron
+            variable_list = (v for v ∈ union((ri.evolving_variables for ri in run_info_dfns)...)
+                             if occursin("electron", v))
+        else
+            variable_list = (v for v ∈ union((ri.evolving_variables for ri in run_info_dfns)...)
+                             if !occursin("electron", v))
+        end
+        all_variable_names = union((ri.variable_names for ri ∈ run_info_dfns)...)
+
+        if input.plot_timestep_residual
+            for variable_name ∈ variable_list
+                loworder_name = variable_name * "_loworder"
+                if loworder_name ∉ all_variable_names
+                    # No data to calculate residual for this variable
+                    continue
+                end
+                residual_name = variable_name * "_timestep_residual"
+                if variable_name == "f_neutral"
+                    plot_vs_vz_z(run_info_dfns, residual_name;
+                                 input=this_input_dict[variable_name],
+                                 outfile=plot_prefix * residual_name * "_vs_vz_z.pdf")
+                elseif variable_name ∈ ("f", "f_electron")
+                    plot_vs_vpa_z(run_info_dfns, residual_name;
+                                  input=this_input_dict[variable_name],
+                                  outfile=plot_prefix * residual_name * "_vs_vpa_z.pdf")
+                else
+                    plot_vs_z(run_info_dfns, residual_name;
+                              input=this_input_dict[variable_name],
+                              outfile=plot_prefix * residual_name * "_vs_z.pdf")
+                end
+            end
+        end
+
+        if input.animate_timestep_residual
+            for variable_name ∈ variable_list
+                loworder_name = variable_name * "_loworder"
+                if loworder_name ∉ all_variable_names
+                    # No data to calculate residual for this variable
+                    continue
+                end
+                residual_name = variable_name * "_timestep_residual"
+                if variable_name == "f_neutral"
+                    animate_vs_vz_z(run_info_dfns, residual_name;
+                                    input=this_input_dict[variable_name],
+                                    outfile=plot_prefix * residual_name * "_vs_vz_z." * this_input_dict[variable_name]["animation_ext"])
+                elseif variable_name ∈ ("f", "f_electron")
+                    animate_vs_vpa_z(run_info_dfns, residual_name;
+                                     input=this_input_dict[variable_name],
+                                     outfile=plot_prefix * residual_name * "_vs_vpa_z." * this_input_dict[variable_name]["animation_ext"])
+                else
+                    animate_vs_z(run_info_dfns, residual_name;
+                                 input=this_input_dict[variable_name],
+                                 outfile=plot_prefix * residual_name * "_vs_z." * this_input_dict[variable_name]["animation_ext"])
+                end
+            end
+        end
+
+        if input.plot_timestep_error
+            for variable_name ∈ variable_list
+                loworder_name = variable_name * "_loworder"
+                if loworder_name ∉ all_variable_names
+                    # No data to calculate error for this variable
+                    continue
+                end
+                error_name = variable_name * "_timestep_error"
+                if variable_name == "f_neutral"
+                    plot_vs_vz_z(run_info_dfns, error_name;
+                                 input=this_input_dict[variable_name],
+                                 outfile=plot_prefix * error_name * "_vs_vz_z.pdf")
+                elseif variable_name ∈ ("f", "f_electron")
+                    plot_vs_vpa_z(run_info_dfns, error_name;
+                                  input=this_input_dict[variable_name],
+                                  outfile=plot_prefix * error_name * "_vs_vpa_z.pdf")
+                else
+                    plot_vs_z(run_info_dfns, error_name;
+                              input=this_input_dict[variable_name],
+                              outfile=plot_prefix * error_name * "_vs_z.pdf")
+                end
+            end
+        end
+
+        if input.animate_timestep_error
+            for variable_name ∈ variable_list
+                loworder_name = variable_name * "_loworder"
+                if loworder_name ∉ all_variable_names
+                    # No data to calculate error for this variable
+                    continue
+                end
+                error_name = variable_name * "_timestep_error"
+                if variable_name == "f_neutral"
+                    animate_vs_vz_z(run_info_dfns, error_name;
+                                    input=this_input_dict[variable_name],
+                                    outfile=plot_prefix * error_name * "_vs_vz_z." * this_input_dict[variable_name]["animation_ext"])
+                elseif variable_name ∈ ("f", "f_electron")
+                    animate_vs_vpa_z(run_info_dfns, error_name;
+                                     input=this_input_dict[variable_name],
+                                     outfile=plot_prefix * error_name * "_vs_vpa_z." * this_input_dict[variable_name]["animation_ext"])
+                else
+                    animate_vs_z(run_info_dfns, error_name;
+                                 input=this_input_dict[variable_name],
+                                 outfile=plot_prefix * error_name * "_vs_z." * this_input_dict[variable_name]["animation_ext"])
+                end
+            end
+        end
+
+        if input.plot_steady_state_residual
+            for variable_name ∈ variable_list
+                loworder_name = variable_name * "_loworder"
+                if loworder_name ∉ all_variable_names
+                    # No data to calculate residual for this variable
+                    continue
+                end
+                residual_name = variable_name * "_steady_state_residual"
+                if variable_name == "f_neutral"
+                    plot_vs_vz_z(run_info_dfns, residual_name;
+                                 input=this_input_dict[variable_name],
+                                 outfile=plot_prefix * residual_name * "_vs_vz_z.pdf")
+                elseif variable_name ∈ ("f", "f_electron")
+                    plot_vs_vpa_z(run_info_dfns, residual_name;
+                                  input=this_input_dict[variable_name],
+                                  outfile=plot_prefix * residual_name * "_vs_vpa_z.pdf")
+                else
+                    plot_vs_z(run_info_dfns, residual_name;
+                              input=this_input_dict[variable_name],
+                              outfile=plot_prefix * residual_name * "_vs_z.pdf")
+                end
+            end
+        end
+
+        if input.animate_steady_state_residual
+            for variable_name ∈ variable_list
+                loworder_name = variable_name * "_loworder"
+                if loworder_name ∉ all_variable_names
+                    # No data to calculate residual for this variable
+                    continue
+                end
+                residual_name = variable_name * "_steady_state_residual"
+                if variable_name == "f_neutral"
+                    animate_vs_vz_z(run_info_dfns, residual_name;
+                                    input=this_input_dict[variable_name],
+                                    outfile=plot_prefix * residual_name * "_vs_vz_z." * this_input_dict[variable_name]["animation_ext"])
+                elseif variable_name ∈ ("f", "f_electron")
+                    animate_vs_vpa_z(run_info_dfns, residual_name;
+                                     input=this_input_dict[variable_name],
+                                     outfile=plot_prefix * residual_name * "_vs_vpa_z." * this_input_dict[variable_name]["animation_ext"])
+                else
+                    animate_vs_z(run_info_dfns, residual_name;
+                                 input=this_input_dict[variable_name],
+                                 outfile=plot_prefix * residual_name * "_vs_z." * this_input_dict[variable_name]["animation_ext"])
+                end
             end
         end
 

@@ -3488,6 +3488,39 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
 
     # Get variable names just from the first restart, for simplicity
     variable_names = get_variable_keys(get_group(fids0[1], "dynamic_data"))
+    if initial_electron
+        evolving_variables = ("f_electron",)
+    else
+        evolving_variables = ["f"]
+        if evolve_density
+            push!(evolving_variables, "density")
+        end
+        if evolve_upar
+            push!(evolving_variables, "parallel_flow")
+        end
+        if evolve_ppar
+            push!(evolving_variables, "parallel_pressure")
+        end
+        if composition.electron_physics == kinetic_electrons
+            push!(evolving_variables, "f_electron")
+        end
+        if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
+            push!(evolving_variables, "electron_parallel_pressure")
+        end
+        if composition.n_neutral_species > 0
+            push!(evolving_variables, "f_neutral")
+            if evolve_density
+                push!(evolving_variables, "density_neutral")
+            end
+            if evolve_upar
+                push!(evolving_variables, "uz_neutral")
+            end
+            if evolve_ppar
+                push!(evolving_variables, "pz_neutral")
+            end
+        end
+        evolving_variables = Tuple(evolving_variables)
+    end
 
     if parallel_io
         files = fids0
@@ -3517,7 +3550,8 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
                 z_chunk_size=z_chunk_size, vperp_chunk_size=vperp_chunk_size,
                 vpa_chunk_size=vpa_chunk_size, vzeta_chunk_size=vzeta_chunk_size,
                 vr_chunk_size=vr_chunk_size, vz_chunk_size=vz_chunk_size,
-                variable_names=variable_names, dfns=dfns)
+                variable_names=variable_names, evolving_variables=evolving_variables,
+                dfns=dfns)
 
     return run_info
 end
@@ -4745,6 +4779,39 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             variable[it] = min_CFL
         end
         variable = select_slice_of_variable(variable; kwargs...)
+    elseif occursin("_timestep_error", variable_name)
+        prefix = split(variable_name, "_timestep_error")[1]
+        full_order = get_variable(run_info, prefix; kwargs...)
+        low_order = get_variable(run_info, prefix * "_loworder"; kwargs...)
+        variable = low_order .- full_order
+    elseif occursin("_timestep_residual", variable_name)
+        prefix = split(variable_name, "_timestep_residual")[1]
+        full_order = get_variable(run_info, prefix; kwargs...)
+        low_order = get_variable(run_info, prefix * "_loworder"; kwargs...)
+        if prefix == "pdf_electron"
+            rtol = run_info.input["electron_timestepping"]["rtol"]
+            atol = run_info.input["electron_timestepping"]["atol"]
+        else
+            rtol = run_info.input["timestepping"]["rtol"]
+            atol = run_info.input["timestepping"]["atol"]
+        end
+        variable = @. (low_order - full_order) / (rtol * abs(full_order) + atol)
+    elseif occursin("_steady_state_residual", variable_name)
+        prefix = split(variable_name, "_steady_state_residual")[1]
+        end_step = get_variable(run_info, prefix; kwargs...)
+        begin_step = get_variable(run_info, prefix * "_start_last_timestep"; kwargs...)
+        if prefix == "f_electron"
+            dt = get_variable(run_info, "electron_previous_dt"; kwargs...)
+        else
+            dt = get_variable(run_info, "previous_dt"; kwargs...)
+        end
+        dt = reshape(dt, ones(mk_int, ndims(end_step)-1)..., length(dt))
+        for i ∈ eachindex(dt)
+            if dt[i] ≤ 0.0
+                dt[i] = Inf
+            end
+        end
+        variable = (end_step .- begin_step) ./ dt
     elseif occursin("_nonlinear_iterations_per_solve", variable_name)
         prefix = split(variable_name, "_nonlinear_iterations_per_solve")[1]
         nl_nsolves = get_per_step_from_cumulative_variable(
