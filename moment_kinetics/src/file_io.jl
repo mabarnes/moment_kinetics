@@ -178,6 +178,8 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
     step_counter::Tint
     # current timestep size
     dt::Ttime
+    # size of last timestep before output, used for some diagnostics
+    previous_dt::Ttime
     # cumulative number of timestep failures
     failure_counter::Tint
     # cumulative count of which variable caused a timstep failure
@@ -191,6 +193,8 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
     electron_step_counter::Telectronint
     # current electron pseudo-timestep size
     electron_dt::Telectrontime
+    # size of last electron pseudo-timestep before the output was written
+    electron_previous_dt::Telectrontime
     # cumulative number of electron pseudo-timestep failures
     electron_failure_counter::Telectronint
     # cumulative count of which variable caused a electron pseudo-timstep failure
@@ -198,7 +202,7 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
     # cumulative count of which factors limited the electron pseudo-timestep at each step
     electron_limit_caused_by::Telectronfailcause
     # Last successful timestep before most recent electron pseudo-timestep failure, used
-    # by adaptve timestepping algorithm
+    # by adaptive timestepping algorithm
     electron_dt_before_last_fail::Telectrontime
     # Variables recording diagnostic information about non-linear solvers (used for
     # implicit parts of timestep). These are stored in nested NamedTuples so that we can
@@ -294,6 +298,8 @@ struct io_initial_electron_info{Tfile, Ttime, Tfe, Tmom, Texte1, Texte2, Texte3,
     electron_step_counter::Telectronint
     # current electron pseudo-timestep size
     electron_dt::Telectrontime
+    # size of last electron pseudo-timestep before the output was written
+    electron_previous_dt::Telectrontime
     # cumulative number of electron pseudo-timestep failures
     electron_failure_counter::Telectronint
     # cumulative count of which variable caused a electron pseudo-timstep failure
@@ -478,8 +484,9 @@ function setup_electron_io(io_input, vpa, vperp, z, r, composition, collisions,
         external_source_electron_pressure_amplitude,
         electron_constraints_A_coefficient, electron_constraints_B_coefficient,
         electron_constraints_C_coefficient, io_electron_step_counter, io_electron_dt,
-        io_electron_failure_counter, io_electron_failure_caused_by,
-        io_electron_limit_caused_by, io_electron_dt_before_last_fail =
+        io_electron_previous_dt, io_electron_failure_counter,
+        io_electron_failure_caused_by, io_electron_limit_caused_by,
+        io_electron_dt_before_last_fail =
             define_dynamic_electron_moment_variables!(fid, r, z, parallel_io,
                                                       external_source_settings,
                                                       evolve_density, evolve_upar,
@@ -554,6 +561,7 @@ function reopen_initial_electron_io(file_info)
                                         getvar("electron_constraints_C_coefficient"),
                                         getvar("electron_step_counter"),
                                         getvar("electron_dt"),
+                                        getvar("electron_previous_dt"),
                                         getvar("electron_failure_counter"),
                                         getvar("electron_failure_caused_by"),
                                         getvar("electron_limit_caused_by"),
@@ -1017,8 +1025,9 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
         external_source_electron_pressure_amplitude,
         electron_constraints_A_coefficient, electron_constraints_B_coefficient,
         electron_constraints_C_coefficient, io_electron_step_counter, io_electron_dt,
-        io_electron_failure_counter, io_electron_failure_caused_by,
-        io_electron_limit_caused_by, io_electron_dt_before_last_fail =
+        io_electron_previous_dt, io_electron_failure_counter,
+        io_electron_failure_caused_by, io_electron_limit_caused_by,
+        io_electron_dt_before_last_fail =
             define_dynamic_electron_moment_variables!(fid, r, z, parallel_io,
                                                       external_source_settings,
                                                       evolve_density, evolve_upar,
@@ -1056,6 +1065,10 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
         io_dt = create_dynamic_variable!(
             dynamic, "dt", mk_float; parallel_io=parallel_io,
             description="current timestep size")
+
+        io_previous_dt = create_dynamic_variable!(
+            dynamic, "previous_dt", mk_float; parallel_io=parallel_io,
+            description="size of the last timestep before the output")
 
         io_failure_counter = create_dynamic_variable!(
             dynamic, "failure_counter", mk_int; parallel_io=parallel_io,
@@ -1137,12 +1150,12 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                electron_constraints_A_coefficient,
                                electron_constraints_B_coefficient,
                                electron_constraints_C_coefficient,
-                               io_time_for_run, io_step_counter, io_dt,
+                               io_time_for_run, io_step_counter, io_dt, io_previous_dt,
                                io_failure_counter, io_failure_caused_by,
                                io_limit_caused_by, io_dt_before_last_fail,
                                io_electron_step_counter, io_electron_dt,
-                               io_electron_failure_counter, io_electron_failure_caused_by,
-                               io_electron_limit_caused_by,
+                               io_electron_previous_dt, io_electron_failure_counter,
+                               io_electron_failure_caused_by, io_electron_limit_caused_by,
                                io_electron_dt_before_last_fail, io_nl_solver_diagnostics,
                                io_input)
     end
@@ -1571,6 +1584,10 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
             dynamic, "electron_dt", mk_float; parallel_io=parallel_io,
             description="current electron pseudo-timestep size")
 
+        io_electron_previous_dt = create_dynamic_variable!(
+            dynamic, "electron_previous_dt", mk_float; parallel_io=parallel_io,
+            description="size of last electron pseudo-timestep before output was written")
+
         io_electron_failure_counter = create_dynamic_variable!(
             dynamic, "electron_failure_counter", mk_int; parallel_io=parallel_io,
             description="cumulative number of electron pseudo-timestep failures for the run")
@@ -1597,6 +1614,7 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
     else
         io_electron_step_counter = nothing
         io_electron_dt = nothing
+        io_electron_previous_dt = nothing
         io_electron_failure_counter = nothing
         io_electron_failure_caused_by = nothing
         io_electron_limit_caused_by = nothing
@@ -1613,8 +1631,9 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
            external_source_electron_pressure_amplitude,
            electron_constraints_A_coefficient, electron_constraints_B_coefficient,
            electron_constraints_C_coefficient, io_electron_step_counter, io_electron_dt,
-           io_electron_failure_counter, io_electron_failure_caused_by,
-           io_electron_limit_caused_by, io_electron_dt_before_last_fail
+           io_electron_previous_dt, io_electron_failure_counter,
+           io_electron_failure_caused_by, io_electron_limit_caused_by,
+           io_electron_dt_before_last_fail
 end
 
 """
@@ -2098,10 +2117,11 @@ function reopen_moments_io(file_info)
                                getvar("electron_constraints_B_coefficient"),
                                getvar("electron_constraints_C_coefficient"),
                                getvar("time_for_run"), getvar("step_counter"),
-                               getvar("dt"), getvar("failure_counter"),
+                               getvar("dt"), getvar("previous_dt"), getvar("failure_counter"),
                                getvar("failure_caused_by"), getvar("limit_caused_by"),
                                getvar("dt_before_last_fail"),getvar("electron_step_counter"),
-                               getvar("electron_dt"), getvar("electron_failure_counter"),
+                               getvar("electron_dt"), getvar("electron_previous_dt"),
+                               getvar("electron_failure_counter"),
                                getvar("electron_failure_caused_by"),
                                getvar("electron_limit_caused_by"),
                                getvar("electron_dt_before_last_fail"),
@@ -2256,12 +2276,14 @@ function reopen_dfns_io(file_info)
                                      getvar("electron_constraints_B_coefficient"),
                                      getvar("electron_constraints_C_coefficient"),
                                      getvar("time_for_run"), getvar("step_counter"),
-                                     getvar("dt"), getvar("failure_counter"),
+                                     getvar("dt"), getvar("previous_dt"),
+                                     getvar("failure_counter"),
                                      getvar("failure_caused_by"),
                                      getvar("limit_caused_by"),
                                      getvar("dt_before_last_fail"),
                                      getvar("electron_step_counter"),
                                      getvar("electron_dt"),
+                                     getvar("electron_previous_dt"),
                                      getvar("electron_failure_counter"),
                                      getvar("electron_failure_caused_by"),
                                      getvar("electron_limit_caused_by"),
@@ -2345,6 +2367,7 @@ function write_all_moments_data_to_binary(scratch, moments, fields, t, n_ion_spe
         append_to_dynamic_var(io_moments.time_for_run, time_for_run, t_idx, parallel_io)
         append_to_dynamic_var(io_moments.step_counter, t_params.step_counter[], t_idx, parallel_io)
         append_to_dynamic_var(io_moments.dt, t_params.dt_before_output[], t_idx, parallel_io)
+        append_to_dynamic_var(io_moments.previous_dt, t_params.previous_dt[], t_idx, parallel_io)
         append_to_dynamic_var(io_moments.failure_counter, t_params.failure_counter[], t_idx, parallel_io)
         append_to_dynamic_var(io_moments.failure_caused_by, t_params.failure_caused_by,
                               t_idx, parallel_io, length(t_params.failure_caused_by);
@@ -2597,6 +2620,8 @@ function write_electron_moments_data_to_binary(scratch, moments, t_params, elect
             append_to_dynamic_var(io_moments.electron_dt,
                                   electron_t_params.dt_before_output[], t_idx,
                                   parallel_io)
+            append_to_dynamic_var(io_moments.electron_previous_dt,
+                                  electron_t_params.previous_dt[], t_idx, parallel_io)
             append_to_dynamic_var(io_moments.electron_failure_counter,
                                   electron_t_params.failure_counter[], t_idx, parallel_io)
             append_to_dynamic_var(io_moments.electron_failure_caused_by,
