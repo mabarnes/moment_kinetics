@@ -43,10 +43,6 @@ vpa_IC_temperature_phase2 = 0.0
 charge_exchange_frequency = 0.5
 ionization_frequency = 0.05
 constant_ionization_rate = true
-nstep = 50
-dt = 1.0e-3
-nwrite = 10
-nwrite_dfns = 10
 use_semi_lagrange = false
 n_rk_stages = 4
 split_operators = false
@@ -89,3 +85,9 @@ vperp_dissipation_coefficient = 1.0e-3 #1.0e-2 #1.0e-1
 [neutral_numerical_dissipation]
 moment_dissipation_coefficient = 0.0001
 vz_dissipation_coefficient = 0.01
+
+[timestepping]
+nstep = 50
+dt = 1.0e-3
+nwrite = 10
+nwrite_dfns = 10

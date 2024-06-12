@@ -37,8 +37,8 @@ using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float, allocate_bool, allocate_float
 using ..calculus: integral
 using ..communication
-using ..derivatives: derivative_z!
-using ..derivatives: derivative_r!
+using ..derivatives: derivative_z!, second_derivative_z!
+using ..derivatives: derivative_r!, second_derivative_r!
 using ..looping
 using ..gyroaverages: gyro_operators, gyroaverage_pdf!
 using ..input_structs: braginskii_fluid, kinetic_electrons
@@ -911,10 +911,8 @@ function calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z, z
     if moments.evolve_density && ion_mom_diss_coeff > 0.0
 
         # centred second derivative for dissipation
-        @views derivative_z!(dummy_zrs, density, buffer_r_1, buffer_r_2, buffer_r_3,
-                             buffer_r_4, z_spectral, z)
-        @views derivative_z!(moments.ion.d2dens_dz2, dummy_zrs, buffer_r_1,
-                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+        @views second_derivative_z!(moments.ion.d2dens_dz2, density, buffer_r_1,
+                                    buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
     end
     if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
         @views derivative_z!(moments.ion.dupar_dz, upar, buffer_r_1,
@@ -931,12 +929,9 @@ function calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z, z
                              buffer_r_5, buffer_r_6, z_spectral, z)
     end
     if moments.evolve_upar && ion_mom_diss_coeff > 0.0
-
         # centred second derivative for dissipation
-        @views derivative_z!(dummy_zrs, upar, buffer_r_1, buffer_r_2, buffer_r_3,
-                             buffer_r_4, z_spectral, z)
-        @views derivative_z!(moments.ion.d2upar_dz2, dummy_zrs, buffer_r_1,
-                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+        @views second_derivative_z!(moments.ion.d2upar_dz2, upar, buffer_r_1, buffer_r_2,
+                                    buffer_r_3, buffer_r_4, z_spectral, z)
     end
     if moments.evolve_upar
         @views derivative_z!(moments.ion.dppar_dz, ppar, buffer_r_1,
@@ -951,11 +946,11 @@ function calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z, z
                              buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
                              buffer_r_5, buffer_r_6, z_spectral, z)
 
-        # centred second derivative for dissipation
-        @views derivative_z!(dummy_zrs, ppar, buffer_r_1, buffer_r_2, buffer_r_3,
-                             buffer_r_4, z_spectral, z)
-        @views derivative_z!(moments.ion.d2ppar_dz2, dummy_zrs, buffer_r_1,
-                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+        if ion_mom_diss_coeff > 0.0
+            # centred second derivative for dissipation
+            @views second_derivative_z!(moments.ion.d2ppar_dz2, ppar, buffer_r_1,
+                                        buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+        end
 
         @views derivative_z!(moments.ion.dqpar_dz, qpar, buffer_r_1,
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
@@ -1512,11 +1507,9 @@ function calculate_neutral_moment_derivatives!(moments, scratch, scratch_dummy, 
     if moments.evolve_density && neutral_mom_diss_coeff > 0.0
 
         # centred second derivative for dissipation
-        @views derivative_z!(dummy_zrsn, density, buffer_r_1, buffer_r_2, buffer_r_3,
-                             buffer_r_4, z_spectral, z; neutrals=true)
-        @views derivative_z!(moments.neutral.d2dens_dz2, dummy_zrsn,
-                             buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
-                             z_spectral, z; neutrals=true)
+        @views second_derivative_z!(moments.neutral.d2dens_dz2, density, buffer_r_1,
+                                    buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z;
+                                    neutrals=true)
     end
     if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
         @views derivative_z!(moments.neutral.duz_dz, uz, buffer_r_1,
@@ -1534,12 +1527,9 @@ function calculate_neutral_moment_derivatives!(moments, scratch, scratch_dummy, 
                              buffer_r_5, buffer_r_6, z_spectral, z; neutrals=true)
     end
     if moments.evolve_upar && neutral_mom_diss_coeff > 0.0
-
         # centred second derivative for dissipation
-        @views derivative_z!(dummy_zrsn, uz, buffer_r_1, buffer_r_2, buffer_r_3,
-                             buffer_r_4, z_spectral, z; neutrals=true)
-        @views derivative_z!(moments.neutral.d2uz_dz2, dummy_zrsn, buffer_r_1,
-                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+        @views second_derivative_z!(moments.neutral.d2uz_dz2, uz, buffer_r_1, buffer_r_2,
+                                    buffer_r_3, buffer_r_4, z_spectral, z; neutrals=true)
     end
     if moments.evolve_upar
         @views derivative_z!(moments.neutral.dpz_dz, pz, buffer_r_1,
@@ -1555,12 +1545,12 @@ function calculate_neutral_moment_derivatives!(moments, scratch, scratch_dummy, 
                              buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
                              buffer_r_5, buffer_r_6, z_spectral, z; neutrals=true)
 
-        # centred second derivative for dissipation
-        @views derivative_z!(dummy_zrsn, pz, buffer_r_1, buffer_r_2, buffer_r_3,
-                             buffer_r_4, z_spectral, z; neutrals=true)
-        @views derivative_z!(moments.neutral.d2pz_dz2, dummy_zrsn, buffer_r_1,
-                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z;
-                             neutrals=true)
+        if neutral_mom_diss_coeff > 0.0
+            # centred second derivative for dissipation
+            @views second_derivative_z!(moments.neutral.d2pz_dz2, pz, buffer_r_1,
+                                        buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z;
+                                        neutrals=true)
+        end
 
         @views derivative_z!(moments.neutral.dqz_dz, qz, buffer_r_1,
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z;
@@ -1568,6 +1558,90 @@ function calculate_neutral_moment_derivatives!(moments, scratch, scratch_dummy, 
         @views derivative_z!(moments.neutral.dvth_dz, vth, buffer_r_1,
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z;
                              neutrals=true)
+    end
+end
+
+"""
+update velocity moments that are calculable from the evolved ion pdf
+"""
+function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
+    r_spectral, geometry, gyroavs, scratch_dummy, z_advect, diagnostic_moments)
+
+    if composition.gyrokinetic_ions
+        ff = scratch_dummy.buffer_vpavperpzrs_1
+        # fill buffer with ring-averaged F (gyroaverage at fixed position)
+        gyroaverage_pdf!(ff,new_scratch.pdf,gyroavs,vpa,vperp,z,r,composition)
+    else
+        ff = new_scratch.pdf
+    end
+
+    if !moments.evolve_density
+        update_density!(new_scratch.density, moments.ion.dens_updated,
+                        ff, vpa, vperp, z, r, composition)
+    end
+    if !moments.evolve_upar
+        update_upar!(new_scratch.upar, moments.ion.upar_updated, new_scratch.density,
+                     new_scratch.ppar, ff, vpa, vperp, z, r, composition,
+                     moments.evolve_density, moments.evolve_ppar)
+    end
+    if !moments.evolve_ppar
+        # update_ppar! calculates (p_parallel/m_s N_e c_s^2) + (n_s/N_e)*(upar_s/c_s)^2 = (1/√π)∫d(vpa/c_s) (vpa/c_s)^2 * (√π f_s c_s / N_e)
+        update_ppar!(new_scratch.ppar, moments.ion.ppar_updated, new_scratch.density,
+                     new_scratch.upar, ff, vpa, vperp, z, r, composition,
+                     moments.evolve_density, moments.evolve_upar)
+    end
+    update_pperp!(new_scratch.pperp, ff, vpa, vperp, z, r, composition)
+
+    # if diagnostic time step/RK stage
+    # update the diagnostic chodura condition
+    if diagnostic_moments
+        update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
+    end
+    # update the thermal speed
+    begin_s_r_z_region()
+    try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
+        update_vth!(moments.ion.vth, new_scratch.ppar, new_scratch.pperp, new_scratch.density, vperp, z, r, composition)
+    catch e
+        if global_size[] > 1
+            println("ERROR: error calculating vth in time_advance.jl")
+            println(e)
+            display(stacktrace(catch_backtrace()))
+            flush(stdout)
+            flush(stderr)
+            MPI.Abort(comm_world, 1)
+        end
+        rethrow(e)
+    end
+    # update the parallel heat flux
+    update_qpar!(moments.ion.qpar, moments.ion.qpar_updated, new_scratch.density,
+                 new_scratch.upar, moments.ion.vth, ff, vpa, vperp, z, r,
+                 composition, moments.evolve_density, moments.evolve_upar,
+                 moments.evolve_ppar)
+    # add further moments to be computed here
+
+end
+
+"""
+update velocity moments that are calculable from the evolved neutral pdf
+"""
+function update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z, r,
+                                         composition)
+
+    if !moments.evolve_density
+        update_neutral_density!(new_scratch.density_neutral, moments.neutral.dens_updated,
+                                new_scratch.pdf_neutral, vz, vr, vzeta, z, r, composition)
+    end
+    if !moments.evolve_upar
+        update_neutral_uz!(new_scratch.uz_neutral, moments.neutral.uz_updated,
+                           new_scratch.density_neutral, new_scratch.pz_neutral,
+                           new_scratch.pdf_neutral, vz, vr, vzeta, z, r, composition,
+                           moments.evolve_density, moments.evolve_ppar)
+    end
+    if !moments.evolve_ppar
+        update_neutral_pz!(new_scratch.pz_neutral, moments.neutral.pz_updated,
+                           new_scratch.density_neutral, new_scratch.uz_neutral,
+                           new_scratch.pdf_neutral, vz, vr, vzeta, z, r, composition,
+                           moments.evolve_density, moments.evolve_upar)
     end
 end
 

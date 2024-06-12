@@ -21,6 +21,7 @@ include("looping.jl")
 include("array_allocation.jl")
 include("interpolation.jl")
 include("calculus.jl")
+include("lagrange_polynomials.jl")
 include("clenshaw_curtis.jl")
 include("gauss_legendre.jl")
 include("chebyshev.jl")
@@ -32,6 +33,7 @@ include("input_structs.jl")
 include("runge_kutta.jl")
 include("reference_parameters.jl")
 include("coordinates.jl")
+include("nonlinear_solvers.jl")
 include("file_io.jl")
 include("geo.jl")
 include("gyroaverages.jl")
@@ -46,6 +48,7 @@ include("moment_constraints.jl")
 include("fokker_planck_test.jl")
 include("fokker_planck_calculus.jl")
 include("fokker_planck.jl")
+include("boundary_conditions.jl")
 include("advection.jl")
 include("vpa_advection.jl")
 include("z_advection.jl")
@@ -56,7 +59,6 @@ include("electron_vpa_advection.jl")
 include("neutral_r_advection.jl")
 include("neutral_z_advection.jl")
 include("neutral_vz_advection.jl")
-include("boundary_conditions.jl")
 include("charge_exchange.jl")
 include("ionization.jl")
 include("krook_collisions.jl")
@@ -340,8 +342,8 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
 
-    moments, spectral_objects, scratch, advance, t_params, fp_arrays, gyroavs,
-    manufactured_source_list =
+    moments, spectral_objects, scratch, scratch_implicit, advance, advance_implicit,
+    t_params, fp_arrays, gyroavs, manufactured_source_list, nl_solver_params =
         setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrophase,
             vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
             z_spectral, r_spectral, composition, moments, t_input, code_time, dt,
@@ -358,7 +360,8 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     ascii_io, io_moments, io_dfns = setup_file_io(io_input, boundary_distributions, vz,
         vr, vzeta, vpa, vperp, z, r, composition, collisions, moments.evolve_density,
         moments.evolve_upar, moments.evolve_ppar, external_source_settings, input_dict,
-        restart_time_index, previous_runs_info, time_for_setup)
+        restart_time_index, previous_runs_info, time_for_setup, t_params,
+        nl_solver_params)
     # write initial data to ascii files
     write_data_to_ascii(pdf, moments, fields, vpa, vperp, z, r, code_time,
         composition.n_ion_species, composition.n_neutral_species, ascii_io)
@@ -366,18 +369,19 @@ function setup_moment_kinetics(input_dict::AbstractDict;
 
     write_all_moments_data_to_binary(moments, fields, code_time,
         composition.n_ion_species, composition.n_neutral_species, io_moments, 1, 0.0,
-        t_params, r, z)
+        t_params, nl_solver_params, r, z)
     write_all_dfns_data_to_binary(pdf, moments, fields, code_time,
         composition.n_ion_species, composition.n_neutral_species, io_dfns, 1, 0.0,
-        t_params, r, z, vperp, vpa, vzeta, vr, vz)
+        t_params, nl_solver_params, r, z, vperp, vpa, vzeta, vr, vz)
 
     begin_s_r_z_vperp_region()
 
-    return pdf, scratch, code_time, t_params, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
-           moments, fields, spectral_objects, advection_structs,
+    return pdf, scratch, scratch_implicit, code_time, t_params, vz, vr, vzeta, vpa, vperp,
+           gyrophase, z, r, moments, fields, spectral_objects, advection_structs,
            composition, collisions, geometry, gyroavs, boundary_distributions,
-           external_source_settings, num_diss_params, advance, fp_arrays, scratch_dummy,
-           manufactured_source_list, ascii_io, io_moments, io_dfns
+           external_source_settings, num_diss_params, nl_solver_params, advance,
+           advance_implicit, fp_arrays, scratch_dummy, manufactured_source_list, ascii_io,
+           io_moments, io_dfns
 end
 
 """

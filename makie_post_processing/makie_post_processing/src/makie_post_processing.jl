@@ -2487,9 +2487,6 @@ function plot_1d(xcoord, data; ax=nothing, xlabel=nothing, ylabel=nothing, title
     if title !== nothing
         ax.title = title
     end
-    if yscale !== nothing
-        ax.yscale = yscale
-    end
 
     if transform !== identity
         # Use transform to allow user to do something like data = abs.(data)
@@ -2500,6 +2497,10 @@ function plot_1d(xcoord, data; ax=nothing, xlabel=nothing, ylabel=nothing, title
     end
 
     l = lines!(ax, xcoord, data; kwargs...)
+
+    if yscale !== nothing
+        ax.yscale = yscale
+    end
 
     if fig === nothing
         return l
@@ -4148,8 +4149,9 @@ end
 
 function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
                                  neutral=false, is=1, iz=nothing, fig=nothing, ax=nothing,
-                                 frame_index=nothing, outfile=nothing, transform=identity,
-                                 axis_args=Dict{Symbol,Any}(), kwargs...)
+                                 frame_index=nothing, outfile=nothing, yscale=nothing,
+                                 transform=identity, axis_args=Dict{Symbol,Any}(),
+                                 kwargs...)
     if input === nothing
         if neutral
             input = Dict_to_NamedTuple(input_dict_dfns["f_neutral"])
@@ -4227,20 +4229,27 @@ function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
 
         this_f_unnorm = get_this_f_unnorm(it)
 
-        this_fmin, this_fmax = NaNMath.extrema(transform(this_f_unnorm))
+        this_fmin, this_fmax = NaNMath.extrema(transform.(this_f_unnorm))
         fmin = min(fmin, this_fmin)
         fmax = max(fmax, this_fmax)
     end
     yheight = fmax - fmin
     xwidth = dzdtmax - dzdtmin
-    limits!(ax, dzdtmin - 0.01*xwidth, dzdtmax + 0.01*xwidth,
-            fmin - 0.01*yheight, fmax + 0.01*yheight)
+    if yscale ∈ (log, log10)
+        # Need to calclutate y offsets differently to non-logarithmic y-axis case, to
+        # ensure ymin is not negative.
+        limits!(ax, dzdtmin - 0.01*xwidth, dzdtmax + 0.01*xwidth,
+                fmin * (fmin/fmax)^0.01, fmax * (fmax/fmin)^0.01)
+    else
+        limits!(ax, dzdtmin - 0.01*xwidth, dzdtmax + 0.01*xwidth,
+                fmin - 0.01*yheight, fmax + 0.01*yheight)
+    end
 
     dzdt = @lift vpagrid_to_dzdt(run_info.vpa.grid, vth[$frame_index], upar[$frame_index],
                                  run_info.evolve_ppar, run_info.evolve_upar)
     f_unnorm = @lift transform.(get_this_f_unnorm($frame_index))
 
-    l = plot_1d(dzdt, f_unnorm; ax=ax, label=run_info.run_name, kwargs...)
+    l = plot_1d(dzdt, f_unnorm; ax=ax, label=run_info.run_name, yscale=yscale, kwargs...)
 
     if outfile !== nothing
         if fig === nothing
@@ -4489,18 +4498,80 @@ function plot_ion_pdf_2D_at_wall(run_info; plot_prefix)
                          && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
                          for ri ∈ run_info)
 
-    for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+8, "wall-"),
-                               (z_upper, z_upper-8:z_upper, "wall+"))
+    nt = minimum(ri.nt for ri ∈ run_info)
+
+    for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+4, "wall-"),
+                               (z_upper, z_upper-4:z_upper, "wall+"))
         f_input = copy(input_dict_dfns["f"])
         f_input["iz0"] = z
 
         if input.plot
-            plot_vs_vpa(run_info, "f"; is=1, input=f_input,
-                        outfile=plot_prefix * "pdf_$(label)_vs_vpa.pdf")
+            fig, ax = get_1d_ax(; xlabel="vpa", ylabel="f")
+            for iz ∈ z_range
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        run_label = ri.run_name * " "
+                    else
+                        run_label = ""
+                    end
+                    plot_vs_vpa(ri, "f"; is=1, iz=iz, input=f_input,
+                                label="$(run_label)iz=$iz", ax=ax)
+                end
+            end
+            put_legend_right(fig, ax)
+            outfile=plot_prefix * "pdf_$(label)_vs_vpa.pdf"
+            save(outfile, fig)
+
+            fig, ax = get_1d_ax(; xlabel="vpa", ylabel="f")
+            for iz ∈ z_range
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        run_label = ri.run_name * " "
+                    else
+                        run_label = ""
+                    end
+                    plot_vs_vpa(ri, "f"; is=1, iz=iz, input=f_input,
+                                label="$(run_label)iz=$iz", ax=ax, yscale=log10,
+                                transform=(x)->positive_or_nan(x; epsilon=1.e-20))
+                end
+            end
+            put_legend_right(fig, ax)
+            outfile=plot_prefix * "logpdf_$(label)_vs_vpa.pdf"
+            save(outfile, fig)
 
             if moment_kinetic
-                plot_f_unnorm_vs_vpa(run_info; input=f_input, is=1,
-                                     outfile=plot_prefix * "pdf_unnorm_$(label)_vs_vpa.pdf")
+                fig, ax = get_1d_ax(; xlabel="vpa_unnorm", ylabel="f_unnorm")
+                for iz ∈ z_range
+                    for ri ∈ run_info
+                        if length(run_info) > 1
+                            run_label = ri.run_name * " "
+                        else
+                            run_label = ""
+                        end
+                        plot_f_unnorm_vs_vpa(ri; input=f_input, is=1, iz=iz,
+                                             label="$(run_label)iz=$iz", ax=ax)
+                    end
+                end
+                put_legend_right(fig, ax)
+                outfile=plot_prefix * "pdf_unnorm_$(label)_vs_vpa.pdf"
+                save(outfile, fig)
+
+                fig, ax = get_1d_ax(; xlabel="vpa_unnorm", ylabel="f_unnorm")
+                for iz ∈ z_range
+                    for ri ∈ run_info
+                        if length(run_info) > 1
+                            run_label = ri.run_name * " "
+                        else
+                            run_label = ""
+                        end
+                        plot_f_unnorm_vs_vpa(ri; input=f_input, is=1, iz=iz,
+                                             label="$(run_label)iz=$iz", ax=ax, yscale=log10,
+                                             transform=(x)->positive_or_nan(x; epsilon=1.e-20))
+                    end
+                end
+                put_legend_right(fig, ax)
+                outfile=plot_prefix * "logpdf_unnorm_$(label)_vs_vpa.pdf"
+                save(outfile, fig)
             end
 
             plot_f_unnorm_vs_vpa(run_info; f_over_vpa2=true, input=f_input, is=1,
@@ -4528,12 +4599,80 @@ function plot_ion_pdf_2D_at_wall(run_info; plot_prefix)
         end
 
         if input.animate
-            animate_vs_vpa(run_info, "f"; is=1, input=f_input,
-                           outfile=plot_prefix * "pdf_$(label)_vs_vpa." * input.animation_ext)
+            fig, ax = get_1d_ax(; xlabel="vpa", ylabel="f")
+            frame_index = Observable(1)
+            for iz ∈ z_range
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        run_label = ri.run_name * " "
+                    else
+                        run_label = ""
+                    end
+                    animate_vs_vpa(ri, "f"; is=1, iz=iz, input=f_input,
+                                   label="$(run_label)iz=$iz", ax=ax,
+                                   frame_index=frame_index)
+                end
+            end
+            put_legend_right(fig, ax)
+            outfile=plot_prefix * "pdf_$(label)_vs_vpa." * input.animation_ext
+            save_animation(fig, frame_index, nt, outfile)
+
+            fig, ax = get_1d_ax(; xlabel="vpa", ylabel="f", yscale=log10)
+            frame_index = Observable(1)
+            for iz ∈ z_range
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        run_label = ri.run_name * " "
+                    else
+                        run_label = ""
+                    end
+                    animate_vs_vpa(ri, "f"; is=1, iz=iz, input=f_input,
+                                   label="$(run_label)iz=$iz", ax=ax,
+                                   frame_index=frame_index,
+                                   transform=(x)->positive_or_nan(x; epsilon=1.e-20))
+                end
+            end
+            put_legend_right(fig, ax)
+            outfile=plot_prefix * "logpdf_$(label)_vs_vpa." * input.animation_ext
+            save_animation(fig, frame_index, nt, outfile)
 
             if moment_kinetic
-                animate_f_unnorm_vs_vpa(run_info; input=f_input, is=1,
-                                        outfile=plot_prefix * "pdf_unnorm_$(label)_vs_vpa." * input.animation_ext)
+                fig, ax = get_1d_ax(; xlabel="vpa", ylabel="f")
+                frame_index = Observable(1)
+                for iz ∈ z_range
+                    for ri ∈ run_info
+                        if length(run_info) > 1
+                            run_label = ri.run_name * " "
+                        else
+                            run_label = ""
+                        end
+                        animate_f_unnorm_vs_vpa(ri; is=1, iz=iz, input=f_input,
+                                                label="$(run_label)iz=$iz", ax=ax,
+                                                frame_index=frame_index)
+                    end
+                end
+                put_legend_right(fig, ax)
+                outfile=plot_prefix * "pdf_unnorm_$(label)_vs_vpa." * input.animation_ext
+                save_animation(fig, frame_index, nt, outfile)
+
+                fig, ax = get_1d_ax(; xlabel="vpa", ylabel="f")
+                frame_index = Observable(1)
+                for iz ∈ z_range
+                    for ri ∈ run_info
+                        if length(run_info) > 1
+                            run_label = ri.run_name * " "
+                        else
+                            run_label = ""
+                        end
+                        animate_f_unnorm_vs_vpa(ri; is=1, iz=iz, input=f_input,
+                                                label="$(run_label)iz=$iz", ax=ax,
+                                                frame_index=frame_index, yscale=log10,
+                                                transform=(x)->positive_or_nan(x; epsilon=1.e-20))
+                    end
+                end
+                put_legend_right(fig, ax)
+                outfile=plot_prefix * "logpdf_unnorm_$(label)_vs_vpa." * input.animation_ext
+                save_animation(fig, frame_index, nt, outfile)
             end
 
             animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=true, input=f_input, is=1,
@@ -4614,19 +4753,82 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
     moment_kinetic = any(ri !== nothing
                          && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
                          for ri ∈ run_info)
+    nt = minimum(ri.nt for ri ∈ run_info)
 
-    for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+8, "wall-"),
-                               (z_upper, z_upper-8:z_upper, "wall+"))
+    for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+4, "wall-"),
+                               (z_upper, z_upper-4:z_upper, "wall+"))
         f_neutral_input = copy(input_dict_dfns["f_neutral"])
         f_neutral_input["iz0"] = z
 
         if input.plot
-            plot_vs_vz(run_info, "f_neutral"; is=1, input=f_neutral_input,
-                       outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz.pdf")
+            fig, ax = get_1d_ax(; xlabel="vz", ylabel="f_neutral")
+            for iz ∈ z_range
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        run_label = ri.run_name * " "
+                    else
+                        run_label = ""
+                    end
+                    plot_vs_vz(ri, "f_neutral"; is=1, iz=iz, input=f_neutral_input,
+                               label="$(run_label)iz=$iz", ax=ax)
+                end
+            end
+            put_legend_right(fig, ax)
+            outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz.pdf"
+            save(outfile, fig)
+
+            fig, ax = get_1d_ax(; xlabel="vz", ylabel="f_neutral")
+            for iz ∈ z_range
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        run_label = ri.run_name * " "
+                    else
+                        run_label = ""
+                    end
+                    plot_vs_vz(ri, "f_neutral"; is=1, iz=iz, input=f_neutral_input,
+                               label="$(run_label)iz=$iz", ax=ax, yscale=log10,
+                               transform=(x)->positive_or_nan(x; epsilon=1.e-20))
+                end
+            end
+            put_legend_right(fig, ax)
+            outfile=plot_prefix * "logpdf_neutral_$(label)_vs_vpa.pdf"
+            save(outfile, fig)
 
             if moment_kinetic
-                plot_f_unnorm_vs_vpa(run_info; input=f_neutral_input, neutral=true, is=1,
-                                     outfile=plot_prefix * "pdf_neutral_unnorm_$(label)_vs_vpa.pdf")
+                fig, ax = get_1d_ax(; xlabel="vz_unnorm", ylabel="f_neutral_unnorm")
+                for iz ∈ z_range
+                    for ri ∈ run_info
+                        if length(run_info) > 1
+                            run_label = ri.run_name * " "
+                        else
+                            run_label = ""
+                        end
+                        plot_f_unnorm_vs_vpa(ri; neutral=true, input=f_neutral_input,
+                                             is=1, iz=iz, label="$(run_label)iz=$iz",
+                                             ax=ax)
+                    end
+                end
+                put_legend_right(fig, ax)
+                outfile=plot_prefix * "pdf_neutral_unnorm_$(label)_vs_vpa.pdf"
+                save(outfile, fig)
+
+                fig, ax = get_1d_ax(; xlabel="vz_unnorm", ylabel="f_neutral_unnorm")
+                for iz ∈ z_range
+                    for ri ∈ run_info
+                        if length(run_info) > 1
+                            run_label = ri.run_name * " "
+                        else
+                            run_label = ""
+                        end
+                        plot_f_unnorm_vs_vpa(ri; neutral=true, input=f_neutral_input,
+                                             is=1, iz=iz, label="$(run_label)iz=$iz",
+                                             ax=ax, yscale=log10,
+                                             transform=(x)->positive_or_nan(x; epsilon=1.e-20))
+                    end
+                end
+                put_legend_right(fig, ax)
+                outfile=plot_prefix * "logpdf_neutral_unnorm_$(label)_vs_vpa.pdf"
+                save(outfile, fig)
             end
 
             if !is_1V
@@ -4669,12 +4871,81 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
         end
 
         if input.animate
-            animate_vs_vz(run_info, "f_neutral"; is=1, input=f_neutral_input,
-                          outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz." * input.animation_ext)
+            fig, ax = get_1d_ax(; xlabel="vz", ylabel="f_neutral")
+            frame_index = Observable(1)
+            for iz ∈ z_range
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        run_label = ri.run_name * " "
+                    else
+                        run_label = ""
+                    end
+                    animate_vs_vz(ri, "f_neutral"; is=1, iz=iz, input=f_neutral_input,
+                                  label="$(run_label)iz=$iz", ax=ax,
+                                  frame_index=frame_index)
+                end
+            end
+            put_legend_right(fig, ax)
+            outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz." * input.animation_ext
+            save_animation(fig, frame_index, nt, outfile)
+
+            fig, ax = get_1d_ax(; xlabel="vz", ylabel="f_neutral", yscale=log10)
+            frame_index = Observable(1)
+            for iz ∈ z_range
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        run_label = ri.run_name * " "
+                    else
+                        run_label = ""
+                    end
+                    animate_vs_vz(ri, "f_neutral"; is=1, iz=iz, input=f_neutral_input,
+                                  label="$(run_label)iz=$iz", ax=ax,
+                                  frame_index=frame_index,
+                                  transform=(x)->positive_or_nan(x; epsilon=1.e-20))
+                end
+            end
+            put_legend_right(fig, ax)
+            outfile=plot_prefix * "logpdf_neutral_$(label)_vs_vz." * input.animation_ext
+            save_animation(fig, frame_index, nt, outfile)
 
             if moment_kinetic
-                animate_f_unnorm_vs_vpa(run_info; input=f_neutral_input, neutral=true, is=1,
-                                        outfile=plot_prefix * "pdf_neutral_unnorm_$(label)_vs_vz." * input.animation_ext)
+                fig, ax = get_1d_ax(; xlabel="vz", ylabel="f_neutral")
+                frame_index = Observable(1)
+                for iz ∈ z_range
+                    for ri ∈ run_info
+                        if length(run_info) > 1
+                            run_label = ri.run_name * " "
+                        else
+                            run_label = ""
+                        end
+                        animate_f_unnorm_vs_vpa(ri; neutral=true, is=1, iz=iz,
+                                                input=f_neutral_input,
+                                                label="$(run_label)iz=$iz", ax=ax,
+                                                frame_index=frame_index)
+                    end
+                end
+                put_legend_right(fig, ax)
+                outfile=plot_prefix * "pdf_neutral_unnorm_$(label)_vs_vz." * input.animation_ext
+                save_animation(fig, frame_index, nt, outfile)
+
+                fig, ax = get_1d_ax(; xlabel="vz", ylabel="f_neutral")
+                frame_index = Observable(1)
+                for iz ∈ z_range
+                    for ri ∈ run_info
+                        if length(run_info) > 1
+                            run_label = ri.run_name * " "
+                        else
+                            run_label = ""
+                        end
+                        animate_f_unnorm_vs_vpa(ri; neutral=true, is=1, iz=iz,
+                                                input=f_neutral_input, label="$(run_label)iz=$iz",
+                                                ax=ax, frame_index=frame_index, yscale=log10,
+                                                transform=(x)->positive_or_nan(x; epsilon=1.e-20))
+                    end
+                end
+                put_legend_right(fig, ax)
+                outfile=plot_prefix * "logpdf_neutral_unnorm_$(label)_vs_vz." * input.animation_ext
+                save_animation(fig, frame_index, nt, outfile)
             end
 
             if !is_1V
@@ -4841,35 +5112,35 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
             end
 
             # Electrons
-            if any(ri.composition.electron_physics == kinetic_electrons for ri ∈ run_info)
+            #if any(ri.composition.electron_physics == kinetic_electrons for ri ∈ run_info)
 
-                fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
-                for ri ∈ run_info
-                    if length(run_info) > 1
-                        prefix = ri.run_name * ", "
-                    else
-                        prefix = ""
-                    end
+            #    fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
+            #    for ri ∈ run_info
+            #        if length(run_info) > 1
+            #            prefix = ri.run_name * ", "
+            #        else
+            #            prefix = ""
+            #        end
 
-                    varname = "electron_constraints_A_coefficient"
-                    label = prefix * "(A-1)"
-                    data = get_variable(ri, varname; it=it0, ir=ir0)
-                    data .-= 1.0
-                    plot_vs_z(ri, varname; label=label, data=data, ax=ax, input=input)
+            #        varname = "electron_constraints_A_coefficient"
+            #        label = prefix * "(A-1)"
+            #        data = get_variable(ri, varname; it=it0, ir=ir0)
+            #        data .-= 1.0
+            #        plot_vs_z(ri, varname; label=label, data=data, ax=ax, input=input)
 
-                    varname = "electron_constraints_B_coefficient"
-                    label = prefix * "B"
-                    plot_vs_z(ri, varname; label=label, ax=ax, it=it0, ir=ir0,
-                              input=input)
+            #        varname = "electron_constraints_B_coefficient"
+            #        label = prefix * "B"
+            #        plot_vs_z(ri, varname; label=label, ax=ax, it=it0, ir=ir0,
+            #                  input=input)
 
-                    varname = "electron_constraints_C_coefficient"
-                    label = prefix * "C"
-                    plot_vs_z(ri, varname; label=label, ax=ax, it=it0, ir=ir0,
-                              input=input)
-                end
-                put_legend_right(fig, ax)
-                save(plot_prefix * "electron_constraints.pdf", fig)
-            end
+            #        varname = "electron_constraints_C_coefficient"
+            #        label = prefix * "C"
+            #        plot_vs_z(ri, varname; label=label, ax=ax, it=it0, ir=ir0,
+            #                  input=input)
+            #    end
+            #    put_legend_right(fig, ax)
+            #    save(plot_prefix * "electron_constraints.pdf", fig)
+            #end
         end
 
         if input.animate
@@ -5003,53 +5274,53 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
             end
 
             # Electrons
-            if any(ri.composition.electron_physics == kinetic_electrons for ri ∈ run_info)
+            #if any(ri.composition.electron_physics == kinetic_electrons for ri ∈ run_info)
 
-                frame_index = Observable(1)
-                fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
+            #    frame_index = Observable(1)
+            #    fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
 
-                # Calculate plot limits manually so we can exclude the first time point, which
-                # often has a large value for (A-1) due to the way initialisation is done,
-                # which can make the subsequent values hard to see.
-                ymin = Inf
-                ymax = -Inf
-                for ri ∈ run_info
-                    if length(run_info) > 1
-                        prefix = ri.run_name * ", "
-                    else
-                        prefix = ""
-                    end
+            #    # Calculate plot limits manually so we can exclude the first time point, which
+            #    # often has a large value for (A-1) due to the way initialisation is done,
+            #    # which can make the subsequent values hard to see.
+            #    ymin = Inf
+            #    ymax = -Inf
+            #    for ri ∈ run_info
+            #        if length(run_info) > 1
+            #            prefix = ri.run_name * ", "
+            #        else
+            #            prefix = ""
+            #        end
 
-                    varname = "electron_constraints_A_coefficient"
-                    label = prefix * "(A-1)"
-                    data = get_variable(ri, varname; ir=ir0)
-                    data .-= 1.0
-                    ymin = min(ymin, minimum(data[:,2:end]))
-                    ymax = max(ymax, maximum(data[:,2:end]))
-                    animate_vs_z(ri, varname; label=label, data=data,
-                                 frame_index=frame_index, ax=ax, input=input)
+            #        varname = "electron_constraints_A_coefficient"
+            #        label = prefix * "(A-1)"
+            #        data = get_variable(ri, varname; ir=ir0)
+            #        data .-= 1.0
+            #        ymin = min(ymin, minimum(data[:,2:end]))
+            #        ymax = max(ymax, maximum(data[:,2:end]))
+            #        animate_vs_z(ri, varname; label=label, data=data,
+            #                     frame_index=frame_index, ax=ax, input=input)
 
-                    varname = "electron_constraints_B_coefficient"
-                    label = prefix * "B"
-                    data = get_variable(ri, varname; ir=ir0)
-                    ymin = min(ymin, minimum(data[:,2:end]))
-                    ymax = max(ymax, maximum(data[:,2:end]))
-                    animate_vs_z(ri, varname; label=label, data=data,
-                                 frame_index=frame_index, ax=ax, ir=ir0, input=input)
+            #        varname = "electron_constraints_B_coefficient"
+            #        label = prefix * "B"
+            #        data = get_variable(ri, varname; ir=ir0)
+            #        ymin = min(ymin, minimum(data[:,2:end]))
+            #        ymax = max(ymax, maximum(data[:,2:end]))
+            #        animate_vs_z(ri, varname; label=label, data=data,
+            #                     frame_index=frame_index, ax=ax, ir=ir0, input=input)
 
-                    varname = "electron_constraints_C_coefficient"
-                    label = prefix * "C"
-                    data = get_variable(ri, varname; ir=ir0)
-                    ymin = min(ymin, minimum(data[:,2:end]))
-                    ymax = max(ymax, maximum(data[:,2:end]))
-                    animate_vs_z(ri, varname; label=label, data=data,
-                                 frame_index=frame_index, ax=ax, ir=ir0, input=input)
-                end
-                put_legend_right(fig, ax)
-                ylims!(ax, ymin, ymax)
-                save_animation(fig, frame_index, nt,
-                               plot_prefix * "electron_constraints." * input.animation_ext)
-            end
+            #        varname = "electron_constraints_C_coefficient"
+            #        label = prefix * "C"
+            #        data = get_variable(ri, varname; ir=ir0)
+            #        ymin = min(ymin, minimum(data[:,2:end]))
+            #        ymax = max(ymax, maximum(data[:,2:end]))
+            #        animate_vs_z(ri, varname; label=label, data=data,
+            #                     frame_index=frame_index, ax=ax, ir=ir0, input=input)
+            #    end
+            #    put_legend_right(fig, ax)
+            #    ylims!(ax, ymin, ymax)
+            #    save_animation(fig, frame_index, nt,
+            #                   plot_prefix * "electron_constraints." * input.animation_ext)
+            #end
         end
     catch e
         println("Error in constraints_plots(). Error was ", e)
@@ -7095,6 +7366,14 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing, electro
                                 linestyle=:dash,
                                 label=prefix * "failures caused by p_neutral", ax=ax_failures)
                     end
+                    if occursin("ARK", ri.t_input["type"])
+                        # Nonlinear iteration failed to converge in implicit part of
+                        # timestep
+                        counter += 1
+                        plot_1d(time, @view failure_caused_by_per_output[counter,:];
+                                linestyle=:dot,
+                                label=prefix * "nonlinear iteration convergence failure", ax=ax_failures)
+                    end
                 end
 
                 if counter > size(failure_caused_by_per_output, 1)
@@ -7131,10 +7410,27 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing, electro
                 else
                     prefix = ri.run_name * " "
                 end
+                if it !== nothing
+                    time = ri.time[it]
+                else
+                    time = ri.time
+                end
+
                 if electron
                     CFL_vars = ["minimum_CFL_electron_z", "minimum_CFL_electron_vpa"]
+                    implicit_CFL_vars = String[]
                 else
-                    CFL_vars = ["minimum_CFL_ion_z", "minimum_CFL_ion_vpa"]
+                    CFL_vars = String[]
+                    implicit_CFL_vars = String[]
+
+                    push!(CFL_vars, "minimum_CFL_ion_z")
+                    if occursin("ARK", ri.t_input["type"]) && ri.t_input["implicit_ion_advance"]
+                        push!(implicit_CFL_vars, "minimum_CFL_ion_z")
+                    end
+                    push!(CFL_vars, "minimum_CFL_ion_vpa")
+                    if occursin("ARK", ri.t_input["type"]) && (ri.t_input["implicit_ion_advance"] || ri.t_input["implicit_vpa_advection"])
+                        push!(implicit_CFL_vars, "minimum_CFL_ion_vpa")
+                    end
                     if ri.n_neutral_species > 0
                         push!(CFL_vars, "minimum_CFL_neutral_z", "minimum_CFL_neutral_vz")
                     end
@@ -7145,15 +7441,29 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing, electro
                     time = ri.time
                 end
                 for varname ∈ CFL_vars
-                    var = get_variable(ri, varname; it=it)
-                    maxval = min(maxval, maximum(var))
-                    plot_1d(time, var; ax=ax, label=prefix*electron_prefix*varname)
+                    var = get_variable(ri, varname)
+                    maxval = NaNMath.min(maxval, NaNMath.maximum(var))
+                    if occursin("neutral", varname)
+                        if varname ∈ implicit_CFL_vars
+                            linestyle = :dashdot
+                        else
+                            linestyle = :dash
+                        end
+                    else
+                        if varname ∈ implicit_CFL_vars
+                            linestyle = :dot
+                        else
+                            linestyle = nothing
+                        end
+                    end
+                    plot_1d(time, var; ax=ax, label=prefix*electron_prefix*varname, linestyle=linestyle)
                 end
             end
-            ylims!(ax, 0.0, 4.0 * maxval)
+            ylims!(ax, 0.0, 10.0 * maxval)
             put_legend_right(CFL_fig, ax)
 
-            limits_fig, ax = get_1d_ax(; xlabel="time", ylabel="number of limits per factor per output")
+            limits_fig, ax = get_1d_ax(; xlabel="time", ylabel="number of limits per factor per output",
+                                       size=(600, 500))
 
             for ri ∈ run_info
                 if length(run_info) == 1
@@ -7171,11 +7481,6 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing, electro
                     get_variable(ri, "$(electron_prefix)limit_caused_by_per_output";
                                  it=it)
                 counter = 0
-
-                # Accuracy limit counter
-                counter += 1
-                plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                        label=prefix * "RK accuracy", ax=ax)
 
                 # Maximum timestep increase limit counter
                 counter += 1
@@ -7197,36 +7502,102 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing, electro
                 plot_1d(time, @view limit_caused_by_per_output[counter,:];
                         label=prefix * "max timestep", ax=ax)
 
-                # z advection
+                # High nonlinear iterations count
                 counter += 1
-                if electron
-                    label = prefix * "electron z advect"
-                else
-                    label = prefix * "ion z advect"
-                end
-                plot_1d(time, @view limit_caused_by_per_output[counter,:]; label=label,
-                        ax=ax)
+                plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                        label=prefix * "high nl iterations", ax=ax)
 
-                # vpa advection
+                # Accuracy limit counters
                 counter += 1
                 if electron
-                    label = prefix * "electron vpa advect"
+                    label = prefix * "electron pdf RK accuracy"
                 else
-                    label = prefix * "ion vpa advect"
+                    label = prefix * "ion pdf RK accuracy"
                 end
-                plot_1d(time, @view limit_caused_by_per_output[counter,:]; label=label,
-                        ax=ax)
+                plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                        label=label, ax=ax, linestyle=:dash)
+                if !electron && ri.evolve_density
+                    counter += 1
+                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                            label=prefix * "ion density RK accuracy", ax=ax,
+                            linestyle=:dash)
+                end
+                if !electron && ri.evolve_upar
+                    counter += 1
+                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                            label=prefix * "ion upar RK accuracy", ax=ax,
+                            linestyle=:dash)
+                end
+                if electron || ri.evolve_ppar
+                    counter += 1
+                    if electron
+                        label = prefix * "electron ppar RK accuracy"
+                    else
+                        label = prefix * "ion ppar RK accuracy"
+                    end
+                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                            label=label, ax=ax,
+                            linestyle=:dash)
+                end
+                if !electron && ri.n_neutral_species > 0
+                    counter += 1
+                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                            label=prefix * "neutral pdf RK accuracy", ax=ax,
+                            linestyle=:dash)
+                    if ri.evolve_density
+                        counter += 1
+                        plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                label=prefix * "neutral density RK accuracy", ax=ax,
+                                linestyle=:dash)
+                    end
+                    if ri.evolve_upar
+                        counter += 1
+                        plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                label=prefix * "neutral uz RK accuracy", ax=ax,
+                                linestyle=:dash)
+                    end
+                    if ri.evolve_ppar
+                        counter += 1
+                        plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                label=prefix * "neutral pz RK accuracy", ax=ax,
+                                linestyle=:dash)
+                    end
+                end
+
+                if electron || !(occursin("ARK", ri.t_input["type"]) && ri.t_input["implicit_ion_advance"])
+                    # Ion z advection
+                    counter += 1
+                    if electron
+                        label = prefix * "electron z advect"
+                    else
+                        label = prefix * "ion z advect"
+                    end
+                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                            label=label, ax=ax, linestyle=:dot)
+                end
+
+                if electron || !(occursin("ARK", ri.t_input["type"]) && (ri.t_input["implicit_ion_advance"] || ri.t_input["implicit_vpa_advection"]))
+                    # Ion vpa advection
+                    counter += 1
+                    if electron
+                        label = prefix * "electron vpa advect"
+                    else
+                        label = prefix * "ion vpa advect"
+                    end
+                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                            label=label, ax=ax, linestyle=:dot)
+                end
 
                 if !electron && ri.n_neutral_species > 0
                     # Neutral z advection
                     counter += 1
                     plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                            label=prefix * "neutral z advect", ax=ax)
+                            label=prefix * "neutral z advect", ax=ax, linestyle=:dot)
 
                     # Neutral vz advection
                     counter += 1
                     plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                            label=prefix * "neutral vz advect", ax=ax)
+                            label=prefix * "neutral vz advect", ax=ax, linestyle=:dot)
                 end
 
                 if counter > size(limit_caused_by_per_output, 1)
@@ -7242,6 +7613,41 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing, electro
 
             put_legend_right(limits_fig, ax)
 
+            # Plot nonlinear solver diagnostics (if any)
+            nl_solvers_fig, ax = get_1d_ax(; xlabel="time", ylabel="iterations per solve/nonlinear-iteration")
+            has_nl_solver = false
+
+            for ri ∈ run_info
+                if length(run_info) == 1
+                    prefix = ""
+                else
+                    prefix = ri.run_name * " "
+                end
+                if it !== nothing
+                    time = ri.time[it]
+                else
+                    time = ri.time
+                end
+
+                nl_nonlinear_iterations_names = Tuple(v for v ∈ ri.variable_names
+                                                      if occursin("_nonlinear_iterations", v))
+                if nl_nonlinear_iterations_names != ()
+                    has_nl_solver = true
+                    nl_prefixes = (split(v, "_nonlinear_iterations")[1]
+                                   for v ∈ nl_nonlinear_iterations_names)
+                    for p ∈ nl_prefixes
+                        nonlinear_iterations = get_variable(ri, "$(p)_nonlinear_iterations_per_solve")
+                        linear_iterations = get_variable(ri, "$(p)_linear_iterations_per_nonlinear_iteration")
+                        plot_1d(time, nonlinear_iterations, label=prefix * " " * p * " NL per solve", ax=ax)
+                        plot_1d(time, linear_iterations, label=prefix * " " * p * " L per NL", ax=ax)
+                    end
+                end
+            end
+
+            if has_nl_solver
+                put_legend_right(nl_solvers_fig, ax)
+            end
+
 
             if plot_prefix !== nothing
                 outfile = plot_prefix * electron_prefix * "timestep_diagnostics.pdf"
@@ -7252,11 +7658,19 @@ function timestep_diagnostics(run_info; plot_prefix=nothing, it=nothing, electro
 
                 outfile = plot_prefix * electron_prefix * "timestep_limits.pdf"
                 save(outfile, limits_fig)
+
+                if has_nl_solver
+                    outfile = plot_prefix * "nonlinear_solver_iterations.pdf"
+                    save(outfile, nl_solvers_fig)
+                end
             else
                 display(steps_fig)
                 display(dt_fig)
                 display(CFL_fig)
                 display(limits_fig)
+                if has_nl_solver
+                    display(nl_solvers_fig)
+                end
             end
         end
 

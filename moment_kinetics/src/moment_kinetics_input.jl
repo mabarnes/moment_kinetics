@@ -221,6 +221,9 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         last_fail_proximity_factor=1.05,
         minimum_dt=0.0,
         maximum_dt=Inf,
+        implicit_ion_advance=true,
+        implicit_vpa_advection=false,
+        write_after_fixed_step_count=false,
         high_precision_error_sum=false,
        )
     if timestepping_section["nwrite"] > timestepping_section["nstep"]
@@ -254,6 +257,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         last_fail_proximity_factor=timestepping_section["last_fail_proximity_factor"],
         minimum_dt=timestepping_section["minimum_dt"] * sqrt(composition.me_over_mi),
         maximum_dt=timestepping_section["maximum_dt"] * sqrt(composition.me_over_mi),
+        write_after_fixed_step_count=false,
         high_precision_error_sum=timestepping_section["high_precision_error_sum"],
         initialization_residual_value=1.0,
         no_restart=false,
@@ -276,83 +280,81 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     electron_timestepping_section["stopfile_name"] = timestepping_section["stopfile_name"]
     electron_timestepping_section["atol_upar"] = NaN
     electron_timestepping_section["steady_state_residual"] = true
-    electron_timestepping_input = Dict_to_NamedTuple(electron_timestepping_section)
-    if !(0.0 < electron_timestepping_input.step_update_prefactor < 1.0)
+    if !(0.0 < electron_timestepping_section["step_update_prefactor"] < 1.0)
         error("[electron_timestepping] step_update_prefactor="
-              * "$(electron_timestepping_input.step_update_prefactor) must be between "
+              * "$(electron_timestepping_section["step_update_prefactor"]) must be between "
               * "0.0 and 1.0.")
     end
-    if electron_timestepping_input.max_increase_factor ≤ 1.0
+    if electron_timestepping_section["max_increase_factor"] ≤ 1.0
         error("[electron_timestepping] max_increase_factor="
-              * "$(electron_timestepping_input.max_increase_factor) must be greater than "
+              * "$(electron_timestepping_section["max_increase_factor"]) must be greater than "
               * "1.0.")
     end
-    if electron_timestepping_input.max_increase_factor_near_last_fail ≤ 1.0
+    if electron_timestepping_section["max_increase_factor_near_last_fail"] ≤ 1.0
         error("[electron_timestepping] max_increase_factor_near_last_fail="
-              * "$(electron_timestepping_input.max_increase_factor_near_last_fail) must "
+              * "$(electron_timestepping_section["max_increase_factor_near_last_fail"]) must "
               * "be greater than 1.0.")
     end
-    if !isinf(electron_timestepping_input.max_increase_factor_near_last_fail) &&
-            electron_timestepping_input.max_increase_factor_near_last_fail > electron_timestepping_input.max_increase_factor
+    if !isinf(electron_timestepping_section["max_increase_factor_near_last_fail"]) &&
+        electron_timestepping_section["max_increase_factor_near_last_fail"] > electron_timestepping_section["max_increase_factor"]
         error("[electron_timestepping] max_increase_factor_near_last_fail="
-              * "$(electron_timestepping_input.max_increase_factor_near_last_fail) should be "
+              * "$(electron_timestepping_section["max_increase_factor_near_last_fail"]) should be "
               * "less than max_increase_factor="
-              * "$(electron_timestepping_input.max_increase_factor).")
+              * "$(electron_timestepping_section["max_increase_factor"]).")
     end
-    if electron_timestepping_input.last_fail_proximity_factor ≤ 1.0
+    if electron_timestepping_section["last_fail_proximity_factor"] ≤ 1.0
         error("[electron_timestepping] last_fail_proximity_factor="
-              * "$(electron_timestepping_input.last_fail_proximity_factor) must be "
+              * "$(electron_timestepping_section["last_fail_proximity_factor"]) must be "
               * "greater than 1.0.")
     end
-    if electron_timestepping_input.minimum_dt > electron_timestepping_input.maximum_dt
+    if electron_timestepping_section["minimum_dt"] > electron_timestepping_section["maximum_dt"]
         error("[electron_timestepping] minimum_dt="
-              * "$(electron_timestepping_input.minimum_dt) must be less than "
-              * "maximum_dt=$(electron_timestepping_input.maximum_dt)")
+              * "$(electron_timestepping_section["minimum_dt"]) must be less than "
+              * "maximum_dt=$(electron_timestepping_section["maximum_dt"])")
     end
-    if electron_timestepping_input.maximum_dt ≤ 0.0
+    if electron_timestepping_section["maximum_dt"] ≤ 0.0
         error("[electron_timestepping] maximum_dt="
-              * "$(electron_timestepping_input.maximum_dt) must be positive")
+              * "$(electron_timestepping_section["maximum_dt"]) must be positive")
     end
 
     # Make a copy of `timestepping_section` here as we do not want to add
-    # `electron_timestepping_input` to the `input_dict` because there is already an
+    # `electron_timestepping_section` to the `input_dict` because there is already an
     # "electron_timestepping" section containing the input info - we only want to put
-    # `electron_timestepping_input` into the Dict that is used to make
+    # `electron_timestepping_section` into the Dict that is used to make
     # `timestepping_input`, so that it becomes part of `timestepping_input`.
     timestepping_section = copy(timestepping_section)
-    timestepping_section["electron_t_input"] = electron_timestepping_input
-    timestepping_input = Dict_to_NamedTuple(timestepping_section)
-    if !(0.0 < timestepping_input.step_update_prefactor < 1.0)
-        error("step_update_prefactor=$(timestepping_input.step_update_prefactor) must "
+    timestepping_section["electron_t_input"] = electron_timestepping_section
+    if !(0.0 < timestepping_section["step_update_prefactor"] < 1.0)
+        error("step_update_prefactor=$(timestepping_section["step_update_prefactor"]) must "
               * "be between 0.0 and 1.0.")
     end
-    if timestepping_input.max_increase_factor ≤ 1.0
-        error("max_increase_factor=$(timestepping_input.max_increase_factor) must "
+    if timestepping_section["max_increase_factor"] ≤ 1.0
+        error("max_increase_factor=$(timestepping_section["max_increase_factor"]) must "
               * "be greater than 1.0.")
     end
-    if timestepping_input.max_increase_factor_near_last_fail ≤ 1.0
+    if timestepping_section["max_increase_factor_near_last_fail"] ≤ 1.0
         error("max_increase_factor_near_last_fail="
-              * "$(timestepping_input.max_increase_factor_near_last_fail) must be "
+              * "$(timestepping_section["max_increase_factor_near_last_fail"]) must be "
               * "greater than 1.0.")
     end
-    if !isinf(timestepping_input.max_increase_factor_near_last_fail) &&
-            timestepping_input.max_increase_factor_near_last_fail > timestepping_input.max_increase_factor
+    if !isinf(timestepping_section["max_increase_factor_near_last_fail"]) &&
+        timestepping_section["max_increase_factor_near_last_fail"] > timestepping_section["max_increase_factor"]
         error("max_increase_factor_near_last_fail="
-              * "$(timestepping_input.max_increase_factor_near_last_fail) should be "
+              * "$(timestepping_section["max_increase_factor_near_last_fail"]) should be "
               * "less than max_increase_factor="
-              * "$(timestepping_input.max_increase_factor).")
+              * "$(timestepping_section["max_increase_factor"]).")
     end
-    if timestepping_input.last_fail_proximity_factor ≤ 1.0
+    if timestepping_section["last_fail_proximity_factor"] ≤ 1.0
         error("last_fail_proximity_factor="
-              * "$(timestepping_input.last_fail_proximity_factor) must be "
+              * "$(timestepping_section["last_fail_proximity_factor"]) must be "
               * "greater than 1.0.")
     end
-    if timestepping_input.minimum_dt > timestepping_input.maximum_dt
-        error("minimum_dt=$(timestepping_input.minimum_dt) must be less than "
-              * "maximum_dt=$(timestepping_input.maximum_dt)")
+    if timestepping_section["minimum_dt"] > timestepping_section["maximum_dt"]
+        error("minimum_dt=$(timestepping_section["minimum_dt"]) must be less than "
+              * "maximum_dt=$(timestepping_section["maximum_dt"])")
     end
-    if timestepping_input.maximum_dt ≤ 0.0
-        error("maximum_dt=$(timestepping_input.maximum_dt) must be positive")
+    if timestepping_section["maximum_dt"] ≤ 0.0
+        error("maximum_dt=$(timestepping_section["maximum_dt"]) must be positive")
     end
 
     use_for_init_is_default = !(("manufactured_solns" ∈ keys(scan_input)) &&
@@ -624,19 +626,23 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
             species.ion[is].z_IC.density_amplitude, species.ion[is].z_IC.density_phase,
             species.ion[is].z_IC.upar_amplitude, species.ion[is].z_IC.upar_phase,
             species.ion[is].z_IC.temperature_amplitude, species.ion[is].z_IC.temperature_phase,
-            species.ion[is].z_IC.monomial_degree)
+            species.ion[is].z_IC.monomial_degree, 0.0, 0.0, 0.0, 0.0)
         r_IC = initial_condition_input(species.ion[is].r_IC.initialization_option,
             species.ion[is].r_IC.width, species.ion[is].r_IC.wavenumber,
             species.ion[is].r_IC.density_amplitude, species.ion[is].r_IC.density_phase,
             species.ion[is].r_IC.upar_amplitude, species.ion[is].r_IC.upar_phase,
             species.ion[is].r_IC.temperature_amplitude, species.ion[is].r_IC.temperature_phase,
-            species.ion[is].r_IC.monomial_degree)
+            species.ion[is].r_IC.monomial_degree, 0.0, 0.0, 0.0, 0.0)
         vpa_IC = initial_condition_input(species.ion[is].vpa_IC.initialization_option,
             species.ion[is].vpa_IC.width, species.ion[is].vpa_IC.wavenumber,
             species.ion[is].vpa_IC.density_amplitude, species.ion[is].vpa_IC.density_phase,
             species.ion[is].vpa_IC.upar_amplitude, species.ion[is].vpa_IC.upar_phase,
             species.ion[is].vpa_IC.temperature_amplitude,
-            species.ion[is].vpa_IC.temperature_phase, species.ion[is].vpa_IC.monomial_degree)
+            species.ion[is].vpa_IC.temperature_phase, species.ion[is].vpa_IC.monomial_degree,
+            get(scan_input, "vpa_IC_v0_$is", 0.5*sqrt(vperp.L^2 + (0.5*vpa.L)^2)),
+            get(scan_input, "vpa_IC_vth0$is", 0.1*sqrt(vperp.L^2 + (0.5*vpa.L)^2)),
+            get(scan_input, "vpa_IC_vpa0$is", 0.25*0.5*abs(vpa.L)),
+            get(scan_input, "vpa_IC_vperp0$is", 0.5*abs(vperp.L)))
         species_ion_immutable[is] = species_parameters(species_type, species.ion[is].initial_temperature,
             species.ion[is].initial_density, z_IC, r_IC, vpa_IC)
     end
@@ -648,19 +654,23 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
                 species.neutral[is].z_IC.density_amplitude, species.neutral[is].z_IC.density_phase,
                 species.neutral[is].z_IC.upar_amplitude, species.neutral[is].z_IC.upar_phase,
                 species.neutral[is].z_IC.temperature_amplitude, species.neutral[is].z_IC.temperature_phase,
-                species.neutral[is].z_IC.monomial_degree)
+                species.neutral[is].z_IC.monomial_degree, 0.0, 0.0, 0.0, 0.0)
             r_IC = initial_condition_input(species.neutral[is].r_IC.initialization_option,
                 species.neutral[is].r_IC.width, species.neutral[is].r_IC.wavenumber,
                 species.neutral[is].r_IC.density_amplitude, species.neutral[is].r_IC.density_phase,
                 species.neutral[is].r_IC.upar_amplitude, species.neutral[is].r_IC.upar_phase,
                 species.neutral[is].r_IC.temperature_amplitude, species.neutral[is].r_IC.temperature_phase,
-                species.neutral[is].r_IC.monomial_degree)
+                species.neutral[is].r_IC.monomial_degree, 0.0, 0.0, 0.0, 0.0)
             vpa_IC = initial_condition_input(species.neutral[is].vpa_IC.initialization_option,
                 species.neutral[is].vpa_IC.width, species.neutral[is].vpa_IC.wavenumber,
                 species.neutral[is].vpa_IC.density_amplitude, species.neutral[is].vpa_IC.density_phase,
                 species.neutral[is].vpa_IC.upar_amplitude, species.neutral[is].vpa_IC.upar_phase,
                 species.neutral[is].vpa_IC.temperature_amplitude,
-                species.neutral[is].vpa_IC.temperature_phase, species.neutral[is].vpa_IC.monomial_degree)
+                species.neutral[is].vpa_IC.temperature_phase, species.neutral[is].vpa_IC.monomial_degree,
+                get(scan_input, "vpa_IC_v0$is", 0.5*sqrt(vperp.L^2 + (0.5*vpa.L)^2)),
+                get(scan_input, "vpa_IC_vth0$is", 0.1*sqrt(vperp.L^2 + (0.5*vpa.L)^2)),
+                get(scan_input, "vpa_IC_vpa0$is", 0.25*0.5*abs(vpa.L)),
+                get(scan_input, "vpa_IC_vperp0$is", 0.5*abs(vperp.L)))
             species_neutral_immutable[is] = species_parameters(species_type, species.neutral[is].initial_temperature,
                 species.neutral[is].initial_density, z_IC, r_IC, vpa_IC)
         end
@@ -670,19 +680,20 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         species.electron.z_IC.density_amplitude, species.electron.z_IC.density_phase,
         species.electron.z_IC.upar_amplitude, species.electron.z_IC.upar_phase,
         species.electron.z_IC.temperature_amplitude, species.electron.z_IC.temperature_phase,
-        species.electron.z_IC.monomial_degree)
+        species.electron.z_IC.monomial_degree, 0.0, 0.0, 0.0, 0.0)
     r_IC = initial_condition_input(species.electron.r_IC.initialization_option,
         species.electron.r_IC.width, species.electron.r_IC.wavenumber,
         species.electron.r_IC.density_amplitude, species.electron.r_IC.density_phase,
         species.electron.r_IC.upar_amplitude, species.electron.r_IC.upar_phase,
         species.electron.r_IC.temperature_amplitude, species.electron.r_IC.temperature_phase,
-        species.electron.r_IC.monomial_degree)
+        species.electron.r_IC.monomial_degree, 0.0, 0.0, 0.0, 0.0)
     vpa_IC = initial_condition_input(species.electron.vpa_IC.initialization_option,
         species.electron.vpa_IC.width, species.electron.vpa_IC.wavenumber,
         species.electron.vpa_IC.density_amplitude, species.electron.vpa_IC.density_phase,
         species.electron.vpa_IC.upar_amplitude, species.electron.vpa_IC.upar_phase,
         species.electron.vpa_IC.temperature_amplitude,
-        species.electron.vpa_IC.temperature_phase, species.electron.vpa_IC.monomial_degree)
+        species.electron.vpa_IC.temperature_phase,
+        species.electron.vpa_IC.monomial_degree, 0.0, 0.0, 0.0, 0.0)
     species_electron_immutable = species_parameters("electron", species.electron.initial_temperature,
         species.electron.initial_density, z_IC, r_IC, vpa_IC)
     species_immutable = (ion = species_ion_immutable, electron = species_electron_immutable, neutral = species_neutral_immutable)
@@ -764,12 +775,12 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     end
 
     # check input (and initialized coordinate structs) to catch errors/unsupported options
-    check_input(io, output_dir, timestepping_input.nstep, timestepping_input.dt, r, z,
+    check_input(io, output_dir, timestepping_section["nstep"], timestepping_section["dt"], r, z,
                 vpa, vperp, composition, species_immutable, evolve_moments,
                 num_diss_params, save_inputs_to_txt, collisions)
 
     # return immutable structs for z, vpa, species and composition
-    all_inputs = (io_immutable, evolve_moments, timestepping_input, z, z_spectral, r,
+    all_inputs = (io_immutable, evolve_moments, timestepping_section, z, z_spectral, r,
                   r_spectral, vpa, vpa_spectral, vperp, vperp_spectral, gyrophase,
                   gyrophase_spectral, vz, vz_spectral, vr, vr_spectral, vzeta,
                   vzeta_spectral, composition, species_immutable, collisions, geometry,

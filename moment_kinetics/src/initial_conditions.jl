@@ -446,8 +446,8 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
                              advection_structs.electron_z_advect,
                              advection_structs.electron_vpa_advect, scratch_dummy,
                              collisions, composition, geometry, external_source_settings,
-                             num_diss_params, t_params.electron, t_input.electron_t_input,
-                             io_input, input_dict)
+                             num_diss_params, t_params.electron,
+                             t_input["electron_t_input"], io_input, input_dict)
 
     return nothing
 end
@@ -548,7 +548,7 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
     # if using kinetic electrons
     if composition.electron_physics == kinetic_electrons
         begin_serial_region()
-        if t_input.no_restart
+        if t_input["no_restart"]
             restart_filename = nothing
         else
             restart_filename = get_default_restart_filename(io_input, "initial_electron";
@@ -590,8 +590,8 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
                                                     moments.evolve_density,
                                                     moments.evolve_upar,
                                                     moments.evolve_ppar,
-                                                    external_source_settings, input_dict,
-                                                    restart_time_index,
+                                                    external_source_settings, t_params,
+                                                    input_dict, restart_time_index,
                                                     previous_runs_info,
                                                     "initial_electron")
 
@@ -632,7 +632,7 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
                                             composition, collisions,
                                             moments.evolve_density, moments.evolve_upar,
                                             moments.evolve_ppar, external_source_settings,
-                                            t_params.debug_io[2], -1, nothing,
+                                            t_params, t_params.debug_io[2], -1, nothing,
                                             "electron_debug")
         end
         electron_pseudotime, n_debug_outputs =
@@ -644,7 +644,7 @@ function initialize_electron_pdf!(scratch, pdf, moments, phi, r, z, vpa, vperp, 
                                         max_electron_pdf_iterations;
                                         io_electron=io_initial_electron,
                                         initial_time=code_time,
-                                        residual_tolerance=t_input.initialization_residual_value,
+                                        residual_tolerance=t_input["initialization_residual_value"],
                                         evolve_ppar=true)
 
         # Now run without evolve_ppar=true to get pdf_electron fully to steady state,
@@ -1108,6 +1108,31 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
         # function passes through zero at upwind boundary
         @loop_z_vperp iz ivperp begin
             @. pdf[:,ivperp,iz] = (vpa.grid + 0.5*vpa.L)^spec.vpa_IC.monomial_degree
+        end
+    elseif spec.vpa_IC.initialization_option == "isotropic-beam"
+        v0 = spec.vpa_IC.v0 #0.5*sqrt(vperp.L^2 + (0.5*vpa.L)^2) # birth speed of beam
+        vth0 = spec.vpa_IC.vth0
+        v4norm = (v0^2)*(vth0^2) # spread of the beam in speed is vth0
+        @loop_z iz begin
+            @loop_vperp_vpa ivperp ivpa begin
+                v2 = (vpa.grid[ivpa])^2 + vperp.grid[ivperp]^2 - v0^2
+                pdf[ivpa,ivperp,iz] = exp(-(v2^2)/v4norm)
+            end
+            normfac = integrate_over_vspace(view(pdf,:,:,iz), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+            @. pdf[:,:,iz] /= normfac
+        end
+    elseif spec.vpa_IC.initialization_option == "directed-beam"
+        vpa0 = spec.vpa_IC.vpa0 #0.25*0.5*abs(vpa.L) # centre of beam in vpa
+        vperp0 = spec.vpa_IC.vperp0 #0.5*abs(vperp.L) # centre of beam in vperp
+        vth0 = spec.vpa_IC.vth0 #0.05*sqrt(vperp.L^2 + (0.5*vpa.L)^2) # width of beam in v 
+        @loop_z iz begin
+            @loop_vperp_vpa ivperp ivpa begin
+                v2 = (vpa.grid[ivpa] - vpa0)^2 + (vperp.grid[ivperp] - vperp0)^2
+                v2norm = vth0^2
+                pdf[ivpa,ivperp,iz] = exp(-v2/v2norm)
+            end
+            normfac = integrate_over_vspace(view(pdf,:,:,iz), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+            @. pdf[:,:,iz] /= normfac
         end
     end
     return nothing

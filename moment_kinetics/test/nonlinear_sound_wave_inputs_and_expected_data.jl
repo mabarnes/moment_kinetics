@@ -163,6 +163,11 @@ test_input_chebyshev = merge(test_input_finite_difference,
                                   "vz_ngrid" => 17,
                                   "vz_nelement" => 8))
 
+if global_size[] > 2 && global_size[] % 2 == 0
+    # Test using distributed-memory
+    test_input_chebyshev["z_nelement_local"] = test_input_chebyshev["z_nelement"] ÷ 2
+end
+
 test_input_chebyshev_split_1_moment =
     merge(test_input_chebyshev,
           Dict("run_name" => "chebyshev_pseudospectral_split_1_moment",

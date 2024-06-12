@@ -135,11 +135,11 @@ function gyroaverage_test(absolute_error; rhostar=0.1, pitch=0.5, ngrid=5, kr=2,
                 nrank, irank, gyrophase_L, gyrophase_discretization, fd_option, cheb_option, "periodic", adv_input,comm,element_spacing_option)
         
         # create the coordinate structs
-        r, r_spectral = define_coordinate(r_input; init_YY=false, run_directory=test_output_directory)
-        z, z_spectral = define_coordinate(z_input; init_YY=false, run_directory=test_output_directory)
-        vperp, vperp_spectral = define_coordinate(vperp_input; init_YY=false, run_directory=test_output_directory)
-        vpa, vpa_spectral = define_coordinate(vpa_input; init_YY=false, run_directory=test_output_directory)
-        gyrophase, gyrophase_spectral = define_coordinate(gyrophase_input; init_YY=false, run_directory=test_output_directory)
+        r, r_spectral = define_coordinate(r_input; collision_operator_dim=false, run_directory=test_output_directory)
+        z, z_spectral = define_coordinate(z_input; collision_operator_dim=false, run_directory=test_output_directory)
+        vperp, vperp_spectral = define_coordinate(vperp_input; collision_operator_dim=false, run_directory=test_output_directory)
+        vpa, vpa_spectral = define_coordinate(vpa_input; collision_operator_dim=false, run_directory=test_output_directory)
+        gyrophase, gyrophase_spectral = define_coordinate(gyrophase_input; collision_operator_dim=false, run_directory=test_output_directory)
         
         # create test geometry
         #rhostar = 0.1 #rhostar of ions for ExB drift

@@ -78,6 +78,14 @@ struct coordinate{T <: AbstractVector{mk_float}}
     scratch2::Array{mk_float,1}
     # scratch3 is an array used for intermediate calculations requiring n entries
     scratch3::Array{mk_float,1}
+    # scratch4 is an array used for intermediate calculations requiring n entries
+    scratch4::Array{mk_float,1}
+    # scratch5 is an array used for intermediate calculations requiring n entries
+    scratch5::Array{mk_float,1}
+    # scratch6 is an array used for intermediate calculations requiring n entries
+    scratch6::Array{mk_float,1}
+    # scratch7 is an array used for intermediate calculations requiring n entries
+    scratch7::Array{mk_float,1}
     # scratch_shared is a shared-memory array used for intermediate calculations requiring
     # n entries
     scratch_shared::T
@@ -108,6 +116,12 @@ struct coordinate{T <: AbstractVector{mk_float}}
     element_spacing_option::String
     # list of element boundaries
     element_boundaries::Array{mk_float,1}
+    # Does the coordinate use a 'Radau' discretization for the first element?
+    radau_first_element::Bool
+    # 'Other' nodes where the j'th Lagrange polynomial (which is 1 at x[j]) is equal to 0
+    other_nodes::Array{mk_float,3}
+    # One over the denominators of the Lagrange polynomials
+    one_over_denominator::Array{mk_float,2}
 end
 
 """
@@ -116,7 +130,7 @@ setup the coordinate grid, and populate the coordinate structure
 containing all of this information
 """
 function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing,
-                           ignore_MPI=false, init_YY::Bool=true)
+                           ignore_MPI=false, collision_operator_dim::Bool=true)
     # total number of grid points is ngrid for the first element
     # plus ngrid-1 unique points for each additional element due
     # to the repetition of a point at the element boundary
@@ -137,8 +151,9 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
     element_scale, element_shift = set_element_scale_and_shift(input.nelement_global, input.nelement_local, input.irank, element_boundaries)
     # initialize the grid and the integration weights associated with the grid
     # also obtain the Chebyshev theta grid and spacing if chosen as discretization option
-    grid, wgts, uniform_grid = init_grid(input.ngrid, input.nelement_local, n_global, n_local, input.irank, input.L, element_scale, element_shift,
-        imin, imax, igrid, input.discretization, input.name)
+    grid, wgts, uniform_grid, radau_first_element = init_grid(input.ngrid,
+        input.nelement_local, n_global, n_local, input.irank, input.L, element_scale,
+        element_shift, imin, imax, igrid, input.discretization, input.name)
     # calculate the widths of the cells between neighboring grid points
     cell_width = grid_spacing(grid, n_local)
     # duniform_dgrid is the local derivative of the uniform grid with respect to
@@ -188,12 +203,39 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
         local_io_range = 1 : n_local-1
         global_io_range = input.irank*(n_local-1)+1 : (input.irank+1)*(n_local-1)
     end
+
+    # Precompute some values for Lagrange polynomial evaluation
+    other_nodes = allocate_float(input.ngrid-1, input.ngrid, input.nelement_local)
+    one_over_denominator = allocate_float(input.ngrid, input.nelement_local)
+    for ielement ∈ 1:input.nelement_local
+        if ielement == 1
+            this_imin = imin[ielement]
+        else
+            this_imin = imin[ielement] - 1
+        end
+        this_imax = imax[ielement]
+        this_grid = grid[this_imin:this_imax]
+        for j ∈ 1:input.ngrid
+            @views other_nodes[1:j-1,j,ielement] .= this_grid[1:j-1]
+            @views other_nodes[j:end,j,ielement] .= this_grid[j+1:end]
+
+            if input.ngrid == 1
+                one_over_denominator[j,ielement] = 1.0
+            else
+                one_over_denominator[j,ielement] = 1.0 / prod(this_grid[j] - n for n ∈ @view other_nodes[:,j,ielement])
+            end
+        end
+    end
+
     coord = coordinate(input.name, n_global, n_local, input.ngrid,
         input.nelement_global, input.nelement_local, input.nrank, input.irank, input.L, grid,
         cell_width, igrid, ielement, imin, imax, igrid_full, input.discretization, input.fd_option, input.cheb_option,
-        input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch), scratch_shared, scratch_shared2,
-        scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
-        local_io_range, global_io_range, element_scale, element_shift, input.element_spacing_option, element_boundaries)
+        input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch),
+        copy(scratch), copy(scratch), copy(scratch), copy(scratch), copy(scratch),
+        scratch_shared, scratch_shared2, scratch_2d, copy(scratch_2d), advection,
+        send_buffer, receive_buffer, input.comm, local_io_range, global_io_range,
+        element_scale, element_shift, input.element_spacing_option, element_boundaries,
+        radau_first_element, other_nodes, one_over_denominator)
 
     if coord.n == 1 && occursin("v", coord.name)
         spectral = null_velocity_dimension_info()
@@ -211,7 +253,8 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
     elseif input.discretization == "gausslegendre_pseudospectral"
         # create arrays needed for explicit GaussLegendre pseudospectral treatment in this
         # coordinate and create the matrices for differentiation
-        spectral = setup_gausslegendre_pseudospectral(coord,init_YY=init_YY)
+        spectral = setup_gausslegendre_pseudospectral(coord, collision_operator_dim=collision_operator_dim,
+                                                      dirichlet_bc=occursin("zero", coord.bc))
         # obtain the local derivatives of the uniform grid with respect to the used grid
         derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
     else
@@ -283,6 +326,7 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
                    imin, imax, igrid, discretization, name)
     uniform_grid = equally_spaced_grid(n_global, n_local, irank, L)
     uniform_grid_shifted = equally_spaced_grid_shifted(n_global, n_local, irank, L)
+    radau_first_element = false
     if n_global == 1
         grid = allocate_float(n_local)
         grid[1] = 0.0
@@ -299,6 +343,7 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
             grid, wgts = scaled_chebyshev_radau_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax, irank)
             wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
                                        # see note above on normalisation
+            radau_first_element = true
         else
             # initialize chebyshev grid defined on [-L/2,L/2]
             # with n grid points chosen to facilitate
@@ -314,6 +359,7 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
             grid, wgts = scaled_gauss_legendre_radau_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax, irank)
             wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
                                        # see note above on normalisation
+            radau_first_element = true
         else
             grid, wgts = scaled_gauss_legendre_lobatto_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax)
         end
@@ -336,7 +382,7 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
         error("discretization option '$discretization' unrecognized")
     end
     # return the locations of the grid points
-    return grid, wgts, uniform_grid
+    return grid, wgts, uniform_grid, radau_first_element
 end
 
 """

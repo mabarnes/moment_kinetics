@@ -38,7 +38,8 @@ end
 an option but known at compile time when a `time_info` struct is passed as a function
 argument.
 """
-struct time_info{Terrorsum <: Real, T_debug_output, T_electron}
+struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero}
+    n_variables::mk_int
     nstep::mk_int
     end_time::mk_float
     dt::MPISharedArray{mk_float,1}
@@ -52,10 +53,14 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron}
     failure_counter::Ref{mk_int}
     failure_caused_by::Vector{mk_int}
     limit_caused_by::Vector{mk_int}
+    nwrite_moments::mk_int
+    nwrite_dfns::mk_int
     moments_output_times::Vector{mk_float}
     dfns_output_times::Vector{mk_float}
     type::String
     rk_coefs::Array{mk_float,2}
+    rk_coefs_implicit::Trkimp
+    implicit_coefficient_is_zero::Timpzero
     n_rk_stages::mk_int
     rk_order::mk_int
     adaptive::Bool
@@ -69,6 +74,9 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron}
     last_fail_proximity_factor::mk_float
     minimum_dt::mk_float
     maximum_dt::mk_float
+    implicit_ion_advance::Bool
+    implicit_vpa_advection::Bool
+    write_after_fixed_step_count::Bool
     error_sum_zero::Terrorsum
     split_operators::Bool
     steady_state_residual::Bool
@@ -89,15 +97,20 @@ mutable struct advance_info
     neutral_z_advection::Bool
     neutral_r_advection::Bool
     neutral_vz_advection::Bool
-    cx_collisions::Bool
-    cx_collisions_1V::Bool
-    ionization_collisions::Bool
-    ionization_collisions_1V::Bool
+    ion_cx_collisions::Bool
+    neutral_cx_collisions::Bool
+    ion_cx_collisions_1V::Bool
+    neutral_cx_collisions_1V::Bool
+    ion_ionization_collisions::Bool
+    neutral_ionization_collisions::Bool
+    ion_ionization_collisions_1V::Bool
+    neutral_ionization_collisions_1V::Bool
     ionization_source::Bool
     krook_collisions_ii::Bool
     explicit_weakform_fp_collisions::Bool
     external_source::Bool
-    numerical_dissipation::Bool
+    ion_numerical_dissipation::Bool
+    neutral_numerical_dissipation::Bool
     source_terms::Bool
     continuity::Bool
     force_balance::Bool
@@ -251,6 +264,11 @@ struct initial_condition_input
     temperature_phase::mk_float
     # inputs for "monomial" initial condition
     monomial_degree::mk_int
+    # inputs for "isotropic-beam", "directed-beam" initial conditions
+    v0::mk_float
+    vth0::mk_float
+    vpa0::mk_float
+    vperp0::mk_float
 end
 
 """
@@ -367,13 +385,34 @@ Base.@kwdef struct krook_collisions_input
 end
 
 Base.@kwdef struct fkpl_collisions_input
+    # option to check if fokker planck frequency should be > 0
     use_fokker_planck::Bool
-    # ion-ion self collision frequency
-    # nu_{ss'} = gamma_{ss'} n_{ref} / (m_s)^2 (c_{ref})^3
-    # with gamma_ss' = 2 pi (Z_s Z_s')^2 e^4 ln \Lambda_{ss'} / (4 pi \epsilon_0)^2
+    # ion-ion self collision frequency (for a species with Z = 1)
+    # nu_{ii} = (L/c_{ref}) * gamma_{ref} n_{ref} /(m_s)^2 (c_{ref})^3
+    # with gamma_ref = 2 pi e^4 ln \Lambda_{ii} / (4 pi \epsilon_0)^2
+    # and ln \Lambda_{ii} the Coulomb logarithm for ion-ion collisions
     nuii::mk_float
+    # option to determine if self collisions are used (for physics test)
+    self_collisions::Bool
+    # option to determine if cross-collisions against fixed Maxwellians are used
+    slowing_down_test::Bool
     # Setting to switch between different options for Fokker-Planck collision frequency input
     frequency_option::String # "manual" # "reference_parameters"
+    # options for fixed Maxwellian species in slowing down test operator
+    # ion density - electron density determined from quasineutrality
+    sd_density::mk_float
+    # ion temperature - electron temperature assumed identical
+    sd_temp::mk_float
+    # ion charge number of fixed Maxwellian species
+    sd_q::mk_float
+    # ion mass with respect to reference
+    sd_mi::mk_float
+    # electron mass with respect to reference
+    sd_me::mk_float
+    # charge number of evolved ion species
+    # kept here because charge number different from 1
+    # is not supported for other physics features
+    Zi::mk_float
 end
 
 """
