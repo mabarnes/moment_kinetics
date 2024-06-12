@@ -1441,6 +1441,90 @@ function calculate_neutral_moment_derivatives!(moments, scratch, scratch_dummy, 
 end
 
 """
+update velocity moments that are calculable from the evolved ion pdf
+"""
+function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
+    r_spectral, geometry, gyroavs, scratch_dummy, z_advect, diagnostic_moments)
+
+    if composition.gyrokinetic_ions
+        ff = scratch_dummy.buffer_vpavperpzrs_1
+        # fill buffer with ring-averaged F (gyroaverage at fixed position)
+        gyroaverage_pdf!(ff,new_scratch.pdf,gyroavs,vpa,vperp,z,r,composition)
+    else
+        ff = new_scratch.pdf
+    end
+
+    if !moments.evolve_density
+        update_density!(new_scratch.density, moments.ion.dens_updated,
+                        ff, vpa, vperp, z, r, composition)
+    end
+    if !moments.evolve_upar
+        update_upar!(new_scratch.upar, moments.ion.upar_updated, new_scratch.density,
+                     new_scratch.ppar, ff, vpa, vperp, z, r, composition,
+                     moments.evolve_density, moments.evolve_ppar)
+    end
+    if !moments.evolve_ppar
+        # update_ppar! calculates (p_parallel/m_s N_e c_s^2) + (n_s/N_e)*(upar_s/c_s)^2 = (1/√π)∫d(vpa/c_s) (vpa/c_s)^2 * (√π f_s c_s / N_e)
+        update_ppar!(new_scratch.ppar, moments.ion.ppar_updated, new_scratch.density,
+                     new_scratch.upar, ff, vpa, vperp, z, r, composition,
+                     moments.evolve_density, moments.evolve_upar)
+    end
+    update_pperp!(new_scratch.pperp, ff, vpa, vperp, z, r, composition)
+
+    # if diagnostic time step/RK stage
+    # update the diagnostic chodura condition
+    if diagnostic_moments
+        update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
+    end
+    # update the thermal speed
+    begin_s_r_z_region()
+    try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
+        update_vth!(moments.ion.vth, new_scratch.ppar, new_scratch.pperp, new_scratch.density, vperp, z, r, composition)
+    catch e
+        if global_size[] > 1
+            println("ERROR: error calculating vth in time_advance.jl")
+            println(e)
+            display(stacktrace(catch_backtrace()))
+            flush(stdout)
+            flush(stderr)
+            MPI.Abort(comm_world, 1)
+        end
+        rethrow(e)
+    end
+    # update the parallel heat flux
+    update_qpar!(moments.ion.qpar, moments.ion.qpar_updated, new_scratch.density,
+                 new_scratch.upar, moments.ion.vth, ff, vpa, vperp, z, r,
+                 composition, moments.evolve_density, moments.evolve_upar,
+                 moments.evolve_ppar)
+    # add further moments to be computed here
+
+end
+
+"""
+update velocity moments that are calculable from the evolved neutral pdf
+"""
+function update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z, r,
+                                         composition)
+
+    if !moments.evolve_density
+        update_neutral_density!(new_scratch.density_neutral, moments.neutral.dens_updated,
+                                new_scratch.pdf_neutral, vz, vr, vzeta, z, r, composition)
+    end
+    if !moments.evolve_upar
+        update_neutral_uz!(new_scratch.uz_neutral, moments.neutral.uz_updated,
+                           new_scratch.density_neutral, new_scratch.pz_neutral,
+                           new_scratch.pdf_neutral, vz, vr, vzeta, z, r, composition,
+                           moments.evolve_density, moments.evolve_ppar)
+    end
+    if !moments.evolve_ppar
+        update_neutral_pz!(new_scratch.pz_neutral, moments.neutral.pz_updated,
+                           new_scratch.density_neutral, new_scratch.uz_neutral,
+                           new_scratch.pdf_neutral, vz, vr, vzeta, z, r, composition,
+                           moments.evolve_density, moments.evolve_upar)
+    end
+end
+
+"""
 computes the integral over vpa of the integrand, using the input vpa_wgts
 """
 function integrate_over_vspace(args...)

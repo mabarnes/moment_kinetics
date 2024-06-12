@@ -211,6 +211,9 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         last_fail_proximity_factor=1.05,
         minimum_dt=0.0,
         maximum_dt=Inf,
+        implicit_ion_advance=true,
+        implicit_vpa_advection=false,
+        write_after_fixed_step_count=false,
         high_precision_error_sum=false,
        )
     if timestepping_section["nwrite"] > timestepping_section["nstep"]
@@ -224,38 +227,37 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     if timestepping_section["atol_upar"] === nothing
         timestepping_section["atol_upar"] = 1.0e-2 * timestepping_section["rtol"]
     end
-    timestepping_input = Dict_to_NamedTuple(timestepping_section)
-    if !(0.0 < timestepping_input.step_update_prefactor < 1.0)
-        error("step_update_prefactor=$(timestepping_input.step_update_prefactor) must "
+    if !(0.0 < timestepping_section["step_update_prefactor"] < 1.0)
+        error("step_update_prefactor=$(timestepping_section["step_update_prefactor"]) must "
               * "be between 0.0 and 1.0.")
     end
-    if timestepping_input.max_increase_factor ≤ 1.0
-        error("max_increase_factor=$(timestepping_input.max_increase_factor) must "
+    if timestepping_section["max_increase_factor"] ≤ 1.0
+        error("max_increase_factor=$(timestepping_section["max_increase_factor"]) must "
               * "be greater than 1.0.")
     end
-    if timestepping_input.max_increase_factor_near_last_fail ≤ 1.0
+    if timestepping_section["max_increase_factor_near_last_fail"] ≤ 1.0
         error("max_increase_factor_near_last_fail="
-              * "$(timestepping_input.max_increase_factor_near_last_fail) must be "
+              * "$(timestepping_section["max_increase_factor_near_last_fail"]) must be "
               * "greater than 1.0.")
     end
-    if !isinf(timestepping_input.max_increase_factor_near_last_fail) &&
-            timestepping_input.max_increase_factor_near_last_fail > timestepping_input.max_increase_factor
+    if !isinf(timestepping_section["max_increase_factor_near_last_fail"]) &&
+        timestepping_section["max_increase_factor_near_last_fail"] > timestepping_section["max_increase_factor"]
         error("max_increase_factor_near_last_fail="
-              * "$(timestepping_input.max_increase_factor_near_last_fail) should be "
+              * "$(timestepping_section["max_increase_factor_near_last_fail"]) should be "
               * "less than max_increase_factor="
-              * "$(timestepping_input.max_increase_factor).")
+              * "$(timestepping_section["max_increase_factor"]).")
     end
-    if timestepping_input.last_fail_proximity_factor ≤ 1.0
+    if timestepping_section["last_fail_proximity_factor"] ≤ 1.0
         error("last_fail_proximity_factor="
-              * "$(timestepping_input.last_fail_proximity_factor) must be "
+              * "$(timestepping_section["last_fail_proximity_factor"]) must be "
               * "greater than 1.0.")
     end
-    if timestepping_input.minimum_dt > timestepping_input.maximum_dt
-        error("minimum_dt=$(timestepping_input.minimum_dt) must be less than "
-              * "maximum_dt=$(timestepping_input.maximum_dt)")
+    if timestepping_section["minimum_dt"] > timestepping_section["maximum_dt"]
+        error("minimum_dt=$(timestepping_section["minimum_dt"]) must be less than "
+              * "maximum_dt=$(timestepping_section["maximum_dt"])")
     end
-    if timestepping_input.maximum_dt ≤ 0.0
-        error("maximum_dt=$(timestepping_input.maximum_dt) must be positive")
+    if timestepping_section["maximum_dt"] ≤ 0.0
+        error("maximum_dt=$(timestepping_section["maximum_dt"]) must be positive")
     end
 
     use_for_init_is_default = !(("manufactured_solns" ∈ keys(scan_input)) &&
@@ -662,12 +664,12 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     end
 
     # check input (and initialized coordinate structs) to catch errors/unsupported options
-    check_input(io, output_dir, timestepping_input.nstep, timestepping_input.dt, r, z,
+    check_input(io, output_dir, timestepping_section["nstep"], timestepping_section["dt"], r, z,
                 vpa, vperp, composition, species_immutable, evolve_moments,
                 num_diss_params, save_inputs_to_txt, collisions)
 
     # return immutable structs for z, vpa, species and composition
-    all_inputs = (io_immutable, evolve_moments, timestepping_input, z, z_spectral, r,
+    all_inputs = (io_immutable, evolve_moments, timestepping_section, z, z_spectral, r,
                   r_spectral, vpa, vpa_spectral, vperp, vperp_spectral, gyrophase,
                   gyrophase_spectral, vz, vz_spectral, vr, vr_spectral, vzeta,
                   vzeta_spectral, composition, species_immutable, collisions, geometry,

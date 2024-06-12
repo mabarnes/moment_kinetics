@@ -6,12 +6,9 @@ using Base.Filesystem: tempname
 
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input
-using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data,
-                                 load_species_data, load_fields_data,
-                                 load_ion_moments_data, load_pdf_data,
-                                 load_neutral_particle_moments_data,
-                                 load_neutral_pdf_data, load_time_data, load_species_data
 using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
+using moment_kinetics.load_data: get_run_info_no_setup, close_run_info,
+                                 postproc_load_variable
 using moment_kinetics.type_definitions: mk_float
 
 const analytical_rtol = 3.e-2
@@ -79,35 +76,43 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
             # Load and analyse output
             #########################
 
-            path = joinpath(realpath(input["base_directory"]), name, name)
+            path = joinpath(realpath(input["base_directory"]), name)
 
-            # open the netcdf file containing moments data and give it the handle 'fid'
-            fid = open_readonly_output_file(path, "moments")
+            # open the output file(s)
+            run_info = get_run_info_no_setup(path; dfns=true)
 
             # load species, time coordinate data
-            n_ion_species, n_neutral_species = load_species_data(fid)
-            ntime, time = load_time_data(fid)
-            n_ion_species, n_neutral_species = load_species_data(fid)
+            n_ion_species = run_info.composition.n_ion_species
+            n_neutral_species = run_info.composition.n_neutral_species
+            ntime = run_info.nt
+            time = run_info.time
             
             # load fields data
-            phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
+            phi_zrt = postproc_load_variable(run_info, "phi")
+            Er_zrt = postproc_load_variable(run_info, "Er")
+            Ez_zrt = postproc_load_variable(run_info, "Ez")
 
             # load velocity moments data
-            n_ion_zrst, upar_ion_zrst, ppar_ion_zrst, qpar_ion_zrst, v_t_ion_zrst = load_ion_moments_data(fid)
-            n_neutral_zrst, upar_neutral_zrst, ppar_neutral_zrst, qpar_neutral_zrst, v_t_neutral_zrst = load_neutral_particle_moments_data(fid)
-            z, z_spectral = load_coordinate_data(fid, "z")
+            n_ion_zrst = postproc_load_variable(run_info, "density")
+            upar_ion_zrst = postproc_load_variable(run_info, "parallel_flow")
+            ppar_ion_zrst = postproc_load_variable(run_info, "parallel_pressure")
+            qpar_ion_zrst = postproc_load_variable(run_info, "parallel_heat_flux")
+            v_t_ion_zrst = postproc_load_variable(run_info, "thermal_speed")
+            n_neutral_zrst = postproc_load_variable(run_info, "density_neutral")
+            upar_neutral_zrst = postproc_load_variable(run_info, "uz_neutral")
+            ppar_neutral_zrst = postproc_load_variable(run_info, "pz_neutral")
+            qpar_neutral_zrst = postproc_load_variable(run_info, "qz_neutral")
+            v_t_neutral_zrst = postproc_load_variable(run_info, "thermal_speed_neutral")
+            z = run_info.z
+            z_spectral = run_info.z_spectral
 
-            close(fid)
-            
-            # open the netcdf file containing pdf data
-            fid = open_readonly_output_file(path, "dfns")
-            
             # load particle distribution function (pdf) data
-            f_ion_vpavperpzrst = load_pdf_data(fid)
-            f_neutral_vzvrvzetazrst = load_neutral_pdf_data(fid)
-            vpa, vpa_spectral = load_coordinate_data(fid, "vpa")
+            f_ion_vpavperpzrst = postproc_load_variable(run_info, "f")
+            f_neutral_vzvrvzetazrst = postproc_load_variable(run_info, "f_neutral")
+            vpa = run_info.vpa
+            vpa_spectral = run_info.vpa_spectral
 
-            close(fid)
+            close_run_info(run_info)
             
             phi = phi_zrt[:,1,:]
             n_ion = n_ion_zrst[:,1,:,:]

@@ -12,10 +12,8 @@ using MPI
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.interpolation: interpolate_to_grid_z
-using moment_kinetics.load_data: open_readonly_output_file
-using moment_kinetics.load_data: load_fields_data,
-                                 load_pdf_data, load_time_data,
-                                 load_species_data
+using moment_kinetics.load_data: get_run_info_no_setup, close_run_info,
+                                 postproc_load_variable
 
 # default inputs for tests
 test_input = Dict("n_ion_species" => 1,
@@ -91,6 +89,10 @@ test_input = Dict("n_ion_species" => 1,
                                        "source_strength" => 2.0,
                                        "source_T" => 2.0))
 
+if global_size[] > 2 && global_size[] % 2 == 0
+    # Test using distributed-memory
+    test_input["z_nelement_local"] = test_input["z_nelement"] ÷ 2
+end
 
 test_input_split1 = merge(test_input,
                           Dict("run_name" => "split1",
@@ -203,20 +205,15 @@ function run_test(test_input, expected_phi; rtol=4.e-14, atol=1.e-15, args...)
             # Load and analyse output
             #########################
 
-            path = joinpath(realpath(input["base_directory"]), name, name)
+            path = joinpath(realpath(input["base_directory"]), name)
 
-            # open the netcdf file and give it the handle 'fid'
-            fid = open_readonly_output_file(path,"moments")
+            # open the output file(s)
+            run_info = get_run_info_no_setup(path)
 
-            # load species, time coordinate data
-            n_ion_species, n_neutral_species = load_species_data(fid)
-            ntime, time = load_time_data(fid)
-            n_ion_species, n_neutral_species = load_species_data(fid)
-            
             # load fields data
-            phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
+            phi_zrt = postproc_load_variable(run_info, "phi")
 
-            close(fid)
+            close_run_info(run_info)
             
             phi = phi_zrt[:,1,:]
         end

@@ -2,8 +2,10 @@
 """
 module ionization
 
-export ionization_collisions_1V!
-export ionization_collisions_3V!
+export ion_ionization_collisions_1V!
+export neutral_ionization_collisions_1V!
+export ion_ionization_collisions_3V!
+export neutral_ionization_collisions_3V!
 export constant_ionization_source!
 
 using ..interpolation: interpolate_to_grid_vpa!
@@ -64,18 +66,12 @@ function constant_ionization_source!(f_out, fvec_in, vpa, vperp, z, r, moments,
     end
 end 
 
-function ionization_collisions_1V!(f_out, f_neutral_out, fvec_in, vz, vpa, vperp, z, r,
-                                   vz_spectral, moments, composition, collisions, dt)
+function ion_ionization_collisions_1V!(f_out, fvec_in, vz, vpa, vperp, z, r, vz_spectral,
+                                       moments, composition, collisions, dt)
     # This routine assumes a 1D model with:
     # nvz = nvpa and identical vz and vpa grids 
     # nvperp = nvr = nveta = 1
     # constant charge_exchange_frequency independent of species
-    @boundscheck vpa.n == size(f_neutral_out,1) || throw(BoundsError(f_neutral_out))
-    @boundscheck 1 == size(f_neutral_out,2) || throw(BoundsError(f_neutral_out))
-    @boundscheck 1 == size(f_neutral_out,3) || throw(BoundsError(f_neutral_out))
-    @boundscheck z.n == size(f_neutral_out,4) || throw(BoundsError(f_neutral_out))
-    @boundscheck r.n == size(f_neutral_out,5) || throw(BoundsError(f_neutral_out))
-    @boundscheck composition.n_neutral_species == size(f_neutral_out,6) || throw(BoundsError(f_neutral_out))
     @boundscheck vpa.n == size(f_out,1) || throw(BoundsError(f_out))
     @boundscheck 1 == size(f_out,2) || throw(BoundsError(f_out))
     @boundscheck z.n == size(f_out,3) || throw(BoundsError(f_out))
@@ -83,8 +79,6 @@ function ionization_collisions_1V!(f_out, f_neutral_out, fvec_in, vz, vpa, vperp
     @boundscheck composition.n_ion_species == size(f_out,5) || throw(BoundsError(f_out))
     
     
-    # keep vpa vperp vz vr vzeta local so that
-    # vpa loop below can also be used for vz
     begin_r_z_vpa_region()
 
     if moments.evolve_density
@@ -155,6 +149,35 @@ function ionization_collisions_1V!(f_out, f_neutral_out, fvec_in, vz, vpa, vperp
             @loop_r_z_vpa ir iz ivpa begin
                 # apply ionization collisions to all ion species
                 f_out[ivpa,1,iz,ir,is] += dt*collisions.ionization*fvec_in.pdf_neutral[ivpa,1,1,iz,ir,isn]*fvec_in.density[iz,ir,is]
+            end
+        end
+    end
+end
+
+function neutral_ionization_collisions_1V!(f_neutral_out, fvec_in, vz, vpa, vperp, z, r,
+                                           vz_spectral, moments, composition, collisions, dt)
+    # This routine assumes a 1D model with:
+    # nvz = nvpa and identical vz and vpa grids
+    # nvperp = nvr = nveta = 1
+    # constant charge_exchange_frequency independent of species
+    @boundscheck vpa.n == size(f_neutral_out,1) || throw(BoundsError(f_neutral_out))
+    @boundscheck 1 == size(f_neutral_out,2) || throw(BoundsError(f_neutral_out))
+    @boundscheck 1 == size(f_neutral_out,3) || throw(BoundsError(f_neutral_out))
+    @boundscheck z.n == size(f_neutral_out,4) || throw(BoundsError(f_neutral_out))
+    @boundscheck r.n == size(f_neutral_out,5) || throw(BoundsError(f_neutral_out))
+    @boundscheck composition.n_neutral_species == size(f_neutral_out,6) || throw(BoundsError(f_neutral_out))
+
+    if !moments.evolve_density
+        begin_r_z_vpa_region()
+
+        @loop_s is begin
+            # ion ionisation rate =   < f_n > n_e R_ion
+            # neutral "ionisation" (depopulation) rate =   -  f_n  n_e R_ion
+            # no gyroaverage here as 1V code
+            #NB: used quasineutrality to replace electron density n_e with ion density
+            #NEEDS GENERALISATION TO n_ion_species > 1 (missing species charge: Sum_i Z_i n_i = n_e)
+            isn = is
+            @loop_r_z_vpa ir iz ivpa begin
                 # apply ionization collisions to all neutral species
                 f_neutral_out[ivpa,1,1,iz,ir,isn] -= dt*collisions.ionization*fvec_in.pdf_neutral[ivpa,1,1,iz,ir,isn]*fvec_in.density[iz,ir,is]
             end
@@ -162,14 +185,8 @@ function ionization_collisions_1V!(f_out, f_neutral_out, fvec_in, vz, vpa, vperp
     end
 end
 
-function ionization_collisions_3V!(f_out, f_neutral_out, f_neutral_gav_in, fvec_in, composition, vz, vr, vzeta, vpa, vperp, z, r, collisions, dt)
+function ion_ionization_collisions_3V!(f_out, f_neutral_gav_in, fvec_in, composition, vz, vr, vzeta, vpa, vperp, z, r, collisions, dt)
     # This routine assumes a 3V model with:
-    @boundscheck vz.n == size(f_neutral_out,1) || throw(BoundsError(f_neutral_out))
-    @boundscheck vr.n == size(f_neutral_out,2) || throw(BoundsError(f_neutral_out))
-    @boundscheck vzeta.n == size(f_neutral_out,3) || throw(BoundsError(f_neutral_out))
-    @boundscheck z.n == size(f_neutral_out,4) || throw(BoundsError(f_neutral_out))
-    @boundscheck r.n == size(f_neutral_out,5) || throw(BoundsError(f_neutral_out))
-    @boundscheck composition.n_neutral_species == size(f_neutral_out,6) || throw(BoundsError(f_neutral_out))
     @boundscheck vpa.n == size(f_out,1) || throw(BoundsError(f_out))
     @boundscheck vperp.n == size(f_out,2) || throw(BoundsError(f_out))
     @boundscheck z.n == size(f_out,3) || throw(BoundsError(f_out))
@@ -185,21 +202,6 @@ function ionization_collisions_3V!(f_out, f_neutral_out, f_neutral_gav_in, fvec_
     
     begin_s_r_z_vperp_vpa_region()
 
-    #    #if collisions.constant_ionization_rate
-    #    #    ## Oddly the test in test/harrisonthompson.jl matches the analitical
-    #    #    ## solution (which assumes width=0.0) better with width=0.5 than with,
-    #    #    ## e.g., width=0.15. Possibly narrower widths would require more vpa
-    #    #    ## resolution, which then causes crashes due to overshoots giving
-    #    #    ## negative f??
-    #    #    #width = 0.5
-    #    #    #@loop_s is begin
-    #    #    #    #@loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-    #    #    #    #    #f_out[ivpa,ivperp,iz,ir,is] += dt*collisions.ionization/width^3*exp(-((vpa.grid[ivpa]^2 + vperp.grid[ivperp]^2)/width^2))
-    #    #    #    #end
-    #    #    #end
-    #    #    #return nothing
-    #    #end
-
     # ion ionization rate =   < f_n > n_e R_ion
     # neutral "ionization" (depopulation) rate =   -  f_n  n_e R_ion
     #NB: used quasineutrality to replace electron density n_e with ion density
@@ -213,6 +215,23 @@ function ionization_collisions_3V!(f_out, f_neutral_out, f_neutral_gav_in, fvec_
             end
         end
     end
+end
+
+function neutral_ionization_collisions_3V!(f_neutral_out, fvec_in, composition, vz, vr, vzeta, vpa, vperp, z, r, collisions, dt)
+    # This routine assumes a 3V model with:
+    @boundscheck vz.n == size(f_neutral_out,1) || throw(BoundsError(f_neutral_out))
+    @boundscheck vr.n == size(f_neutral_out,2) || throw(BoundsError(f_neutral_out))
+    @boundscheck vzeta.n == size(f_neutral_out,3) || throw(BoundsError(f_neutral_out))
+    @boundscheck z.n == size(f_neutral_out,4) || throw(BoundsError(f_neutral_out))
+    @boundscheck r.n == size(f_neutral_out,5) || throw(BoundsError(f_neutral_out))
+    @boundscheck composition.n_neutral_species == size(f_neutral_out,6) || throw(BoundsError(f_neutral_out))
+
+    ionization_frequency = collisions.ionization
+
+    # ion ionization rate =   < f_n > n_e R_ion
+    # neutral "ionization" (depopulation) rate =   -  f_n  n_e R_ion
+    #NB: used quasineutrality to replace electron density n_e with ion density
+    #NEEDS GENERALISATION TO n_ion_species > 1 (missing species charge: Sum_i Z_i n_i = n_e)
     begin_sn_r_z_vzeta_vr_vz_region()
     @loop_sn isn begin
         for is ∈ 1:composition.n_ion_species
@@ -222,7 +241,6 @@ function ionization_collisions_3V!(f_out, f_neutral_out, f_neutral_gav_in, fvec_
             end
         end
     end
-
 end
 
 end

@@ -77,6 +77,14 @@ struct coordinate{T <: AbstractVector{mk_float}}
     scratch2::Array{mk_float,1}
     # scratch3 is an array used for intermediate calculations requiring n entries
     scratch3::Array{mk_float,1}
+    # scratch4 is an array used for intermediate calculations requiring n entries
+    scratch4::Array{mk_float,1}
+    # scratch5 is an array used for intermediate calculations requiring n entries
+    scratch5::Array{mk_float,1}
+    # scratch6 is an array used for intermediate calculations requiring n entries
+    scratch6::Array{mk_float,1}
+    # scratch7 is an array used for intermediate calculations requiring n entries
+    scratch7::Array{mk_float,1}
     # scratch_shared is a shared-memory array used for intermediate calculations requiring
     # n entries
     scratch_shared::T
@@ -221,10 +229,12 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
     coord = coordinate(input.name, n_global, n_local, input.ngrid,
         input.nelement_global, input.nelement_local, input.nrank, input.irank, input.L, grid,
         cell_width, igrid, ielement, imin, imax, igrid_full, input.discretization, input.fd_option, input.cheb_option,
-        input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch), scratch_shared, scratch_shared2,
-        scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
-        local_io_range, global_io_range, element_scale, element_shift, input.element_spacing_option,
-        element_boundaries, radau_first_element, other_nodes, one_over_denominator)
+        input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch),
+        copy(scratch), copy(scratch), copy(scratch), copy(scratch), copy(scratch),
+        scratch_shared, scratch_shared2, scratch_2d, copy(scratch_2d), advection,
+        send_buffer, receive_buffer, input.comm, local_io_range, global_io_range,
+        element_scale, element_shift, input.element_spacing_option, element_boundaries,
+        radau_first_element, other_nodes, one_over_denominator)
 
     if coord.n == 1 && occursin("v", coord.name)
         spectral = null_velocity_dimension_info()
@@ -242,7 +252,8 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
     elseif input.discretization == "gausslegendre_pseudospectral"
         # create arrays needed for explicit GaussLegendre pseudospectral treatment in this
         # coordinate and create the matrices for differentiation
-        spectral = setup_gausslegendre_pseudospectral(coord, collision_operator_dim=collision_operator_dim)
+        spectral = setup_gausslegendre_pseudospectral(coord, collision_operator_dim=collision_operator_dim,
+                                                      dirichlet_bc=occursin("zero", coord.bc))
         # obtain the local derivatives of the uniform grid with respect to the used grid
         derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
     else

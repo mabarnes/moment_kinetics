@@ -13,9 +13,9 @@ using moment_kinetics
 module MKTestUtilities
 
 export use_verbose, force_optional_dependencies, @long, quietoutput, get_MPI_tempdir,
-       global_rank, maxabs_norm, @testset_skip
+       global_rank, global_size, maxabs_norm, @testset_skip
 
-using moment_kinetics.communication: comm_world, global_rank
+using moment_kinetics.communication: comm_world, global_rank, global_size
 using moment_kinetics.command_line_options: get_options
 
 using MPI

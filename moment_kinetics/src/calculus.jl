@@ -362,7 +362,10 @@ function assign_endpoint!(df1d::AbstractArray{mk_float,Ndims},
     # test against coord name -- make sure to use exact string delimiters e.g. "x" not 'x'
     # test against Ndims (autodetermined) to choose which array slices to use in assigning endpoints
     #println("DEBUG MESSAGE: coord.name: ",coord.name," Ndims: ",Ndims," key: ",key)
-    if coord.name == "z" && Ndims==2
+    if coord.name == "z" && Ndims==1
+        df1d[j] = receive_buffer[]
+        #println("ASSIGNING DATA")
+    elseif coord.name == "z" && Ndims==2
         df1d[j,:] .= receive_buffer[:]
         #println("ASSIGNING DATA")
     elseif coord.name == "z" && Ndims==3
@@ -373,6 +376,9 @@ function assign_endpoint!(df1d::AbstractArray{mk_float,Ndims},
         #println("ASSIGNING DATA")
     elseif coord.name == "z" && Ndims==6
         df1d[:,:,:,j,:,:] .= receive_buffer[:,:,:,:,:]
+        #println("ASSIGNING DATA")
+    elseif coord.name == "r" && Ndims==1
+        df1d[j] = receive_buffer[]
         #println("ASSIGNING DATA")
     elseif coord.name == "r" && Ndims==2
         df1d[:,j] .= receive_buffer[:]
