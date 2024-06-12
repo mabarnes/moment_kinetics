@@ -620,8 +620,10 @@ function apply_electron_bc_and_constraints!(this_scratch, phi, moments, z, vperp
     A = moments.electron.constraints_A_coefficient
     B = moments.electron.constraints_B_coefficient
     C = moments.electron.constraints_C_coefficient
+    skip_first = z.irank == 0 && z.bc != "periodic"
+    skip_last = z.irank == z.nrank - 1 && z.bc != "periodic"
     @loop_r_z ir iz begin
-        if (iz == 1 && z.irank == 0) || (iz == z.n && z.irank == z.nrank - 1)
+        if (iz == 1 && skip_first) || (iz == z.n && skip_last)
             continue
         end
         (A[iz,ir], B[iz,ir], C[iz,ir]) =
@@ -650,6 +652,11 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
     if vperp.n > 1
         begin_r_z_vpa_region()
         @views enforce_vperp_boundary_condition!(pdf, vperp.bc, vperp, vperp_spectral)
+    end
+
+    if z.bc == "periodic"
+        # Nothing more to do for z-periodic boundary conditions
+        return nothing
     end
 
     # first enforce the boundary condition at z_min.
@@ -693,7 +700,7 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
 
     if z.irank == 0
         if z.bc != "wall"
-            error("Options other than wall bc not implemented yet for electrons")
+            error("Options other than wall or z-periodic bc not implemented yet for electrons")
         end
         @loop_r ir begin
             # Impose sheath-edge boundary condition, while also imposing moment
@@ -870,7 +877,7 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
     
     if z.irank == z.nrank - 1
         if z.bc != "wall"
-            error("Options other than wall bc not implemented yet for electrons")
+            error("Options other than wall or z-periodic bc not implemented yet for electrons")
         end
         @loop_r ir begin
             # Impose sheath-edge boundary condition, while also imposing moment

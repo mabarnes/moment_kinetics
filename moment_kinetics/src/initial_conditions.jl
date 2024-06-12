@@ -1472,7 +1472,16 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
             end
         end
     else
-        println("!!! currently, only the wall BC is supported for kinetic electrons !!!")
+        begin_r_z_region()
+        @loop_r ir begin
+            # Initialise an unshifted Maxwellian as a first step
+            @loop_z iz begin
+                vpa_over_vth = @. vpa.scratch3 = vpa.grid + upar[iz,ir] / vth[iz,ir]
+                @loop_vperp ivperp begin
+                    @. pdf[:,ivperp,iz,ir] = exp(-vpa_over_vth^2)
+                end
+            end
+        end
     end
 end
 
