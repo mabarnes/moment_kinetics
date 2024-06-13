@@ -605,8 +605,10 @@ function initialize_electron_pdf!(scratch_electron, pdf, moments, phi, r, z, vpa
 
         begin_serial_region()
         @serial_region begin
-            # update the electron pdf in the first scratch_electron
-            scratch_electron[1].pdf_electron .= pdf.electron.norm
+            # update the electron pdf in the last scratch_electron (which will be copied
+            # to the first entry as part of the pseudo-time-loop in
+            # update_electron_pdf!()).
+            scratch_electron[t_params.n_rk_stages+1].pdf_electron .= pdf.electron.norm
         end
 
         begin_r_z_region()

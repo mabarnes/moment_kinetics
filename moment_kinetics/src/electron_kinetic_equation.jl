@@ -169,7 +169,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
             0.5 * moments.electron.vth[iz,ir] *
             (moments.electron.dppar_dz[iz,ir] / moments.electron.ppar[iz,ir] -
              moments.electron.ddens_dz[iz,ir] / moments.electron.dens[iz,ir])
-        scratch[1].electron_ppar[iz,ir] = moments.electron.ppar[iz,ir]
+        scratch[t_params.n_rk_stages+1].electron_ppar[iz,ir] = moments.electron.ppar[iz,ir]
     end
 
     # compute the z-derivative of the input electron parallel heat flux, needed for the electron kinetic equation
@@ -223,7 +223,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                 # need to exit or handle this appropriately
                 @loop_vpa ivpa begin
                     @loop_z iz begin
-                        println(io_pdf, "z: ", z.grid[iz], " wpa: ", vpa.grid[ivpa], " pdf: ", scratch[1].pdf_electron[ivpa, 1, iz, 1], " time: ", time, " residual: ", residual[ivpa, 1, iz, 1])
+                        println(io_pdf, "z: ", z.grid[iz], " wpa: ", vpa.grid[ivpa], " pdf: ", scratch[t_params.n_rk_stages+1].pdf_electron[ivpa, 1, iz, 1], " time: ", time, " residual: ", residual[ivpa, 1, iz, 1])
                     end
                     println(io_pdf,"")
                 end
@@ -246,10 +246,6 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
     t_params.moments_output_counter[] += 1
     @serial_region begin
         if io_electron !== nothing
-            # Copy scratch arrays in order to save initial state - not optimal, but should
-            # be done at most once or twice while initialising a simulation
-            scratch[t_params.n_rk_stages+1].pdf_electron .= scratch[1].pdf_electron
-            scratch[t_params.n_rk_stages+1].electron_ppar .= scratch[1].electron_ppar
             write_electron_state(scratch, moments, t_params, time, io_electron,
                                  t_params.moments_output_counter[], r, z, vperp, vpa)
         end
@@ -258,6 +254,24 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
     while (!electron_pdf_converged
            && (t_params.step_counter[] - initial_step_counter < max_electron_pdf_iterations)
            && t_params.dt[] > 0.0 && !isnan(t_params.dt[]))
+
+        # Set the initial values for the next step to the final values from the previous
+        # step
+        begin_r_z_vperp_vpa_region()
+        new_pdf = scratch[1].pdf_electron
+        old_pdf = scratch[t_params.n_rk_stages+1].pdf_electron
+        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+            new_pdf[ivpa,ivperp,iz,ir] = old_pdf[ivpa,ivperp,iz,ir]
+        end
+        if evolve_ppar
+            begin_r_z_region()
+            new_ppar = scratch[1].electron_ppar
+            old_ppar = scratch[t_params.n_rk_stages+1].electron_ppar
+            @loop_r_z ir iz begin
+                new_ppar[iz,ir] = old_ppar[iz,ir]
+            end
+        end
+
         for istage ∈ 1:t_params.n_rk_stages
             # Set the initial values for this stage to the final values from the previous
             # stage
@@ -428,23 +442,6 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                 electron_pdf_converged = abs(residual) < residual_tolerance
             end
             electron_pdf_converged = MPI.Bcast(electron_pdf_converged, 0, comm_world)
-        end
-
-        # Set the initial values for the next step to the final values from the previous
-        # step
-        begin_r_z_vperp_vpa_region()
-        new_pdf = scratch[1].pdf_electron
-        old_pdf = scratch[t_params.n_rk_stages+1].pdf_electron
-        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-            new_pdf[ivpa,ivperp,iz,ir] = old_pdf[ivpa,ivperp,iz,ir]
-        end
-        if evolve_ppar
-            begin_r_z_region()
-            new_ppar = scratch[1].electron_ppar
-            old_ppar = scratch[t_params.n_rk_stages+1].electron_ppar
-            @loop_r_z ir iz begin
-                new_ppar[iz,ir] = old_ppar[iz,ir]
-            end
         end
 
         if text_output
