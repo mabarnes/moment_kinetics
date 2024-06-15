@@ -3376,18 +3376,36 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         # Find output files from all restarts in the directory
         counter = 1
         run_prefixes = Vector{String}()
-        while true
-            # Test if output files exist for this value of counter
-            prefix_with_count = base_prefix * "_$counter"
-            if length(glob(basename(prefix_with_count) * ".*.h5", dirname(prefix_with_count))) > 0 ||
-                length(glob(basename(prefix_with_count) * ".*.cdf", dirname(prefix_with_count))) > 0
+        if initial_electron
+            while true
+                # Test if output files exist for this value of counter
+                prefix_with_count = base_prefix * "_$counter"
+                if length(glob(basename(prefix_with_count) * ".initial_elctron*.h5", dirname(prefix_with_count))) > 0 ||
+                    length(glob(basename(prefix_with_count) * ".initial_elctron*.cdf", dirname(prefix_with_count))) > 0
 
-                push!(run_prefixes, prefix_with_count)
-            else
-                # No more output files found
-                break
+                    push!(run_prefixes, prefix_with_count)
+                else
+                    # No more output files found
+                    break
+                end
+                counter += 1
             end
-            counter += 1
+        else
+            while true
+                # Test if output files exist for this value of counter
+                prefix_with_count = base_prefix * "_$counter"
+                if length(glob(basename(prefix_with_count) * ".dfns*.h5", dirname(prefix_with_count))) > 0 ||
+                    length(glob(basename(prefix_with_count) * ".dfns*.cdf", dirname(prefix_with_count))) > 0 ||
+                    length(glob(basename(prefix_with_count) * ".moments*.h5", dirname(prefix_with_count))) > 0 ||
+                    length(glob(basename(prefix_with_count) * ".moments*.cdf", dirname(prefix_with_count))) > 0
+
+                    push!(run_prefixes, prefix_with_count)
+                else
+                    # No more output files found
+                    break
+                end
+                counter += 1
+            end
         end
         # Add the final run which does not have a '_$counter' suffix
         push!(run_prefixes, base_prefix)
