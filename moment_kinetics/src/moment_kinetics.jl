@@ -101,7 +101,6 @@ using .type_definitions: mk_int
 using .utils: to_minutes, get_default_restart_filename,
               get_prefix_iblock_and_move_existing_file
 using .em_fields: setup_em_fields
-using .time_advance: setup_dummy_and_buffer_arrays
 using .time_advance: allocate_advection_structs
 
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
@@ -271,11 +270,6 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     # NB: the returned advection_structs are yet to be initialized
     advection_structs = allocate_advection_structs(composition, z, r, vpa, vperp, vz, vr, vzeta)
 
-    # setup dummy arrays & buffer arrays for z r MPI                             
-    n_neutral_species_alloc = max(1, composition.n_neutral_species)
-    scratch_dummy = setup_dummy_and_buffer_arrays(r.n, z.n, vpa.n, vperp.n, vz.n, vr.n, vzeta.n, 
-        composition.n_ion_species, n_neutral_species_alloc)
-
     if restart === false
         restarting = false
         # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
@@ -284,8 +278,8 @@ function setup_moment_kinetics(input_dict::AbstractDict;
                               composition, r, z, vperp, vpa, vzeta, vr, vz,
                               z_spectral, r_spectral, vperp_spectral, vpa_spectral,
                               vz_spectral, species, collisions, external_source_settings,
-                              manufactured_solns_input, scratch_dummy, t_input,
-                              num_diss_params, advection_structs, io_input, input_dict)
+                              manufactured_solns_input, t_input, num_diss_params,
+                              advection_structs, io_input, input_dict)
         # initialize time variable
         code_time = 0.
         dt = nothing
@@ -343,16 +337,16 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
 
-    moments, spectral_objects, scratch, scratch_implicit, scratch_electron, advance,
-    advance_implicit, t_params, fp_arrays, gyroavs, manufactured_source_list,
+    moments, spectral_objects, scratch, scratch_implicit, scratch_electron, scratch_dummy,
+    advance, advance_implicit, t_params, fp_arrays, gyroavs, manufactured_source_list,
     nl_solver_params =
         setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrophase,
             vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
             z_spectral, r_spectral, composition, moments, t_input, code_time, dt,
             dt_before_last_fail, electron_dt, electron_dt_before_last_fail, collisions,
             species, geometry, boundary_distributions, external_source_settings,
-            num_diss_params, manufactured_solns_input, advection_structs, scratch_dummy,
-            io_input, restarting, restart_electron_physics, input_dict)
+            num_diss_params, manufactured_solns_input, advection_structs, io_input,
+            restarting, restart_electron_physics, input_dict)
 
     # This is the closest we can get to the end time of the setup before writing it to the
     # output file

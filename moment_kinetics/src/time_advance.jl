@@ -442,7 +442,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                              electron_dt_before_last_fail_reload, collisions, species,
                              geometry, boundary_distributions, external_source_settings,
                              num_diss_params, manufactured_solns_input,
-                             advection_structs, scratch_dummy, io_input, restarting,
+                             advection_structs, io_input, restarting,
                              restart_electron_physics, input_dict)
     # define some local variables for convenience/tidiness
     n_ion_species = composition.n_ion_species
@@ -677,6 +677,9 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     end
     # setup dummy arrays & buffer arrays for z r MPI
     n_neutral_species_alloc = max(1,composition.n_neutral_species)
+    scratch_dummy = setup_dummy_and_buffer_arrays(r.n, z.n, vpa.n, vperp.n, vz.n, vr.n,
+                                                  vzeta.n, composition.n_ion_species,
+                                                  n_neutral_species_alloc)
     # create arrays for Fokker-Planck collisions 
     if advance.explicit_weakform_fp_collisions
         fp_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; precompute_weights=true)
@@ -1006,7 +1009,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     _block_synchronize()
 
     return moments, spectral_objects, scratch, scratch_implicit, scratch_electron,
-           advance, advance_implicit, t_params, fp_arrays, gyroavs,
+           scratch_dummy, advance, advance_implicit, t_params, fp_arrays, gyroavs,
            manufactured_source_list, nl_solver_params
 end
 

@@ -131,8 +131,8 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
                                vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
                                vperp_spectral, vpa_spectral, vz_spectral, species,
                                collisions, external_source_settings,
-                               manufactured_solns_input, scratch_dummy, t_input,
-                               num_diss_params, advection_structs, io_input, input_dict)
+                               manufactured_solns_input, t_input, num_diss_params,
+                               advection_structs, io_input, input_dict)
     if manufactured_solns_input.use_for_init
         init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z,
                                              r, composition.n_ion_species,
