@@ -740,8 +740,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                               vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
                               vperp_spectral, vpa_spectral, collisions, gyroavs,
                               external_source_settings, scratch_dummy, scratch,
-                              scratch_electron, t_params, t_input, num_diss_params,
-                              advection_structs, io_input, input_dict;
+                              scratch_electron, nl_solver_params, t_params, t_input,
+                              num_diss_params, advection_structs, io_input, input_dict;
                               restart_electron_physics=restart_electron_physics)
     elseif restarting && composition.electron_physics == kinetic_electrons &&
            t_params.electron.debug_io !== nothing
