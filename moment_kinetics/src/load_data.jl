@@ -82,6 +82,11 @@ function open_file_to_read(::Val{hdf5}, filename)
     return h5open(filename, "r")
 end
 
+function get_attribute end
+function get_attribute(file_or_group_or_var::Union{HDF5.H5DataStore,HDF5.Dataset}, name)
+    return attrs(file_or_group_or_var)[name]
+end
+
 """
 """
 function open_readonly_output_file(run_name, ext; iblock=0, printout=false)

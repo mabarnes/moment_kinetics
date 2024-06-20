@@ -1947,6 +1947,11 @@ Add an attribute to a file, group or variable
 function add_attribute! end
 
 """
+Modify an attribute to a file, group or variable
+"""
+function modify_attribute! end
+
+"""
 Low-level function to open a binary output file
 
 Each implementation (HDF5, NetCDF, etc.) defines a method of this function to open a file
