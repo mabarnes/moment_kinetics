@@ -429,6 +429,7 @@ function setup_electron_io(io_input, vpa, vperp, z, r, composition, collisions,
         # write a header to the output file
         add_attribute!(fid, "file_info",
                        "Output initial electron state from the moment_kinetics code")
+        add_attribute!(fid, "pdf_electron_converged", false)
 
         # write some overview information to the output file
         write_overview!(fid, composition, collisions, parallel_io, evolve_density,
@@ -2883,12 +2884,13 @@ end
 
 """
     write_electron_state(scratch_electron, moments, t_params, t, io_initial_electron,
-                         t_idx, r, z, vperp, vpa)
+                         t_idx, r, z, vperp, vpa; pdf_electron_converged=false)
 
 Write the electron state to an output file.
 """
 function write_electron_state(scratch_electron, moments, t_params, t,
-                              io_or_file_info_initial_electron, t_idx, r, z, vperp, vpa)
+                              io_or_file_info_initial_electron, t_idx, r, z, vperp, vpa;
+                              pdf_electron_converged=false)
 
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -2911,6 +2913,11 @@ function write_electron_state(scratch_electron, moments, t_params, t,
 
         write_electron_moments_data_to_binary(scratch_electron, moments, t_params,
                                               t_params, io_initial_electron, t_idx, r, z)
+
+        if pdf_electron_converged
+            modify_attribute!(io_initial_electron.fid, "pdf_electron_converged",
+                              pdf_electron_converged)
+        end
 
         closefile && close(io_initial_electron.fid)
     end

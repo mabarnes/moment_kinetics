@@ -41,7 +41,8 @@ using ..electron_fluid_equations: calculate_electron_parallel_friction_force!
 using ..electron_kinetic_equation: update_electron_pdf!, enforce_boundary_condition_on_electron_pdf!
 using ..input_structs: boltzmann_electron_response_with_simple_sheath, braginskii_fluid, kinetic_electrons
 using ..derivatives: derivative_z!
-using ..utils: get_default_restart_filename, get_prefix_iblock_and_move_existing_file
+using ..utils: get_default_restart_filename, get_prefix_iblock_and_move_existing_file,
+               get_backup_filename
 
 using ..manufactured_solns: manufactured_solutions
 
@@ -573,35 +574,45 @@ function initialize_electron_pdf!(scratch_electron, pdf, moments, phi, r, z, vpa
             previous_runs_info = nothing
             code_time = 0.0
             restart_time_index = -1
+            pdf_electron_converged = false
         else
-            if global_rank[] == 0
-                println("Restarting electrons from $restart_filename")
-            end
             # Previously-created electron distribution function exists, so use it as
             # the initial guess.
-            backup_prefix_iblock =
+            backup_prefix_iblock, initial_electrons_filename,
+            backup_initial_electrons_filename =
                 get_prefix_iblock_and_move_existing_file(restart_filename,
                                                          io_input.output_dir)
 
             # Reload pdf and moments from an existing output file
-            code_time, previous_runs_info, restart_time_index =
+            code_time, pdf_electron_converged, previous_runs_info, restart_time_index =
                 reload_electron_data!(pdf, moments, t_params, backup_prefix_iblock, -1,
                                       geometry, r, z, vpa, vperp, vzeta, vr, vz)
 
-            # Broadcast code_time from the root process of each shared-memory block (on which it
-            # might have been loaded from a restart file).
+            # Broadcast code_time and pdf_electron_converged from the root process of each
+            # shared-memory block (on which it might have been loaded from a restart
+            # file).
             code_time = MPI.Bcast(code_time, 0, comm_block[])
+            pdf_electron_converged = MPI.Bcast(pdf_electron_converged, 0, comm_block[])
+
+            if pdf_electron_converged
+                if global_rank[] == 0
+                    println("Reading initial electron state from $restart_filename")
+                end
+                # Move the *.initial_electron.h5 file back to its original location, as we
+                # do not need to create a new output file.
+                MPI.Barrier(comm_world)
+                if global_rank[] == 0
+                    if initial_electrons_filename != backup_initial_electrons_filename
+                        mv(backup_initial_electrons_filename, initial_electrons_filename)
+                    end
+                end
+                MPI.Barrier(comm_world)
+            else
+                if global_rank[] == 0
+                    println("Restarting electron initialisation from $restart_filename")
+                end
+            end
         end
-        # Setup I/O for initial electron state
-        io_initial_electron = setup_electron_io(io_input, vpa, vperp, z, r,
-                                                composition, collisions,
-                                                moments.evolve_density,
-                                                moments.evolve_upar,
-                                                moments.evolve_ppar,
-                                                external_source_settings, t_params,
-                                                input_dict, restart_time_index,
-                                                previous_runs_info,
-                                                "initial_electron")
 
         begin_serial_region()
         @serial_region begin
@@ -637,9 +648,6 @@ function initialize_electron_pdf!(scratch_electron, pdf, moments, phi, r, z, vpa
         max_electron_pdf_iterations = 2000000
         #max_electron_pdf_iterations = 500000
         #max_electron_pdf_iterations = 10000
-        if global_rank[] == 0
-            println("Initializing electrons - evolving both pdf_electron and electron_ppar")
-        end
         if t_params.debug_io !== nothing
             io_electron = setup_electron_io(t_params.debug_io[1], vpa, vperp, z, r,
                                             composition, collisions,
@@ -657,39 +665,63 @@ function initialize_electron_pdf!(scratch_electron, pdf, moments, phi, r, z, vpa
             resize!(t_params.dfns_output_times, n_truncated)
             t_params.dfns_output_times .= truncated_times
         end
-        electron_pseudotime, success =
-            @views update_electron_pdf!(scratch_electron, pdf.electron.norm, moments, phi,
-                                        r, z, vperp, vpa, z_spectral, vperp_spectral,
-                                        vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-                                        t_params, collisions, composition,
-                                        external_source_settings, num_diss_params,
-                                        max_electron_pdf_iterations;
-                                        io_electron=io_initial_electron,
-                                        initial_time=code_time,
-                                        residual_tolerance=t_input["initialization_residual_value"],
-                                        evolve_ppar=true)
-        if success != ""
-            error("!!!max number of iterations for electron pdf update exceeded!!!\n"
-                  * "Stopping at $(Dates.format(now(), dateformat"H:MM:SS"))")
-        end
+        if !pdf_electron_converged 
+            if global_rank[] == 0
+                println("Initializing electrons - evolving both pdf_electron and electron_ppar")
+            end
+            # Setup I/O for initial electron state
+            io_initial_electron = setup_electron_io(io_input, vpa, vperp, z, r,
+                                                    composition, collisions,
+                                                    moments.evolve_density,
+                                                    moments.evolve_upar,
+                                                    moments.evolve_ppar,
+                                                    external_source_settings, t_params,
+                                                    input_dict, restart_time_index,
+                                                    previous_runs_info,
+                                                    "initial_electron")
 
-        # Now run without evolve_ppar=true to get pdf_electron fully to steady state,
-        # ready for the start of the ion time advance.
-        if global_rank[] == 0
-            println("Initializing electrons - evolving pdf_electron only to steady state")
-        end
-        electron_pseudotime, success =
-            @views update_electron_pdf!(scratch_electron, pdf.electron.norm, moments, phi,
-                                        r, z, vperp, vpa, z_spectral, vperp_spectral,
-                                        vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-                                        t_params, collisions, composition,
-                                        external_source_settings, num_diss_params,
-                                        max_electron_pdf_iterations;
-                                        io_electron=io_initial_electron,
-                                        initial_time=electron_pseudotime)
-        if success != ""
-            error("!!!max number of iterations for electron pdf update exceeded!!!\n"
-                  * "Stopping at $(Dates.format(now(), dateformat"H:MM:SS"))")
+            electron_pseudotime, success =
+                @views update_electron_pdf!(scratch_electron, pdf.electron.norm, moments, phi,
+                                            r, z, vperp, vpa, z_spectral, vperp_spectral,
+                                            vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                                            t_params, collisions, composition,
+                                            external_source_settings, num_diss_params,
+                                            max_electron_pdf_iterations;
+                                            io_electron=io_initial_electron,
+                                            initial_time=code_time,
+                                            residual_tolerance=t_input["initialization_residual_value"],
+                                            evolve_ppar=true)
+            if success != ""
+                error("!!!max number of iterations for electron pdf update exceeded!!!\n"
+                      * "Stopping at $(Dates.format(now(), dateformat"H:MM:SS"))")
+            end
+
+            # Now run without evolve_ppar=true to get pdf_electron fully to steady state,
+            # ready for the start of the ion time advance.
+            if global_rank[] == 0
+                println("Initializing electrons - evolving pdf_electron only to steady state")
+            end
+            electron_pseudotime, success =
+                @views update_electron_pdf!(scratch_electron, pdf.electron.norm, moments, phi,
+                                            r, z, vperp, vpa, z_spectral, vperp_spectral,
+                                            vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                                            t_params, collisions, composition,
+                                            external_source_settings, num_diss_params,
+                                            max_electron_pdf_iterations;
+                                            io_electron=io_initial_electron,
+                                            initial_time=electron_pseudotime)
+            if success != ""
+                error("!!!max number of iterations for electron pdf update exceeded!!!\n"
+                      * "Stopping at $(Dates.format(now(), dateformat"H:MM:SS"))")
+            end
+
+            # Write the converged initial state for the electrons to a file so that it can be
+            # re-used if the simulation is re-run.
+            t_params.moments_output_counter[] += 1
+            write_electron_state(scratch_electron, moments, t_params, electron_pseudotime,
+                                 io_initial_electron, t_params.moments_output_counter[], r, z,
+                                 vperp, vpa; pdf_electron_converged=true)
+            finish_electron_io(io_initial_electron)
         end
 
         begin_r_z_vperp_vpa_region()
@@ -697,14 +729,6 @@ function initialize_electron_pdf!(scratch_electron, pdf, moments, phi, r, z, vpa
             pdf.electron.pdf_before_ion_timestep[ivpa,ivperp,iz,ir] =
                 pdf.electron.norm[ivpa,ivperp,iz,ir]
         end
-
-        # Write the converged initial state for the electrons to a file so that it can be
-        # re-used if the simulation is re-run.
-        t_params.moments_output_counter[] += 1
-        write_electron_state(scratch_electron, moments, t_params, electron_pseudotime,
-                             io_initial_electron, t_params.moments_output_counter[], r, z,
-                             vperp, vpa)
-        finish_electron_io(io_initial_electron)
 
         # No need to do electron I/O (apart from possibly debug I/O) any more, so if
         # adaptive timestep is used, it does not need to adjust to output times.

@@ -1032,6 +1032,7 @@ Reload electron pdf and moments from an existing output file.
 function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, time_index,
                                geometry, r, z, vpa, vperp, vzeta, vr, vz)
     code_time = 0.0
+    pdf_electron_converged = false
     previous_runs_info = nothing
     begin_serial_region()
     @serial_region begin
@@ -1067,6 +1068,8 @@ function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, ti
                                       (vperp, restart_vperp), (vpa, restart_vpa)))
 
             code_time = load_slice(dynamic, "time", time_index)
+
+            pdf_electron_converged = get_attribute(fid, "pdf_electron_converged")
 
             r_range, z_range, vperp_range, vpa_range, vzeta_range, vr_range, vz_range =
                 get_reload_ranges(parallel_io, restart_r, restart_z, restart_vperp,
@@ -1116,7 +1119,7 @@ function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, ti
         end
     end
 
-    return code_time, previous_runs_info, time_index
+    return code_time, pdf_electron_converged, previous_runs_info, time_index
 end
 
 function load_restart_coordinates(fid, r, z, vperp, vpa, vzeta, vr, vz, parallel_io)

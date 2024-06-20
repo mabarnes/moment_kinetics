@@ -303,8 +303,9 @@ function setup_moment_kinetics(input_dict::AbstractDict;
             restart_filename = restart
         end
 
-        backup_prefix_iblock = get_prefix_iblock_and_move_existing_file(restart_filename,
-                                                                        io_input.output_dir)
+        backup_prefix_iblock, _, _ =
+            get_prefix_iblock_and_move_existing_file(restart_filename,
+                                                     io_input.output_dir)
 
         # Reload pdf and moments from an existing output file
         code_time, dt, dt_before_last_fail, electron_dt, electron_dt_before_last_fail,

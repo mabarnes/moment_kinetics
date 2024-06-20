@@ -274,7 +274,7 @@ function get_prefix_iblock_and_move_existing_file(restart_filename, output_dir)
     # Ensure files have been moved before any process tries to read from them
     MPI.Barrier(comm_world)
 
-    return backup_prefix_iblock
+    return backup_prefix_iblock, dfns_filename, backup_dfns_filename
 end
 
 """
