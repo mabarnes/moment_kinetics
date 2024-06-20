@@ -565,7 +565,7 @@ function distributed_dot_s_r_z_vperp_vpa(v::AbstractArray{mk_float, 5},
     vperp = coords.vperp
     vpa = coords.vpa
 
-    begin_z_region()
+    begin_s_r_z_vperp_vpa_region()
 
     local_dot = 0.0
     if r.irank < r.nrank - 1
