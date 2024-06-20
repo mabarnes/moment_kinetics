@@ -81,6 +81,7 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     minimum_dt::mk_float
     maximum_dt::mk_float
     implicit_braginskii_conduction::Bool
+    implicit_electron_advance::Bool
     implicit_ion_advance::Bool
     implicit_vpa_advection::Bool
     write_after_fixed_step_count::Bool

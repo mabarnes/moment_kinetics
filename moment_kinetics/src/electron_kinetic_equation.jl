@@ -15,19 +15,24 @@ using ..communication
 using ..interpolation: interpolate_to_grid_1d!
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
-using ..electron_fluid_equations: update_electron_vth_temperature!,
-                                  calculate_electron_qpar_from_pdf!
-using ..electron_fluid_equations: electron_energy_equation!
+using ..electron_fluid_equations: calculate_electron_moments!,
+                                  update_electron_vth_temperature!,
+                                  calculate_electron_qpar_from_pdf!,
+                                  calculate_electron_parallel_friction_force!
+using ..electron_fluid_equations: electron_energy_equation!, electron_energy_residual!
 using ..electron_z_advection: electron_z_advection!, update_electron_speed_z!
 using ..electron_vpa_advection: electron_vpa_advection!, update_electron_speed_vpa!
+using ..em_fields: update_phi!
 using ..external_sources: external_electron_source!
 using ..file_io: get_electron_io_info, write_electron_state, finish_electron_io
 using ..krook_collisions: electron_krook_collisions!
 using ..moment_constraints: hard_force_moment_constraints!
+using ..moment_kinetics_structs: scratch_pdf, scratch_electron_pdf, electron_pdf_substruct
+using ..nonlinear_solvers: newton_solve!
 using ..runge_kutta: rk_update_variable!, rk_loworder_solution!, local_error_norm,
                      adaptive_timestep_update_t_params!
 using ..utils: get_minimum_CFL_z, get_minimum_CFL_vpa
-using ..velocity_moments: integrate_over_vspace
+using ..velocity_moments: integrate_over_vspace, calculate_electron_moment_derivatives!
 
 """
 update_electron_pdf is a function that uses the electron kinetic equation 
@@ -551,6 +556,134 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         success = ""
     end
     return time, success
+end
+
+"""
+    implicit_electron_advance!()
+
+Do an implicit solve which finds: the steady-state electron shape function \$g_e\$; the
+backward-Euler advanced electron pressure which is updated using \$g_e\$ at the new
+time-level.
+
+Implicit electron solve includes r-dimension. For 1D runs this makes no difference. In 2D
+it might or might not be necessary. If the r-dimension is not needed in the implicit
+solve, we would need to work on the parallelisation. The simplest option would be a
+non-parallelised outer loop over r, with each nonlinear solve being parallelised over
+{z,vperp,vpa}. More efficient might be to add an equivalent to the 'anyv' parallelisation
+used for the collision operator (e.g. 'anyzv'?) to allow the outer r-loop to be
+parallelised.
+"""
+function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, moments,
+                                    fields, collisions, composition,
+                                    external_source_settings, num_diss_params, r, z,
+                                    vperp, vpa, r_spectral, z_spectral, vpa_spectral,
+                                    z_advect, vpa_advect, gyroavs, scratch_dummy, dt,
+                                    nl_solver_params)
+
+    electron_ppar_out = fvec_out.electron_ppar
+    # Store the solved-for pdf in n_rk_stages+1, because this was the version that gets
+    # written to output for the explicit-electron-timestepping version.
+    pdf_electron_out = scratch_electron.pdf_electron
+
+    # Do a forward-Euler step for electron_ppar to get the initial guess.
+    # No equivalent for f_electron, as f_electron obeys a steady-state equation.
+    electron_energy_equation!(electron_ppar_out, fvec_in.electron_ppar,
+                              fvec_in.density, fvec_in.electron_upar, fvec_in.upar,
+                              fvec_in.ppar, fvec_in.density_neutral,
+                              fvec_in.uz_neutral, fvec_in.pz_neutral,
+                              moments.electron, collisions, dt, composition,
+                              external_source_settings.electron, num_diss_params, z)
+
+    function residual_func!(residual, new_variables)
+        electron_ppar_residual, f_electron_residual = residual
+        electron_ppar_new, f_electron_new = new_variables
+
+        new_scratch = scratch_pdf(fvec_in.pdf, fvec_in.density, fvec_in.upar, fvec_in.ppar,
+                                  fvec_in.pperp, fvec_in.temp_z_s,
+                                  fvec_in.electron_density, fvec_in.electron_upar,
+                                  electron_ppar_new, fvec_in.electron_pperp,
+                                  fvec_in.electron_temp, fvec_in.pdf_neutral,
+                                  fvec_in.density_neutral, fvec_in.uz_neutral,
+                                  fvec_in.pz_neutral)
+        # Only the first entry in the `electron_pdf_substruct` will be used, so does not
+        # matter what we put in the second and third except that they have the right type.
+        new_pdf = (electron=electron_pdf_substruct(f_electron_new, f_electron_new,
+                                                   f_electron_new,),)
+        # Calculate heat flux and derivatives using new_variables
+        calculate_electron_moments!(new_scratch, new_pdf, moments, composition,
+                                    collisions, r, z, vpa)
+        calculate_electron_moment_derivatives!(moments, new_scratch, scratch_dummy, z,
+                                               z_spectral,
+                                               num_diss_params.electron.moment_dissipation_coefficient,
+                                               composition.electron_physics)
+
+        electron_energy_residual!(electron_ppar_residual, electron_ppar_new, fvec_in,
+                                  moments, collisions, composition,
+                                  external_source_settings, num_diss_params, z, dt)
+
+        # electron_kinetic_equation_euler_update!() just adds dt*d(g_e)/dt to the
+        # electron_pdf member of the first argument, so if we set the electron_pdf member
+        # of the first argument to zero, and pass dt=1, then it will evaluate the time
+        # derivative, which is the residual for a steady-state solution.
+        begin_r_z_vperp_vpa_region()
+        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+            f_electron_residual[ivpa,ivperp,iz,ir] = 0.0
+        end
+        residual_scratch_electron = scratch_electron_pdf(f_electron_residual,
+                                                         electron_ppar_residual)
+        new_scratch_electron = scratch_electron_pdf(f_electron_new, electron_ppar_new)
+        electron_kinetic_equation_euler_update!(residual_scratch_electron,
+                                                new_scratch_electron, moments, z, vperp,
+                                                vpa, z_spectral, vpa_spectral, z_advect,
+                                                vpa_advect, scratch_dummy, collisions,
+                                                composition, external_source_settings,
+                                                num_diss_params, 1.0)
+        return nothing
+    end
+
+    residual = (scratch_dummy.implicit_buffer_zr_1,
+                scratch_dummy.implicit_buffer_vpavperpzr_1)
+    delta_x = (scratch_dummy.implicit_buffer_zr_2,
+               scratch_dummy.implicit_buffer_vpavperpzr_2)
+    rhs_delta = (scratch_dummy.implicit_buffer_zr_3,
+                 scratch_dummy.implicit_buffer_vpavperpzr_3)
+    v = (scratch_dummy.implicit_buffer_zr_4,
+         scratch_dummy.implicit_buffer_vpavperpzr_4)
+    w = (scratch_dummy.implicit_buffer_zr_5,
+         scratch_dummy.implicit_buffer_vpavperpzr_5)
+
+    newton_success = newton_solve!((electron_ppar_out, pdf_electron_out), residual_func!,
+                                   residual, delta_x, rhs_delta, v, w, nl_solver_params;
+                                   left_preconditioner=nothing,
+                                   right_preconditioner=nothing,
+                                   coords=(r=r, z=z, vperp=vperp, vpa=vpa))
+
+    # Fill pdf.electron.norm
+    non_scratch_pdf = pdf.electron.norm
+    begin_r_z_vperp_vpa_region()
+    @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+        non_scratch_pdf[ivpa,ivperp,iz,ir] = pdf_electron_out[ivpa,ivperp,iz,ir]
+    end
+
+    # Update the electron parallel friction force.
+    # This does not actually do anything for kinetic electron runs at the moment, but
+    # include as a reminder to update this if/when we do include e-i collisions for
+    # kinetic electrons.
+    calculate_electron_parallel_friction_force!(
+        moments.electron.parallel_friction, fvec_out.electron_density,
+        fvec_out.electron_upar, fvec_out.upar, moments.electron.dT_dz,
+        composition.me_over_mi, collisions.nu_ei, composition.electron_physics)
+
+    # Solve for EM fields now that electrons are updated.
+    update_phi!(fields, fvec_out, vperp, z, r, composition, collisions, moments,
+                z_spectral, r_spectral, scratch_dummy, gyroavs)
+
+    if !newton_success
+        success = "kinetic-electrons"
+    else
+        success = ""
+    end
+    return success
 end
 
 function speedup_hack!(fvec_out, fvec_in, z_speedup_fac, z, vpa; evolve_ppar=false)

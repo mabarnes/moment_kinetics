@@ -267,8 +267,9 @@ function makie_post_process(run_dir::Union{String,Tuple},
     end
 
     timestep_diagnostics(run_info, run_info_dfns; plot_prefix=plot_prefix)
-    if any(ri.composition.electron_physics ==
-           moment_kinetics.input_structs.kinetic_electrons for ri ∈ run_info)
+    if any((ri.composition.electron_physics ==
+                moment_kinetics.input_structs.kinetic_electrons
+            && !ri.t_input["implicit_electron_advance"]) for ri ∈ run_info)
         timestep_diagnostics(run_info, run_info_dfns; plot_prefix=plot_prefix, electron=true)
     end
 

@@ -46,7 +46,7 @@ using ..charge_exchange: ion_charge_exchange_collisions_1V!,
                          neutral_charge_exchange_collisions_1V!,
                          ion_charge_exchange_collisions_3V!,
                          neutral_charge_exchange_collisions_3V!
-using ..electron_kinetic_equation: update_electron_pdf!
+using ..electron_kinetic_equation: update_electron_pdf!, implicit_electron_advance!
 using ..ionization: ion_ionization_collisions_1V!, neutral_ionization_collisions_1V!,
                     ion_ionization_collisions_3V!, neutral_ionization_collisions_3V!,
                     constant_ionization_source!
@@ -153,6 +153,20 @@ struct scratch_dummy_arrays
     # needs to be shared memory
     buffer_vpavperpzrs_1::MPISharedArray{mk_float,5}
     buffer_vpavperpzrs_2::MPISharedArray{mk_float,5}
+    # buffers to hold moment quantities for implicit solves
+    implicit_buffer_zr_1::MPISharedArray{mk_float,2}
+    implicit_buffer_zr_2::MPISharedArray{mk_float,2}
+    implicit_buffer_zr_3::MPISharedArray{mk_float,2}
+    implicit_buffer_zr_4::MPISharedArray{mk_float,2}
+    implicit_buffer_zr_5::MPISharedArray{mk_float,2}
+    implicit_buffer_zr_6::MPISharedArray{mk_float,2}
+    # buffers to hold electron for implicit solves
+    implicit_buffer_vpavperpzr_1::MPISharedArray{mk_float,4}
+    implicit_buffer_vpavperpzr_2::MPISharedArray{mk_float,4}
+    implicit_buffer_vpavperpzr_3::MPISharedArray{mk_float,4}
+    implicit_buffer_vpavperpzr_4::MPISharedArray{mk_float,4}
+    implicit_buffer_vpavperpzr_5::MPISharedArray{mk_float,4}
+    implicit_buffer_vpavperpzr_6::MPISharedArray{mk_float,4}
     # buffers to hold ion pdf for implicit solves
     implicit_buffer_vpavperpzrs_1::MPISharedArray{mk_float,5}
     implicit_buffer_vpavperpzrs_2::MPISharedArray{mk_float,5}
@@ -296,8 +310,8 @@ If something is passed in `electron`, it is stored in the `electron_t_params` me
 the returned `time_info`.
 """
 function setup_time_info(t_input, n_variables, code_time, dt_reload,
-                         dt_before_last_fail_reload, manufactured_solns_input, io_input,
-                         input_dict; electron=nothing)
+                         dt_before_last_fail_reload, composition,
+                         manufactured_solns_input, io_input, input_dict; electron=nothing)
     rk_coefs, rk_coefs_implicit, implicit_coefficient_is_zero, n_rk_stages, rk_order,
     adaptive, low_storage, CFL_prefactor =
         setup_runge_kutta_coefficients!(t_input["type"],
@@ -374,8 +388,16 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
     if rk_coefs_implicit === nothing
         # Not an IMEX scheme, so cannot have any implicit terms
         t_input["implicit_braginskii_conduction"] = false
+        t_input["implicit_electron_advance"] = false
         t_input["implicit_ion_advance"] = false
         t_input["implicit_vpa_advection"] = false
+    else
+        if composition.electron_physics != braginskii_fluid
+            t_input["implicit_braginskii_conduction"] = false
+        end
+        if composition.electron_physics != kinetic_electrons
+            t_input["implicit_electron_advance"] = false
+        end
     end
 
     if t_input["high_precision_error_sum"]
@@ -418,6 +440,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      t_input["last_fail_proximity_factor"], t_input["minimum_dt"],
                      t_input["maximum_dt"],
                      electron !== nothing && t_input["implicit_braginskii_conduction"],
+                     electron !== nothing && t_input["implicit_electron_advance"],
                      electron !== nothing && t_input["implicit_ion_advance"],
                      electron !== nothing && t_input["implicit_vpa_advection"],
                      t_input["write_after_fixed_step_count"], error_sum_zero,
@@ -463,8 +486,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         electron_t_params = setup_time_info(t_input["electron_t_input"], 2, 0.0,
                                             electron_dt_reload,
                                             electron_dt_before_last_fail_reload,
-                                            manufactured_solns_input, io_input,
-                                            input_dict)
+                                            composition, manufactured_solns_input,
+                                            io_input, input_dict)
         # Make Vectors that count which variable caused timestep limits and timestep failures
         # the right length. Do this setup even when not using adaptive timestepping, because
         # it is easier than modifying the file I/O according to whether we are using adaptive
@@ -521,8 +544,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         end
     end
     t_params = setup_time_info(t_input, n_variables, code_time, dt_reload,
-                               dt_before_last_fail_reload, manufactured_solns_input,
-                               io_input, input_dict;
+                               dt_before_last_fail_reload, composition,
+                               manufactured_solns_input, io_input, input_dict;
                                electron=electron_t_params)
 
     # Make Vectors that count which variable caused timestep limits and timestep failures
@@ -624,6 +647,18 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     else
        electron_conduction_nl_solve_parameters = nothing
     end
+    if t_params.implicit_electron_advance
+        nl_solver_electron_advance_params =
+            setup_nonlinear_solve(input_dict,
+                                  (r=r, z=z, vperp=vperp, vpa=vpa),
+                                  ();
+                                  default_rtol=t_params.rtol / 10.0,
+                                  default_atol=t_params.atol / 10.0,
+                                  electron_ppar_pdf_solve=true,
+                                  preconditioner_type="lu")
+    else
+        nl_solver_electron_advance_params = nothing
+    end
     if t_params.implicit_ion_advance
         # Implicit solve for vpa_advection term should be done in serial, as it will be
         # called within a parallelised s_r_z_vperp loop.
@@ -656,6 +691,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
               * "time")
     end
     nl_solver_params = (electron_conduction=electron_conduction_nl_solve_parameters,
+                        electron_advance=nl_solver_electron_advance_params,
                         ion_advance=nl_solver_ion_advance_params,
                         vpa_advection=nl_solver_vpa_advection_params,)
 
@@ -679,7 +715,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     n_neutral_species_alloc = max(1,composition.n_neutral_species)
     scratch_dummy = setup_dummy_and_buffer_arrays(r.n, z.n, vpa.n, vperp.n, vz.n, vr.n,
                                                   vzeta.n, composition.n_ion_species,
-                                                  n_neutral_species_alloc)
+                                                  n_neutral_species_alloc, t_params)
     # create arrays for Fokker-Planck collisions 
     if advance.explicit_weakform_fp_collisions
         fp_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; precompute_weights=true)
@@ -1166,8 +1202,10 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         # if treating the electrons as a fluid with Braginskii closure, or
         # moment-kinetically then advance the electron energy equation
         if composition.electron_physics == kinetic_electrons
-            advance_electron_energy = true
-            advance_electron_conduction = true
+            if !t_params.implicit_electron_advance
+                advance_electron_energy = true
+                advance_electron_conduction = true
+            end
         elseif composition.electron_physics == braginskii_fluid
             if t_params.implicit_braginskii_conduction
                 # if treating the electrons as a fluid with Braginskii closure, and using
@@ -1327,6 +1365,11 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
         advance_electron_conduction = true
     end
 
+    if t_params.implicit_electron_advance
+        advance_electron_energy = true
+        advance_electron_conduction = true
+    end
+
     manufactured_solns_test = manufactured_solns_input.use_for_advance
 
     return advance_info(advance_vpa_advection, advance_vperp_advection, advance_z_advection, advance_r_advection,
@@ -1347,7 +1390,8 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
                         vpa_diffusion, vperp_diffusion, vz_diffusion)
 end
 
-function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies_ion,nspecies_neutral)
+function setup_dummy_and_buffer_arrays(nr, nz, nvpa, nvperp, nvz, nvr, nvzeta,
+                                       nspecies_ion, nspecies_neutral, t_params)
 
     dummy_s = allocate_float(nspecies_ion)
     dummy_sr = allocate_float(nr, nspecies_ion)
@@ -1422,12 +1466,51 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
     buffer_vpavperpr_5 = allocate_shared_float(nvpa,nvperp,nr)
     buffer_vpavperpr_6 = allocate_shared_float(nvpa,nvperp,nr)
 
-    implicit_buffer_vpavperpzrs_1 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
-    implicit_buffer_vpavperpzrs_2 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
-    implicit_buffer_vpavperpzrs_3 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
-    implicit_buffer_vpavperpzrs_4 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
-    implicit_buffer_vpavperpzrs_5 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
-    implicit_buffer_vpavperpzrs_6 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+    if t_params.implicit_electron_advance
+        implicit_buffer_zr_1 = allocate_shared_float(nz,nr)
+        implicit_buffer_zr_2 = allocate_shared_float(nz,nr)
+        implicit_buffer_zr_3 = allocate_shared_float(nz,nr)
+        implicit_buffer_zr_4 = allocate_shared_float(nz,nr)
+        implicit_buffer_zr_5 = allocate_shared_float(nz,nr)
+        implicit_buffer_zr_6 = allocate_shared_float(nz,nr)
+
+        implicit_buffer_vpavperpzr_1 = allocate_shared_float(nvpa,nvperp,nz,nr)
+        implicit_buffer_vpavperpzr_2 = allocate_shared_float(nvpa,nvperp,nz,nr)
+        implicit_buffer_vpavperpzr_3 = allocate_shared_float(nvpa,nvperp,nz,nr)
+        implicit_buffer_vpavperpzr_4 = allocate_shared_float(nvpa,nvperp,nz,nr)
+        implicit_buffer_vpavperpzr_5 = allocate_shared_float(nvpa,nvperp,nz,nr)
+        implicit_buffer_vpavperpzr_6 = allocate_shared_float(nvpa,nvperp,nz,nr)
+    else
+        implicit_buffer_zr_1 = allocate_shared_float(0,0)
+        implicit_buffer_zr_2 = allocate_shared_float(0,0)
+        implicit_buffer_zr_3 = allocate_shared_float(0,0)
+        implicit_buffer_zr_4 = allocate_shared_float(0,0)
+        implicit_buffer_zr_5 = allocate_shared_float(0,0)
+        implicit_buffer_zr_6 = allocate_shared_float(0,0)
+
+        implicit_buffer_vpavperpzr_1 = allocate_shared_float(0,0,0,0)
+        implicit_buffer_vpavperpzr_2 = allocate_shared_float(0,0,0,0)
+        implicit_buffer_vpavperpzr_3 = allocate_shared_float(0,0,0,0)
+        implicit_buffer_vpavperpzr_4 = allocate_shared_float(0,0,0,0)
+        implicit_buffer_vpavperpzr_5 = allocate_shared_float(0,0,0,0)
+        implicit_buffer_vpavperpzr_6 = allocate_shared_float(0,0,0,0)
+    end
+
+    if t_params.implicit_ion_advance
+        implicit_buffer_vpavperpzrs_1 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+        implicit_buffer_vpavperpzrs_2 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+        implicit_buffer_vpavperpzrs_3 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+        implicit_buffer_vpavperpzrs_4 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+        implicit_buffer_vpavperpzrs_5 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+        implicit_buffer_vpavperpzrs_6 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+    else
+        implicit_buffer_vpavperpzrs_1 = allocate_shared_float(0,0,0,0,0)
+        implicit_buffer_vpavperpzrs_2 = allocate_shared_float(0,0,0,0,0)
+        implicit_buffer_vpavperpzrs_3 = allocate_shared_float(0,0,0,0,0)
+        implicit_buffer_vpavperpzrs_4 = allocate_shared_float(0,0,0,0,0)
+        implicit_buffer_vpavperpzrs_5 = allocate_shared_float(0,0,0,0,0)
+        implicit_buffer_vpavperpzrs_6 = allocate_shared_float(0,0,0,0,0)
+    end
 
     buffer_vzvrvzetazsn_1 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
     buffer_vzvrvzetazsn_2 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
@@ -1464,6 +1547,8 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
         buffer_vpavperpzs_1,buffer_vpavperpzs_2,buffer_vpavperpzs_3,buffer_vpavperpzs_4,buffer_vpavperpzs_5,buffer_vpavperpzs_6,
         buffer_vpavperprs_1,buffer_vpavperprs_2,buffer_vpavperprs_3,buffer_vpavperprs_4,buffer_vpavperprs_5,buffer_vpavperprs_6,
         buffer_vpavperpzrs_1,buffer_vpavperpzrs_2,
+        implicit_buffer_zr_1,implicit_buffer_zr_2,implicit_buffer_zr_3,implicit_buffer_zr_4,implicit_buffer_zr_5,implicit_buffer_zr_6,
+        implicit_buffer_vpavperpzr_1,implicit_buffer_vpavperpzr_2,implicit_buffer_vpavperpzr_3,implicit_buffer_vpavperpzr_4,implicit_buffer_vpavperpzr_5,implicit_buffer_vpavperpzr_6,
         implicit_buffer_vpavperpzrs_1,implicit_buffer_vpavperpzrs_2,implicit_buffer_vpavperpzrs_3,implicit_buffer_vpavperpzrs_4,implicit_buffer_vpavperpzrs_5,implicit_buffer_vpavperpzrs_6,
         buffer_vzvrvzetazsn_1,buffer_vzvrvzetazsn_2,buffer_vzvrvzetazsn_3,buffer_vzvrvzetazsn_4,buffer_vzvrvzetazsn_5,buffer_vzvrvzetazsn_6,
         buffer_vzvrvzetarsn_1,buffer_vzvrvzetarsn_2,buffer_vzvrvzetarsn_3,buffer_vzvrvzetarsn_4,buffer_vzvrvzetarsn_5,buffer_vzvrvzetarsn_6,
@@ -2260,7 +2345,7 @@ function apply_all_bcs_constraints_update_moments!(
         # to the beginning of the ion/neutral timestep, so the electron solution
         # calculated here would be discarded - we might as well skip calculating it in
         # that case.
-        if update_electrons && success == ""
+        if update_electrons && !t_params.implicit_electron_advance && success == ""
             _, kinetic_electron_success = update_electron_pdf!(
                scratch_electron, pdf.electron.norm, moments, fields.phi, r, z, vperp, vpa,
                z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
@@ -2739,6 +2824,7 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t, t_params, 
                 # The diagonal elements are equal to the Butcher 'a' coefficients
                 # rk_coefs_implicit[istage,istage]=a[istage,istage].
                 nl_success = backward_euler!(scratch_implicit[istage], scratch[istage],
+                                             scratch_electron[t_params.electron.n_rk_stages+1],
                                              pdf, fields, moments, advect_objects, vz, vr,
                                              vzeta, vpa, vperp, gyrophase, z, r, t,
                                              t_params.dt[] *
@@ -3182,19 +3268,27 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     return nothing
 end
 
-function backward_euler!(fvec_out, fvec_in, pdf, fields, moments, advect_objects, vz, vr,
-                         vzeta, vpa, vperp, gyrophase, z, r, t, dt, spectral_objects,
-                         composition, collisions, geometry, scratch_dummy,
-                         manufactured_source_list, external_source_settings,
-                         num_diss_params, gyroavs, nl_solver_params, advance, fp_arrays,
-                         istage)
+function backward_euler!(fvec_out, fvec_in, scratch_electron, pdf, fields, moments,
+                         advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t,
+                         dt, spectral_objects, composition, collisions, geometry,
+                         scratch_dummy, manufactured_source_list,
+                         external_source_settings, num_diss_params, gyroavs,
+                         nl_solver_params, advance, fp_arrays, istage)
 
     vpa_spectral, vperp_spectral, r_spectral, z_spectral = spectral_objects.vpa_spectral, spectral_objects.vperp_spectral, spectral_objects.r_spectral, spectral_objects.z_spectral
     vz_spectral, vr_spectral, vzeta_spectral = spectral_objects.vz_spectral, spectral_objects.vr_spectral, spectral_objects.vzeta_spectral
     vpa_advect, vperp_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.vperp_advect, advect_objects.r_advect, advect_objects.z_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
-    if advance.electron_conduction
+    if composition.electron_physics == kinetic_electrons && advance.electron_energy
+        success = implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron,
+                                             moments, fields, collisions, composition,
+                                             external_source_settings, num_diss_params, r,
+                                             z, vperp, vpa, r_spectral, z_spectral,
+                                             vpa_spectral, z_advect, vpa_advect, gyroavs,
+                                             scratch_dummy, dt,
+                                             nl_solver_params.electron_advance)
+    elseif advance.electron_conduction
         success = implicit_braginskii_conduction!(fvec_out, fvec_in, moments, z, r, dt,
                                                   z_spectral, composition, collisions,
                                                   scratch_dummy,

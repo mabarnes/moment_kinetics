@@ -233,6 +233,42 @@ function electron_energy_equation!(ppar_out, ppar_in, electron_density, electron
 end
 
 """
+    electron_energy_residual!(residual, electron_ppar_out, fvec_in, moments,
+                              collisions, composition, external_source_settings,
+                              num_diss_params, z, dt)
+
+The residual is a function whose input is `electron_ppar`, so that when it's output
+`residual` is zero, electron_ppar is the result of a backward-Euler timestep:
+  (f_out - f_in) / dt = RHS(f_out)
+⇒ (f_out - f_in) - dt*RHS(f_out) = 0
+
+This function assumes any needed moment derivatives are already calculated using
+`electron_ppar_out` and stored in `moments.electron`.
+"""
+function electron_energy_residual!(residual, electron_ppar_out, fvec_in, moments,
+                                   collisions, composition, external_source_settings,
+                                   num_diss_params, z, dt)
+    begin_r_z_region()
+    electron_ppar_in = fvec_in.electron_ppar
+    @loop_r_z ir iz begin
+        residual[iz,ir] = electron_ppar_in[iz,ir]
+    end
+    electron_energy_equation!(residual, electron_ppar_out,
+                              fvec_in.density, fvec_in.electron_upar, fvec_in.upar,
+                              fvec_in.ppar, fvec_in.density_neutral,
+                              fvec_in.uz_neutral, fvec_in.pz_neutral,
+                              moments.electron, collisions, dt, composition,
+                              external_source_settings.electron, num_diss_params, z)
+    # Now
+    #   residual = f_in + dt*RHS(f_out)
+    # so update to desired residual
+    begin_r_z_region()
+    @loop_r_z ir iz begin
+        residual[iz,ir] = (electron_ppar_out[iz,ir] - residual[iz,ir])
+    end
+end
+
+"""
 Add just the braginskii conduction contribution to the electron pressure, and assume that
 we have to calculate qpar and dqpar_dz from ppar within this function (they are not
 pre-calculated).
