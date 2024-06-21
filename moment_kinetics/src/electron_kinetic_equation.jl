@@ -326,7 +326,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
             apply_electron_bc_and_constraints!(scratch[istage+1], phi, moments, z, vperp,
                                                vpa, vperp_spectral, vpa_spectral,
                                                vpa_advect, num_diss_params, composition,
-                                               t_params)
+                                               t_params.rtol)
 
             latest_pdf = scratch[istage+1].pdf_electron
             
@@ -576,9 +576,9 @@ parallelised.
 function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, moments,
                                     fields, collisions, composition,
                                     external_source_settings, num_diss_params, r, z,
-                                    vperp, vpa, r_spectral, z_spectral, vpa_spectral,
-                                    z_advect, vpa_advect, gyroavs, scratch_dummy, dt,
-                                    nl_solver_params)
+                                    vperp, vpa, r_spectral, z_spectral, vperp_spectral,
+                                    vpa_spectral, z_advect, vpa_advect, gyroavs,
+                                    scratch_dummy, dt, nl_solver_params)
 
     electron_ppar_out = fvec_out.electron_ppar
     # Store the solved-for pdf in n_rk_stages+1, because this was the version that gets
@@ -605,6 +605,13 @@ function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, mo
                                   fvec_in.electron_temp, fvec_in.pdf_neutral,
                                   fvec_in.density_neutral, fvec_in.uz_neutral,
                                   fvec_in.pz_neutral)
+        new_scratch_electron = scratch_electron_pdf(f_electron_new, electron_ppar_new)
+
+        apply_electron_bc_and_constraints!(new_scratch_electron, fields.phi, moments, z,
+                                           vperp, vpa, vperp_spectral, vpa_spectral,
+                                           vpa_advect, num_diss_params, composition,
+                                           nl_solver_params.rtol)
+
         # Only the first entry in the `electron_pdf_substruct` will be used, so does not
         # matter what we put in the second and third except that they have the right type.
         new_pdf = (electron=electron_pdf_substruct(f_electron_new, f_electron_new,
@@ -730,7 +737,7 @@ end
 
 function apply_electron_bc_and_constraints!(this_scratch, phi, moments, z, vperp, vpa,
                                             vperp_spectral, vpa_spectral, vpa_advect,
-                                            num_diss_params, composition, t_params)
+                                            num_diss_params, composition, rtol)
     latest_pdf = this_scratch.pdf_electron
 
     begin_r_z_vperp_vpa_region()
@@ -744,7 +751,7 @@ function apply_electron_bc_and_constraints!(this_scratch, phi, moments, z, vperp
                                                 vperp_spectral, vpa_spectral, vpa_advect,
                                                 moments,
                                                 num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                                                composition.me_over_mi, 0.1 * t_params.rtol)
+                                                composition.me_over_mi, 0.1 * rtol)
 
     begin_r_z_region()
     A = moments.electron.constraints_A_coefficient
@@ -1257,7 +1264,8 @@ function electron_adaptive_timestep_update!(scratch, t, t_params, moments, phi, 
     end
     apply_electron_bc_and_constraints!(scratch[t_params.n_rk_stages+1], phi, moments, z,
                                        vperp, vpa, vperp_spectral, vpa_spectral,
-                                       vpa_advect, num_diss_params, composition, t_params)
+                                       vpa_advect, num_diss_params, composition,
+                                       t_params.rtol)
     if evolve_ppar
         # Reset vth in the `moments` struct to the result consistent with full-accuracy RK
         # solution.

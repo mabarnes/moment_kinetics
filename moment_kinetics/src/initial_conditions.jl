@@ -747,8 +747,8 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                                moments, fields, collisions, composition,
                                                external_source_settings, num_diss_params,
                                                r, z, vperp, vpa, r_spectral, z_spectral,
-                                               vpa_spectral, z_advect, vpa_advect,
-                                               gyroavs, scratch_dummy, 0.0,
+                                               vperp_spectral, vpa_spectral, z_advect,
+                                               vpa_advect, gyroavs, scratch_dummy, 0.0,
                                                initialisation_nl_solver_params)
             else
                 electron_pseudotime, success =

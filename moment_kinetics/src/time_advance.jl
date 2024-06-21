@@ -3285,8 +3285,8 @@ function backward_euler!(fvec_out, fvec_in, scratch_electron, pdf, fields, momen
                                              moments, fields, collisions, composition,
                                              external_source_settings, num_diss_params, r,
                                              z, vperp, vpa, r_spectral, z_spectral,
-                                             vpa_spectral, z_advect, vpa_advect, gyroavs,
-                                             scratch_dummy, dt,
+                                             vperp_spectral, vpa_spectral, z_advect,
+                                             vpa_advect, gyroavs, scratch_dummy, dt,
                                              nl_solver_params.electron_advance)
     elseif advance.electron_conduction
         success = implicit_braginskii_conduction!(fvec_out, fvec_in, moments, z, r, dt,
