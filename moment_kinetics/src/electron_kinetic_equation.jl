@@ -587,6 +587,9 @@ function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, mo
 
     # Do a forward-Euler step for electron_ppar to get the initial guess.
     # No equivalent for f_electron, as f_electron obeys a steady-state equation.
+    calculate_electron_moment_derivatives!(moments, fvec_in, scratch_dummy, z, z_spectral,
+                                           num_diss_params.electron.moment_dissipation_coefficient,
+                                           composition.electron_physics)
     electron_energy_equation!(electron_ppar_out, fvec_in.electron_ppar,
                               fvec_in.density, fvec_in.electron_upar, fvec_in.upar,
                               fvec_in.ppar, fvec_in.density_neutral,
