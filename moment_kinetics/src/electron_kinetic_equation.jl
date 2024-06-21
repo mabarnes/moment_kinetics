@@ -26,7 +26,8 @@ using ..em_fields: update_phi!
 using ..external_sources: external_electron_source!
 using ..file_io: get_electron_io_info, write_electron_state, finish_electron_io
 using ..krook_collisions: electron_krook_collisions!
-using ..moment_constraints: hard_force_moment_constraints!
+using ..moment_constraints: hard_force_moment_constraints!,
+                            moment_constraints_on_residual!
 using ..moment_kinetics_structs: scratch_pdf, scratch_electron_pdf, electron_pdf_substruct
 using ..nonlinear_solvers: newton_solve!
 using ..runge_kutta: rk_update_variable!, rk_loworder_solution!, local_error_norm,
@@ -648,6 +649,64 @@ function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, mo
                                                 vpa_advect, scratch_dummy, collisions,
                                                 composition, external_source_settings,
                                                 num_diss_params, 1.0)
+
+        # Set residual to zero where pdf_electron is determined by boundary conditions.
+        if vpa.n > 1
+            begin_r_z_vperp_region()
+            @loop_r_z_vperp ir iz ivperp begin
+                @views enforce_v_boundary_condition_local!(f_electron_residual[:,ivperp,iz,ir], vpa.bc,
+                                                           vpa_advect[1].speed[:,ivperp,iz,ir],
+                                                           num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
+                                                           vpa, vpa_spectral)
+            end
+        end
+        if vperp.n > 1
+            begin_r_z_vpa_region()
+            enforce_vperp_boundary_condition!(f_electron_residual, vperp.bc, vperp, vperp_spectral,
+                                              vperp_adv, vperp_diffusion)
+        end
+        if z.bc == "wall" && (z.irank == 0 || z.irank == z.nrank - 1)
+            # Wall boundary conditions. Note that as density, upar, ppar do not
+            # change in this implicit step, f_new, f_old, and residual should all
+            # be zero at exactly the same set of grid points, so it is reasonable
+            # to zero-out `residual` to impose the boundary condition. We impose
+            # this after subtracting f_old in case rounding errors, etc. mean that
+            # at some point f_old had a different boundary condition cut-off
+            # index.
+            begin_r_vperp_vpa_region()
+            v_unnorm = vpa.scratch
+            zero = 1.0e-14
+            if z.irank == 0
+                iz = 1
+                @loop_r ir begin
+                    v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[iz,ir],
+                                                fvec_in.electron_upar[iz,ir], true, true)
+                    @loop_vperp_vpa ivperp ivpa begin
+                        if v_unnorm > -zero
+                            f_electron_residual[ivpa,ivperp,iz,ir] .= 0.0
+                        end
+                    end
+                end
+            end
+            if z.irank == z.nrank - 1
+                iz = z.n
+                @loop_r ir begin
+                    v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[iz,ir],
+                                                fvec_in.electron_upar[iz,ir], true, true)
+                    @loop_vperp_vpa ivpa ivperp begin
+                        if v_unnorm < zero
+                            f_electron_residual[ivpa,ivperp,iz,ir] .= 0.0
+                        end
+                    end
+                end
+            end
+        end
+        begin_r_z_region()
+        @loop_r_z ir iz begin
+            @views moment_constraints_on_residual!(f_electron_residual[:,:,iz,ir], f_electron_new[:,:,iz,ir],
+                                                   (evolve_density=true, evolve_upar=true, evolve_ppar=true),
+                                                   vpa)
+        end
         return nothing
     end
 
