@@ -616,6 +616,16 @@ function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, mo
     # written to output for the explicit-electron-timestepping version.
     pdf_electron_out = scratch_electron.pdf_electron
 
+    # If we just defined the residual for the electron distribution function solve to be
+    # 'dg/dt=0', then we would be asking the solver (roughly) to find g such that
+    # 'dg/dt<tol' for some tolerance. However dg/dt has some typical timescale, τ, so
+    # 'dg/dt∼g/τ'. It would be inconvenient to have to define the tolerances taking τ
+    # (normalised to the reference sound crossing time) into account, so instead estimate
+    # the relevant timescale as 'sqrt(me/mi)*z.L', i.e. as the electron thermal crossing
+    # time at reference parameters. We pass this as 'dt' to
+    # electron_kinetic_equation_euler_update!() so that it multiplies the residual.
+    pdf_electron_normalisation_factor = sqrt(composition.me_over_mi) * z.L
+
     # Do a forward-Euler step for electron_ppar to get the initial guess.
     # No equivalent for f_electron, as f_electron obeys a steady-state equation.
     calculate_electron_moment_derivatives!(moments, fvec_in, scratch_dummy, z, z_spectral,
@@ -677,7 +687,8 @@ function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, mo
                                                 vpa, z_spectral, vpa_spectral, z_advect,
                                                 vpa_advect, scratch_dummy, collisions,
                                                 composition, external_source_settings,
-                                                num_diss_params, 1.0)
+                                                num_diss_params,
+                                                pdf_electron_normalisation_factor)
 
         # Set residual to zero where pdf_electron is determined by boundary conditions.
         if vpa.n > 1
