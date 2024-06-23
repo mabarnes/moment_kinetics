@@ -105,6 +105,8 @@ mutable struct advance_info
     neutral_ionization_collisions_1V::Bool
     ionization_source::Bool
     krook_collisions_ii::Bool
+    mxwl_diff_collisions_ii::Bool
+    mxwl_diff_collisions_nn::Bool
     explicit_weakform_fp_collisions::Bool
     external_source::Bool
     ion_numerical_dissipation::Bool
@@ -359,7 +361,19 @@ struct drive_input
 end
 
 """
+Structs set up for the collision operators so far in use. These will each
+be contained in the main collisions_input struct below, as substructs. 
 """
+Base.@kwdef struct mxwl_diff_collisions_input
+    use_maxwell_diffusion::Bool
+    # different diffusion coefficients for each species, has units of 
+    # frequency * velocity^2. Diffusion coefficients usually denoted D
+    D_ii::mk_float
+    D_nn::mk_float
+    # Setting to switch between different options for Krook collision operator
+    diffusion_coefficient_option::String # "reference_parameters" # "manual", 
+end
+
 Base.@kwdef struct krook_collisions_input
     use_krook::Bool
     # Ion-ion Coulomb collision rate at the reference density and temperature
@@ -400,6 +414,8 @@ Base.@kwdef struct fkpl_collisions_input
 end
 
 """
+Collisions input struct to contain all the different collisions substructs and overall 
+collision input parameters.
 """
 struct collisions_input
     # charge exchange collision frequency
@@ -412,6 +428,8 @@ struct collisions_input
     krook::krook_collisions_input
     # struct of parameters for the Fokker-Planck operator
     fkpl::fkpl_collisions_input
+    # struct of parameters for the Maxwellian Diffusion operator
+    mxwl_diff::mxwl_diff_collisions_input
 end
 
 """
