@@ -15,6 +15,7 @@ using ..coordinates: define_coordinate
 using ..external_sources
 using ..file_io: io_has_parallel, input_option_error, open_ascii_output_file
 using ..krook_collisions: setup_krook_collisions_input
+using ..maxwell_diffusion: setup_mxwl_diff_collisions_input
 using ..fokker_planck: setup_fkpl_collisions_input
 using ..finite_differences: fd_check_option
 using ..input_structs
@@ -180,14 +181,21 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     end
     #################### end specification of species inputs #####################
 
+    # Build the main collisions struct using scan_input and reference parameters
     charge_exchange = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(species.ion[1].initial_temperature))
     ionization = get(scan_input, "ionization_frequency", charge_exchange)
     constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
     # set up krook collision inputs
     krook_input = setup_krook_collisions_input(scan_input, reference_params)
-    # set up krook collision inputs
+    # set up Fokker-Planck collision inputs
     fkpl_input = setup_fkpl_collisions_input(scan_input, reference_params)
-    collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate, krook_input, fkpl_input)
+    # set up maxwell diffusion collision inputs
+    mxwl_diff_input = setup_mxwl_diff_collisions_input(scan_input, reference_params)
+    # write total collision struct using the structs above, as each setup function 
+    # for the collisions outputs itself a struct of the type of collision, which
+    # is a substruct of the overall collisions_input struct.
+    collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate, 
+                                  krook_input, fkpl_input, mxwl_diff_input)
 
     # parameters related to the time stepping
     timestepping_section = set_defaults_and_check_section!(
