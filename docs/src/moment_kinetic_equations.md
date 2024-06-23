@@ -440,16 +440,16 @@ The derivatives transform as
 \begin{align}
   \left.\frac{\partial f_{s}}{\partial t}\right|_{z,v\|}
   & \rightarrow\left.\frac{\partial f_{s}}{\partial t}\right|_{z,w\|}
-               - \frac{1}{v_{\mathrm{th},s}}\frac{\partial u_{s}}{\partial t}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}
-               - \frac{w_{\|,s}}{v_{\mathrm{th},s}}\frac{\partial v_{\mathrm{th},s}}{\partial t}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}\\
+               - \frac{1}{v_{\mathrm{th},s}}\frac{\partial u_{s}}{\partial t}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,t}
+               - \frac{w_{\|,s}}{v_{\mathrm{th},s}}\frac{\partial v_{\mathrm{th},s}}{\partial t}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,t}\\
 %
   \left.\frac{\partial f_{s}}{\partial z}\right|_{z,v\|}
-  & \rightarrow\left.\frac{\partial f_{s}}{\partial z}\right|_{z,w\|}
-               - \frac{1}{v_{\mathrm{th},s}}\frac{\partial u_{s}}{\partial z}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}
-               - \frac{w_{\|,s}}{v_{\mathrm{th},s}}\frac{\partial v_{\mathrm{th},s}}{\partial z}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}\\
+  & \rightarrow\left.\frac{\partial f_{s}}{\partial z}\right|_{t,w\|}
+               - \frac{1}{v_{\mathrm{th},s}}\frac{\partial u_{s}}{\partial z}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,t}
+               - \frac{w_{\|,s}}{v_{\mathrm{th},s}}\frac{\partial v_{\mathrm{th},s}}{\partial z}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,wt}\\
 %
   \left.\frac{\partial f_{s}}{\partial v_{\|}}\right|_{z,v\|}
-  & \rightarrow\frac{1}{v_{\mathrm{th},s}}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}
+  & \rightarrow\frac{1}{v_{\mathrm{th},s}}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,t}
 \end{align}
 ```
 
