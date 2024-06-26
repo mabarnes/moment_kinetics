@@ -745,12 +745,15 @@ function external_ion_source_controller!(fvec_in, moments, ion_source_settings, 
 
     is = 1
     ion_moments = moments.ion
+    density = fvec_in.density
+    upar = fvec_in.upar
+    ppar = fvec_in.ppar
 
     if ion_source_settings.source_type == "Maxwellian"
         if moments.evolve_ppar
             @loop_r_z ir iz begin
                 ion_moments.external_source_pressure_amplitude[iz,ir] =
-                    (0.5 * ion_source_settings.source_T + fvec_in.upar[iz,ir,is]^2) *
+                    (0.5 * ion_source_settings.source_T + upar[iz,ir,is]^2) *
                     ion_moments.external_source_amplitude[iz,ir]
             end
         end
@@ -758,7 +761,7 @@ function external_ion_source_controller!(fvec_in, moments, ion_source_settings, 
         if moments.evolve_upar
             @loop_r_z ir iz begin
                 ion_moments.external_source_momentum_amplitude[iz,ir] =
-                    - ion_moments.density[iz,ir] * ion_moments.upar[iz,ir] *
+                    - density[iz,ir] * upar[iz,ir] *
                       ion_source_settings.source_strength *
                       ion_source_settings.r_amplitude[ir] *
                       ion_source_settings.z_amplitude[iz]
@@ -767,8 +770,7 @@ function external_ion_source_controller!(fvec_in, moments, ion_source_settings, 
         if moments.evolve_ppar
             @loop_r_z ir iz begin
                 ion_moments.external_source_pressure_amplitude[iz,ir] =
-                    (0.5 * ion_source_settings.source_T + ion_moments.upar[iz,ir]^2 -
-                     ion_moments.ppar[iz,ir]) *
+                    (0.5 * ion_source_settings.source_T + upar[iz,ir]^2 - ppar[iz,ir]) *
                     ion_source_settings.source_strength *
                     ion_source_settings.r_amplitude[ir] *
                     ion_source_settings.z_amplitude[iz]
@@ -784,8 +786,8 @@ function external_ion_source_controller!(fvec_in, moments, ion_source_settings, 
                     ion_source_settings.PI_density_target_iz !== nothing
                 # This process has the target point
 
-                n_mid = fvec_in.density[ion_source_settings.PI_density_target_iz,
-                                        ion_source_settings.PI_density_target_ir, is]
+                n_mid = density[ion_source_settings.PI_density_target_iz,
+                                ion_source_settings.PI_density_target_ir, is]
                 n_error = ion_source_settings.PI_density_target - n_mid
 
                 ion_moments.external_source_controller_integral[1,1] +=
@@ -820,14 +822,13 @@ function external_ion_source_controller!(fvec_in, moments, ion_source_settings, 
         if moments.evolve_ppar
             @loop_r_z ir iz begin
                 ion_moments.external_source_pressure_amplitude[iz,ir] =
-                    (0.5 * ion_source_settings.source_T + fvec_in.upar[iz,ir,is]^2) *
+                    (0.5 * ion_source_settings.source_T + upar[iz,ir,is]^2) *
                     amplitude * ion_source_settings.controller_source_profile[iz,ir]
             end
         end
     elseif ion_source_settings.source_type == "density_profile_control"
         begin_r_z_region()
 
-        density = fvec_in.density
         target = ion_source_settings.PI_density_target
         P = ion_source_settings.PI_density_controller_P
         I = ion_source_settings.PI_density_controller_I
@@ -847,7 +848,7 @@ function external_ion_source_controller!(fvec_in, moments, ion_source_settings, 
         if moments.evolve_ppar
             @loop_r_z ir iz begin
                 ion_moments.external_source_pressure_amplitude[iz,ir] =
-                    (0.5 * ion_source_settings.source_T + fvec_in.upar[iz,ir,is]^2) *
+                    (0.5 * ion_source_settings.source_T + upar[iz,ir,is]^2) *
                     amplitude[iz,ir]
             end
         end
