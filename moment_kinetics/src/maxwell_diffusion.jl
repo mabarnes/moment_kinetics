@@ -47,7 +47,7 @@ function setup_mxwl_diff_collisions_input(toml_input::Dict, reference_params)
     diffusion_coefficient_option = input_section["diffusion_coefficient_option"]
     if diffusion_coefficient_option == "reference_parameters"
         input_section["D_ii"] = D_ii_mxwl_diff_default
-        input_section["D_nn"] = D_nn_mxwl_diff_default
+        input_section["D_nn"] = -1.0 #D_nn_mxwl_diff_default
     elseif diffusion_coefficient_option == "manual" 
         # use the diffusion coefficient from the input file
         # do nothing
