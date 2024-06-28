@@ -365,6 +365,8 @@ Base.@kwdef struct fkpl_collisions_input
     nuii::mk_float
     # option to determine if self collisions are used (for physics test)
     self_collisions::Bool
+    # option to determine if ad-hoc moment_kinetics-style conserving corrections are used
+    use_conserving_corrections::Bool
     # option to determine if cross-collisions against fixed Maxwellians are used
     slowing_down_test::Bool
     # Setting to switch between different options for Fokker-Planck collision frequency input
