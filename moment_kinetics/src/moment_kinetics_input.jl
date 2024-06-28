@@ -1196,6 +1196,8 @@ function check_coordinate_input(coord, coord_name, io)
         println(io,">$coord_name.bc = 'constant'.  enforcing constant incoming BC in $coord_name.")
     elseif coord.bc == "zero"
         println(io,">$coord_name.bc = 'zero'.  enforcing zero incoming BC in $coord_name. Enforcing zero at both boundaries if diffusion operator is present.")
+    elseif coord.bc == "zero-no-regularity"
+        println(io,">$coord_name.bc = 'zero'.  enforcing zero incoming BC in $coord_name. Enforcing zero at both boundaries if diffusion operator is present. Do not enforce dF/dcoord = 0 at origin if coord = vperp.")
     elseif coord.bc == "zero_gradient"
         println(io,">$coord_name.bc = 'zero_gradient'.  enforcing zero gradients at both limits of $coord_name domain.")
     elseif coord.bc == "both_zero"
@@ -1216,7 +1218,7 @@ function check_coordinate_input(coord, coord_name, io)
 
         if coord.bc != "zero" && coord.n_global > 1 && global_rank[] == 0
             println("WARNING: regularity condition (df/dvperp=0 at vperp=0) not being "
-                    * "imposed. Collisions or vperp-diffusion will be unstable.")
+                    * "imposed. Collisions or vperp-diffusion may be unstable.")
         end
     else
         println(io,">using ", coord.ngrid, " grid points per $coord_name element on ",
