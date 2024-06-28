@@ -2297,11 +2297,15 @@ function enforce_vpavperp_BCs!(pdf,vpa,vperp,vpa_spectral,vperp_spectral)
     # set regularity condition d F / d vperp = 0 at vperp = 0
     # adjust F(vperp = 0) so that d F / d vperp = 0 at vperp = 0
     begin_anyv_vpa_region()
-    buffer = @view vperp.scratch[1:ngrid_vperp-1]
     @loop_vpa ivpa begin
         pdf[ivpa,nvperp] = 0.0
-        @views @. buffer = D0[2:ngrid_vperp] * pdf[ivpa,2:ngrid_vperp]
-        pdf[ivpa,1] = -sum(buffer)/D0[1]
+    end
+    if vperp.bc == "zero"
+        buffer = @view vperp.scratch[1:ngrid_vperp-1]
+        @loop_vpa ivpa begin
+            @views @. buffer = D0[2:ngrid_vperp] * pdf[ivpa,2:ngrid_vperp]
+            pdf[ivpa,1] = -sum(buffer)/D0[1]
+        end
     end
 end
 

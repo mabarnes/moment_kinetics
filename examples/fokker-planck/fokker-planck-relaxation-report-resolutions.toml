@@ -49,6 +49,7 @@ vperp_ngrid = 5
 vperp_nelement = 4
 vperp_L = 3.0
 vperp_discretization = "gausslegendre_pseudospectral"
+vperp_bc = "zero"
 # Fokker-Planck operator requires the "gausslegendre_pseudospectral
 # options for the vpa and vperp grids
 
