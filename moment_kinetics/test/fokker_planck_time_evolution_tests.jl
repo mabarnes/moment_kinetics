@@ -34,7 +34,7 @@ struct expected_data
     f_ion::Array{mk_float, 3} # vpa, vperp, time
 end
 
-const expected =
+const expected_base =
   expected_data(
    [-3.0, -2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0],
    [0.155051025721682, 0.644948974278318, 1.000000000000000, 1.500000000000000, 2.000000000000000, 2.500000000000000, 3.000000000000000],
@@ -81,34 +81,97 @@ const expected =
     0.005877384425022965 0.00466291282312835 0.0028530945920350282 0.0008130106752860425 2.4399432485774198e-5 -9.743480904212476e-5 0.0;
     0.00017108987342944414 7.097261590252536e-5 -7.822316408657793e-5 -0.0001534897546375058 -9.087984332447822e-5 -3.3079379573126077e-5 0.0;
     0.0 0.0 0.0 0.0 0.0 0.0 0.0])
+const expected_no_regularity = 
+expected_data(
+   [-3.0, -2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0],
+   [0.155051025721682, 0.644948974278318, 1.000000000000000, 1.500000000000000, 2.000000000000000, 2.500000000000000, 3.000000000000000],
+   # Expected phi:
+   [-1.249777922692213, -1.249777922692476],
+   # Expected n_ion:
+   [0.286568430139637, 0.286568430139562],
+   # Expected upar_ion:
+   [0.0, 0.0],
+   # Expected ppar_ion:
+   [0.182900778868619, 0.157103495982094],
+   # Expected pperp_ion
+   [0.143950337301367, 0.156848978744563],
+   # Expected qpar_ion
+   [0.0, 0.0],
+   # Expected v_t_ion
+   [1.046547864034549, 1.046547864034539],
+   # Expected dSdt
+   [0.000000000000000, -0.000000000409521],
+   # Expected f_ion:
+   [0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 ;
+    0.000709315517525 0.000479326544463 0.000267291885601 0.000076580407386 0.000013307679383 0.000001402619088 0.000000000000000 ;
+    0.006729798254906 0.004547723633218 0.002535994801781 0.000726574675523 0.000126259746577 0.000013307679383 0.000000000000000 ;
+    0.038727315040126 0.026170342585036 0.014593642470202 0.004181148571375 0.000726574675400 0.000076580407373 0.000000000000000 ;
+    0.135165490857824 0.091339334982523 0.050934510844468 0.014592981682667 0.002535879973697 0.000267279782810 0.000000000000000 ;
+    0.262731408806302 0.177543188036297 0.099005269067555 0.028365484502288 0.004929182099845 0.000519531971048 0.000000000000000 ;
+    0.000976245858025 0.000659707199564 0.000367879441171 0.000105399224562 0.000018315638889 0.000001930454136 0.000000000000000 ;
+    0.262731408806302 0.177543188036297 0.099005269067555 0.028365484502288 0.004929182099845 0.000519531971048 0.000000000000000 ;
+    0.135165490857824 0.091339334982523 0.050934510844468 0.014592981682667 0.002535879973697 0.000267279782810 0.000000000000000 ;
+    0.038727315040126 0.026170342585036 0.014593642470202 0.004181148571375 0.000726574675400 0.000076580407373 0.000000000000000 ;
+    0.006729798254906 0.004547723633218 0.002535994801781 0.000726574675523 0.000126259746577 0.000013307679383 0.000000000000000 ;
+    0.000709315517525 0.000479326544463 0.000267291885601 0.000076580407386 0.000013307679383 0.000001402619088 0.000000000000000 ;
+    0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 ;;;
+    0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 ;
+    0.000474751734681 0.000190566474175 -0.000068453615894 -0.000220474853312 -0.000166467621731 -0.000070269966866 0.000000000000000 ;
+    0.008012848857986 0.005724808854515 0.003340228975343 0.000928890127606 -0.000038607624651 -0.000175709447738 0.000000000000000 ;
+    0.034159249923911 0.024646971077049 0.014803095427209 0.004994733815267 0.000871813908241 -0.000279350037847 0.000000000000000 ;
+    0.095764438891876 0.069477778980504 0.042139603659514 0.014773029429542 0.003247498909427 -0.000201036843458 0.000000000000000 ;
+    0.177293203999877 0.129346984538368 0.079203821037167 0.028272781052345 0.006554590511338 0.000118708200311 0.000000000000000 ;
+    0.216600640826244 0.158225686082234 0.097107273632873 0.034812857798807 0.008154333928791 0.000303091030245 0.000000000000000 ;
+    0.177293203999877 0.129346984538368 0.079203821037167 0.028272781052345 0.006554590511338 0.000118708200311 0.000000000000000 ;
+    0.095764438891876 0.069477778980504 0.042139603659514 0.014773029429542 0.003247498909427 -0.000201036843458 0.000000000000000 ;
+    0.034159249923911 0.024646971077049 0.014803095427209 0.004994733815267 0.000871813908241 -0.000279350037847 0.000000000000000 ;
+    0.008012848857986 0.005724808854515 0.003340228975343 0.000928890127606 -0.000038607624651 -0.000175709447738 0.000000000000000 ;
+    0.000474751734681 0.000190566474175 -0.000068453615894 -0.000220474853312 -0.000166467621731 -0.000070269966866 0.000000000000000 ;
+    0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000])
 ###########################################################################################
 # to modify the test, with a new expected f, print the new f using the following commands
 # in an interative Julia REPL. The path is the path to the .dfns file. 
 ########################################################################################## 
 """
+using moment_kinetics.load_data: open_readonly_output_file, load_pdf_data, load_ion_moments_data, load_fields_data
 fid = open_readonly_output_file(path, "dfns")
 f_ion_vpavperpzrst = load_pdf_data(fid)
 f_ion = f_ion_vpavperpzrst[:,:,1,1,1,:]
 ntind = 2
 nvpa = 13  #subject to grid choices
 nvperp = 7 #subject to grid choices
+# pdf
 for k in 1:ntind
-  for j in 1:nvperp-1
-      for i in 1:nvpa-1
-         @printf("%.15f ", f_ion[i,j,k])
-         print("; ")
-      end
-      @printf("%.15f ", f_ion[nvpa,j,k])
-      print(";;\n")
-  end
-  for i in 1:nvpa-1
-    @printf("%.15f ", f_ion[i,nvperp,k])
-    print("; ")
-  end
-  @printf("%.15f ", f_ion[nvpa,nvperp,k])
-  if k < ntind
-      print(";;;\n")
-  end  
+     for i in 1:nvpa-1
+         for j in 1:nvperp-1
+            @printf("%.15f ", f_ion[i,j,k])
+         end
+         @printf("%.15f ", f_ion[i,nvperp,k])
+         print(";\n")
+     end
+     for j in 1:nvperp-1
+       @printf("%.15f ", f_ion[nvpa,j,k])
+     end
+     @printf("%.15f ", f_ion[nvpa,nvperp,k])
+     if k < ntind
+         print(";;;\n")
+     end
+end
+# a moment
+n_ion_zrst, upar_ion_zrst, ppar_ion_zrst, pperp_ion_zrst, qpar_ion_zrst, v_t_ion_zrst, dSdt_zrst = load_ion_moments_data(fid,extended_moments=true)
+for k in 1:ntind
+   @printf("%.15f", n_ion_zrst[1,1,1,k])
+   if k < ntind
+       print(", ")
+   end
+end
+# a field
+phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
+for k in 1:ntind
+   @printf("%.15f", phi_zrt[1,1,k])
+   if k < ntind
+       print(", ")
+   end
 end
 """
 # default inputs for tests
@@ -175,19 +238,21 @@ test_input_gauss_legendre = Dict("run_name" => "gausslegendre_pseudospectral",
 Run a sound-wave test for a single set of parameters
 """
 # Note 'name' should not be shared by any two tests in this file
-function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
+function run_test(test_input, run_name, vperp_bc, expected, rtol, atol, upar_rtol=nothing; args...)
     # by passing keyword arguments to run_test, args becomes a Dict which can be used to
     # update the default inputs
 
     # Make a copy to make sure nothing modifies the input Dicts defined in this test
     # script.
     test_input = deepcopy(test_input)
-
+    test_input["vperp_bc"] = vperp_bc
+    
     if upar_rtol === nothing
         upar_rtol = rtol
     end
 
     # Convert keyword arguments to a unique name
+    test_input["run_name"] = run_name
     name = test_input["run_name"]
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
@@ -207,7 +272,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
     #input = test_input
 
     input["run_name"] = name
-
+    print(input)
     # Suppress console output while running
     quietoutput() do
         # run simulation
@@ -296,6 +361,8 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
                 ######################################
 
                 @test isapprox(expected.n_ion[tind], n_ion[tind], atol=atol)
+                println(expected.n_ion[tind])
+                println(n_ion[tind])
                 @test isapprox(expected.upar_ion[tind], upar_ion[tind], atol=atol)
                 @test isapprox(expected.ppar_ion[tind], ppar_ion[tind], atol=atol)
                 @test isapprox(expected.pperp_ion[tind], pperp_ion[tind], atol=atol)
@@ -325,7 +392,15 @@ function runtests()
         # GaussLegendre pseudospectral
         # Benchmark data is taken from this run (GaussLegendre)
         @testset "Gauss Legendre base" begin
-            run_test(test_input_gauss_legendre, 1.e-14, 1.0e-14 )
+            run_name = "gausslegendre_pseudospectral"
+            vperp_bc = "zero"
+            run_test(test_input_gauss_legendre, run_name, vperp_bc, expected_base, 1.0e-14, 1.0e-14 )
+        end
+        @testset "Gauss Legendre no enforced regularity condition at vperp = 0" begin
+            run_name = "gausslegendre_pseudospectral_no_regularity"
+            vperp_bc = "zero-no-regularity"
+            run_test(test_input_gauss_legendre, run_name, vperp_bc, expected_no_regularity,
+             1.0e-13, 1.0e-13)
         end
     end
 end
