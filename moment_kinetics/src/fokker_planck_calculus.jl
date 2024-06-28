@@ -39,7 +39,7 @@ using ..array_allocation: allocate_float, allocate_shared_float
 using ..calculus: derivative!
 using ..communication
 using ..communication: MPISharedArray, global_rank
-using ..lagrange_polynomials: lagrange_poly
+using ..lagrange_polynomials: lagrange_poly, lagrange_poly_optimised
 using ..looping
 using moment_kinetics.gauss_legendre: get_QQ_local!
 using Dates
@@ -646,12 +646,16 @@ end
 # `ellipe(k) = \int^{\pi/2}\_0 \frac{1}{\sqrt{ 1 - m \sin^2(\theta)}} d \theta`
 
 function local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
-                            nquad_vpa,ielement_vpa,vpa_nodes,vpa, # info about primed vpa grids
-                            nquad_vperp,ielement_vperp,vperp_nodes,vperp, # info about primed vperp grids
+                            nquad_vpa,ielement_vpa,vpa, # info about primed vpa grids
+                            nquad_vperp,ielement_vperp,vperp, # info about primed vperp grids
                             x_vpa, w_vpa, x_vperp, w_vperp, # points and weights for primed (source) grids
                             vpa_val, vperp_val) # values and indices for unprimed (field) grids
     for igrid_vperp in 1:vperp.ngrid
+        vperp_other_nodes = @view vperp.other_nodes[:,igrid_vperp,ielement_vperp]
+        vperp_one_over_denominator = vperp.one_over_denominator[igrid_vperp,ielement_vperp]
         for igrid_vpa in 1:vpa.ngrid
+            vpa_other_nodes = @view vpa.other_nodes[:,igrid_vpa,ielement_vpa]
+            vpa_one_over_denominator = vpa.one_over_denominator[igrid_vpa,ielement_vpa]
             # get grid index for point on full grid  
             ivpap = vpa.igrid_full[igrid_vpa,ielement_vpa]   
             ivperpp = vperp.igrid_full[igrid_vperp,ielement_vperp]   
@@ -679,8 +683,12 @@ function local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,
                     H_elliptic_integral_factor = 2.0*ellipk_mm/(pi*prefac)
                     H1_elliptic_integral_factor = -(2.0/(pi*prefac))*( (mm-2.0)*(ellipk_mm/mm) + (2.0*ellipe_mm/mm) )
                     H2_elliptic_integral_factor = (2.0/(pi*prefac))*( (3.0*mm^2 - 8.0*mm + 8.0)*(ellipk_mm/(3.0*mm^2)) + (4.0*mm - 8.0)*ellipe_mm/(3.0*mm^2) )
-                    lagrange_poly_vpa = lagrange_poly(igrid_vpa,vpa_nodes,x_kvpa)
-                    lagrange_poly_vperp = lagrange_poly(igrid_vperp,vperp_nodes,x_kvperp)
+                    lagrange_poly_vpa = lagrange_poly_optimised(vpa_other_nodes,
+                                                                vpa_one_over_denominator,
+                                                                x_kvpa)
+                    lagrange_poly_vperp = lagrange_poly_optimised(vperp_other_nodes,
+                                                                  vperp_one_over_denominator,
+                                                                  x_kvperp)
                     
                     (G0_weights[ivpap,ivperpp] += 
                         lagrange_poly_vpa*lagrange_poly_vperp*
@@ -741,8 +749,8 @@ function loop_over_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weights,H2_
         vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
         nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
         local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
-                    nquad_vpa,ielement_vpap,vpa_nodes,vpa,
-                    nquad_vperp,ielement_vperpp,vperp_nodes,vperp,
+                    nquad_vpa,ielement_vpap,vpa,
+                    nquad_vperp,ielement_vperpp,vperp,
                     x_vpa, w_vpa, x_vperp, w_vperp, 
                     vpa_val, vperp_val)
     end
@@ -755,8 +763,8 @@ function loop_over_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weights,H2_
         #nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
         nquad_vpa = get_scaled_x_w_with_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, x_laguerre, w_laguerre, vpa_min, vpa_max, vpa_nodes, igrid_vpa, vpa_val)
         local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
-                    nquad_vpa,ielement_vpap,vpa_nodes,vpa,
-                    nquad_vperp,ielement_vperpp,vperp_nodes,vperp,
+                    nquad_vpa,ielement_vpap,vpa,
+                    nquad_vperp,ielement_vperpp,vperp,
                     x_vpa, w_vpa, x_vperp, w_vperp, 
                     vpa_val, vperp_val)
     end
@@ -767,8 +775,8 @@ function loop_over_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weights,H2_
         vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
         nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
         local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
-                    nquad_vpa,ielement_vpap,vpa_nodes,vpa,
-                    nquad_vperp,ielement_vperpp,vperp_nodes,vperp,
+                    nquad_vpa,ielement_vpap,vpa,
+                    nquad_vperp,ielement_vperpp,vperp,
                     x_vpa, w_vpa, x_vperp, w_vperp, 
                     vpa_val, vperp_val)
                     
@@ -788,8 +796,8 @@ function loop_over_vpa_elements_no_divergences!(G0_weights,G1_weights,H0_weights
         vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
         nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
         local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
-                    nquad_vpa,ielement_vpap,vpa_nodes,vpa,
-                    nquad_vperp,ielement_vperpp,vperp_nodes,vperp,
+                    nquad_vpa,ielement_vpap,vpa,
+                    nquad_vperp,ielement_vperpp,vperp,
                     x_vpa, w_vpa, x_vperp, w_vperp, 
                     vpa_val, vperp_val)
                     
@@ -2366,6 +2374,25 @@ function interpolate_2D_vspace!(pdf_out,pdf_in,vpa,vperp,scalefac)
     end
     return nothing
 end
+# Alternative version that should be faster - to be tested
+#function interpolate_2D_vspace!(pdf_out, pdf_in, vpa, vpa_spectral, vperp, vperp_spectral,
+#                                scalefac, pdf_buffer)
+#    newgrid_vperp = vperp.scratch .= scalefac .* vperp.grid
+#    newgrid_vpa = vpa.scratch .= scalefac .* vpa.grid
+#
+#    begin_anyv_vpa_region()
+#    @loop_vpa ivpa begin
+#        @views interpolate_to_grid_1d!(pdf_buffer[ivpa,:], newgrid_vperp,
+#                                       pdf_in[ivpa,:], vperp, vperp_spectral)
+#    end
+#
+#    begin_anyv_vperp_region()
+#    @loop_vperp ivperp begin
+#        @views interpolate_to_grid_1d!(pdf_out[:,ivperp], newgrid_vpa,
+#                                       pdf_buffer[:,ivperp], vpa, vpa_spectral)
+
+#    end
+#end
 
 """
 function to find the element in which x sits

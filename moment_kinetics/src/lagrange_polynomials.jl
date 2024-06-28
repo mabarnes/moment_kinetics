@@ -8,7 +8,7 @@ their being scattered (and possibly duplicated) in other modules.
 """
 module lagrange_polynomials
 
-export lagrange_poly
+export lagrange_poly, lagrange_poly_optimised
 
 """
 Lagrange polynomial
@@ -31,6 +31,23 @@ function lagrange_poly(j,x_nodes,x)
             poly *= (x - x_nodes[i])/(x0 - x_nodes[i])
     end
     return poly
+end
+
+"""
+    lagrange_poly_optimised(other_nodes, one_over_denominator, x)
+
+Optimised version of Lagrange polynomial calculation, making use of pre-calculated quantities.
+
+`other_nodes` is a vector of the grid points in this element where this Lagrange
+polynomial is zero (the other nodes than the one where it is 1).
+
+`one_over_denominator` is `1/prod(x0 - n for n ∈ other_nodes)` where `x0` is the grid
+point where this Lagrange polynomial is 1.
+
+`x` is the point to evaluate the Lagrange polynomial at.
+"""
+function lagrange_poly_optimised(other_nodes, one_over_denominator, x)
+    return prod(x - n for n ∈ other_nodes) * one_over_denominator
 end
 
 end
