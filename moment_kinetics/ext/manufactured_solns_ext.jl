@@ -621,10 +621,10 @@ using IfElse
                + dvperpdt * Dvperp(dfni)
                + cx_frequency*( densn*dfni - densi*gav_dfnn )
                - ionization_frequency*dense*gav_dfnn )
-        nu_krook = collisions.krook_collision_frequency_prefactor
+        nu_krook = collisions.krook.nuii0
         if nu_krook > 0.0
             Ti_over_Tref = vthi^2
-            if collisions.krook_collisions_option == "manual"
+            if collisions.krook.frequency_option == "manual"
                 nuii_krook = nu_krook
             else # default option
                 nuii_krook = nu_krook * densi * Ti_over_Tref^(-1.5)

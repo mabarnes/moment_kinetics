@@ -116,7 +116,11 @@ elseif Sys.isapple()
 
             global mk_preferences, local_preferences
 
-            # Just got the value for the setting, now write it to LocalPreferences.toml
+            # Just got the value for the setting, now write it to LocalPreferences.toml,
+            # but first reload the preferences from the LocalPreferences.toml file so that
+            # we don't overwrite the values that MPIPreferences has set.
+            local_preferences = TOML.parsefile(local_preferences_filename)
+            mk_preferences = local_preferences["moment_kinetics"]
             mk_preferences["mpi_library_path"] = mpi_library_path
             open(local_preferences_filename, "w") do io
                 TOML.print(io, local_preferences, sorted=true)

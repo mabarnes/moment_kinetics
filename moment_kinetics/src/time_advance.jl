@@ -1627,7 +1627,7 @@ function time_advance_split_operators!(pdf, scratch, scratch_implicit, t, t_para
                 advance.neutral_ionization_collisions = false
             end
         end
-        if collisions.krook_collision_frequency_prefactor  > 0.0
+        if collisions.krook.nuii0  > 0.0
             advance.krook_collisions_ii = true
             time_advance_no_splitting!(pdf, scratch, scratch_implicit, t, t_params, z, vpa,
                 z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,

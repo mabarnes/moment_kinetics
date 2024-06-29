@@ -471,14 +471,19 @@ eval(quote
              anyv_subblock_size[] = anyv_split[end]
              number_of_anyv_blocks = prod(anyv_split[1:end-1])
              anyv_subblock_index = block_rank[] ÷ anyv_subblock_size[]
-             anyv_rank_within_subblock = block_rank[] % anyv_subblock_size[]
+             if anyv_subblock_index ≥ number_of_anyv_blocks
+                 anyv_subblock_index = nothing
+                 anyv_rank_within_subblock = -1
+             else
+                 anyv_rank_within_subblock = block_rank[] % anyv_subblock_size[]
+             end
 
              # Create communicator for the anyv subblock. OK to do this here as
              # communication.setup_distributed_memory_MPI() must have already been called
              # to set block_size[] and block_rank[]
              comm_anyv_subblock[] = MPI.Comm_split(comm_block[], anyv_subblock_index,
                                                    anyv_rank_within_subblock)
-             anyv_subblock_rank[] = MPI.Comm_rank(comm_anyv_subblock[])
+             anyv_subblock_rank[] = anyv_rank_within_subblock
              anyv_isubblock_index[] = anyv_subblock_index
              anyv_nsubblocks_per_block[] = number_of_anyv_blocks
              anyv_rank0 = (anyv_subblock_rank[] == 0)
