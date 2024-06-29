@@ -254,7 +254,7 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
     close_linear_counter = -1
     success = true
     previous_residual_norm = residual_norm
-    while residual_norm > 1.0
+    while (counter < 1 && residual_norm > 1.0e-8) || residual_norm > 1.0
         counter += 1
         #println("\nNewton ", counter)
 
