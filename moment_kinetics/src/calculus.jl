@@ -148,7 +148,7 @@ function second_derivative!(d2f, f, coord, spectral::weak_discretization_info; h
     # g = d^2 f / d coord^2, which is 
     # M * g = K * f, with M the mass matrix and K an appropriate stiffness matrix
     # by multiplying by basis functions and integrating by parts    
-    mul!(coord.scratch, spectral.K_matrix, f)
+    mul!(coord.scratch3, spectral.K_matrix, f)
 
     if handle_periodic && coord.bc == "periodic"
         if coord.nrank > 1
@@ -156,8 +156,8 @@ function second_derivative!(d2f, f, coord, spectral::weak_discretization_info; h
                   * "distributed coordinate")
         end
 
-        coord.scratch[1] = 0.5 * (coord.scratch[1] + coord.scratch[end])
-        coord.scratch[end] = coord.scratch[1]
+        coord.scratch3[1] = 0.5 * (coord.scratch3[1] + coord.scratch3[end])
+        coord.scratch3[end] = coord.scratch3[1]
     end
 
     # solve weak form matrix problem M * g = K * f to obtain g = d^2 f / d coord^2
@@ -165,7 +165,7 @@ function second_derivative!(d2f, f, coord, spectral::weak_discretization_info; h
         error("mass_matrix_solve!() does not support a "
               * "distributed coordinate")
     end
-    mass_matrix_solve!(d2f, coord.scratch, spectral)
+    mass_matrix_solve!(d2f, coord.scratch3, spectral)
 end
 
 function laplacian_derivative!(d2f, f, coord, spectral::weak_discretization_info)
@@ -174,7 +174,7 @@ function laplacian_derivative!(d2f, f, coord, spectral::weak_discretization_info
     # M * g = K * f, with M the mass matrix, and K an appropriate stiffness matrix,
     # by multiplying by basis functions and integrating by parts.
     # for all other coord.name, do exactly the same as second_derivative! above.
-    mul!(coord.scratch, spectral.L_matrix, f)
+    mul!(coord.scratch3, spectral.L_matrix, f)
 
     if handle_periodic && coord.bc == "periodic"
         if coord.nrank > 1
@@ -182,8 +182,8 @@ function laplacian_derivative!(d2f, f, coord, spectral::weak_discretization_info
                   * "distributed coordinate")
         end
 
-        coord.scratch[1] = 0.5 * (coord.scratch[1] + coord.scratch[end])
-        coord.scratch[end] = coord.scratch[1]
+        coord.scratch3[1] = 0.5 * (coord.scratch3[1] + coord.scratch3[end])
+        coord.scratch3[end] = coord.scratch3[1]
     end
 
     # solve weak form matrix problem M * g = K * f to obtain g = d^2 f / d coord^2
@@ -191,7 +191,7 @@ function laplacian_derivative!(d2f, f, coord, spectral::weak_discretization_info
         error("mass_matrix_solve!() does not support a "
               * "distributed coordinate")
     end
-    mass_matrix_solve!(d2f, coord.scratch, spectral)
+    mass_matrix_solve!(d2f, coord.scratch3, spectral)
 end
 
 """
