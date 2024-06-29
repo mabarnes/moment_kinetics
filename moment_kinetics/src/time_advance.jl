@@ -46,7 +46,8 @@ using ..ionization: ion_ionization_collisions_1V!, neutral_ionization_collisions
                     ion_ionization_collisions_3V!, neutral_ionization_collisions_3V!,
                     constant_ionization_source!
 using ..krook_collisions: krook_collisions!
-using ..maxwell_diffusion: ion_vpa_maxwell_diffusion!, neutral_vz_maxwell_diffusion!
+using ..maxwell_diffusion: ion_vpa_maxwell_diffusion!, neutral_vz_maxwell_diffusion!,
+                           implicit_ion_maxwell_diffusion!
 using ..external_sources
 using ..nonlinear_solvers
 using ..numerical_dissipation: vpa_boundary_buffer_decay!,
@@ -310,6 +311,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         # Not an IMEX scheme, so cannot have any implicit terms
         t_input["implicit_ion_advance"] = false
         t_input["implicit_vpa_advection"] = false
+        t_input["implicit_ion_maxwell_diffusion"] = false
     end
 
     if t_input["high_precision_error_sum"]
@@ -329,6 +331,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      t_input["last_fail_proximity_factor"], t_input["minimum_dt"],
                      t_input["maximum_dt"], t_input["implicit_ion_advance"],
                      t_input["implicit_vpa_advection"],
+                     t_input["implicit_ion_maxwell_diffusion"],
                      t_input["write_after_fixed_step_count"], error_sum_zero,
                      t_input["split_operators"], t_input["steady_state_residual"],
                      t_input["converged_residual_value"],
@@ -498,13 +501,36 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     else
         nl_solver_vpa_advection_params = nothing
     end
+    if t_params.implicit_ion_maxwell_diffusion
+        # Implicit solve for ion maxwell diffusion term should be done in serial, as it
+        # will be called within a parallelised s_r_z_vperp loop.
+        nl_solver_maxwell_diffusion_params =
+            setup_nonlinear_solve(input_dict, (vpa=vpa,),
+                                  (composition.n_ion_species, r, z, vperp);
+                                  default_rtol=t_params.rtol / 10.0,
+                                  default_atol=t_params.atol / 10.0,
+                                  serial_solve=true, preconditioner_type="lu")
+    else
+        nl_solver_maxwell_diffusion_params = nothing
+    end
     if nl_solver_ion_advance_params !== nothing &&
             nl_solver_vpa_advection_params !== nothing
         error("Cannot use implicit_ion_advance and implicit_vpa_advection at the same "
               * "time")
     end
+    if nl_solver_ion_advance_params !== nothing &&
+            nl_solver_maxwell_diffusion_params !== nothing
+        error("Cannot use implicit_ion_advance and implicit_ion_maxwell_diffusion at the same "
+              * "time")
+    end
+    if nl_solver_vpa_advection_params !== nothing &&
+            nl_solver_maxwell_diffusion_params !== nothing
+        error("Cannot use implicit_vpa_advection and implicit_ion_maxwell_diffusion at the same "
+              * "time")
+    end
     nl_solver_params = (ion_advance=nl_solver_ion_advance_params,
-                        vpa_advection=nl_solver_vpa_advection_params,)
+                        vpa_advection=nl_solver_vpa_advection_params,
+                        maxwell_diffusion=nl_solver_maxwell_diffusion_params,)
 
     begin_serial_region()
 
@@ -858,7 +884,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         if collisions.krook.nuii0 > 0.0
             advance_krook_collisions_ii = !t_params.implicit_ion_advance
         end
-        if collisions.mxwl_diff.D_ii > 0.0
+        if collisions.mxwl_diff.D_ii > 0.0 && !t_params.implicit_ion_maxwell_diffusion
             advance_maxwell_diffusion_ii = true
         end
         if collisions.mxwl_diff.D_nn > 0.0
@@ -911,9 +937,9 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         # flag to determine if a d^2/dvpa^2 operator is present
         # When using implicit_vpa_advection, the vpa diffusion is included in the implicit
         # step
-        vpa_diffusion = ((num_diss_params.ion.vpa_dissipation_coefficient > 0.0) || (collisions.fkpl.nuii > 0.0 && vperp.n > 1) || advance_maxwell_diffusion_ii)
+        vpa_diffusion = ((num_diss_params.ion.vpa_dissipation_coefficient > 0.0) || (collisions.fkpl.nuii > 0.0 && vperp.n > 1) || collisions.mxwl_diff.D_ii > 0.0)
         vperp_diffusion = ((num_diss_params.ion.vperp_dissipation_coefficient > 0.0) || (collisions.fkpl.nuii > 0.0 && vperp.n > 1))
-        vz_diffusion = (num_diss_params.neutral.vz_dissipation_coefficient > 0.0 || advance_maxwell_diffusion_nn)
+        vz_diffusion = (num_diss_params.neutral.vz_dissipation_coefficient > 0.0 || collisions.mxwl_diff.D_nn > 0.0)
     end
 
     manufactured_solns_test = manufactured_solns_input.use_for_advance
@@ -923,8 +949,9 @@ function setup_advance_flags(moments, composition, t_params, collisions,
                         advance_neutral_vz_advection, advance_ion_cx, advance_neutral_cx,
                         advance_ion_cx_1V, advance_neutral_cx_1V, advance_ion_ionization,
                         advance_neutral_ionization, advance_ion_ionization_1V,
-                        advance_neutral_ionization_1V, advance_ionization_source,
-                        advance_krook_collisions_ii,
+                        advance_neutral_ionization_1V,
+                        advance_ionization_source, advance_krook_collisions_ii,
+                        advance_maxwell_diffusion_ii, advance_maxwell_diffusion_nn,
                         explicit_weakform_fp_collisions,
                         advance_external_source, advance_ion_numerical_dissipation,
                         advance_neutral_numerical_dissipation, advance_sources,
@@ -959,6 +986,8 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
     advance_neutral_ionization_1V = false
     advance_ionization_source = false
     advance_krook_collisions_ii = false
+    advance_maxwell_diffusion_ii = false
+    advance_maxwell_diffusion_nn = false
     advance_external_source = false
     advance_ion_numerical_dissipation = false
     advance_neutral_numerical_dissipation = false
@@ -1022,6 +1051,8 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
     elseif t_params.implicit_vpa_advection
         advance_vpa_advection = true
         advance_ion_numerical_dissipation = true
+    elseif t_params.implicit_ion_maxwell_diffusion && collisions.mxwl_diff.D_ii > 0.0
+        advance_maxwell_diffusion_ii = true
     end
     # *_diffusion flags are set regardless of whether diffusion is included in explicit or
     # implicit part of timestep, because they are used for boundary conditions, not to
@@ -1032,9 +1063,9 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
     # flag to determine if a d^2/dvpa^2 operator is present
     # When using implicit_vpa_advection, the vpa diffusion is included in the implicit
     # step
-    vpa_diffusion = ((num_diss_params.ion.vpa_dissipation_coefficient > 0.0) || (collisions.fkpl.nuii > 0.0 && vperp.n > 1))
+    vpa_diffusion = ((num_diss_params.ion.vpa_dissipation_coefficient > 0.0) || (collisions.fkpl.nuii > 0.0 && vperp.n > 1)) || (collisions.mxwl_diff.D_ii > 0.0)
     vperp_diffusion = ((num_diss_params.ion.vperp_dissipation_coefficient > 0.0) || (collisions.fkpl.nuii > 0.0 && vperp.n > 1))
-    vz_diffusion = (num_diss_params.neutral.vz_dissipation_coefficient > 0.0)
+    vz_diffusion = (num_diss_params.neutral.vz_dissipation_coefficient > 0.0) || (collisions.mxwl_diff.D_nn > 0.0)
 
     manufactured_solns_test = manufactured_solns_input.use_for_advance
 
@@ -2371,6 +2402,7 @@ function ssp_rk!(pdf, scratch, scratch_implicit, t, t_params, vz, vr, vzeta, vpa
 
     reset_nonlinear_per_stage_counters(nl_solver_params.ion_advance)
     reset_nonlinear_per_stage_counters(nl_solver_params.vpa_advection)
+    reset_nonlinear_per_stage_counters(nl_solver_params.maxwell_diffusion)
 
     istage = n_rk_stages+1
 
@@ -2729,6 +2761,16 @@ function backward_euler!(fvec_out, fvec_in, pdf, fields, moments, advect_objects
                                           nl_solver_params.vpa_advection,
                                           advance.vpa_diffusion, num_diss_params, gyroavs,
                                           scratch_dummy)
+        if !success
+            return success
+        end
+    elseif advance.mxwl_diff_collisions_ii
+        success = implicit_ion_maxwell_diffusion!(fvec_out.pdf, fvec_in, moments,
+                                                  z_advect, vpa, vperp, z, r, dt,
+                                                  r_spectral, vpa_spectral, composition,
+                                                  collisions, geometry,
+                                                  nl_solver_params.maxwell_diffusion,
+                                                  gyroavs, scratch_dummy)
         if !success
             return success
         end

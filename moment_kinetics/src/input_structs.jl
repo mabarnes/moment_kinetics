@@ -76,6 +76,7 @@ struct time_info{Terrorsum <: Real, Trkimp, Timpzero}
     maximum_dt::mk_float
     implicit_ion_advance::Bool
     implicit_vpa_advection::Bool
+    implicit_ion_maxwell_diffusion::Bool
     write_after_fixed_step_count::Bool
     error_sum_zero::Terrorsum
     split_operators::Bool

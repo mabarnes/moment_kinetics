@@ -13,12 +13,17 @@ most valid here.
 
 module maxwell_diffusion
 
-export setup_mxwl_diff_collisions_input, ion_vpa_maxwell_diffusion!, neutral_vz_maxwell_diffusion!
+export setup_mxwl_diff_collisions_input, ion_vpa_maxwell_diffusion!, neutral_vz_maxwell_diffusion!, implicit_ion_maxwell_diffusion!
 
 using ..looping
 using ..input_structs: mxwl_diff_collisions_input, set_defaults_and_check_section!
+using ..boundary_conditions: enforce_v_boundary_condition_local!, vpagrid_to_dzdt
 using ..calculus: derivative!, second_derivative!
+using ..moment_constraints: moment_constraints_on_residual!
+using ..moment_kinetics_structs: scratch_pdf
+using ..nonlinear_solvers: newton_solve!
 using ..reference_parameters: get_reference_collision_frequency_ii
+using ..velocity_moments: update_derived_moments!, calculate_ion_moment_derivatives!
 
 """
 Function for reading Maxwell diffusion operator input parameters. 
@@ -66,13 +71,31 @@ function setup_mxwl_diff_collisions_input(toml_input::Dict, reference_params)
     return mxwl_diff_collisions_input(; input...)
 end
 
+function ion_vpa_maxwell_diffusion_inner!(f_out, f_in, n, upar, vth, vpa, spectral,
+                                          diffusion_coefficient, dt, ::Val{true},
+                                          ::Val{true}, ::Val{true})
+    second_derivative!(vpa.scratch2, f_in, vpa, spectral)
+    @. vpa.scratch = vpa.grid * f_in
+    derivative!(vpa.scratch3, vpa.scratch, vpa, spectral)
+    @. f_out += dt * diffusion_coefficient * n / vth^3 * (vpa.scratch2 + vpa.scratch3)
+end
+
+function ion_vpa_maxwell_diffusion_inner!(f_out, f_in, n, upar, vth, vpa, spectral,
+                                          diffusion_coefficient, dt, ::Val{false},
+                                          ::Val{false}, ::Val{false})
+    second_derivative!(vpa.scratch2, f_in, vpa, spectral)
+    @. vpa.scratch = (vpa.grid - upar) * f_in
+    derivative!(vpa.scratch3, vpa.scratch, vpa, spectral)
+    @. f_out += dt * diffusion_coefficient * n / vth^3 * (vth^2 * vpa.scratch2 + vpa.scratch3)
+end
+
 """
 Calculate the Maxwellian associated with the current ion pdf moments, and then 
 subtract this from current pdf. Then take second derivative of this function
 to act as the diffusion operator. 
 """
-function ion_vpa_maxwell_diffusion!(f_out, f_in, moments, vpa, vperp, spectral::T_spectral, 
-                                       dt, diffusion_coefficient) where T_spectral
+function ion_vpa_maxwell_diffusion!(f_out, f_in, moments, vpa, vperp, spectral, dt,
+                                    diffusion_coefficient)
     
     # If negative input (should be -1.0), then none of this diffusion will happen. 
     # This number can be put in as some parameter in the input file called something
@@ -84,6 +107,10 @@ function ion_vpa_maxwell_diffusion!(f_out, f_in, moments, vpa, vperp, spectral::
     if vperp.n > 1 && (moments.evolve_density || moments.evolve_upar || moments.evolve_ppar)
         error("Maxwell diffusion not implemented for 2V moment-kinetic cases yet")
     end
+
+    evolve_density = Val(moments.evolve_density)
+    evolve_upar = Val(moments.evolve_upar)
+    evolve_ppar = Val(moments.evolve_ppar)
 
     # Otherwise, build the maxwellian function (which is going to be subtracted from 
     # the current distribution) using the moments of the distribution (so that the 
@@ -98,97 +125,76 @@ function ion_vpa_maxwell_diffusion!(f_out, f_in, moments, vpa, vperp, spectral::
     # - upar: working in peculiar velocity space, so no upar subtraction from vpa 
     # - ppar: normalisation by vth, in 1D is 1/vth prefactor, and grid is normalised by vth,
     # hence no 1/vth^2 term in the exponent.
-    if moments.evolve_density && moments.evolve_upar && moments.evolve_ppar
-        @loop_s_r_z_vperp is ir iz ivperp begin
-            #@views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
-            #                exp(-((vpa.grid[:])^2 + (vperp.grid[ivperp])^2) )
-            #second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
-            #@views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
-            n = f_in.density[iz,ir,is]
-            upar = f_in.upar[iz,ir,is]
-            vth = moments.ion.vth[iz,ir,is]
-            @views second_derivative!(vpa.scratch2, f_in.pdf[:,ivperp,iz,ir,is], vpa, spectral)
-            @views @. vpa.scratch = (vpa.grid - upar / vth) * f_in.pdf[:,ivperp,iz,ir,is]
-            derivative!(vpa.scratch3, vpa.scratch, vpa, spectral)
-            @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * n / vth^3 * (vpa.scratch2 + vpa.scratch3)
-        end
-    elseif moments.evolve_density && moments.evolve_upar
-        @loop_s_r_z_vperp is ir iz ivperp begin
-            vth = moments.ion.vth[iz,ir,is]
-            @views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
-                            1.0 / vth * exp(- ((vpa.grid[:])^2 + (vperp.grid[ivperp])^2)/(vth^2) )
-            second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
-            @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
-        end
-        error("hack not implemented for this case")
-    elseif moments.evolve_density && moments.evolve_ppar
-        @loop_s_r_z_vperp is ir iz ivperp begin
-            upar = f_in.upar[iz,ir,is]
-            @views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
-                            exp(- ((vpa.grid[:] - upar)^2 + (vperp.grid[ivperp])^2))
-            second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
-            @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
-        end
-        error("hack not implemented for this case")
-    elseif moments.evolve_upar && moments.evolve_ppar
-        @loop_s_r_z_vperp is ir iz ivperp begin
-            n = f_in.density[iz,ir,is]
-            @views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
-                            n * exp(- ((vpa.grid[:])^2 + (vperp.grid[ivperp])^2) )
-            second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
-            @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
-        end
-        error("hack not implemented for this case")
-    elseif moments.evolve_density
-        @loop_s_r_z_vperp is ir iz ivperp begin
-            vth = moments.ion.vth[iz,ir,is]
-            upar = f_in.upar[iz,ir,is]
-            @views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
-                            1.0 / vth * exp(- ((vpa.grid[:] - upar)^2 + (vperp.grid[ivperp])^2)/(vth^2) )
-            second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
-            @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
-        end
-        error("hack not implemented for this case")
-    elseif moments.evolve_upar
-        @loop_s_r_z_vperp is ir iz ivperp begin
-            vth = moments.ion.vth[iz,ir,is]
-            n = f_in.density[iz,ir,is]
-            @views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
-                            n / vth * exp(- ((vpa.grid[:])^2 + (vperp.grid[ivperp])^2)/(vth^2) )
-            second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
-            @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
-        end
-        error("hack not implemented for this case")
-    elseif moments.evolve_ppar
-        @loop_s_r_z_vperp is ir iz ivperp begin
-            n = f_in.density[iz,ir,is]
-            upar = f_in.upar[iz,ir,is]
-            @views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
-                            n * exp(- ((vpa.grid[:] - upar)^2 + (vperp.grid[ivperp])^2) )
-            second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
-            @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
-        end
-        error("hack not implemented for this case")
-    else
-        # Drift kinetic version is the only one that currently can support 2V. 
-        @loop_s_r_z_vperp is ir iz ivperp begin
-            n = f_in.density[iz,ir,is]
-            upar = f_in.upar[iz,ir,is]
-            vth = moments.ion.vth[iz,ir,is]
-            #if vperp.n == 1
-            #    vth_prefactor = 1.0 / vth
-            #else
-            #    vth_prefactor = 1.0 / vth^3
-            #end
-            #@views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - n * vth_prefactor * 
-            #                exp(-( ((vpa.grid[:] - upar)^2) + (vperp.grid[ivperp])^2)/(vth^2) )
-            #second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
-            @views second_derivative!(vpa.scratch2, f_in.pdf[:,ivperp,iz,ir,is], vpa, spectral)
-            @views @. vpa.scratch = (vpa.grid - upar) * f_in.pdf[:,ivperp,iz,ir,is]
-            derivative!(vpa.scratch3, vpa.scratch, vpa, spectral)
-            @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * n / vth^3 * (vth^2 * vpa.scratch2 + vpa.scratch3)
-        end
+    @loop_s_r_z_vperp is ir iz ivperp begin
+        #@views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
+        #                exp(-((vpa.grid[:])^2 + (vperp.grid[ivperp])^2) )
+        #second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
+        #@views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
+        @views ion_vpa_maxwell_diffusion_inner!(f_out[:,ivperp,iz,ir,is],
+                                                f_in.pdf[:,ivperp,iz,ir,is],
+                                                f_in.density[iz,ir,is],
+                                                f_in.upar[iz,ir,is],
+                                                moments.ion.vth[iz,ir,is], vpa, spectral,
+                                                diffusion_coefficient, dt, evolve_density,
+                                                evolve_upar, evolve_ppar)
     end
+    #elseif moments.evolve_density && moments.evolve_upar
+    #    @loop_s_r_z_vperp is ir iz ivperp begin
+    #        vth = moments.ion.vth[iz,ir,is]
+    #        @views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
+    #                        1.0 / vth * exp(- ((vpa.grid[:])^2 + (vperp.grid[ivperp])^2)/(vth^2) )
+    #        second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
+    #        @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
+    #    end
+    #    error("hack not implemented for this case")
+    #elseif moments.evolve_density && moments.evolve_ppar
+    #    @loop_s_r_z_vperp is ir iz ivperp begin
+    #        upar = f_in.upar[iz,ir,is]
+    #        @views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
+    #                        exp(- ((vpa.grid[:] - upar)^2 + (vperp.grid[ivperp])^2))
+    #        second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
+    #        @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
+    #    end
+    #    error("hack not implemented for this case")
+    #elseif moments.evolve_upar && moments.evolve_ppar
+    #    @loop_s_r_z_vperp is ir iz ivperp begin
+    #        n = f_in.density[iz,ir,is]
+    #        @views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
+    #                        n * exp(- ((vpa.grid[:])^2 + (vperp.grid[ivperp])^2) )
+    #        second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
+    #        @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
+    #    end
+    #    error("hack not implemented for this case")
+    #elseif moments.evolve_density
+    #    @loop_s_r_z_vperp is ir iz ivperp begin
+    #        vth = moments.ion.vth[iz,ir,is]
+    #        upar = f_in.upar[iz,ir,is]
+    #        @views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
+    #                        1.0 / vth * exp(- ((vpa.grid[:] - upar)^2 + (vperp.grid[ivperp])^2)/(vth^2) )
+    #        second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
+    #        @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
+    #    end
+    #    error("hack not implemented for this case")
+    #elseif moments.evolve_upar
+    #    @loop_s_r_z_vperp is ir iz ivperp begin
+    #        vth = moments.ion.vth[iz,ir,is]
+    #        n = f_in.density[iz,ir,is]
+    #        @views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
+    #                        n / vth * exp(- ((vpa.grid[:])^2 + (vperp.grid[ivperp])^2)/(vth^2) )
+    #        second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
+    #        @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
+    #    end
+    #    error("hack not implemented for this case")
+    #elseif moments.evolve_ppar
+    #    @loop_s_r_z_vperp is ir iz ivperp begin
+    #        n = f_in.density[iz,ir,is]
+    #        upar = f_in.upar[iz,ir,is]
+    #        @views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
+    #                        n * exp(- ((vpa.grid[:] - upar)^2 + (vperp.grid[ivperp])^2) )
+    #        second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
+    #        @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
+    #    end
+    #    error("hack not implemented for this case")
     return nothing
 end
 
@@ -270,6 +276,155 @@ function neutral_vz_maxwell_diffusion!(f_out, f_in, moments, vzeta, vr, vz, spec
         end
     end
     return nothing
+end
+
+"""
+"""
+function implicit_ion_maxwell_diffusion!(f_out, fvec_in, moments, z_advect, vpa, vperp, z,
+                                         r, dt, r_spectral, vpa_spectral, composition,
+                                         collisions, geometry, nl_solver_params, gyroavs,
+                                         scratch_dummy)
+    if vperp.n > 1 && (moments.evolve_density || moments.evolve_upar || moments.evolve_ppar)
+        error("Moment constraints in implicit_maxwell_diffusion!() do not support 2V runs yet")
+    end
+
+    # Ensure moments are consistent with f_new
+    new_scratch = scratch_pdf(f_out, fvec_in.density, fvec_in.upar, fvec_in.ppar,
+                              fvec_in.pperp, fvec_in.temp_z_s, fvec_in.pdf_neutral,
+                              fvec_in.density_neutral, fvec_in.uz_neutral,
+                              fvec_in.pz_neutral)
+    update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
+                            r_spectral, geometry, gyroavs, scratch_dummy, z_advect, false)
+
+    begin_s_r_z_vperp_region()
+
+    evolve_density = Val(moments.evolve_density)
+    evolve_upar = Val(moments.evolve_upar)
+    evolve_ppar = Val(moments.evolve_ppar)
+    coords = (vpa=vpa,)
+    vpa_bc = vpa.bc
+    D_ii = collisions.mxwl_diff.D_ii
+    zero = 1.0e-14
+    @loop_s is begin
+        @loop_r_z_vperp ir iz ivperp begin
+            f_old_no_bc = @view fvec_in.pdf[:,ivperp,iz,ir,is]
+            this_f_out = @view f_out[:,ivperp,iz,ir,is]
+            n = fvec_in.density[iz,ir,is]
+            upar = fvec_in.upar[iz,ir,is]
+            vth = moments.ion.vth[iz,ir,is]
+
+            if z.irank == 0 && iz == 1
+                @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, moments.ion.vth[iz,ir,is],
+                                                 fvec_in.upar[iz,ir,is],
+                                                 moments.evolve_ppar,
+                                                 moments.evolve_upar)
+                icut_lower_z = vpa.n
+                for ivpa ∈ vpa.n:-1:1
+                    # for left boundary in zed (z = -Lz/2), want
+                    # f(z=-Lz/2, v_parallel > 0) = 0
+                    if vpa.scratch[ivpa] ≤ zero
+                        icut_lower_z = ivpa + 1
+                        break
+                    end
+                end
+            end
+            if z.irank == z.nrank - 1 && iz == z.n
+                @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, moments.ion.vth[iz,ir,is],
+                                                 fvec_in.upar[iz,ir,is],
+                                                 moments.evolve_ppar,
+                                                 moments.evolve_upar)
+                icut_upper_z = 0
+                for ivpa ∈ 1:vpa.n
+                    # for right boundary in zed (z = Lz/2), want
+                    # f(z=Lz/2, v_parallel < 0) = 0
+                    if vpa.scratch[ivpa] ≥ -zero
+                        icut_upper_z = ivpa - 1
+                        break
+                    end
+                end
+            end
+
+            function apply_bc!(x)
+                # Boundary condition
+                enforce_v_boundary_condition_local!(x, vpa_bc, nothing, true,
+                                                    vpa, vpa_spectral)
+
+                if z.bc == "wall"
+                    # Wall boundary conditions. Note that as density, upar, ppar do not
+                    # change in this implicit step, f_new, f_old, and residual should all
+                    # be zero at exactly the same set of grid points, so it is reasonable
+                    # to zero-out `residual` to impose the boundary condition. We impose
+                    # this after subtracting f_old in case rounding errors, etc. mean that
+                    # at some point f_old had a different boundary condition cut-off
+                    # index.
+                    if z.irank == 0 && iz == 1
+                        x[icut_lower_z:end] .= 0.0
+                    end
+                    # absolute velocity at right boundary
+                    if z.irank == z.nrank - 1 && iz == z.n
+                        x[1:icut_upper_z] .= 0.0
+                    end
+                end
+            end
+
+            # Need to apply 'new' boundary conditions to `f_old`, so that by imposing them
+            # on `residual`, they are automatically imposed on `f_new`.
+            f_old = vpa.scratch9 .= f_old_no_bc
+            apply_bc!(f_old)
+
+            left_preconditioner = identity
+            right_preconditioner = identity
+
+            # Define a function whose input is `f_new`, so that when it's output
+            # `residual` is zero, f_new is the result of a backward-Euler timestep:
+            #   (f_new - f_old) / dt = RHS(f_new)
+            # ⇒ f_new - f_old - dt*RHS(f_new) = 0
+            function residual_func!(residual, f_new)
+                apply_bc!(f_new)
+                residual .= f_old
+                ion_vpa_maxwell_diffusion_inner!(residual, f_new, n, upar, vth, vpa,
+                                                 vpa_spectral, D_ii, dt, evolve_density,
+                                                 evolve_upar, evolve_ppar)
+
+                # Now
+                #   residual = f_old + dt*RHS(f_new)
+                # so update to desired residual
+                @. residual = f_new - residual
+
+                apply_bc!(residual)
+                moment_constraints_on_residual!(residual, f_new, moments, vpa)
+            end
+
+            # Buffers
+            # Note vpa.scratch, vpa.scratch2 and vpa.scratch3 are used by advance_f!, so
+            # we cannot use it here.
+            residual = vpa.scratch4
+            delta_x = vpa.scratch5
+            rhs_delta = vpa.scratch6
+            v = vpa.scratch7
+            w = vpa.scratch8
+
+            # Use forward-Euler step for initial guess
+            # By passing this_f_out, which is equal to f_old at this point, the 'residual'
+            # is
+            #   f_new - f_old - dt*RHS(f_old) = -dt*RHS(f_old)
+            # so to get a forward-Euler step we have to subtract this 'residual'
+            residual_func!(residual, this_f_out)
+            this_f_out .-= residual
+
+            success = newton_solve!(this_f_out, residual_func!, residual, delta_x,
+                                    rhs_delta, v, w, nl_solver_params, coords=coords,
+                                    left_preconditioner=left_preconditioner,
+                                    right_preconditioner=right_preconditioner)
+            if !success
+                return success
+            end
+        end
+    end
+
+    nl_solver_params.stage_counter[] += 1
+
+    return true
 end
 
 end # maxwell_diffusion

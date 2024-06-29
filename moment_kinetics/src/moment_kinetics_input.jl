@@ -221,6 +221,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         maximum_dt=Inf,
         implicit_ion_advance=true,
         implicit_vpa_advection=false,
+        implicit_ion_maxwell_diffusion=false,
         write_after_fixed_step_count=false,
         high_precision_error_sum=false,
        )
