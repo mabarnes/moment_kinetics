@@ -17,7 +17,7 @@ export setup_mxwl_diff_collisions_input, ion_vpa_maxwell_diffusion!, neutral_vz_
 
 using ..looping
 using ..input_structs: mxwl_diff_collisions_input, set_defaults_and_check_section!
-using ..calculus: second_derivative!
+using ..calculus: derivative!, second_derivative!
 using ..reference_parameters: get_reference_collision_frequency_ii
 
 """
@@ -100,10 +100,17 @@ function ion_vpa_maxwell_diffusion!(f_out, f_in, moments, vpa, vperp, spectral::
     # hence no 1/vth^2 term in the exponent.
     if moments.evolve_density && moments.evolve_upar && moments.evolve_ppar
         @loop_s_r_z_vperp is ir iz ivperp begin
-            @views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
-                            exp(-((vpa.grid[:])^2 + (vperp.grid[ivperp])^2) )
-            second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
-            @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
+            #@views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
+            #                exp(-((vpa.grid[:])^2 + (vperp.grid[ivperp])^2) )
+            #second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
+            #@views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
+            n = f_in.density[iz,ir,is]
+            upar = f_in.upar[iz,ir,is]
+            vth = moments.ion.vth[iz,ir,is]
+            @views second_derivative!(vpa.scratch2, f_in.pdf[:,ivperp,iz,ir,is], vpa, spectral)
+            @views @. vpa.scratch = (vpa.grid - upar / vth) * f_in.pdf[:,ivperp,iz,ir,is]
+            derivative!(vpa.scratch3, vpa.scratch, vpa, spectral)
+            @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * n / vth^3 * (vpa.scratch2 + vpa.scratch3)
         end
     elseif moments.evolve_density && moments.evolve_upar
         @loop_s_r_z_vperp is ir iz ivperp begin
@@ -113,6 +120,7 @@ function ion_vpa_maxwell_diffusion!(f_out, f_in, moments, vpa, vperp, spectral::
             second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
             @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
         end
+        error("hack not implemented for this case")
     elseif moments.evolve_density && moments.evolve_ppar
         @loop_s_r_z_vperp is ir iz ivperp begin
             upar = f_in.upar[iz,ir,is]
@@ -121,6 +129,7 @@ function ion_vpa_maxwell_diffusion!(f_out, f_in, moments, vpa, vperp, spectral::
             second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
             @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
         end
+        error("hack not implemented for this case")
     elseif moments.evolve_upar && moments.evolve_ppar
         @loop_s_r_z_vperp is ir iz ivperp begin
             n = f_in.density[iz,ir,is]
@@ -129,6 +138,7 @@ function ion_vpa_maxwell_diffusion!(f_out, f_in, moments, vpa, vperp, spectral::
             second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
             @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
         end
+        error("hack not implemented for this case")
     elseif moments.evolve_density
         @loop_s_r_z_vperp is ir iz ivperp begin
             vth = moments.ion.vth[iz,ir,is]
@@ -138,6 +148,7 @@ function ion_vpa_maxwell_diffusion!(f_out, f_in, moments, vpa, vperp, spectral::
             second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
             @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
         end
+        error("hack not implemented for this case")
     elseif moments.evolve_upar
         @loop_s_r_z_vperp is ir iz ivperp begin
             vth = moments.ion.vth[iz,ir,is]
@@ -147,6 +158,7 @@ function ion_vpa_maxwell_diffusion!(f_out, f_in, moments, vpa, vperp, spectral::
             second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
             @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
         end
+        error("hack not implemented for this case")
     elseif moments.evolve_ppar
         @loop_s_r_z_vperp is ir iz ivperp begin
             n = f_in.density[iz,ir,is]
@@ -156,21 +168,25 @@ function ion_vpa_maxwell_diffusion!(f_out, f_in, moments, vpa, vperp, spectral::
             second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
             @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
         end
+        error("hack not implemented for this case")
     else
         # Drift kinetic version is the only one that currently can support 2V. 
         @loop_s_r_z_vperp is ir iz ivperp begin
             n = f_in.density[iz,ir,is]
             upar = f_in.upar[iz,ir,is]
             vth = moments.ion.vth[iz,ir,is]
-            if vperp.n == 1
-                vth_prefactor = 1.0 / vth
-            else
-                vth_prefactor = 1.0 / vth^3
-            end
-            @views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - n * vth_prefactor * 
-                            exp(-( ((vpa.grid[:] - upar)^2) + (vperp.grid[ivperp])^2)/(vth^2) )
-            second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
-            @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
+            #if vperp.n == 1
+            #    vth_prefactor = 1.0 / vth
+            #else
+            #    vth_prefactor = 1.0 / vth^3
+            #end
+            #@views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - n * vth_prefactor * 
+            #                exp(-( ((vpa.grid[:] - upar)^2) + (vperp.grid[ivperp])^2)/(vth^2) )
+            #second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
+            @views second_derivative!(vpa.scratch2, f_in.pdf[:,ivperp,iz,ir,is], vpa, spectral)
+            @views @. vpa.scratch = (vpa.grid - upar) * f_in.pdf[:,ivperp,iz,ir,is]
+            derivative!(vpa.scratch3, vpa.scratch, vpa, spectral)
+            @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * n / vth^3 * (vth^2 * vpa.scratch2 + vpa.scratch3)
         end
     end
     return nothing
