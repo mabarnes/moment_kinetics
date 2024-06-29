@@ -911,9 +911,9 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         # flag to determine if a d^2/dvpa^2 operator is present
         # When using implicit_vpa_advection, the vpa diffusion is included in the implicit
         # step
-        vpa_diffusion = ((num_diss_params.ion.vpa_dissipation_coefficient > 0.0) || (collisions.fkpl.nuii > 0.0 && vperp.n > 1))
+        vpa_diffusion = ((num_diss_params.ion.vpa_dissipation_coefficient > 0.0) || (collisions.fkpl.nuii > 0.0 && vperp.n > 1) || advance_maxwell_diffusion_ii)
         vperp_diffusion = ((num_diss_params.ion.vperp_dissipation_coefficient > 0.0) || (collisions.fkpl.nuii > 0.0 && vperp.n > 1))
-        vz_diffusion = (num_diss_params.neutral.vz_dissipation_coefficient > 0.0)
+        vz_diffusion = (num_diss_params.neutral.vz_dissipation_coefficient > 0.0 || advance_maxwell_diffusion_nn)
     end
 
     manufactured_solns_test = manufactured_solns_input.use_for_advance
