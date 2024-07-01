@@ -290,9 +290,11 @@ function implicit_ion_maxwell_diffusion!(f_out, fvec_in, moments, z_advect, vpa,
 
     # Ensure moments are consistent with f_new
     new_scratch = scratch_pdf(f_out, fvec_in.density, fvec_in.upar, fvec_in.ppar,
-                              fvec_in.pperp, fvec_in.temp_z_s, fvec_in.pdf_neutral,
-                              fvec_in.density_neutral, fvec_in.uz_neutral,
-                              fvec_in.pz_neutral)
+                              fvec_in.pperp, fvec_in.temp_z_s, fvec_in.electron_density,
+                              fvec_in.electron_upar, fvec_in.electron_ppar,
+                              fvec_in.electron_pperp, fvec_in.electron_temp,
+                              fvec_in.pdf_neutral, fvec_in.density_neutral,
+                              fvec_in.uz_neutral, fvec_in.pz_neutral)
     update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
                             r_spectral, geometry, gyroavs, scratch_dummy, z_advect, false)
 

@@ -2866,8 +2866,13 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t, t_params, 
                 # Note the timestep for this solve is rk_coefs_implict[istage,istage]*dt.
                 # The diagonal elements are equal to the Butcher 'a' coefficients
                 # rk_coefs_implicit[istage,istage]=a[istage,istage].
+                if scratch_electron === nothing
+                    this_scratch_electron = nothing
+                else
+                    this_scratch_electron = scratch_electron[t_params.electron.n_rk_stages+1]
+                end
                 nl_success = backward_euler!(scratch_implicit[istage], scratch[istage],
-                                             scratch_electron[t_params.electron.n_rk_stages+1],
+                                             this_scratch_electron,
                                              pdf, fields, moments, advect_objects, vz, vr,
                                              vzeta, vpa, vperp, gyrophase, z, r, t,
                                              t_params.dt[] *
