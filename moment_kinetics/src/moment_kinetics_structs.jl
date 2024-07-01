@@ -9,7 +9,8 @@ using ..type_definitions: mk_float
 
 """
 """
-struct scratch_pdf{n_distribution_ion, n_moment, n_distribution_neutral,n_moment_neutral}
+struct scratch_pdf{n_distribution_ion, n_moment, n_moment_electron,
+                   n_distribution_neutral, n_moment_neutral}
     # ions
     pdf::MPISharedArray{mk_float, n_distribution_ion}
     density::MPISharedArray{mk_float, n_moment}
@@ -17,11 +18,25 @@ struct scratch_pdf{n_distribution_ion, n_moment, n_distribution_neutral,n_moment
     ppar::MPISharedArray{mk_float, n_moment}
     pperp::MPISharedArray{mk_float, n_moment}
     temp_z_s::MPISharedArray{mk_float, n_moment}
+    # electrons
+    electron_density::MPISharedArray{mk_float, n_moment_electron}
+    electron_upar::MPISharedArray{mk_float, n_moment_electron}
+    electron_ppar::MPISharedArray{mk_float, n_moment_electron}
+    electron_pperp::MPISharedArray{mk_float, n_moment_electron}
+    electron_temp::MPISharedArray{mk_float, n_moment_electron}
     # neutral particles 
     pdf_neutral::MPISharedArray{mk_float, n_distribution_neutral}
     density_neutral::MPISharedArray{mk_float, n_moment_neutral}
     uz_neutral::MPISharedArray{mk_float, n_moment_neutral}
     pz_neutral::MPISharedArray{mk_float, n_moment_neutral}
+end
+
+"""
+"""
+struct scratch_electron_pdf{n_distribution_electron, n_moment_electron}
+    # electrons
+    pdf_electron::MPISharedArray{mk_float, n_distribution_electron}
+    electron_ppar::MPISharedArray{mk_float, n_moment_electron}
 end
 
 """
@@ -141,6 +156,78 @@ struct moments_ion_substruct
 end
 
 """
+moments_electron_substruct is a struct that contains moment information for electrons
+"""
+struct moments_electron_substruct
+    # this is the particle density
+    dens::MPISharedArray{mk_float,2}
+    # flag that keeps track of if the density needs updating before use
+    dens_updated::Ref{Bool}
+    # this is the parallel flow
+    upar::MPISharedArray{mk_float,2}
+    # flag that keeps track of whether or not upar needs updating before use
+    upar_updated::Ref{Bool}
+    # this is the parallel pressure
+    ppar::MPISharedArray{mk_float,2}
+    # flag that keeps track of whether or not ppar needs updating before use
+    ppar_updated::Ref{Bool}
+    # this is the temperature
+    temp::MPISharedArray{mk_float,2}
+    # flag that keeps track of whether or not temp needs updating before use
+    temp_updated::Ref{Bool}
+    # this is the parallel heat flux
+    qpar::MPISharedArray{mk_float,2}
+    # flag that keeps track of whether or not qpar needs updating before use
+    qpar_updated::Ref{Bool}
+    # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
+    vth::MPISharedArray{mk_float,2}
+    # this is the parallel friction force between ions and electrons
+    parallel_friction::MPISharedArray{mk_float,2}
+    # Spatially varying amplitude of the external source term
+    external_source_amplitude::MPISharedArray{mk_float,2}
+    # Spatially varying amplitude of the density moment of the external source term
+    external_source_density_amplitude::MPISharedArray{mk_float,2}
+    # Spatially varying amplitude of the parallel momentum moment of the external source
+    # term
+    external_source_momentum_amplitude::MPISharedArray{mk_float,2}
+    # Spatially varying amplitude of the parallel pressure moment of the external source
+    # term
+    external_source_pressure_amplitude::MPISharedArray{mk_float,2}
+    # if evolve_ppar = true, then the velocity variable is (vpa - upa)/vth, which introduces
+    # a factor of vth for each power of wpa in velocity space integrals.
+    # v_norm_fac accounts for this: it is vth if using the above definition for the parallel velocity,
+    # and it is one otherwise
+    v_norm_fac::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the z-derivative of the particle density
+    ddens_dz::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the z-derivative of the parallel flow
+    dupar_dz::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the z-derivative of the parallel pressure
+    dppar_dz::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the upwinded z-derivative of the parallel pressure
+    dppar_dz_upwind::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the second-z-derivative of the parallel pressure
+    d2ppar_dz2::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the z-derivative of the parallel heat flux
+    dqpar_dz::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the z-derivative of the parallel temperature Tpar = ppar/dens
+    dT_dz::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the upwinded z-derivative of the temperature Tpar = ppar/dens
+    dT_dz_upwind::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the z-derivative of the electron thermal speed vth = sqrt(2*Tpar/m)
+    dvth_dz::Union{MPISharedArray{mk_float,2},Nothing}
+    # Store coefficient 'A' from applying moment constraints so we can write it out as a
+    # diagnostic
+    constraints_A_coefficient::Union{MPISharedArray{mk_float,2},Nothing}
+    # Store coefficient 'B' from applying moment constraints so we can write it out as a
+    # diagnostic
+    constraints_B_coefficient::Union{MPISharedArray{mk_float,2},Nothing}
+    # Store coefficient 'C' from applying moment constraints so we can write it out as a
+    # diagnostic
+    constraints_C_coefficient::Union{MPISharedArray{mk_float,2},Nothing}
+end
+
+"""
 """
 struct moments_neutral_substruct
     # this is the particle density
@@ -239,12 +326,22 @@ struct pdf_substruct{n_distribution}
     buffer::MPISharedArray{mk_float,n_distribution} # for collision operator terms when pdfs must be interpolated onto different velocity space grids, and for gyroaveraging
 end
 
+"""
+"""
+struct electron_pdf_substruct{n_distribution}
+    norm::MPISharedArray{mk_float,n_distribution}
+    buffer::MPISharedArray{mk_float,n_distribution} # for collision operator terms when pdfs must be interpolated onto different velocity space grids
+    pdf_before_ion_timestep::MPISharedArray{mk_float,n_distribution}
+end
+
 # struct of structs neatly contains i+n info?
 """
 """
 struct pdf_struct
     #ion particles: s + r + z + vperp + vpa
     ion::pdf_substruct{5}
+    # electron particles: r + z + vperp + vpa
+    electron::Union{electron_pdf_substruct{4},Nothing}
     #neutral particles: s + r + z + vzeta + vr + vz
     neutral::pdf_substruct{6}
 end
@@ -253,6 +350,7 @@ end
 """
 struct moments_struct
     ion::moments_ion_substruct
+    electron::moments_electron_substruct
     neutral::moments_neutral_substruct
     # flag that indicates if the density should be evolved via continuity equation
     evolve_density::Bool

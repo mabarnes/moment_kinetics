@@ -5,7 +5,7 @@ module velocity_moments
 export integrate_over_vspace
 export integrate_over_positive_vpa, integrate_over_negative_vpa
 export integrate_over_positive_vz, integrate_over_negative_vz
-export create_moments_ion, create_moments_neutral
+export create_moments_ion, create_moments_electron, create_moments_neutral
 export update_moments!
 export update_density!
 export update_upar!
@@ -41,7 +41,8 @@ using ..derivatives: derivative_z!, second_derivative_z!
 using ..derivatives: derivative_r!, second_derivative_r!
 using ..looping
 using ..gyroaverages: gyro_operators, gyroaverage_pdf!
-using ..moment_kinetics_structs: moments_ion_substruct,
+using ..input_structs: braginskii_fluid, kinetic_electrons
+using ..moment_kinetics_structs: moments_ion_substruct, moments_electron_substruct,
                                  moments_neutral_substruct
 
 #global tmpsum1 = 0.0
@@ -193,6 +194,83 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
         external_source_momentum_amplitude, external_source_pressure_amplitude,
         external_source_controller_integral, constraints_A_coefficient,
         constraints_B_coefficient, constraints_C_coefficient)
+end
+
+"""
+create a moment struct containing information about the electron moments
+"""
+function create_moments_electron(nz, nr, electron_model, num_diss_params)
+    # allocate array used for the particle density
+    density = allocate_shared_float(nz, nr)
+    # initialise Bool variable that indicates if the density is updated for each species
+    density_updated = Ref(false)
+    # allocate array used for the parallel flow
+    parallel_flow = allocate_shared_float(nz, nr)
+    # allocate Bool variable that indicates if the parallel flow is updated for each species
+    parallel_flow_updated = Ref(false)
+    # allocate array used for the parallel pressure
+    parallel_pressure = allocate_shared_float(nz, nr)
+    # allocate Bool variable that indicates if the parallel pressure is updated for each species
+    parallel_pressure_updated = Ref(false)
+    # allocate array used for the temperature
+    temperature = allocate_shared_float(nz, nr)
+    # allocate Bool variable that indicates if the temperature is updated for each species
+    temperature_updated = Ref(false)
+    # allocate array used for the parallel flow
+    parallel_heat_flux = allocate_shared_float(nz, nr)
+    # allocate Bool variables that indicates if the parallel flow is updated for each species
+    parallel_heat_flux_updated = Ref(false)
+    # allocate array used for the election-ion parallel friction force
+    parallel_friction_force = allocate_shared_float(nz, nr)
+    # allocate arrays used for external sources
+    external_source_amplitude = allocate_shared_float(nz, nr)
+    external_source_density_amplitude = allocate_shared_float(nz, nr)
+    external_source_momentum_amplitude = allocate_shared_float(nz, nr)
+    external_source_pressure_amplitude = allocate_shared_float(nz, nr)
+    # allocate array used for the thermal speed
+    thermal_speed = allocate_shared_float(nz, nr)
+    # if evolving the electron pdf, it will be a function of the vth-normalised peculiar velocity
+    v_norm_fac = thermal_speed
+    # dn/dz is needed to obtain dT/dz (appearing in, e.g., Braginskii qpar) from dppar/dz
+    ddens_dz = allocate_shared_float(nz, nr)
+    # need dupar/dz to obtain, e.g., the updated electron temperature
+    dupar_dz = allocate_shared_float(nz, nr)
+    dppar_dz = allocate_shared_float(nz, nr)
+    if electron_model ∈ (braginskii_fluid, kinetic_electrons)
+        dppar_dz_upwind = allocate_shared_float(nz, nr)
+        dT_dz_upwind = allocate_shared_float(nz, nr)
+    else
+        dppar_dz_upwind = nothing
+        dT_dz_upwind = nothing
+    end
+    if num_diss_params.electron.moment_dissipation_coefficient > 0.0
+        d2ppar_dz2 = allocate_shared_float(nz, nr)
+    else
+        d2ppar_dz2 = nothing
+    end
+    dqpar_dz = allocate_shared_float(nz, nr)
+    dT_dz = allocate_shared_float(nz, nr)
+    dvth_dz = allocate_shared_float(nz, nr)
+    
+    constraints_A_coefficient = allocate_shared_float(nz, nr)
+    constraints_B_coefficient = allocate_shared_float(nz, nr)
+    constraints_C_coefficient = allocate_shared_float(nz, nr)
+    @serial_region begin
+        constraints_A_coefficient .= 1.0
+        constraints_B_coefficient .= 0.0
+        constraints_C_coefficient .= 0.0
+    end
+
+    # return struct containing arrays needed to update moments
+    return moments_electron_substruct(density, density_updated, parallel_flow,
+        parallel_flow_updated, parallel_pressure, parallel_pressure_updated,
+        temperature, temperature_updated, 
+        parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, 
+        parallel_friction_force, external_source_amplitude,
+        external_source_density_amplitude, external_source_momentum_amplitude,
+        external_source_pressure_amplitude, v_norm_fac, ddens_dz, dupar_dz, dppar_dz,
+        dppar_dz_upwind, d2ppar_dz2, dqpar_dz, dT_dz, dT_dz_upwind, dvth_dz,
+        constraints_A_coefficient, constraints_B_coefficient, constraints_C_coefficient)
 end
 
 # neutral particles have natural mean velocities 
@@ -879,6 +957,49 @@ function calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z, z
         @views derivative_z!(moments.ion.dvth_dz, vth, buffer_r_1,
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
     end
+end
+
+"""
+Pre-calculate spatial derivatives of the electron moments that will be needed for the time advance
+"""
+function calculate_electron_moment_derivatives!(moments, scratch, scratch_dummy, z, z_spectral,
+                                                electron_mom_diss_coeff, electron_model)
+    begin_r_region()
+
+    dens = scratch.electron_density
+    upar = scratch.electron_upar
+    ppar = scratch.electron_ppar
+    qpar = moments.electron.qpar
+    dummy_zr = @view scratch_dummy.dummy_zrs[:,:,1]
+    buffer_r_1 = @view scratch_dummy.buffer_rs_1[:,1]
+    buffer_r_2 = @view scratch_dummy.buffer_rs_2[:,1]
+    buffer_r_3 = @view scratch_dummy.buffer_rs_3[:,1]
+    buffer_r_4 = @view scratch_dummy.buffer_rs_4[:,1]
+       
+    @views derivative_z!(moments.electron.dupar_dz, upar, buffer_r_1,
+                         buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+
+    # centred second derivative for dissipation
+    if electron_mom_diss_coeff > 0.0
+        @views derivative_z!(dummy_zr, ppar, buffer_r_1, buffer_r_2, buffer_r_3,
+                             buffer_r_4, z_spectral, z)
+        @views derivative_z!(moments.electron.d2ppar_dz2, dummy_zr, buffer_r_1,
+                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+    end
+
+    @views derivative_z!(moments.electron.ddens_dz, dens, buffer_r_1,
+                            buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+    @views derivative_z!(moments.electron.dppar_dz, ppar, buffer_r_1,
+                            buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+    @views derivative_z!(moments.electron.dqpar_dz, qpar, buffer_r_1,
+                            buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+    # calculate the zed derivative of the electron temperature
+    @loop_r_z ir iz begin
+        # store the temperature in dummy_zr
+        dummy_zr[iz,ir] = 2*ppar[iz,ir]/dens[iz,ir]
+    end
+    @views derivative_z!(moments.electron.dT_dz, dummy_zr, buffer_r_1,
+                            buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
 end
 
 """
@@ -1743,6 +1864,10 @@ function reset_moments_status!(moments)
     moments.neutral.pzeta_updated .= false
     moments.neutral.pr_updated .= false
     moments.neutral.qz_updated .= false
+    moments.electron.dens_updated[] = false
+    moments.electron.upar_updated[] = false
+    moments.electron.ppar_updated[] = false
+    moments.electron.qpar_updated[] = false
 end
 
 end

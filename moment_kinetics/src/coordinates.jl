@@ -6,6 +6,7 @@ export define_coordinate, write_coordinate
 export equally_spaced_grid
 export set_element_boundaries
 
+using LinearAlgebra
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float, allocate_int
 using ..calculus: derivative!
