@@ -2858,7 +2858,7 @@ function plot_ion_pdf(run_name, run_name_label, vpa, vperp, z, r, z_local, r_loc
         spec_string = [string("_", spec_type)]
     end
     # make a gif animation of f(vpa,z,t) at a given (vperp,r) location
-    if pp.animate_f_vs_vpa_z
+    if pp.animate_f_vs_vpa_z && (vpa.n > 1 && z_local.n > 1)
         pdf = load_distributed_ion_pdf_slice(run_name, nblocks,
                                                  itime_min:iskip:itime_max, n_species,
                                                  r_local, z_local, vperp, vpa;
@@ -2876,7 +2876,7 @@ function plot_ion_pdf(run_name, run_name_label, vpa, vperp, z, r, z_local, r_loc
         end
     end
     # make a gif animation of f(vpa,r,t) at a given (vperp,z) location
-    if pp.animate_f_vs_vpa_r
+    if pp.animate_f_vs_vpa_r && (vpa.n > 1 && r_local.n > 1)
         pdf = load_distributed_ion_pdf_slice(run_name, nblocks,
                                              itime_min:iskip:itime_max, n_species,
                                              r_local, z_local, vperp, vpa;
@@ -2894,7 +2894,7 @@ function plot_ion_pdf(run_name, run_name_label, vpa, vperp, z, r, z_local, r_loc
         end
     end
     # make a gif animation of f(vperp,z,t) at a given (vpa,r) location
-    if pp.animate_f_vs_vperp_z
+    if pp.animate_f_vs_vperp_z && (vperp.n > 1 && z_local.n > 1)
         pdf = load_distributed_ion_pdf_slice(run_name, nblocks,
                                                  itime_min:iskip:itime_max, n_species,
                                                  r_local, z_local, vperp, vpa; ivpa=ivpa0,
@@ -2908,7 +2908,7 @@ function plot_ion_pdf(run_name, run_name_label, vpa, vperp, z, r, z_local, r_loc
         end
     end
     # make a gif animation of f(vperp,r,t) at a given (vpa,z) location
-    if pp.animate_f_vs_vperp_r
+    if pp.animate_f_vs_vperp_r && (vperp.n > 1 && r_local.n > 1)
         pdf = load_distributed_ion_pdf_slice(run_name, nblocks,
                                                  itime_min:iskip:itime_max, n_species,
                                                  r_local, z_local, vperp, vpa; ivpa=ivpa0,
@@ -2970,7 +2970,7 @@ function plot_ion_pdf(run_name, run_name_label, vpa, vperp, z, r, z_local, r_loc
         end
     end
     # make a gif animation of f(z,r,t) at a given (vpa,vperp) location
-    if pp.animate_f_vs_r_z
+    if pp.animate_f_vs_r_z && (z_local.n > 1 && r_local.n > 1)
         pdf = load_distributed_ion_pdf_slice(run_name, nblocks,
                                              itime_min:iskip:itime_max, n_species,
                                              r_local, z_local, vperp, vpa; ivpa=ivpa0,
