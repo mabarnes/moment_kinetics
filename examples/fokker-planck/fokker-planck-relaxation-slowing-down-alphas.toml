@@ -87,6 +87,6 @@ sink_vth=0.07071067811865475
 
 [timestepping]
 nstep = 50000
-dt = 5.0e-4
+dt = 2.5e-4
 nwrite = 100
 nwrite_dfns = 100
