@@ -548,7 +548,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
             species.ion[is].vpa_IC.upar_amplitude, species.ion[is].vpa_IC.upar_phase,
             species.ion[is].vpa_IC.temperature_amplitude,
             species.ion[is].vpa_IC.temperature_phase, species.ion[is].vpa_IC.monomial_degree,
-            get(scan_input, "vpa_IC_v0_$is", 0.5*sqrt(vperp.L^2 + (0.5*vpa.L)^2)),
+            get(scan_input, "vpa_IC_v0$is", 0.5*sqrt(vperp.L^2 + (0.5*vpa.L)^2)),
             get(scan_input, "vpa_IC_vth0$is", 0.1*sqrt(vperp.L^2 + (0.5*vpa.L)^2)),
             get(scan_input, "vpa_IC_vpa0$is", 0.25*0.5*abs(vpa.L)),
             get(scan_input, "vpa_IC_vperp0$is", 0.5*abs(vperp.L)))
