@@ -485,9 +485,12 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vpa::coordinate, density,
             # Store v_parallel with upar shift removed in vpa.scratch
             vth = sqrt(2.0*ppar[iz]/density[iz])
             @. vpa.scratch = vpa.grid + upar[iz]/vth
-            # Introduce factor to ensure corrections go smoothly to zero near
-            # v_parallel=0
-            @. vpa.scratch2 = f * abs(vpa.scratch) / (1.0 + abs(vpa.scratch))
+            # Introduce factors to ensure corrections go smoothly to zero near
+            # v_parallel=0, and that there are no large corrections aw large w_parallel as
+            # those can have a strong effect on the parallel heat flux and make
+            # timestepping unstable when the cut-off point jumps from one grid point to
+            # another.
+            @. vpa.scratch2 = f * abs(vpa.scratch) / (1.0 + abs(vpa.scratch)) / (1.0 + (4.0 * vpa.scratch / vpa.L)^4)
             J1 = integrate_over_vspace(vpa.scratch2, vpa.grid, vpa.wgts)
             J2 = integrate_over_vspace(vpa.scratch2, vpa.grid, 2, vpa.wgts)
             J3 = integrate_over_vspace(vpa.scratch2, vpa.grid, 3, vpa.wgts)
@@ -505,9 +508,12 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vpa::coordinate, density,
 
             # Store v_parallel with upar shift removed in vpa.scratch
             @. vpa.scratch = vpa.grid + upar[iz]
-            # Introduce factor to ensure corrections go smoothly to zero near
-            # v_parallel=0
-            @. vpa.scratch2 = f * abs(vpa.scratch) / (1.0 + abs(vpa.scratch))
+            # Introduce factors to ensure corrections go smoothly to zero near
+            # v_parallel=0, and that there are no large corrections aw large w_parallel as
+            # those can have a strong effect on the parallel heat flux and make
+            # timestepping unstable when the cut-off point jumps from one grid point to
+            # another.
+            @. vpa.scratch2 = f * abs(vpa.scratch) / (1.0 + abs(vpa.scratch)) / (1.0 + (4.0 * vpa.scratch / vpa.L)^4)
             J1 = integrate_over_vspace(vpa.scratch2, vpa.grid, vpa.wgts)
             J2 = integrate_over_vspace(vpa.scratch2, vpa.grid, 2, vpa.wgts)
 
