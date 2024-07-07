@@ -324,7 +324,7 @@ function implicit_ion_maxwell_diffusion!(f_out, fvec_in, moments, z_advect, vpa,
                 for ivpa ∈ vpa.n:-1:1
                     # for left boundary in zed (z = -Lz/2), want
                     # f(z=-Lz/2, v_parallel > 0) = 0
-                    if vpa.scratch[ivpa] ≤ zero
+                    if vpa.scratch[ivpa] < -zero
                         icut_lower_z = ivpa + 1
                         break
                     end
@@ -339,7 +339,7 @@ function implicit_ion_maxwell_diffusion!(f_out, fvec_in, moments, z_advect, vpa,
                 for ivpa ∈ 1:vpa.n
                     # for right boundary in zed (z = Lz/2), want
                     # f(z=Lz/2, v_parallel < 0) = 0
-                    if vpa.scratch[ivpa] ≥ -zero
+                    if vpa.scratch[ivpa] > zero
                         icut_upper_z = ivpa - 1
                         break
                     end
