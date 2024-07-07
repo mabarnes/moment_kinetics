@@ -1812,7 +1812,9 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t, t_pa
         # update the time
         t += t_params.previous_dt[]
 
-        if t ≥ t_params.end_time - epsilon
+        if t ≥ t_params.end_time - epsilon ||
+                (t_params.write_after_fixed_step_count &&
+                 t_params.step_counter[] >= t_params.nstep)
             # Ensure all output is written at the final step
             finish_now = true
         elseif t_params.dt[] < 0.0 || isnan(t_params.dt[]) || isinf(t_params.dt[])
