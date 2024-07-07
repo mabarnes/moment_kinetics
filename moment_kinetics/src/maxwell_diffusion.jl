@@ -72,21 +72,21 @@ function setup_mxwl_diff_collisions_input(toml_input::Dict, reference_params)
 end
 
 function ion_vpa_maxwell_diffusion_inner!(f_out, f_in, n, upar, vth, vpa, spectral,
+                                          diffusion_coefficient, dt, ::Val{false},
+                                          ::Val{false}, ::Val{false})
+    second_derivative!(vpa.scratch2, f_in, vpa, spectral)
+    @. vpa.scratch = (vpa.grid - upar) * f_in
+    derivative!(vpa.scratch3, vpa.scratch, vpa, spectral)
+    @. f_out += dt * diffusion_coefficient * n / vth^3 * (0.5 * vth^2 * vpa.scratch2 + vpa.scratch3)
+end
+
+function ion_vpa_maxwell_diffusion_inner!(f_out, f_in, n, upar, vth, vpa, spectral,
                                           diffusion_coefficient, dt, ::Val{true},
                                           ::Val{true}, ::Val{true})
     second_derivative!(vpa.scratch2, f_in, vpa, spectral)
     @. vpa.scratch = vpa.grid * f_in
     derivative!(vpa.scratch3, vpa.scratch, vpa, spectral)
     @. f_out += dt * diffusion_coefficient * n / vth^3 * (vpa.scratch2 + vpa.scratch3)
-end
-
-function ion_vpa_maxwell_diffusion_inner!(f_out, f_in, n, upar, vth, vpa, spectral,
-                                          diffusion_coefficient, dt, ::Val{false},
-                                          ::Val{false}, ::Val{false})
-    second_derivative!(vpa.scratch2, f_in, vpa, spectral)
-    @. vpa.scratch = (vpa.grid - upar) * f_in
-    derivative!(vpa.scratch3, vpa.scratch, vpa, spectral)
-    @. f_out += dt * diffusion_coefficient * n / vth^3 * (vth^2 * vpa.scratch2 + vpa.scratch3)
 end
 
 """
