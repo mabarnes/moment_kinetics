@@ -394,7 +394,7 @@ function implicit_ion_maxwell_diffusion!(f_out, fvec_in, moments, z_advect, vpa,
                 @. residual = f_new - residual
 
                 apply_bc!(residual)
-                moment_constraints_on_residual!(residual, f_new, moments, vpa)
+                #moment_constraints_on_residual!(residual, f_new, moments, vpa)
             end
 
             # Buffers
