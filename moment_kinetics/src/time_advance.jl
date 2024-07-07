@@ -2613,12 +2613,30 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron, 
         end
     end
 
-    # Apply boundary conditions and constraints
+    # Apply boundary conditions and constraints to the loworder approximation.
+    # Need to apply constraints using the high-order moments for consistency, to avoid
+    # potential for spurious error estimates at boundary points.
+    loworder_constraints_scratch =
+        scratch_pdf(scratch[2].pdf, scratch[t_params.n_rk_stages+1].density,
+                    scratch[t_params.n_rk_stages+1].upar,
+                    scratch[t_params.n_rk_stages+1].ppar,
+                    scratch[t_params.n_rk_stages+1].pperp,
+                    scratch[t_params.n_rk_stages+1].temp_z_s,
+                    scratch[t_params.n_rk_stages+1].electron_density,
+                    scratch[t_params.n_rk_stages+1].electron_upar,
+                    scratch[t_params.n_rk_stages+1].electron_ppar,
+                    scratch[t_params.n_rk_stages+1].electron_pperp,
+                    scratch[t_params.n_rk_stages+1].electron_temp,
+                    scratch[2].pdf_neutral,
+                    scratch[t_params.n_rk_stages+1].density_neutral,
+                    scratch[t_params.n_rk_stages+1].uz_neutral,
+                    scratch[t_params.n_rk_stages+1].pz_neutral)
     apply_all_bcs_constraints_update_moments!(
-        scratch[2], pdf, moments, fields, boundary_distributions, scratch_electron, vz,
-        vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
-        collisions, geometry, gyroavs, external_source_settings, num_diss_params,
-        t_params, advance, scratch_dummy, false; update_electrons=false)
+        loworder_constraints_scratch, pdf, moments, fields, boundary_distributions,
+        scratch_electron, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
+        advect_objects, composition, collisions, geometry, gyroavs,
+        external_source_settings, num_diss_params, t_params, advance, scratch_dummy,
+        false; update_electrons=false)
 
     # Re-calculate moment derivatives in the `moments` struct, in case they were changed
     # by the previous call
