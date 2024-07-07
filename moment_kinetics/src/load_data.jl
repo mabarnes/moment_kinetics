@@ -54,7 +54,8 @@ const timestep_diagnostic_variables = ("time_for_run", "step_counter", "dt",
 const em_variables = ("phi", "Er", "Ez")
 const ion_moment_variables = ("density", "parallel_flow", "parallel_pressure",
                               "thermal_speed", "temperature", "parallel_heat_flux",
-                              "collision_frequency_ii", "sound_speed", "mach_number")
+                              "collision_frequency_ii", "sound_speed", "mach_number",
+                              "total_energy", "total_energy_flux")
 const electron_moment_variables = ("electron_density", "electron_parallel_flow",
                                    "electron_parallel_pressure", "electron_thermal_speed",
                                    "electron_temperature", "electron_parallel_heat_flux",
@@ -62,7 +63,8 @@ const electron_moment_variables = ("electron_density", "electron_parallel_flow",
                                    "electron_dudz", "electron_dpdz", "electron_dqdz")
 const neutral_moment_variables = ("density_neutral", "uz_neutral", "pz_neutral",
                                   "thermal_speed_neutral", "temperature_neutral",
-                                  "qz_neutral")
+                                  "qz_neutral", "total_energy_neutral",
+                                  "total_energy_flux_neutral")
 const all_moment_variables = tuple(em_variables..., ion_moment_variables...,
                                    electron_moment_variables...,
                                    neutral_moment_variables...)
@@ -4173,6 +4175,58 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
         cs = get_variable(run_info, "sound_speed"; kwargs...)
         variable = upar ./ cs
+    elseif variable_name == "total_energy"
+        if run_info.vperp.n > 1
+            error("total_energy is so far only implemented for 1D1V case")
+        else
+            ppar = get_variable(run_info, "parallel_pressure"; kwargs...)
+            upar = get_variable(run_info, "parallel_flow"; kwargs...)
+            n = get_variable(run_info, "density"; kwargs...)
+
+            variable = @. ppar + 0.5*n*upar^2
+        end
+    elseif variable_name == "total_energy_neutral"
+        if run_info.vzeta.n > 1 || run_info.vr.n > 1
+            error("total_energy_neutral is so far only implemented for 1D1V case")
+        else
+            ppar = get_variable(run_info, "pz_neutral"; kwargs...)
+            upar = get_variable(run_info, "uz_neutral"; kwargs...)
+            n = get_variable(run_info, "density_neutral"; kwargs...)
+
+            # Factor of 3/2 in front of 1/2*n*vth^2*upar because this in 1V - would be 5/2
+            # for 2V/3V cases.
+            variable = @. ppar + 0.5*n*upar^2
+        end
+    elseif variable_name == "total_energy_flux"
+        if run_info.vperp.n > 1
+            error("total_energy_flux is so far only implemented for 1D1V case")
+        else
+            qpar = get_variable(run_info, "parallel_heat_flux"; kwargs...)
+            vth = get_variable(run_info, "thermal_speed"; kwargs...)
+            upar = get_variable(run_info, "parallel_flow"; kwargs...)
+            n = get_variable(run_info, "density"; kwargs...)
+
+            # Note factor of 0.5 in front of qpar because the definition of qpar (see e.g.
+            # `update_qpar_species!()`) is unconventional (i.e. missing a factor of 0.5).
+            # Factor of 3/2 in front of 1/2*n*vth^2*upar because this in 1V - would be 5/2
+            # for 2V/3V cases.
+            variable = @. 0.5*qpar + 0.75*n*vth^2*upar + 0.5*n*upar^3
+        end
+    elseif variable_name == "total_energy_flux_neutral"
+        if run_info.vzeta.n > 1 || run_info.vr.n > 1
+            error("total_energy_flux_neutral is so far only implemented for 1D1V case")
+        else
+            qpar = get_variable(run_info, "qz_neutral"; kwargs...)
+            vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
+            upar = get_variable(run_info, "uz_neutral"; kwargs...)
+            n = get_variable(run_info, "density_neutral"; kwargs...)
+
+            # Note factor of 0.5 in front of qpar because the definition of qpar (see e.g.
+            # `update_qpar_species!()`) is unconventional (i.e. missing a factor of 0.5).
+            # Factor of 3/2 in front of 1/2*n*vth^2*upar because this in 1V - would be 5/2
+            # for 2V/3V cases.
+            variable = @. 0.5*qpar + 0.75*n*vth^2*upar + 0.5*n*upar^3
+        end
     elseif variable_name == "z_advect_speed"
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
