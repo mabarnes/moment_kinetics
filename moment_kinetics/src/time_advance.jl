@@ -27,7 +27,7 @@ using ..velocity_moments: update_neutral_pzeta!, update_neutral_pz!, update_neut
 using ..velocity_moments: calculate_ion_moment_derivatives!, calculate_neutral_moment_derivatives!
 using ..velocity_moments: calculate_electron_moment_derivatives!
 using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
-using ..boundary_conditions: enforce_boundary_conditions!
+using ..boundary_conditions: enforce_boundary_conditions!, get_ion_z_boundary_cutoff_indices
 using ..boundary_conditions: enforce_neutral_boundary_conditions!
 using ..boundary_conditions: vpagrid_to_dzdt, enforce_v_boundary_condition_local!
 using ..input_structs
@@ -401,6 +401,12 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         if composition.electron_physics != kinetic_electrons
             t_input["implicit_electron_advance"] = false
         end
+    end
+
+    if t_input["implicit_vpa_advection"]
+        error("implicit_vpa_advection does not work at the moment. Need to figure out "
+              * "what to do with constraints, as explicit and implicit parts would not "
+              * "preserve constaints separately.")
     end
 
     if t_input["high_precision_error_sum"]
@@ -2648,6 +2654,32 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron, 
         false; pdf_bc_constraints=false, update_electrons=false)
 
     # Calculate the timstep error estimates
+    if z.bc == "wall" && (moments.evolve_upar || moments.evolve_ppar)
+        # Set error on last/first non-zero point in ion distribution function to zero, as
+        # this this point may cause unhelpful timestep failures when the cutoff moves from
+        # one point to another.
+        if z.irank == 0 || z.irank == z.nrank - 1
+            begin_s_r_region()
+            @loop_s_r is ir begin
+                density = @view scratch[t_params.n_rk_stages+1].density[:,ir,is]
+                upar = @view scratch[t_params.n_rk_stages+1].upar[:,ir,is]
+                ppar = @view scratch[t_params.n_rk_stages+1].ppar[:,ir,is]
+                last_negative_vpa_ind, first_positive_vpa_ind =
+                    get_ion_z_boundary_cutoff_indices(density, upar, ppar,
+                                                      moments.evolve_upar,
+                                                      moments.evolve_ppar, z, vpa,
+                                                      1.0e-14)
+                if z.irank == 0
+                    scratch[2].pdf[last_negative_vpa_ind,:,1,ir,is] .=
+                        scratch[t_params.n_rk_stages+1].pdf[last_negative_vpa_ind,:,1,ir,is]
+                end
+                if z.irank == z.nrank - 1
+                    scratch[2].pdf[first_positive_vpa_ind,:,end,ir,is] .=
+                        scratch[t_params.n_rk_stages+1].pdf[first_positive_vpa_ind,:,end,ir,is]
+                end
+            end
+        end
+    end
     ion_pdf_error = local_error_norm(scratch[2].pdf, scratch[t_params.n_rk_stages+1].pdf,
                                      t_params.rtol, t_params.atol;
                                      method=error_norm_method, skip_r_inner=skip_r_inner,
