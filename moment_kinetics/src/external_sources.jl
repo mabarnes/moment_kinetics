@@ -608,10 +608,18 @@ function external_ion_source!(pdf, fvec, moments, ion_source_settings, vperp, vp
         end
 
         if source_type == "energy"
-            # Take particles out of pdf so source does not change density
-            @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-                pdf[ivpa,ivperp,iz,ir,is] -= dt * source_amplitude[iz,ir] *
-                    fvec.pdf[ivpa,ivperp,iz,ir,is]
+            if moments.evolve_density
+                # Take particles out of pdf so source does not change density
+                @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+                    pdf[ivpa,ivperp,iz,ir,is] -= dt * source_amplitude[iz,ir] *
+                        fvec.pdf[ivpa,ivperp,iz,ir,is]
+                end
+            else
+                # Take particles out of pdf so source does not change density
+                @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+                    pdf[ivpa,ivperp,iz,ir,is] -= dt * source_amplitude[iz,ir] *
+                        fvec.pdf[ivpa,ivperp,iz,ir,is] / fvec.density[iz,ir,is]
+                end
             end
         end
     elseif source_type == "alphas" || source_type == "alphas-with-losses"
