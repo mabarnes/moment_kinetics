@@ -997,7 +997,7 @@ end
 
 Use the calculated `CFL_limits` and `error_norms` to update the timestep in `t_params`.
 """
-function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, error_norms,
+function adaptive_timestep_update_t_params!(t_params, t, CFL_limits, error_norms,
                                             total_points, current_dt, error_norm_method,
                                             success, nl_max_its_fraction;
                                             electron=false)
@@ -1059,11 +1059,6 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
     if success != ""
         # Iteration failed in implicit part of timestep try decreasing timestep
 
-        # Set scratch[end] equal to scratch[1] to start the timestep over
-        scratch_temp = scratch[t_params.n_rk_stages+1]
-        scratch[t_params.n_rk_stages+1] = scratch[1]
-        scratch[1] = scratch_temp
-
         @serial_region begin
             t_params.failure_counter[] += 1
 
@@ -1116,11 +1111,6 @@ function adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, er
         # extra _block_synchronize() call after reading it here.
         #
         # Timestep failed, reduce timestep and re-try
-
-        # Set scratch[end] equal to scratch[1] to start the timestep over
-        scratch_temp = scratch[t_params.n_rk_stages+1]
-        scratch[t_params.n_rk_stages+1] = scratch[1]
-        scratch[1] = scratch_temp
 
         @serial_region begin
             t_params.failure_counter[] += 1

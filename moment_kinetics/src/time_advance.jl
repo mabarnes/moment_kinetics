@@ -2011,6 +2011,24 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t, t_pa
             end
         end
 
+        if t_params.previous_dt[] == 0.0
+            # Timestep failed, so reset  scratch[t_params.n_rk_stages+1] equal to
+            # scratch[1] to start the timestep over.
+            scratch_temp = scratch[t_params.n_rk_stages+1]
+            scratch[t_params.n_rk_stages+1] = scratch[1]
+            scratch[1] = scratch_temp
+
+            # Re-update remaining velocity moments that are calculable from the evolved
+            # pdf These need to be re-calculated because `scratch[istage+1]` is now the
+            # state at the beginning of the timestep, because the timestep failed
+            apply_all_bcs_constraints_update_moments!(
+                scratch[t_params.n_rk_stages+1], pdf, moments, fields, nothing, nothing, vz,
+                vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
+                collisions, geometry, gyroavs, external_source_settings, num_diss_params,
+                t_params, advance, scratch_dummy, false; pdf_bc_constraints=false,
+                update_electrons=false)
+        end
+
         if finish_now
             break
         end
@@ -2750,9 +2768,9 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron, 
         end
     end
 
-    adaptive_timestep_update_t_params!(t_params, scratch, t, CFL_limits, error_norms,
-                                       total_points, current_dt, error_norm_method,
-                                       success, nl_max_its_fraction)
+    adaptive_timestep_update_t_params!(t_params, t, CFL_limits, error_norms, total_points,
+                                       current_dt, error_norm_method, success,
+                                       nl_max_its_fraction)
 
     if composition.electron_physics == kinetic_electrons
         if t_params.previous_dt[] == 0.0
@@ -2773,18 +2791,83 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron, 
                     pdf.electron.norm[ivpa,ivperp,iz,ir]
             end
         end
-    end
 
-    if t_params.previous_dt[] == 0.0
-        # Re-update remaining velocity moments that are calculable from the evolved
-        # pdf These need to be re-calculated because `scratch[istage+1]` is now the
-        # state at the beginning of the timestep, because the timestep failed
-        apply_all_bcs_constraints_update_moments!(
-            scratch[t_params.n_rk_stages+1], pdf, moments, fields, nothing, nothing, vz,
-            vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
-            collisions, geometry, gyroavs, external_source_settings, num_diss_params,
-            t_params, advance, scratch_dummy, false; pdf_bc_constraints=false,
-            update_electrons=false)
+        istage = t_params.n_rk_stages+1
+
+        # update the pdf.norm and moments arrays as needed
+        begin_s_r_z_region()
+        final_scratch = scratch[istage]
+        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+            pdf.ion.norm[ivpa,ivperp,iz,ir,is] = final_scratch.pdf[ivpa,ivperp,iz,ir,is]
+        end
+        @loop_s_r_z is ir iz begin
+            moments.ion.dens[iz,ir,is] = final_scratch.density[iz,ir,is]
+            moments.ion.upar[iz,ir,is] = final_scratch.upar[iz,ir,is]
+            moments.ion.ppar[iz,ir,is] = final_scratch.ppar[iz,ir,is]
+            moments.ion.pperp[iz,ir,is] = final_scratch.pperp[iz,ir,is]
+        end
+        # No need to synchronize here as we only change electron quantities and previous
+        # region only changed ion quantities.
+        begin_r_z_region(no_synchronize=true)
+        @loop_r_z ir iz begin
+            moments.electron.dens[iz,ir] = final_scratch.electron_density[iz,ir]
+            moments.electron.upar[iz,ir] = final_scratch.electron_upar[iz,ir]
+            moments.electron.ppar[iz,ir] = final_scratch.electron_ppar[iz,ir]
+            moments.electron.temp[iz,ir] = final_scratch.electron_temp[iz,ir]
+        end
+        if composition.n_neutral_species > 0
+            # No need to synchronize here as we only change neutral quantities and previous
+            # region only changed plasma quantities.
+            begin_sn_r_z_region(no_synchronize=true)
+            @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+                pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn] = final_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
+            end
+            @loop_sn_r_z isn ir iz begin
+                moments.neutral.dens[iz,ir,isn] = final_scratch.density_neutral[iz,ir,isn]
+                moments.neutral.uz[iz,ir,isn] = final_scratch.uz_neutral[iz,ir,isn]
+                moments.neutral.pz[iz,ir,isn] = final_scratch.pz_neutral[iz,ir,isn]
+            end
+            # for now update moments.neutral object directly for diagnostic moments
+            # that are not used in Runga-Kutta steps
+            update_neutral_pr!(moments.neutral.pr, moments.neutral.pr_updated, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+            update_neutral_pzeta!(moments.neutral.pzeta, moments.neutral.pzeta_updated, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+            # Update ptot (isotropic pressure)
+            if r.n > 1 #if 2D geometry
+                @loop_sn_r_z isn ir iz begin
+                    moments.neutral.ptot[iz,ir,isn] = (moments.neutral.pz[iz,ir,isn] + moments.neutral.pr[iz,ir,isn] + moments.neutral.pzeta[iz,ir,isn])/3.0
+                end
+            else # 1D model
+                @loop_sn_r_z isn ir iz begin
+                    moments.neutral.ptot[iz,ir,isn] = moments.neutral.pz[iz,ir,isn]
+                end
+            end
+            # get particle fluxes (n.b. bad naming convention uz -> means -> n uz here)
+            update_neutral_ur!(moments.neutral.ur, moments.neutral.ur_updated,
+                               moments.neutral.dens, pdf.neutral.norm, vz, vr, vzeta, z, r,
+                               composition)
+            update_neutral_uzeta!(moments.neutral.uzeta, moments.neutral.uzeta_updated,
+                                  moments.neutral.dens, pdf.neutral.norm, vz, vr, vzeta, z,
+                                  r, composition)
+            try #below loop can cause DomainError if ptot < 0 or density < 0, so exit cleanly if possible
+                @loop_sn_r_z isn ir iz begin
+                    # update density using last density from Runga-Kutta stages
+                    moments.neutral.dens[iz,ir,isn] = final_scratch.density_neutral[iz,ir,isn]
+                    # get vth for neutrals
+                    moments.neutral.vth[iz,ir,isn] = sqrt(2.0*moments.neutral.ptot[iz,ir,isn]/moments.neutral.dens[iz,ir,isn])
+                end
+            catch e
+                if global_size[] > 1
+                    println("ERROR: error at line 724 of time_advance.jl")
+                    println(e)
+                    display(stacktrace(catch_backtrace()))
+                    flush(stdout)
+                    flush(stderr)
+                    MPI.Abort(comm_world, 1)
+                end
+                rethrow(e)
+            end
+        end
+
     end
 
     return nothing
@@ -2970,84 +3053,90 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t, t_params, 
     elseif success != ""
         error("Implicit part of timestep failed")
     end
+#if global_rank[] == 0
+#    println("loworder ", scratch[2].pdf[92:95,1,1,1,1])
+#    println()
+#end
 
     reset_nonlinear_per_stage_counters(nl_solver_params.ion_advance)
     reset_nonlinear_per_stage_counters(nl_solver_params.vpa_advection)
     reset_nonlinear_per_stage_counters(nl_solver_params.maxwell_diffusion)
 
-    istage = n_rk_stages+1
+    if t_params.previous_dt[] > 0.0
+        istage = n_rk_stages+1
 
-    # update the pdf.norm and moments arrays as needed
-    begin_s_r_z_region()
-    final_scratch = scratch[istage]
-    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-        pdf.ion.norm[ivpa,ivperp,iz,ir,is] = final_scratch.pdf[ivpa,ivperp,iz,ir,is]
-    end
-    @loop_s_r_z is ir iz begin
-        moments.ion.dens[iz,ir,is] = final_scratch.density[iz,ir,is]
-        moments.ion.upar[iz,ir,is] = final_scratch.upar[iz,ir,is]
-        moments.ion.ppar[iz,ir,is] = final_scratch.ppar[iz,ir,is]
-        moments.ion.pperp[iz,ir,is] = final_scratch.pperp[iz,ir,is]
-    end
-    # No need to synchronize here as we only change electron quantities and previous
-    # region only changed ion quantities.
-    begin_r_z_region(no_synchronize=true)
-    @loop_r_z ir iz begin
-        moments.electron.dens[iz,ir] = final_scratch.electron_density[iz,ir]
-        moments.electron.upar[iz,ir] = final_scratch.electron_upar[iz,ir]
-        moments.electron.ppar[iz,ir] = final_scratch.electron_ppar[iz,ir]
-        moments.electron.temp[iz,ir] = final_scratch.electron_temp[iz,ir]
-    end
-    if composition.n_neutral_species > 0
-        # No need to synchronize here as we only change neutral quantities and previous
-        # region only changed plasma quantities.
-        begin_sn_r_z_region(no_synchronize=true)
-        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
-            pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn] = final_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
+        # update the pdf.norm and moments arrays as needed
+        begin_s_r_z_region()
+        final_scratch = scratch[istage]
+        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+            pdf.ion.norm[ivpa,ivperp,iz,ir,is] = final_scratch.pdf[ivpa,ivperp,iz,ir,is]
         end
-        @loop_sn_r_z isn ir iz begin
-            moments.neutral.dens[iz,ir,isn] = final_scratch.density_neutral[iz,ir,isn]
-            moments.neutral.uz[iz,ir,isn] = final_scratch.uz_neutral[iz,ir,isn]
-            moments.neutral.pz[iz,ir,isn] = final_scratch.pz_neutral[iz,ir,isn]
+        @loop_s_r_z is ir iz begin
+            moments.ion.dens[iz,ir,is] = final_scratch.density[iz,ir,is]
+            moments.ion.upar[iz,ir,is] = final_scratch.upar[iz,ir,is]
+            moments.ion.ppar[iz,ir,is] = final_scratch.ppar[iz,ir,is]
+            moments.ion.pperp[iz,ir,is] = final_scratch.pperp[iz,ir,is]
         end
-        # for now update moments.neutral object directly for diagnostic moments
-        # that are not used in Runga-Kutta steps
-        update_neutral_pr!(moments.neutral.pr, moments.neutral.pr_updated, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
-        update_neutral_pzeta!(moments.neutral.pzeta, moments.neutral.pzeta_updated, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
-        # Update ptot (isotropic pressure)
-        if r.n > 1 #if 2D geometry
-            @loop_sn_r_z isn ir iz begin
-                moments.neutral.ptot[iz,ir,isn] = (moments.neutral.pz[iz,ir,isn] + moments.neutral.pr[iz,ir,isn] + moments.neutral.pzeta[iz,ir,isn])/3.0
+        # No need to synchronize here as we only change electron quantities and previous
+        # region only changed ion quantities.
+        begin_r_z_region(no_synchronize=true)
+        @loop_r_z ir iz begin
+            moments.electron.dens[iz,ir] = final_scratch.electron_density[iz,ir]
+            moments.electron.upar[iz,ir] = final_scratch.electron_upar[iz,ir]
+            moments.electron.ppar[iz,ir] = final_scratch.electron_ppar[iz,ir]
+            moments.electron.temp[iz,ir] = final_scratch.electron_temp[iz,ir]
+        end
+        if composition.n_neutral_species > 0
+            # No need to synchronize here as we only change neutral quantities and previous
+            # region only changed plasma quantities.
+            begin_sn_r_z_region(no_synchronize=true)
+            @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+                pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn] = final_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
             end
-        else # 1D model
             @loop_sn_r_z isn ir iz begin
-                moments.neutral.ptot[iz,ir,isn] = moments.neutral.pz[iz,ir,isn]
-            end
-        end
-        # get particle fluxes (n.b. bad naming convention uz -> means -> n uz here)
-        update_neutral_ur!(moments.neutral.ur, moments.neutral.ur_updated,
-                           moments.neutral.dens, pdf.neutral.norm, vz, vr, vzeta, z, r,
-                           composition)
-        update_neutral_uzeta!(moments.neutral.uzeta, moments.neutral.uzeta_updated,
-                              moments.neutral.dens, pdf.neutral.norm, vz, vr, vzeta, z,
-                              r, composition)
-        try #below loop can cause DomainError if ptot < 0 or density < 0, so exit cleanly if possible
-            @loop_sn_r_z isn ir iz begin
-                # update density using last density from Runga-Kutta stages
                 moments.neutral.dens[iz,ir,isn] = final_scratch.density_neutral[iz,ir,isn]
-                # get vth for neutrals
-                moments.neutral.vth[iz,ir,isn] = sqrt(2.0*moments.neutral.ptot[iz,ir,isn]/moments.neutral.dens[iz,ir,isn])
+                moments.neutral.uz[iz,ir,isn] = final_scratch.uz_neutral[iz,ir,isn]
+                moments.neutral.pz[iz,ir,isn] = final_scratch.pz_neutral[iz,ir,isn]
             end
-        catch e
-            if global_size[] > 1
-                println("ERROR: error at line 724 of time_advance.jl")
-                println(e)
-                display(stacktrace(catch_backtrace()))
-                flush(stdout)
-                flush(stderr)
-                MPI.Abort(comm_world, 1)
+            # for now update moments.neutral object directly for diagnostic moments
+            # that are not used in Runga-Kutta steps
+            update_neutral_pr!(moments.neutral.pr, moments.neutral.pr_updated, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+            update_neutral_pzeta!(moments.neutral.pzeta, moments.neutral.pzeta_updated, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+            # Update ptot (isotropic pressure)
+            if r.n > 1 #if 2D geometry
+                @loop_sn_r_z isn ir iz begin
+                    moments.neutral.ptot[iz,ir,isn] = (moments.neutral.pz[iz,ir,isn] + moments.neutral.pr[iz,ir,isn] + moments.neutral.pzeta[iz,ir,isn])/3.0
+                end
+            else # 1D model
+                @loop_sn_r_z isn ir iz begin
+                    moments.neutral.ptot[iz,ir,isn] = moments.neutral.pz[iz,ir,isn]
+                end
             end
-            rethrow(e)
+            # get particle fluxes (n.b. bad naming convention uz -> means -> n uz here)
+            update_neutral_ur!(moments.neutral.ur, moments.neutral.ur_updated,
+                               moments.neutral.dens, pdf.neutral.norm, vz, vr, vzeta, z, r,
+                               composition)
+            update_neutral_uzeta!(moments.neutral.uzeta, moments.neutral.uzeta_updated,
+                                  moments.neutral.dens, pdf.neutral.norm, vz, vr, vzeta, z,
+                                  r, composition)
+            try #below loop can cause DomainError if ptot < 0 or density < 0, so exit cleanly if possible
+                @loop_sn_r_z isn ir iz begin
+                    # update density using last density from Runga-Kutta stages
+                    moments.neutral.dens[iz,ir,isn] = final_scratch.density_neutral[iz,ir,isn]
+                    # get vth for neutrals
+                    moments.neutral.vth[iz,ir,isn] = sqrt(2.0*moments.neutral.ptot[iz,ir,isn]/moments.neutral.dens[iz,ir,isn])
+                end
+            catch e
+                if global_size[] > 1
+                    println("ERROR: error at line 724 of time_advance.jl")
+                    println(e)
+                    display(stacktrace(catch_backtrace()))
+                    flush(stdout)
+                    flush(stderr)
+                    MPI.Abort(comm_world, 1)
+                end
+                rethrow(e)
+            end
         end
     end
 
