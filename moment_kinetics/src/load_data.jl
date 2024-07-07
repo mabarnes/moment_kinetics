@@ -54,11 +54,11 @@ const timestep_diagnostic_variables = ("time_for_run", "step_counter", "dt",
 const em_variables = ("phi", "Er", "Ez")
 const ion_moment_variables = ("density", "parallel_flow", "parallel_pressure",
                               "thermal_speed", "temperature", "parallel_heat_flux",
-                              "collision_frequency_ii", "collision_frequency_ee",
-                              "collision_frequency_ei", "sound_speed", "mach_number")
+                              "collision_frequency_ii", "sound_speed", "mach_number")
 const electron_moment_variables = ("electron_density", "electron_parallel_flow",
                                    "electron_parallel_pressure", "electron_thermal_speed",
                                    "electron_temperature", "electron_parallel_heat_flux",
+                                   "collision_frequency_ee", "collision_frequency_ei",
                                    "electron_dudz", "electron_dpdz", "electron_dqdz")
 const neutral_moment_variables = ("density_neutral", "uz_neutral", "pz_neutral",
                                   "thermal_speed_neutral", "temperature_neutral",
