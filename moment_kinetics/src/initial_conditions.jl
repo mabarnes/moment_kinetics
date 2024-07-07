@@ -445,7 +445,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
         scratch[1].electron_pperp .= 0.0 #moments.electron.pperp
         scratch[1].electron_temp .= moments.electron.temp
         if t_params.electron === nothing
-            n_rk_stages = length(scratch)
+            n_rk_stages = length(scratch) - 1
         else
             n_rk_stages = t_params.electron.n_rk_stages
         end
