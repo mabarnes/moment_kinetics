@@ -416,6 +416,26 @@ function enforce_zero_incoming_bc!(pdf, speed, z, zero)
         end
     end
 end
+function get_ion_z_boundary_cutoff_indices(density, upar, ppar, evolve_upar, evolve_ppar,
+                                           z, vpa, zero)
+    if z.irank == 0
+        vth = sqrt(2.0*(ppar[1]/density[1]))
+        @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, vth,
+                                         upar[1], evolve_ppar, evolve_upar)
+        last_negative_vpa_ind = searchsortedlast(vpa.scratch, -zero)
+    else
+        last_negative_vpa_ind = nothing
+    end
+    if z.irank == z.nrank - 1
+        vth = sqrt(2.0*(ppar[end]/density[end]))
+        @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, vth,
+                                          upar[end], evolve_ppar, evolve_upar)
+        first_positive_vpa_ind = searchsortedfirst(vpa.scratch2, zero)
+    else
+        first_positive_vpa_ind = nothing
+    end
+    return last_negative_vpa_ind, first_positive_vpa_ind
+end
 function enforce_zero_incoming_bc!(pdf, z::coordinate, vpa::coordinate, density, upar,
                                    ppar, evolve_upar, evolve_ppar, zero)
     if z.irank != 0 && z.irank != z.nrank - 1
@@ -429,28 +449,15 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vpa::coordinate, density,
     # so use advection speed below instead of vpa
 
     # absolute velocity at left boundary
+    last_negative_vpa_ind, first_positive_vpa_ind =
+        get_ion_z_boundary_cutoff_indices(density, upar, ppar, evolve_upar, evolve_ppar,
+                                          z, vpa, zero)
     if z.irank == 0
-        @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, sqrt(2.0*(ppar[1]/density[1])),
-                                         upar[1], evolve_ppar, evolve_upar)
-        @loop_vpa ivpa begin
-            # for left boundary in zed (z = -Lz/2), want
-            # f(z=-Lz/2, v_parallel > 0) = 0
-            if vpa.scratch[ivpa] > zero
-                pdf[ivpa,:,1] .= 0.0
-            end
-        end
+        pdf[last_negative_vpa_ind+1:end, :, 1] .= 0.0
     end
     # absolute velocity at right boundary
     if z.irank == z.nrank - 1
-        @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, sqrt(2.0*(ppar[end]/density[end])),
-                                          upar[end], evolve_ppar, evolve_upar)
-        @loop_vpa ivpa begin
-            # for right boundary in zed (z = Lz/2), want
-            # f(z=Lz/2, v_parallel < 0) = 0
-            if vpa.scratch2[ivpa] < -zero
-                pdf[ivpa,:,end] .= 0.0
-            end
-        end
+        pdf[1:first_positive_vpa_ind-1, :, end] .= 0.0
     end
 
     # Special constraint-forcing code that tries to keep the modifications smooth at
