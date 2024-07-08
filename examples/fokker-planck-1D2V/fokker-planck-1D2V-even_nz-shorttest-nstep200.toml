@@ -9,7 +9,6 @@ evolve_moments_parallel_flow = false
 evolve_moments_parallel_pressure = false
 evolve_moments_conservation = false
 #force_Er_zero_at_wall = false #true
-#Er_constant = 0.0
 #epsilon_offset = 0.1
 #use_vpabar_in_mms_dfni = true
 T_e = 1.0
