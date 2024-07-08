@@ -7457,7 +7457,7 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
             ##########################
 
             CFL_fig, ax = get_1d_ax(; xlabel="time", ylabel="(grid spacing) / speed")
-            maxval = Inf
+            #maxval = Inf
             for ri ∈ run_info
                 if length(run_info) == 1
                     prefix = ""
@@ -7496,7 +7496,7 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                 end
                 for varname ∈ CFL_vars
                     var = get_variable(ri, varname)
-                    maxval = NaNMath.min(maxval, NaNMath.maximum(var))
+                    #maxval = NaNMath.min(maxval, NaNMath.maximum(var))
                     if occursin("neutral", varname)
                         if varname ∈ implicit_CFL_vars
                             linestyle = :dashdot
@@ -7510,10 +7510,12 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                             linestyle = nothing
                         end
                     end
-                    plot_1d(time, var; ax=ax, label=prefix*electron_prefix*varname, linestyle=linestyle)
+                    plot_1d(time, var; ax=ax, label=prefix*electron_prefix*varname,
+                            linestyle=linestyle, yscale=log10,
+                            transform=x->positive_or_nan(x; epsilon=1.e-20))
                 end
             end
-            ylims!(ax, 0.0, 10.0 * maxval)
+            #ylims!(ax, 0.0, 10.0 * maxval)
             put_legend_right(CFL_fig, ax)
 
             limits_fig, ax = get_1d_ax(; xlabel="time", ylabel="number of limits per factor per output",
