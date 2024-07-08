@@ -94,6 +94,15 @@ using IfElse
             end
             dBdz = expand_derivatives(Dz(Bmag))
             jacobian = 1.0
+        elseif option == "0D-Spitzer-test"
+            Bmag = 1.0
+            dBdz = geometry_input_data.dBdz_constant
+            dBdr = geometry_input_data.dBdr_constant
+            bzed = pitch
+            bzeta = sqrt(1 - bzed^2)
+            Bzed = Bmag*bzed
+            Bzeta = Bmag*bzeta
+            jacobian = 1.0
         else
             input_option_error("$option", option)
         end

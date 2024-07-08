@@ -6,13 +6,21 @@ export update_speed_vperp!
 using ..advection: advance_f_local!
 using ..chebyshev: chebyshev_info
 using ..looping
+using ..z_advection: update_speed_z!
+using ..r_advection: update_speed_r!
 
 # do a single stage time advance (potentially as part of a multi-stage RK scheme)
 function vperp_advection!(f_out, fvec_in, vperp_advect, r, z, vperp, vpa,
-                      dt, vperp_spectral, composition, z_advect, r_advect, geometry)
+                      dt, vperp_spectral, composition, z_advect, r_advect, geometry,
+                      moments, fields, t)
+    
+    # if appropriate, update z and r speeds
+    update_z_r_speeds!(z_advect, r_advect, fvec_in, moments, fields,
+                            geometry, vpa, vperp, z, r, t)
+    
     begin_s_r_z_vpa_region()
     @loop_s is begin
-        # get the updated speed along the r direction using the current f
+        # get the updated speed along the vperp direction using the current f
         @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r, z_advect[is], r_advect[is], geometry)
         @loop_r_z_vpa ir iz ivpa begin
             @views advance_f_local!(f_out[ivpa,:,iz,ir,is], fvec_in.pdf[ivpa,:,iz,ir,is],
@@ -57,5 +65,35 @@ function update_speed_vperp!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect,
     end
     return nothing
 end
+
+function update_z_r_speeds!(z_advect, r_advect, fvec_in, moments, fields,
+                            geometry, vpa, vperp, z, r, t)
+    update_z_speed = (z.n == 1 && geometry.input.option == "0D-Spitzer-test")
+    if update_z_speed
+    # make sure z speed is physical despite
+    # 0D nature of simulation
+        begin_s_r_vperp_vpa_region()
+        @loop_s is begin
+            # get the updated speed along the z direction using the current f
+            @views update_speed_z!(z_advect[is], fvec_in.upar[:,:,is],
+                                   moments.ion.vth[:,:,is], moments.evolve_upar,
+                                   moments.evolve_ppar, fields, vpa, vperp, z, r, t, geometry, is)
+        end
+    end
+    
+    update_r_speed = (r.n == 1 && geometry.input.option == "0D-Spitzer-test")
+    if update_r_speed
+    # make sure r speed is physical despite
+    # 0D nature of simulation
+        begin_s_z_vperp_vpa_region()
+        @loop_s is begin
+            # get the updated speed along the r direction using the current f
+            update_speed_r!(r_advect[is], fvec_in.upar[:,:,is],
+                               moments.ion.vth[:,:,is], fields, moments.evolve_upar,
+                               moments.evolve_ppar, vpa, vperp, z, r, geometry, is)
+        end
+    end
+    return nothing
+end    
 
 end

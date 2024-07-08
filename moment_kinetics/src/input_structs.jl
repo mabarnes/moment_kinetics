@@ -417,7 +417,11 @@ Base.@kwdef struct geometry_input
     # constant for testing nonzero Er when nr = 1
     Er_constant::mk_float
     # constant for testing nonzero Ez when nz = 1
-    Ez_constant::mk_float  
+    Ez_constant::mk_float
+    # constant for testing nonzero dBdz when nz = 1
+    dBdz_constant::mk_float
+    # constant for testing nonzero dBdr when nr = 1
+    dBdr_constant::mk_float
 end
 
 @enum binary_format_type hdf5 netcdf

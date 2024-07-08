@@ -87,7 +87,11 @@ function setup_geometry_input(toml_input::Dict, reference_rhostar)
         # constant for testing nonzero Er when nr = 1
         Er_constant = 0.0,
         # constant for testing nonzero Ez when nz = 1
-        Ez_constant = 0.0)
+        Ez_constant = 0.0,
+        # constant for testing nonzero dBdz when nz = 1
+        dBdz_constant = 0.0,
+        # constant for testing nonzero dBdr when nr = 1
+        dBdr_constant = 0.0)
     
     input = Dict(Symbol(k)=>v for (k,v) in input_section)
     #println(input)
@@ -196,6 +200,31 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
                 cvdriftz[iz,ir] = -(bzeta[iz,ir]/Bmag[iz,ir])*(bzeta[iz,ir]^2)/rr
                 gbdriftr[iz,ir] = 0.0
                 gbdriftz[iz,ir] = cvdriftz[iz,ir]
+            end
+        end
+    elseif option == "0D-Spitzer-test"
+     # a 0D configuration with certain geometrical factors
+     # set to be constants to enable testing of velocity
+     # space operators such as mirror or vperp advection terms
+     pitch = geometry_input_data.pitch
+     dBdz_constant = geometry_input_data.dBdz_constant
+     dBdr_constant = geometry_input_data.dBdr_constant
+     B0 = 1.0 # chose reference field strength to be Bzeta at r = 1
+     for ir in 1:nr
+            for iz in 1:nz
+                Bmag[iz,ir] = B0
+                bzed[iz,ir] = pitch
+                bzeta[iz,ir] = sqrt(1 - pitch^2)
+                Bzed[iz,ir] = bzed[iz,ir]*Bmag[iz,ir]
+                Bzeta[iz,ir] = bzeta[iz,ir]*Bmag[iz,ir]
+                dBdz[iz,ir] = dBdz_constant
+                dBdr[iz,ir] = dBdr_constant
+                jacobian[iz,ir] = 1.0
+                
+                cvdriftr[iz,ir] = 0.0
+                cvdriftz[iz,ir] = 0.0
+                gbdriftr[iz,ir] = 0.0
+                gbdriftz[iz,ir] = 0.0
             end
         end
     else 

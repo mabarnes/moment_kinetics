@@ -649,8 +649,8 @@ function setup_advance_flags(moments, composition, t_params, collisions,
     # otherwise, check to see if the flags need to be set to true
     if !t_params.split_operators
         # default for non-split operators is to include both vpa and z advection together
-        advance_vpa_advection = vpa.n > 1 && z.n > 1
-        advance_vperp_advection = vperp.n > 1 && z.n > 1
+        advance_vpa_advection = vpa.n > 1 #&& z.n > 1
+        advance_vperp_advection = vperp.n > 1 #&& z.n > 1
         advance_z_advection = z.n > 1
         advance_r_advection = r.n > 1
         if collisions.fkpl.nuii > 0.0 && vperp.n > 1 
@@ -2085,7 +2085,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     end
 
     # r advection relies on derivatives in z to get ExB
-    if advance.r_advection && r.n > 1
+    if advance.r_advection
         r_advection!(fvec_out.pdf, fvec_in, moments, fields, r_advect, r, z, vperp, vpa,
                      dt, r_spectral, composition, geometry, scratch_dummy)
     end
@@ -2093,7 +2093,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     # so call vperp_advection! only after z and r advection routines
     if advance.vperp_advection
         vperp_advection!(fvec_out.pdf, fvec_in, vperp_advect, r, z, vperp, vpa,
-                      dt, vperp_spectral, composition, z_advect, r_advect, geometry)
+                      dt, vperp_spectral, composition, z_advect, r_advect, geometry,
+                      moments, fields, t)
     end
 
     if advance.source_terms
@@ -2106,7 +2107,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
             r, z, vzeta, vr, vz, dt, t, z_spectral, composition, scratch_dummy)
     end
 
-    if advance.neutral_r_advection && r.n > 1
+    if advance.neutral_r_advection
         neutral_advection_r!(fvec_out.pdf_neutral, fvec_in, neutral_r_advect,
             r, z, vzeta, vr, vz, dt, r_spectral, composition, geometry, scratch_dummy)
     end
