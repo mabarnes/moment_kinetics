@@ -305,7 +305,7 @@ mutable struct species_composition
     # wall potential used if electron_physics=boltzmann_electron_response_with_simple_sheath
     phi_wall::mk_float
     # constant for testing nonzero Er
-    Er_constant::mk_float
+    #Er_constant::mk_float
     # ratio of the neutral particle mass to the ion mass
     mn_over_mi::mk_float
     # ratio of the electron particle mass to the ion mass
@@ -414,6 +414,10 @@ Base.@kwdef struct geometry_input
     pitch::mk_float = 1.0
     # DeltaB ( = (Bzed(z=L/2) - Bzed(0))/Bref if geometry_option == "1D-mirror")
     DeltaB::mk_float = 0.0
+    # constant for testing nonzero Er when nr = 1
+    Er_constant::mk_float
+    # constant for testing nonzero Ez when nz = 1
+    Ez_constant::mk_float  
 end
 
 @enum binary_format_type hdf5 netcdf

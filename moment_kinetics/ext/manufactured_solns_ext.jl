@@ -43,6 +43,8 @@ using IfElse
     # does not appear in a particular geometric coefficient, because 
     # that coefficient is a constant. 
     struct geometric_coefficients_sym{}
+        Er_constant::mk_float
+        Ez_constant::mk_float
         rhostar::mk_float
         Bzed::Union{mk_float,Num}
         Bzeta::Union{mk_float,Num}
@@ -62,6 +64,8 @@ using IfElse
         option = geometry_input_data.option
         rhostar = geometry_input_data.rhostar
         pitch = geometry_input_data.pitch
+        Er_constant = geometry_input_data.Er_constant
+        Ez_constant = geometry_input_data.Ez_constant
         if option == "constant-helical" || option == "default"
             bzed = pitch
             bzeta = sqrt(1 - bzed^2)
@@ -93,7 +97,8 @@ using IfElse
         else
             input_option_error("$option", option)
         end
-        geo_sym = geometric_coefficients_sym(rhostar,Bzed,Bzeta,Bmag,bzed,bzeta,dBdz,dBdr,jacobian)
+        geo_sym = geometric_coefficients_sym(Er_constant,Ez_constant,
+          rhostar,Bzed,Bzeta,Bmag,bzed,bzeta,dBdz,dBdr,jacobian)
         return geo_sym
     end
 
@@ -272,7 +277,7 @@ using IfElse
             upari = 0.0
         elseif z_bc == "wall"
             densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
-            Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr,manufactured_solns_input,species)
+            Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,geometry,nr,manufactured_solns_input,species)
             Bzeta = geometry.Bzeta
             Bmag = geometry.Bmag
             rhostar = geometry.rhostar
@@ -402,7 +407,7 @@ using IfElse
         return dfni
     end
 
-    function electric_fields(Lr, Lz, r_bc, z_bc, composition, nr,
+    function electric_fields(Lr, Lz, r_bc, z_bc, composition, geometry, nr,
                              manufactured_solns_input, species)
        
         # define derivative operators
@@ -500,11 +505,13 @@ using IfElse
         return manufactured_solns_list
     end 
     
-    function manufactured_electric_fields(Lr, Lz, r_bc, z_bc, composition, nr,
+    function manufactured_electric_fields(Lr, Lz, r_bc, z_bc, composition, geometry_input_data::geometry_input, nr,
                                           manufactured_solns_input, species)
         
+        # calculate the geometry symbolically
+        geometry = geometry_sym(geometry_input_data,Lz,Lr,nr)
         # calculate the electric fields and the potential
-        Er, Ez, phi = electric_fields(Lr, Lz, r_bc, z_bc, composition, nr,
+        Er, Ez, phi = electric_fields(Lr, Lz, r_bc, z_bc, composition, geometry, nr,
                                       manufactured_solns_input, species)
         
         Er_func = build_function(Er, z, r, t, expression=Val{false})
@@ -603,7 +610,7 @@ using IfElse
         
         # calculate the electric fields and the potential
         Er, Ez, phi = electric_fields(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc,
-                                      composition, r_coord.n, manufactured_solns_input,
+                                      composition, geometry, r_coord.n, manufactured_solns_input,
                                       ion_species)
 
         # the adiabatic invariant (for compactness)

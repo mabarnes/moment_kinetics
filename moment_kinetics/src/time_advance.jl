@@ -394,7 +394,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
 
     # initialize the electrostatic potential
     begin_serial_region()
-    update_phi!(fields, scratch[1], vperp, z, r, composition, z_spectral, r_spectral, scratch_dummy, gyroavs)
+    update_phi!(fields, scratch[1], vperp, z, r, composition, geometry, z_spectral, r_spectral, scratch_dummy, gyroavs)
     @serial_region begin
         # save the initial phi(z) for possible use later (e.g., if forcing phi)
         fields.phi0 .= fields.phi
@@ -592,7 +592,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         end
     end
 
-    update_phi!(fields, scratch[1], vperp, z, r, composition, z_spectral, r_spectral,
+    update_phi!(fields, scratch[1], vperp, z, r, composition, geometry, z_spectral, r_spectral,
                 scratch_dummy, gyroavs)
     calculate_ion_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, 
                                       ion_mom_diss_coeff)
@@ -1572,7 +1572,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     end
 
     # update the electrostatic potential phi
-    update_phi!(fields, scratch[istage+1], vperp, z, r, composition, z_spectral,
+    update_phi!(fields, scratch[istage+1], vperp, z, r, composition, geometry, z_spectral,
                 r_spectral, scratch_dummy, gyroavs)
     # _block_synchronize() here because phi needs to be read on different ranks than
     # it was written on, even though the loop-type does not change here. However,
@@ -1603,7 +1603,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
             end
 
             # update the electrostatic potential phi
-            update_phi!(fields, scratch[istage+1], vperp, z, r, composition, z_spectral,
+            update_phi!(fields, scratch[istage+1], vperp, z, r, composition, geometry, z_spectral,
                         r_spectral, scratch_dummy, gyroavs)
             if !(( moments.evolve_upar || moments.evolve_ppar) &&
                       istage == length(scratch)-1)

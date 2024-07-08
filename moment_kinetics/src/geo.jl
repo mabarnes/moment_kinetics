@@ -73,11 +73,22 @@ option = ""
 
 """
 function setup_geometry_input(toml_input::Dict, reference_rhostar)
-    input_section = get(toml_input, "geometry", Dict{String,Any}())
-    if !("rhostar" ∈ keys(input_section))
-        # Set default rhostar with reference value
-        input_section["rhostar"] = get(input_section, "rhostar", reference_rhostar)
-    end
+    # read the input toml and specify a sensible default
+    input_section = set_defaults_and_check_section!(toml_input, "geometry",
+        # begin default inputs (as kwargs)
+        # rhostar ion (ref)
+        rhostar = reference_rhostar #used to premultiply ExB drift terms
+        # magnetic geometry option
+        option = "constant-helical" # "1D-mirror"
+        # pitch ( = Bzed/Bmag if geometry_option == "constant-helical")
+        pitch = 1.0,
+        # DeltaB ( = (Bzed(z=L/2) - Bzed(0))/Bref if geometry_option == "1D-mirror")
+        DeltaB = 0.0,
+        # constant for testing nonzero Er when nr = 1
+        Er_constant = 0.0,
+        # constant for testing nonzero Ez when nz = 1
+        Ez_constant = 0.0)
+    
     input = Dict(Symbol(k)=>v for (k,v) in input_section)
     #println(input)
     return geometry_input(; input...)
