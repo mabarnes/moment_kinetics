@@ -417,7 +417,7 @@ using IfElse
         # get N_e factor for boltzmann response
         if composition.electron_physics == boltzmann_electron_response_with_simple_sheath && nr == 1 
             # so 1D MMS test with 3V neutrals where ion current can be calculated prior to knowing Er
-            jpari_into_LHS_wall = jpari_into_LHS_wall_sym(Lr, Lz, r_bc, z_bc,
+            jpari_into_LHS_wall = jpari_into_LHS_wall_sym(Lr, Lz, r_bc, z_bc, composition,
                                                           manufactured_solns_input)
             N_e = -2.0*sqrt(pi*composition.me_over_mi)*exp(-composition.phi_wall/composition.T_e)*jpari_into_LHS_wall
         elseif composition.electron_physics == boltzmann_electron_response_with_simple_sheath && nr > 1 
