@@ -8,7 +8,7 @@ module geo
 export init_magnetic_geometry
 export setup_geometry_input
 
-using ..input_structs: geometry_input
+using ..input_structs: geometry_input, set_defaults_and_check_section!
 using ..file_io: input_option_error
 using ..array_allocation: allocate_float
 using ..type_definitions: mk_float, mk_int
@@ -77,9 +77,9 @@ function setup_geometry_input(toml_input::Dict, reference_rhostar)
     input_section = set_defaults_and_check_section!(toml_input, "geometry",
         # begin default inputs (as kwargs)
         # rhostar ion (ref)
-        rhostar = reference_rhostar #used to premultiply ExB drift terms
+        rhostar = reference_rhostar, #used to premultiply ExB drift terms
         # magnetic geometry option
-        option = "constant-helical" # "1D-mirror"
+        option = "constant-helical",# "1D-mirror"
         # pitch ( = Bzed/Bmag if geometry_option == "constant-helical")
         pitch = 1.0,
         # DeltaB ( = (Bzed(z=L/2) - Bzed(0))/Bref if geometry_option == "1D-mirror")

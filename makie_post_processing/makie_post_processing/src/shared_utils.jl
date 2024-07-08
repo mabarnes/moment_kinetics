@@ -5,7 +5,6 @@ export calculate_and_write_frequencies, get_geometry, get_composition
 using moment_kinetics.analysis: fit_delta_phi_mode
 using moment_kinetics.array_allocation: allocate_float
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.geo: init_magnetic_geometry
 using moment_kinetics.input_structs: boltzmann_electron_response,
                                      boltzmann_electron_response_with_simple_sheath,
                                      grid_input, geometry_input, species_composition
@@ -13,7 +12,7 @@ using moment_kinetics.moment_kinetics_input: get_default_rhostar, setup_referenc
 using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.reference_parameters: setup_reference_parameters
 using moment_kinetics.moment_kinetics_input: get_default_rhostar
-using moment_kinetics.geo: init_magnetic_geometry
+using moment_kinetics.geo: init_magnetic_geometry, setup_geometry_input
 using MPI
 
 """
@@ -90,7 +89,7 @@ function get_composition(scan_input)
     use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
     gyrokinetic_ions = get(scan_input, "gyrokinetic_ions", false)
     # constant to be used to test nonzero Er in wall boundary condition
-    Er_constant = get(scan_input, "Er_constant", 0.0)
+    #Er_constant = get(scan_input, "Er_constant", 0.0)
     recycling_fraction = get(scan_input, "recycling_fraction", 1.0)
     # constant to be used to control Ez divergences
     epsilon_offset = get(scan_input, "epsilon_offset", 0.001)
@@ -106,7 +105,7 @@ function get_composition(scan_input)
     # ratio of the electron particle mass to the ion particle mass
     me_over_mi = 1.0/1836.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
-        electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, Er_constant,
+        electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, #Er_constant,
         mn_over_mi, me_over_mi, recycling_fraction, gyrokinetic_ions, allocate_float(n_species))
     return composition
 
@@ -114,18 +113,10 @@ end
 
 function get_geometry(scan_input,z,r)
     reference_params = setup_reference_parameters(scan_input)
-    # set geometry_input
-    # MRH need to get this in way that does not duplicate code
-    # MRH from moment_kinetics_input.jl
-    option = get(scan_input, "geometry_option", "constant-helical") #"1D-mirror"
-    pitch = get(scan_input, "pitch", 1.0)
-    rhostar = get(scan_input, "rhostar", get_default_rhostar(reference_params))
-    DeltaB = get(scan_input, "DeltaB", 1.0)
-    geo_in = geometry_input(rhostar,option,pitch,DeltaB)
+    reference_rhostar = get_default_rhostar(reference_params)
+    geo_in = setup_geometry_input(scan_input, reference_rhostar)
     geometry = init_magnetic_geometry(geo_in,z,r)
-    
     return geometry
-
 end
 
 end # shared_utils.jl

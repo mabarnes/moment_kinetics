@@ -136,8 +136,8 @@ function update_phi!(fields, fvec, vperp, z, r, composition, geometry, z_spectra
                 scratch_dummy.buffer_r_3, scratch_dummy.buffer_r_4,
                 z_spectral,z)
     else
-        @serial_region begin
-            fields.Ez[:,:] .= = geometry.input.Ez_constant
+        @loop_r_z ir iz begin
+            fields.Ez[iz,ir] = geometry.input.Ez_constant
             # Ez_constant defaults to 0.0 in geo.jl
         end
     end

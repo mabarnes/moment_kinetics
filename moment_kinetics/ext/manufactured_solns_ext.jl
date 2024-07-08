@@ -362,7 +362,7 @@ using IfElse
 
         if manufactured_solns_input.type == "default"
             # calculate the electric fields and the potential
-            Er, Ez, phi = electric_fields(Lr, Lz, r_bc, z_bc, composition, nr,
+            Er, Ez, phi = electric_fields(Lr, Lz, r_bc, z_bc, composition, geometry, nr,
                                           manufactured_solns_input, species)
 
             # get geometric/composition data
@@ -417,7 +417,7 @@ using IfElse
         # get N_e factor for boltzmann response
         if composition.electron_physics == boltzmann_electron_response_with_simple_sheath && nr == 1 
             # so 1D MMS test with 3V neutrals where ion current can be calculated prior to knowing Er
-            jpari_into_LHS_wall = jpari_into_LHS_wall_sym(Lr, Lz, r_bc, z_bc, composition,
+            jpari_into_LHS_wall = jpari_into_LHS_wall_sym(Lr, Lz, r_bc, z_bc,
                                                           manufactured_solns_input)
             N_e = -2.0*sqrt(pi*composition.me_over_mi)*exp(-composition.phi_wall/composition.T_e)*jpari_into_LHS_wall
         elseif composition.electron_physics == boltzmann_electron_response_with_simple_sheath && nr > 1 
@@ -442,8 +442,8 @@ using IfElse
         # calculate the electric fields
         dense = densi # get the electron density via quasineutrality with Zi = 1
         phi = composition.T_e*log(dense/N_e) # use the adiabatic response of electrons for me/mi -> 0
-        Er = -Dr(phi)*rfac + composition.Er_constant
-        Ez = -Dz(phi)
+        Er = -Dr(phi)*rfac + geometry.Er_constant
+        Ez = -Dz(phi)      + geometry.Ez_constant
         
         Er_expanded = expand_derivatives(Er)
         Ez_expanded = expand_derivatives(Ez)

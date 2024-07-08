@@ -1097,7 +1097,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
         densn_func = manufactured_solns_list.densn_func
         manufactured_E_fields =
             manufactured_electric_fields(Lr_in, z_global.L, r_global.bc, z_global.bc,
-                                         composition, r_global.n,
+                                         composition, geometry.input, r_global.n,
                                          manufactured_solns_input, species)
         Er_func = manufactured_E_fields.Er_func
         Ez_func = manufactured_E_fields.Ez_func

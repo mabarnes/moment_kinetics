@@ -10,7 +10,7 @@ using SpecialFunctions: besselj0
 import moment_kinetics
 using moment_kinetics.input_structs
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.geo: init_magnetic_geometry
+using moment_kinetics.geo: init_magnetic_geometry, setup_geometry_input
 using moment_kinetics.communication
 using moment_kinetics.looping
 using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
@@ -142,11 +142,9 @@ function gyroaverage_test(absolute_error; rhostar=0.1, pitch=0.5, ngrid=5, kr=2,
         gyrophase, gyrophase_spectral = define_coordinate(gyrophase_input; collision_operator_dim=false, run_directory=test_output_directory)
         
         # create test geometry
-        #rhostar = 0.1 #rhostar of ions for ExB drift
         option = "constant-helical"
-        #pitch = 1.0
-        DeltaB = 1.0
-        geometry_in = geometry_input(rhostar,option,pitch,DeltaB)
+        inputdict = Dict("geometry" => Dict("option" => option, "rhostar" => rhostar, "pitch" => pitch))
+        geometry_in = setup_geometry_input(inputdict, 0.1)
         geometry = init_magnetic_geometry(geometry_in,z,r)
         
         # create test composition
@@ -243,7 +241,7 @@ function create_test_composition()
     # wall potential at z = 0
     phi_wall = 0.0
     # constant to test nonzero Er
-    Er_constant = 0.0
+    #Er_constant = 0.0
     # ratio of the neutral particle mass to the ion particle mass
     mn_over_mi = 1.0
     # ratio of the electron particle mass to the ion particle mass
@@ -253,7 +251,7 @@ function create_test_composition()
     recycling_fraction = 1.0
     gyrokinetic_ions = true
     return composition = species_composition(n_species, n_ion_species, n_neutral_species,
-            electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, Er_constant,
+            electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, #Er_constant,
             mn_over_mi, me_over_mi, recycling_fraction, gyrokinetic_ions, allocate_float(n_species))
 end
 
