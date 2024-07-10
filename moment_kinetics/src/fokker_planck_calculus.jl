@@ -2287,18 +2287,22 @@ function enforce_vpavperp_BCs!(pdf,vpa,vperp,vpa_spectral,vperp_spectral)
     D0 = vperp_spectral.radau.D0
     # vpa boundary conditions
     # zero at infinity
-    begin_anyv_vperp_region()
-    @loop_vperp ivperp begin
-        pdf[1,ivperp] = 0.0
-        pdf[nvpa,ivperp] = 0.0
+    if vpa.bc == "zero"
+        begin_anyv_vperp_region()
+        @loop_vperp ivperp begin
+            pdf[1,ivperp] = 0.0
+            pdf[nvpa,ivperp] = 0.0
+        end
     end
     # vperp boundary conditions
     # zero boundary condition at infinity
     # set regularity condition d F / d vperp = 0 at vperp = 0
     # adjust F(vperp = 0) so that d F / d vperp = 0 at vperp = 0
     begin_anyv_vpa_region()
-    @loop_vpa ivpa begin
-        pdf[ivpa,nvperp] = 0.0
+    if vperp.bc in ("zero", "zero-no-regularity")
+        @loop_vpa ivpa begin
+            pdf[ivpa,nvperp] = 0.0
+        end
     end
     if vperp.bc == "zero"
         buffer = @view vperp.scratch[1:ngrid_vperp-1]

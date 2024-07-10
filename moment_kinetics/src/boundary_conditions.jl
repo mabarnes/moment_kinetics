@@ -954,6 +954,8 @@ function enforce_v_boundary_condition_local!(f, bc, speed, v_diffusion, v, v_spe
     elseif bc == "periodic"
         f[1] = 0.5*(f[1]+f[end])
         f[end] = f[1]
+    elseif bc == "none"
+        # Do nothing
     else
         error("Unsupported boundary condition option '$bc' for $(v.name)")
     end
