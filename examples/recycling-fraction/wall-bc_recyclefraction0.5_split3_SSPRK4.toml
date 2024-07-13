@@ -62,15 +62,9 @@ vz_bc = "zero"
 vz_discretization = "chebyshev_pseudospectral"
 
 [timestepping]
-type = "Fekete4(3)"
 #nstep = 50000
 nstep = 1000000
 dt = 1.0e-5
-#minimum_dt = 1.0e-8
-minimum_dt = 1.0e-6
-step_update_prefactor = 0.5
-atol = 1.0e-10
-#atol = 1.0e-9
 nwrite = 10000
 nwrite_dfns = 10000
 split_operators = false
