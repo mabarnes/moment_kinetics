@@ -17,6 +17,7 @@ export setup_mxwl_diff_collisions_input, ion_vpa_maxwell_diffusion!, neutral_vz_
 
 using ..looping
 using ..input_structs: mxwl_diff_collisions_input, set_defaults_and_check_section!
+using ..array_allocation: allocate_float
 using ..boundary_conditions: enforce_v_boundary_condition_local!, vpagrid_to_dzdt
 using ..calculus: derivative!, second_derivative!
 using ..moment_constraints: moment_constraints_on_residual!
@@ -24,6 +25,8 @@ using ..moment_kinetics_structs: scratch_pdf
 using ..nonlinear_solvers: newton_solve!
 using ..reference_parameters: get_reference_collision_frequency_ii
 using ..velocity_moments: update_derived_moments!, calculate_ion_moment_derivatives!
+
+using LinearAlgebra
 
 """
 Function for reading Maxwell diffusion operator input parameters. 
@@ -307,6 +310,75 @@ function implicit_ion_maxwell_diffusion!(f_out, fvec_in, moments, z_advect, vpa,
     vpa_bc = vpa.bc
     D_ii = collisions.mxwl_diff.D_ii
     zero = 1.0e-14
+
+    function get_precon(prefactor; icut_lower=2, icut_upper=vpa.n-1)
+        if !(isa(evolve_density, Val{true}) && isa(evolve_upar, Val{true}) &&
+             isa(evolve_ppar, Val{true}))
+            error("maxwell_diffusion preconditioner is only implemented for fully "
+                  * "moment-kinetic case")
+        end
+        if icut_lower < 2
+            icut_lower = 2
+        end
+        if icut_upper > vpa.n - 1
+            icut_upper = vpa.n - 1
+        end
+        # Dirichlet boundary conditions set the first and last values of the solution
+        # to zero, so can remove the first/last rows/columns of the matrix. Do this
+        # (even though it's slightly more complicated in a way) to keep the matrix
+        # symmetric, so that it has real eigenvalues and orthogonal eigenvectors.
+        # When there is a 'cutoff index' because we are imposing sheath-edge boundary
+        # conditions, more values (all those outside the `icut` index) are
+        # zero-ed out, and so removed from the matrix system.
+        precon_matrix = allocate_float(vpa.n-2, vpa.n-2)
+        precon_matrix .= 0.0
+        for i ∈ 1:vpa.nelement_local
+            imin = vpa.imin[i] - (i != 1)
+            if i != 1
+                # Remove first row/column
+                imin -= 1
+            end
+            imax = vpa.imax[i]
+            if i < vpa.nelement_local
+                # Remove first row/column
+                imax -= 1
+            else
+                # Remove first and last row/column
+                imax -= 2
+            end
+            if i == 1 && i == vpa.nelement_local
+                @. precon_matrix += vpa_spectral.lobatto.Dmat[2:end-1,2:end-1] / vpa.element_scale[i]
+            elseif i == 1
+                @. precon_matrix[imin:imax-1,imin:imax] += vpa_spectral.lobatto.Dmat[2:end-1,2:end] / vpa.element_scale[i]
+                @. precon_matrix[imax,imin:imax] += 0.5 * vpa_spectral.lobatto.Dmat[end,2:end] / vpa.element_scale[i]
+            elseif i == vpa.nelement_local
+                @. precon_matrix[imin,imin:imax] += 0.5 .* vpa_spectral.lobatto.Dmat[1,1:end-1] / vpa.element_scale[i]
+                @. precon_matrix[imin+1:imax,imin:imax] += vpa_spectral.lobatto.Dmat[2:end-1,1:end-1] / vpa.element_scale[i]
+            else
+                @. precon_matrix[imin,imin:imax] += 0.5 * vpa_spectral.lobatto.Dmat[1,:] / vpa.element_scale[i]
+                @. precon_matrix[imin+1:imax-1,imin:imax] += vpa_spectral.lobatto.Dmat[2:end-1,:] / vpa.element_scale[i]
+                @. precon_matrix[imax,imin:imax] += 0.5 * vpa_spectral.lobatto.Dmat[end,:] / vpa.element_scale[i]
+            end
+        end
+        # Right-multiply by w_∥
+        for i ∈ 1:vpa.n-2
+            precon_matrix[:,i] .*= vpa.grid[i+1]
+        end
+
+        # This allocates a new matrix - to avoid this would need to pre-allocate a
+        # suitable buffer somewhere.
+        precon_matrix .+= inv(@view vpa_spectral.mass_matrix[2:end-1,2:end-1]) *
+                          vpa_spectral.K_matrix[2:end-1,2:end-1]
+
+        precon_matrix = @view precon_matrix[icut_lower-1:icut_upper-1,icut_lower-1:icut_upper-1]
+
+        # Convert to a guess at time-advance matrix using input_dt, to make the
+        # matrix better conditioned and reduce rounding errors.
+        precon_matrix .= Diagonal(ones(icut_upper - icut_lower + 1)) .- prefactor .* precon_matrix
+
+        return lu(precon_matrix)
+    end
+
     @loop_s is begin
         @loop_r_z_vperp ir iz ivperp begin
             f_old_no_bc = @view fvec_in.pdf[:,ivperp,iz,ir,is]
@@ -374,8 +446,33 @@ function implicit_ion_maxwell_diffusion!(f_out, fvec_in, moments, z_advect, vpa,
             f_old = vpa.scratch9 .= f_old_no_bc
             apply_bc!(f_old)
 
+            if nl_solver_params.stage_counter[] % nl_solver_params.preconditioner_update_interval == 0
+                if z.irank == 0 && iz == 1
+                    nl_solver_params.preconditioners[ivperp,iz,ir,is] =
+                        (get_precon(dt * D_ii * n / vth^3; icut_upper=icut_lower_z-1),
+                         2, icut_lower_z-1)
+                elseif z.irank == z.nrank - 1 && iz == z.n
+                    nl_solver_params.preconditioners[ivperp,iz,ir,is] =
+                        (get_precon(dt * D_ii * n / vth^3; icut_lower=icut_upper_z+1),
+                         icut_upper_z+1, vpa.n-1)
+                else
+                    nl_solver_params.preconditioners[ivperp,iz,ir,is] =
+                        (get_precon(dt * D_ii * n / vth^3),
+                         2, vpa.n-1)
+                end
+            end
+
+            function preconditioner(x)
+                precon_lu, icut_lower, icut_upper =
+                    nl_solver_params.preconditioners[ivperp,iz,ir,is]
+                vpa.scratch .= x
+                @views ldiv!(x[icut_lower:icut_upper], precon_lu,
+                             vpa.scratch[icut_lower:icut_upper])
+                return nothing
+            end
+
             left_preconditioner = identity
-            right_preconditioner = identity
+            right_preconditioner = preconditioner
 
             # Define a function whose input is `f_new`, so that when it's output
             # `residual` is zero, f_new is the result of a backward-Euler timestep:
