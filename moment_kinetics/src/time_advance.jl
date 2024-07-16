@@ -2822,7 +2822,7 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron, 
 
     adaptive_timestep_update_t_params!(t_params, t, CFL_limits, error_norms, total_points,
                                        current_dt, error_norm_method, success,
-                                       nl_max_its_fraction)
+                                       nl_max_its_fraction, composition)
 
     if composition.electron_physics == kinetic_electrons
         if t_params.previous_dt[] == 0.0

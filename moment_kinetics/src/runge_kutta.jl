@@ -9,6 +9,7 @@ export setup_runge_kutta_coefficients!, rk_update_evolved_moments!,
 
 using ..array_allocation: allocate_float
 using ..communication
+using ..input_structs
 using ..looping
 using ..type_definitions: mk_float
 
@@ -999,7 +1000,7 @@ Use the calculated `CFL_limits` and `error_norms` to update the timestep in `t_p
 """
 function adaptive_timestep_update_t_params!(t_params, t, CFL_limits, error_norms,
                                             total_points, current_dt, error_norm_method,
-                                            success, nl_max_its_fraction;
+                                            success, nl_max_its_fraction, composition;
                                             electron=false)
     # Get global minimum of CFL limits
     CFL_limit = nothing

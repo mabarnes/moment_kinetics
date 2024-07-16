@@ -1359,7 +1359,7 @@ function electron_adaptive_timestep_update!(scratch, t, t_params, moments, phi, 
 
     adaptive_timestep_update_t_params!(t_params, t, CFL_limits, error_norms, total_points,
                                        current_dt, error_norm_method, "", 0.0,
-                                       electron=true)
+                                       composition; electron=true)
     if t_params.previous_dt[] == 0.0
         # Timestep failed, so reset  scratch[t_params.n_rk_stages+1] equal to
         # scratch[1] to start the timestep over.
