@@ -1272,6 +1272,8 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
         vz, vr, vzeta, z, vz_spectral, density, uz, pz, vth, v_norm_fac, evolve_density,
         evolve_upar, evolve_ppar, wall_flux_0, wall_flux_L)
 
+    zero = 1.0e-14
+
     # Reduce the ion flux by `recycling_fraction` to account for ions absorbed by the
     # wall.
     wall_flux_0 *= composition.recycling_fraction
@@ -1338,6 +1340,11 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                 end
             end
         else
+            # Normalise grid to thermal speed of `initial_temperature`, to avoid
+            # inaccuracy in moment-kinetic cases when `initial_temperature` is very
+            # small or large compared to the reference value.
+            vth_init = sqrt(spec.initial_temperature)
+
             # First create distribution functions at the z-boundary points that obey the
             # boundary conditions.
             if z.irank == 0 && z.irank == z.nrank - 1
@@ -1358,7 +1365,7 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                     @. pdf[:,ivr,ivzeta,iz] = density[iz] *
                                               exp(-((vz.grid - uz[iz])^2 +
                                                     vzeta.grid[ivzeta]^2 + vr.grid[ivr]^2)
-                                                  / vth[iz]^2) / vth[iz]
+                                                  * vth_init^2 / vth[iz]^2) / vth[iz]
 
                     # Also ensure both species go to zero smoothly at v_z=0 at the
                     # wall, where the boundary conditions require that distribution
@@ -1398,16 +1405,49 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
             @views MPI.Bcast!(temp, z.nrank - 1, z.comm)
             wall_flux_L = temp[]
 
-            knudsen_pdf = boundary_distributions.knudsen
+            # Re-calculate Knudsen distribution instead of using
+            # `boundary_distributions.knudsen`, so that we can include vth_init here.
+            knudsen_pdf = allocate_float(vz.n, vr.n, vzeta.n)
+            knudsen_vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
+            if vzeta.n > 1 && vr.n > 1
+                # 3V specification of neutral wall emission distribution for boundary condition
+                # get the true Knudsen cosine distribution for neutral particle wall emission
+                for ivzeta in 1:vzeta.n
+                    for ivr in 1:vr.n
+                        for ivz in 1:vz.n
+                            v_transverse = sqrt(vzeta.grid[ivzeta]^2 + vr.grid[ivr]^2)
+                            v_normal = abs(vz.grid[ivz])
+                            v_tot = sqrt(v_normal^2 + v_transverse^2)
+                            if  v_tot > zero
+                                prefac = v_normal/v_tot
+                            else
+                                prefac = 0.0
+                            end
+                            knudsen_pdf[ivz,ivr,ivzeta] = (3.0*sqrt(pi)/knudsen_vtfac^4) * prefac *
+                                                             exp(-((v_normal/knudsen_vtfac)^2 + (v_transverse/knudsen_vtfac)^2) * vth_init^2)
+                        end
+                    end
+                end
+            elseif vzeta.n == 1 && vr.n == 1
+                # get the marginalised Knudsen cosine distribution after integrating over
+                # vperp appropriate for 1V model
+                @. knudsen_pdf[:,1,1] = (3.0*pi/knudsen_vtfac^3)*abs(vz.grid*vth_init)*erfc(abs(vz.grid) * vth_init / knudsen_vtfac)
+            end
 
-            zero = 1.0e-14
+            if vzeta.n > 1 || vr.n > 1
+                wgts_3V_vth_init = vth_init
+            else
+                wgts_3V_vth_init = 1.0
+            end
 
             # add this species' contribution to the combined ion/neutral particle flux
             # out of the domain at z=-Lz/2
             @views wall_flux_0 += integrate_over_negative_vz(
-                                      abs.(vz.grid) .* lower_z_pdf_buffer, vz.grid, vz.wgts,
-                                      vz.scratch3, vr.grid, vr.wgts, vzeta.grid,
-                                      vzeta.wgts)
+                                      vth_init .* abs.(vz.grid) .* lower_z_pdf_buffer,
+                                      vth_init .* vz.grid, vth_init .* vz.wgts,
+                                      vz.scratch3, vth_init .* vr.grid,
+                                      wgts_3V_vth_init .* vr.wgts, vth_init .* vzeta.grid,
+                                      wgts_3V_vth_init .* vzeta.wgts)
             # for left boundary in zed (z = -Lz/2), want
             # f_n(z=-Lz/2, v_z > 0) = Γ_0 * f_KW(v_z) * pdf_norm_fac(-Lz/2)
             @loop_vz ivz begin
@@ -1419,9 +1459,11 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
             # add this species' contribution to the combined ion/neutral particle flux
             # out of the domain at z=-Lz/2
             @views wall_flux_L += integrate_over_positive_vz(
-                                      abs.(vz.grid) .* upper_z_pdf_buffer, vz.grid, vz.wgts,
-                                      vz.scratch3, vr.grid, vr.wgts, vzeta.grid,
-                                      vzeta.wgts)
+                                      vth_init .* abs.(vz.grid) .* upper_z_pdf_buffer,
+                                      vth_init .* vz.grid, vth_init .* vz.wgts,
+                                      vz.scratch3, vth_init .* vr.grid,
+                                      wgts_3V_vth_init .* vr.wgts, vth_init .* vzeta.grid,
+                                      wgts_3V_vth_init .* vzeta.wgts)
             # for right boundary in zed (z = Lz/2), want
             # f_n(z=Lz/2, v_z < 0) = Γ_Lz * f_KW(v_z) * pdf_norm_fac(Lz/2)
             @loop_vz ivz begin
@@ -1451,8 +1493,9 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
             # Get the unnormalised pdf and the moments of the constructed full-f
             # distribution function (which will be modified from the input moments).
             convert_full_f_neutral_to_normalised!(pdf, density, uz, pz, vth, vzeta, vr,
-                                                  vz, vz_spectral, evolve_density,
-                                                  evolve_upar, evolve_ppar)
+                                                  vz, vz_spectral, vth_init,
+                                                  evolve_density, evolve_upar,
+                                                  evolve_ppar)
 
             if !evolve_density
                 # Need to divide out density to return pdf/density
@@ -1827,19 +1870,30 @@ the moments of `f`.
 Inputs/outputs depend on z, vzeta, vr and vz (should be inside loops over species, r)
 """
 function convert_full_f_neutral_to_normalised!(f, density, uz, pz, vth, vzeta, vr, vz,
-        vz_spectral, evolve_density, evolve_upar, evolve_ppar)
+        vz_spectral, vth_init, evolve_density, evolve_upar, evolve_ppar)
 
+    if vzeta.n > 1 || vr.n > 1
+        wgts_3V_vth_init = vth_init
+    else
+        wgts_3V_vth_init = 1.0
+    end
     @loop_z iz begin
         # Calculate moments
-        @views density[iz] = integrate_over_neutral_vspace(f[:,:,:,iz], vz.grid, 0,
-                                                           vz.wgts, vr.grid, 0, vr.wgts,
-                                                           vzeta.grid, 0, vzeta.wgts)
-        @views uz[iz] = integrate_over_neutral_vspace(f[:,:,:,iz], vz.grid, 1, vz.wgts,
-                                                      vr.grid, 0, vr.wgts, vzeta.grid, 0,
-                                                      vzeta.wgts) / density[iz]
-        @views pz[iz] = integrate_over_neutral_vspace(f[:,:,:,iz], vz.grid, 2, vz.wgts,
-                                                      vr.grid, 0, vr.wgts, vzeta.grid, 0,
-                                                      vzeta.wgts) - density[iz]*uz[iz]^2
+        @views density[iz] = integrate_over_neutral_vspace(
+                                 f[:,:,:,iz], vth_init .* vth_init .* vz.grid, 0,
+                                 vth_init .* vz.wgts, vth_init .* vr.grid, 0,
+                                 wgts_3V_vth_init .* vr.wgts, vth_init .* vzeta.grid, 0,
+                                 wgts_3V_vth_init .* vzeta.wgts)
+        @views uz[iz] = integrate_over_neutral_vspace(
+                            f[:,:,:,iz], vth_init .* vz.grid, 1, vth_init .* vz.wgts,
+                            vth_init .* vr.grid, 0, wgts_3V_vth_init .* vr.wgts,
+                            vth_init .* vzeta.grid, 0, wgts_3V_vth_init .* vzeta.wgts) /
+                        density[iz]
+        @views pz[iz] = integrate_over_neutral_vspace(
+                            f[:,:,:,iz], vth_init .* vz.grid, 2, vth_init .* vz.wgts,
+                            vth_init .* vr.grid, 0, wgts_3V_vth_init .* vr.wgts,
+                            vth_init .* vzeta.grid, 0, wgts_3V_vth_init .* vzeta.wgts) -
+                        density[iz]*uz[iz]^2
         vth[iz] = sqrt(2.0*pz[iz]/density[iz])
 
         # Normalise f
@@ -1854,11 +1908,11 @@ function convert_full_f_neutral_to_normalised!(f, density, uz, pz, vth, vzeta, v
             # The values to interpolate *to* are the v_parallel values corresponding to
             # the w_parallel grid
             vz.scratch .= vpagrid_to_dzdt(vz.grid, vth[iz], uz[iz], evolve_ppar,
-                                          evolve_upar)
+                                          evolve_upar) ./ vth_init
             @loop_vzeta_vr ivzeta ivr begin
                 @views vz.scratch2 .= f[:,ivr,ivzeta,iz] # Copy to use as input to interpolation
-                @views interpolate_to_grid_1d!(f[:,ivr,ivzeta,iz], vz.scratch, vz.scratch2,
-                                               vz, vz_spectral)
+                @views interpolate_to_grid_1d!(f[:,ivr,ivzeta,iz], vz.scratch,
+                                               vz.scratch2, vz, vz_spectral)
             end
         end
     end
