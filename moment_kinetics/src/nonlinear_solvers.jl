@@ -83,7 +83,7 @@ function setup_nonlinear_solve(input_dict, coords, outer_coords=(); default_rtol
         atol=default_atol,
         nonlinear_max_iterations=20,
         linear_rtol=1.0e-3,
-        linear_atol=1.0e-15,
+        linear_atol=1.0,
         linear_restart=10,
         linear_max_restarts=0,
         preconditioner_update_interval=300,
@@ -1040,16 +1040,25 @@ function linear_solve!(x, residual_func!, residual0, delta_x, v, w; coords, rtol
     # Solve (approximately?):
     #   J δx = residual0
 
-    tol = max(rtol, atol)
-    epsilon = 1.0e-6 / tol
-    inv_epsilon = 1.0 / epsilon
+    Jv_scale_factor = 1.0e3
+    inv_Jv_scale_factor = 1.0 / Jv_scale_factor
 
+    # The vectors `v` that are passed to this function will be normalised so that
+    # `distributed_norm(v) == 1.0`. `distributed_norm()` is defined - including the
+    # relative and absolute tolerances from the Newton iteration - so that a vector with a
+    # norm of 1.0 is 'small' in the sense that a vector with a norm of 1.0 is small enough
+    # relative to `x` to consider the iteration converged. This means that `x+v` would be
+    # very close to `x`, so R(x+v)-R(x) would be likely to be badly affected by rounding
+    # errors, because `v` is so small, relative to `x`. We actually want to multiply `v`
+    # by a large number `Jv_scale_factor` (in constrast to the small `epsilon` in the
+    # 'usual' case where the norm does not include either reative or absolute tolerance)
+    # to ensure that we get a reasonable estimate of J.v.
     function approximate_Jacobian_vector_product!(v)
         right_preconditioner(v)
 
-        parallel_map((x,v) -> x + epsilon * v, v, x, v)
+        parallel_map((x,v) -> x + Jv_scale_factor * v, v, x, v)
         residual_func!(rhs_delta, v)
-        parallel_map((rhs_delta, residual0) -> (rhs_delta - residual0) * inv_epsilon,
+        parallel_map((rhs_delta, residual0) -> (rhs_delta - residual0) * inv_Jv_scale_factor,
                      v, rhs_delta, residual0)
         left_preconditioner(v)
         return v
