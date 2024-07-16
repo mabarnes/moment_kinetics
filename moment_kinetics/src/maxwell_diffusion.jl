@@ -27,6 +27,7 @@ using ..reference_parameters: get_reference_collision_frequency_ii
 using ..velocity_moments: update_derived_moments!, calculate_ion_moment_derivatives!
 
 using LinearAlgebra
+using SparseArrays
 
 """
 Function for reading Maxwell diffusion operator input parameters. 
@@ -365,18 +366,35 @@ function implicit_ion_maxwell_diffusion!(f_out, fvec_in, moments, z_advect, vpa,
             precon_matrix[:,i] .*= vpa.grid[i+1]
         end
 
+        ## This allocates a new matrix - to avoid this would need to pre-allocate a
+        ## suitable buffer somewhere.
+        #precon_matrix .+= inv(@view vpa_spectral.mass_matrix[2:end-1,2:end-1]) *
+        #                  vpa_spectral.K_matrix[2:end-1,2:end-1]
+
+        #precon_matrix = @view precon_matrix[icut_lower-1:icut_upper-1,icut_lower-1:icut_upper-1]
+
+        ## Convert to a guess at time-advance matrix using input_dt, to make the
+        ## matrix better conditioned and reduce rounding errors.
+        #precon_matrix .= Diagonal(ones(icut_upper - icut_lower + 1)) .- prefactor .* precon_matrix
+
+        #precon_lu = lu(precon_matrix)
+
         # This allocates a new matrix - to avoid this would need to pre-allocate a
         # suitable buffer somewhere.
-        precon_matrix .+= inv(@view vpa_spectral.mass_matrix[2:end-1,2:end-1]) *
-                          vpa_spectral.K_matrix[2:end-1,2:end-1]
+        precon_matrix .= vpa_spectral.mass_matrix[2:end-1,2:end-1] * precon_matrix
+        precon_matrix .+= vpa_spectral.K_matrix[2:end-1,2:end-1]
 
         precon_matrix = @view precon_matrix[icut_lower-1:icut_upper-1,icut_lower-1:icut_upper-1]
 
         # Convert to a guess at time-advance matrix using input_dt, to make the
         # matrix better conditioned and reduce rounding errors.
-        precon_matrix .= Diagonal(ones(icut_upper - icut_lower + 1)) .- prefactor .* precon_matrix
+        @views precon_matrix .=
+            vpa_spectral.mass_matrix[icut_lower:icut_upper,icut_lower:icut_upper] .-
+            prefactor .* precon_matrix
 
-        return lu(precon_matrix)
+        precon_lu = lu(sparse(precon_matrix))
+
+        return precon_lu
     end
 
     @loop_s is begin
@@ -465,7 +483,9 @@ function implicit_ion_maxwell_diffusion!(f_out, fvec_in, moments, z_advect, vpa,
             function preconditioner(x)
                 precon_lu, icut_lower, icut_upper =
                     nl_solver_params.preconditioners[ivperp,iz,ir,is]
-                vpa.scratch .= x
+                @views mul!(vpa.scratch[icut_lower:icut_upper],
+                            vpa_spectral.mass_matrix[icut_lower:icut_upper,icut_lower:icut_upper],
+                            x[icut_lower:icut_upper])
                 @views ldiv!(x[icut_lower:icut_upper], precon_lu,
                              vpa.scratch[icut_lower:icut_upper])
                 return nothing

@@ -130,8 +130,8 @@ function setup_nonlinear_solve(input_dict, coords, outer_coords=(); default_rtol
         # These will be calculated properly within the time loop.
         #preconditioners = fill(lu(sparse(1.0*I, total_size_coords, total_size_coords)),
         #                       reverse(outer_coord_sizes))
-        preconditioners = fill((lu(collect(Diagonal(ones(total_size_coords)))), -1, -1),
-                               reverse(outer_coord_sizes))
+        preconditioners = fill((lu(sparse(collect(Diagonal(ones(total_size_coords))))),
+                                -1, -1), reverse(outer_coord_sizes))
     else
         preconditioners = nothing
     end
