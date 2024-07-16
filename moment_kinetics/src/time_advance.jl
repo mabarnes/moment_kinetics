@@ -45,7 +45,8 @@ using ..charge_exchange: charge_exchange_collisions_1V!, charge_exchange_collisi
 using ..electron_kinetic_equation: update_electron_pdf!
 using ..ionization: ionization_collisions_1V!, ionization_collisions_3V!, constant_ionization_source!
 using ..krook_collisions: krook_collisions!
-using ..maxwell_diffusion: ion_vpa_maxwell_diffusion!, neutral_vz_maxwell_diffusion!
+using ..maxwell_diffusion: ion_vpa_maxwell_diffusion!, 
+                           neutral_vz_maxwell_diffusion!
 using ..external_sources
 using ..numerical_dissipation: vpa_boundary_buffer_decay!,
                                vpa_boundary_buffer_diffusion!, vpa_dissipation!,
@@ -820,6 +821,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
     advance_krook_collisions_ii = false
     advance_maxwell_diffusion_ii = false
     advance_maxwell_diffusion_nn = false
+    advance_maxwell_diffusion_ee = false
     advance_external_source = false
     advance_numerical_dissipation = false
     advance_sources = false
@@ -909,6 +911,9 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         if collisions.mxwl_diff.D_nn > 0.0
             advance_maxwell_diffusion_nn = true
         end
+        if collisions.mxwl_diff.D_ee > 0.0
+            advance_maxwell_diffusion_ee = true
+        end
         advance_external_source = external_source_settings.ion.active
         advance_neutral_external_source = external_source_settings.neutral.active
         advance_numerical_dissipation = true
@@ -967,7 +972,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
                         advance_ionization, advance_ionization_1V,
                         advance_ionization_source, advance_krook_collisions_ii,
                         advance_maxwell_diffusion_ii, advance_maxwell_diffusion_nn,
-                        explicit_weakform_fp_collisions,
+                        advance_maxwell_diffusion_ee, explicit_weakform_fp_collisions,
                         advance_external_source, advance_numerical_dissipation,
                         advance_sources, advance_continuity, advance_force_balance,
                         advance_energy, advance_electron_energy, advance_neutral_external_source,
@@ -2330,8 +2335,9 @@ function ssp_rk!(pdf, scratch, t, t_params, vz, vr, vzeta, vpa, vperp, gyrophase
     end
 
     for istage ∈ 1:n_rk_stages
-        if global_rank[] == 0
+        if global_rank[] == 0 && composition.electron_physics != boltzmann_electron_response
             println("ion step ", t_params.step_counter[], ".", istage, " ", t)
+            println("composition physics: ", composition.electron_physics)
         end
         # do an Euler time advance, with scratch[2] containing the advanced quantities
         # and scratch[1] containing quantities at time level n

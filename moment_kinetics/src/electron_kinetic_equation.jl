@@ -28,6 +28,7 @@ using ..runge_kutta: rk_update_variable!, rk_error_variable!, local_error_norm,
                      adaptive_timestep_update_t_params!
 using ..utils: get_minimum_CFL_z, get_minimum_CFL_vpa
 using ..velocity_moments: integrate_over_vspace
+using ..maxwell_diffusion: electron_vpa_maxwell_diffusion!
 
 """
 update_electron_pdf is a function that uses the electron kinetic equation 
@@ -1544,6 +1545,12 @@ function electron_kinetic_equation_euler_update!(fvec_out, fvec_in, moments, z, 
     # add in numerical dissipation terms
     add_dissipation_term!(fvec_out.pdf_electron, fvec_in.pdf_electron, scratch_dummy,
                           z_spectral, z, vpa, vpa_spectral, num_diss_params, dt)
+
+    # Add maxwellian diffusion collision operator for electrons
+    if collisions.mxwl_diff.D_ee > 0.0
+        electron_vpa_maxwell_diffusion!(fvec_out.pdf_electron, fvec_in, moments, vpa, vperp, vpa_spectral, 
+                                        dt, collisions.mxwl_diff.D_ee)
+    end
 
     if collisions.krook.nuee0 > 0.0 || collisions.krook.nuei0 > 0.0
         # Add a Krook collision operator

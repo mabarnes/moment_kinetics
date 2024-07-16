@@ -97,6 +97,7 @@ mutable struct advance_info
     krook_collisions_ii::Bool
     mxwl_diff_collisions_ii::Bool
     mxwl_diff_collisions_nn::Bool
+    mxwl_diff_collisions_ee::Bool
     explicit_weakform_fp_collisions::Bool
     external_source::Bool
     numerical_dissipation::Bool
@@ -369,6 +370,7 @@ Base.@kwdef struct mxwl_diff_collisions_input
     # frequency * velocity^2. Diffusion coefficients usually denoted D
     D_ii::mk_float
     D_nn::mk_float
+    D_ee::mk_float
     # Setting to switch between different options for Krook collision operator
     diffusion_coefficient_option::String # "reference_parameters" # "manual", 
 end

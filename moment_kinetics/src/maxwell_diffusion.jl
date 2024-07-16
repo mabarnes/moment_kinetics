@@ -18,7 +18,7 @@ export setup_mxwl_diff_collisions_input, ion_vpa_maxwell_diffusion!, neutral_vz_
 using ..looping
 using ..input_structs: mxwl_diff_collisions_input, set_defaults_and_check_section!
 using ..calculus: second_derivative!
-using ..reference_parameters: get_reference_collision_frequency_ii
+using ..reference_parameters: get_reference_collision_frequency_ii, get_reference_collision_frequency_ee
 
 """
 Function for reading Maxwell diffusion operator input parameters. 
@@ -35,12 +35,15 @@ function setup_mxwl_diff_collisions_input(toml_input::Dict, reference_params)
     D_ii_mxwl_diff_default = get_reference_collision_frequency_ii(reference_params) *
                              2 * reference_params.Tref/reference_params.mref
     D_nn_mxwl_diff_default = D_ii_mxwl_diff_default
+    D_ee_mxwl_diff_default = get_reference_collision_frequency_ee(reference_params) *
+                             2 * reference_params.Tref/reference_params.me
     # read the input toml and specify a sensible default    
     input_section = set_defaults_and_check_section!(toml_input, "maxwell_diffusion_collisions",
        # begin default inputs (as kwargs)
        use_maxwell_diffusion = false,
        D_ii = -1.0,
        D_nn = -1.0,
+       D_ee = -1.0,
        diffusion_coefficient_option = "reference_parameters")
        
     # ensure that the diffusion coefficient is consistent with the input option
@@ -48,6 +51,7 @@ function setup_mxwl_diff_collisions_input(toml_input::Dict, reference_params)
     if diffusion_coefficient_option == "reference_parameters"
         input_section["D_ii"] = D_ii_mxwl_diff_default
         input_section["D_nn"] = D_nn_mxwl_diff_default
+        input_section["D_ee"] = D_ee_mxwl_diff_default
     elseif diffusion_coefficient_option == "manual" 
         # use the diffusion coefficient from the input file
         # do nothing
@@ -60,6 +64,7 @@ function setup_mxwl_diff_collisions_input(toml_input::Dict, reference_params)
     if !input_section["use_maxwell_diffusion"]
         input_section["D_ii"] = -1.0
         input_section["D_nn"] = -1.0
+        input_section["D_ee"] = -1.0
     end
     input = Dict(Symbol(k)=>v for (k,v) in input_section)
 
@@ -202,28 +207,41 @@ function neutral_vz_maxwell_diffusion!(f_out, f_in, moments, vzeta, vr, vz, spec
     begin_sn_r_z_vzeta_vr_region()
 
 
-    if moments.evolve_ppar && moments.evolve_upar
-        # See similar comments in krook_collisions! function. 
+    # In what follows, there are eight combinations of booleans (though not all have been
+    # fully implemented yet). In line with moment kinetics, the Maxwellian is normalised
+    # in the relevant ways:
+    # - density: normalise by n 
+    # - upar: working in peculiar velocity space, so no upar subtraction from vpa 
+    # - ppar: normalisation by vth, in 1D is 1/vth prefactor, and grid is normalised by vth,
+    # hence no 1/vth^2 term in the exponent.
+    if moments.evolve_density && moments.evolve_upar && moments.evolve_ppar
         @loop_sn_r_z_vzeta_vr isn ir iz ivzeta ivr begin
             @views @. vz.scratch = f_in.pdf_neutral[:,ivr,ivzeta,iz,ir,isn] - 
                             exp(-((vz.grid[:])^2 + (vr.grid[ivr])^2 + (vzeta.grid[ivzeta])^2) )
             second_derivative!(vz.scratch2, vz.scratch, vz, spectral)
             @views @. f_out[:,ivr,ivzeta,iz,ir,isn] += dt * diffusion_coefficient * vz.scratch2
         end
-    elseif moments.evolve_ppar
+    elseif moments.evolve_density && moments.evolve_upar
         @loop_sn_r_z_vzeta_vr isn ir iz ivzeta ivr begin
             vth = moments.neutral.vth[iz,ir,isn]
-            uz = f_in.uz_neutral[iz,ir,isn]
             @views @. vz.scratch = f_in.pdf_neutral[:,ivr,ivzeta,iz,ir,isn] - 
-                            exp(- ((vz.grid[:] - uz)^2 + (vr.grid[ivr])^2 + (vzeta.grid[ivzeta])^2)/(vth^2) )
+                            1/vth * exp(- ((vz.grid[:])^2 + (vr.grid[ivr])^2 + (vzeta.grid[ivzeta])^2)/(vth^2) )
             second_derivative!(vz.scratch2, vz.scratch, vz, spectral)
             @views @. f_out[:,ivr,ivzeta,iz,ir,isn] += dt * diffusion_coefficient * vz.scratch2
         end
-    elseif moments.evolve_upar
+    elseif moments.evolve_density && moments.evolve_ppar
         @loop_sn_r_z_vzeta_vr isn ir iz ivzeta ivr begin
-            vth = moments.neutral.vth[iz,ir,isn]
+            uz = f_in.uz_neutral[iz,ir,isn]
             @views @. vz.scratch = f_in.pdf_neutral[:,ivr,ivzeta,iz,ir,isn] - 
-                            1.0 / vth * exp(- ((vz.grid[:])^2 + (vr.grid[ivr])^2 + (vzeta.grid[ivzeta])^2)/(vth^2) )
+                            exp(- ((vz.grid[:] - uz)^2 + (vr.grid[ivr])^2 + (vzeta.grid[ivzeta])^2))
+            second_derivative!(vz.scratch2, vz.scratch, vz, spectral)
+            @views @. f_out[:,ivr,ivzeta,iz,ir,isn] += dt * diffusion_coefficient * vz.scratch2
+        end
+    elseif moments.evolve_upar && moments.evolve_ppar
+        @loop_sn_r_z_vzeta_vr isn ir iz ivzeta ivr begin
+            n = f_in.density_neutral[iz,ir,isn]
+            @views @. vz.scratch = f_in.pdf_neutral[:,ivr,ivzeta,iz,ir,isn] - 
+                            n * exp(- ((vz.grid[:])^2 + (vr.grid[ivr])^2 + (vzeta.grid[ivzeta])^2))
             second_derivative!(vz.scratch2, vz.scratch, vz, spectral)
             @views @. f_out[:,ivr,ivzeta,iz,ir,isn] += dt * diffusion_coefficient * vz.scratch2
         end
@@ -232,8 +250,25 @@ function neutral_vz_maxwell_diffusion!(f_out, f_in, moments, vzeta, vr, vz, spec
             vth = moments.neutral.vth[iz,ir,isn]
             uz = f_in.uz_neutral[iz,ir,isn]
             @views @. vz.scratch = f_in.pdf_neutral[:,ivr,ivzeta,iz,ir,isn] - 
-                            1.0 / vth * exp(- ((vz.grid[:] - uz)^2 + 
-                                            (vr.grid[ivr])^2 + (vzeta.grid[ivzeta])^2)/(vth^2) )
+                            1/vth * exp(- ((vz.grid[:] - uz)^2 + (vr.grid[ivr])^2 + (vzeta.grid[ivzeta])^2)/(vth^2) )
+            second_derivative!(vz.scratch2, vz.scratch, vz, spectral)
+            @views @. f_out[:,ivr,ivzeta,iz,ir,isn] += dt * diffusion_coefficient * vz.scratch2
+        end
+    elseif moments.evolve_upar
+        @loop_sn_r_z_vzeta_vr isn ir iz ivzeta ivr begin
+            vth = moments.neutral.vth[iz,ir,isn]
+            n = f_in.density_neutral[iz,ir,isn]
+            @views @. vz.scratch = f_in.pdf_neutral[:,ivr,ivzeta,iz,ir,isn] - 
+                            n/vth * exp(- ((vz.grid[:])^2 + (vr.grid[ivr])^2 + (vzeta.grid[ivzeta])^2)/(vth^2) )
+            second_derivative!(vz.scratch2, vz.scratch, vz, spectral)
+            @views @. f_out[:,ivr,ivzeta,iz,ir,isn] += dt * diffusion_coefficient * vz.scratch2
+        end
+    elseif moments.evolve_ppar
+        @loop_sn_r_z_vzeta_vr isn ir iz ivzeta ivr begin
+            n = f_in.density_neutral[iz,ir,isn]
+            uz = f_in.uz_neutral[iz,ir,isn]
+            @views @. vz.scratch = f_in.pdf_neutral[:,ivr,ivzeta,iz,ir,isn] - 
+                            n * exp(- ((vz.grid[:] - uz)^2 + (vr.grid[ivr])^2 + (vzeta.grid[ivzeta])^2))
             second_derivative!(vz.scratch2, vz.scratch, vz, spectral)
             @views @. f_out[:,ivr,ivzeta,iz,ir,isn] += dt * diffusion_coefficient * vz.scratch2
         end
@@ -253,6 +288,119 @@ function neutral_vz_maxwell_diffusion!(f_out, f_in, moments, vzeta, vr, vz, spec
             @views @. f_out[:,ivr,ivzeta,iz,ir,isn] += dt * diffusion_coefficient * vz.scratch2
         end
     end
+    
+    return nothing
+end
+
+"""
+Calculate the Maxwellian associated with the current electron pdf moments, and then 
+subtract this from current pdf. Then take second derivative of this function
+to act as the diffusion operator. 
+"""
+function electron_vpa_maxwell_diffusion!(f_out, f_in, moments, vpa, vperp, spectral::T_spectral, 
+                                       dt, diffusion_coefficient) where T_spectral
+    
+    # If negative input (should be -1.0), then none of this diffusion will happen. 
+    # This number can be put in as some parameter in the input file called something
+    # like 'maxwellian_diffusion_coefficient'
+    if diffusion_coefficient <= 0.0 || vpa.n == 1
+        return nothing
+    end
+
+    if vperp.n > 1 && (moments.evolve_density || moments.evolve_upar || moments.evolve_ppar)
+        error("Maxwell diffusion not implemented for 2V moment-kinetic cases yet")
+    end
+
+    # Otherwise, build the maxwellian function (which is going to be subtracted from 
+    # the current distribution) using the moments of the distribution (so that the 
+    # operator itself conserves the moments), and then this result will be the one 
+    # whose second derivative will be added to the RHS (i.e. subtracted from the current)
+    begin_s_r_z_vperp_region()
+
+    # In what follows, there are eight combinations of booleans (though not all have been
+    # fully implemented yet). In line with moment kinetics, the Maxwellian is normalised
+    # in the relevant ways:
+    # - density: normalise by n 
+    # - upar: working in peculiar velocity space, so no upar subtraction from vpa 
+    # - ppar: normalisation by vth, in 1D is 1/vth prefactor, and grid is normalised by vth,
+    # hence no 1/vth^2 term in the exponent.
+    if moments.evolve_density && moments.evolve_upar && moments.evolve_ppar
+        @loop_r_z_vperp ir iz ivperp begin
+            @views @. vpa.scratch = f_in.pdf_electron[:,ivperp,iz,ir] - 
+                            exp(-((vpa.grid[:])^2 + (vperp.grid[ivperp])^2) )
+            second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
+            @views @. f_out[:,ivperp,iz,ir] += dt * diffusion_coefficient * vpa.scratch2
+        end
+    elseif moments.evolve_density && moments.evolve_upar
+        @loop_r_z_vperp ir iz ivperp begin
+            vth = moments.electron.vth[iz,ir]
+            @views @. vpa.scratch = f_in.pdf_electron[:,ivperp,iz,ir] - 
+                            1.0 / vth * exp(- ((vpa.grid[:])^2 + (vperp.grid[ivperp])^2)/(vth^2) )
+            second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
+            @views @. f_out[:,ivperp,iz,ir] += dt * diffusion_coefficient * vpa.scratch2
+        end
+    elseif moments.evolve_density && moments.evolve_ppar
+        @loop_r_z_vperp ir iz ivperp begin
+            upar = f_in.upar[iz,ir]
+            @views @. vpa.scratch = f_in.pdf_electron[:,ivperp,iz,ir] - 
+                            exp(- ((vpa.grid[:] - upar)^2 + (vperp.grid[ivperp])^2))
+            second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
+            @views @. f_out[:,ivperp,iz,ir] += dt * diffusion_coefficient * vpa.scratch2
+        end
+    elseif moments.evolve_upar && moments.evolve_ppar
+        @loop_r_z_vperp ir iz ivperp begin
+            n = f_in.density[iz,ir]
+            @views @. vpa.scratch = f_in.pdf_electron[:,ivperp,iz,ir] - 
+                            n * exp(- ((vpa.grid[:])^2 + (vperp.grid[ivperp])^2) )
+            second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
+            @views @. f_out[:,ivperp,iz,ir] += dt * diffusion_coefficient * vpa.scratch2
+        end
+    elseif moments.evolve_density
+        @loop_r_z_vperp ir iz ivperp begin
+            vth = moments.electron.vth[iz,ir]
+            upar = f_in.upar[iz,ir]
+            @views @. vpa.scratch = f_in.pdf_electron[:,ivperp,iz,ir] - 
+                            1.0 / vth * exp(- ((vpa.grid[:] - upar)^2 + (vperp.grid[ivperp])^2)/(vth^2) )
+            second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
+            @views @. f_out[:,ivperp,iz,ir] += dt * diffusion_coefficient * vpa.scratch2
+        end
+    elseif moments.evolve_upar
+        @loop_r_z_vperp ir iz ivperp begin
+            vth = moments.electron.vth[iz,ir]
+            n = f_in.density[iz,ir]
+            @views @. vpa.scratch = f_in.pdf_electron[:,ivperp,iz,ir] - 
+                            n / vth * exp(- ((vpa.grid[:])^2 + (vperp.grid[ivperp])^2)/(vth^2) )
+            second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
+            @views @. f_out[:,ivperp,iz,ir] += dt * diffusion_coefficient * vpa.scratch2
+        end
+    elseif moments.evolve_ppar
+        @loop_r_z_vperp ir iz ivperp begin
+            n = f_in.density[iz,ir]
+            upar = f_in.upar[iz,ir]
+            @views @. vpa.scratch = f_in.pdf_electron[:,ivperp,iz,ir] - 
+                            n * exp(- ((vpa.grid[:] - upar)^2 + (vperp.grid[ivperp])^2) )
+            second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
+            @views @. f_out[:,ivperp,iz,ir] += dt * diffusion_coefficient * vpa.scratch2
+        end
+    else
+        # Drift kinetic version is the only one that currently can support 2V. 
+        @loop_r_z_vperp ir iz ivperp begin
+            n = f_in.density[iz,ir]
+            upar = f_in.upar[iz,ir]
+            vth = moments.electron.vth[iz,ir]
+            if vperp.n == 1
+                vth_prefactor = 1.0 / vth
+            else
+                vth_prefactor = 1.0 / vth^3
+            end
+            @views @. vpa.scratch = f_in.pdf_electron[:,ivperp,iz,ir] - n * vth_prefactor * 
+                            exp(-( ((vpa.grid[:] - upar)^2) + (vperp.grid[ivperp])^2)/(vth^2) )
+            second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
+            @views @. f_out[:,ivperp,iz,ir] += dt * diffusion_coefficient * vpa.scratch2
+        end
+    end
+
+
     return nothing
 end
 
