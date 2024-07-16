@@ -324,10 +324,9 @@ function implicit_ion_maxwell_diffusion!(f_out, fvec_in, moments, z_advect, vpa,
         if icut_upper > vpa.n - 1
             icut_upper = vpa.n - 1
         end
+
         # Dirichlet boundary conditions set the first and last values of the solution
-        # to zero, so can remove the first/last rows/columns of the matrix. Do this
-        # (even though it's slightly more complicated in a way) to keep the matrix
-        # symmetric, so that it has real eigenvalues and orthogonal eigenvectors.
+        # to zero, so can remove the first/last rows/columns of the matrix.
         # When there is a 'cutoff index' because we are imposing sheath-edge boundary
         # conditions, more values (all those outside the `icut` index) are
         # zero-ed out, and so removed from the matrix system.
@@ -373,8 +372,6 @@ function implicit_ion_maxwell_diffusion!(f_out, fvec_in, moments, z_advect, vpa,
 
         #precon_matrix = @view precon_matrix[icut_lower-1:icut_upper-1,icut_lower-1:icut_upper-1]
 
-        ## Convert to a guess at time-advance matrix using input_dt, to make the
-        ## matrix better conditioned and reduce rounding errors.
         #precon_matrix .= Diagonal(ones(icut_upper - icut_lower + 1)) .- prefactor .* precon_matrix
 
         #precon_lu = lu(precon_matrix)
@@ -386,8 +383,6 @@ function implicit_ion_maxwell_diffusion!(f_out, fvec_in, moments, z_advect, vpa,
 
         precon_matrix = @view precon_matrix[icut_lower-1:icut_upper-1,icut_lower-1:icut_upper-1]
 
-        # Convert to a guess at time-advance matrix using input_dt, to make the
-        # matrix better conditioned and reduce rounding errors.
         @views precon_matrix .=
             vpa_spectral.mass_matrix[icut_lower:icut_upper,icut_lower:icut_upper] .-
             prefactor .* precon_matrix
@@ -463,6 +458,7 @@ function implicit_ion_maxwell_diffusion!(f_out, fvec_in, moments, z_advect, vpa,
             # on `residual`, they are automatically imposed on `f_new`.
             f_old = vpa.scratch9 .= f_old_no_bc
             apply_bc!(f_old)
+            apply_bc!(this_f_out)
 
             if nl_solver_params.stage_counter[] % nl_solver_params.preconditioner_update_interval == 0
                 if z.irank == 0 && iz == 1
