@@ -18,6 +18,7 @@ using ..velocity_moments: update_derived_moments!, calculate_ion_moment_derivati
 using ..array_allocation: allocate_float
 using ..boundary_conditions: vpagrid_to_dzdt
 using ..calculus: second_derivative!
+using ..maxwell_diffusion: ion_vpa_maxwell_diffusion_inner!
 using LinearAlgebra
 using SparseArrays
 
@@ -48,7 +49,11 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, z_advect, vpa_
                                  vpa, vperp, z, r, dt, t, r_spectral, z_spectral,
                                  vpa_spectral, composition, collisions,
                                  ion_source_settings, geometry, nl_solver_params,
-                                 vpa_diffusion, num_diss_params, gyroavs, scratch_dummy)
+                                 maxwell_diffusion, vpa_diffusion, num_diss_params,
+                                 gyroavs, scratch_dummy)
+    evolve_density = Val(moments.evolve_density)
+    evolve_upar = Val(moments.evolve_upar)
+    evolve_ppar = Val(moments.evolve_ppar)
     if vperp.n > 1 && (moments.evolve_density || moments.evolve_upar || moments.evolve_ppar)
         error("Moment constraints in implicit_vpa_advection!() do not support 2V runs yet")
     end
@@ -59,9 +64,11 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, z_advect, vpa_
 
     # Ensure moments are consistent with f_new
     new_scratch = scratch_pdf(f_out, fvec_in.density, fvec_in.upar, fvec_in.ppar,
-                              fvec_in.pperp, fvec_in.temp_z_s, fvec_in.pdf_neutral,
-                              fvec_in.density_neutral, fvec_in.uz_neutral,
-                              fvec_in.pz_neutral)
+                              fvec_in.pperp, fvec_in.temp_z_s, fvec_in.electron_density,
+                              fvec_in.electron_upar, fvec_in.electron_ppar,
+                              fvec_in.electron_pperp, fvec_in.electron_temp,
+                              fvec_in.pdf_neutral, fvec_in.density_neutral,
+                              fvec_in.uz_neutral, fvec_in.pz_neutral)
     update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
                             r_spectral, geometry, gyroavs, scratch_dummy, z_advect, false)
     calculate_ion_moment_derivatives!(moments, new_scratch, scratch_dummy, z,
@@ -73,8 +80,134 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, z_advect, vpa_
     coords = (vpa=vpa,)
     vpa_bc = vpa.bc
     minval = num_diss_params.ion.force_minimum_pdf_value
+    n = fvec_in.density
+    upar = fvec_in.upar
+    vth = moments.ion.vth
     vpa_dissipation_coefficient = num_diss_params.ion.vpa_dissipation_coefficient
+    include_vpa_dissipation = (vpa_dissipation_coefficient > 0.0)
+    maxwell_D_ii = collisions.mxwl_diff.D_ii
     zero = 1.0e-14
+
+    function get_precon(is, ir, iz, ivperp, speed; icut_lower=2, icut_upper=vpa.n-1)
+        if maxwell_diffusion &&
+            !(isa(evolve_density, Val{true}) && isa(evolve_upar, Val{true}) &&
+              isa(evolve_ppar, Val{true}))
+            error("vpa advection preconditioner with maxwell-diffusion is only "
+                  * "implemented for fully moment-kinetic case so far")
+        end
+        if icut_lower < 2
+            icut_lower = 2
+        end
+        if icut_upper > vpa.n - 1
+            icut_upper = vpa.n - 1
+        end
+
+        if maxwell_diffusion
+            maxwell_prefactor = maxwell_D_ii * n[iz,ir,is] / vth[iz,ir,is]^3
+        end
+
+        # Dirichlet boundary conditions set the first and last values of the solution
+        # to zero, so can remove the first/last rows/columns of the matrix.
+        # When there is a 'cutoff index' because we are imposing sheath-edge boundary
+        # conditions, more values (all those outside the `icut` index) are
+        # zero-ed out, and so removed from the matrix system.
+
+        precon_matrix = allocate_float(vpa.n, vpa.n)
+        precon_matrix .= 0.0
+
+        for i ∈ 1:vpa.nelement_local
+            imin = vpa.imin[i] - (i != 1)
+            imax = vpa.imax[i]
+
+            # vpa advection terms
+            if i == 1 && i == vpa.nelement_local
+                @views precon_matrix .-= reshape(speed[imin:imax], :, 1) .* vpa_spectral.lobatto.Dmat ./ vpa.element_scale[i]
+            elseif i == 1
+                @views precon_matrix[imin:imax-1,imin:imax] .-= reshape(speed[imin:imax-1], :, 1) .* vpa_spectral.lobatto.Dmat[1:end-1,1:end] ./ vpa.element_scale[i]
+                if speed[imax] < 0.0
+                    # Do nothing
+                elseif speed[imax] > 0.0
+                    @views @. precon_matrix[imax,imin:imax] -= speed[imax] * vpa_spectral.lobatto.Dmat[end,1:end] / vpa.element_scale[i]
+                else
+                    @views @. precon_matrix[imax,imin:imax] -= 0.5 * speed[imax] * vpa_spectral.lobatto.Dmat[end,1:end] / vpa.element_scale[i]
+                end
+            elseif i == vpa.nelement_local
+                if speed[imin] < 0.0
+                    @views @. precon_matrix[imin,imin:imax] -= speed[imin] * vpa_spectral.lobatto.Dmat[1,:] / vpa.element_scale[i]
+                elseif speed[imin] > 0.0
+                    # Do nothing
+                else
+                    @views @. precon_matrix[imin,imin:imax] -= 0.5 .* speed[imin] * vpa_spectral.lobatto.Dmat[1,:] / vpa.element_scale[i]
+                end
+                @views precon_matrix[imin+1:imax,imin:imax] .-= reshape(speed[imin+1:imax], :, 1) .* vpa_spectral.lobatto.Dmat[2:end,:] ./ vpa.element_scale[i]
+            else
+                if speed[imin] < 0.0
+                    @views @. precon_matrix[imin,imin:imax] -= speed[imin] * vpa_spectral.lobatto.Dmat[1,:] / vpa.element_scale[i]
+                elseif speed[imin] > 0.0
+                    # Do nothing
+                else
+                    @views @. precon_matrix[imin,imin:imax] -= 0.5 * speed[imin] * vpa_spectral.lobatto.Dmat[1,:] / vpa.element_scale[i]
+                end
+                @views precon_matrix[imin+1:imax-1,imin:imax] .-= reshape(speed[imin+1:imax-1], :, 1) .* vpa_spectral.lobatto.Dmat[2:end-1,:] ./ vpa.element_scale[i]
+                if speed[imax] < 0.0
+                    # Do nothing
+                elseif speed[imax] > 0.0
+                    @views @. precon_matrix[imax,imin:imax] -= speed[imax] * vpa_spectral.lobatto.Dmat[end,:] / vpa.element_scale[i]
+                else
+                    @views @. precon_matrix[imax,imin:imax] -= 0.5 * speed[imax] * vpa_spectral.lobatto.Dmat[end,:] / vpa.element_scale[i]
+                end
+            end
+
+            if maxwell_diffusion
+                if i == 1 && i == vpa.nelement_local
+                    @views precon_matrix .+= maxwell_prefactor .* vpa_spectral.lobatto.Dmat ./ vpa.element_scale[i] .* reshape(vpa.grid[imin:imax], 1, :)
+                elseif i == 1
+                    @views precon_matrix[imin:imax-1,imin:imax] .+= maxwell_prefactor .* vpa_spectral.lobatto.Dmat[1:end-1,:] ./ vpa.element_scale[i] .* reshape(vpa.grid[imin:imax], 1, :)
+                    @views @. precon_matrix[imax,imin:imax] += 0.5 * maxwell_prefactor * vpa_spectral.lobatto.Dmat[end,:] / vpa.element_scale[i] * vpa.grid[imin:imax]
+                elseif i == vpa.nelement_local
+                    @views @. precon_matrix[imin,imin:imax] += 0.5 .* maxwell_prefactor * vpa_spectral.lobatto.Dmat[1,:] / vpa.element_scale[i] * vpa.grid[imin:imax]
+                    @views precon_matrix[imin+1:imax,imin:imax] .+= maxwell_prefactor .* vpa_spectral.lobatto.Dmat[2:end,:] ./ vpa.element_scale[i] .* reshape(vpa.grid[imin:imax], 1, :)
+                else
+                    @views @. precon_matrix[imin,imin:imax] += 0.5 * maxwell_prefactor * vpa_spectral.lobatto.Dmat[1,:] / vpa.element_scale[i] * vpa.grid[imin:imax]
+                    @views precon_matrix[imin+1:imax-1,imin:imax] .+= maxwell_prefactor .* vpa_spectral.lobatto.Dmat[2:end-1,:] ./ vpa.element_scale[i] .* reshape(vpa.grid[imin:imax], 1, :)
+                    @views @. precon_matrix[imax,imin:imax] += 0.5 * maxwell_prefactor * vpa_spectral.lobatto.Dmat[end,:] / vpa.element_scale[i] * vpa.grid[imin:imax]
+                end
+            end
+        end
+
+        # Remove first/last row/column, to represent Dirichlet boundary conditions
+        precon_matrix = @view precon_matrix[2:end-1,2:end-1]
+
+        if include_vpa_dissipation || maxwell_diffusion
+            # This allocates a new matrix - to avoid this would need to pre-allocate a
+            # suitable buffer somewhere.
+            precon_matrix .= vpa_spectral.mass_matrix[2:end-1,2:end-1] * precon_matrix
+        end
+
+        if include_vpa_dissipation || maxwell_diffusion
+            @. precon_matrix += vpa_dissipation_coefficient * vpa_spectral.K_matrix[2:end-1,2:end-1]
+        end
+
+        if maxwell_diffusion
+            precon_matrix .+= maxwell_prefactor * vpa_spectral.K_matrix[2:end-1,2:end-1]
+        end
+
+        precon_matrix = @view precon_matrix[icut_lower-1:icut_upper-1,icut_lower-1:icut_upper-1]
+
+        if include_vpa_dissipation || maxwell_diffusion
+            @views precon_matrix .=
+                vpa_spectral.mass_matrix[icut_lower:icut_upper,icut_lower:icut_upper] .-
+                dt .* precon_matrix
+        else
+            precon_matrix .= Diagonal(ones(icut_upper - icut_lower + 1)) .-
+                             dt .* precon_matrix
+        end
+
+        precon_lu = lu(sparse(precon_matrix))
+
+        return precon_lu
+    end
+
     @loop_s is begin
         @loop_r_z_vperp ir iz ivperp begin
             f_old_no_bc = @view fvec_in.pdf[:,ivperp,iz,ir,is]
@@ -82,34 +215,18 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, z_advect, vpa_
             speed = @view vpa_advect[is].speed[:,ivperp,iz,ir]
 
             if z.irank == 0 && iz == 1
-                @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, moments.ion.vth[iz,ir,is],
+                @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, vth[iz,ir,is],
                                                  fvec_in.upar[iz,ir,is],
                                                  moments.evolve_ppar,
                                                  moments.evolve_upar)
-                icut_lower_z = vpa.n
-                for ivpa ∈ vpa.n:-1:1
-                    # for left boundary in zed (z = -Lz/2), want
-                    # f(z=-Lz/2, v_parallel > 0) = 0
-                    if vpa.scratch[ivpa] ≤ zero
-                        icut_lower_z = ivpa + 1
-                        break
-                    end
-                end
+                icut_lower_z = searchsortedlast(vpa.scratch, zero) + 1
             end
             if z.irank == z.nrank - 1 && iz == z.n
-                @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, moments.ion.vth[iz,ir,is],
+                @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, vth[iz,ir,is],
                                                  fvec_in.upar[iz,ir,is],
                                                  moments.evolve_ppar,
                                                  moments.evolve_upar)
-                icut_upper_z = 0
-                for ivpa ∈ 1:vpa.n
-                    # for right boundary in zed (z = Lz/2), want
-                    # f(z=Lz/2, v_parallel < 0) = 0
-                    if vpa.scratch[ivpa] ≥ -zero
-                        icut_upper_z = ivpa - 1
-                        break
-                    end
-                end
+                icut_upper_z = searchsortedfirst(vpa.scratch, -zero) - 1
             end
 
             function apply_bc!(x)
@@ -137,125 +254,40 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, z_advect, vpa_
 
             # Need to apply 'new' boundary conditions to `f_old`, so that by imposing them
             # on `residual`, they are automatically imposed on `f_new`.
-            f_old = vpa.scratch7 .= f_old_no_bc
+            f_old = vpa.scratch9 .= f_old_no_bc
             apply_bc!(f_old)
 
-            #if nl_solver_params.stage_counter[] % nl_solver_params.preconditioner_update_interval == 0
-            #    advection_matrix = allocate_float(vpa.n, vpa.n)
-            #    advection_matrix .= 0.0
-            #    for i ∈ 1:vpa.nelement_local
-            #        imin = vpa.imin[i] - (i != 1)
-            #        imax = vpa.imax[i]
-            #        if i == 1
-            #            advection_matrix[imin,imin:imax] .+= vpa_spectral.lobatto.Dmat[1,:] ./ vpa.element_scale[i]
-            #        else
-            #            if speed[imin] < 0.0
-            #                advection_matrix[imin,imin:imax] .+= vpa_spectral.lobatto.Dmat[1,:] ./ vpa.element_scale[i]
-            #            elseif speed[imin] > 0.0
-            #                # Do nothing
-            #            else
-            #                advection_matrix[imin,imin:imax] .+= 0.5 .* vpa_spectral.lobatto.Dmat[1,:] ./ vpa.element_scale[i]
-            #            end
-            #        end
-            #        advection_matrix[imin+1:imax-1,imin:imax] .+= vpa_spectral.lobatto.Dmat[2:end-1,:] ./ vpa.element_scale[i]
-            #        if i == vpa.nelement_local
-            #            advection_matrix[imax,imin:imax] .+= vpa_spectral.lobatto.Dmat[end,:] ./ vpa.element_scale[i]
-            #        else
-            #            if speed[imax] < 0.0
-            #                # Do nothing
-            #            elseif speed[imax] > 0.0
-            #                advection_matrix[imax,imin:imax] .+= vpa_spectral.lobatto.Dmat[end,:] ./ vpa.element_scale[i]
-            #            else
-            #                advection_matrix[imax,imin:imax] .+= 0.5 .* vpa_spectral.lobatto.Dmat[end,:] ./ vpa.element_scale[i]
-            #            end
-            #        end
-            #    end
-            #    # Multiply by advection speed
-            #    for i ∈ 1:vpa.n
-            #        advection_matrix[i,:] .*= dt * speed[i]
-            #    end
-            #    for i ∈ 1:vpa.n
-            #        advection_matrix[i,i] += 1.0
-            #    end
+            if nl_solver_params.stage_counter[] % nl_solver_params.preconditioner_update_interval == 0
+                if z.irank == 0 && iz == 1
+                    nl_solver_params.preconditioners[ivperp,iz,ir,is] =
+                        (get_precon(is, ir, iz, ivperp, speed; icut_upper=icut_lower_z-1),
+                         2, icut_lower_z-1)
+                elseif z.irank == z.nrank - 1 && iz == z.n
+                    nl_solver_params.preconditioners[ivperp,iz,ir,is] =
+                        (get_precon(is, ir, iz, ivperp, speed; icut_lower=icut_upper_z+1),
+                         icut_upper_z+1, vpa.n-1)
+                else
+                    nl_solver_params.preconditioners[ivperp,iz,ir,is] =
+                        (get_precon(is, ir, iz, ivperp, speed),
+                         2, vpa.n-1)
+                end
+            end
 
-            #    if isa(vpa_spectral, weak_discretization_info)
-            #        # This allocates a new matrix - to avoid this would need to pre-allocate a
-            #        # suitable buffer somewhere and use `mul!()`.
-            #        advection_matrix = vpa_spectral.mass_matrix * advection_matrix
-            #        @. advection_matrix -= dt * vpa_dissipation_coefficient * vpa_spectral.K_matrix
-            #    elseif vpa_dissipation_coefficient > 0.0
-            #        error("Non-weak-form schemes cannot precondition diffusion")
-            #    end
+            function preconditioner(x)
+                precon_lu, icut_lower, icut_upper =
+                    nl_solver_params.preconditioners[ivperp,iz,ir,is]
+                if include_vpa_dissipation || maxwell_diffusion
+                    @views mul!(vpa.scratch[icut_lower:icut_upper],
+                                vpa_spectral.mass_matrix[icut_lower:icut_upper,icut_lower:icut_upper],
+                                x[icut_lower:icut_upper])
+                end
+                @views ldiv!(x[icut_lower:icut_upper], precon_lu,
+                             vpa.scratch[icut_lower:icut_upper])
+                return nothing
+            end
 
-            #    # hacky (?) Dirichlet boundary conditions
-            #    this_f_out[1] = 0.0
-            #    this_f_out[end] = 0.0
-            #    advection_matrix[1,:] .= 0.0
-            #    advection_matrix[1,1] = 1.0
-            #    advection_matrix[end,:] .= 0.0
-            #    advection_matrix[end,end] = 1.0
-
-            #    if z.bc == "wall"
-            #        if z.irank == 0 && iz == 1
-            #            # Set equal df/dt equal to f on points that should be set to zero for
-            #            # boundary condition. The vector that the inverse of the advection matrix
-            #            # acts on should have zeros there already.
-            #            advection_matrix[icut_lower_z:end,icut_lower_z:end] .= 0.0
-            #            for i ∈ icut_lower_z:vpa.n
-            #                advection_matrix[i,i] = 1.0
-            #            end
-            #        end
-            #        if z.irank == z.nrank - 1 && iz == z.n
-            #            # Set equal df/dt equal to f on points that should be set to zero for
-            #            # boundary condition. The vector that the inverse of the advection matrix
-            #            # acts on should have zeros there already.
-            #            # I comes from LinearAlgebra and represents identity matrix
-            #            advection_matrix[1:icut_upper_z,1:icut_upper_z] .= 0.0
-            #            for i ∈ 1:icut_upper_z
-            #                advection_matrix[i,i] = 1.0
-            #            end
-            #        end
-            #    end
-
-            #    advection_matrix = sparse(advection_matrix)
-            #    nl_solver_params.preconditioners[ivperp,iz,ir,is] = lu(advection_matrix)
-            #end
-
-            #function preconditioner(x)
-            #    if isa(vpa_spectral, weak_discretization_info)
-            #        # Multiply by mass matrix, storing result in vpa.scratch
-            #        mul!(vpa.scratch, vpa_spectral.mass_matrix, x)
-            #    end
-
-            #    # Handle boundary conditions
-            #    enforce_v_boundary_condition_local!(vpa.scratch, vpa_bc, speed, vpa_diffusion,
-            #                                        vpa, vpa_spectral)
-
-            #    if z.bc == "wall"
-            #        # Wall boundary conditions. Note that as density, upar, ppar do not
-            #        # change in this implicit step, f_new, f_old, and residual should all
-            #        # be zero at exactly the same set of grid points, so it is reasonable
-            #        # to zero-out `residual` to impose the boundary condition. We impose
-            #        # this after subtracting f_old in case rounding errors, etc. mean that
-            #        # at some point f_old had a different boundary condition cut-off
-            #        # index.
-            #        if z.irank == 0 && iz == 1
-            #            vpa.scratch[icut_lower_z:end] .= 0.0
-#           #             println("at icut_lower_z ", f_new[icut_lower_z], " ", f_old[icut_lower_z])
-            #        end
-            #        # absolute velocity at right boundary
-            #        if z.irank == z.nrank - 1 && iz == z.n
-            #            vpa.scratch[1:icut_upper_z] .= 0.0
-            #        end
-            #    end
-
-            #    # Do LU application on vpa.scratch, storing result in x
-            #    ldiv!(x, nl_solver_params.preconditioners[ivperp,iz,ir,is], vpa.scratch)
-            #    return nothing
-            #end
             left_preconditioner = identity
-            right_preconditioner = identity
-            #right_preconditioner = preconditioner
+            right_preconditioner = preconditioner
 
             # Define a function whose input is `f_new`, so that when it's output
             # `residual` is zero, f_new is the result of a backward-Euler timestep:
@@ -267,13 +299,18 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, z_advect, vpa_
                 advance_f_local!(residual, f_new, vpa_advect[is], ivperp, iz, ir, vpa, dt,
                                  vpa_spectral)
 
-                if vpa_diffusion
+                if include_vpa_dissipation
                     second_derivative!(vpa.scratch, f_new, vpa, vpa_spectral)
                     @. residual += dt * vpa_dissipation_coefficient * vpa.scratch
                 end
 
-                # Make sure updated f will not contain negative values
-                #@. residual = max(residual, minval)
+                if maxwell_diffusion
+                    ion_vpa_maxwell_diffusion_inner!(residual, f_new, n[iz,ir,is],
+                                                     upar[iz,ir,is], vth[iz,ir,is], vpa,
+                                                     vpa_spectral, maxwell_D_ii, dt,
+                                                     evolve_density, evolve_upar,
+                                                     evolve_ppar)
+                end
 
                 # Now
                 #   residual = f_old + dt*RHS(f_new)
@@ -285,11 +322,11 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, z_advect, vpa_
 
             # Buffers
             # Note vpa,scratch is used by advance_f!, so we cannot use it here.
-            residual = vpa.scratch2
-            delta_x = vpa.scratch3
-            rhs_delta = vpa.scratch4
-            v = vpa.scratch5
-            w = vpa.scratch6
+            residual = vpa.scratch4
+            delta_x = vpa.scratch5
+            rhs_delta = vpa.scratch6
+            v = vpa.scratch7
+            w = vpa.scratch8
 
             # Use forward-Euler step for initial guess
             # By passing this_f_out, which is equal to f_old at this point, the 'residual'

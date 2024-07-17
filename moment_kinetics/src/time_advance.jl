@@ -1222,7 +1222,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         if collisions.krook.nuii0 > 0.0
             advance_krook_collisions_ii = !t_params.implicit_ion_advance
         end
-        if collisions.mxwl_diff.D_ii > 0.0 && !t_params.implicit_ion_maxwell_diffusion
+        if collisions.mxwl_diff.D_ii > 0.0 && !(t_params.implicit_ion_maxwell_diffusion || t_params.implicit_ion_advance || t_params.implicit_vpa_advection)
             advance_maxwell_diffusion_ii = true
         end
         if collisions.mxwl_diff.D_nn > 0.0
@@ -1410,6 +1410,9 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
     elseif t_params.implicit_vpa_advection
         advance_vpa_advection = true
         advance_ion_numerical_dissipation = true
+        if collisions.mxwl_diff.D_ii > 0.0
+            advance_maxwell_diffusion_ii = true
+        end
     elseif t_params.implicit_ion_maxwell_diffusion && collisions.mxwl_diff.D_ii > 0.0
         advance_maxwell_diffusion_ii = true
     end
@@ -3568,6 +3571,7 @@ function backward_euler!(fvec_out, fvec_in, scratch_electron, pdf, fields, momen
                                           vpa_spectral, composition, collisions,
                                           external_source_settings.ion, geometry,
                                           nl_solver_params.vpa_advection,
+                                          advance.mxwl_diff_collisions_ii,
                                           advance.vpa_diffusion, num_diss_params, gyroavs,
                                           scratch_dummy)
     elseif advance.mxwl_diff_collisions_ii
