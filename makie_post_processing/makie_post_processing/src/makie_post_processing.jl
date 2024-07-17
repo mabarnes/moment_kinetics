@@ -3873,15 +3873,17 @@ function plot_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing, neutra
         upar = get_variable(run_info, "uz_neutral"; it=it, is=is, ir=input.ir0, iz=iz)
         vth = get_variable(run_info, "thermal_speed_neutral"; it=it, is=is, ir=input.ir0,
                            iz=iz)
+        vcoord = run_info.vz
     else
         f = get_variable(run_info, "f"; it=it, is=is, ir=input.ir0, iz=iz,
                          ivperp=input.ivperp0)
         density = get_variable(run_info, "density"; it=it, is=is, ir=input.ir0, iz=iz)
         upar = get_variable(run_info, "parallel_flow"; it=it, is=is, ir=input.ir0, iz=iz)
         vth = get_variable(run_info, "thermal_speed"; it=it, is=is, ir=input.ir0, iz=iz)
+        vcoord = run_info.vpa
     end
 
-    f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(f, run_info.vpa.grid, density, upar, vth,
+    f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(f, vcoord.grid, density, upar, vth,
                                                 run_info.evolve_density,
                                                 run_info.evolve_upar,
                                                 run_info.evolve_ppar)
@@ -4205,6 +4207,7 @@ function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
         density = get_variable(run_info, "density_neutral"; is=is, ir=input.ir0, iz=iz)
         upar = get_variable(run_info, "uz_neutral"; is=is, ir=input.ir0, iz=iz)
         vth = get_variable(run_info, "thermal_speed_neutral"; is=is, ir=input.ir0, iz=iz)
+        vcoord = run_info.vz
     else
         f = VariableCache(run_info, "f", chunk_size_2d; it=nothing, is=is, ir=input.ir0, iz=iz,
                           ivperp=input.ivperp0, ivpa=nothing, ivzeta=nothing, ivr=nothing,
@@ -4212,6 +4215,7 @@ function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
         density = get_variable(run_info, "density"; is=is, ir=input.ir0, iz=iz)
         upar = get_variable(run_info, "parallel_flow"; is=is, ir=input.ir0, iz=iz)
         vth = get_variable(run_info, "thermal_speed"; is=is, ir=input.ir0, iz=iz)
+        vcoord = run_info.vpa
     end
 
     function get_this_f_unnorm(it)
@@ -4219,7 +4223,7 @@ function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
                                          run_info.evolve_density, run_info.evolve_ppar)
 
         if f_over_vpa2
-            dzdt = vpagrid_to_dzdt(run_info.vpa.grid, vth[it], upar[it],
+            dzdt = vpagrid_to_dzdt(vcoord.grid, vth[it], upar[it],
                                    run_info.evolve_ppar, run_info.evolve_upar)
             dzdt2 = dzdt.^2
             for i ∈ eachindex(dzdt2)
@@ -4240,7 +4244,7 @@ function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
     fmin = Inf
     fmax = -Inf
     for it ∈ 1:run_info.nt
-        this_dzdt = vpagrid_to_dzdt(run_info.vpa.grid, vth[it], upar[it],
+        this_dzdt = vpagrid_to_dzdt(vcoord.grid, vth[it], upar[it],
                                     run_info.evolve_ppar, run_info.evolve_upar)
         this_dzdtmin, this_dzdtmax = extrema(this_dzdt)
         dzdtmin = min(dzdtmin, this_dzdtmin)
@@ -4264,7 +4268,7 @@ function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
                 fmin - 0.01*yheight, fmax + 0.01*yheight)
     end
 
-    dzdt = @lift vpagrid_to_dzdt(run_info.vpa.grid, vth[$frame_index], upar[$frame_index],
+    dzdt = @lift vpagrid_to_dzdt(vcoord.grid, vth[$frame_index], upar[$frame_index],
                                  run_info.evolve_ppar, run_info.evolve_upar)
     f_unnorm = @lift transform.(get_this_f_unnorm($frame_index))
 
