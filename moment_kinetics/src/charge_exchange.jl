@@ -30,7 +30,7 @@ function ion_charge_exchange_collisions_1V!(f_out, fvec_in, moments, composition
                 fvec_in.density_neutral[:,:,is], fvec_in.upar[:,:,is],
                 fvec_in.uz_neutral[:,:,is], moments.ion.vth[:,:,is],
                 moments.neutral.vth[:,:,is], moments, vpa, vz, charge_exchange_frequency,
-                vz_spectral, dt)
+                vz_spectral, dt; neutrals=false)
         end
     else
         begin_s_r_z_region()
@@ -38,11 +38,17 @@ function ion_charge_exchange_collisions_1V!(f_out, fvec_in, moments, composition
             # apply CX collisions to all ion species
             # for each ion species, obtain affect of charge exchange collisions
             # with the corresponding neutral species
-            @loop_r_z_vpa ir iz ivpa begin
-                f_out[ivpa,1,iz,ir,is] +=
-                    dt*charge_exchange_frequency*(
-                        fvec_in.pdf_neutral[ivpa,1,1,iz,ir,is]*fvec_in.density[iz,ir,is]
-                        - fvec_in.pdf[ivpa,1,iz,ir,is]*fvec_in.density_neutral[iz,ir,is])
+            isn = is
+            @loop_r_z ir iz begin
+                @views interpolate_to_grid_vpa!(vpa.scratch, vpa.grid,
+                                                fvec_in.pdf_neutral[:,1,1,iz,ir,isn], vz,
+                                                vz_spectral)
+                @loop_vpa ivpa begin
+                    f_out[ivpa,1,iz,ir,is] +=
+                        dt*charge_exchange_frequency*(
+                            vpa.scratch[ivpa]*fvec_in.density[iz,ir,is]
+                            - fvec_in.pdf[ivpa,1,iz,ir,is]*fvec_in.density_neutral[iz,ir,is])
+                end
             end
         end
     end
@@ -70,7 +76,7 @@ function neutral_charge_exchange_collisions_1V!(f_neutral_out, fvec_in, moments,
                 fvec_in.pdf[:,1,:,:,isn], fvec_in.density[:,:,isn],
                 fvec_in.uz_neutral[:,:,isn], fvec_in.upar[:,:,isn],
                 moments.neutral.vth[:,:,isn], moments.ion.vth[:,:,isn], moments,
-                vz, vpa, charge_exchange_frequency, vpa_spectral, dt)
+                vz, vpa, charge_exchange_frequency, vpa_spectral, dt; neutrals=true)
         end
     else
         begin_sn_r_z_region()
@@ -78,11 +84,16 @@ function neutral_charge_exchange_collisions_1V!(f_neutral_out, fvec_in, moments,
             # apply CX collisions to all neutral species
             # for each neutral species, obtain affect of charge exchange collisions
             # with the corresponding ion species
-            @loop_r_z_vz ir iz ivz begin
-                f_neutral_out[ivz,1,1,iz,ir,isn] +=
-                    dt*charge_exchange_frequency*(
-                        fvec_in.pdf[ivz,1,iz,ir,isn]*fvec_in.density_neutral[iz,ir,isn]
-                        - fvec_in.pdf_neutral[ivz,1,1,iz,ir,isn]*fvec_in.density[iz,ir,isn])
+            @loop_r_z ir iz begin
+                @views interpolate_to_grid_vpa!(vz.scratch, vz.grid,
+                                                fvec_in.pdf[:,1,iz,ir,isn], vpa,
+                                                vpa_spectral)
+                @loop_vz ivz begin
+                    f_neutral_out[ivz,1,1,iz,ir,isn] +=
+                        dt*charge_exchange_frequency*(
+                            vz.scratch[ivz]*fvec_in.density_neutral[iz,ir,isn]
+                            - fvec_in.pdf_neutral[ivz,1,1,iz,ir,isn]*fvec_in.density[iz,ir,isn])
+                end
             end
         end
     end
@@ -94,7 +105,7 @@ with a single species of the opposite type; e.g., ions with neutrals or neutrals
 """
 function charge_exchange_collisions_single_species!(f_out, pdf_in, pdf_other,
         density_other, upar, upar_other, vth, vth_other, moments, vpa, vpa_other,
-        charge_exchange_frequency, spectral_other, dt)
+        charge_exchange_frequency, spectral_other, dt; neutrals)
     @loop_r_z ir iz begin
         if moments.evolve_ppar
             # will need the ratio of thermal speeds both to interpolate between vpa grids
@@ -142,9 +153,16 @@ function charge_exchange_collisions_single_species!(f_out, pdf_in, pdf_other,
             # no need to interpolate if neither upar or ppar evolved separately from pdf
             vpa.scratch2 .= pdf_other[:,iz,ir]
         end
-        @loop_vpa ivpa begin
-            f_out[ivpa,iz,ir] += dt * charge_exchange_frequency * density_other[iz,ir] *
+        if neutrals
+            @loop_vz ivz begin
+                f_out[ivz,iz,ir] += dt * charge_exchange_frequency * density_other[iz,ir] *
+                (vpa.scratch2[ivz] * vth_ratio - pdf_in[ivz,iz,ir])
+            end
+        else
+            @loop_vpa ivpa begin
+                f_out[ivpa,iz,ir] += dt * charge_exchange_frequency * density_other[iz,ir] *
                 (vpa.scratch2[ivpa] * vth_ratio - pdf_in[ivpa,iz,ir])
+            end
         end
     end
 end

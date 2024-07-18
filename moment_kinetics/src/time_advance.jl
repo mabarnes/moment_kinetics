@@ -1158,7 +1158,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
             # if charge exchange collision frequency non-zero,
             # account for charge exchange collisions
             if abs(collisions.charge_exchange) > 0.0
-                if vz.n == vpa.n && vperp.n == 1 && vr.n == 1 && vzeta.n == 1
+                if vperp.n == 1 && vr.n == 1 && vzeta.n == 1
                     advance_ion_cx_1V = !t_params.implicit_ion_advance
                     advance_neutral_cx_1V = true
                 elseif vperp.n > 1 && vr.n > 1 && vzeta.n > 1
@@ -1166,8 +1166,6 @@ function setup_advance_flags(moments, composition, t_params, collisions,
                     advance_neutral_cx = true
                 else
                     error("If any perpendicular velocity has length>1 they all must. "
-                          * "If all perpendicular velocities have length=1, then vpa and "
-                          * "vz should be the same.\n"
                           * "vperp.n=$(vperp.n), vr.n=$(vr.n), vzeta.n=$(vzeta.n), "
                           * "vpa.n=$(vpa.n), vz.n=$(vz.n)")
                 end
@@ -1175,7 +1173,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
             # if ionization collision frequency non-zero,
             # account for ionization collisions
             if abs(collisions.ionization) > 0.0
-                if vz.n == vpa.n && vperp.n == 1 && vr.n == 1 && vzeta.n == 1
+                if vperp.n == 1 && vr.n == 1 && vzeta.n == 1
                     advance_ion_ionization_1V = !t_params.implicit_ion_advance
                     advance_neutral_ionization_1V = true
                 elseif vperp.n > 1 && vr.n > 1 && vzeta.n > 1
@@ -1183,8 +1181,6 @@ function setup_advance_flags(moments, composition, t_params, collisions,
                     advance_neutral_ionization = true
                 else
                     error("If any perpendicular velocity has length>1 they all must. "
-                          * "If all perpendicular velocities have length=1, then vpa and "
-                          * "vz should be the same.\n"
                           * "vperp.n=$(vperp.n), vr.n=$(vr.n), vzeta.n=$(vzeta.n), "
                           * "vpa.n=$(vpa.n), vz.n=$(vz.n)")
                 end
@@ -1356,27 +1352,23 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
         advance_z_advection = z.n > 1
         advance_r_advection = r.n > 1
         if abs(collisions.charge_exchange) > 0.0
-            if vz.n == vpa.n && vperp.n == 1 && vr.n == 1 && vzeta.n == 1
+            if vperp.n == 1 && vr.n == 1 && vzeta.n == 1
                 advance_ion_cx_1V = true
             elseif vperp.n > 1 && vr.n > 1 && vzeta.n > 1
                 advance_ion_cx = true
             else
                 error("If any perpendicular velocity has length>1 they all must. "
-                      * "If all perpendicular velocities have length=1, then vpa and "
-                      * "vz should be the same.\n"
                       * "vperp.n=$(vperp.n), vr.n=$(vr.n), vzeta.n=$(vzeta.n), "
                       * "vpa.n=$(vpa.n), vz.n=$(vz.n)")
             end
         end
         if abs(collisions.ionization) > 0.0
-            if vz.n == vpa.n && vperp.n == 1 && vr.n == 1 && vzeta.n == 1
+            if vperp.n == 1 && vr.n == 1 && vzeta.n == 1
                 advance_ion_ionization_1V = true
             elseif vperp.n > 1 && vr.n > 1 && vzeta.n > 1
                 advance_ion_ionization = true
             else
                 error("If any perpendicular velocity has length>1 they all must. "
-                      * "If all perpendicular velocities have length=1, then vpa and "
-                      * "vz should be the same.\n"
                       * "vperp.n=$(vperp.n), vr.n=$(vr.n), vzeta.n=$(vzeta.n), "
                       * "vpa.n=$(vpa.n), vz.n=$(vz.n)")
             end
