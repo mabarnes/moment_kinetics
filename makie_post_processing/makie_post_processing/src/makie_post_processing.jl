@@ -1005,7 +1005,14 @@ function plots_for_variable(run_info, variable_name; plot_prefix, has_rdim=true,
     println("Making plots for $variable_name")
     flush(stdout)
 
-    variable = get_variable(run_info, variable_name)
+    variable = nothing
+    try
+        variable = get_variable(run_info, variable_name)
+    catch e
+        println("plots_for_variable() failed for $variable_name - could not load data. "
+                * "Error was $e")
+        return nothing
+    end
 
     if variable_name ∈ em_variables
         species_indices = (nothing,)
