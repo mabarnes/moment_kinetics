@@ -998,7 +998,7 @@ end
 
 Use the calculated `CFL_limits` and `error_norms` to update the timestep in `t_params`.
 """
-function adaptive_timestep_update_t_params!(t_params, t, CFL_limits, error_norms,
+function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                                             total_points, current_dt, error_norm_method,
                                             success, nl_max_its_fraction, composition;
                                             electron=false)
@@ -1237,8 +1237,8 @@ function adaptive_timestep_update_t_params!(t_params, t, CFL_limits, error_norms
                 if (t_params.step_counter[] % 1000 == 0) && global_rank[] == 0
                     prefix = electron ? "electron" : "ion"
                     println("$prefix step ", t_params.step_counter[], ": t=",
-                            round(t, sigdigits=6), ", nfail=", t_params.failure_counter[],
-                            ", dt=", t_params.dt[])
+                            round(t_params.t[], sigdigits=6), ", nfail=",
+                            t_params.failure_counter[], ", dt=", t_params.dt[])
                 end
             end
         end
@@ -1248,12 +1248,12 @@ function adaptive_timestep_update_t_params!(t_params, t, CFL_limits, error_norms
         minimum_dt = 1.e-14
         if t_params.dt[] < minimum_dt
             println("Time advance failed: trying to set dt=$(t_params.dt[]) less than "
-                    * "$minimum_dt at t=$t. Ending run.")
+                    * "$minimum_dt at t=$(t_params.t[]). Ending run.")
             # Set dt negative to signal an error
             t_params.dt[] = -1.0
         end
 
-        current_time = t + t_params.previous_dt[]
+        current_time = t_params.t[] + t_params.previous_dt[]
         # Store here to ensure dt_before_output is set correctly when both moments and
         # dfns are written at the same time.
         current_dt = t_params.dt[]

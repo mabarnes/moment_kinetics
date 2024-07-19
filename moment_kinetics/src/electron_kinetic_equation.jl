@@ -65,7 +65,7 @@ OUTPUT:
 function update_electron_pdf!(scratch, pdf, moments, phi, r, z, vperp, vpa, z_spectral,
         vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy, t_params,
         collisions, composition, external_source_settings, num_diss_params,
-        max_electron_pdf_iterations; io_electron=nothing, initial_time=0.0,
+        max_electron_pdf_iterations; io_electron=nothing, initial_time=nothing,
         residual_tolerance=nothing, evolve_ppar=false)
 
     # set the method to use to solve the electron kinetic equation
@@ -142,7 +142,7 @@ OUTPUT:
 function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, collisions,
         composition, r, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
         vpa_advect, scratch_dummy, t_params, external_source_settings, num_diss_params,
-        max_electron_pdf_iterations; io_electron=nothing, initial_time=0.0,
+        max_electron_pdf_iterations; io_electron=nothing, initial_time=nothing,
         residual_tolerance=nothing, evolve_ppar=false)
 
     begin_r_z_region()
@@ -182,11 +182,16 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
     @views derivative_z!(moments.electron.dqpar_dz, moments.electron.qpar, buffer_r_1,
                          buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
 
-    time = initial_time
-    # Make sure that output times are set relative to this initial_time (the values in
-    # t_params are set relative to 0.0).
-    moments_output_times = t_params.moments_output_times .+ initial_time
-    dfns_output_times = t_params.dfns_output_times .+ initial_time
+    if initial_time !== nothing
+        @serial_region begin
+            t_params.t[] = initial_time
+        end
+        _block_synchronize()
+        # Make sure that output times are set relative to this initial_time (the values in
+        # t_params are set relative to 0.0).
+        moments_output_times = t_params.moments_output_times .+ initial_time
+        dfns_output_times = t_params.dfns_output_times .+ initial_time
+    end
     if io_electron === nothing && t_params.debug_io !== nothing
         # Overwrite the debug output file with the output from this call to
         # update_electron_pdf_with_time_advance!().
@@ -229,15 +234,15 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                 # need to exit or handle this appropriately
                 @loop_vpa ivpa begin
                     @loop_z iz begin
-                        println(io_pdf, "z: ", z.grid[iz], " wpa: ", vpa.grid[ivpa], " pdf: ", scratch[t_params.n_rk_stages+1].pdf_electron[ivpa, 1, iz, 1], " time: ", time, " residual: ", residual[ivpa, 1, iz, 1])
+                        println(io_pdf, "z: ", z.grid[iz], " wpa: ", vpa.grid[ivpa], " pdf: ", scratch[t_params.n_rk_stages+1].pdf_electron[ivpa, 1, iz, 1], " time: ", t_params.t[], " residual: ", residual[ivpa, 1, iz, 1])
                     end
                     println(io_pdf,"")
                 end
                 @loop_z iz begin
-                    println(io_upar, "z: ", z.grid[iz], " upar: ", moments.electron.upar[iz,1], " dupar_dz: ", moments.electron.dupar_dz[iz,1], " time: ", time, " iteration: ", t_params.step_counter[] - initial_step_counter)
-                    println(io_qpar, "z: ", z.grid[iz], " qpar: ", moments.electron.qpar[iz,1], " dqpar_dz: ", moments.electron.dqpar_dz[iz,1], " time: ", time, " iteration: ", t_params.step_counter[] - initial_step_counter)
-                    println(io_ppar, "z: ", z.grid[iz], " ppar: ", moments.electron.ppar[iz,1], " dppar_dz: ", moments.electron.dppar_dz[iz,1], " time: ", time, " iteration: ", t_params.step_counter[] - initial_step_counter)
-                    println(io_vth, "z: ", z.grid[iz], " vthe: ", moments.electron.vth[iz,1], " dvth_dz: ", moments.electron.dvth_dz[iz,1], " time: ", time, " iteration: ", t_params.step_counter[] - initial_step_counter, " dens: ", dens[iz,1])
+                    println(io_upar, "z: ", z.grid[iz], " upar: ", moments.electron.upar[iz,1], " dupar_dz: ", moments.electron.dupar_dz[iz,1], " time: ", t_params.t[], " iteration: ", t_params.step_counter[] - initial_step_counter)
+                    println(io_qpar, "z: ", z.grid[iz], " qpar: ", moments.electron.qpar[iz,1], " dqpar_dz: ", moments.electron.dqpar_dz[iz,1], " time: ", t_params.t[], " iteration: ", t_params.step_counter[] - initial_step_counter)
+                    println(io_ppar, "z: ", z.grid[iz], " ppar: ", moments.electron.ppar[iz,1], " dppar_dz: ", moments.electron.dppar_dz[iz,1], " time: ", t_params.t[], " iteration: ", t_params.step_counter[] - initial_step_counter)
+                    println(io_vth, "z: ", z.grid[iz], " vthe: ", moments.electron.vth[iz,1], " dvth_dz: ", moments.electron.dvth_dz[iz,1], " time: ", t_params.t[], " iteration: ", t_params.step_counter[] - initial_step_counter, " dens: ", dens[iz,1])
                 end
                 println(io_upar,"")
                 println(io_qpar,"")
@@ -252,7 +257,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
     t_params.moments_output_counter[] += 1
     @serial_region begin
         if io_electron !== nothing
-            write_electron_state(scratch, moments, t_params, time, io_electron,
+            write_electron_state(scratch, moments, t_params, io_electron,
                                  t_params.moments_output_counter[], r, z, vperp, vpa)
         end
     end
@@ -394,10 +399,11 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
             update_derived_moments_and_derivatives()
 
             if t_params.adaptive && istage == t_params.n_rk_stages
-                electron_adaptive_timestep_update!(scratch, time, t_params, moments,
-                                                   phi, z_advect, vpa_advect, composition,
-                                                   r, z, vperp, vpa, vperp_spectral,
-                                                   vpa_spectral, external_source_settings,
+                electron_adaptive_timestep_update!(scratch, t_params.t[], t_params,
+                                                   moments, phi, z_advect, vpa_advect,
+                                                   composition, r, z, vperp, vpa,
+                                                   vperp_spectral, vpa_spectral,
+                                                   external_source_settings,
                                                    num_diss_params;
                                                    evolve_ppar=evolve_ppar)
                 # Re-do this in case electron_adaptive_timestep_update!() re-arranged the
@@ -415,7 +421,10 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         end
 
         # update the time following the pdf update
-        time += t_params.previous_dt[]
+        @serial_region begin
+            t_params.t[] += t_params.previous_dt[]
+        end
+        _block_synchronize()
 
         residual = -1.0
         if t_params.previous_dt[] > 0.0
@@ -466,9 +475,9 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
             begin_serial_region()
             @serial_region begin
                 if z.irank == 0 && z.irank == z.nrank - 1
-                    println("iteration: ", t_params.step_counter[] - initial_step_counter, " time: ", time, " dt_electron: ", t_params.dt[], " phi_boundary: ", phi[[1,end],1], " residual: ", residual)
+                    println("iteration: ", t_params.step_counter[] - initial_step_counter, " time: ", t_params.t[], " dt_electron: ", t_params.dt[], " phi_boundary: ", phi[[1,end],1], " residual: ", residual)
                 elseif z.irank == 0
-                    println("iteration: ", t_params.step_counter[] - initial_step_counter, " time: ", time, " dt_electron: ", t_params.dt[], " phi_boundary_lower: ", phi[1,1], " residual: ", residual)
+                    println("iteration: ", t_params.step_counter[] - initial_step_counter, " time: ", t_params.t[], " dt_electron: ", t_params.dt[], " phi_boundary_lower: ", phi[1,1], " residual: ", residual)
                 end
             end
         end
@@ -482,17 +491,17 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                     if (mod(t_params.moments_output_counter[], 100) == 0)
                         @loop_vpa ivpa begin
                             @loop_z iz begin
-                                println(io_pdf, "z: ", z.grid[iz], " wpa: ", vpa.grid[ivpa], " pdf: ", new_pdf[ivpa, 1, iz, 1], " time: ", time, " residual: ", residual[ivpa, 1, iz, 1])
+                                println(io_pdf, "z: ", z.grid[iz], " wpa: ", vpa.grid[ivpa], " pdf: ", new_pdf[ivpa, 1, iz, 1], " time: ", t_params.t[], " residual: ", residual[ivpa, 1, iz, 1])
                             end
                             println(io_pdf,"")
                         end
                         println(io_pdf,"")
                     end
                     @loop_z iz begin
-                        println(io_upar, "z: ", z.grid[iz], " upar: ", moments.electron.upar[iz,1], " dupar_dz: ", moments.electron.dupar_dz[iz,1], " time: ", time, " iteration: ", t_params.step_counter[] - initial_step_counter)
-                        println(io_qpar, "z: ", z.grid[iz], " qpar: ", moments.electron.qpar[iz,1], " dqpar_dz: ", moments.electron.dqpar_dz[iz,1], " time: ", time, " iteration: ", t_params.step_counter[] - initial_step_counter)
-                        println(io_ppar, "z: ", z.grid[iz], " ppar: ", moments.electron.ppar[iz,1], " dppar_dz: ", moments.electron.dppar_dz[iz,1], " time: ", time, " iteration: ", t_params.step_counter[] - initial_step_counter)
-                        println(io_vth, "z: ", z.grid[iz], " vthe: ", moments.electron.vth[iz,1], " dvth_dz: ", moments.electron.dvth_dz[iz,1], " time: ", time, " iteration: ", t_params.step_counter[] - initial_step_counter, " dens: ", dens[iz,1])
+                        println(io_upar, "z: ", z.grid[iz], " upar: ", moments.electron.upar[iz,1], " dupar_dz: ", moments.electron.dupar_dz[iz,1], " time: ", t_params.t[], " iteration: ", t_params.step_counter[] - initial_step_counter)
+                        println(io_qpar, "z: ", z.grid[iz], " qpar: ", moments.electron.qpar[iz,1], " dqpar_dz: ", moments.electron.dqpar_dz[iz,1], " time: ", t_params.t[], " iteration: ", t_params.step_counter[] - initial_step_counter)
+                        println(io_ppar, "z: ", z.grid[iz], " ppar: ", moments.electron.ppar[iz,1], " dppar_dz: ", moments.electron.dppar_dz[iz,1], " time: ", t_params.t[], " iteration: ", t_params.step_counter[] - initial_step_counter)
+                        println(io_vth, "z: ", z.grid[iz], " vthe: ", moments.electron.vth[iz,1], " dvth_dz: ", moments.electron.dvth_dz[iz,1], " time: ", t_params.t[], " iteration: ", t_params.step_counter[] - initial_step_counter, " dens: ", dens[iz,1])
                     end
                     println(io_upar,"")
                     println(io_qpar,"")
@@ -504,7 +513,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
             @serial_region begin
                 if io_electron !== nothing
                     t_params.write_moments_output[] = false
-                    write_electron_state(scratch, moments, t_params, time, io_electron,
+                    write_electron_state(scratch, moments, t_params, io_electron,
                                          t_params.moments_output_counter[], r, z, vperp,
                                          vpa)
                 end
@@ -530,7 +539,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
             if !electron_pdf_converged
                 @loop_vpa ivpa begin
                     @loop_z iz begin
-                        println(io_pdf, "z: ", z.grid[iz], " wpa: ", vpa.grid[ivpa], " pdf: ", pdf[ivpa, 1, iz, 1], " time: ", time, " residual: ", residual[ivpa, 1, iz, 1])
+                        println(io_pdf, "z: ", z.grid[iz], " wpa: ", vpa.grid[ivpa], " pdf: ", pdf[ivpa, 1, iz, 1], " time: ", t_params.t[], " residual: ", residual[ivpa, 1, iz, 1])
                     end
                     println(io_pdf,"")
                 end
@@ -545,7 +554,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         if !electron_pdf_converged || do_debug_io
             if io_electron !== nothing && io_electron !== true
                 t_params.moments_output_counter[] += 1
-                write_electron_state(scratch, moments, t_params, time, io_electron,
+                write_electron_state(scratch, moments, t_params, io_electron,
                                      t_params.moments_output_counter[], r, z, vperp, vpa)
                 finish_electron_io(io_electron)
             end
@@ -556,7 +565,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
     else
         success = ""
     end
-    return time, success
+    return success
 end
 
 """

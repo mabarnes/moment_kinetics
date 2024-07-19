@@ -360,20 +360,20 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         restart_time_index, previous_runs_info, time_for_setup, t_params,
         nl_solver_params)
     # write initial data to ascii files
-    write_data_to_ascii(pdf, moments, fields, vpa, vperp, z, r, code_time,
+    write_data_to_ascii(pdf, moments, fields, vpa, vperp, z, r, t_params.t[],
         composition.n_ion_species, composition.n_neutral_species, ascii_io)
     # write initial data to binary files
 
-    write_all_moments_data_to_binary(scratch, moments, fields, code_time,
+    write_all_moments_data_to_binary(scratch, moments, fields, t_params.t[],
         composition.n_ion_species, composition.n_neutral_species, io_moments, 1, 0.0,
         t_params, nl_solver_params, r, z)
-    write_all_dfns_data_to_binary(scratch, scratch_electron, moments, fields, code_time,
-        composition.n_ion_species, composition.n_neutral_species, io_dfns, 1, 0.0,
-        t_params, nl_solver_params, r, z, vperp, vpa, vzeta, vr, vz)
+    write_all_dfns_data_to_binary(scratch, scratch_electron, moments, fields,
+        t_params.t[], composition.n_ion_species, composition.n_neutral_species, io_dfns,
+        1, 0.0, t_params, nl_solver_params, r, z, vperp, vpa, vzeta, vr, vz)
 
     begin_s_r_z_vperp_region()
 
-    return pdf, scratch, scratch_implicit, scratch_electron, code_time, t_params, vz, vr,
+    return pdf, scratch, scratch_implicit, scratch_electron, t_params, vz, vr,
            vzeta, vpa, vperp, gyrophase, z, r, moments, fields, spectral_objects,
            advection_structs, composition, collisions, geometry, gyroavs,
            boundary_distributions, external_source_settings, num_diss_params,

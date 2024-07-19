@@ -43,6 +43,7 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     n_variables::mk_int
     nstep::mk_int
     end_time::mk_float
+    t::MPISharedArray{mk_float,1}
     dt::MPISharedArray{mk_float,1}
     previous_dt::MPISharedArray{mk_float,1}
     next_output_time::MPISharedArray{mk_float,1}

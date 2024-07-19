@@ -696,7 +696,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                                     previous_runs_info,
                                                     "initial_electron")
 
-            electron_pseudotime, success =
+            success =
                 @views update_electron_pdf!(scratch_electron, pdf.electron.norm, moments,
                                             fields.phi, r, z, vperp, vpa, z_spectral,
                                             vperp_spectral, vpa_spectral, z_advect,
@@ -756,7 +756,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                                vpa_advect, gyroavs, scratch_dummy, 0.0,
                                                initialisation_nl_solver_params)
             else
-                electron_pseudotime, success =
+                success =
                     update_electron_pdf!(scratch_electron, pdf.electron.norm, moments,
                                          fields.phi, r, z, vperp, vpa, z_spectral,
                                          vperp_spectral, vpa_spectral, z_advect,
@@ -764,8 +764,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                          collisions, composition,
                                          external_source_settings, num_diss_params,
                                          max_electron_pdf_iterations;
-                                         io_electron=io_initial_electron,
-                                         initial_time=electron_pseudotime)
+                                         io_electron=io_initial_electron)
             end
             if success != ""
                 error("!!!max number of iterations for electron pdf update exceeded!!!\n"

@@ -191,6 +191,8 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
     dt_before_last_fail::Ttime
     # cumulative number of electron pseudo-timesteps taken
     electron_step_counter::Telectronint
+    # cumulative electron pseudo-time
+    electron_cumulative_pseudotime::Telectrontime
     # current electron pseudo-timestep size
     electron_dt::Telectrontime
     # size of last electron pseudo-timestep before the output was written
@@ -250,13 +252,12 @@ end
 structure containing the data/metadata needed for binary file i/o
 for electron initialization
 """
-struct io_initial_electron_info{Tfile, Ttime, Tfe, Tmom, Texte1, Texte2, Texte3, Texte4,
+struct io_initial_electron_info{Tfile, Tfe, Tmom, Texte1, Texte2, Texte3, Texte4,
                                 Tconstr, Telectrontime, Telectronint, Telectronfailcause,
                                 Tinput}
     # file identifier for the binary file to which data is written
     fid::Tfile
-    # handle for the pseudotime variable
-    pseudotime::Ttime
+    time::Telectrontime
     # handle for the electron distribution function variable
     f_electron::Tfe
     # low-order approximation, used to diagnose timestepping error
@@ -296,6 +297,8 @@ struct io_initial_electron_info{Tfile, Ttime, Tfe, Tmom, Texte1, Texte2, Texte3,
     electron_constraints_C_coefficient::Tconstr
     # cumulative number of electron pseudo-timesteps taken
     electron_step_counter::Telectronint
+    # cumulative electron pseudo-time
+    electron_cumulative_pseudotime::Telectrontime
     # current electron pseudo-timestep size
     electron_dt::Telectrontime
     # size of last electron pseudo-timestep before the output was written
@@ -561,6 +564,7 @@ function reopen_initial_electron_io(file_info)
                                         getvar("electron_constraints_B_coefficient"),
                                         getvar("electron_constraints_C_coefficient"),
                                         getvar("electron_step_counter"),
+                                        getvar("electron_cumulative_pseudotime"),
                                         getvar("electron_dt"),
                                         getvar("electron_previous_dt"),
                                         getvar("electron_failure_counter"),
@@ -1582,6 +1586,10 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
             description="cumulative number of electron pseudo-timesteps for the run")
 
         io_electron_dt = create_dynamic_variable!(
+            dynamic, "electron_cumulative_pseudotime", mk_float; parallel_io=parallel_io,
+            description="cumulative electron pseudo-time")
+
+        io_electron_dt = create_dynamic_variable!(
             dynamic, "electron_dt", mk_float; parallel_io=parallel_io,
             description="current electron pseudo-timestep size")
 
@@ -1614,6 +1622,7 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
                         * "timestepping algorithm")
     else
         io_electron_step_counter = nothing
+        io_electron_cumulative_pseudotime = nothing
         io_electron_dt = nothing
         io_electron_previous_dt = nothing
         io_electron_failure_counter = nothing
@@ -2126,6 +2135,7 @@ function reopen_moments_io(file_info)
                                getvar("dt"), getvar("previous_dt"), getvar("failure_counter"),
                                getvar("failure_caused_by"), getvar("limit_caused_by"),
                                getvar("dt_before_last_fail"),getvar("electron_step_counter"),
+                               getvar("electron_cumulative_pseudotime"),
                                getvar("electron_dt"), getvar("electron_previous_dt"),
                                getvar("electron_failure_counter"),
                                getvar("electron_failure_caused_by"),
@@ -2288,6 +2298,7 @@ function reopen_dfns_io(file_info)
                                      getvar("limit_caused_by"),
                                      getvar("dt_before_last_fail"),
                                      getvar("electron_step_counter"),
+                                     getvar("electron_cumulative_pseudotime"),
                                      getvar("electron_dt"),
                                      getvar("electron_previous_dt"),
                                      getvar("electron_failure_counter"),
@@ -2338,7 +2349,7 @@ end
 write time-dependent moments data for ions, electrons and neutrals to the binary output
 file
 """
-function write_all_moments_data_to_binary(scratch, moments, fields, t, n_ion_species,
+function write_all_moments_data_to_binary(scratch, moments, fields, n_ion_species,
                                           n_neutral_species, io_or_file_info_moments,
                                           t_idx, time_for_run, t_params, nl_solver_params,
                                           r, z)
@@ -2357,7 +2368,7 @@ function write_all_moments_data_to_binary(scratch, moments, fields, t, n_ion_spe
         parallel_io = io_moments.io_input.parallel_io
 
         # add the time for this time slice to the hdf5 file
-        append_to_dynamic_var(io_moments.time, t, t_idx, parallel_io)
+        append_to_dynamic_var(io_moments.time, t_params.t[], t_idx, parallel_io)
 
         write_em_fields_data_to_binary(fields, io_moments, t_idx, r, z)
 
@@ -2623,6 +2634,9 @@ function write_electron_moments_data_to_binary(scratch, moments, t_params, elect
             # Save timestepping info
             append_to_dynamic_var(io_moments.electron_step_counter,
                                   electron_t_params.step_counter[], t_idx, parallel_io)
+            append_to_dynamic_var(io_moments.electron_cumulative_pseudotime,
+                                  electron_t_params.t[], t_idx,
+                                  parallel_io)
             append_to_dynamic_var(io_moments.electron_dt,
                                   electron_t_params.dt_before_output[], t_idx,
                                   parallel_io)
@@ -2755,7 +2769,7 @@ end
 write time-dependent distribution function data for ions, electrons and neutrals to the
 binary output file
 """
-function write_all_dfns_data_to_binary(scratch, scratch_electron, moments, fields, t,
+function write_all_dfns_data_to_binary(scratch, scratch_electron, moments, fields,
                                        n_ion_species, n_neutral_species,
                                        io_or_file_info_dfns, t_idx, time_for_run,
                                        t_params, nl_solver_params, r, z, vperp, vpa,
@@ -2773,7 +2787,7 @@ function write_all_dfns_data_to_binary(scratch, scratch_electron, moments, field
 
         # Write the moments for this time slice to the output file.
         # This also updates the time.
-        write_all_moments_data_to_binary(scratch, moments, fields, t, n_ion_species,
+        write_all_moments_data_to_binary(scratch, moments, fields, n_ion_species,
                                          n_neutral_species, io_dfns.io_moments, t_idx,
                                          time_for_run, t_params, nl_solver_params, r, z)
 
@@ -2883,12 +2897,12 @@ function write_neutral_dfns_data_to_binary(scratch, t_params, n_neutral_species,
 end
 
 """
-    write_electron_state(scratch_electron, moments, t_params, t, io_initial_electron,
+    write_electron_state(scratch_electron, moments, t_params, io_initial_electron,
                          t_idx, r, z, vperp, vpa; pdf_electron_converged=false)
 
 Write the electron state to an output file.
 """
-function write_electron_state(scratch_electron, moments, t_params, t,
+function write_electron_state(scratch_electron, moments, t_params,
                               io_or_file_info_initial_electron, t_idx, r, z, vperp, vpa;
                               pdf_electron_converged=false)
 
@@ -2906,7 +2920,10 @@ function write_electron_state(scratch_electron, moments, t_params, t,
         parallel_io = io_initial_electron.io_input.parallel_io
 
         # add the pseudo-time for this time slice to the hdf5 file
-        append_to_dynamic_var(io_initial_electron.pseudotime, t, t_idx, parallel_io)
+        append_to_dynamic_var(io_initial_electron.time,
+                              t_params.t[], t_idx, parallel_io)
+        append_to_dynamic_var(io_initial_electron.electron_cumulative_pseudotime,
+                              t_params.t[], t_idx, parallel_io)
 
         write_electron_dfns_data_to_binary(scratch_electron, t_params,
                                            io_initial_electron, t_idx, r, z, vperp, vpa)
