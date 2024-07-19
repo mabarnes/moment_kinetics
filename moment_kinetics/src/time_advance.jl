@@ -349,7 +349,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
     write_moments_output = allocate_shared_bool(1)
     write_dfns_output = allocate_shared_bool(1)
     if block_rank[] == 0
-        t_shared[] = t_reload === nothing ? 0.0 : code_time
+        t_shared[] = code_time
         dt_shared[] = dt_reload === nothing ? t_input["dt"] : dt_reload
         previous_dt_shared[] = dt_reload === nothing ? t_input["dt"] : dt_reload
         next_output_time[] = 0.0
@@ -2412,7 +2412,7 @@ function apply_all_bcs_constraints_update_moments!(
         # calculated here would be discarded - we might as well skip calculating it in
         # that case.
         if update_electrons && !t_params.implicit_electron_advance && success == ""
-            _, kinetic_electron_success = update_electron_pdf!(
+            kinetic_electron_success = update_electron_pdf!(
                scratch_electron, pdf.electron.norm, moments, fields.phi, r, z, vperp, vpa,
                z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
                scratch_dummy, t_params.electron, collisions, composition,

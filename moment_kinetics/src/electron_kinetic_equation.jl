@@ -1366,7 +1366,7 @@ function electron_adaptive_timestep_update!(scratch, t, t_params, moments, phi, 
         push!(total_points, z.n_global * r.n_global)
     end
 
-    adaptive_timestep_update_t_params!(t_params, t, CFL_limits, error_norms, total_points,
+    adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms, total_points,
                                        current_dt, error_norm_method, "", 0.0,
                                        composition; electron=true)
     if t_params.previous_dt[] == 0.0

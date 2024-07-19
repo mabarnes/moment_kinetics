@@ -1029,10 +1029,10 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
         external_source_electron_momentum_amplitude,
         external_source_electron_pressure_amplitude,
         electron_constraints_A_coefficient, electron_constraints_B_coefficient,
-        electron_constraints_C_coefficient, io_electron_step_counter, io_electron_dt,
-        io_electron_previous_dt, io_electron_failure_counter,
-        io_electron_failure_caused_by, io_electron_limit_caused_by,
-        io_electron_dt_before_last_fail =
+        electron_constraints_C_coefficient, io_electron_step_counter,
+        io_electron_cumulative_pseudotime, io_electron_dt, io_electron_previous_dt,
+        io_electron_failure_counter, io_electron_failure_caused_by,
+        io_electron_limit_caused_by, io_electron_dt_before_last_fail =
             define_dynamic_electron_moment_variables!(fid, r, z, parallel_io,
                                                       external_source_settings,
                                                       evolve_density, evolve_upar,
@@ -1158,7 +1158,8 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                io_time_for_run, io_step_counter, io_dt, io_previous_dt,
                                io_failure_counter, io_failure_caused_by,
                                io_limit_caused_by, io_dt_before_last_fail,
-                               io_electron_step_counter, io_electron_dt,
+                               io_electron_step_counter,
+                               io_electron_cumulative_pseudotime, io_electron_dt,
                                io_electron_previous_dt, io_electron_failure_counter,
                                io_electron_failure_caused_by, io_electron_limit_caused_by,
                                io_electron_dt_before_last_fail, io_nl_solver_diagnostics,
@@ -1585,7 +1586,7 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
             dynamic, "electron_step_counter", mk_int; parallel_io=parallel_io,
             description="cumulative number of electron pseudo-timesteps for the run")
 
-        io_electron_dt = create_dynamic_variable!(
+        io_electron_cumulative_pseudotime = create_dynamic_variable!(
             dynamic, "electron_cumulative_pseudotime", mk_float; parallel_io=parallel_io,
             description="cumulative electron pseudo-time")
 
@@ -1640,10 +1641,10 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
            external_source_electron_momentum_amplitude,
            external_source_electron_pressure_amplitude,
            electron_constraints_A_coefficient, electron_constraints_B_coefficient,
-           electron_constraints_C_coefficient, io_electron_step_counter, io_electron_dt,
-           io_electron_previous_dt, io_electron_failure_counter,
-           io_electron_failure_caused_by, io_electron_limit_caused_by,
-           io_electron_dt_before_last_fail
+           electron_constraints_C_coefficient, io_electron_step_counter,
+           io_electron_cumulative_pseudotime, io_electron_dt, io_electron_previous_dt,
+           io_electron_failure_counter, io_electron_failure_caused_by,
+           io_electron_limit_caused_by, io_electron_dt_before_last_fail
 end
 
 """

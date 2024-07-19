@@ -775,7 +775,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
             # re-used if the simulation is re-run.
             t_params.electron.moments_output_counter[] += 1
             write_electron_state(scratch_electron, moments, t_params.electron,
-                                 electron_pseudotime, io_initial_electron,
+                                 io_initial_electron,
                                  t_params.electron.moments_output_counter[], r, z, vperp,
                                  vpa; pdf_electron_converged=true)
             finish_electron_io(io_initial_electron)
