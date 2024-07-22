@@ -80,8 +80,8 @@ Chebyshev coefficients of derivatives of a function
 
 Starting from the expression of $f$ as a sum Chebyshev polynomials, equation \eq{eq:cheb-expansion},
 we can obtain an expression for the derivative
-```math \begin{equation}
-\frac{d f}{d x} = \sum^N_{n=0} a_{n}\frac{d T_{n}}{d x}. \label{eq:derivative-def}\end{equation}
+```math
+\begin{equation} \frac{d f}{d x} = \sum^N_{n=0} a_{n}\frac{d T_{n}}{d x}. \label{eq:derivative-def}\end{equation}
 ```
 We note that we must be able to express ${d f}/{d x}$ as a sum 
 of Chebyshev polynomials of up to order $N-1$, i.e.,
