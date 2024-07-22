@@ -58,13 +58,13 @@ these cases we choose the points
 ```math
 \begin{equation} x_j = \cos \theta_j, \quad \theta_j = \frac{2 j \pi}{2 N + 1} \quad 0 \leq j \leq N.\end{equation}
 ```
-Writing out the Chebyshev series \eq{eq:cheb-expansion}, 
+Writing out the Chebyshev series (1), <!-- \eq{eq:cheb-expansion}, -->
 we have that 
 ```math
 \begin{equation} \begin{split} f(x_j) = & \sum^N_{n=0} a_{n} \cos \frac{2 n j \pi}{2 N + 1} \\ & = a_{0} + \sum^N_{n=1} \frac{a_{n}}{2}\left(\exp\left[i \frac{2\pi n j}{2N +1}\right] + \exp\left[-i \frac{2\pi n j}{2N +1}\right]\right).\end{split} \label{eq:cheb-expansion-radau-points}\tag{3}\end{equation}
 ```
-The form of the series \eq{eq:cheb-expansion-radau-points} is identical to the form of 
-a Fourier series on an odd number of points, i.e., taking $M = 2 N + 1$ in equation \eq{eq:fourier-series},
+The form of the series (3) <!--\eq{eq:cheb-expansion-radau-points}--> is identical to the form of 
+a Fourier series on an odd number of points, i.e., taking $M = 2 N + 1$ in equation (2) <--\eq{eq:fourier-series}-->,
 and assuming $b_{k} = b_{M -k}$ for $k>1$,
 we have that 
 ```math
@@ -78,7 +78,7 @@ We can thus take a Chebyshev transform using a Fourier transform on Gauss-Chebys
 Chebyshev coefficients of derivatives of a function
 ===============================================
 
-Starting from the expression of $f$ as a sum Chebyshev polynomials, equation \eq{eq:cheb-expansion},
+Starting from the expression of $f$ as a sum Chebyshev polynomials, equation (1) <!--\eq{eq:cheb-expansion}-->,
 we can obtain an expression for the derivative
 ```math
 \begin{equation} \frac{d f}{d x} = \sum^N_{n=0} a_{n}\frac{d T_{n}}{d x}. \label{eq:derivative-def}\tag{4}\end{equation}
@@ -109,7 +109,7 @@ Using these identities, which may be obtained from the trigonometric definition 
 ```math
 \begin{equation}  U_{n}(\cos \theta) \sin \theta = \sin \left((n+1)\theta\right),\end{equation}
 ```
-we find that equation  \eq{eq:dn-def} becomes 
+we find that equation (5) <!--\eq{eq:dn-def}--> becomes 
 ```math
 \begin{equation} \begin{split}\sum^N_{n=1} a_{n} n U_{n-1}(x) =& \frac{d_{N-1}}{2}U_{N-1}+\frac{d_{N-2}}{2}U_{N-2} 
 \\ & + \sum^{N-3}_{k=1} \frac{d_{k}-d_{k+2}}{2}U_{k} + \left(d_{0} - \frac{d_{2}}{2}\right)U_{0}. \end{split}
@@ -139,7 +139,7 @@ to write
 ```math
 \begin{equation} \int^{1}_{-1} f(x) \; d x = \int^\pi_0 f(\cos\theta) \sin \theta \; d \theta . \label{eq:change-of-variables-integral} \tag{9}\end{equation}
 ```
- Using the series expansion \eq{eq:cheb-expansion} in equation \eq{eq:change-of-variables-integral}
+ Using the series expansion (1) <!--\eq{eq:cheb-expansion}--> in equation (9) <!--\eq{eq:change-of-variables-integral}-->
  we find that 
  ```math
  \begin{equation} \int^{1}_{-1} f(x) \; d x = \sum^N_{n=0} a_{n}\int^\pi_0 \cos (n \theta) \sin \theta \; d \theta
@@ -164,7 +164,7 @@ to write
  ```
  
  To avoid computing the set of coefficients $\{a_{n}\}$ every time we wish to integrate $f(x_j)$,
- we use the inverse transforms. This transform allows us to rewrite equation \eq{eq:Cheb-sum} in the form \eq{eq:w-sum}.
+ we use the inverse transforms. This transform allows us to rewrite equation (11) <!--\eq{eq:Cheb-sum}--> in the form (8) <!--\eq{eq:w-sum}-->.
  Since the inverse transform differs between the Gauss-Chebyshev-Lobotto and Gauss-Chebyshev-Radau cases, we treat each 
  case separately below. 
  
@@ -195,12 +195,12 @@ and $\hat{f}_j$ is $f(x_j)$ on the extended domain in FFT order, i.e.,
 ```math
 \begin{equation} a_{j} = a_{2N-j}, {\rm~for~} N+1 \leq j \leq 2N-1.\end{equation}
 ```
-In the second step we use the definition of the inverse transform \eq{eq:inverse-transform-GCR}, and 
+In the second step we use the definition of the inverse transform (14) <!--\eq{eq:inverse-transform-GCR}-->, and 
 in the third step we define 
 ```math
 \begin{equation} v_{j} = \sum_{n=0}^{2N-1}\frac{J_{n}}{2N}\exp\left[-i \frac{2\pi n j}{2N}\right].\end{equation}
 ```
-Finally, we can compare equations \eq{eq:w-sum} and \eq{eq:weights-working} and deduce that 
+Finally, we can compare equations (8) <!--\eq{eq:w-sum}--> and (13) <!--\eq{eq:weights-working}--> and deduce that 
 ```math
 \begin{equation} w_{j} = q_{j}v_{j} {\rm~for~} 0 \leq j \leq N.  \end{equation}
 ```
@@ -239,12 +239,12 @@ where in the first step we have extended the sum from $N$ to $2N$ and used FFT-o
 ```math
 \begin{equation} a_{j} = a_{2N+1-j}, {\rm~for~} N+1 \leq j \leq 2N.\end{equation}
 ```
-In the second step we use the definition of the inverse transform \eq{eq:inverse-transform-GCR}, and 
+In the second step we use the definition of the inverse transform (14) <!--\eq{eq:inverse-transform-GCR}-->, and 
 in the third step we define 
 ```math
 \begin{equation} v_{j} = \sum_{n=0}^{2N}\frac{J_{n}}{2N+1}\exp\left[-i \frac{2\pi n j}{2N+1}\right].\end{equation}
 ```
-Finally, we can compare equations \eq{eq:w-sum} and \eq{eq:weights-working-radau} and deduce that 
+Finally, we can compare equations (8) <!--\eq{eq:w-sum}--> and (15) <!--\eq{eq:weights-working-radau}--> and deduce that 
 ```math
 \begin{equation} w_{j} = q_{j}v_{j} {\rm~for~} 0 \leq j \leq N.  \end{equation}
 ```
