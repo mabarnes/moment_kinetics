@@ -59,6 +59,9 @@ The electron kinetic equation is:
     scratch_dummy = dummy arrays to be used for temporary storage
     dt = time step size
     max_electron_pdf_iterations = maximum number of iterations to use in the solution of the electron kinetic equation
+    ion_dt = if this is passed, the electron pressure is evolved in a form that results in
+             a backward-Euler update on the ion timestep (ion_dt) once the electron
+             pseudo-timestepping reaches steady state.
 OUTPUT:
     pdf = updated (modified) electron pdf
 """
@@ -66,7 +69,7 @@ function update_electron_pdf!(scratch, pdf, moments, phi, r, z, vperp, vpa, z_sp
         vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy, t_params,
         collisions, composition, external_source_settings, num_diss_params,
         max_electron_pdf_iterations; io_electron=nothing, initial_time=nothing,
-        residual_tolerance=nothing, evolve_ppar=false)
+        residual_tolerance=nothing, evolve_ppar=false, ion_dt=nothing)
 
     # set the method to use to solve the electron kinetic equation
     solution_method = "artificial_time_derivative"
@@ -79,7 +82,7 @@ function update_electron_pdf!(scratch, pdf, moments, phi, r, z, vperp, vpa, z_sp
             vpa_spectral, z_advect, vpa_advect, scratch_dummy, t_params,
             external_source_settings, num_diss_params, max_electron_pdf_iterations;
             io_electron=io_electron, initial_time=initial_time,
-            residual_tolerance=residual_tolerance, evolve_ppar=evolve_ppar)
+            residual_tolerance=residual_tolerance, evolve_ppar=evolve_ppar, ion_dt=ion_dt)
     elseif solution_method == "shooting_method"
         dens = moments.electron.dens
         vthe = moments.electron.vth
@@ -136,6 +139,9 @@ The electron kinetic equation is:
     max_electron_pdf_iterations = maximum number of iterations to use in the solution of the electron kinetic equation
     io_electron = info struct for binary file I/O
     initial_time = initial value for the (pseudo-)time
+    ion_dt = if this is passed, the electron pressure is evolved in a form that results in
+             a backward-Euler update on the ion timestep (ion_dt) once the electron
+             pseudo-timestepping reaches steady state.
 OUTPUT:
     pdf = updated (modified) electron pdf
 """
@@ -143,9 +149,13 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         composition, r, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
         vpa_advect, scratch_dummy, t_params, external_source_settings, num_diss_params,
         max_electron_pdf_iterations; io_electron=nothing, initial_time=nothing,
-        residual_tolerance=nothing, evolve_ppar=false)
+        residual_tolerance=nothing, evolve_ppar=false, ion_dt=nothing)
 
     begin_r_z_region()
+
+    if ion_dt !== nothing
+        evolve_ppar = true
+    end
 
     # create several (r) dimension dummy arrays for use in taking derivatives
     buffer_r_1 = @view scratch_dummy.buffer_rs_1[:,1]
@@ -181,6 +191,18 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
     # compute the z-derivative of the input electron parallel heat flux, needed for the electron kinetic equation
     @views derivative_z!(moments.electron.dqpar_dz, moments.electron.qpar, buffer_r_1,
                          buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+
+    if !evolve_ppar
+        # ppar is not updated in the pseudo-timestepping loop below. So that we can read
+        # ppar from the scratch structs, copy moments.electron.ppar into all of them.
+        moments_ppar = moments.electron.ppar
+        for istage ∈ 1:t_params.n_rk_stages+1
+            scratch_ppar = scratch[istage].electron_ppar
+            @loop_r_z ir iz begin
+                scratch_ppar[iz,ir] = moments_ppar[iz,ir]
+            end
+        end
+    end
 
     if initial_time !== nothing
         @serial_region begin
@@ -241,7 +263,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                 @loop_z iz begin
                     println(io_upar, "z: ", z.grid[iz], " upar: ", moments.electron.upar[iz,1], " dupar_dz: ", moments.electron.dupar_dz[iz,1], " time: ", t_params.t[], " iteration: ", t_params.step_counter[] - initial_step_counter)
                     println(io_qpar, "z: ", z.grid[iz], " qpar: ", moments.electron.qpar[iz,1], " dqpar_dz: ", moments.electron.dqpar_dz[iz,1], " time: ", t_params.t[], " iteration: ", t_params.step_counter[] - initial_step_counter)
-                    println(io_ppar, "z: ", z.grid[iz], " ppar: ", moments.electron.ppar[iz,1], " dppar_dz: ", moments.electron.dppar_dz[iz,1], " time: ", t_params.t[], " iteration: ", t_params.step_counter[] - initial_step_counter)
+                    println(io_ppar, "z: ", z.grid[iz], " ppar: ", scratch[t_params.n_rk_stages+1].electron_ppar[iz,1], " dppar_dz: ", moments.electron.dppar_dz[iz,1], " time: ", t_params.t[], " iteration: ", t_params.step_counter[] - initial_step_counter)
                     println(io_vth, "z: ", z.grid[iz], " vthe: ", moments.electron.vth[iz,1], " dvth_dz: ", moments.electron.dvth_dz[iz,1], " time: ", t_params.t[], " iteration: ", t_params.step_counter[] - initial_step_counter, " dens: ", dens[iz,1])
                 end
                 println(io_upar,"")
@@ -308,7 +330,8 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                                                     scratch_dummy, collisions,
                                                     composition, external_source_settings,
                                                     num_diss_params, t_params.dt[];
-                                                    evolve_ppar=evolve_ppar)
+                                                    evolve_ppar=evolve_ppar,
+                                                    ion_dt=ion_dt)
             speedup_hack!(scratch[istage+1], scratch[istage], z_speedup_fac, z, vpa;
                           evolve_ppar=evolve_ppar)
 
@@ -317,15 +340,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
             if evolve_ppar
                 rk_update_variable!(scratch, nothing, :electron_ppar, t_params, istage)
 
-                begin_r_z_region()
-                moments_struct_ppar = moments.electron.ppar
-                scratch_ppar = scratch[istage+1].electron_ppar
-                @loop_r_z ir iz begin
-                    moments_struct_ppar[iz,ir] = scratch_ppar[iz,ir]
-                end
-                _block_synchronize()
-
-                update_electron_vth_temperature!(moments, moments_struct_ppar,
+                update_electron_vth_temperature!(moments, scratch[istage+1].electron_ppar,
                                                  moments.electron.dens, composition)
             end
 
@@ -340,8 +355,8 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                 # update the electron heat flux
                 moments.electron.qpar_updated[] = false
                 calculate_electron_qpar_from_pdf!(moments.electron.qpar,
-                                                  moments.electron.ppar, moments.electron.vth,
-                                                  latest_pdf, vpa)
+                                                  scratch[istage+1].electron_ppar,
+                                                  moments.electron.vth, latest_pdf, vpa)
 
                 # compute the z-derivative of the parallel electron heat flux
                 @views derivative_z!(moments.electron.dqpar_dz, moments.electron.qpar,
@@ -500,7 +515,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                     @loop_z iz begin
                         println(io_upar, "z: ", z.grid[iz], " upar: ", moments.electron.upar[iz,1], " dupar_dz: ", moments.electron.dupar_dz[iz,1], " time: ", t_params.t[], " iteration: ", t_params.step_counter[] - initial_step_counter)
                         println(io_qpar, "z: ", z.grid[iz], " qpar: ", moments.electron.qpar[iz,1], " dqpar_dz: ", moments.electron.dqpar_dz[iz,1], " time: ", t_params.t[], " iteration: ", t_params.step_counter[] - initial_step_counter)
-                        println(io_ppar, "z: ", z.grid[iz], " ppar: ", moments.electron.ppar[iz,1], " dppar_dz: ", moments.electron.dppar_dz[iz,1], " time: ", t_params.t[], " iteration: ", t_params.step_counter[] - initial_step_counter)
+                        println(io_ppar, "z: ", z.grid[iz], " ppar: ", scratch[t_params.n_rk_stages+1].electron_ppar[iz,1], " dppar_dz: ", moments.electron.dppar_dz[iz,1], " time: ", t_params.t[], " iteration: ", t_params.step_counter[] - initial_step_counter)
                         println(io_vth, "z: ", z.grid[iz], " vthe: ", moments.electron.vth[iz,1], " dvth_dz: ", moments.electron.dvth_dz[iz,1], " time: ", t_params.t[], " iteration: ", t_params.step_counter[] - initial_step_counter, " dens: ", dens[iz,1])
                     end
                     println(io_upar,"")
@@ -532,6 +547,15 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
     final_scratch_pdf = scratch[t_params.n_rk_stages+1].pdf_electron
     @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
         pdf[ivpa,ivperp,iz,ir] = final_scratch_pdf[ivpa,ivperp,iz,ir]
+    end
+    if evolve_ppar
+        # Update `moments.electron.ppar` with the final electron pressure
+        begin_r_z_region()
+        scratch_ppar = scratch[t_params.n_rk_stages+1].electron_ppar
+        moments_ppar = moments.electron.ppar
+        @loop_r_z ir iz begin
+            moments_ppar[iz,ir] = scratch_ppar[iz,ir]
+        end
     end
     begin_serial_region()
     @serial_region begin
@@ -1306,8 +1330,9 @@ function electron_adaptive_timestep_update!(scratch, t, t_params, moments, phi, 
     # vpa-advection
     begin_r_z_vperp_region()
     update_electron_speed_vpa!(vpa_advect[1], moments.electron.dens,
-                               moments.electron.upar, moments.electron.ppar,
-                               moments, vpa.grid, external_source_settings.electron)
+                               moments.electron.upar,
+                               scratch[t_params.n_rk_stages+1].electron_ppar, moments,
+                               vpa.grid, external_source_settings.electron)
     vpa_CFL = get_minimum_CFL_vpa(vpa_advect[1].speed, vpa)
     if block_rank[] == 0
         push!(CFL_limits, t_params.CFL_prefactor * vpa_CFL)
@@ -1592,12 +1617,8 @@ function electron_kinetic_equation_euler_update!(fvec_out, fvec_in, moments, z, 
                                                  vpa, z_spectral, vpa_spectral, z_advect,
                                                  vpa_advect, scratch_dummy, collisions,
                                                  composition, external_source_settings,
-                                                 num_diss_params, dt; evolve_ppar=false)
-    if evolve_ppar
-        ppar = fvec_in.electron_ppar
-    else
-        ppar = moments.electron.ppar
-    end
+                                                 num_diss_params, dt; evolve_ppar=false,
+                                                 ion_dt=nothing)
     # add the contribution from the z advection term
     electron_z_advection!(fvec_out.pdf_electron, fvec_in.pdf_electron,
                           moments.electron.upar, moments.electron.vth, z_advect, z,
@@ -1605,14 +1626,15 @@ function electron_kinetic_equation_euler_update!(fvec_out, fvec_in, moments, z, 
 
     # add the contribution from the wpa advection term
     electron_vpa_advection!(fvec_out.pdf_electron, fvec_in.pdf_electron,
-                            moments.electron.dens, moments.electron.upar, ppar,
-                            moments, vpa_advect, vpa, vpa_spectral, scratch_dummy, dt,
-                            external_source_settings.electron)
+                            moments.electron.dens, moments.electron.upar,
+                            fvec_in.electron_ppar, moments, vpa_advect, vpa, vpa_spectral,
+                            scratch_dummy, dt, external_source_settings.electron)
 
     # add in the contribution to the residual from the term proportional to the pdf
-    add_contribution_from_pdf_term!(fvec_out.pdf_electron, fvec_in.pdf_electron, ppar,
-                                    moments.electron.dens, moments.electron.upar, moments,
-                                    vpa.grid, z, dt, external_source_settings.electron)
+    add_contribution_from_pdf_term!(fvec_out.pdf_electron, fvec_in.pdf_electron,
+                                    fvec_in.electron_ppar, moments.electron.dens,
+                                    moments.electron.upar, moments, vpa.grid, z, dt,
+                                    external_source_settings.electron)
 
     # add in numerical dissipation terms
     add_dissipation_term!(fvec_out.pdf_electron, fvec_in.pdf_electron, scratch_dummy,
@@ -1643,6 +1665,23 @@ function electron_kinetic_equation_euler_update!(fvec_out, fvec_in, moments, z, 
                                   moments.neutral.pz, moments.electron, collisions, dt,
                                   composition, external_source_settings.electron,
                                   num_diss_params, z)
+
+        if ion_dt !== nothing
+            # Add source term to turn steady state solution into a backward-Euler update of
+            # electron_ppar with the ion timestep `ion_dt`.
+            ppar_out = fvec_out.electron_ppar
+            ppar_previous_ion_step = moments.electron.ppar
+            begin_r_z_region()
+            @loop_r_z ir iz begin
+                # At this point, ppar_out = ppar_in + dt*RHS(ppar_in). Here we add a
+                # source/damping term so that in the steady state of the electron
+                # pseudo-timestepping iteration,
+                #   RHS(ppar) - (ppar - ppar_previous_ion_step) / ion_dt = 0,
+                # resulting in a backward-Euler step (as long as the pseudo-timestepping
+                # loop converges).
+                ppar_out[iz,ir] += -dt * (ppar_out[iz,ir] - ppar_previous_ion_step[iz,ir]) / ion_dt
+            end
+        end
     end
 
     return nothing

@@ -396,12 +396,14 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         t_input["implicit_ion_advance"] = false
         t_input["implicit_vpa_advection"] = false
         t_input["implicit_ion_maxwell_diffusion"] = false
+        t_input["implicit_electron_ppar"] = false
     else
         if composition.electron_physics != braginskii_fluid
             t_input["implicit_braginskii_conduction"] = false
         end
         if composition.electron_physics != kinetic_electrons
             t_input["implicit_electron_advance"] = false
+            t_input["implicit_electron_ppar"] = false
         end
     end
 
@@ -455,6 +457,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      electron !== nothing && t_input["implicit_ion_advance"],
                      electron !== nothing && t_input["implicit_vpa_advection"],
                      electron !== nothing && t_input["implicit_ion_maxwell_diffusion"],
+                     electron !== nothing && t_input["implicit_electron_ppar"],
                      t_input["write_after_fixed_step_count"], error_sum_zero,
                      t_input["split_operators"], t_input["steady_state_residual"],
                      t_input["converged_residual_value"],
@@ -723,6 +726,10 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
             nl_solver_maxwell_diffusion_params !== nothing
         error("Cannot use implicit_vpa_advection and implicit_ion_maxwell_diffusion at the same "
               * "time")
+    end
+    if nl_solver_electron_advance_params !== nothing && t_params.implicit_electron_ppar
+        error("Cannot use implicit_electron_advance and implicit_electron_ppar at the "
+              * "same time.")
     end
     nl_solver_params = (electron_conduction=electron_conduction_nl_solve_parameters,
                         electron_advance=nl_solver_electron_advance_params,
@@ -1251,7 +1258,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         # if treating the electrons as a fluid with Braginskii closure, or
         # moment-kinetically then advance the electron energy equation
         if composition.electron_physics == kinetic_electrons
-            if !t_params.implicit_electron_advance
+            if !(t_params.implicit_electron_advance || t_params.implicit_electron_ppar)
                 advance_electron_energy = true
                 advance_electron_conduction = true
             end
@@ -1415,7 +1422,7 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
         advance_electron_conduction = true
     end
 
-    if t_params.implicit_electron_advance
+    if (t_params.implicit_electron_advance || t_params.implicit_electron_ppar)
         advance_electron_energy = true
         advance_electron_conduction = true
     end
@@ -2416,7 +2423,9 @@ function apply_all_bcs_constraints_update_moments!(
         # to the beginning of the ion/neutral timestep, so the electron solution
         # calculated here would be discarded - we might as well skip calculating it in
         # that case.
-        if update_electrons && !t_params.implicit_electron_advance && success == ""
+        if update_electrons &&
+                !(t_params.implicit_electron_advance || t_params.implicit_electron_ppar) &&
+                success == ""
             kinetic_electron_success = update_electron_pdf!(
                scratch_electron, pdf.electron.norm, moments, fields.phi, r, z, vperp, vpa,
                z_spectral, vperp_spectral, vpa_spectral, electron_z_advect,
@@ -3007,17 +3016,19 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t_params, vz,
                 # rk_coefs_implicit[istage,istage]=a[istage,istage].
                 if scratch_electron === nothing
                     this_scratch_electron = nothing
-                else
+                elseif t_params.implicit_electron_advance
                     this_scratch_electron = scratch_electron[t_params.electron.n_rk_stages+1]
+                else
+                    this_scratch_electron = scratch_electron
                 end
                 nl_success = backward_euler!(scratch_implicit[istage], scratch[istage],
                                              this_scratch_electron,
                                              pdf, fields, moments, advect_objects, vz, vr,
                                              vzeta, vpa, vperp, gyrophase, z, r,
-                                             t_params.t[], t_params.dt[] *
+                                             t_params.dt[] *
                                              t_params.rk_coefs_implicit[istage,istage],
-                                             spectral_objects, composition, collisions,
-                                             geometry, scratch_dummy,
+                                             t_params, spectral_objects, composition,
+                                             collisions, geometry, scratch_dummy,
                                              manufactured_source_list,
                                              external_source_settings, num_diss_params,
                                              gyroavs, nl_solver_params, advance_implicit,
@@ -3075,6 +3086,10 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t_params, vz,
                                 || !t_params.implicit_ion_advance
                                 || (istage == n_rk_stages && t_params.implicit_coefficient_is_zero[1])
                                 || t_params.implicit_coefficient_is_zero[istage+1])
+        update_electrons = (t_params.rk_coefs_implicit === nothing
+                            || !(t_params.implicit_electron_advance || t_params.implicit_electron_ppar)
+                            || t_params.implicit_coefficient_is_zero[istage+1]
+                            || (istage == n_rk_stages && t_params.implicit_coefficient_is_zero[1]))
         diagnostic_moments = diagnostic_checks && istage == n_rk_stages
         success = apply_all_bcs_constraints_update_moments!(
             scratch[istage+1], pdf, moments, fields, boundary_distributions,
@@ -3082,7 +3097,7 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t_params, vz,
             advect_objects, composition, collisions, geometry, gyroavs,
             external_source_settings, num_diss_params, t_params, advance, scratch_dummy,
             diagnostic_moments; pdf_bc_constraints=apply_bc_constraints,
-            update_electrons=apply_bc_constraints)
+            update_electrons=update_electrons)
         if success != ""
             # Break out of the istage loop, as passing `success != ""` to the
             # adaptive timestep update function will signal a failed timestep, so
@@ -3474,8 +3489,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
 end
 
 function backward_euler!(fvec_out, fvec_in, scratch_electron, pdf, fields, moments,
-                         advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t,
-                         dt, spectral_objects, composition, collisions, geometry,
+                         advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, dt,
+                         t_params, spectral_objects, composition, collisions, geometry,
                          scratch_dummy, manufactured_source_list,
                          external_source_settings, num_diss_params, gyroavs,
                          nl_solver_params, advance, fp_arrays, istage)
@@ -3486,7 +3501,7 @@ function backward_euler!(fvec_out, fvec_in, scratch_electron, pdf, fields, momen
     electron_z_advect, electron_vpa_advect = advect_objects.electron_z_advect, advect_objects.electron_vpa_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
-    if composition.electron_physics == kinetic_electrons && advance.electron_energy
+    if nl_solver_params.electron_advance !== nothing
         success = implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron,
                                              moments, fields, collisions, composition,
                                              external_source_settings, num_diss_params, r,
@@ -3495,6 +3510,17 @@ function backward_euler!(fvec_out, fvec_in, scratch_electron, pdf, fields, momen
                                              electron_z_advect, electron_vpa_advect,
                                              gyroavs, scratch_dummy, dt,
                                              nl_solver_params.electron_advance)
+    elseif t_params.implicit_electron_ppar
+        max_electron_pdf_iterations = 1000
+        electron_success = update_electron_pdf!(scratch_electron, pdf.electron.norm,
+                                                moments, fields.phi, r, z, vperp, vpa,
+                                                z_spectral, vperp_spectral, vpa_spectral,
+                                                electron_z_advect, electron_vpa_advect,
+                                                scratch_dummy, t_params.electron,
+                                                collisions, composition,
+                                                external_source_settings, num_diss_params,
+                                                max_electron_pdf_iterations; ion_dt=dt)
+        success = (electron_success == "")
     elseif advance.electron_conduction
         success = implicit_braginskii_conduction!(fvec_out, fvec_in, moments, z, r, dt,
                                                   z_spectral, composition, collisions,
@@ -3505,27 +3531,21 @@ function backward_euler!(fvec_out, fvec_in, scratch_electron, pdf, fields, momen
     if nl_solver_params.ion_advance !== nothing
         success = implicit_ion_advance!(fvec_out, fvec_in, pdf, fields, moments,
                                         advect_objects, vz, vr, vzeta, vpa, vperp,
-                                        gyrophase, z, r, t, dt, spectral_objects,
-                                        composition, collisions, geometry, scratch_dummy,
-                                        manufactured_source_list,
+                                        gyrophase, z, r, t_params.t[], dt,
+                                        spectral_objects, composition, collisions,
+                                        geometry, scratch_dummy, manufactured_source_list,
                                         external_source_settings, num_diss_params,
                                         gyroavs, nl_solver_params.ion_advance, advance,
                                         fp_arrays, istage)
-        if !success
-            return success
-        end
     elseif advance.vpa_advection
         success = implicit_vpa_advection!(fvec_out.pdf, fvec_in, fields, moments,
-                                          z_advect, vpa_advect, vpa, vperp, z, r, dt, t,
-                                          r_spectral, z_spectral, vpa_spectral,
-                                          composition, collisions,
+                                          z_advect, vpa_advect, vpa, vperp, z, r, dt,
+                                          t_params.t[], r_spectral, z_spectral,
+                                          vpa_spectral, composition, collisions,
                                           external_source_settings.ion, geometry,
                                           nl_solver_params.vpa_advection,
                                           advance.vpa_diffusion, num_diss_params, gyroavs,
                                           scratch_dummy)
-        if !success
-            return success
-        end
     elseif advance.mxwl_diff_collisions_ii
         success = implicit_ion_maxwell_diffusion!(fvec_out.pdf, fvec_in, moments,
                                                   z_advect, vpa, vperp, z, r, dt,
@@ -3533,12 +3553,9 @@ function backward_euler!(fvec_out, fvec_in, scratch_electron, pdf, fields, momen
                                                   collisions, geometry,
                                                   nl_solver_params.maxwell_diffusion,
                                                   gyroavs, scratch_dummy)
-        if !success
-            return success
-        end
     end
 
-    return true
+    return success
 end
 
 """
