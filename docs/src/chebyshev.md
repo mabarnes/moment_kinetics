@@ -229,7 +229,7 @@ With this inverse tranformation, we can write
 ```math
 \begin{equation} \begin{split}\sum_{n=0}^N J_{n} a_{n} & =  \sum^{2N}_{n=0} \frac{a_{n}J_{n}}{q_{n}} \\
 & = \sum^{2N}_{j=0}\sum^{2N}_{n=0} \frac{\hat{f}_j J_{n}}{2N+1} \exp\left[-i \frac{2\pi n j}{2N+1}\right] \\ 
-& = \sum^{2N}_{j=0} \hat{f}_j v_{j} = \sum^{N}_{j=0} \hat{f}_j q_{j}v_{j},\end{split}\label{eq:weights-working}\end{equation}
+& = \sum^{2N}_{j=0} \hat{f}_j v_{j} = \sum^{N}_{j=0} \hat{f}_j q_{j}v_{j},\end{split}\label{eq:weights-working-radau}\end{equation}
 ```
 where in the first step we have extended the sum from $N$ to $2N$ and used FFT-order definitions of $J_{n}$ and $a_{n}$
 ```math
@@ -243,7 +243,7 @@ in the third step we define
 ```math
 \begin{equation} v_{j} = \sum_{n=0}^{2N}\frac{J_{n}}{2N+1}\exp\left[-i \frac{2\pi n j}{2N+1}\right].\end{equation}
 ```
-Finally, we can compare equations \eq{eq:w-sum} and \eq{eq:weights-working} and deduce that 
+Finally, we can compare equations \eq{eq:w-sum} and \eq{eq:weights-working-radau} and deduce that 
 ```math
 \begin{equation} w_{j} = q_{j}v_{j} {\rm~for~} 0 \leq j \leq N.  \end{equation}
 ```
