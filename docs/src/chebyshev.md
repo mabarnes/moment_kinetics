@@ -176,7 +176,7 @@ Weights on Gauss-Chebyshev-Lobotto points
  ```
  where 
  ```math
- \begin{equation} q_{n} = \left\{\begin{array}{l} 2 {\rm ~if~} n\neq0,N  \\ 1 {\rm ~if~} n=0,N  \end{array}\right.,\end{equation}
+ \begin{equation} q_{n} = \left\{\begin{array}{l} 2 {\rm ~if~} n\neq0,N  \\ 1 {\rm ~if~} n=0,N  \end{array}\right.\end{equation}
  ```
 and $\hat{f}_j$ is $f(x_j)$ on the extended domain in FFT order, i.e.,
 ```math
@@ -217,7 +217,7 @@ We use the inverse transformation
 ```
 where 
 ```math
-\begin{equation} q_{n} = \left\{\begin{array}{l} 2 {\rm ~if~} n > 0  \\ 1 {\rm ~if~} n=0  \end{array}\right.,\end{equation}
+\begin{equation} q_{n} = \left\{\begin{array}{l} 2 {\rm ~if~} n > 0  \\ 1 {\rm ~if~} n=0  \end{array}\right.\end{equation}
 ```
 and $\hat{f}_j$ is $f(x_j)$ on the extended domain in FFT order, i.e.,
 ```math
