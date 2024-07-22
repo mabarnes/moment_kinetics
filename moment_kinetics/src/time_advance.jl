@@ -3068,7 +3068,8 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t_params, vz,
         # If `implicit_coefficient_is_zero` is true for the next stage, then this step is
         # explicit, so we need the bcs and constraints.
         apply_bc_constraints = (t_params.rk_coefs_implicit === nothing
-                                || istage == n_rk_stages
+                                || !t_params.implicit_ion_advance
+                                || (istage == n_rk_stages && t_params.implicit_coefficient_is_zero[1])
                                 || t_params.implicit_coefficient_is_zero[istage+1])
         diagnostic_moments = diagnostic_checks && istage == n_rk_stages
         success = apply_all_bcs_constraints_update_moments!(
