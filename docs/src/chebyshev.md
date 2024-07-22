@@ -28,7 +28,7 @@ We pick points
 ```
 Then 
 ```math
-\begin{equation} T_n{x_j} = \cos \frac{n j \pi}{N}.\end{equation}
+\begin{equation} T_n(x_j) = \cos \frac{n j \pi}{N}.\end{equation}
 ```
 Assuming that $M = 2N$, with $N$ an integer, and $b_{k} = b_{M-k}$ for $k>0$, we have that 
 ```math
@@ -124,9 +124,7 @@ we obtain the (unqiuely-determined) relations
 ```math
 \begin{equation} \begin{split} &d_{N-1} = 2Na_{N},\quad d_{N-2} = 2(N-1)a_{N-1}, \\ 
 & d_{k} = 2(k+1) a_{k+1} + d_{k+2}, \quad d_{0} = \frac{d_{2}}{2} + a_{1}.\end{split} \label{eq:dn-result-U}\end{equation}
-```
-Note the lack of a second relation for $d_{0}$, but that otherwise the expressions \eq{eq:dn-result-U}
-agree with those of the last section.       
+```       
 
 Clenshaw-Curtis integration weights
 ===============================================
@@ -156,12 +154,12 @@ to write
  \begin{equation} \frac{\cos(n \pi) +1}{1 - n^2} = \left\{\begin{tabular}{l} $0 {\rm ~if~} n = 2 r + 1, ~r \in \mathbb{Z} $ \\ $2/(1 - n^2) {\rm ~if~} n=2r,~r. \in \mathbb{Z}$  \end{tabular}\right. \end{equation}
  ```
  We define ```math
- \begin{equation} \J_{n} = \frac{\cos(n \pi) +1}{1 - n^2}. \end{equation}
+ \begin{equation} J_{n} = \frac{\cos(n \pi) +1}{1 - n^2}. \end{equation}
  ```
  Using this definition, we can write the integral of $f(x)$ can be written 
  in terms of a sum over of the Chebyshev coefficients:
  ```math
- \begin{equation} \int^{1}_{-1} f(x) \; d x = \sum_{n=0}^N \J_{n} a_{n}. \label{eq:Cheb-sum}\end{equation}
+ \begin{equation} \int^{1}_{-1} f(x) \; d x = \sum_{n=0}^N J_{n} a_{n}. \label{eq:Cheb-sum}\end{equation}
  ```
  
  To avoid computing the set of coefficients $\{a_{n}\}$ every time we wish to integrate $f(x_j)$,
@@ -173,25 +171,25 @@ Weights on Gauss-Chebyshev-Lobotto points
 ===============================================
   We use the inverse transformation 
  ```math
- \begin{equation} a_{n} = \frac{\q_{n}}{2N}\sum^{2N-1}_{j=0} \hat{f}_j \exp\left[- i \frac{2\pi n j}{2N}\right], \label{eq:inverse-transform-GCL}\end{equation}
+ \begin{equation} a_{n} = \frac{q_{n}}{2N}\sum^{2N-1}_{j=0} \hat{f}_j \exp\left[- i \frac{2\pi n j}{2N}\right], \label{eq:inverse-transform-GCL}\end{equation}
  ```
  where 
  ```math
- \begin{equation} \q_{n} = \left\{\begin{tabular}{l} $2 {\rm ~if~} n\neq0,N $ \\ $1 {\rm ~if~} n=0,N$  \end{tabular}\right.,\end{equation}
+ \begin{equation} q_{n} = \left\{\begin{tabular}{l} $2 {\rm ~if~} n\neq0,N $ \\ $1 {\rm ~if~} n=0,N$  \end{tabular}\right.,\end{equation}
  ```
 and $\hat{f}_j$ is $f(x_j)$ on the extended domain in FFT order, i.e.,
 ```math
-\begin{equation} \hat{f}_j = f(x_{j}) {\rm~for~} 0 \leq j \leq N ,\quad \hat{f}_j = f(x_{2N-j}){\rm~for~} N+1 \leq j \leq 2N-1. \end{equation}
+\begin{equation} \hat{f}_j = f(x_{j}) {\rm~for~} 0 \leq j \leq N ,quad \hat{f}_j = f(x_{2N-j}){\rm~for~} N+1 \leq j \leq 2N-1. \end{equation}
 ```
  With this inverse tranformation, we can write 
 ```math
-\begin{equation} \begin{split}\sum_{n=0}^N \J_{n} a_{n} & =  \sum^{2N-1}_{n=0} \frac{a_{n}\J_{n}}{\q_{n}} \\
- & = \sum^{2N-1}_{j=0}\sum^{2N-1}_{n=0} \frac{\hat{f}_j \J_{n}}{2N} \exp\left[-i \frac{2\pi n j}{2N}\right] \\ 
- & = \sum^{2N-1}_{j=0} \hat{f}_j \v_{j} = \sum^{N}_{j=0} \hat{f}_j \q_{j}\v_{j},\end{split}\label{eq:weights-working}\end{equation}
+\begin{equation} \begin{split}\sum_{n=0}^N J_{n} a_{n} & =  \sum^{2N-1}_{n=0} \frac{a_{n}J_{n}}{q_{n}} \\
+ & = \sum^{2N-1}_{j=0}\sum^{2N-1}_{n=0} \frac{\hat{f}_j J_{n}}{2N} \exp\left[-i \frac{2\pi n j}{2N}\right] \\ 
+ & = \sum^{2N-1}_{j=0} \hat{f}_j v_{j} = \sum^{N}_{j=0} \hat{f}_j q_{j}v_{j},\end{split}\label{eq:weights-working}\end{equation}
 ```
- where in the first step we have extended the sum from $N$ to $2N-1$ and used FFT-order definitions of $\J_{n}$ and $a_{n}$
+ where in the first step we have extended the sum from $N$ to $2N-1$ and used FFT-order definitions of $J_{n}$ and $a_{n}$
 ```math
-\begin{equation} \J_{j} = \J_{2N-j}, {\rm~for~} N+1 \leq j \leq 2N-1,\end{equation}
+\begin{equation} J_{j} = J_{2N-j}, {\rm~for~} N+1 \leq j \leq 2N-1,\end{equation}
 ```
 ```math
 \begin{equation} a_{j} = a_{2N-j}, {\rm~for~} N+1 \leq j \leq 2N-1.\end{equation}
@@ -199,26 +197,26 @@ and $\hat{f}_j$ is $f(x_j)$ on the extended domain in FFT order, i.e.,
 In the second step we use the definition of the inverse transform \eq{eq:inverse-transform-GCR}, and 
 in the third step we define 
 ```math
-\begin{equation} \v_{j} = \sum_{n=0}^{2N-1}\frac{\J_{n}}{2N}\exp\left[-i \frac{2\pi n j}{2N}\right].\end{equation}
+\begin{equation} v_{j} = \sum_{n=0}^{2N-1}\frac{J_{n}}{2N}\exp\left[-i \frac{2\pi n j}{2N}\right].\end{equation}
 ```
 Finally, we can compare equations \eq{eq:w-sum} and \eq{eq:weights-working} and deduce that 
 ```math
-\begin{equation} w_{j} = \q_{j}\v_{j} {\rm~for~} 0 \leq j \leq N.  \end{equation}
+\begin{equation} w_{j} = q_{j}v_{j} {\rm~for~} 0 \leq j \leq N.  \end{equation}
 ```
-We can write $\v_{j}$ in terms of a discrete cosine transform, i.e.,
+We can write $v_{j}$ in terms of a discrete cosine transform, i.e.,
 ```math
-\begin{equation} \v_{j} = \frac{1}{2N}\left(\J_{0} + (-1)^j\J_{N} + 2\sum_{n=1}^{N-1}\J_{n}\cos\left(\frac{\pi n j}{N}\right)\right).\end{equation}
+\begin{equation} v_{j} = \frac{1}{2N}\left(J_{0} + (-1)^jJ_{N} + 2\sum_{n=1}^{N-1}J_{n}\cos\left(\frac{\pi n j}{N}\right)\right).\end{equation}
 ```
  
 Weights on Gauss-Chebyshev-Radau points
 ===============================================
 We use the inverse transformation 
 ```math
-\begin{equation} a_{n} = \frac{\q_{n}}{2N+1}\sum^{2N}_{j=0} \hat{f}_j \exp\left[- i \frac{2\pi n j}{2N+1}\right], \label{eq:inverse-transform-GCR}\end{equation}
+\begin{equation} a_{n} = \frac{q_{n}}{2N+1}\sum^{2N}_{j=0} \hat{f}_j \exp\left[- i \frac{2\pi n j}{2N+1}\right], \label{eq:inverse-transform-GCR}\end{equation}
 ```
 where 
 ```math
-\begin{equation} \q_{n} = \left\{\begin{tabular}{l} $2 {\rm ~if~} n > 0 $ \\ $1 {\rm ~if~} n=0$  \end{tabular}\right.,\end{equation}
+\begin{equation} q_{n} = \left\{\begin{tabular}{l} $2 {\rm ~if~} n > 0 $ \\ $1 {\rm ~if~} n=0$  \end{tabular}\right.,\end{equation}
 ```
 and $\hat{f}_j$ is $f(x_j)$ on the extended domain in FFT order, i.e.,
 ```math
@@ -229,13 +227,13 @@ The key detail in the Chebyshev-Radau scheme is that (in the notation above)
 $x_0 = 1$ is not a repeated point, and must occupy $\hat{f}_0$. 
 With this inverse tranformation, we can write 
 ```math
-\begin{equation} \begin{split}\sum_{n=0}^N \J_{n} a_{n} & =  \sum^{2N}_{n=0} \frac{a_{n}\J_{n}}{\q_{n}} \\
-& = \sum^{2N}_{j=0}\sum^{2N}_{n=0} \frac{\hat{f}_j \J_{n}}{2N+1} \exp\left[-i \frac{2\pi n j}{2N+1}\right] \\ 
-& = \sum^{2N}_{j=0} \hat{f}_j \v_{j} = \sum^{N}_{j=0} \hat{f}_j \q_{j}\v_{j},\end{split}\label{eq:weights-working}\end{equation}
+\begin{equation} \begin{split}\sum_{n=0}^N J_{n} a_{n} & =  \sum^{2N}_{n=0} \frac{a_{n}J_{n}}{q_{n}} \\
+& = \sum^{2N}_{j=0}\sum^{2N}_{n=0} \frac{\hat{f}_j J_{n}}{2N+1} \exp\left[-i \frac{2\pi n j}{2N+1}\right] \\ 
+& = \sum^{2N}_{j=0} \hat{f}_j v_{j} = \sum^{N}_{j=0} \hat{f}_j q_{j}v_{j},\end{split}\label{eq:weights-working}\end{equation}
 ```
-where in the first step we have extended the sum from $N$ to $2N$ and used FFT-order definitions of $\J_{n}$ and $a_{n}$
+where in the first step we have extended the sum from $N$ to $2N$ and used FFT-order definitions of $J_{n}$ and $a_{n}$
 ```math
-\begin{equation} \J_{j} = \J_{2N+1-j}, {\rm~for~} N+1 \leq j \leq 2N,\end{equation}
+\begin{equation} J_{j} = J_{2N+1-j}, {\rm~for~} N+1 \leq j \leq 2N,\end{equation}
 ```
 ```math
 \begin{equation} a_{j} = a_{2N+1-j}, {\rm~for~} N+1 \leq j \leq 2N.\end{equation}
@@ -243,9 +241,9 @@ where in the first step we have extended the sum from $N$ to $2N$ and used FFT-o
 In the second step we use the definition of the inverse transform \eq{eq:inverse-transform-GCR}, and 
 in the third step we define 
 ```math
-\begin{equation} \v_{j} = \sum_{n=0}^{2N}\frac{\J_{n}}{2N+1}\exp\left[-i \frac{2\pi n j}{2N+1}\right].\end{equation}
+\begin{equation} v_{j} = \sum_{n=0}^{2N}\frac{J_{n}}{2N+1}\exp\left[-i \frac{2\pi n j}{2N+1}\right].\end{equation}
 ```
 Finally, we can compare equations \eq{eq:w-sum} and \eq{eq:weights-working} and deduce that 
 ```math
-\begin{equation} w_{j} = \q_{j}\v_{j} {\rm~for~} 0 \leq j \leq N.  \end{equation}
+\begin{equation} w_{j} = q_{j}v_{j} {\rm~for~} 0 \leq j \leq N.  \end{equation}
 ```
