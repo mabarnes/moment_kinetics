@@ -2329,6 +2329,7 @@ function apply_all_bcs_constraints_update_moments!(
     z_spectral, r_spectral, vpa_spectral, vperp_spectral = spectral_objects.z_spectral, spectral_objects.r_spectral, spectral_objects.vpa_spectral, spectral_objects.vperp_spectral
     vzeta_spectral, vr_spectral, vz_spectral = spectral_objects.vzeta_spectral, spectral_objects.vr_spectral, spectral_objects.vz_spectral
     vpa_advect, vperp_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.vperp_advect, advect_objects.r_advect, advect_objects.z_advect
+    electron_z_advect, electron_vpa_advect = advect_objects.electron_z_advect, advect_objects.electron_vpa_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
     success = ""
@@ -2414,9 +2415,10 @@ function apply_all_bcs_constraints_update_moments!(
         if update_electrons && !t_params.implicit_electron_advance && success == ""
             kinetic_electron_success = update_electron_pdf!(
                scratch_electron, pdf.electron.norm, moments, fields.phi, r, z, vperp, vpa,
-               z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
-               scratch_dummy, t_params.electron, collisions, composition,
-               external_source_settings, num_diss_params, max_electron_pdf_iterations)
+               z_spectral, vperp_spectral, vpa_spectral, electron_z_advect,
+               electron_vpa_advect, scratch_dummy, t_params.electron, collisions,
+               composition, external_source_settings, num_diss_params,
+               max_electron_pdf_iterations)
             success = kinetic_electron_success
         end
     end
@@ -3476,6 +3478,7 @@ function backward_euler!(fvec_out, fvec_in, scratch_electron, pdf, fields, momen
     vpa_spectral, vperp_spectral, r_spectral, z_spectral = spectral_objects.vpa_spectral, spectral_objects.vperp_spectral, spectral_objects.r_spectral, spectral_objects.z_spectral
     vz_spectral, vr_spectral, vzeta_spectral = spectral_objects.vz_spectral, spectral_objects.vr_spectral, spectral_objects.vzeta_spectral
     vpa_advect, vperp_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.vperp_advect, advect_objects.r_advect, advect_objects.z_advect
+    electron_z_advect, electron_vpa_advect = advect_objects.electron_z_advect, advect_objects.electron_vpa_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
     if composition.electron_physics == kinetic_electrons && advance.electron_energy
@@ -3483,8 +3486,9 @@ function backward_euler!(fvec_out, fvec_in, scratch_electron, pdf, fields, momen
                                              moments, fields, collisions, composition,
                                              external_source_settings, num_diss_params, r,
                                              z, vperp, vpa, r_spectral, z_spectral,
-                                             vperp_spectral, vpa_spectral, z_advect,
-                                             vpa_advect, gyroavs, scratch_dummy, dt,
+                                             vperp_spectral, vpa_spectral,
+                                             electron_z_advect, electron_vpa_advect,
+                                             gyroavs, scratch_dummy, dt,
                                              nl_solver_params.electron_advance)
     elseif advance.electron_conduction
         success = implicit_braginskii_conduction!(fvec_out, fvec_in, moments, z, r, dt,
