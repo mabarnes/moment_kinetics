@@ -118,7 +118,7 @@ we find that equation  \eq{eq:dn-def} becomes
 Using the orthogonality relation 
 ```math
 \begin{equation} \int^1_{-1} U_{m}(x)U_{n}(x)\sqrt{1-x^2} \; d x = 
-\left\{\begin{tabular}{l} $0 {\rm ~if~} n\neq m $ \\ $\pi/2 {\rm ~if~} n=m$  \end{tabular}\right.,\end{equation}
+\left\{\begin{array}{l} 0 {\rm ~if~} n\neq m  \\ \pi/2 {\rm ~if~} n=m \\ \end{array} \right.,\end{equation}
 ```
 we obtain the (unqiuely-determined) relations 
 ```math
