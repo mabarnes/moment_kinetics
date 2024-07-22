@@ -180,7 +180,7 @@ Weights on Gauss-Chebyshev-Lobotto points
  ```
 and $\hat{f}_j$ is $f(x_j)$ on the extended domain in FFT order, i.e.,
 ```math
-\begin{equation} \hat{f}_j = f(x_{j}) {\rm~for~} 0 \leq j \leq N ,quad \hat{f}_j = f(x_{2N-j}){\rm~for~} N+1 \leq j \leq 2N-1. \end{equation}
+\begin{equation} \hat{f}_j = f(x_{j}) {\rm~for~} 0 \leq j \leq N ,\quad \hat{f}_j = f(x_{2N-j}){\rm~for~} N+1 \leq j \leq 2N-1. \end{equation}
 ```
  With this inverse tranformation, we can write 
 ```math
