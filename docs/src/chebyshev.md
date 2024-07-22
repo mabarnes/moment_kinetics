@@ -16,7 +16,7 @@ The Chebyshev polynomials are defined by
 We can see how to find $\{a_{n}\}$ given $\{f(x_j)\}$ via Fourier transform. 
 The Fourier series representation of $f$ on a uniform grid indexed by $j$ is defined by 
 ```math
-\begin{equation} f_j = \sum_{k=0}^{M-1} b_{k}\exp\left[i \frac{2\pi k j}{M}\right].\label{eq:fourier-series}\end{equation}
+\begin{equation} f_j = \sum_{k=0}^{M-1} b_{k}\exp\left[i \frac{2\pi k j}{M}\right].\label{eq:fourier-series}\tag{2}\end{equation}
 ```
 
 Gauss-Chebyshev-Lobotto points
@@ -61,7 +61,7 @@ these cases we choose the points
 Writing out the Chebyshev series \eq{eq:cheb-expansion}, 
 we have that 
 ```math
-\begin{equation} \begin{split} f(x_j) = & \sum^N_{n=0} a_{n} \cos \frac{2 n j \pi}{2 N + 1} \\ & = a_{0} + \sum^N_{n=1} \frac{a_{n}}{2}\left(\exp\left[i \frac{2\pi n j}{2N +1}\right] + \exp\left[-i \frac{2\pi n j}{2N +1}\right]\right).\end{split} \label{eq:cheb-expansion-radau-points}\end{equation}
+\begin{equation} \begin{split} f(x_j) = & \sum^N_{n=0} a_{n} \cos \frac{2 n j \pi}{2 N + 1} \\ & = a_{0} + \sum^N_{n=1} \frac{a_{n}}{2}\left(\exp\left[i \frac{2\pi n j}{2N +1}\right] + \exp\left[-i \frac{2\pi n j}{2N +1}\right]\right).\end{split} \label{eq:cheb-expansion-radau-points}\tag{3}\end{equation}
 ```
 The form of the series \eq{eq:cheb-expansion-radau-points} is identical to the form of 
 a Fourier series on an odd number of points, i.e., taking $M = 2 N + 1$ in equation \eq{eq:fourier-series},
@@ -81,7 +81,7 @@ Chebyshev coefficients of derivatives of a function
 Starting from the expression of $f$ as a sum Chebyshev polynomials, equation \eq{eq:cheb-expansion},
 we can obtain an expression for the derivative
 ```math
-\begin{equation} \frac{d f}{d x} = \sum^N_{n=0} a_{n}\frac{d T_{n}}{d x}. \label{eq:derivative-def}\end{equation}
+\begin{equation} \frac{d f}{d x} = \sum^N_{n=0} a_{n}\frac{d T_{n}}{d x}. \label{eq:derivative-def}\tag{4}\end{equation}
 ```
 We note that we must be able to express ${d f}/{d x}$ as a sum 
 of Chebyshev polynomials of up to order $N-1$, i.e.,
@@ -91,7 +91,7 @@ of Chebyshev polynomials of up to order $N-1$, i.e.,
 We must determine the set $\{d_{n}\}$ in terms of the set $\{a_{n}\}$.
 First, we equate the two expressions to find that 
 ```math
-\begin{equation} \sum^N_{k=0} a_{k}\frac{d T_{k}}{d x} = \sum^{N-1}_{n=0} d_{n}T_{n}. \label{eq:dn-def}\end{equation}
+\begin{equation} \sum^N_{k=0} a_{k}\frac{d T_{k}}{d x} = \sum^{N-1}_{n=0} d_{n}T_{n}. \label{eq:dn-def}\tag{5}\end{equation}
 ```
 We use the Chebyshev polynomials of the second kind $U_n{x}$ to aid us in the calculation of the set $\{d_{n}\}$. 
 These polynomials are defined by 
@@ -113,7 +113,7 @@ we find that equation  \eq{eq:dn-def} becomes
 ```math
 \begin{equation} \begin{split}\sum^N_{n=1} a_{n} n U_{n-1}(x) =& \frac{d_{N-1}}{2}U_{N-1}+\frac{d_{N-2}}{2}U_{N-2} 
 \\ & + \sum^{N-3}_{k=1} \frac{d_{k}-d_{k+2}}{2}U_{k} + \left(d_{0} - \frac{d_{2}}{2}\right)U_{0}. \end{split}
-\label{eq:dn-def-U}\end{equation}
+\label{eq:dn-def-U}\tag{6}\end{equation}
 ```
 Using the orthogonality relation 
 ```math
@@ -123,7 +123,7 @@ Using the orthogonality relation
 we obtain the (unqiuely-determined) relations 
 ```math
 \begin{equation} \begin{split} &d_{N-1} = 2Na_{N},\quad d_{N-2} = 2(N-1)a_{N-1}, \\ 
-& d_{k} = 2(k+1) a_{k+1} + d_{k+2}, \quad d_{0} = \frac{d_{2}}{2} + a_{1}.\end{split} \label{eq:dn-result-U}\end{equation}
+& d_{k} = 2(k+1) a_{k+1} + d_{k+2}, \quad d_{0} = \frac{d_{2}}{2} + a_{1}.\end{split} \label{eq:dn-result-U}\tag{7}\end{equation}
 ```       
 
 Clenshaw-Curtis integration weights
@@ -132,18 +132,18 @@ Clenshaw-Curtis integration weights
 We require the integration weights for the set of points $\{x_j\}$ chosen 
 in our numerical scheme. The weights $w_{j}$ are defined implicitly by 
 ```math
-\begin{equation} \int^{1}_{-1} f(x) \; d x = \sum_{j=0}^N f(x_j) w_{j}. \label{eq:w-sum}\end{equation}
+\begin{equation} \int^{1}_{-1} f(x) \; d x = \sum_{j=0}^N f(x_j) w_{j}. \label{eq:w-sum}\tag{8}\end{equation}
 ```
 In the Chebyshev scheme we use the change of variables $x = \cos \theta$
 to write 
 ```math
-\begin{equation} \int^{1}_{-1} f(x) \; d x = \int^\pi_0 f(\cos\theta) \sin \theta \; d \theta . \label{eq:change-of-variables-integral} \end{equation}
+\begin{equation} \int^{1}_{-1} f(x) \; d x = \int^\pi_0 f(\cos\theta) \sin \theta \; d \theta . \label{eq:change-of-variables-integral} \tag{9}\end{equation}
 ```
  Using the series expansion \eq{eq:cheb-expansion} in equation \eq{eq:change-of-variables-integral}
  we find that 
  ```math
  \begin{equation} \int^{1}_{-1} f(x) \; d x = \sum^N_{n=0} a_{n}\int^\pi_0 \cos (n \theta) \sin \theta \; d \theta
- . \label{eq:series-integral} \end{equation}
+ . \label{eq:series-integral}\tag{10} \end{equation}
  ```
  Note the integral identity
  ```math
@@ -160,7 +160,7 @@ to write
  Using this definition, we can write the integral of $f(x)$ can be written 
  in terms of a sum over of the Chebyshev coefficients:
  ```math
- \begin{equation} \int^{1}_{-1} f(x) \; d x = \sum_{n=0}^N J_{n} a_{n}. \label{eq:Cheb-sum}\end{equation}
+ \begin{equation} \int^{1}_{-1} f(x) \; d x = \sum_{n=0}^N J_{n} a_{n}. \label{eq:Cheb-sum}\tag{11}\end{equation}
  ```
  
  To avoid computing the set of coefficients $\{a_{n}\}$ every time we wish to integrate $f(x_j)$,
@@ -172,7 +172,7 @@ Weights on Gauss-Chebyshev-Lobotto points
 ===============================================
   We use the inverse transformation 
  ```math
- \begin{equation} a_{n} = \frac{q_{n}}{2N}\sum^{2N-1}_{j=0} \hat{f}_j \exp\left[- i \frac{2\pi n j}{2N}\right], \label{eq:inverse-transform-GCL}\end{equation}
+ \begin{equation} a_{n} = \frac{q_{n}}{2N}\sum^{2N-1}_{j=0} \hat{f}_j \exp\left[- i \frac{2\pi n j}{2N}\right], \label{eq:inverse-transform-GCL}\tag{12}\end{equation}
  ```
  where 
  ```math
@@ -186,7 +186,7 @@ and $\hat{f}_j$ is $f(x_j)$ on the extended domain in FFT order, i.e.,
 ```math
 \begin{equation} \begin{split}\sum_{n=0}^N J_{n} a_{n} & =  \sum^{2N-1}_{n=0} \frac{a_{n}J_{n}}{q_{n}} \\
  & = \sum^{2N-1}_{j=0}\sum^{2N-1}_{n=0} \frac{\hat{f}_j J_{n}}{2N} \exp\left[-i \frac{2\pi n j}{2N}\right] \\ 
- & = \sum^{2N-1}_{j=0} \hat{f}_j v_{j} = \sum^{N}_{j=0} \hat{f}_j q_{j}v_{j},\end{split}\label{eq:weights-working}\end{equation}
+ & = \sum^{2N-1}_{j=0} \hat{f}_j v_{j} = \sum^{N}_{j=0} \hat{f}_j q_{j}v_{j},\end{split}\label{eq:weights-working}\tag{13}\end{equation}
 ```
  where in the first step we have extended the sum from $N$ to $2N-1$ and used FFT-order definitions of $J_{n}$ and $a_{n}$
 ```math
@@ -213,7 +213,7 @@ Weights on Gauss-Chebyshev-Radau points
 ===============================================
 We use the inverse transformation 
 ```math
-\begin{equation} a_{n} = \frac{q_{n}}{2N+1}\sum^{2N}_{j=0} \hat{f}_j \exp\left[- i \frac{2\pi n j}{2N+1}\right], \label{eq:inverse-transform-GCR}\end{equation}
+\begin{equation} a_{n} = \frac{q_{n}}{2N+1}\sum^{2N}_{j=0} \hat{f}_j \exp\left[- i \frac{2\pi n j}{2N+1}\right], \label{eq:inverse-transform-GCR}\tag{14}\end{equation}
 ```
 where 
 ```math
@@ -230,7 +230,7 @@ With this inverse tranformation, we can write
 ```math
 \begin{equation} \begin{split}\sum_{n=0}^N J_{n} a_{n} & =  \sum^{2N}_{n=0} \frac{a_{n}J_{n}}{q_{n}} \\
 & = \sum^{2N}_{j=0}\sum^{2N}_{n=0} \frac{\hat{f}_j J_{n}}{2N+1} \exp\left[-i \frac{2\pi n j}{2N+1}\right] \\ 
-& = \sum^{2N}_{j=0} \hat{f}_j v_{j} = \sum^{N}_{j=0} \hat{f}_j q_{j}v_{j},\end{split}\label{eq:weights-working-radau}\end{equation}
+& = \sum^{2N}_{j=0} \hat{f}_j v_{j} = \sum^{N}_{j=0} \hat{f}_j q_{j}v_{j},\end{split}\label{eq:weights-working-radau}\tag{15}\end{equation}
 ```
 where in the first step we have extended the sum from $N$ to $2N$ and used FFT-order definitions of $J_{n}$ and $a_{n}$
 ```math
