@@ -118,7 +118,7 @@ we find that equation  \eq{eq:dn-def} becomes
 Using the orthogonality relation 
 ```math
 \begin{equation} \int^1_{-1} U_{m}(x)U_{n}(x)\sqrt{1-x^2} \; d x = 
-\left\{\begin{array}{l} 0 {\rm ~if~} n\neq m  \\ \pi/2 {\rm ~if~} n=m \\ \end{array} \right.,\end{equation}
+\left\{\begin{array}{l} 0 {\rm ~if~} n\neq m  \\ \pi/2 {\rm ~if~} n=m \\ \end{array} \right.\end{equation}
 ```
 we obtain the (unqiuely-determined) relations 
 ```math
@@ -151,7 +151,7 @@ to write
 ```
  Also note that 
 ```math
-\begin{equation} \frac{\cos(n \pi) +1}{1 - n^2} = \left\{\begin{tabular}{l} $0 {\rm ~if~} n = 2 r + 1, ~r \in \mathbb{Z} $ \\ $2/(1 - n^2) {\rm ~if~} n=2r,~r. \in \mathbb{Z}$  \end{tabular}\right. \end{equation}
+\begin{equation} \frac{\cos(n \pi) +1}{1 - n^2} = \left\{\begin{array}{l} 0 {\rm ~if~} n = 2 r + 1, ~r \in \mathbb{Z}  \\ 2/(1 - n^2) {\rm ~if~} n=2r,~r. \in \mathbb{Z}  \end{array}\right. \end{equation}
  ```
  We define 
  ```math
@@ -176,7 +176,7 @@ Weights on Gauss-Chebyshev-Lobotto points
  ```
  where 
  ```math
- \begin{equation} q_{n} = \left\{\begin{tabular}{l} $2 {\rm ~if~} n\neq0,N $ \\ $1 {\rm ~if~} n=0,N$  \end{tabular}\right.,\end{equation}
+ \begin{equation} q_{n} = \left\{\begin{array}{l} 2 {\rm ~if~} n\neq0,N  \\ 1 {\rm ~if~} n=0,N  \end{array}\right.,\end{equation}
  ```
 and $\hat{f}_j$ is $f(x_j)$ on the extended domain in FFT order, i.e.,
 ```math
@@ -217,7 +217,7 @@ We use the inverse transformation
 ```
 where 
 ```math
-\begin{equation} q_{n} = \left\{\begin{tabular}{l} $2 {\rm ~if~} n > 0 $ \\ $1 {\rm ~if~} n=0$  \end{tabular}\right.,\end{equation}
+\begin{equation} q_{n} = \left\{\begin{array}{l} 2 {\rm ~if~} n > 0  \\ 1 {\rm ~if~} n=0  \end{array}\right.,\end{equation}
 ```
 and $\hat{f}_j$ is $f(x_j)$ on the extended domain in FFT order, i.e.,
 ```math
