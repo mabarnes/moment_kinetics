@@ -7,7 +7,7 @@ Chebyshev tranform via Fourier transform
 ```
 We express a function $f$ as a sum of Chebyshev polynomials
 ```math 
-\begin{equation} f(x) = \sum^N_{n=0} a_{n}T_n(x)\label{eq:cheb-expansion}\end{equation}
+\begin{equation} f(x) = \sum^N_{n=0} a_{n}T_n(x)\label{eq:cheb-expansion} \tag{1}\end{equation}
 ```
 The Chebyshev polynomials are defined by 
 ```math
