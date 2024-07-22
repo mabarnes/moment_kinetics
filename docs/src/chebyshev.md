@@ -150,10 +150,11 @@ to write
 \begin{equation} \int^\pi_0 \cos(n \theta) \sin \theta \; d \theta = \frac{\cos(n \pi) +1}{1 - n^2} {\rm~for~} n \geq 0.\end{equation}
 ```
  Also note that 
- ```math
- \begin{equation} \frac{\cos(n \pi) +1}{1 - n^2} = \left\{\begin{tabular}{l} $0 {\rm ~if~} n = 2 r + 1, ~r \in \mathbb{Z} $ \\ $2/(1 - n^2) {\rm ~if~} n=2r,~r. \in \mathbb{Z}$  \end{tabular}\right. \end{equation}
+```math
+\begin{equation} \frac{\cos(n \pi) +1}{1 - n^2} = \left\{\begin{tabular}{l} $0 {\rm ~if~} n = 2 r + 1, ~r \in \mathbb{Z} $ \\ $2/(1 - n^2) {\rm ~if~} n=2r,~r. \in \mathbb{Z}$  \end{tabular}\right. \end{equation}
  ```
- We define ```math
+ We define 
+ ```math
  \begin{equation} J_{n} = \frac{\cos(n \pi) +1}{1 - n^2}. \end{equation}
  ```
  Using this definition, we can write the integral of $f(x)$ can be written 
