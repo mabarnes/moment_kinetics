@@ -35,8 +35,7 @@ Assuming that $M = 2N$, with $N$ an integer, and $b_{k} = b_{M-k}$ for $k>0$, we
 \begin{equation} f_j = b_{0} + b_{N}(-1)^j + \sum_{n=1}^{N-1}
 b_{n}\left(\exp\left[i \frac{\pi n j}{N}\right]+\exp\left[-i \frac{\pi n j}{N}\right]\right).\end{equation}
 ```
-Comparing this to the expression for $f(x_j)$ in the Chebyshev representation, 
-using the form of $T_n(x_j)$, 
+Comparing this to the expression for $f(x_j)$ in the Chebyshev representation,
 ```math
 \begin{equation} f_j = a_{0} + a_{N}(-1)^j + \frac{1}{2}\sum_{n=1}^{N-1}
 a_{n}\left(\exp\left[i \frac{\pi n j}{N}\right]+\exp\left[-i \frac{\pi n j}{N}\right]\right),\end{equation}
