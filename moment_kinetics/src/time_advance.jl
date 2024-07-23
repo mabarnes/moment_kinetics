@@ -441,7 +441,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      previous_dt_shared, next_output_time, dt_before_output,
                      dt_before_last_fail, CFL_prefactor, step_to_moments_output,
                      step_to_dfns_output, write_moments_output, write_dfns_output, Ref(0),
-                     Ref(2), Ref(2), Ref(0), mk_int[], mk_int[], t_input["nwrite"],
+                     Ref(0), Ref(0), Ref(0), mk_int[], mk_int[], t_input["nwrite"],
                      t_input["nwrite_dfns"], moments_output_times, dfns_output_times,
                      t_input["type"], rk_coefs, rk_coefs_implicit,
                      implicit_coefficient_is_zero, n_rk_stages, rk_order, adaptive,
@@ -778,16 +778,24 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                               scratch_electron, nl_solver_params, t_params, t_input,
                               num_diss_params, advection_structs, io_input, input_dict;
                               restart_electron_physics=restart_electron_physics)
-    elseif restarting && composition.electron_physics == kinetic_electrons &&
-           t_params.electron.debug_io !== nothing
-        # Create *.electron_debug.h5 file so that it can be re-opened in
-        # update_electron_pdf!().
-        io_electron = setup_electron_io(t_params.electron.debug_io[1], vpa, vperp, z, r,
-                                        composition, collisions, moments.evolve_density,
-                                        moments.evolve_upar, moments.evolve_ppar,
-                                        external_source_settings, t_params.electron,
-                                        t_params.electron.debug_io[2], -1, nothing,
-                                        "electron_debug")
+    elseif restarting && composition.electron_physics == kinetic_electrons
+        if t_params.electron.debug_io !== nothing
+            # Create *.electron_debug.h5 file so that it can be re-opened in
+            # update_electron_pdf!().
+            io_electron = setup_electron_io(t_params.electron.debug_io[1], vpa, vperp, z, r,
+                                            composition, collisions, moments.evolve_density,
+                                            moments.evolve_upar, moments.evolve_ppar,
+                                            external_source_settings, t_params.electron,
+                                            t_params.electron.debug_io[2], -1, nothing,
+                                            "electron_debug")
+        end
+
+        # No need to do electron I/O (apart from possibly debug I/O) any more, so if
+        # adaptive timestep is used, it does not need to adjust to output times.
+        resize!(t_params.electron.moments_output_times, 0)
+        resize!(t_params.electron.dfns_output_times, 0)
+        t_params.electron.moments_output_counter[] = 1
+        t_params.electron.dfns_output_counter[] = 1
     end
 
     # update the derivatives of the electron moments as these may be needed when
@@ -1767,8 +1775,6 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
     epsilon = 1.e-11
 
     # main time advance loop
-    iwrite_moments = 2
-    iwrite_dfns = 2
     finish_now = false
     t_params.step_counter[] = 1
     if t_params.t[] ≥ t_params.end_time - epsilon
@@ -1905,7 +1911,7 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
             @serial_region begin
                 if global_rank[] == 0
                     print("writing moments output ",
-                          rpad(string(t_params.moments_output_counter[] - 1), 4), "  ",
+                          rpad(string(t_params.moments_output_counter[]), 4), "  ",
                           "t = ", rpad(string(round(t_params.t[], sigdigits=6)), 7), "  ",
                           "nstep = ", rpad(string(t_params.step_counter[]), 7), "  ")
                     if t_params.adaptive
@@ -1921,7 +1927,7 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
             write_all_moments_data_to_binary(scratch, moments, fields,
                                              composition.n_ion_species,
                                              composition.n_neutral_species, io_moments,
-                                             iwrite_moments, time_for_run, t_params,
+                                             t_params.moments_output_counter[], time_for_run, t_params,
                                              nl_solver_params, r, z)
 
             if t_params.steady_state_residual
@@ -1978,7 +1984,6 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
                 end
             end
 
-            iwrite_moments += 1
             begin_s_r_z_vperp_region()
             @debug_detect_redundant_block_synchronize begin
                 # Reactivate check for redundant _block_synchronize()
@@ -1995,7 +2000,7 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
             @serial_region begin
                 if global_rank[] == 0
                     println("writing distribution functions output ",
-                            rpad(string(t_params.dfns_output_counter[] - 1), 4), "  ",
+                            rpad(string(t_params.dfns_output_counter[]), 4), "  ",
                             "t = ", rpad(string(round(t_params.t[], sigdigits=6)), 7), "  ",
                             "nstep = ", rpad(string(t_params.step_counter[]), 7), "  ",
                             Dates.format(now(), dateformat"H:MM:SS"))
@@ -2005,10 +2010,9 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
             write_all_dfns_data_to_binary(scratch, scratch_electron, moments, fields,
                                           composition.n_ion_species,
                                           composition.n_neutral_species, io_dfns,
-                                          iwrite_dfns, time_for_run, t_params,
-                                          nl_solver_params, r, z, vperp, vpa, vzeta, vr,
-                                          vz)
-            iwrite_dfns += 1
+                                          t_params.dfns_output_counter[], time_for_run,
+                                          t_params, nl_solver_params, r, z, vperp, vpa,
+                                          vzeta, vr, vz)
             begin_s_r_z_vperp_region()
             @debug_detect_redundant_block_synchronize begin
                 # Reactivate check for redundant _block_synchronize()

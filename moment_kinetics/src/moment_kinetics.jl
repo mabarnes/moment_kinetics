@@ -364,12 +364,15 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         composition.n_ion_species, composition.n_neutral_species, ascii_io)
     # write initial data to binary files
 
+    t_params.moments_output_counter[] += 1
     write_all_moments_data_to_binary(scratch, moments, fields, composition.n_ion_species,
-        composition.n_neutral_species, io_moments, 1, 0.0, t_params, nl_solver_params, r,
-        z)
+        composition.n_neutral_species, io_moments, t_params.moments_output_counter[], 0.0,
+        t_params, nl_solver_params, r, z)
+    t_params.dfns_output_counter[] += 1
     write_all_dfns_data_to_binary(scratch, scratch_electron, moments, fields,
-        composition.n_ion_species, composition.n_neutral_species, io_dfns, 1, 0.0,
-        t_params, nl_solver_params, r, z, vperp, vpa, vzeta, vr, vz)
+        composition.n_ion_species, composition.n_neutral_species, io_dfns,
+        t_params.dfns_output_counter[], 0.0, t_params, nl_solver_params, r, z, vperp, vpa,
+        vzeta, vr, vz)
 
     begin_s_r_z_vperp_region()
 

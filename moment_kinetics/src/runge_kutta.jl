@@ -1260,11 +1260,11 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
         if (!t_params.write_after_fixed_step_count
             && !t_params.write_moments_output[]
             && length(t_params.moments_output_times) > 0
-            && (t_params.moments_output_counter[] ≤ length(t_params.moments_output_times) + 1)
-            && (current_time + t_params.dt[] >= t_params.moments_output_times[t_params.moments_output_counter[]-1]))
+            && (t_params.moments_output_counter[] ≤ length(t_params.moments_output_times))
+            && (current_time + t_params.dt[] >= t_params.moments_output_times[t_params.moments_output_counter[]]))
 
             t_params.dt_before_output[] = current_dt
-            t_params.dt[] = t_params.moments_output_times[t_params.moments_output_counter[]-1] - current_time
+            t_params.dt[] = t_params.moments_output_times[t_params.moments_output_counter[]] - current_time
             t_params.step_to_moments_output[] = true
 
             if t_params.dt[] < 0.0
@@ -1275,11 +1275,11 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
         if (!t_params.write_after_fixed_step_count
             && !t_params.write_dfns_output[]
             && length(t_params.dfns_output_times) > 0
-            && (t_params.dfns_output_counter[] ≤ length(t_params.dfns_output_times) + 1)
-            && (current_time + t_params.dt[] >= t_params.dfns_output_times[t_params.dfns_output_counter[]-1]))
+            && (t_params.dfns_output_counter[] ≤ length(t_params.dfns_output_times))
+            && (current_time + t_params.dt[] >= t_params.dfns_output_times[t_params.dfns_output_counter[]]))
 
             t_params.dt_before_output[] = current_dt
-            t_params.dt[] = t_params.dfns_output_times[t_params.dfns_output_counter[]-1] - current_time
+            t_params.dt[] = t_params.dfns_output_times[t_params.dfns_output_counter[]] - current_time
             t_params.step_to_dfns_output[] = true
 
             if t_params.dt[] < 0.0

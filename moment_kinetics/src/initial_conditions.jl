@@ -696,6 +696,8 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                                     previous_runs_info,
                                                     "initial_electron")
 
+            # Can't let this counter stay set to 0
+            t_params.electron.dfns_output_counter[] = max(t_params.electron.dfns_output_counter[], 1)
             success =
                 @views update_electron_pdf!(scratch_electron, pdf.electron.norm, moments,
                                             fields.phi, r, z, vperp, vpa, z_spectral,
