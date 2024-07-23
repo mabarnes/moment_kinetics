@@ -165,28 +165,22 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
     buffer_r_5 = @view scratch_dummy.buffer_rs_5[:,1]
     buffer_r_6 = @view scratch_dummy.buffer_rs_6[:,1]
 
-    # compute the z-derivative of the input electron parallel flow, needed for the electron kinetic equation
-    @views derivative_z!(moments.electron.dupar_dz, moments.electron.upar, buffer_r_1,
-                         buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
-
-    # compute the z-derivative of the input electron parallel pressure, needed for the electron kinetic equation
-    @views derivative_z!(moments.electron.dppar_dz, moments.electron.ppar, buffer_r_1,
-                         buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
-
     begin_r_z_region()
     @loop_r_z ir iz begin
         # update the electron thermal speed using the updated electron parallel pressure
         moments.electron.vth[iz,ir] = sqrt(abs(2.0 * moments.electron.ppar[iz,ir] /
                                                 (moments.electron.dens[iz,ir] *
                                                  composition.me_over_mi)))
-        # update the z-derivative of the electron thermal speed from the z-derivatives of the electron density
-        # and parallel pressure
-        moments.electron.dvth_dz[iz,ir] =
-            0.5 * moments.electron.vth[iz,ir] *
-            (moments.electron.dppar_dz[iz,ir] / moments.electron.ppar[iz,ir] -
-             moments.electron.ddens_dz[iz,ir] / moments.electron.dens[iz,ir])
         scratch[t_params.n_rk_stages+1].electron_ppar[iz,ir] = moments.electron.ppar[iz,ir]
     end
+    calculate_electron_moment_derivatives!(moments,
+                                           (electron_density=moments.electron.dens,
+                                            electron_upar=moments.electron.upar,
+                                            electron_ppar=moments.electron.ppar),
+                                           scratch_dummy, z, z_spectral,
+                                           num_diss_params.electron.moment_dissipation_coefficient,
+                                           composition.electron_physics)
+
 
     # compute the z-derivative of the input electron parallel heat flux, needed for the electron kinetic equation
     @views derivative_z!(moments.electron.dqpar_dz, moments.electron.qpar, buffer_r_1,
@@ -358,26 +352,13 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                                                   scratch[istage+1].electron_ppar,
                                                   moments.electron.vth, latest_pdf, vpa)
 
-                # compute the z-derivative of the parallel electron heat flux
-                @views derivative_z!(moments.electron.dqpar_dz, moments.electron.qpar,
-                                     buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
-                                     z_spectral, z)
-
                 if evolve_ppar
-                    # get an updated iterate of the electron parallel pressure
-                    begin_r_z_region()
-                    # compute the z-derivative of the updated electron parallel pressure
-                    @views derivative_z!(moments.electron.dppar_dz,
-                                         scratch[istage+1].electron_ppar, buffer_r_1, buffer_r_2,
-                                         buffer_r_3, buffer_r_4, z_spectral, z)
-
                     this_ppar = scratch[istage+1].electron_ppar
-                    this_dppar_dz = moments.electron.dppar_dz
-                    this_ddens_dz = moments.electron.ddens_dz
                     this_dens = moments.electron.dens
-                    this_vth = moments.electron.vth
-                    this_dvth_dz = moments.electron.dvth_dz
+                    this_upar = moments.electron.upar
                     if update_vth
+                        begin_r_z_region()
+                        this_vth = moments.electron.vth
                         @loop_r_z ir iz begin
                             # update the electron thermal speed using the updated electron
                             # parallel pressure
@@ -386,29 +367,19 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                                                         composition.me_over_mi)))
                         end
                     end
-                    @loop_r_z ir iz begin
-                        # update the z-derivative of the electron thermal speed from the
-                        # z-derivatives of the electron density and parallel pressure
-                        this_dvth_dz[iz,ir] = 0.5 * this_vth[iz,ir] *
-                                              (this_dppar_dz[iz,ir] / this_ppar[iz,ir] -
-                                               this_ddens_dz[iz,ir] / this_dens[iz,ir])
-                    end
-
-                    # centred second derivative for dissipation
-                    if num_diss_params.electron.moment_dissipation_coefficient > 0.0
-                        @views derivative_z!(moments.electron.d2ppar_dz2,
-                                             moments.electron.dppar_dz, buffer_r_1, buffer_r_2,
-                                             buffer_r_3, buffer_r_4, z_spectral, z)
-                        begin_serial_region()
-                        @serial_region begin
-                            if z.irank == 0
-                                moments.electron.d2ppar_dz2[1,:] .= 0.0
-                            end
-                            if z.irank == z.nrank - 1
-                                moments.electron.d2ppar_dz2[end,:] .= 0.0
-                            end
-                        end
-                    end
+                    calculate_electron_moment_derivatives!(
+                        moments,
+                        (electron_density=this_dens,
+                         electron_upar=this_upar,
+                         electron_ppar=this_ppar),
+                        scratch_dummy, z, z_spectral,
+                        num_diss_params.electron.moment_dissipation_coefficient,
+                        composition.electron_physics)
+                else
+                    # compute the z-derivative of the parallel electron heat flux
+                    @views derivative_z!(moments.electron.dqpar_dz, moments.electron.qpar,
+                                         buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
+                                         z_spectral, z)
                 end
             end
             update_derived_moments_and_derivatives()

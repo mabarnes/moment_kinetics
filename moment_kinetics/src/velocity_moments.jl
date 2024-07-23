@@ -1000,6 +1000,8 @@ function calculate_electron_moment_derivatives!(moments, scratch, scratch_dummy,
     end
     @views derivative_z!(moments.electron.dT_dz, dummy_zr, buffer_r_1,
                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+    @views derivative_z!(moments.electron.dvth_dz, moments.electron.vth, buffer_r_1,
+                         buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
 end
 
 """
