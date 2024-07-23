@@ -4123,43 +4123,72 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
     end
 
     if variable_name == "temperature"
-        vth = postproc_load_variable(run_info, "thermal_speed"; kwargs...)
+        vth = get_variable(run_info, "thermal_speed"; kwargs...)
         variable = vth.^2
     elseif variable_name == "collision_frequency_ii"
-        n = postproc_load_variable(run_info, "density"; kwargs...)
-        vth = postproc_load_variable(run_info, "thermal_speed"; kwargs...)
+        n = get_variable(run_info, "density"; kwargs...)
+        vth = get_variable(run_info, "thermal_speed"; kwargs...)
         variable = get_collision_frequency_ii(run_info.collisions, n, vth)
     elseif variable_name == "collision_frequency_ee"
-        n = postproc_load_variable(run_info, "electron_density"; kwargs...)
-        vth = postproc_load_variable(run_info, "electron_thermal_speed"; kwargs...)
+        n = get_variable(run_info, "electron_density"; kwargs...)
+        vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
         variable = get_collision_frequency_ee(run_info.collisions, n, vth)
     elseif variable_name == "collision_frequency_ei"
-        n = postproc_load_variable(run_info, "electron_density"; kwargs...)
-        vth = postproc_load_variable(run_info, "electron_thermal_speed"; kwargs...)
+        n = get_variable(run_info, "electron_density"; kwargs...)
+        vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
         variable = get_collision_frequency_ei(run_info.collisions, n, vth)
     elseif variable_name == "electron_temperature"
-        vth = postproc_load_variable(run_info, "electron_thermal_speed"; kwargs...)
+        vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
         variable = run_info.composition.me_over_mi .* vth.^2
     elseif variable_name == "electron_dudz"
-        upar = postproc_load_variable(run_info, "electron_parallel_flow"; kwargs...)
+        upar = get_variable(run_info, "electron_parallel_flow"; kwargs...)
         variable = similar(upar)
-        for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n
-            @views derivative!(variable[:,ir,it], upar[:,ir,it], run_info.z, run_info.z_spectral)
+        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
+            error("Cannot take z-derivative when iz!==nothing")
+        end
+        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            for it ∈ 1:size(variable, 2)
+                @views derivative!(variable[:,it], upar[:,it], run_info.z, run_info.z_spectral)
+            end
+        else
+            for it ∈ 1:size(variable, 3), ir ∈ 1:run_info.r.n
+                @views derivative!(variable[:,ir,it], upar[:,ir,it], run_info.z, run_info.z_spectral)
+            end
         end
     elseif variable_name == "electron_dpdz"
-        ppar = postproc_load_variable(run_info, "electron_parallel_pressure"; kwargs...)
+        ppar = get_variable(run_info, "electron_parallel_pressure"; kwargs...)
         variable = similar(ppar)
-        for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n
-            @views derivative!(variable[:,ir,it], ppar[:,ir,it], run_info.z, run_info.z_spectral)
+        println("electron_dpdz kwargs ", kwargs)
+        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
+            error("Cannot take z-derivative when iz!==nothing")
+        end
+        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            println("check range ", (kwargs[:it] === nothing ? (1:run_info.nt) : (1:length(kwargs[:it]))))
+            for it ∈ 1:size(variable, 2)
+                @views derivative!(variable[:,it], ppar[:,it], run_info.z, run_info.z_spectral)
+            end
+        else
+            for it ∈ 1:size(variable, 3), ir ∈ 1:run_info.r.n
+                @views derivative!(variable[:,ir,it], ppar[:,ir,it], run_info.z, run_info.z_spectral)
+            end
         end
     elseif variable_name == "electron_dqdz"
-        qpar = postproc_load_variable(run_info, "electron_parallel_heat_flux"; kwargs...)
+        qpar = get_variable(run_info, "electron_parallel_heat_flux"; kwargs...)
         variable = similar(qpar)
-        for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n
-            @views derivative!(variable[:,ir,it], qpar[:,ir,it], run_info.z, run_info.z_spectral)
+        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
+            error("Cannot take z-derivative when iz!==nothing")
+        end
+        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            for it ∈ 1:size(variable, 2)
+                @views derivative!(variable[:,it], qpar[:,it], run_info.z, run_info.z_spectral)
+            end
+        else
+            for it ∈ 1:size(variable, 3), ir ∈ 1:run_info.r.n
+                @views derivative!(variable[:,ir,it], qpar[:,ir,it], run_info.z, run_info.z_spectral)
+            end
         end
     elseif variable_name == "temperature_neutral"
-        vth = postproc_load_variable(run_info, "thermal_speed_neutral"; kwargs...)
+        vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
         variable = vth.^2
     elseif variable_name == "sound_speed"
         T_e = run_info.composition.T_e
