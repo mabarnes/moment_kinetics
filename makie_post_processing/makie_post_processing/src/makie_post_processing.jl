@@ -1898,8 +1898,8 @@ for dim ∈ one_dimension_combinations_no_t
                          time = select_slice(run_info[1].time, :t; input=input, it=it)
                          title = lift(i->string("t = ", time[i]), frame_index)
                      else
-                         time = select_slice(ri.time, :t; input=input, it=it)
-                         title = lift(i->join((string("t", irun, " = ", time[i])
+                         title = lift(i->join((string("t", irun, " = ",
+                                                      select_slice(ri.time, :t; input=input, it=it)[i])
                                                for (irun,ri) ∈ enumerate(run_info)), "; "),
                                       frame_index)
                      end
@@ -2136,8 +2136,8 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
 
                      if length(run_info) > 1
                          title = get_variable_symbol(var_name)
-                         time = select_slice(ri.time, :t; input=input, it=it)
-                         subtitles = (lift(i->string(ri.run_name, "\nt = ", time[i]),
+                         subtitles = (lift(i->string(ri.run_name, "\nt = ",
+                                                     select_slice(ri.time, :t; input=input, it=it)[i]),
                                            frame_index)
                                       for ri ∈ run_info)
                      else
