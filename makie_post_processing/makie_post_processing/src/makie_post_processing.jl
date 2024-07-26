@@ -819,6 +819,15 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
     return nothing
 end
 
+function makie_post_processing_error_handler(e::Exception, message::String)
+    if isa(e, InterruptException)
+        rethrow(e)
+    else
+        println(message * "\nError was $e.")
+        return nothing
+    end
+end
+
 """
     get_run_info(run_dir...; itime_min=1, itime_max=0,
                  itime_skip=1, dfns=false, initial_electron=false, do_setup=true,
@@ -1009,9 +1018,9 @@ function plots_for_variable(run_info, variable_name; plot_prefix, has_rdim=true,
     try
         variable = get_variable(run_info, variable_name)
     catch e
-        println("plots_for_variable() failed for $variable_name - could not load data. "
-                * "Error was $e")
-        return nothing
+        return makie_post_processing_error_handler(
+                   e,
+                   "plots_for_variable() failed for $variable_name - could not load data.")
     end
 
     if variable_name ∈ em_variables
@@ -1488,8 +1497,9 @@ for dim ∈ one_dimension_combinations
                      end
                      return fig
                  catch e
-                     println("$($function_name_str) failed for $var_name, is=$is. Error was $e")
-                     return nothing
+                     return makie_post_processing_error_handler(
+                                e,
+                                "$($function_name_str) failed for $var_name, is=$is.")
                  end
              end
 
@@ -1673,8 +1683,9 @@ for (dim1, dim2) ∈ two_dimension_combinations
                      end
                      return fig
                  catch e
-                     println("$($function_name_str) failed for $var_name, is=$is. Error was $e")
-                     return nothing
+                     return makie_post_processing_error_handler(
+                                e,
+                                "$($function_name_str) failed for $var_name, is=$is.")
                  end
              end
 
@@ -1937,8 +1948,9 @@ for dim ∈ one_dimension_combinations_no_t
 
                      return fig
                  catch e
-                     println("$($function_name_str)() failed for $var_name, is=$is. Error was $e")
-                     return nothing
+                     return makie_post_processing_error_handler(
+                                e,
+                                "$($function_name_str)() failed for $var_name, is=$is.")
                  end
              end
 
@@ -2167,8 +2179,9 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
 
                      return fig
                  catch e
-                     println("$($function_name_str) failed for $var_name, is=$is. Error was $e")
-                     return nothing
+                     return makie_post_processing_error_handler(
+                                e,
+                                "$($function_name_str) failed for $var_name, is=$is.")
                  end
              end
 
@@ -3656,7 +3669,9 @@ function _save_residual_plots(fig_axes, plot_prefix)
             save(plot_prefix * replace(key, " "=>"_") * ".pdf", fa[1])
         end
     catch e
-        println("Error in _save_residual_plots(). Error was ", e)
+        return makie_post_processing_error_handler(
+                   e,
+                   "Error in _save_residual_plots().")
     end
 end
 
@@ -3709,7 +3724,9 @@ function calculate_steady_state_residual(run_info::Tuple, variable_name; is=1,
 
         return fig_axes
     catch e
-        println("Error in calculate_steady_state_residual(). Error was ", e)
+        return makie_post_processing_error_handler(
+                   e,
+                   "Error in calculate_steady_state_residual().")
     end
 end
 
@@ -3840,7 +3857,9 @@ function plot_f_unnorm_vs_vpa(run_info::Tuple; f_over_vpa2=false, neutral=false,
 
         return fig
     catch e
-        println("Error in plot_f_unnorm_vs_vpa(). Error was ", e)
+        return makie_post_processing_error_handler(
+                   e,
+                   "Error in plot_f_unnorm_vs_vpa().")
     end
 end
 
@@ -4005,7 +4024,9 @@ function plot_f_unnorm_vs_vpa_z(run_info::Tuple; neutral=false, outfile=nothing,
 
         return fig
     catch e
-        println("Error in plot_f_unnorm_vs_vpa_z(). Error was ", e)
+        return makie_post_processing_error_handler(
+                   e,
+                   "Error in plot_f_unnorm_vs_vpa_z().")
     end
 end
 
@@ -4171,7 +4192,9 @@ function animate_f_unnorm_vs_vpa(run_info::Tuple; f_over_vpa2=false, neutral=fal
 
         return fig
     catch e
-        println("Error in animate_f_unnorm_vs_vpa(). Error was ", e)
+        return makie_post_processing_error_handler(
+                   e,
+                   "Error in animate_f_unnorm_vs_vpa().")
     end
 end
 
@@ -4380,7 +4403,9 @@ function animate_f_unnorm_vs_vpa_z(run_info::Tuple; neutral=false, outfile=nothi
 
         return fig
     catch e
-        println("Error in animate_f_unnorm_vs_vpa_z(). Error was ", e)
+        return makie_post_processing_error_handler(
+                   e,
+                   "Error in animate_f_unnorm_vs_vpa_z().")
     end
 end
 
@@ -4755,7 +4780,9 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
             end
         end
     catch e
-        println("Error in plot_charged_pdf_2D_at_wall(). Error was ", e)
+        return makie_post_processing_error_handler(
+                   e,
+                   "Error in plot_charged_pdf_2D_at_wall().")
     end
 
     return nothing
@@ -5046,7 +5073,9 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
             end
         end
     catch e
-        println("Error in plot_neutral_pdf_2D_at_wall(). Error was ", e)
+        return makie_post_processing_error_handler(
+                   e,
+                   "Error in plot_neutral_pdf_2D_at_wall().")
     end
 
     return nothing
@@ -5380,7 +5409,9 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
             #end
         end
     catch e
-        println("Error in constraints_plots(). Error was ", e)
+        return makie_post_processing_error_handler(
+                   e,
+                   "Error in constraints_plots().")
     end
 end
 
@@ -5546,7 +5577,9 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix)
             save(outfile, fig)
         end
     catch e
-        println("Error in Chodura_condition_plots(). Error was ", e)
+        return makie_post_processing_error_handler(
+                   e,
+                   "Error in Chodura_condition_plots().")
     end
 
     return nothing
@@ -5736,7 +5769,9 @@ function sound_wave_plots(run_info::Tuple; plot_prefix)
             return fig
         end
     catch e
-        println("Error in sound_wave_plots(). Error was ", e)
+        return makie_post_processing_error_handler(
+                   e,
+                   "Error in sound_wave_plots().")
     end
 
     return nothing
@@ -6126,7 +6161,9 @@ function instability2D_plots(run_info, variable_name; plot_prefix, zind=nothing,
             plot_Fourier_1D(variable_Fourier_1D, get_variable_symbol(variable_name),
                             variable_name)
         catch e
-            println("Warning: error in 1D Fourier analysis for $variable_name. Error was $e")
+            return makie_post_processing_error_handler(
+                       e,
+                       "Warning: error in 1D Fourier analysis for $variable_name.")
         end
 
         # Do this to allow memory to be garbage-collected.
@@ -6185,7 +6222,9 @@ function instability2D_plots(run_info, variable_name; plot_prefix, zind=nothing,
             plot_Fourier_2D(variable_Fourier, get_variable_symbol(variable_name),
                             variable_name)
         catch e
-            println("Warning: error in 2D Fourier analysis for $variable_name. Error was $e")
+            return makie_post_processing_error_handler(
+                       e,
+                       "Warning: error in 2D Fourier analysis for $variable_name.")
         end
 
         # Do this to allow memory to be garbage-collected.
@@ -6213,7 +6252,9 @@ function instability2D_plots(run_info, variable_name; plot_prefix, zind=nothing,
                        colorbar_place=colorbar_place, frame_index=frame_index,
                        outfile=outfile)
         catch e
-            println("Warning: error in perturbation animation for $variable_name. Error was $e")
+            return makie_post_processing_error_handler(
+                       e,
+                       "Warning: error in perturbation animation for $variable_name.")
         end
 
         # Do this to allow memory to be garbage-collected (although this is redundant
@@ -7170,7 +7211,9 @@ function manufactured_solutions_analysis(run_info::Tuple; plot_prefix, nvperp)
         return manufactured_solutions_analysis(run_info[1]; plot_prefix=plot_prefix,
                                                nvperp=nvperp)
     catch e
-        println("Error in manufactured_solutions_analysis(). Error was ", e)
+        return makie_post_processing_error_handler(
+                   e,
+                   "Error in manufactured_solutions_analysis().")
     end
 end
 
@@ -7259,7 +7302,9 @@ function manufactured_solutions_analysis_dfns(run_info::Tuple; plot_prefix)
     try
         return manufactured_solutions_analysis_dfns(run_info[1]; plot_prefix=plot_prefix)
     catch e
-        println("Error in manufactured_solutions_analysis_dfns(). Error was ", e)
+        return makie_post_processing_error_handler(
+                   e,
+                   "Error in manufactured_solutions_analysis_dfns().")
     end
 end
 
@@ -7981,7 +8026,9 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
 
         return steps_fig, dt_fig, CFL_fig
     catch e
-        println("Error in timestep_diagnostics(). Error was ", e)
+        return makie_post_processing_error_handler(
+                   e,
+                   "Error in timestep_diagnostics().")
     end
 end
 
