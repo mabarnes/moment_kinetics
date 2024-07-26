@@ -1849,8 +1849,8 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
         end
 
         if t_params.adaptive && !t_params.write_after_fixed_step_count
-            write_moments = t_params.write_moments_output[]
-            write_dfns = t_params.write_dfns_output[]
+            write_moments = t_params.write_moments_output[] || finish_now
+            write_dfns = t_params.write_dfns_output[] || finish_now
 
             _block_synchronize()
             @serial_region begin
@@ -1859,9 +1859,11 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
             end
         else
             write_moments = (t_params.step_counter[] % t_params.nwrite_moments == 0
-                             || t_params.step_counter[] >= t_params.nstep)
+                             || t_params.step_counter[] >= t_params.nstep
+                             || finish_now)
             write_dfns = (t_params.step_counter[] % t_params.nwrite_dfns == 0
-                          || t_params.step_counter[] >= t_params.nstep)
+                          || t_params.step_counter[] >= t_params.nstep
+                          || finish_now)
         end
         if write_moments
             t_params.moments_output_counter[] += 1
