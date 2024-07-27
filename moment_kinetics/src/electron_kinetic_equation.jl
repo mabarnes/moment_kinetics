@@ -918,15 +918,15 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
             # Initial guess for cut-off velocity is result from previous RK stage (which
             # might be the previous timestep if this is the first stage). Recalculate this
             # value from phi.
-            vmax = sqrt(phi[1,ir] / me_over_mi)
+            vcut = sqrt(phi[1,ir] / me_over_mi)
 
-            # -vmax is between vmax_ind-1 and vmax_ind
-            vmax_ind = searchsortedfirst(vpa_unnorm, -vmax)
-            if vmax_ind < 2
-                error("In lower-z electron bc, failed to find vpa=-vmax point, vmax_ind=$vmax_ind")
+            # -vcut is between minus_vcut_ind-1 and minus_vcut_ind
+            minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
+            if minus_vcut_ind < 2
+                error("In lower-z electron bc, failed to find vpa=-vcut point, minus_vcut_ind=$minus_vcut_ind")
             end
-            if vmax_ind > vpa.n
-                error("In lower-z electron bc, failed to find vpa=-vmax point, vmax_ind=$vmax_ind")
+            if minus_vcut_ind > vpa.n
+                error("In lower-z electron bc, failed to find vpa=-vcut point, minus_vcut_ind=$minus_vcut_ind")
             end
 
             # sigma is the location we use for w_∥(v_∥=0) - set to 0 to ignore the 'upar
@@ -956,19 +956,19 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
             cubic_integral_pieces = @views @. vpa.scratch6 = energy_integral_pieces * vpa_unnorm / vthe[1,ir]
             quartic_integral_pieces = @views @. vpa.scratch7 = cubic_integral_pieces * vpa_unnorm / vthe[1,ir]
 
-            function get_integrals_and_derivatives(vmax, vmax_ind)
-                # vmax_fraction is the fraction of the distance between vmax_ind-1 and
-                # vmax_ind where -vmax is.
-                vmax_fraction = (-vmax - vpa_unnorm[vmax_ind-1]) / (vpa_unnorm[vmax_ind] - vpa_unnorm[vmax_ind-1])
+            function get_integrals_and_derivatives(vcut, minus_vcut_ind)
+                # vcut_fraction is the fraction of the distance between minus_vcut_ind-1 and
+                # minus_vcut_ind where -vcut is.
+                vcut_fraction = (-vcut - vpa_unnorm[minus_vcut_ind-1]) / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1])
 
                 function get_for_one_moment(integral_pieces, skip_part2=false)
-                    # Integral contribution from the cell containing vmax
-                    integral_vmax_cell = (0.5 * integral_pieces[vmax_ind-1] + 0.5 * integral_pieces[vmax_ind])
+                    # Integral contribution from the cell containing vcut
+                    integral_vcut_cell = (0.5 * integral_pieces[minus_vcut_ind-1] + 0.5 * integral_pieces[minus_vcut_ind])
 
-                    part1 = sum(integral_pieces[1:vmax_ind-2])
-                    part1 += 0.5 * integral_pieces[vmax_ind-1] + vmax_fraction * integral_vmax_cell
-                    # part1prime is d(part1)/d(vmax)
-                    part1prime = -integral_vmax_cell / (vpa_unnorm[vmax_ind] - vpa_unnorm[vmax_ind-1])
+                    part1 = sum(integral_pieces[1:minus_vcut_ind-2])
+                    part1 += 0.5 * integral_pieces[minus_vcut_ind-1] + vcut_fraction * integral_vcut_cell
+                    # part1prime is d(part1)/d(vcut)
+                    part1prime = -integral_vcut_cell / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1])
 
                     if skip_part2
                         part2 = nothing
@@ -977,9 +977,9 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
                         # Integral contribution from the cell containing sigma
                         integral_sigma_cell = (0.5 * integral_pieces[sigma_ind-1] + 0.5 * integral_pieces[sigma_ind])
 
-                        part2 = sum(integral_pieces[vmax_ind+1:sigma_ind-2])
-                        part2 += (1.0 - vmax_fraction) * integral_vmax_cell + 0.5 * integral_pieces[vmax_ind] + 0.5 * integral_pieces[sigma_ind-1] + sigma_fraction * integral_sigma_cell
-                        # part2prime is d(part2)/d(vmax)
+                        part2 = sum(integral_pieces[minus_vcut_ind+1:sigma_ind-2])
+                        part2 += (1.0 - vcut_fraction) * integral_vcut_cell + 0.5 * integral_pieces[minus_vcut_ind] + 0.5 * integral_pieces[sigma_ind-1] + sigma_fraction * integral_sigma_cell
+                        # part2prime is d(part2)/d(vcut)
                         part2prime = -part1prime
                     end
 
@@ -1001,11 +1001,11 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
             counter = 1
             A = 1.0
             C = 0.0
-            # Always do at least one update of vmax
-            epsilon, epsilonprime, A, C = get_integrals_and_derivatives(vmax, vmax_ind)
+            # Always do at least one update of vcut
+            epsilon, epsilonprime, A, C = get_integrals_and_derivatives(vcut, minus_vcut_ind)
             while true
                 # Newton iteration update. Note that primes denote derivatives with
-                # respect to vmax
+                # respect to vcut
                 delta_v = - epsilon / epsilonprime
 
                 # Prevent the step size from getting too big, to make Newton iteration
@@ -1013,10 +1013,10 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
                 delta_v = min(delta_v, 0.1 * vthe[1,ir])
                 delta_v = max(delta_v, -0.1 * vthe[1,ir])
 
-                vmax = vmax + delta_v
-                vmax_ind = searchsortedfirst(vpa_unnorm, -vmax)
+                vcut = vcut + delta_v
+                minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
 
-                epsilon, epsilonprime, A, C = get_integrals_and_derivatives(vmax, vmax_ind)
+                epsilon, epsilonprime, A, C = get_integrals_and_derivatives(vcut, minus_vcut_ind)
 
                 if abs(epsilon) < newton_tol * abs(u_over_vt)
                     break
@@ -1053,15 +1053,15 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
             @views interpolate_to_grid_1d!(reversed_pdf, reversed_wpa_of_minus_vpa, pdf[:,1,1,ir], vpa, vpa_spectral) # Could make this more efficient by only interpolating to the points needed below, by taking an appropriate view of wpa_of_minus_vpa. Also, in the element containing vpa=0, this interpolation depends on the values that will be replaced by the reflected, interpolated values, which is not ideal (maybe this element should be treated specially first?).
             reverse!(reversed_pdf)
 
-            ivpa_max = searchsortedlast(vpa_unnorm, vmax)
+            ivpa_max = searchsortedlast(vpa_unnorm, vcut)
             reversed_pdf[ivpa_max+1:end] .= 0.0
-            # vmax_fraction is the fraction of the distance between ivpa_max and
-            # ivpa_max+1 where vmax is.
-            vmax_fraction = (vmax - vpa_unnorm[ivpa_max]) / (vpa_unnorm[ivpa_max+1] - vpa_unnorm[ivpa_max])
-            reversed_pdf[ivpa_max] *= vmax_fraction
+            # vcut_fraction is the fraction of the distance between ivpa_max and
+            # ivpa_max+1 where vcut is.
+            vcut_fraction = (vcut - vpa_unnorm[ivpa_max]) / (vpa_unnorm[ivpa_max+1] - vpa_unnorm[ivpa_max])
+            reversed_pdf[ivpa_max] *= vcut_fraction
 
             # update the electrostatic potential at the boundary to be the value corresponding to the updated cutoff velocity
-            phi[1,ir] = me_over_mi * vmax^2
+            phi[1,ir] = me_over_mi * vcut^2
             pdf[sigma_ind:end,1,1,ir] .= reversed_pdf[sigma_ind:end]
 
             moments.electron.constraints_A_coefficient[1,ir] = A
@@ -1095,15 +1095,15 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
             # Initial guess for cut-off velocity is result from previous RK stage (which
             # might be the previous timestep if this is the first stage). Recalculate this
             # value from phi.
-            vmax = sqrt(phi[end,ir] / me_over_mi)
+            vcut = sqrt(phi[end,ir] / me_over_mi)
 
-            # -vmax is between vmax_ind and vmax_ind+1
-            vmax_ind = searchsortedlast(vpa_unnorm, vmax)
-            if vmax_ind < 1
-                error("In upper-z electron bc, failed to find vpa=vmax point, vmax_ind=$vmax_ind")
+            # vcut is between plus_vcut_ind and plus_vcut_ind+1
+            plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
+            if plus_vcut_ind < 1
+                error("In upper-z electron bc, failed to find vpa=vcut point, plus_vcut_ind=$plus_vcut_ind")
             end
-            if vmax_ind > vpa.n - 1
-                error("In upper-z electron bc, failed to find vpa=vmax point, vmax_ind=$vmax_ind")
+            if plus_vcut_ind > vpa.n - 1
+                error("In upper-z electron bc, failed to find vpa=vcut point, plus_vcut_ind=$plus_vcut_ind")
             end
 
             # sigma is the location we use for w_∥(v_∥=0) - set to 0 to ignore the 'upar
@@ -1133,19 +1133,19 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
             cubic_integral_pieces = @views @. vpa.scratch6 = energy_integral_pieces * vpa_unnorm / vthe[end,ir]
             quartic_integral_pieces = @views @. vpa.scratch7 = cubic_integral_pieces * vpa_unnorm / vthe[end,ir]
 
-            function get_integrals_and_derivatives(vmax, vmax_ind)
-                # vmax_fraction is the fraction of the distance between vmax_ind and
-                # vmax_ind+1 where vmax is.
-                vmax_fraction = (vmax - vpa_unnorm[vmax_ind+1]) / (vpa_unnorm[vmax_ind] - vpa_unnorm[vmax_ind+1])
+            function get_integrals_and_derivatives(vcut, plus_vcut_ind)
+                # vcut_fraction is the fraction of the distance between plus_vcut_ind and
+                # plus_vcut_ind+1 where vcut is.
+                vcut_fraction = (vcut - vpa_unnorm[plus_vcut_ind+1]) / (vpa_unnorm[plus_vcut_ind] - vpa_unnorm[plus_vcut_ind+1])
 
                 function get_for_one_moment(integral_pieces, skip_part2=false)
-                    # Integral contribution from the cell containing vmax
-                    integral_vmax_cell = (0.5 * integral_pieces[vmax_ind] + 0.5 * integral_pieces[vmax_ind+1])
+                    # Integral contribution from the cell containing vcut
+                    integral_vcut_cell = (0.5 * integral_pieces[plus_vcut_ind] + 0.5 * integral_pieces[plus_vcut_ind+1])
 
-                    part1 = sum(integral_pieces[vmax_ind+2:end])
-                    part1 += 0.5 * integral_pieces[vmax_ind+1] + vmax_fraction * integral_vmax_cell
-                    # part1prime is d(part1)/d(vmax)
-                    part1prime = integral_vmax_cell / (vpa_unnorm[vmax_ind] - vpa_unnorm[vmax_ind+1])
+                    part1 = sum(integral_pieces[plus_vcut_ind+2:end])
+                    part1 += 0.5 * integral_pieces[plus_vcut_ind+1] + vcut_fraction * integral_vcut_cell
+                    # part1prime is d(part1)/d(vcut)
+                    part1prime = integral_vcut_cell / (vpa_unnorm[plus_vcut_ind] - vpa_unnorm[plus_vcut_ind+1])
 
                     if skip_part2
                         part2 = nothing
@@ -1154,9 +1154,9 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
                         # Integral contribution from the cell containing sigma
                         integral_sigma_cell = (0.5 * integral_pieces[sigma_ind] + 0.5 * integral_pieces[sigma_ind+1])
 
-                        part2 = sum(integral_pieces[sigma_ind+2:vmax_ind-1])
-                        part2 += (1.0 - vmax_fraction) * integral_vmax_cell + 0.5 * integral_pieces[vmax_ind] + 0.5 * integral_pieces[sigma_ind+1] + sigma_fraction * integral_sigma_cell
-                        # part2prime is d(part2)/d(vmax)
+                        part2 = sum(integral_pieces[sigma_ind+2:plus_vcut_ind-1])
+                        part2 += (1.0 - vcut_fraction) * integral_vcut_cell + 0.5 * integral_pieces[plus_vcut_ind] + 0.5 * integral_pieces[sigma_ind+1] + sigma_fraction * integral_sigma_cell
+                        # part2prime is d(part2)/d(vcut)
                         part2prime = -part1prime
                     end
 
@@ -1176,11 +1176,11 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
             end
 
             counter = 1
-            # Always do at least one update of vmax
-            epsilon, epsilonprime, A, C = get_integrals_and_derivatives(vmax, vmax_ind)
+            # Always do at least one update of vcut
+            epsilon, epsilonprime, A, C = get_integrals_and_derivatives(vcut, plus_vcut_ind)
             while true
                 # Newton iteration update. Note that primes denote derivatives with
-                # respect to vmax
+                # respect to vcut
                 delta_v = - epsilon / epsilonprime
 
                 # Prevent the step size from getting too big, to make Newton iteration
@@ -1188,10 +1188,10 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
                 delta_v = min(delta_v, 0.1 * vthe[1,ir])
                 delta_v = max(delta_v, -0.1 * vthe[1,ir])
 
-                vmax = vmax + delta_v
-                vmax_ind = searchsortedlast(vpa_unnorm, vmax)
+                vcut = vcut + delta_v
+                plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
 
-                epsilon, epsilonprime, A, C = get_integrals_and_derivatives(vmax, vmax_ind)
+                epsilon, epsilonprime, A, C = get_integrals_and_derivatives(vcut, plus_vcut_ind)
 
                 if abs(epsilon) < newton_tol * abs(u_over_vt)
                     break
@@ -1228,15 +1228,15 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
             @views interpolate_to_grid_1d!(reversed_pdf, reversed_wpa_of_minus_vpa, pdf[:,1,end,ir], vpa, vpa_spectral) # Could make this more efficient by only interpolating to the points needed below, by taking an appropriate view of wpa_of_minus_vpa. Also, in the element containing vpa=0, this interpolation depends on the values that will be replaced by the reflected, interpolated values, which is not ideal (maybe this element should be treated specially first?).
             reverse!(reversed_pdf)
 
-            ivpa_min = searchsortedfirst(vpa_unnorm, -vmax)
+            ivpa_min = searchsortedfirst(vpa_unnorm, -vcut)
             reversed_pdf[1:ivpa_min-1] .= 0.0
-            # vmax_fraction is the fraction of the distance between ivpa_min and
-            # ivpa_min-1 where -vmax is.
-            vmax_fraction = (-vmax - vpa_unnorm[ivpa_min]) / (vpa_unnorm[ivpa_min-1] - vpa_unnorm[ivpa_min])
-            reversed_pdf[ivpa_min] *= vmax_fraction
+            # vcut_fraction is the fraction of the distance between ivpa_min and
+            # ivpa_min-1 where -vcut is.
+            vcut_fraction = (-vcut - vpa_unnorm[ivpa_min]) / (vpa_unnorm[ivpa_min-1] - vpa_unnorm[ivpa_min])
+            reversed_pdf[ivpa_min] *= vcut_fraction
 
             # update the electrostatic potential at the boundary to be the value corresponding to the updated cutoff velocity
-            phi[end,ir] = me_over_mi * vmax^2
+            phi[end,ir] = me_over_mi * vcut^2
             pdf[1:sigma_ind,1,end,ir] .= reversed_pdf[1:sigma_ind]
 
             moments.electron.constraints_A_coefficient[end,ir] = A
