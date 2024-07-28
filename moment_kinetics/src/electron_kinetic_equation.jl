@@ -946,6 +946,27 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
             # sigma_ind where sigma is.
             sigma_fraction = (sigma - vpa_unnorm[sigma_ind-1]) / (vpa_unnorm[sigma_ind] - vpa_unnorm[sigma_ind-1])
 
+            # Want to construct the w-grid corresponding to -vpa.
+            #   wpa(vpa) = (vpa - upar)/vth
+            #   ⇒ vpa = vth*wpa(vpa) + upar
+            #   wpa(-vpa) = (-vpa - upar)/vth
+            #             = (-(vth*wpa(vpa) + upar) - upar)/vth
+            #             = (-vth*wpa - 2*upar)/vth
+            #             = -wpa - 2*upar/vth
+            # [Note that `vpa.grid` is slightly mis-named here - it contains the values of
+            #  wpa(+vpa) as we are using a 'moment kinetic' approach.]
+            # Need to reverse vpa.grid because the grid passed as the second argument of
+            # interpolate_to_grid_1d!() needs to be sorted in increasing order.
+            reversed_wpa_of_minus_vpa = @. vpa.scratch3 = -vpa.grid + 2.0 * sigma
+            #reversed_wpa_of_minus_vpa = vpa.scratch3 .= .-vpa.grid
+            reverse!(reversed_wpa_of_minus_vpa)
+
+            # interpolate the pdf onto this grid
+            #@views interpolate_to_grid_1d!(interpolated_pdf, wpa_values, pdf[:,1,1,ir], vpa, vpa_spectral)
+            @views interpolate_to_grid_1d!(reversed_pdf, reversed_wpa_of_minus_vpa, pdf[:,1,1,ir], vpa, vpa_spectral) # Could make this more efficient by only interpolating to the points needed below, by taking an appropriate view of wpa_of_minus_vpa. Also, in the element containing vpa=0, this interpolation depends on the values that will be replaced by the reflected, interpolated values, which is not ideal (maybe this element should be treated specially first?).
+            reverse!(reversed_pdf)
+            pdf[sigma_ind:end,1,1,ir] .= reversed_pdf[sigma_ind:end]
+
             # Per-grid-point contributions to moment integrals
             # Note that we need to include the normalisation factor of 1/sqrt(pi) that
             # would be factored in by integrate_over_vspace(). This will need to
@@ -1029,36 +1050,20 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
             # constraints.
             @. pdf[:,1,1,ir] *= A + C * vpa_unnorm^2 / vthe[1,ir]^2
 
-            # Want to construct the w-grid corresponding to -vpa.
-            #   wpa(vpa) = (vpa - upar)/vth
-            #   ⇒ vpa = vth*wpa(vpa) + upar
-            #   wpa(-vpa) = (-vpa - upar)/vth
-            #             = (-(vth*wpa(vpa) + upar) - upar)/vth
-            #             = (-vth*wpa - 2*upar)/vth
-            #             = -wpa - 2*upar/vth
-            # [Note that `vpa.grid` is slightly mis-named here - it contains the values of
-            #  wpa(+vpa) as we are using a 'moment kinetic' approach.]
-            # Need to reverse vpa.grid because the grid passed as the second argument of
-            # interpolate_to_grid_1d!() needs to be sorted in increasing order.
-            reversed_wpa_of_minus_vpa = @. vpa.scratch3 = -vpa.grid + 2.0 * sigma
-            #reversed_wpa_of_minus_vpa = vpa.scratch3 .= .-vpa.grid
-            reverse!(reversed_wpa_of_minus_vpa)
-
-            # interpolate the pdf onto this grid
-            #@views interpolate_to_grid_1d!(interpolated_pdf, wpa_values, pdf[:,1,1,ir], vpa, vpa_spectral)
-            @views interpolate_to_grid_1d!(reversed_pdf, reversed_wpa_of_minus_vpa, pdf[:,1,1,ir], vpa, vpa_spectral) # Could make this more efficient by only interpolating to the points needed below, by taking an appropriate view of wpa_of_minus_vpa. Also, in the element containing vpa=0, this interpolation depends on the values that will be replaced by the reflected, interpolated values, which is not ideal (maybe this element should be treated specially first?).
-            reverse!(reversed_pdf)
-
-            ivpa_max = searchsortedlast(vpa_unnorm, vcut)
-            reversed_pdf[ivpa_max+1:end] .= 0.0
-            # vcut_fraction is the fraction of the distance between ivpa_max and
-            # ivpa_max+1 where vcut is.
-            vcut_fraction = (vcut - vpa_unnorm[ivpa_max]) / (vpa_unnorm[ivpa_max+1] - vpa_unnorm[ivpa_max])
-            reversed_pdf[ivpa_max] *= vcut_fraction
+            plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
+            pdf[plus_vcut_ind+2:end,1,1,ir] .= 0.0
+            # vcut_fraction is the fraction of the distance between plus_vcut_ind and
+            # plus_vcut_ind+1 where vcut is.
+            vcut_fraction = (vcut - vpa_unnorm[plus_vcut_ind]) / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind])
+            if vcut_fraction > 0.5
+                pdf[plus_vcut_ind+1,1,1,ir] *= vcut_fraction - 0.5
+            else
+                pdf[plus_vcut_ind+1,1,1,ir] = 0.0
+                pdf[plus_vcut_ind+1,1,1,ir] *= vcut_fraction + 0.5
+            end
 
             # update the electrostatic potential at the boundary to be the value corresponding to the updated cutoff velocity
             phi[1,ir] = me_over_mi * vcut^2
-            pdf[sigma_ind:end,1,1,ir] .= reversed_pdf[sigma_ind:end]
 
             moments.electron.constraints_A_coefficient[1,ir] = A
             moments.electron.constraints_B_coefficient[1,ir] = 0.0
@@ -1203,6 +1208,27 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
             # sigma_ind where sigma is.
             sigma_fraction = (sigma - vpa_unnorm[sigma_ind+1]) / (vpa_unnorm[sigma_ind] - vpa_unnorm[sigma_ind+1])
 
+            # Want to construct the w-grid corresponding to -vpa.
+            #   wpa(vpa) = (vpa - upar)/vth
+            #   ⇒ vpa = vth*wpa(vpa) + upar
+            #   wpa(-vpa) = (-vpa - upar)/vth
+            #             = (-(vth*wpa(vpa) + upar) - upar)/vth
+            #             = (-vth*wpa - 2*upar)/vth
+            #             = -wpa - 2*upar/vth
+            # [Note that `vpa.grid` is slightly mis-named here - it contains the values of
+            #  wpa(+vpa) as we are using a 'moment kinetic' approach.]
+            # Need to reverse vpa.grid because the grid passed as the second argument of
+            # interpolate_to_grid_1d!() needs to be sorted in increasing order.
+            reversed_wpa_of_minus_vpa = @. vpa.scratch3 = -vpa.grid + 2.0 * sigma
+            #reversed_wpa_of_minus_vpa = vpa.scratch3 .= .-vpa.grid
+            reverse!(reversed_wpa_of_minus_vpa)
+
+            # interpolate the pdf onto this grid
+            #@views interpolate_to_grid_1d!(interpolated_pdf, wpa_values, pdf[:,1,1,ir], vpa, vpa_spectral)
+            @views interpolate_to_grid_1d!(reversed_pdf, reversed_wpa_of_minus_vpa, pdf[:,1,end,ir], vpa, vpa_spectral) # Could make this more efficient by only interpolating to the points needed below, by taking an appropriate view of wpa_of_minus_vpa. Also, in the element containing vpa=0, this interpolation depends on the values that will be replaced by the reflected, interpolated values, which is not ideal (maybe this element should be treated specially first?).
+            reverse!(reversed_pdf)
+            pdf[1:sigma_ind,1,end,ir] .= reversed_pdf[1:sigma_ind]
+
             # Per-grid-point contributions to moment integrals
             # Note that we need to include the normalisation factor of 1/sqrt(pi) that
             # would be factored in by integrate_over_vspace(). This will need to
@@ -1284,36 +1310,20 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
             # constraints.
             @. pdf[:,1,end,ir] *= A + C * vpa_unnorm^2 / vthe[end,ir]^2
 
-            # Want to construct the w-grid corresponding to -vpa.
-            #   wpa(vpa) = (vpa - upar)/vth
-            #   ⇒ vpa = vth*wpa(vpa) + upar
-            #   wpa(-vpa) = (-vpa - upar)/vth
-            #             = (-(vth*wpa(vpa) + upar) - upar)/vth
-            #             = (-vth*wpa - 2*upar)/vth
-            #             = -wpa - 2*upar/vth
-            # [Note that `vpa.grid` is slightly mis-named here - it contains the values of
-            #  wpa(+vpa) as we are using a 'moment kinetic' approach.]
-            # Need to reverse vpa.grid because the grid passed as the second argument of
-            # interpolate_to_grid_1d!() needs to be sorted in increasing order.
-            reversed_wpa_of_minus_vpa = @. vpa.scratch3 = -vpa.grid + 2.0 * sigma
-            #reversed_wpa_of_minus_vpa = vpa.scratch3 .= .-vpa.grid
-            reverse!(reversed_wpa_of_minus_vpa)
-
-            # interpolate the pdf onto this grid
-            #@views interpolate_to_grid_1d!(interpolated_pdf, wpa_values, pdf[:,1,1,ir], vpa, vpa_spectral)
-            @views interpolate_to_grid_1d!(reversed_pdf, reversed_wpa_of_minus_vpa, pdf[:,1,end,ir], vpa, vpa_spectral) # Could make this more efficient by only interpolating to the points needed below, by taking an appropriate view of wpa_of_minus_vpa. Also, in the element containing vpa=0, this interpolation depends on the values that will be replaced by the reflected, interpolated values, which is not ideal (maybe this element should be treated specially first?).
-            reverse!(reversed_pdf)
-
-            ivpa_min = searchsortedfirst(vpa_unnorm, -vcut)
-            reversed_pdf[1:ivpa_min-1] .= 0.0
-            # vcut_fraction is the fraction of the distance between ivpa_min and
-            # ivpa_min-1 where -vcut is.
-            vcut_fraction = (-vcut - vpa_unnorm[ivpa_min]) / (vpa_unnorm[ivpa_min-1] - vpa_unnorm[ivpa_min])
-            reversed_pdf[ivpa_min] *= vcut_fraction
+            minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
+            pdf[1:minus_vcut_ind-2,1,end,ir] .= 0.0
+            # vcut_fraction is the fraction of the distance between minus_vcut_ind and
+            # minus_vcut_ind-1 where -vcut is.
+            vcut_fraction = (-vcut - vpa_unnorm[minus_vcut_ind]) / (vpa_unnorm[minus_vcut_ind-1] - vpa_unnorm[minus_vcut_ind])
+            if vcut_fraction > 0.5
+                pdf[minus_vcut_ind-1,1,end,ir] *= vcut_fraction - 0.5
+            else
+                pdf[minus_vcut_ind-1,1,end,ir] = 0.0
+                pdf[minus_vcut_ind,1,end,ir] *= vcut_fraction + 0.5
+            end
 
             # update the electrostatic potential at the boundary to be the value corresponding to the updated cutoff velocity
             phi[end,ir] = me_over_mi * vcut^2
-            pdf[1:sigma_ind,1,end,ir] .= reversed_pdf[1:sigma_ind]
 
             moments.electron.constraints_A_coefficient[end,ir] = A
             moments.electron.constraints_B_coefficient[end,ir] = 0.0
