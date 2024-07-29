@@ -179,7 +179,7 @@ function calculate_phi_from_Epar!(phi, Epar, r, z)
         # Need to broadcast the lower-z boundary value, because we only communicate
         # delta_phi below, rather than passing the boundary values directly from block to
         # block.
-        phi[1,:] .= MPI.bcast(@view(phi[1,:]), z.comm; root=0)
+        MPI.Bcast!(@view(phi[1,:]), z.comm; root=0)
 
         if z.irank == z.nrank - 1
             # Don't want to change the upper-z boundary value, so save it here so we can
@@ -195,12 +195,12 @@ function calculate_phi_from_Epar!(phi, Epar, r, z)
 
         # Add contributions to integral along z from processes at smaller z-values than
         # this one.
-        this_delta_phi = phi[end,:] .- phi[1,:]
+        this_delta_phi = r.scratch2 .= phi[end,:] .- phi[1,:]
         for irank ∈ 0:z.nrank-2
-            delta_phi = MPI.bcast(this_delta_phi, z.comm; root=irank)
+            MPI.Bcast!(this_delta_phi, z.comm; root=irank)
             if z.irank > irank
                 @loop_r_z ir iz begin
-                    phi[iz,ir] += delta_phi[ir]
+                    phi[iz,ir] += this_delta_phi[ir]
                 end
             end
         end
