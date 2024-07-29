@@ -341,7 +341,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
             apply_electron_bc_and_constraints!(scratch[istage+1], phi, moments, z, vperp,
                                                vpa, vperp_spectral, vpa_spectral,
                                                vpa_advect, num_diss_params, composition,
-                                               t_params.rtol)
+                                               1.0e-11)
 
             latest_pdf = scratch[istage+1].pdf_electron
             
@@ -1502,7 +1502,7 @@ function electron_adaptive_timestep_update!(scratch, t, t_params, moments, phi, 
     apply_electron_bc_and_constraints!(scratch[t_params.n_rk_stages+1], phi, moments, z,
                                        vperp, vpa, vperp_spectral, vpa_spectral,
                                        vpa_advect, num_diss_params, composition,
-                                       t_params.rtol)
+                                       1.0e-11)
     if evolve_ppar
         # Reset vth in the `moments` struct to the result consistent with full-accuracy RK
         # solution.
