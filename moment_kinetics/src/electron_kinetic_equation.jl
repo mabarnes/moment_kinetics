@@ -340,8 +340,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
 
             apply_electron_bc_and_constraints!(scratch[istage+1], phi, moments, z, vperp,
                                                vpa, vperp_spectral, vpa_spectral,
-                                               vpa_advect, num_diss_params, composition,
-                                               1.0e-11)
+                                               vpa_advect, num_diss_params, composition)
 
             latest_pdf = scratch[istage+1].pdf_electron
             
@@ -617,8 +616,7 @@ function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, mo
 
         apply_electron_bc_and_constraints!(new_scratch_electron, fields.phi, moments, z,
                                            vperp, vpa, vperp_spectral, vpa_spectral,
-                                           vpa_advect, num_diss_params, composition,
-                                           nl_solver_params.rtol)
+                                           vpa_advect, num_diss_params, composition)
 
         # Only the first entry in the `electron_pdf_substruct` will be used, so does not
         # matter what we put in the second and third except that they have the right type.
@@ -803,7 +801,7 @@ end
 
 function apply_electron_bc_and_constraints!(this_scratch, phi, moments, z, vperp, vpa,
                                             vperp_spectral, vpa_spectral, vpa_advect,
-                                            num_diss_params, composition, rtol)
+                                            num_diss_params, composition)
     latest_pdf = this_scratch.pdf_electron
 
     begin_r_z_vperp_vpa_region()
@@ -817,7 +815,7 @@ function apply_electron_bc_and_constraints!(this_scratch, phi, moments, z, vperp
                                                 vperp_spectral, vpa_spectral, vpa_advect,
                                                 moments,
                                                 num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                                                composition.me_over_mi, 0.1 * rtol)
+                                                composition.me_over_mi)
 
     begin_r_z_region()
     A = moments.electron.constraints_A_coefficient
@@ -840,7 +838,10 @@ end
 function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vperp, vpa,
                                                      vperp_spectral, vpa_spectral,
                                                      vpa_adv, moments, vpa_diffusion,
-                                                     me_over_mi, newton_tol)
+                                                     me_over_mi)
+
+    newton_tol = 1.0e-13
+
     # Enforce velocity-space boundary conditions
     if vpa.n > 1
         begin_r_z_vperp_region()
@@ -1035,7 +1036,7 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
 
                 epsilon, epsilonprime, A, C, a2, b2, c2, d2 = get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
 
-                if abs(epsilon) < newton_tol * abs(u_over_vt)
+                if abs(epsilon) < newton_tol
                     break
                 end
 
@@ -1295,7 +1296,7 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
 
                 epsilon, epsilonprime, A, C, a2, b2, c2, d2 = get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
 
-                if abs(epsilon) < newton_tol * abs(u_over_vt)
+                if abs(epsilon) < newton_tol
                     break
                 end
 
@@ -1501,8 +1502,7 @@ function electron_adaptive_timestep_update!(scratch, t, t_params, moments, phi, 
     end
     apply_electron_bc_and_constraints!(scratch[t_params.n_rk_stages+1], phi, moments, z,
                                        vperp, vpa, vperp_spectral, vpa_spectral,
-                                       vpa_advect, num_diss_params, composition,
-                                       1.0e-11)
+                                       vpa_advect, num_diss_params, composition)
     if evolve_ppar
         # Reset vth in the `moments` struct to the result consistent with full-accuracy RK
         # solution.

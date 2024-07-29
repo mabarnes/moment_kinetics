@@ -336,7 +336,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
             pdf.electron.norm, fields.phi, moments.electron.dens, moments.electron.upar,
             moments.electron.vth, z, vpa, vperp, vperp_spectral, vpa_spectral,
             [(speed=speed,)], moments, num_diss_params,
-            composition.me_over_mi, scratch_dummy; newton_tol=1.0e-11)
+            composition.me_over_mi, scratch_dummy)
     end
     # calculate the initial electron parallel heat flux;
     # if using kinetic electrons, this relies on the electron pdf, which itself relies on the electron heat flux
@@ -1538,7 +1538,7 @@ this 'initital' value for the electron will just be the first guess in an iterat
 """
 function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upar, vth, z,
         vpa, vperp, vperp_spectral, vpa_spectral, vpa_advect, moments, num_diss_params,
-        me_over_mi, scratch_dummy; restart_from_boltzmann=false, newton_tol)
+        me_over_mi, scratch_dummy; restart_from_boltzmann=false)
 
     if z.bc == "wall"
         begin_r_region()
@@ -1557,7 +1557,7 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
                                                     vperp_spectral, vpa_spectral,
                                                     vpa_advect, moments,
                                                     num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                                                    me_over_mi, newton_tol)
+                                                    me_over_mi)
 
         # Distribute the z-boundary pdf values to every process
         begin_serial_region()
