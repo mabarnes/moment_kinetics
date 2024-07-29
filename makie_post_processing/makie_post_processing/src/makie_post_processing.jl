@@ -7755,6 +7755,12 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                         plot_1d(time, linear_iterations, label=prefix * " " * p * " L per NL", ax=ax)
                     end
                 end
+
+                if ri.composition.electron_physics == kinetic_electrons
+                    has_nl_solver = true
+                    electron_steps_per_ion_step = get_variable(ri, "electron_steps_per_ion_step")
+                    plot_1d(time, electron_steps_per_ion_step, label=prefix * " electron steps per solve", ax=ax)
+                end
             end
 
             if has_nl_solver

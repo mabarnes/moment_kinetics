@@ -47,6 +47,7 @@ const timestep_diagnostic_variables = ("time_for_run", "step_counter", "dt",
                                        "average_successful_dt", "electron_step_counter",
                                        "electron_dt", "electron_failure_counter",
                                        "electron_failure_caused_by",
+                                       "electron_steps_per_ion_step",
                                        "electron_steps_per_output",
                                        "electron_failures_per_output",
                                        "electron_failure_caused_by_per_output",
@@ -4683,6 +4684,10 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             # Don't want a meaningless Inf...
             variable[1] = 0.0
         end
+    elseif variable_name == "electron_steps_per_ion_step"
+        electron_steps_per_output = get_variable(run_info, "electron_steps_per_output"; kwargs...)
+        ion_steps_per_output = get_variable(run_info, "steps_per_output"; kwargs...)
+        variable = electron_steps_per_output ./ ion_steps_per_output
     elseif variable_name == "electron_steps_per_output"
         variable = get_per_step_from_cumulative_variable(run_info, "electron_step_counter"; kwargs...)
     elseif variable_name == "electron_failures_per_output"
