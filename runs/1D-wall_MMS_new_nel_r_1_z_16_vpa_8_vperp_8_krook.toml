@@ -10,7 +10,6 @@ force_Er_zero_at_wall = false #true
 Er_constant = 0.0
 T_e = 1.0
 T_wall = 1.0
-rhostar = 1.0
 initial_density1 = 0.5
 initial_temperature1 = 1.0
 initial_density2 = 0.5
@@ -71,12 +70,16 @@ vzeta_L = 12.0
 vzeta_bc = "periodic"
 vzeta_discretization = "chebyshev_pseudospectral"
 
+[krook_collisions]
+use_krook = true
+nuii0 = 1.0
+frequency_option = "manual"
+
 [timestepping]
 nstep = 2000
 dt = 0.0005
 nwrite = 200
 nwrite_dfns = 200
-n_rk_stages = 4
 split_operators = false
 
 [manufactured_solns]
@@ -88,6 +91,7 @@ split_operators = false
  use_vpabar_in_mms_dfni=true
  alpha_switch=1.0
  type="default"
+
 [ion_numerical_dissipation]
 vpa_dissipation_coefficient = -1.0
 z_dissipation_coefficient = -1.0
