@@ -3308,32 +3308,46 @@ function plot_ion_moments_2D(density, parallel_flow, parallel_pressure,
 			outfile = string(run_name, "_delta_perpendicular_pressure"*description*"(iz0,ir0)_vs_t.pdf")
 			trysavefig(outfile)
         end
+        if pp.plot_perpendicular_pressure_vs_r0_z && nz > 1 # plot last timestep perpendicular_pressure[z,ir0]
+           @views plot(z, perpendicular_pressure[:,ir0,is,end], xlabel=L"z/L_z", ylabel=L"p_{i\perp}",label="")
+           outfile = string(run_name, "_perpendicular_pressure"*description*"(r0,z)_vs_z.pdf")
+           trysavefig(outfile)
+        end
         # the total pressure
+        total_pressure = copy(parallel_pressure)
+        @. total_pressure = (2.0/3.0)*perpendicular_pressure + (1.0/3.0)*parallel_pressure
         if pp.plot_ppar0_vs_t && pp.plot_pperp0_vs_t
+            
             @views plot([time, time, time] , 
             [parallel_pressure[iz0,ir0,is,:], perpendicular_pressure[iz0,ir0,is,:], 
-            (2.0/3.0).*perpendicular_pressure[iz0,ir0,is,:] .+ (1.0/3.0).*parallel_pressure[iz0,ir0,is,:]],
-            xlabel=L"t/ (L_{ref}/c_{ref})", ylabel="", label = [L"p_{i\|\|}(t)" L"p_{i\perp}(t)" L"p_{i}(t)"])
+            total_pressure[iz0,ir0,is,:]],
+            xlabel=L"t/ (L_{ref}/c_{ref})", ylabel="", label = [L"p_{i\|\|}(t)" L"p_{i\perp}(t)" L"p_{i}(t)"],
+            foreground_color_legend = nothing, background_color_legend = nothing)
 			outfile = string(run_name, "_pressures"*description*"(iz0,ir0)_vs_t.pdf")
 			trysavefig(outfile)
             @views plot([time, time, time] , 
             [parallel_pressure[iz0,ir0,is,:] .- parallel_pressure[iz0,ir0,is,1], perpendicular_pressure[iz0,ir0,is,:] .- perpendicular_pressure[iz0,ir0,is,1], 
-            (2.0/3.0).*(perpendicular_pressure[iz0,ir0,is,:] .- perpendicular_pressure[iz0,ir0,is,1]).+
-            (1.0/3.0).*(parallel_pressure[iz0,ir0,is,:] .- parallel_pressure[iz0,ir0,is,1])],
-            xlabel=L"t/ (L_{ref}/c_{ref})", ylabel="", label = [L"p_{i\|\|}(t) - p_{i\|\|}(0)" L"p_{i\perp}(t) - p_{i\perp}(0)" L"p_{i}(t) - p_{i}(0)"])
+             total_pressure[iz0,ir0,is,:] .- total_pressure[iz0,ir0,is,1]],
+             xlabel=L"t/ (L_{ref}/c_{ref})", ylabel="", label = [L"p_{i\|\|}(t) - p_{i\|\|}(0)" L"p_{i\perp}(t) - p_{i\perp}(0)" L"p_{i}(t) - p_{i}(0)"],
+             foreground_color_legend = nothing, background_color_legend = nothing)
 			outfile = string(run_name, "_delta_pressures"*description*"(iz0,ir0)_vs_t.pdf")
 			trysavefig(outfile)
             @views plot([time] , 
-            [(2.0/3.0).*perpendicular_pressure[iz0,ir0,is,:] .+ (1.0/3.0).*parallel_pressure[iz0,ir0,is,:]],
+            [total_pressure[iz0,ir0,is,:]],
             xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"p_{i}(t)", label = "")
 			outfile = string(run_name, "_pressure"*description*"(iz0,ir0)_vs_t.pdf")
 			trysavefig(outfile)
             @views plot([time] , 
-            [(2.0/3.0).*(perpendicular_pressure[iz0,ir0,is,:] .- perpendicular_pressure[iz0,ir0,is,1]).+
-            (1.0/3.0).*(parallel_pressure[iz0,ir0,is,:] .- parallel_pressure[iz0,ir0,is,1])],
+            [total_pressure[iz0,ir0,is,:] .- total_pressure[iz0,ir0,is,1]],
             xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"p_{i}(t) - p_{i}(0)", label = "")
 			outfile = string(run_name, "_delta_pressure"*description*"(iz0,ir0)_vs_t.pdf")
 			trysavefig(outfile)
+        end
+        if pp.plot_perpendicular_pressure_vs_r0_z && pp.plot_parallel_pressure_vs_r0_z && nz > 1 # plot last timestep perpendicular_pressure[z,ir0]
+           @views plot([z,z,z], [parallel_pressure[:,ir0,is,end],perpendicular_pressure[:,ir0,is,end],total_pressure[:,ir0,is,end]], xlabel=L"z/L_z", ylabel="",
+                       label = [L"p_{i\|\|}" L"p_{i\perp}" L"p_{i}"], foreground_color_legend = nothing, background_color_legend = nothing)
+           outfile = string(run_name, "_all_pressures"*description*"(r0,z)_vs_z.pdf")
+           trysavefig(outfile)
         end
         # the thermal speed
         if pp.plot_vth0_vs_t

@@ -553,6 +553,8 @@ struct pp_input
 	animate_parallel_flow_vs_r_z::Bool
 	# if plot_parallel_pressure_vs_r0_z = true  plot last timestep parallel_pressure[z,ir0]
 	plot_parallel_pressure_vs_r0_z::Bool
+	# if plot_perpendicular_pressure_vs_r0_z = true  plot last timestep perpendicular_pressure[z,ir0]
+	plot_perpendicular_pressure_vs_r0_z::Bool
 	# if plot_wall_parallel_pressure_vs_r = true  plot last timestep parallel_pressure[z_wall,r]
 	plot_wall_parallel_pressure_vs_r::Bool
     # if plot_parallel_pressure_vs_r_z = true plot parallel_pressure vs r z at last timestep 
