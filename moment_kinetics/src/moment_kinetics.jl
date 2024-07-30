@@ -315,7 +315,8 @@ function setup_moment_kinetics(input_dict::AbstractDict;
             @. moments.electron.temp = composition.me_over_mi * moments.electron.vth^2
             @. moments.electron.ppar = 0.5 * moments.electron.dens * moments.electron.temp
         end
-        if composition.electron_physics == kinetic_electrons
+        if composition.electron_physics ∈ (kinetic_electrons,
+                                           kinetic_electrons_with_temperature_equation)
             begin_r_z_vperp_vpa_region()
             @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
                 pdf.electron.pdf_before_ion_timestep[ivpa,ivperp,iz,ir] =

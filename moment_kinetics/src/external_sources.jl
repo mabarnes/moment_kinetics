@@ -227,7 +227,8 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
     end
 
     ion_settings = get_settings(false)
-    if electron_physics ∈ (braginskii_fluid, kinetic_electrons)
+    if electron_physics ∈ (braginskii_fluid, kinetic_electrons,
+                           kinetic_electrons_with_temperature_equation)
         electron_settings = get_electron_settings(ion_settings)
     else
         electron_settings = (active=false,)

@@ -872,7 +872,9 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
             else
                 restart_electron_physics = boltzmann_electron_response
             end
-            if pdf.electron !== nothing && restart_electron_physics == kinetic_electrons
+            if pdf.electron !== nothing &&
+                    restart_electron_physics ∈ (kinetic_electrons,
+                                                kinetic_electrons_with_temperature_equation)
                 pdf.electron.norm .=
                     reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa,
                                         r_range, z_range, vperp_range, vpa_range,
@@ -3530,10 +3532,12 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         if evolve_ppar
             push!(evolving_variables, "parallel_pressure")
         end
-        if composition.electron_physics == kinetic_electrons
+        if composition.electron_physics ∈ (kinetic_electrons,
+                                           kinetic_electrons_with_temperature_equation)
             push!(evolving_variables, "f_electron")
         end
-        if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
+        if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons,
+                                           kinetic_electrons_with_temperature_equation)
             push!(evolving_variables, "electron_parallel_pressure")
         end
         if composition.n_neutral_species > 0
