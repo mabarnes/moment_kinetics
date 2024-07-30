@@ -401,7 +401,8 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         if composition.electron_physics != braginskii_fluid
             t_input["implicit_braginskii_conduction"] = false
         end
-        if composition.electron_physics != kinetic_electrons
+        if composition.electron_physics ∉ (kinetic_electrons,
+                                           kinetic_electrons_with_temperature_equation)
             t_input["implicit_electron_advance"] = false
             t_input["implicit_electron_ppar"] = false
         end
@@ -497,7 +498,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         dt_reload = nothing
     end
 
-    if composition.electron_physics == kinetic_electrons
+    if composition.electron_physics ∈ (kinetic_electrons,
+                                       kinetic_electrons_with_temperature_equation)
         electron_t_params = setup_time_info(t_input["electron_t_input"], 2, 0.0,
                                             electron_dt_reload,
                                             electron_dt_before_last_fail_reload,
@@ -538,7 +540,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         # ion pressure
         n_variables += 1
     end
-    if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
+    if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons,
+                                       kinetic_electrons_with_temperature_equation)
         # electron pressure
         n_variables += 1
     end
@@ -596,11 +599,13 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         push!(t_params.limit_caused_by, 0) # RK accuracy
         push!(t_params.failure_caused_by, 0)
     end
-    if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
+    if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons,
+                                       kinetic_electrons_with_temperature_equation)
         # electron pressure
         push!(t_params.limit_caused_by, 0) # RK accuracy
         push!(t_params.failure_caused_by, 0) # RK accuracy for electron_ppar
-        if composition.electron_physics == kinetic_electrons
+        if composition.electron_physics ∈ (kinetic_electrons,
+                                           kinetic_electrons_with_temperature_equation)
             push!(t_params.failure_caused_by, 0) # Convergence failure for kinetic electron solve
         end
     end
@@ -747,7 +752,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     else
         scratch_implicit = nothing
     end
-    if composition.electron_physics == kinetic_electrons
+    if composition.electron_physics ∈ (kinetic_electrons,
+                                       kinetic_electrons_with_temperature_equation)
         scratch_electron = setup_electron_scratch_arrays(moments, pdf,
                                                          t_params.electron.n_rk_stages+1)
     else
@@ -769,23 +775,11 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
 
     # Now that `t_params` and `scratch` have been created, initialize electrons if
     # necessary
-    if composition.electron_physics != restart_electron_physics
-        begin_serial_region()
-        @serial_region begin
-            # zero-initialise phi here, because the boundary points of phi are used as an
-            # effective 'cache' for the sheath-boundary cutoff speed for the electrons, so
-            # needs to be initialised to something, but phi cannot be calculated properly
-            # until after the electrons are initialised.
-            fields.phi .= 0.0
-        end
-        initialize_electrons!(pdf, moments, fields, geometry, composition, r, z,
-                              vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
-                              vperp_spectral, vpa_spectral, collisions, gyroavs,
-                              external_source_settings, scratch_dummy, scratch,
-                              scratch_electron, nl_solver_params, t_params, t_input,
-                              num_diss_params, advection_structs, io_input, input_dict;
-                              restart_electron_physics=restart_electron_physics)
-    elseif restarting && composition.electron_physics == kinetic_electrons
+    if restarting &&
+            composition.electron_physics ∈ (kinetic_electrons,
+                                            kinetic_electrons_with_temperature_equation) &&
+            restart_electron_physics ∈ (kinetic_electrons,
+                                        kinetic_electrons_with_temperature_equation)
         if t_params.electron.debug_io !== nothing
             # Create *.electron_debug.h5 file so that it can be re-opened in
             # update_electron_pdf!().
@@ -803,6 +797,22 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         resize!(t_params.electron.dfns_output_times, 0)
         t_params.electron.moments_output_counter[] = 1
         t_params.electron.dfns_output_counter[] = 1
+    elseif composition.electron_physics != restart_electron_physics
+        begin_serial_region()
+        @serial_region begin
+            # zero-initialise phi here, because the boundary points of phi are used as an
+            # effective 'cache' for the sheath-boundary cutoff speed for the electrons, so
+            # needs to be initialised to something, but phi cannot be calculated properly
+            # until after the electrons are initialised.
+            fields.phi .= 0.0
+        end
+        initialize_electrons!(pdf, moments, fields, geometry, composition, r, z,
+                              vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
+                              vperp_spectral, vpa_spectral, collisions, gyroavs,
+                              external_source_settings, scratch_dummy, scratch,
+                              scratch_electron, nl_solver_params, t_params, t_input,
+                              num_diss_params, advection_structs, io_input, input_dict;
+                              restart_electron_physics=restart_electron_physics)
     end
 
     # update the derivatives of the electron moments as these may be needed when
@@ -1257,7 +1267,8 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         end
         # if treating the electrons as a fluid with Braginskii closure, or
         # moment-kinetically then advance the electron energy equation
-        if composition.electron_physics == kinetic_electrons
+        if composition.electron_physics ∈ (kinetic_electrons,
+                                           kinetic_electrons_with_temperature_equation)
             if !(t_params.implicit_electron_advance || t_params.implicit_electron_ppar)
                 advance_electron_energy = true
                 advance_electron_conduction = true
@@ -2312,7 +2323,8 @@ function rk_update!(scratch, scratch_implicit, moments, t_params, istage, compos
     # use Runge Kutta to update any velocity moments evolved separately from the pdf
     rk_update_evolved_moments!(scratch, scratch_implicit, moments, t_params, istage)
 
-    if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
+    if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons,
+                                       kinetic_electrons_with_temperature_equation)
         rk_update_variable!(scratch, scratch_implicit, :electron_ppar, t_params, istage)
     end
 
@@ -2395,7 +2407,8 @@ function apply_all_bcs_constraints_update_moments!(
                                            z_spectral,
                                            num_diss_params.electron.moment_dissipation_coefficient, 
                                            composition.electron_physics)
-    if composition.electron_physics == kinetic_electrons
+    if composition.electron_physics ∈ (kinetic_electrons,
+                                       kinetic_electrons_with_temperature_equation)
         #max_electron_pdf_iterations = 1000
         #max_electron_sim_time = nothing
         max_electron_pdf_iterations = nothing
@@ -2616,7 +2629,8 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron,
         begin_s_r_z_region()
         rk_loworder_solution!(scratch, scratch_implicit, :ppar, t_params)
     end
-    if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
+    if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons,
+                                       kinetic_electrons_with_temperature_equation)
         begin_r_z_region()
         rk_loworder_solution!(scratch, scratch_implicit, :electron_ppar, t_params)
     end
@@ -2740,7 +2754,8 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron,
         push!(total_points, z.n_global * r.n_global * n_ion_species)
     end
 
-    if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
+    if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons,
+                                       kinetic_electrons_with_temperature_equation)
         begin_r_z_region()
         electron_p_err = local_error_norm(scratch[2].electron_ppar,
                                           scratch[t_params.n_rk_stages+1].electron_ppar,
@@ -2842,7 +2857,8 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron,
                                        current_dt, error_norm_method, success,
                                        nl_max_its_fraction, composition)
 
-    if composition.electron_physics == kinetic_electrons
+    if composition.electron_physics ∈ (kinetic_electrons,
+                                       kinetic_electrons_with_temperature_equation)
         if t_params.previous_dt[] == 0.0
             # Reset electron pdf to its value at the beginning of this step.
             begin_r_z_vperp_vpa_region()
@@ -3470,8 +3486,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     end
     if advance.electron_energy
         electron_energy_equation!(fvec_out.electron_ppar, fvec_in.electron_ppar,
-                                  fvec_in.density, fvec_in.electron_upar, fvec_in.upar,
-                                  fvec_in.ppar, fvec_in.density_neutral,
+                                  fvec_in.density, fvec_in.electron_upar, fvec_in.density,
+                                  fvec_in.upar, fvec_in.ppar, fvec_in.density_neutral,
                                   fvec_in.uz_neutral, fvec_in.pz_neutral,
                                   moments.electron, collisions, dt, composition,
                                   external_source_settings.electron, num_diss_params, z;

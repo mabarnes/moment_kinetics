@@ -210,11 +210,13 @@ function makie_post_process(run_dir::Union{String,Tuple},
     # Only plot electron stuff if some runs have electrons
     if any(ri !== nothing for ri ∈ run_info_moments)
         has_electrons = any(r.composition.electron_physics
-                            ∈ (braginskii_fluid, kinetic_electrons)
+                            ∈ (braginskii_fluid, kinetic_electrons,
+                               kinetic_electrons_with_temperature_equation)
                             for r in run_info_moments)
     else
         has_electrons = any(r.composition.electron_physics
-                            ∈ (braginskii_fluid, kinetic_electrons)
+                            ∈ (braginskii_fluid, kinetic_electrons,
+                               kinetic_electrons_with_temperature_equation)
                             for r in run_info_dfns)
     end
 
@@ -267,8 +269,8 @@ function makie_post_process(run_dir::Union{String,Tuple},
     end
 
     timestep_diagnostics(run_info, run_info_dfns; plot_prefix=plot_prefix)
-    if any((ri.composition.electron_physics ==
-                moment_kinetics.input_structs.kinetic_electrons
+    if any((ri.composition.electron_physics ∈ (kinetic_electrons,
+                                               kinetic_electrons_with_temperature_equation)
             && !ri.t_input["implicit_electron_advance"]) for ri ∈ run_info)
         timestep_diagnostics(run_info, run_info_dfns; plot_prefix=plot_prefix, electron=true)
     end
@@ -5198,7 +5200,9 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
             end
 
             # Electrons
-            #if any(ri.composition.electron_physics == kinetic_electrons for ri ∈ run_info)
+            #if any(ri.composition.electron_physics ∈ (kinetic_electrons,
+            #                                          kinetic_electrons_with_temperature_equation)
+            #       for ri ∈ run_info)
 
             #    fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
             #    for ri ∈ run_info
@@ -5360,7 +5364,9 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
             end
 
             # Electrons
-            #if any(ri.composition.electron_physics == kinetic_electrons for ri ∈ run_info)
+            #if any(ri.composition.electron_physics ∈ (kinetic_electrons,
+            #                                          kinetic_electrons_with_temperature_equation)
+            #       for ri ∈ run_info)
 
             #    frame_index = Observable(1)
             #    fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
@@ -7436,7 +7442,8 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                             ax=ax_failures)
                 end
                 if electron || ri.composition.electron_physics ∈ (braginskii_fluid,
-                                                                  kinetic_electrons)
+                                                                  kinetic_electrons,
+                                                                  kinetic_electrons_with_temperature_equation)
                     # Electron parallel pressure failure counter
                     counter += 1
                     plot_1d(time, @view failure_caused_by_per_output[counter,:];
@@ -7477,7 +7484,8 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                                 linestyle=:dot,
                                 label=prefix * "nonlinear iteration convergence failure", ax=ax_failures)
                     end
-                    if ri.composition.electron_physics == kinetic_electrons
+                    if ri.composition.electron_physics ∈ (kinetic_electrons,
+                                                          kinetic_electrons_with_temperature_equation)
                         # Kinetic electron iteration failed to converge
                         counter += 1
                         plot_1d(time, @view failure_caused_by_per_output[counter,:];
@@ -7646,7 +7654,9 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                             label=prefix * "ion ppar RK accuracy", ax=ax,
                             linestyle=:dash)
                 end
-                if electron || ri.composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
+                if electron || ri.composition.electron_physics ∈ (braginskii_fluid,
+                                                                  kinetic_electrons,
+                                                                  kinetic_electrons_with_temperature_equation)
                     counter += 1
                     plot_1d(time, @view limit_caused_by_per_output[counter,:];
                             label=prefix * "electron ppar RK accuracy", ax=ax,
@@ -7756,7 +7766,8 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                     end
                 end
 
-                if ri.composition.electron_physics == kinetic_electrons
+                if ri.composition.electron_physics ∈ (kinetic_electrons,
+                                                      kinetic_electrons_with_temperature_equation)
                     has_nl_solver = true
                     electron_steps_per_ion_step = get_variable(ri, "electron_steps_per_ion_step")
                     plot_1d(time, electron_steps_per_ion_step, label=prefix * " electron steps per solve", ax=ax)
@@ -7821,8 +7832,9 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                                                 :leftspinevisible=>false,
                                                 :rightspinevisible=>false))
             end
-            if electron || any(ri.composition.electron_physics == kinetic_electrons for ri
-                               ∈ run_info)
+            if electron || any(ri.composition.electron_physics ∈ (kinetic_electrons,
+                                                                  kinetic_electrons_with_temperature_equation)
+                               for ri ∈ run_info)
                 data = get_variable(run_info, "CFL_electron_z")
                 datamin = minimum(minimum(d) for d ∈ data)
                 animate_vs_vpa_z(run_info, "CFL_electron_z"; data=data, it=it,

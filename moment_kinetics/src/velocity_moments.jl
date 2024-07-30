@@ -41,7 +41,7 @@ using ..derivatives: derivative_z!, second_derivative_z!
 using ..derivatives: derivative_r!, second_derivative_r!
 using ..looping
 using ..gyroaverages: gyro_operators, gyroaverage_pdf!
-using ..input_structs: braginskii_fluid, kinetic_electrons
+using ..input_structs
 using ..moment_kinetics_structs: moments_ion_substruct, moments_electron_substruct,
                                  moments_neutral_substruct
 
@@ -236,7 +236,8 @@ function create_moments_electron(nz, nr, electron_model, num_diss_params)
     # need dupar/dz to obtain, e.g., the updated electron temperature
     dupar_dz = allocate_shared_float(nz, nr)
     dppar_dz = allocate_shared_float(nz, nr)
-    if electron_model ∈ (braginskii_fluid, kinetic_electrons)
+    if electron_model ∈ (braginskii_fluid, kinetic_electrons,
+                         kinetic_electrons_with_temperature_equation)
         dppar_dz_upwind = allocate_shared_float(nz, nr)
         dT_dz_upwind = allocate_shared_float(nz, nr)
     else
@@ -970,6 +971,7 @@ function calculate_electron_moment_derivatives!(moments, scratch, scratch_dummy,
     upar = scratch.electron_upar
     ppar = scratch.electron_ppar
     qpar = moments.electron.qpar
+    vth = moments.electron.vth
     dummy_zr = @view scratch_dummy.dummy_zrs[:,:,1]
     buffer_r_1 = @view scratch_dummy.buffer_rs_1[:,1]
     buffer_r_2 = @view scratch_dummy.buffer_rs_2[:,1]
@@ -992,6 +994,8 @@ function calculate_electron_moment_derivatives!(moments, scratch, scratch_dummy,
     @views derivative_z!(moments.electron.dppar_dz, ppar, buffer_r_1,
                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
     @views derivative_z!(moments.electron.dqpar_dz, qpar, buffer_r_1,
+                            buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+    @views derivative_z!(moments.electron.dvth_dz, vth, buffer_r_1,
                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
     # calculate the zed derivative of the electron temperature
     @loop_r_z ir iz begin

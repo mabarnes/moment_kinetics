@@ -112,7 +112,8 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
         @loop_r_z ir iz begin
             fields.phi[iz,ir] = composition.T_e * log(dens_e[iz,ir] / N_e[ir])
         end
-    elseif composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons)
+    elseif composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons,
+                                           kinetic_electrons_with_temperature_equation)
         calculate_Epar_from_electron_force_balance!(fields.Ez, dens_e, moments.electron.dppar_dz,
             collisions.nu_ei, moments.electron.parallel_friction,
             composition.n_neutral_species, collisions.charge_exchange_electron, composition.me_over_mi,
@@ -142,7 +143,8 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
         end
     end
     # if advancing electron fluid equations, solve for Ez directly from force balance
-    if composition.electron_physics ∉ (braginskii_fluid, kinetic_electrons)
+    if composition.electron_physics ∉ (braginskii_fluid, kinetic_electrons,
+                                       kinetic_electrons_with_temperature_equation)
         if z.n > 1
             # Ez = - d phi / dz
             @views derivative_z!(fields.Ez,-fields.phi,

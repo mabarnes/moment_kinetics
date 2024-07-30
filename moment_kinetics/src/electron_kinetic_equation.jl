@@ -608,10 +608,10 @@ function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, mo
                                            num_diss_params.electron.moment_dissipation_coefficient,
                                            composition.electron_physics)
     electron_energy_equation!(electron_ppar_out, fvec_in.electron_ppar,
-                              fvec_in.density, fvec_in.electron_upar, fvec_in.upar,
-                              fvec_in.ppar, fvec_in.density_neutral,
-                              fvec_in.uz_neutral, fvec_in.pz_neutral,
-                              moments.electron, collisions, dt, composition,
+                              fvec_in.density, fvec_in.electron_upar, fvec_in.density,
+                              fvec_in.upar, fvec_in.ppar, fvec_in.density_neutral,
+                              fvec_in.uz_neutral, fvec_in.pz_neutral, moments.electron,
+                              collisions, dt, composition,
                               external_source_settings.electron, num_diss_params, z)
 
     function residual_func!(residual, new_variables)
@@ -1814,7 +1814,7 @@ function electron_kinetic_equation_euler_update!(fvec_out, fvec_in, moments, z, 
     if evolve_ppar
         electron_energy_equation!(fvec_out.electron_ppar, fvec_in.electron_ppar,
                                   moments.electron.dens, moments.electron.upar,
-                                  moments.ion.upar, moments.ion.ppar,
+                                  moments.ion.dens, moments.ion.upar, moments.ion.ppar,
                                   moments.neutral.dens, moments.neutral.uz,
                                   moments.neutral.pz, moments.electron, collisions, dt,
                                   composition, external_source_settings.electron,

@@ -1581,7 +1581,7 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
                                parallel_io=parallel_io,
                                description="'C' coefficient enforcing pressure constraint for electrons")
 
-    if electron_physics == kinetic_electrons
+    if electron_physics ∈ (kinetic_electrons, kinetic_electrons_with_temperature_equation)
         io_electron_step_counter = create_dynamic_variable!(
             dynamic, "electron_step_counter", mk_int; parallel_io=parallel_io,
             description="cumulative number of electron pseudo-timesteps for the run")
@@ -1885,7 +1885,8 @@ function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz, com
             io_f_start_last_timestep = nothing
         end
 
-        if composition.electron_physics == kinetic_electrons
+        if composition.electron_physics ∈ (kinetic_electrons,
+                                           kinetic_electrons_with_temperature_equation)
             # io_f_electron is the handle for the electron pdf
             io_f_electron = create_dynamic_variable!(dynamic, "f_electron", mk_float, vpa,
                                                      vperp, z, r;

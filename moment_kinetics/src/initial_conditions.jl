@@ -41,7 +41,7 @@ using ..electron_fluid_equations: calculate_electron_upar_from_charge_conservati
 using ..electron_fluid_equations: calculate_electron_qpar!, electron_fluid_qpar_boundary_condition!
 using ..electron_fluid_equations: calculate_electron_parallel_friction_force!
 using ..electron_kinetic_equation: update_electron_pdf!, enforce_boundary_condition_on_electron_pdf!
-using ..input_structs: boltzmann_electron_response_with_simple_sheath, braginskii_fluid, kinetic_electrons
+using ..input_structs
 using ..derivatives: derivative_z!
 using ..utils: get_default_restart_filename, get_prefix_iblock_and_move_existing_file,
                get_backup_filename
@@ -106,7 +106,8 @@ function create_pdf(composition, r, z, vperp, vpa, vzeta, vr, vz)
     pdf_neutral_norm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, composition.n_neutral_species)
     # buffer array is for neutral-ion collisions, not for storing neutral pdf
     pdf_neutral_buffer = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, composition.n_ion_species)
-    if composition.electron_physics == kinetic_electrons
+    if composition.electron_physics ∈ (kinetic_electrons,
+                                       kinetic_electrons_with_temperature_equation)
         pdf_electron_norm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n)
         # MB: not sure if pdf_electron_buffer will ever be needed, but create for now
         # to emulate ion and neutral behaviour
@@ -218,7 +219,8 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
             moments.electron.constraints_A_coefficient .= 1.0
             moments.electron.constraints_B_coefficient .= 0.0
             moments.electron.constraints_C_coefficient .= 0.0
-            if composition.electron_physics == kinetic_electrons
+            if composition.electron_physics ∈ (kinetic_electrons,
+                                               kinetic_electrons_with_temperature_equation)
                 pdf.electron.norm .= 0.0
             end
         end
@@ -289,7 +291,8 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
         @loop_r_z ir iz begin
             moments.electron.ppar[iz,ir] = 0.5 * moments.electron.dens[iz,ir] * moments.electron.temp[iz,ir]
         end
-    elseif restart_electron_physics ∉ (braginskii_fluid, kinetic_electrons)
+    elseif restart_electron_physics ∉ (braginskii_fluid, kinetic_electrons,
+                                       kinetic_electrons_with_temperature_equation)
         # Restarting from Boltzmann electron simulation, so start with constant
         # electron temperature
         begin_serial_region()
@@ -325,7 +328,8 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
     @views derivative_z!(moments.electron.dppar_dz, moments.electron.ppar, 
         scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1], scratch_dummy.buffer_rs_3[:,1],
         scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
-    if composition.electron_physics == kinetic_electrons
+    if composition.electron_physics ∈ (kinetic_electrons,
+                                       kinetic_electrons_with_temperature_equation)
         # Initialise the array for the electron pdf
         begin_serial_region()
         speed = @view scratch_dummy.buffer_vpavperpzrs_1[:,:,:,:,1]
@@ -344,7 +348,8 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
         electron_fluid_qpar_boundary_condition!(
             moments.electron.ppar, moments.electron.upar, moments.electron.dens,
             moments.electron, z)
-        if restart_electron_physics ∉ (nothing, braginskii_fluid, kinetic_electrons)
+        if restart_electron_physics ∉ (nothing, braginskii_fluid, kinetic_electrons,
+                                       kinetic_electrons_with_temperature_equation)
             # Restarting from Boltzmann. If we use an exactly constant T_e profile,
             # qpar for the electrons will be non-zero only at the boundary points,
             # which will crash the code unless the timestep is insanely small. Give
@@ -570,7 +575,8 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
 
     # now that the initial electron pdf is given, the electron parallel heat flux should be updated
     # if using kinetic electrons
-    if composition.electron_physics == kinetic_electrons
+    if composition.electron_physics ∈ (kinetic_electrons,
+                                       kinetic_electrons_with_temperature_equation)
         begin_serial_region()
         if t_input["no_restart"]
             restart_filename = nothing
