@@ -16,6 +16,7 @@ using moment_kinetics.fokker_planck_test: d2Gdvpa2_Maxwellian, dGdvperp_Maxwelli
 using moment_kinetics.fokker_planck_test: dHdvpa_Maxwellian, dHdvperp_Maxwellian, H_Maxwellian, G_Maxwellian
 using moment_kinetics.fokker_planck_test: F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
 using moment_kinetics.fokker_planck_test: d2Fdvpa2_Maxwellian, d2Fdvperpdvpa_Maxwellian, d2Fdvperp2_Maxwellian
+using moment_kinetics.fokker_planck_test: save_fkpl_integration_error_data
 using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.calculus: derivative!
 using moment_kinetics.velocity_moments: integrate_over_vspace, get_pressure
@@ -99,16 +100,16 @@ test_Lagrange_integral = false #true
 test_Lagrange_integral_scan = true
 
 function test_Lagrange_Rosenbluth_potentials(ngrid,nelement; standalone=true)
-    # set up grids for input Maxwellian
-    vpa, vperp, vpa_spectral, vperp_spectral =  init_grids(nelement,ngrid)
-    # set up necessary inputs for collision operator functions 
-    nvperp = vperp.n
-    nvpa = vpa.n
     # Set up MPI
     if standalone
         initialize_comms!()
     end
     setup_distributed_memory_MPI(1,1,1,1)
+    # set up grids for input Maxwellian
+    vpa, vperp, vpa_spectral, vperp_spectral =  init_grids(nelement,ngrid)
+    # set up necessary inputs for collision operator functions 
+    nvperp = vperp.n
+    nvpa = vpa.n
     looping.setup_loop_ranges!(block_rank[], block_size[];
                                    s=1, sn=1,
                                    r=1, z=1, vperp=vperp.n, vpa=vpa.n,
@@ -344,7 +345,7 @@ function test_Lagrange_Rosenbluth_potentials(ngrid,nelement; standalone=true)
     return results 
 end
 
-function test_rosenbluth_potentials_direct_integration(;ngrid=5,nelement_list=[2],plot_scan=true)
+function test_rosenbluth_potentials_direct_integration(;ngrid=5,nelement_list=[2],plot_scan=true,save_HDF5=true)
     if size(nelement_list,1) == 1
         nelement = nelement_list[1]
         test_Lagrange_Rosenbluth_potentials(ngrid,nelement,standalone=true)
@@ -426,6 +427,15 @@ function test_rosenbluth_potentials_direct_integration(;ngrid=5,nelement_list=[2
             outfile = "fkpl_fs_numerical_test_ngrid_"*string(ngrid)*"_GLL.pdf"
             savefig(outfile)
             println(outfile)
+        end
+        if global_rank[]==0 && save_HDF5
+            outdir = ""
+            ncore = global_size[]
+            save_fkpl_integration_error_data(outdir, ncore, ngrid, nelement_list,
+                max_dfsdvpa_err, max_dfsdvperp_err, max_d2fsdvperpdvpa_err,
+                max_H_err, max_G_err, max_dHdvpa_err, max_dHdvperp_err,
+                max_d2Gdvperp2_err, max_d2Gdvpa2_err, max_d2Gdvperpdvpa_err, max_dGdvperp_err, 
+                expected, expected_integral)
         end
         finalize_comms!()
     end
