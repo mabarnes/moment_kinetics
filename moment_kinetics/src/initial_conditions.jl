@@ -659,9 +659,12 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
         # First run with evolve_ppar=true to get electron_ppar close to steady state.
         # electron_ppar does not have to be exactly steady state as it will be
         # time-evolved along with the ions.
-        max_electron_pdf_iterations = 2000000
-        #max_electron_pdf_iterations = 500000
-        #max_electron_pdf_iterations = 10000
+        #max_electron_pdf_iterations = 2000000
+        ##max_electron_pdf_iterations = 500000
+        ##max_electron_pdf_iterations = 10000
+        #max_electron_sim_time = nothing
+        max_electron_pdf_iterations = nothing
+        max_electron_sim_time = 2.0
         if t_params.electron.debug_io !== nothing
             io_electron = setup_electron_io(t_params.electron.debug_io[1], vpa, vperp, z,
                                             r, composition, collisions,
@@ -705,7 +708,8 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                             vpa_advect, scratch_dummy, t_params.electron,
                                             collisions, composition,
                                             external_source_settings, num_diss_params,
-                                            max_electron_pdf_iterations;
+                                            max_electron_pdf_iterations,
+                                            max_electron_sim_time;
                                             io_electron=io_initial_electron,
                                             initial_time=code_time,
                                             residual_tolerance=t_input["initialization_residual_value"],
@@ -765,7 +769,8 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                          vpa_advect, scratch_dummy, t_params.electron,
                                          collisions, composition,
                                          external_source_settings, num_diss_params,
-                                         max_electron_pdf_iterations;
+                                         max_electron_pdf_iterations,
+                                         max_electron_sim_time;
                                          io_electron=io_initial_electron)
             end
             if success != ""

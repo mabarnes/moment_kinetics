@@ -68,8 +68,9 @@ OUTPUT:
 function update_electron_pdf!(scratch, pdf, moments, phi, r, z, vperp, vpa, z_spectral,
         vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy, t_params,
         collisions, composition, external_source_settings, num_diss_params,
-        max_electron_pdf_iterations; io_electron=nothing, initial_time=nothing,
-        residual_tolerance=nothing, evolve_ppar=false, ion_dt=nothing)
+        max_electron_pdf_iterations, max_electron_sim_time; io_electron=nothing,
+        initial_time=nothing, residual_tolerance=nothing, evolve_ppar=false,
+        ion_dt=nothing)
 
     # set the method to use to solve the electron kinetic equation
     solution_method = "artificial_time_derivative"
@@ -80,8 +81,8 @@ function update_electron_pdf!(scratch, pdf, moments, phi, r, z, vperp, vpa, z_sp
         return update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi,
             collisions, composition, r, z, vperp, vpa, z_spectral, vperp_spectral,
             vpa_spectral, z_advect, vpa_advect, scratch_dummy, t_params,
-            external_source_settings, num_diss_params, max_electron_pdf_iterations;
-            io_electron=io_electron, initial_time=initial_time,
+            external_source_settings, num_diss_params, max_electron_pdf_iterations,
+            max_electron_sim_time; io_electron=io_electron, initial_time=initial_time,
             residual_tolerance=residual_tolerance, evolve_ppar=evolve_ppar, ion_dt=ion_dt)
     elseif solution_method == "shooting_method"
         dens = moments.electron.dens
@@ -148,8 +149,17 @@ OUTPUT:
 function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, collisions,
         composition, r, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
         vpa_advect, scratch_dummy, t_params, external_source_settings, num_diss_params,
-        max_electron_pdf_iterations; io_electron=nothing, initial_time=nothing,
-        residual_tolerance=nothing, evolve_ppar=false, ion_dt=nothing)
+        max_electron_pdf_iterations, max_electron_sim_time; io_electron=nothing,
+        initial_time=nothing, residual_tolerance=nothing, evolve_ppar=false,
+        ion_dt=nothing)
+
+    if max_electron_pdf_iterations !== nothing && max_electron_sim_time !== nothing
+        error("Cannot use both max_electron_pdf_iterations=$max_electron_pdf_iterations "
+              * "and max_electron_sim_time=$max_electron_sim_time at the same time")
+    end
+    if max_electron_pdf_iterations === nothing && max_electron_sim_time === nothing
+        error("Must set one of max_electron_pdf_iterations and max_electron_sim_time")
+    end
 
     begin_r_z_region()
 
@@ -207,6 +217,8 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         # t_params are set relative to 0.0).
         moments_output_times = t_params.moments_output_times .+ initial_time
         dfns_output_times = t_params.dfns_output_times .+ initial_time
+    else
+        initial_time = t_params.t[]
     end
     if io_electron === nothing && t_params.debug_io !== nothing
         # Overwrite the debug output file with the output from this call to
@@ -279,7 +291,8 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
     end
     # evolve (artificially) in time until the residual is less than the tolerance
     while (!electron_pdf_converged
-           && (t_params.step_counter[] - initial_step_counter < max_electron_pdf_iterations)
+           && (max_electron_pdf_iterations === nothing || t_params.step_counter[] - initial_step_counter < max_electron_pdf_iterations)
+           && (max_electron_sim_time === nothing || t_params.t[] - initial_time < max_electron_sim_time)
            && t_params.dt[] > 0.0 && !isnan(t_params.dt[]))
 
         # Set the initial values for the next step to the final values from the previous

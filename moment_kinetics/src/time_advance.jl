@@ -2396,7 +2396,10 @@ function apply_all_bcs_constraints_update_moments!(
                                            num_diss_params.electron.moment_dissipation_coefficient, 
                                            composition.electron_physics)
     if composition.electron_physics == kinetic_electrons
-        max_electron_pdf_iterations = 1000
+        #max_electron_pdf_iterations = 1000
+        #max_electron_sim_time = nothing
+        max_electron_pdf_iterations = nothing
+        max_electron_sim_time = 1.0e-3
 
         # Copy ion and electron moments from `scratch` into `moments` to be used in
         # electron kinetic equation update
@@ -2433,7 +2436,7 @@ function apply_all_bcs_constraints_update_moments!(
                z_spectral, vperp_spectral, vpa_spectral, electron_z_advect,
                electron_vpa_advect, scratch_dummy, t_params.electron, collisions,
                composition, external_source_settings, num_diss_params,
-               max_electron_pdf_iterations)
+               max_electron_pdf_iterations, max_electron_sim_time)
             success = kinetic_electron_success
         end
     end
@@ -3513,7 +3516,10 @@ function backward_euler!(fvec_out, fvec_in, scratch_electron, pdf, fields, momen
                                              gyroavs, scratch_dummy, dt,
                                              nl_solver_params.electron_advance)
     elseif t_params.implicit_electron_ppar
-        max_electron_pdf_iterations = 1000
+        #max_electron_pdf_iterations = 1000
+        #max_electron_sim_time = nothing
+        max_electron_pdf_iterations = nothing
+        max_electron_sim_time = 1.0e-3
         electron_success = update_electron_pdf!(scratch_electron, pdf.electron.norm,
                                                 moments, fields.phi, r, z, vperp, vpa,
                                                 z_spectral, vperp_spectral, vpa_spectral,
@@ -3521,7 +3527,8 @@ function backward_euler!(fvec_out, fvec_in, scratch_electron, pdf, fields, momen
                                                 scratch_dummy, t_params.electron,
                                                 collisions, composition,
                                                 external_source_settings, num_diss_params,
-                                                max_electron_pdf_iterations; ion_dt=dt)
+                                                max_electron_pdf_iterations,
+                                                max_electron_sim_time; ion_dt=dt)
         success = (electron_success == "")
     elseif advance.electron_conduction
         success = implicit_braginskii_conduction!(fvec_out, fvec_in, moments, z, r, dt,
