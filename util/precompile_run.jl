@@ -77,7 +77,7 @@ collisions_input2 = merge(wall_bc_cheb_input, Dict("n_neutral_species" => 0,
                                                   "fokker_planck_collisions" => Dict{String,Any}("use_fokker_planck" => true, "self_collisions" => true, "slowing_down_test" => true),
                                                   "vperp_discretization" => "gausslegendre_pseudospectral",
                                                   "vpa_discretization" => "gausslegendre_pseudospectral",
-                                                  "vperp_bc" => "zero-no-regularity",
+                                                  "vperp_bc" => "zero-impose-regularity",
                                                  ))
 # add an additional input for every geometry option available in addition to the default
 geo_input1 = merge(wall_bc_cheb_input, Dict("n_neutral_species" => 0,
