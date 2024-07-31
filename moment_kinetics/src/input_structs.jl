@@ -85,7 +85,6 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     implicit_electron_advance::Bool
     implicit_ion_advance::Bool
     implicit_vpa_advection::Bool
-    implicit_ion_maxwell_diffusion::Bool
     implicit_electron_ppar::Bool
     write_after_fixed_step_count::Bool
     error_sum_zero::Terrorsum

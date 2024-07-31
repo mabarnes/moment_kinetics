@@ -233,7 +233,6 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         implicit_electron_advance=true,
         implicit_ion_advance=false,
         implicit_vpa_advection=false,
-        implicit_ion_maxwell_diffusion=false,
         implicit_electron_ppar=false,
         write_after_fixed_step_count=false,
         write_error_diagnostics=false,
