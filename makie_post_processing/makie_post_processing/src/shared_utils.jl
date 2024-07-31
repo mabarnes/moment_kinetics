@@ -89,7 +89,6 @@ function get_composition(scan_input)
     use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
     gyrokinetic_ions = get(scan_input, "gyrokinetic_ions", false)
     # constant to be used to test nonzero Er in wall boundary condition
-    #Er_constant = get(scan_input, "Er_constant", 0.0)
     recycling_fraction = get(scan_input, "recycling_fraction", 1.0)
     # constant to be used to control Ez divergences
     epsilon_offset = get(scan_input, "epsilon_offset", 0.001)
