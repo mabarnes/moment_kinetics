@@ -1016,7 +1016,6 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     T_wall = 1.0
     # wall potential at z = 0
     phi_wall = 0.0
-    #Er_constant = 0.0
     # ratio of the neutral particle mass to the ion particle mass
     mn_over_mi = 1.0
     # ratio of the electron particle mass to the ion particle mass
