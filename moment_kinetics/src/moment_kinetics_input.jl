@@ -1016,8 +1016,6 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     T_wall = 1.0
     # wall potential at z = 0
     phi_wall = 0.0
-    # constant to test nonzero Er
-    #Er_constant = 0.0
     # ratio of the neutral particle mass to the ion particle mass
     mn_over_mi = 1.0
     # ratio of the electron particle mass to the ion particle mass
@@ -1027,7 +1025,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     recycling_fraction = 1.0
     gyrokinetic_ions = false
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
-        electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, #Er_constant,
+        electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall,
         mn_over_mi, me_over_mi, recycling_fraction, gyrokinetic_ions, allocate_float(n_species))
     
     species_ion = Array{species_parameters_mutable,1}(undef,n_ion_species)

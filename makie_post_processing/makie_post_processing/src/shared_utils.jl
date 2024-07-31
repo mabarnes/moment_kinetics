@@ -89,7 +89,6 @@ function get_composition(scan_input)
     use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
     gyrokinetic_ions = get(scan_input, "gyrokinetic_ions", false)
     # constant to be used to test nonzero Er in wall boundary condition
-    #Er_constant = get(scan_input, "Er_constant", 0.0)
     recycling_fraction = get(scan_input, "recycling_fraction", 1.0)
     # constant to be used to control Ez divergences
     epsilon_offset = get(scan_input, "epsilon_offset", 0.001)
@@ -105,7 +104,7 @@ function get_composition(scan_input)
     # ratio of the electron particle mass to the ion particle mass
     me_over_mi = 1.0/1836.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
-        electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, #Er_constant,
+        electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall,
         mn_over_mi, me_over_mi, recycling_fraction, gyrokinetic_ions, allocate_float(n_species))
     return composition
 
