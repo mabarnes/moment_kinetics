@@ -38,7 +38,8 @@ end
 an option but known at compile time when a `time_info` struct is passed as a function
 argument.
 """
-struct time_info{Terrorsum <: Real}
+struct time_info{Terrorsum <: Real, Trkimp, Timpzero}
+    n_variables::mk_int
     nstep::mk_int
     end_time::mk_float
     dt::MPISharedArray{mk_float,1}
@@ -52,10 +53,14 @@ struct time_info{Terrorsum <: Real}
     failure_counter::Ref{mk_int}
     failure_caused_by::Vector{mk_int}
     limit_caused_by::Vector{mk_int}
+    nwrite_moments::mk_int
+    nwrite_dfns::mk_int
     moments_output_times::Vector{mk_float}
     dfns_output_times::Vector{mk_float}
     type::String
     rk_coefs::Array{mk_float,2}
+    rk_coefs_implicit::Trkimp
+    implicit_coefficient_is_zero::Timpzero
     n_rk_stages::mk_int
     rk_order::mk_int
     adaptive::Bool
@@ -69,6 +74,9 @@ struct time_info{Terrorsum <: Real}
     last_fail_proximity_factor::mk_float
     minimum_dt::mk_float
     maximum_dt::mk_float
+    implicit_ion_advance::Bool
+    implicit_vpa_advection::Bool
+    write_after_fixed_step_count::Bool
     error_sum_zero::Terrorsum
     split_operators::Bool
     steady_state_residual::Bool
@@ -87,15 +95,20 @@ mutable struct advance_info
     neutral_z_advection::Bool
     neutral_r_advection::Bool
     neutral_vz_advection::Bool
-    cx_collisions::Bool
-    cx_collisions_1V::Bool
-    ionization_collisions::Bool
-    ionization_collisions_1V::Bool
+    ion_cx_collisions::Bool
+    neutral_cx_collisions::Bool
+    ion_cx_collisions_1V::Bool
+    neutral_cx_collisions_1V::Bool
+    ion_ionization_collisions::Bool
+    neutral_ionization_collisions::Bool
+    ion_ionization_collisions_1V::Bool
+    neutral_ionization_collisions_1V::Bool
     ionization_source::Bool
     krook_collisions_ii::Bool
     explicit_weakform_fp_collisions::Bool
     external_source::Bool
-    numerical_dissipation::Bool
+    ion_numerical_dissipation::Bool
+    neutral_numerical_dissipation::Bool
     source_terms::Bool
     continuity::Bool
     force_balance::Bool

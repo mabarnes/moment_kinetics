@@ -2722,6 +2722,9 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         vz_chunk_size = 1
     end
 
+    # Get variable names just from the first restart, for simplicity
+    variable_names = get_variable_keys(get_group(fids0[1], "dynamic_data"))
+
     if parallel_io
         files = fids0
     else
@@ -2733,9 +2736,9 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
     run_info = (run_name=run_name, run_prefix=base_prefix, parallel_io=parallel_io,
                 ext=ext, nblocks=nblocks, files=files, input=input,
                 n_ion_species=n_ion_species, n_neutral_species=n_neutral_species,
-                evolve_moments=evolve_moments, composition=composition, species=species,
-                collisions=collisions, geometry=geometry, drive_input=drive_input,
-                num_diss_params=num_diss_params,
+                evolve_moments=evolve_moments, t_input=t_input, composition=composition,
+                species=species, collisions=collisions, geometry=geometry,
+                drive_input=drive_input, num_diss_params=num_diss_params,
                 external_source_settings=external_source_settings,
                 evolve_density=evolve_density, evolve_upar=evolve_upar,
                 evolve_ppar=evolve_ppar,
@@ -2749,7 +2752,8 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
                 vz_spectral=vz_spectral, r_chunk_size=r_chunk_size,
                 z_chunk_size=z_chunk_size, vperp_chunk_size=vperp_chunk_size,
                 vpa_chunk_size=vpa_chunk_size, vzeta_chunk_size=vzeta_chunk_size,
-                vr_chunk_size=vr_chunk_size, vz_chunk_size=vz_chunk_size, dfns=dfns)
+                vr_chunk_size=vr_chunk_size, vz_chunk_size=vz_chunk_size,
+                variable_names=variable_names, dfns=dfns)
 
     return run_info
 end
@@ -3283,6 +3287,11 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
 
         speed = allocate_float(nz, nvpa, nvperp, nr, nspecies, nt)
         Er = get_variable(run_info, "Er")
+        gEr = allocate_float(nvperp, nz, nr, nspecies, nt)
+        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz
+            # Don't support gyroaveraging here (yet)
+            gEr[:,iz,ir,is,it] .= Er[iz,ir,it]
+        end
 
         setup_distributed_memory_MPI(1,1,1,1)
         setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
@@ -3293,11 +3302,11 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             # Only need some struct with a 'speed' variable
             advect = (speed=@view(speed[:,:,:,:,is,it]),)
             # Only need Er
-            fields = (Er=@view(Er[:,:,it]),)
+            fields = (gEr=@view(gEr[:,:,:,is,it]),)
             @views update_speed_z!(advect, upar[:,:,is,it], vth[:,:,is,it],
                                    run_info.evolve_upar, run_info.evolve_ppar, fields,
                                    run_info.vpa, run_info.vperp, run_info.z, run_info.r,
-                                   run_info.time[it], run_info.geometry)
+                                   run_info.time[it], run_info.geometry, is)
         end
 
         # Horrible hack so that we can get the speed back without rearranging the
@@ -3331,9 +3340,6 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             end
         end
     elseif variable_name == "vpa_advect_speed"
-        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
-        # to get_variable() in this case. Instead select a slice of the result.
-        Ez = get_variable(run_info, "Ez")
         density = get_variable(run_info, "density")
         upar = get_variable(run_info, "parallel_flow")
         ppar = get_variable(run_info, "parallel_pressure")
@@ -3347,9 +3353,21 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         dqpar_dz = get_z_derivative(run_info, "parallel_heat_flux")
         if run_info.external_source_settings.ion.active
             external_source_amplitude = get_variable(run_info, "external_source_amplitude")
-            external_source_density_amplitude = get_variable(run_info, "external_source_density_amplitude")
-            external_source_momentum_amplitude = get_variable(run_info, "external_source_momentum_amplitude")
-            external_source_pressure_amplitude = get_variable(run_info, "external_source_pressure_amplitude")
+            if run_info.evolve_density
+                external_source_density_amplitude = get_variable(run_info, "external_source_density_amplitude")
+            else
+                external_source_density_amplitude = zeros(0,0,run_info.nt)
+            end
+            if run_info.evolve_upar
+                external_source_momentum_amplitude = get_variable(run_info, "external_source_momentum_amplitude")
+            else
+                external_source_momentum_amplitude = zeros(0,0,run_info.nt)
+            end
+            if run_info.evolve_ppar
+                external_source_pressure_amplitude = get_variable(run_info, "external_source_pressure_amplitude")
+            else
+                external_source_pressure_amplitude = zeros(0,0,run_info.nt)
+            end
         else
             external_source_amplitude = zeros(0,0,run_info.nt)
             external_source_density_amplitude = zeros(0,0,run_info.nt)
@@ -3361,6 +3379,15 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         nvperp = run_info.vperp.n
         nvpa = run_info.vpa.n
 
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        Ez = get_variable(run_info, "Ez")
+        gEz = allocate_float(nvperp, nz, nr, nspecies, nt)
+        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz
+            # Don't support gyroaveraging here (yet)
+            gEz[:,iz,ir,is,it] .= Ez[iz,ir,it]
+        end
+
         speed=allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
         setup_distributed_memory_MPI(1,1,1,1)
         setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
@@ -3371,7 +3398,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             # Only need some struct with a 'speed' variable
             advect = [(speed=@view(speed[:,:,:,:,is,it]),) for is ∈ 1:nspecies]
             # Only need Ez
-            fields = (Ez=@view(Ez[:,:,it]),)
+            fields = (gEz=@view(gEz[:,:,:,:,it]),)
             @views moments = (ion=(dppar_dz=dppar_dz[:,:,:,it],
                                    dupar_dz=dupar_dz[:,:,:,it],
                                    dvth_dz=dvth_dz[:,:,:,it],
@@ -3411,6 +3438,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
 
         speed = allocate_float(nz, nvz, nvr, nvzeta, nr, nspecies, nt)
 
+        setup_distributed_memory_MPI(1,1,1,1)
         setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
                            vperp=run_info.vperp.n, vpa=run_info.vpa.n, vzeta=nvzeta,
                            vr=nvr, vz=nvz)
@@ -3474,9 +3502,21 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         dqz_dz = get_z_derivative(run_info, "qz_neutral")
         if run_info.external_source_settings.neutral.active
             external_source_amplitude = get_variable(run_info, "external_source_neutral_amplitude")
-            external_source_density_amplitude = get_variable(run_info, "external_source_neutral_density_amplitude")
-            external_source_momentum_amplitude = get_variable(run_info, "external_source_neutral_momentum_amplitude")
-            external_source_pressure_amplitude = get_variable(run_info, "external_source_neutral_pressure_amplitude")
+            if run_info.evolve_density
+                external_source_density_amplitude = get_variable(run_info, "external_source_neutral_density_amplitude")
+            else
+                external_source_density_amplitude = zeros(0,0,run_info.nt)
+            end
+            if run_info.evolve_upar
+                external_source_momentum_amplitude = get_variable(run_info, "external_source_neutral_momentum_amplitude")
+            else
+                external_source_momentum_amplitude = zeros(0,0,run_info.nt)
+            end
+            if run_info.evolve_ppar
+                external_source_pressure_amplitude = get_variable(run_info, "external_source_neutral_pressure_amplitude")
+            else
+                external_source_pressure_amplitude = zeros(0,0,run_info.nt)
+            end
         else
             external_source_amplitude = zeros(0,0,run_info.nt)
             external_source_density_amplitude = zeros(0,0,run_info.nt)
@@ -3490,6 +3530,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         nvz = run_info.vz.n
         speed = allocate_float(nvz, nvr, nvzeta, nz, nr, nspecies, nt)
 
+        setup_distributed_memory_MPI(1,1,1,1)
         setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
                            vperp=run_info.vperp.n, vpa=run_info.vpa.n, vzeta=nvzeta,
                            vr=nvr, vz=nvz)
@@ -3676,6 +3717,20 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             variable[it] = min_CFL
         end
         variable = select_slice_of_variable(variable; kwargs...)
+    elseif occursin("_nonlinear_iterations_per_solve", variable_name)
+        prefix = split(variable_name, "_nonlinear_iterations_per_solve")[1]
+        nl_nsolves = get_per_step_from_cumulative_variable(
+            run_info, "$(prefix)_n_solves"; kwargs...)
+        nl_iterations = get_per_step_from_cumulative_variable(
+            run_info, "$(prefix)_nonlinear_iterations"; kwargs...)
+        variable = nl_iterations ./ nl_nsolves
+    elseif occursin("_linear_iterations_per_nonlinear_iteration", variable_name)
+        prefix = split(variable_name, "_linear_iterations_per_nonlinear_iteration")[1]
+        nl_iterations = get_per_step_from_cumulative_variable(
+            run_info, "$(prefix)_nonlinear_iterations"; kwargs...)
+        nl_linear_iterations = get_per_step_from_cumulative_variable(
+            run_info, "$(prefix)_linear_iterations"; kwargs...)
+        variable = nl_linear_iterations ./ nl_iterations
     else
         variable = postproc_load_variable(run_info, variable_name; kwargs...)
     end
