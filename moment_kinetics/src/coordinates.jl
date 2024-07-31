@@ -86,6 +86,10 @@ struct coordinate{T <: AbstractVector{mk_float}}
     scratch6::Array{mk_float,1}
     # scratch7 is an array used for intermediate calculations requiring n entries
     scratch7::Array{mk_float,1}
+    # scratch8 is an array used for intermediate calculations requiring n entries
+    scratch8::Array{mk_float,1}
+    # scratch9 is an array used for intermediate calculations requiring n entries
+    scratch9::Array{mk_float,1}
     # scratch_shared is a shared-memory array used for intermediate calculations requiring
     # n entries
     scratch_shared::T
@@ -232,10 +236,11 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
         cell_width, igrid, ielement, imin, imax, igrid_full, input.discretization, input.fd_option, input.cheb_option,
         input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch),
         copy(scratch), copy(scratch), copy(scratch), copy(scratch), copy(scratch),
-        scratch_shared, scratch_shared2, scratch_2d, copy(scratch_2d), advection,
-        send_buffer, receive_buffer, input.comm, local_io_range, global_io_range,
-        element_scale, element_shift, input.element_spacing_option, element_boundaries,
-        radau_first_element, other_nodes, one_over_denominator)
+        copy(scratch), copy(scratch), scratch_shared, scratch_shared2, scratch_2d,
+        copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
+        local_io_range, global_io_range, element_scale, element_shift,
+        input.element_spacing_option, element_boundaries, radau_first_element,
+        other_nodes, one_over_denominator)
 
     if coord.n == 1 && occursin("v", coord.name)
         spectral = null_velocity_dimension_info()
