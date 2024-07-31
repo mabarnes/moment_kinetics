@@ -202,10 +202,6 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                                   num_diss_params, z)
     end
 
-    # compute the z-derivative of the input electron parallel heat flux, needed for the electron kinetic equation
-    @views derivative_z!(moments.electron.dqpar_dz, moments.electron.qpar, buffer_r_1,
-                         buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
-
     if !evolve_ppar
         # ppar is not updated in the pseudo-timestepping loop below. So that we can read
         # ppar from the scratch structs, copy moments.electron.ppar into all of them.
