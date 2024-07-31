@@ -887,9 +887,12 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
     if dirichlet_bc
         # Make matrix diagonal for first/last grid points so it does not change the values
         # there
-        if coord.irank == 0
-            QQ_global[1,:] .= 0.0
-            QQ_global[1,1] = 1.0
+        if !(coord.name == "vperp") 
+            # modify lower endpoint if not a radial/cylindrical coordinate
+            if coord.irank == 0
+                QQ_global[1,:] .= 0.0
+                QQ_global[1,1] = 1.0
+            end
         end
         if coord.irank == coord.nrank - 1
             QQ_global[end,:] .= 0.0
