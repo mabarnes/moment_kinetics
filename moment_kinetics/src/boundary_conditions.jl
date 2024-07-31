@@ -974,7 +974,7 @@ function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,5}, bc, vpe
 end
 
 function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,4}, bc, vperp, vperp_spectral, vperp_advect, diffusion)
-    if bc == "zero" || bc == "zero-no-regularity"
+    if bc == "zero" || bc == "zero-impose-regularity"
         nvperp = vperp.n
         ngrid = vperp.ngrid
         # set zero boundary condition
@@ -984,7 +984,7 @@ function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,4}, bc, vpe
             end
         end
         # set regularity condition d F / d vperp = 0 at vperp = 0
-        if bc == "zero" && (vperp.discretization == "gausslegendre_pseudospectral" || vperp.discretization == "chebyshev_pseudospectral")
+        if bc == "zero-impose-regularity" && (vperp.discretization == "gausslegendre_pseudospectral" || vperp.discretization == "chebyshev_pseudospectral")
             D0 = vperp_spectral.radau.D0
             buffer = @view vperp.scratch[1:ngrid-1]
             @loop_r_z_vpa ir iz ivpa begin
@@ -994,7 +994,7 @@ function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,4}, bc, vpe
                     f[ivpa,1,iz,ir] = -sum(buffer)/D0[1]
                 end
             end
-        elseif bc == "zero-no-regularity"
+        elseif bc == "zero"
             # do nothing
         else
             println("vperp.bc=\"$bc\" not supported by discretization "

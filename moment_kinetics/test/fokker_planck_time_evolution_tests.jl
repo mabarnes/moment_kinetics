@@ -34,7 +34,7 @@ struct expected_data
     f_ion::Array{mk_float, 3} # vpa, vperp, time
 end
 
-const expected_base =
+const expected_zero_impose_regularity =
   expected_data(
    [-3.0, -2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0],
    [0.155051025721682, 0.644948974278318, 1.000000000000000, 1.500000000000000, 2.000000000000000, 2.500000000000000, 3.000000000000000],
@@ -81,7 +81,7 @@ const expected_base =
     0.005877384425022965 0.00466291282312835 0.0028530945920350282 0.0008130106752860425 2.4399432485774198e-5 -9.743480904212476e-5 0.0;
     0.00017108987342944414 7.097261590252536e-5 -7.822316408657793e-5 -0.0001534897546375058 -9.087984332447822e-5 -3.3079379573126077e-5 0.0;
     0.0 0.0 0.0 0.0 0.0 0.0 0.0])
-const expected_no_regularity = 
+const expected_zero = 
 expected_data(
    [-3.0, -2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0],
    [0.155051025721682, 0.644948974278318, 1.000000000000000, 1.500000000000000, 2.000000000000000, 2.500000000000000, 3.000000000000000],
@@ -435,17 +435,17 @@ function runtests()
         # Benchmark data is taken from this run (GaussLegendre)
         @testset "Gauss Legendre base" begin
             run_name = "gausslegendre_pseudospectral"
-            vperp_bc = "zero"
+            vperp_bc = "zero-impose-regularity"
             run_test(test_input_gauss_legendre,
-             expected_base, 1.0e-14, 1.0e-14;
-             vperp_bc="zero")
+             expected_zero_impose_regularity, 1.0e-14, 1.0e-14;
+             vperp_bc=vperp_bc)
         end
         @testset "Gauss Legendre no enforced regularity condition at vperp = 0" begin
             run_name = "gausslegendre_pseudospectral_no_regularity"
-            vperp_bc = "zero-no-regularity"
+            vperp_bc = "zero"
             run_test(test_input_gauss_legendre,
-            expected_no_regularity,
-             1.0e-14, 1.0e-14; vperp_bc="zero-no-regularity")
+            expected_zero,
+             1.0e-14, 1.0e-14; vperp_bc=vperp_bc)
         end
         @testset "Gauss Legendre no (explicitly) enforced boundary conditions" begin
             run_name = "gausslegendre_pseudospectral_none_bc"
