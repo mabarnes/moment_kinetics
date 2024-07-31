@@ -163,10 +163,6 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
 
     begin_r_z_region()
 
-    if ion_dt !== nothing
-        evolve_ppar = true
-    end
-
     # create several (r) dimension dummy arrays for use in taking derivatives
     buffer_r_1 = @view scratch_dummy.buffer_rs_1[:,1]
     buffer_r_2 = @view scratch_dummy.buffer_rs_2[:,1]
@@ -191,6 +187,20 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                                            num_diss_params.electron.moment_dissipation_coefficient,
                                            composition.electron_physics)
 
+    if ion_dt !== nothing
+        evolve_ppar = true
+
+        # Use forward-Euler step (with `ion_dt` as the timestep) as initial guess for
+        # updated electron_ppar
+        electron_energy_equation!(scratch[t_params.n_rk_stages+1].electron_ppar,
+                                  moments.electron.ppar, moments.electron.dens,
+                                  moments.electron.upar, moments.ion.dens,
+                                  moments.ion.upar, moments.ion.ppar,
+                                  moments.neutral.dens, moments.neutral.uz,
+                                  moments.neutral.pz, moments.electron, collisions,
+                                  ion_dt, composition, external_source_settings.electron,
+                                  num_diss_params, z)
+    end
 
     # compute the z-derivative of the input electron parallel heat flux, needed for the electron kinetic equation
     @views derivative_z!(moments.electron.dqpar_dz, moments.electron.qpar, buffer_r_1,
@@ -397,13 +407,21 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
             update_derived_moments_and_derivatives()
 
             if t_params.adaptive && istage == t_params.n_rk_stages
+                if ion_dt === nothing
+                    local_max_dt = Inf
+                else
+                    # Ensure timestep is not too big, so that d(electron_ppar)/dt 'source
+                    # term' is numerically stable.
+                    local_max_dt = 0.5 * ion_dt
+                end
                 electron_adaptive_timestep_update!(scratch, t_params.t[], t_params,
                                                    moments, phi, z_advect, vpa_advect,
                                                    composition, r, z, vperp, vpa,
                                                    vperp_spectral, vpa_spectral,
                                                    external_source_settings,
                                                    num_diss_params;
-                                                   evolve_ppar=evolve_ppar)
+                                                   evolve_ppar=evolve_ppar,
+                                                   local_max_dt=local_max_dt)
                 # Re-do this in case electron_adaptive_timestep_update!() re-arranged the
                 # `scratch` vector
                 new_scratch = scratch[istage+1]
@@ -1446,7 +1464,7 @@ function electron_adaptive_timestep_update!(scratch, t, t_params, moments, phi, 
                                             vpa_advect, composition, r, z, vperp, vpa,
                                             vperp_spectral, vpa_spectral,
                                             external_source_settings, num_diss_params;
-                                            evolve_ppar=false)
+                                            evolve_ppar=false, local_max_dt=Inf)
     #error_norm_method = "Linf"
     error_norm_method = "L2"
 
@@ -1547,7 +1565,8 @@ function electron_adaptive_timestep_update!(scratch, t, t_params, moments, phi, 
 
     adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms, total_points,
                                        current_dt, error_norm_method, "", 0.0,
-                                       composition; electron=true)
+                                       composition; electron=true,
+                                       local_max_dt=local_max_dt)
     if t_params.previous_dt[] == 0.0
         # Timestep failed, so reset  scratch[t_params.n_rk_stages+1] equal to
         # scratch[1] to start the timestep over.

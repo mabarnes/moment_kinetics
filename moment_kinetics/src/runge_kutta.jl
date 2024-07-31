@@ -1001,7 +1001,7 @@ Use the calculated `CFL_limits` and `error_norms` to update the timestep in `t_p
 function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                                             total_points, current_dt, error_norm_method,
                                             success, nl_max_its_fraction, composition;
-                                            electron=false)
+                                            electron=false, local_max_dt::mk_float=Inf)
     # Get global minimum of CFL limits
     CFL_limit = nothing
     this_limit_caused_by = nothing
@@ -1218,8 +1218,9 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                 end
 
                 # Prevent timestep from going above maximum_dt
-                if t_params.dt[] > t_params.maximum_dt
-                    t_params.dt[] = t_params.maximum_dt
+                max_dt = min(t_params.maximum_dt, local_max_dt)
+                if t_params.dt[] > max_dt
+                    t_params.dt[] = max_dt
                     this_limit_caused_by = 4
                 end
 
