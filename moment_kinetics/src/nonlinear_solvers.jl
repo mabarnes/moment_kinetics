@@ -984,7 +984,6 @@ function parallel_delta_x_calc_r_z_vperp_vpa(delta_x::Tuple{AbstractArray{mk_flo
 
     delta_x_ppar, delta_x_pdf = delta_x
     V_ppar, V_pdf = V
-    y_ppar, y_pdf = y
 
     ny = length(y)
 
