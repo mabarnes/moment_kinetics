@@ -282,19 +282,24 @@ function runtests()
     @testset "Braginskii electron IMEX timestepping" verbose=use_verbose begin
         println("Braginskii electron IMEX timestepping tests")
 
-        @testset "Split 3" begin
-            test_input["base_directory"] = test_output_directory
-            run_test(test_input, expected_p, expected_q, expected_vt)
-        end
-        @long @testset "Check other timestep - $type" for
-                type ∈ ("KennedyCarpenterARK437",)
+        if Sys.isapple()
+            @testset_skip "MINPACK is broken on macOS (https://github.com/sglyon/MINPACK.jl/issues/18)" "non-linear solvers" begin
+            end
+        else
+            @testset "Split 3" begin
+                test_input["base_directory"] = test_output_directory
+                run_test(test_input, expected_p, expected_q, expected_vt)
+            end
+            @long @testset "Check other timestep - $type" for
+                    type ∈ ("KennedyCarpenterARK437",)
 
-            timestep_check_input = deepcopy(test_input)
-            timestep_check_input["base_directory"] = test_output_directory
-            timestep_check_input["run_name"] = type
-            timestep_check_input["timestepping"]["type"] = type
-            run_test(timestep_check_input, expected_p, expected_q, expected_vt,
-                     rtol=2.e-4, atol=1.e-10)
+                timestep_check_input = deepcopy(test_input)
+                timestep_check_input["base_directory"] = test_output_directory
+                timestep_check_input["run_name"] = type
+                timestep_check_input["timestepping"]["type"] = type
+                run_test(timestep_check_input, expected_p, expected_q, expected_vt,
+                         rtol=2.e-4, atol=1.e-10)
+            end
         end
     end
 
