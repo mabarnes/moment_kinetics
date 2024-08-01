@@ -12,8 +12,7 @@ using MPI
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.interpolation: interpolate_to_grid_z
-using moment_kinetics.load_data: open_readonly_output_file
-using moment_kinetics.load_data: load_electron_moments_data
+using moment_kinetics.load_data: get_run_info_no_setup, close_run_info, get_variable
 
 # default inputs for tests
 test_input = Dict("n_ion_species" => 1,
@@ -143,17 +142,17 @@ function run_test(test_input, expected_p, expected_q, expected_vt; rtol=1.e-6,
             # Load and analyse output
             #########################
 
-            path = joinpath(realpath(input["base_directory"]), name, name)
+            path = joinpath(realpath(input["base_directory"]), name)
 
-            # open the netcdf file and give it the handle 'fid'
-            fid = open_readonly_output_file(path,"moments")
+            # open the output file
+            run_info = get_run_info_no_setup(path)
 
-            # load fields data
-            parallel_pressure_zrt, parallel_heat_flux_zrt, thermal_speed_zrt =
-            load_electron_moments_data(fid)
+            parallel_pressure_zrt = get_variable(run_info, "electron_parallel_pressure")
+            parallel_heat_flux_zrt = get_variable(run_info, "electron_parallel_heat_flux")
+            thermal_speed_zrt = get_variable(run_info, "electron_thermal_speed")
 
-            close(fid)
-            
+            close_run_info(run_info)
+
             p = parallel_pressure_zrt[:,1,:]
             q = parallel_heat_flux_zrt[:,1,:]
             vt = thermal_speed_zrt[:,1,:]
