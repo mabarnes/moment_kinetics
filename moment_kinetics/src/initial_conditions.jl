@@ -870,12 +870,10 @@ end
 """
 function init_density!(dens, z, r, spec, n_species)
     for is ∈ 1:n_species
-        println("init_option: ", spec[is].z_IC.initialization_option)
         for ir ∈ 1:r.n
             if spec[is].z_IC.initialization_option == "gaussian"
                 # initial condition is an unshifted Gaussian
                 @. dens[:,ir,is] = spec[is].initial_density + exp(-(z.grid/spec[is].z_IC.width)^2)
-                println("ion_dens: ", dens[1,1,is], " init: ", spec[is].initial_density, " sum_factor: ", exp(-(z.grid[1]/spec[is].z_IC.width)^2))
             elseif spec[is].z_IC.initialization_option == "sinusoid"
                 # initial condition is sinusoid in z
                 @. dens[:,ir,is] =
