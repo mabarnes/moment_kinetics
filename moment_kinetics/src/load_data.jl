@@ -3943,7 +3943,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             fid = open_readonly_output_file(run_info.files[1], run_info.ext, iblock=0)
             group = get_group(fid, "dynamic_data")
             result = load_variable(group, variable_name)
-            result = selectdim(result, ndims(result), global_it_start:global_it_end)
+            result = selectdim(result, ndims(result), it)
         elseif nd == 3
             result = allocate_float(run_info.z.n, run_info.r.n, run_info.nt)
             read_distributed_zr_data!(result, variable_name, run_info.files,
