@@ -100,7 +100,7 @@ struct gausslegendre_info{TSparse, TLU} <: weak_discretization_info
     Qmat::Array{mk_float,2}
 end
 
-function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true, dirichlet_bc=true)
+function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true, dirichlet_bc=false)
     lobatto = setup_gausslegendre_pseudospectral_lobatto(coord,collision_operator_dim=collision_operator_dim)
     radau = setup_gausslegendre_pseudospectral_radau(coord,collision_operator_dim=collision_operator_dim)
 
