@@ -13,6 +13,7 @@ using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.reference_parameters: setup_reference_parameters
 using moment_kinetics.moment_kinetics_input: get_default_rhostar
 using moment_kinetics.geo: init_magnetic_geometry, setup_geometry_input
+using moment_kinetics.species_input: get_species_input
 using MPI
 
 """
@@ -65,47 +66,7 @@ end
 """
 """
 function get_composition(scan_input)
-    reference_params = setup_reference_parameters(scan_input)
-    # set composition input
-    # MRH need to get this in way that does not duplicate code
-    # MRH from moment_kinetics_input.jl
-    electron_physics = get(scan_input, "electron_physics", boltzmann_electron_response)
-
-    n_ion_species = get(scan_input, "n_ion_species", 1)
-    n_neutral_species = get(scan_input, "n_neutral_species", 1)
-    if electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
-        n_species = n_ion_species + n_neutral_species
-    else
-        n_species = n_ion_species + n_neutral_species + 1
-    end
-    T_e = get(scan_input, "T_e", 1.0)
-    # set wall temperature T_wall = Tw/Te
-    T_wall = get(scan_input, "T_wall", 1.0)
-    # set initial neutral temperature Tn/Tₑ = 1
-    # set initial nᵢ/Nₑ = 1.0
-    # set phi_wall at z = 0
-    phi_wall = get(scan_input, "phi_wall", 0.0)
-    # if false use true Knudsen cosine for neutral wall bc
-    use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
-    gyrokinetic_ions = get(scan_input, "gyrokinetic_ions", false)
-    # constant to be used to test nonzero Er in wall boundary condition
-    recycling_fraction = get(scan_input, "recycling_fraction", 1.0)
-    # constant to be used to control Ez divergences
-    epsilon_offset = get(scan_input, "epsilon_offset", 0.001)
-    # bool to control if dfni is a function of vpa or vpabar in MMS test
-    use_vpabar_in_mms_dfni = get(scan_input, "use_vpabar_in_mms_dfni", true)
-    if use_vpabar_in_mms_dfni
-        alpha_switch = 1.0
-    else
-        alpha_switch = 0.0
-    end
-    # ratio of the neutral particle mass to the ion particle mass
-    mn_over_mi = 1.0
-    # ratio of the electron particle mass to the ion particle mass
-    me_over_mi = 1.0/1836.0
-    composition = species_composition(n_species, n_ion_species, n_neutral_species,
-        electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall,
-        mn_over_mi, me_over_mi, recycling_fraction, gyrokinetic_ions, allocate_float(n_species))
+    composition = get_species_input(scan_input)
     return composition
 
 end
