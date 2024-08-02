@@ -633,6 +633,13 @@ function get(d::Dict, key, default::Enum)
     end
 end
 
+using TOML
+import TOML.Internals.Printer: to_toml_value
+# Define a method of TOML.to_toml_value that handles Enum
+function to_toml_value(f::TOML.Internals.Printer.MbyFunc, value::Enum)
+    return string(value)
+end
+
 """
 Set the defaults for options in the top level of the input, and check that there are not
 any unexpected options (i.e. options that have no default).
