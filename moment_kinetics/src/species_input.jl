@@ -187,32 +187,32 @@ function get_species_input(toml_input)
         neutral_spec_params_list[isn] = neutral_species_parameters(; spec_input...)
     end
     # construct composition dict
-    println(composition_section)
-    println(ion_spec_params_list)
-    println(neutral_spec_params_list)
-    println(composition_section["n_ion_species"])
+    #println(composition_section)
+    #println(ion_spec_params_list)
+    #println(neutral_spec_params_list)
+    #println(composition_section["n_ion_species"])
     species_dict = Dict("n_species" => nspec_tot, "ion" => ion_spec_params_list, "neutral" => neutral_spec_params_list)
-    println(species_dict)
+    #println(species_dict)
     composition_section = merge(composition_section,species_dict)
-    println(composition_section)
+    #println(composition_section)
     input = Dict(Symbol(k)=>v for (k,v) in composition_section)
-    println(input)
+    #println(input)
     # construct composition struct
     composition = species_composition(; input...)
-    println(composition)
-    println("")
-    for is in 1:composition.n_ion_species
-        println("ion_species_"*string(is))
-        println("mass: ",composition.ion[1].mass)
-        println("Zs: ",composition.ion[1].zeds)
-        println("")
-    end
+    #println(composition)
+    #println("")
+    #for is in 1:composition.n_ion_species
+        #println("ion_species_"*string(is))
+        #println("mass: ",composition.ion[1].mass)
+        #println("Zs: ",composition.ion[1].zeds)
+        #println("")
+    #end
 
-    for isn in 1:composition.n_neutral_species
-        println("neutral_species_"*string(isn))
-        println("mass: ",composition.neutral[1].mass)
-        println("")
-    end
+    #for isn in 1:composition.n_neutral_species
+    #    println("neutral_species_"*string(isn))
+    #    println("mass: ",composition.neutral[1].mass)
+    #    println("")
+    #end
     
     ## checks and errors
     if !(0.0 <= composition.recycling_fraction <= 1.0)
