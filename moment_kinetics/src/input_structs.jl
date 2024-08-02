@@ -8,7 +8,8 @@ export time_info
 export advection_input, advection_input_mutable
 export grid_input, grid_input_mutable
 export initial_condition_input, initial_condition_input_mutable
-export species_parameters, species_parameters_mutable
+export spatial_initial_condition_input, velocity_initial_condition_input
+export ion_species_parameters, neutral_species_parameters, species_parameters_mutable
 export species_composition
 export drive_input, drive_input_mutable
 export collisions_input, krook_collisions_input, fkpl_collisions_input
@@ -237,7 +238,26 @@ end
 
 """
 """
-struct initial_condition_input
+Base.@kwdef struct spatial_initial_condition_input
+    # initialization inputs for one coordinate of a separable distribution function
+    initialization_option::String
+    # inputs for "gaussian" initial condition
+    width::mk_float
+    # inputs for "sinusoid" initial condition
+    wavenumber::mk_int
+    density_amplitude::mk_float
+    density_phase::mk_float
+    upar_amplitude::mk_float
+    upar_phase::mk_float
+    temperature_amplitude::mk_float
+    temperature_phase::mk_float
+    # inputs for "monomial" initial condition
+    monomial_degree::mk_int
+end
+
+"""
+"""
+Base.@kwdef struct velocity_initial_condition_input
     # initialization inputs for one coordinate of a separable distribution function
     initialization_option::String
     # inputs for "gaussian" initial condition
@@ -278,25 +298,49 @@ end
 
 """
 """
-struct species_parameters
-    # type is the type of species; options are 'ion' or 'neutral'
+Base.@kwdef struct ion_species_parameters
+    # type is the type of species
     type::String
+    # mass/reference mass
+    mass::mk_float
+    # charge number, absolute w.r.t. proton charge
+    zeds::mk_float
     # array containing the initial line-averaged temperature for this species
     initial_temperature::mk_float
     # array containing the initial line-averaged density for this species
     initial_density::mk_float
     # struct containing the initial condition info in z for this species
-    z_IC::initial_condition_input
+    z_IC::spatial_initial_condition_input
     # struct containing the initial condition info in r for this species
-    r_IC::initial_condition_input
+    r_IC::spatial_initial_condition_input
     # struct containing the initial condition info in vpa for this species
-    vpa_IC::initial_condition_input
+    vpa_IC::velocity_initial_condition_input
 end
 
 """
 """
-mutable struct species_composition
+Base.@kwdef struct neutral_species_parameters
+    # type is the type of species
+    type::String
+    # mass/reference mass
+    mass::mk_float
+    # array containing the initial line-averaged temperature for this species
+    initial_temperature::mk_float
+    # array containing the initial line-averaged density for this species
+    initial_density::mk_float
+    # struct containing the initial condition info in z for this species
+    z_IC::spatial_initial_condition_input
+    # struct containing the initial condition info in r for this species
+    r_IC::spatial_initial_condition_input
+    # struct containing the initial condition info in vpa for this species
+    vpa_IC::velocity_initial_condition_input
+end
+
+"""
+"""
+Base.@kwdef struct species_composition
     # n_species = total number of evolved species (including ions, neutrals and electrons)
+    # a diagnostic, not an input parameter
     n_species::mk_int
     # n_ion_species is the number of evolved ion species
     n_ion_species::mk_int
@@ -317,7 +361,6 @@ mutable struct species_composition
     T_wall::mk_float
     # wall potential used if electron_physics=boltzmann_electron_response_with_simple_sheath
     phi_wall::mk_float
-    # constant for testing nonzero Er
     # ratio of the neutral particle mass to the ion mass
     mn_over_mi::mk_float
     # ratio of the electron particle mass to the ion mass
@@ -329,8 +372,10 @@ mutable struct species_composition
     # gyrokinetic_ions = true -> use gyroaveraged fields at fixed guiding centre and moments of the pdf computed at fixed r
     # gyrokinetic_ions = false -> use drift kinetic approximation
     gyrokinetic_ions::Bool
-    # scratch buffer whose size is n_species
-    scratch::Vector{mk_float}
+    # array of structs of parameters for each ion species
+    ion::Vector{ion_species_parameters}
+    # array of structs of parameters for each neutral species
+    neutral::Vector{neutral_species_parameters}
 end
 
 """
