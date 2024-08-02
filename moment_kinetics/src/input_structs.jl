@@ -154,8 +154,9 @@ end
 
 """
 """
-@enum electron_physics_type boltzmann_electron_response boltzmann_electron_response_with_simple_sheath
-export electron_physics_type, boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath
+const boltzmann_electron_response = "boltzmann_electron_response"
+const boltzmann_electron_response_with_simple_sheath = "boltzmann_electron_response_with_simple_sheath"
+export boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath
 
 """
 """
@@ -351,7 +352,7 @@ Base.@kwdef struct species_composition
     # * if electron_physics=boltzmann_electron_response_with_simple_sheath, the electron
     #   density is fixed to be Nₑ*(eϕ/T_e) and N_e is calculated using a current
     #   condition at the wall
-    electron_physics::electron_physics_type
+    electron_physics::String
     # if false -- wall bc uses true Knudsen cosine to specify neutral pdf leaving the wall
     # if true -- use a simpler pdf that is easier to integrate
     use_test_neutral_wall_pdf::Bool
