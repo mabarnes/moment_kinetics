@@ -18,6 +18,7 @@ export pp_input
 export geometry_input
 export set_defaults_and_check_top_level!, set_defaults_and_check_section!,
        Dict_to_NamedTuple
+export merge_dict_with_kwargs!
 
 using ..communication
 using ..type_definitions: mk_float, mk_int
@@ -777,6 +778,29 @@ Useful as NamedTuple is immutable, so option values cannot be accidentally chang
 """
 function Dict_to_NamedTuple(d)
     return NamedTuple(Symbol(k)=>v for (k,v) ∈ d)
+end
+
+"""
+Dict merge function for named keyword arguments 
+for case when input Dict is a mixed Dict of Dicts
+and non-Dict float/int/string entries, and the 
+keyword arguments are also a mix of Dicts and non-Dicts
+"""
+
+function merge_dict_with_kwargs!(dict_base; args...)
+    #println("before merge: ",dict_base)
+    for (k,v) in args
+        println(k, " ", v)
+        if String(k) in keys(dict_base)
+            if isa(v,AbstractDict)
+                v = merge(dict_base[String(k)],v)
+            end            
+        end
+        dict_mod = Dict(String(k) => v)
+        dict_base = merge(dict_base, dict_mod)
+    end
+    #println("after merge: ",dict_base)
+    return nothing
 end
 
 end

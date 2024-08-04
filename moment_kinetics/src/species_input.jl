@@ -44,7 +44,7 @@ function get_species_input(toml_input)
         # gyrokinetic_ions = True -> use gyroaveraged fields at fixed guiding centre and moments of the pdf computed at fixed r
         # gyrokinetic_ions = False -> use drift kinetic approximation
         gyrokinetic_ions = false)
-    
+
     nspec_ion = composition_section["n_ion_species"]
     nspec_neutral = composition_section["n_neutral_species"]
     nspec_tot = nspec_ion + nspec_neutral
@@ -64,7 +64,7 @@ function get_species_input(toml_input)
             # initial temperature
             initial_temperature = 1.0)
         
-        z_IC_section = set_defaults_and_check_section!(toml_input, "ion_z_IC_species_"*string(is),
+        z_IC_section = set_defaults_and_check_section!(toml_input, "z_IC_ion_species_"*string(is),
             # [ion_z_IC_species_1], [ion_z_IC_species_2], etc 
             initialization_option = "gaussian",
             width = 0.125,
@@ -79,7 +79,7 @@ function get_species_input(toml_input)
         z_IC_input = Dict(Symbol(k)=>v for (k,v) in z_IC_section)
         z_IC = spatial_initial_condition_input(; z_IC_input...)
         
-        r_IC_section = set_defaults_and_check_section!(toml_input, "ion_r_IC_species_"*string(is),
+        r_IC_section = set_defaults_and_check_section!(toml_input, "r_IC_ion_species_"*string(is),
             # [ion_r_IC_species_1], [ion_r_IC_species_2], etc 
             initialization_option = "gaussian",
             width = 0.125,
@@ -94,7 +94,7 @@ function get_species_input(toml_input)
         r_IC_input= Dict(Symbol(k)=>v for (k,v) in r_IC_section)
         r_IC = spatial_initial_condition_input(; r_IC_input...)
         
-        vpa_IC_section = set_defaults_and_check_section!(toml_input, "ion_vpa_IC_species_"*string(is),
+        vpa_IC_section = set_defaults_and_check_section!(toml_input, "vpa_IC_ion_species_"*string(is),
             # [ion_vpa_IC_species_1], [ion_vpa_IC_species_2], etc 
             initialization_option = "gaussian",
             width = 1.0,
@@ -130,7 +130,7 @@ function get_species_input(toml_input)
             # initial temperature
             initial_temperature = 1.0)
         
-        z_IC_section = set_defaults_and_check_section!(toml_input, "neutral_z_IC_species_"*string(isn),
+        z_IC_section = set_defaults_and_check_section!(toml_input, "z_IC_neutral_species_"*string(isn),
             # [neutral_z_IC_species_1], [neutral_z_IC_species_2], etc 
             initialization_option = "gaussian",
             width = 0.125,
@@ -145,7 +145,7 @@ function get_species_input(toml_input)
         z_IC_input = Dict(Symbol(k)=>v for (k,v) in z_IC_section)
         z_IC = spatial_initial_condition_input(; z_IC_input...)
         
-        r_IC_section = set_defaults_and_check_section!(toml_input, "neutral_r_IC_species_"*string(isn),
+        r_IC_section = set_defaults_and_check_section!(toml_input, "r_IC_neutral_species_"*string(isn),
             # [neutral_r_IC_species_1], [neutral_r_IC_species_2], etc 
             initialization_option = "gaussian",
             width = 0.125,
@@ -160,7 +160,7 @@ function get_species_input(toml_input)
         r_IC_input= Dict(Symbol(k)=>v for (k,v) in r_IC_section)
         r_IC = spatial_initial_condition_input(; r_IC_input...)
         
-        vpa_IC_section = set_defaults_and_check_section!(toml_input, "neutral_vpa_IC_species_"*string(isn),
+        vpa_IC_section = set_defaults_and_check_section!(toml_input, "vz_IC_neutral_species_"*string(isn),
             # [neutral_vpa_IC_species_1], [neutral_vpa_IC_species_2], etc 
             initialization_option = "gaussian",
             width = 1.0,

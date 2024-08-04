@@ -5,7 +5,7 @@ include("setup.jl")
 using Base.Filesystem: tempname
 
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.input_structs: grid_input, advection_input
+using moment_kinetics.input_structs: grid_input, advection_input, merge_dict_with_kwargs!
 using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
 using moment_kinetics.load_data: get_run_info_no_setup, close_run_info,
                                  postproc_load_variable
@@ -49,7 +49,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
 
     # Update default inputs with values to be changed
     input = merge(test_input, modified_inputs)
-
+    merge_dict_with_kwargs!(input; args...)
     input["run_name"] = name
 
     # Suppress console output while running
