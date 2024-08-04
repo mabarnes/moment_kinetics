@@ -764,7 +764,11 @@ function set_defaults_and_check_section!(options::AbstractDict, section_name;
     for (key_sym, value) ∈ kwargs
         key = String(key_sym)
         if !(key ∈ explicit_keys)
-            section[key] = value
+            # merge this entry to section Dict 
+            # (creating a temporary Dict seems necessary in general,
+            # rather than just referencing the unexisting key in the section Dict)
+            section = merge(section, Dict{String,Any}(key => value))
+            #section[key] = value
         end
     end
 
