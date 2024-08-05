@@ -17,7 +17,7 @@ test_input_full_f = Dict(
      "evolve_moments_parallel_flow" => false,
      "evolve_moments_parallel_pressure" => false,
      "ion_species_1" => Dict{String,Any}("initial_density" => 0.5,      
-                                         "initial_temperature" => 1.0)
+                                         "initial_temperature" => 1.0),
      "z_IC_ion_species_1" => Dict{String,Any}("density_amplitude" => 0.001,
                                               "density_phase" => 0.0,
                                               "initialization_option1" => "sinusoid",
