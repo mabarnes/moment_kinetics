@@ -20,7 +20,7 @@ test_input_full_f = Dict(
                                          "initial_temperature" => 1.0),
      "z_IC_ion_species_1" => Dict{String,Any}("density_amplitude" => 0.001,
                                               "density_phase" => 0.0,
-                                              "initialization_option1" => "sinusoid",
+                                              "initialization_option" => "sinusoid",
                                               "temperature_amplitude" => 0.0,
                                               "temperature_phase" => 0.0,
                                               "upar_amplitude" => 0.0,
