@@ -13,7 +13,7 @@ test_input = Dict(
     "evolve_moments_parallel_pressure" => false,
     "evolve_moments_conservation" => false,
     "ion_species_1" => Dict("initial_density" => 1.0,
-                            "initial_temperature1" => 1.0),
+                            "initial_temperature" => 1.0),
     "z_IC_ion_species_1" => Dict("initialization_option" => "gaussian",
                                  "density_amplitude" => 0.001,
                                  "density_phase" => 0.0,
