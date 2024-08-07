@@ -1,29 +1,7 @@
-n_ion_species = 1
-n_neutral_species = 1
-boltzmann_electron_response = true
 evolve_moments_density = true
 evolve_moments_parallel_flow = true
 evolve_moments_parallel_pressure = true
 evolve_moments_conservation = true
-T_e = 1.0
-initial_density1 = 0.5
-initial_temperature1 = 1.0
-initial_density2 = 0.5
-initial_temperature2 = 1.0
-z_IC_option1 = "sinusoid"
-z_IC_density_amplitude1 = 0.001
-z_IC_density_phase1 = 0.0
-z_IC_upar_amplitude1 = 0.0
-z_IC_upar_phase1 = 0.0
-z_IC_temperature_amplitude1 = 0.0
-z_IC_temperature_phase1 = 0.0
-z_IC_option2 = "sinusoid"
-z_IC_density_amplitude2 = 0.001
-z_IC_density_phase2 = 0.0
-z_IC_upar_amplitude2 = 0.0
-z_IC_upar_phase2 = 0.0
-z_IC_temperature_amplitude2 = 0.0
-z_IC_temperature_phase2 = 0.0
 charge_exchange_frequency = 0.62831853071
 ionization_frequency = 0.0
 r_ngrid = 1
@@ -37,6 +15,38 @@ vpa_nelement = 8
 vpa_L = 8.0
 vpa_bc = "periodic"
 vpa_discretization = "chebyshev_pseudospectral"
+
+[composition]
+n_ion_species = 1
+n_neutral_species = 1
+electron_physics = "boltzmann_electron_response"
+T_e = 1.0
+
+[ion_species_1]
+initial_density = 0.5
+initial_temperature = 1.0
+
+[neutral_species_1]
+initial_density = 0.5
+initial_temperature = 1.0
+
+[z_IC_ion_species_1]
+initialization_option = "sinusoid"
+density_amplitude = 0.001
+density_phase = 0.0
+upar_amplitude = 0.0
+upar_phase = 0.0
+temperature_amplitude = 0.0
+temperature_phase = 0.0
+
+[z_IC_neutral_species_1]
+initialization_option = "sinusoid"
+density_amplitude = 0.001
+density_phase = 0.0
+upar_amplitude = 0.0
+upar_phase = 0.0
+temperature_amplitude = 0.0
+temperature_phase = 0.0
 
 [timestepping]
 nstep = 1500
