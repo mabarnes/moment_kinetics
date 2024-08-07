@@ -90,6 +90,7 @@ function setup_fkpl_collisions_input(toml_input::Dict, reference_params)
        nuii = -1.0,
        frequency_option = "reference_parameters",
        self_collisions = true,
+       use_conserving_corrections = true,
        slowing_down_test = false,
        sd_density = 1.0,
        sd_temp = 0.01,
@@ -257,6 +258,7 @@ function explicit_fp_collisions_weak_form_Maxwellian_cross_species!(pdf_out,pdf_
     @boundscheck r.n == size(dSdt,2) || throw(BoundsError(dSdt))
     @boundscheck n_ion_species == size(dSdt,3) || throw(BoundsError(dSdt))
     
+    use_conserving_corrections = collisions.fkpl.use_conserving_corrections
     fkin = collisions.fkpl
     # masses charge numbers and collision frequencies
     mref = 1.0 # generalise if multiple ions evolved
@@ -282,8 +284,10 @@ function explicit_fp_collisions_weak_form_Maxwellian_cross_species!(pdf_out,pdf_
         # enforce the boundary conditions on CC before it is used for timestepping
         enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
         # make sure that the cross-species terms conserve density
-        density_conserving_correction!(fkpl_arrays.CC, pdf_in[:,:,iz,ir,is], vpa, vperp,
+        if use_conserving_corrections
+            density_conserving_correction!(fkpl_arrays.CC, pdf_in[:,:,iz,ir,is], vpa, vperp,
                                 fkpl_arrays.S_dummy)
+        end
         # advance this part of s,r,z with the resulting sum_s' C[Fs,Fs']
         begin_anyv_vperp_vpa_region()
         CC = fkpl_arrays.CC
@@ -326,6 +330,7 @@ function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,dSdt,compos
     nuref = collisions.fkpl.nuii # generalise!
     Zi = collisions.fkpl.Zi # generalise!
     nussp = nuref*(Zi^4) # include charge number factor for self collisions
+    use_conserving_corrections = collisions.fkpl.use_conserving_corrections
     # N.B. parallelisation using special 'anyv' region
     begin_s_r_z_anyv_region()
     @loop_s_r_z is ir iz begin
@@ -336,9 +341,10 @@ function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,dSdt,compos
         # enforce the boundary conditions on CC before it is used for timestepping
         enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
         # make ad-hoc conserving corrections
-        conserving_corrections!(fkpl_arrays.CC, pdf_in[:,:,iz,ir,is], vpa, vperp,
+        if use_conserving_corrections
+            conserving_corrections!(fkpl_arrays.CC, pdf_in[:,:,iz,ir,is], vpa, vperp,
                                 fkpl_arrays.S_dummy)
-        
+        end
         # advance this part of s,r,z with the resulting C[Fs,Fs]
         begin_anyv_vperp_vpa_region()
         CC = fkpl_arrays.CC

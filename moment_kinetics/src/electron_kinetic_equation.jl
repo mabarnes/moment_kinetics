@@ -605,7 +605,7 @@ used for the collision operator (e.g. 'anyzv'?) to allow the outer r-loop to be
 parallelised.
 """
 function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, moments,
-                                    fields, collisions, composition,
+                                    fields, collisions, composition, geometry,
                                     external_source_settings, num_diss_params, r, z,
                                     vperp, vpa, r_spectral, z_spectral, vperp_spectral,
                                     vpa_spectral, z_advect, vpa_advect, gyroavs,
@@ -774,7 +774,7 @@ function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, mo
 
     # Solve for EM fields now that electrons are updated.
     update_phi!(fields, fvec_out, vperp, z, r, composition, collisions, moments,
-                z_spectral, r_spectral, scratch_dummy, gyroavs)
+                geometry, z_spectral, r_spectral, scratch_dummy, gyroavs)
 
     if !newton_success
         success = "kinetic-electrons"

@@ -255,7 +255,7 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         dfnn_func = manufactured_solns_list.dfnn_func
         densn_func = manufactured_solns_list.densn_func
         
-        manufactured_E_fields = manufactured_electric_fields(Lr_in,z.L,r_bc,z_bc,composition,r.n,manufactured_solns_input,species)
+        manufactured_E_fields = manufactured_electric_fields(Lr_in,z.L,r_bc,z_bc,composition,geo_in,r.n,manufactured_solns_input,species)
         Er_func = manufactured_E_fields.Er_func
         Ez_func = manufactured_E_fields.Ez_func
         phi_func = manufactured_E_fields.phi_func

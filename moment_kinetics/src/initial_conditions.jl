@@ -762,10 +762,11 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                                scratch[1], pdf,
                                                scratch_electron[t_params.electron.n_rk_stages+1],
                                                moments, fields, collisions, composition,
-                                               external_source_settings, num_diss_params,
-                                               r, z, vperp, vpa, r_spectral, z_spectral,
-                                               vperp_spectral, vpa_spectral, z_advect,
-                                               vpa_advect, gyroavs, scratch_dummy, 0.0,
+                                               geometry, external_source_settings,
+                                               num_diss_params, r, z, vperp, vpa,
+                                               r_spectral, z_spectral, vperp_spectral,
+                                               vpa_spectral, z_advect, vpa_advect,
+                                               gyroavs, scratch_dummy, 0.0,
                                                initialisation_nl_solver_params)
             else
                 success =

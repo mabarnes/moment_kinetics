@@ -345,7 +345,6 @@ mutable struct species_composition
     # wall potential used if electron_physics=boltzmann_electron_response_with_simple_sheath
     phi_wall::mk_float
     # constant for testing nonzero Er
-    Er_constant::mk_float
     # ratio of the neutral particle mass to the ion mass
     mn_over_mi::mk_float
     # ratio of the electron particle mass to the ion mass
@@ -421,6 +420,8 @@ Base.@kwdef struct fkpl_collisions_input
     nuii::mk_float
     # option to determine if self collisions are used (for physics test)
     self_collisions::Bool
+    # option to determine if ad-hoc moment_kinetics-style conserving corrections are used
+    use_conserving_corrections::Bool
     # option to determine if cross-collisions against fixed Maxwellians are used
     slowing_down_test::Bool
     # Setting to switch between different options for Fokker-Planck collision frequency input
@@ -480,6 +481,14 @@ Base.@kwdef struct geometry_input
     pitch::mk_float = 1.0
     # DeltaB ( = (Bzed(z=L/2) - Bzed(0))/Bref if geometry_option == "1D-mirror")
     DeltaB::mk_float = 0.0
+    # constant for testing nonzero Er when nr = 1
+    Er_constant::mk_float
+    # constant for testing nonzero Ez when nz = 1
+    Ez_constant::mk_float
+    # constant for testing nonzero dBdz when nz = 1
+    dBdz_constant::mk_float
+    # constant for testing nonzero dBdr when nr = 1
+    dBdr_constant::mk_float
 end
 
 @enum binary_format_type hdf5 netcdf
@@ -611,6 +620,8 @@ struct pp_input
 	animate_parallel_flow_vs_r_z::Bool
 	# if plot_parallel_pressure_vs_r0_z = true  plot last timestep parallel_pressure[z,ir0]
 	plot_parallel_pressure_vs_r0_z::Bool
+	# if plot_perpendicular_pressure_vs_r0_z = true  plot last timestep perpendicular_pressure[z,ir0]
+	plot_perpendicular_pressure_vs_r0_z::Bool
 	# if plot_wall_parallel_pressure_vs_r = true  plot last timestep parallel_pressure[z_wall,r]
 	plot_wall_parallel_pressure_vs_r::Bool
     # if plot_parallel_pressure_vs_r_z = true plot parallel_pressure vs r z at last timestep 

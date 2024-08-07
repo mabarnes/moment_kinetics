@@ -131,6 +131,70 @@ function second_derivative!(d2f, f, coord, spectral; handle_periodic=true)
     return nothing
 end
 
+function laplacian_derivative!(d2f, f, coord, spectral; handle_periodic=true)
+    # computes (1/coord) d / coord ( coord d f / d(coord)) for vperp coordinate
+    # For spectral element methods, calculate second derivative by applying first
+    # derivative twice, with special treatment for element boundaries
+
+    # First derivative
+    elementwise_derivative!(coord, f, spectral)
+    derivative_elements_to_full_grid!(coord.scratch3, coord.scratch_2d, coord)
+    if coord.name == "vperp"
+        # include the Jacobian
+        @. coord.scratch3 *= coord.grid
+    end
+    # MPI reconcile code here if used with z or r coords
+
+    # Save elementwise first derivative result
+    coord.scratch2_2d .= coord.scratch_2d
+
+    # Second derivative for element interiors
+    elementwise_derivative!(coord, coord.scratch3, spectral)
+    derivative_elements_to_full_grid!(d2f, coord.scratch_2d, coord)
+    if coord.name == "vperp"
+        # include the Jacobian
+        @. d2f /= coord.grid
+    end
+    # MPI reconcile code here if used with z or r coords
+
+    # Add contribution to penalise discontinuous first derivatives at element
+    # boundaries. For smooth functions this would do nothing so should not affect
+    # convergence of the second derivative. Aims to stabilise numerical instability when
+    # spike develops at an element boundary. The coefficient is an arbitrary choice, it
+    # should probably be large enough for stability but as small as possible.
+    #
+    # Arbitrary numerical coefficient
+    C = 1.0
+    function penalise_discontinuous_first_derivative!(d2f, imin, imax, df)
+        # Left element boundary
+        d2f[imin] += C * df[1]
+
+        # Right element boundary
+        d2f[imax] -= C * df[end]
+
+        return nothing
+    end
+    @views penalise_discontinuous_first_derivative!(d2f, 1, coord.imax[1],
+                                                    coord.scratch2_2d[:,1])
+    for ielement ∈ 2:coord.nelement_local
+        @views penalise_discontinuous_first_derivative!(d2f, coord.imin[ielement]-1,
+                                                        coord.imax[ielement],
+                                                        coord.scratch2_2d[:,ielement])
+    end
+
+    if coord.bc ∈ ("zero", "both_zero", "zero-no-regularity")
+        # For stability don't contribute to evolution at boundaries, in case these
+        # points are not set by a boundary condition.
+        # Full grid may be across processes and bc only applied to extreme ends of the
+        # domain.
+        if coord.irank == coord.nrank - 1
+            d2f[end] = 0.0
+        end
+    else
+        error("Unsupported bc '$(coord.bc)'")
+    end
+    return nothing
+end
 """
     mass_matrix_solve!(f, b, spectral::weak_discretization_info)
 
@@ -176,9 +240,11 @@ function laplacian_derivative!(d2f, f, coord, spectral::weak_discretization_info
     # for all other coord.name, do exactly the same as second_derivative! above.
     mul!(coord.scratch3, spectral.L_matrix, f)
 
-    if handle_periodic && coord.bc == "periodic"
+    if coord.bc == "periodic" && coord.name == "vperp"
+        error("laplacian_derivative!() cannot handle periodic boundaries for vperp")
+    elseif coord.bc == "periodic"
         if coord.nrank > 1
-            error("second_derivative!() cannot handle periodic boundaries for a "
+            error("laplacian_derivative!() cannot handle periodic boundaries for a "
                   * "distributed coordinate")
         end
 

@@ -102,6 +102,7 @@ const plot_wall_density_vs_r = true # plot last timestep density[z_wall,r]
 const plot_density_vs_r_z = true
 const animate_density_vs_r_z = true
 const plot_parallel_flow_vs_r0_z = true # plot last timestep parallel_flow[z,ir0]
+const plot_perpendicular_flow_vs_r0_z = true # plot last timestep perpendicular_flow[z,ir0]
 const plot_wall_parallel_flow_vs_r = true # plot last timestep parallel_flow[z_wall,r]
 const plot_parallel_flow_vs_r_z = true
 const animate_parallel_flow_vs_r_z = true
@@ -171,7 +172,8 @@ pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t, animate_ph
     animate_Er_vs_r_z, animate_Ez_vs_r_z, animate_phi_vs_r_z, plot_phi_vs_r0_z,
     plot_Ez_vs_r0_z, plot_wall_Ez_vs_r, plot_Er_vs_r0_z, plot_wall_Er_vs_r,
     plot_density_vs_r0_z, plot_wall_density_vs_r, plot_density_vs_r_z,
-    animate_density_vs_r_z, plot_parallel_flow_vs_r0_z, plot_wall_parallel_flow_vs_r,
+    animate_density_vs_r_z, plot_parallel_flow_vs_r0_z, plot_perpendicular_flow_vs_r0_z, 
+    plot_wall_parallel_flow_vs_r,
     plot_parallel_flow_vs_r_z, animate_parallel_flow_vs_r_z,
     plot_parallel_pressure_vs_r0_z, plot_wall_parallel_pressure_vs_r,
     plot_parallel_pressure_vs_r_z, animate_parallel_pressure_vs_r_z,

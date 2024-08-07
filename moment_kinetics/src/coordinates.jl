@@ -258,8 +258,7 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
     elseif input.discretization == "gausslegendre_pseudospectral"
         # create arrays needed for explicit GaussLegendre pseudospectral treatment in this
         # coordinate and create the matrices for differentiation
-        spectral = setup_gausslegendre_pseudospectral(coord, collision_operator_dim=collision_operator_dim,
-                                                      dirichlet_bc=occursin("zero", coord.bc))
+        spectral = setup_gausslegendre_pseudospectral(coord, collision_operator_dim=collision_operator_dim)
         # obtain the local derivatives of the uniform grid with respect to the used grid
         derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
     else

@@ -43,6 +43,8 @@ using IfElse
     # does not appear in a particular geometric coefficient, because 
     # that coefficient is a constant. 
     struct geometric_coefficients_sym{}
+        Er_constant::mk_float
+        Ez_constant::mk_float
         rhostar::mk_float
         Bzed::Union{mk_float,Num}
         Bzeta::Union{mk_float,Num}
@@ -62,6 +64,8 @@ using IfElse
         option = geometry_input_data.option
         rhostar = geometry_input_data.rhostar
         pitch = geometry_input_data.pitch
+        Er_constant = geometry_input_data.Er_constant
+        Ez_constant = geometry_input_data.Ez_constant
         if option == "constant-helical" || option == "default"
             bzed = pitch
             bzeta = sqrt(1 - bzed^2)
@@ -90,10 +94,20 @@ using IfElse
             end
             dBdz = expand_derivatives(Dz(Bmag))
             jacobian = 1.0
+        elseif option == "0D-Spitzer-test"
+            Bmag = 1.0
+            dBdz = geometry_input_data.dBdz_constant
+            dBdr = geometry_input_data.dBdr_constant
+            bzed = pitch
+            bzeta = sqrt(1 - bzed^2)
+            Bzed = Bmag*bzed
+            Bzeta = Bmag*bzeta
+            jacobian = 1.0
         else
             input_option_error("$option", option)
         end
-        geo_sym = geometric_coefficients_sym(rhostar,Bzed,Bzeta,Bmag,bzed,bzeta,dBdz,dBdr,jacobian)
+        geo_sym = geometric_coefficients_sym(Er_constant,Ez_constant,
+          rhostar,Bzed,Bzeta,Bmag,bzed,bzeta,dBdz,dBdr,jacobian)
         return geo_sym
     end
 
@@ -272,7 +286,7 @@ using IfElse
             upari = 0.0
         elseif z_bc == "wall"
             densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
-            Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr,manufactured_solns_input,species)
+            Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,geometry,nr,manufactured_solns_input,species)
             Bzeta = geometry.Bzeta
             Bmag = geometry.Bmag
             rhostar = geometry.rhostar
@@ -357,7 +371,7 @@ using IfElse
 
         if manufactured_solns_input.type == "default"
             # calculate the electric fields and the potential
-            Er, Ez, phi = electric_fields(Lr, Lz, r_bc, z_bc, composition, nr,
+            Er, Ez, phi = electric_fields(Lr, Lz, r_bc, z_bc, composition, geometry, nr,
                                           manufactured_solns_input, species)
 
             # get geometric/composition data
@@ -402,7 +416,7 @@ using IfElse
         return dfni
     end
 
-    function electric_fields(Lr, Lz, r_bc, z_bc, composition, nr,
+    function electric_fields(Lr, Lz, r_bc, z_bc, composition, geometry, nr,
                              manufactured_solns_input, species)
        
         # define derivative operators
@@ -412,7 +426,7 @@ using IfElse
         # get N_e factor for boltzmann response
         if composition.electron_physics == boltzmann_electron_response_with_simple_sheath && nr == 1 
             # so 1D MMS test with 3V neutrals where ion current can be calculated prior to knowing Er
-            jpari_into_LHS_wall = jpari_into_LHS_wall_sym(Lr, Lz, r_bc, z_bc, composition,
+            jpari_into_LHS_wall = jpari_into_LHS_wall_sym(Lr, Lz, r_bc, z_bc,
                                                           manufactured_solns_input)
             N_e = -2.0*sqrt(pi*composition.me_over_mi)*exp(-composition.phi_wall/composition.T_e)*jpari_into_LHS_wall
         elseif composition.electron_physics == boltzmann_electron_response_with_simple_sheath && nr > 1 
@@ -437,8 +451,8 @@ using IfElse
         # calculate the electric fields
         dense = densi # get the electron density via quasineutrality with Zi = 1
         phi = composition.T_e*log(dense/N_e) # use the adiabatic response of electrons for me/mi -> 0
-        Er = -Dr(phi)*rfac + composition.Er_constant
-        Ez = -Dz(phi)
+        Er = -Dr(phi)*rfac + geometry.Er_constant
+        Ez = -Dz(phi)      + geometry.Ez_constant
         
         Er_expanded = expand_derivatives(Er)
         Ez_expanded = expand_derivatives(Ez)
@@ -500,11 +514,13 @@ using IfElse
         return manufactured_solns_list
     end 
     
-    function manufactured_electric_fields(Lr, Lz, r_bc, z_bc, composition, nr,
+    function manufactured_electric_fields(Lr, Lz, r_bc, z_bc, composition, geometry_input_data::geometry_input, nr,
                                           manufactured_solns_input, species)
         
+        # calculate the geometry symbolically
+        geometry = geometry_sym(geometry_input_data,Lz,Lr,nr)
         # calculate the electric fields and the potential
-        Er, Ez, phi = electric_fields(Lr, Lz, r_bc, z_bc, composition, nr,
+        Er, Ez, phi = electric_fields(Lr, Lz, r_bc, z_bc, composition, geometry, nr,
                                       manufactured_solns_input, species)
         
         Er_func = build_function(Er, z, r, t, expression=Val{false})
@@ -603,7 +619,7 @@ using IfElse
         
         # calculate the electric fields and the potential
         Er, Ez, phi = electric_fields(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc,
-                                      composition, r_coord.n, manufactured_solns_input,
+                                      composition, geometry, r_coord.n, manufactured_solns_input,
                                       ion_species)
 
         # the adiabatic invariant (for compactness)

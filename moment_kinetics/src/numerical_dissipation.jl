@@ -12,7 +12,7 @@ export setup_numerical_dissipation, vpa_boundary_buffer_decay!,
 using Base.Iterators: flatten
 
 using ..looping
-using ..calculus: derivative!, second_derivative!
+using ..calculus: derivative!, second_derivative!, laplacian_derivative!
 using ..derivatives: derivative_r!, derivative_z!, second_derivative_r!,
                      second_derivative_z!
 using ..type_definitions: mk_float
@@ -369,7 +369,7 @@ function vperp_dissipation!(f_out, f_in, vperp, spectral::T_spectral, dt,
     end
     
     @loop_s_r_z_vpa is ir iz ivpa begin
-        @views second_derivative!(vperp.scratch, f_in[ivpa,:,iz,ir,is], vperp, spectral)
+        @views laplacian_derivative!(vperp.scratch, f_in[ivpa,:,iz,ir,is], vperp, spectral)
         @views @. f_out[ivpa,:,iz,ir,is] += dt * diffusion_coefficient * vperp.scratch
     end
 

@@ -104,7 +104,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     # if false use true Knudsen cosine for neutral wall bc
     composition.use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
     # constant to be used to test nonzero Er in wall boundary condition
-    composition.Er_constant = get(scan_input, "Er_constant", 0.0)
+    #composition.Er_constant = get(scan_input, "Er_constant", 0.0)
     # The ion flux reaching the wall that is recycled as neutrals is reduced by
     # `recycling_fraction` to account for ions absorbed by the wall.
     composition.recycling_fraction = get(scan_input, "recycling_fraction", 1.0)
@@ -654,7 +654,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
             species.ion[is].vpa_IC.upar_amplitude, species.ion[is].vpa_IC.upar_phase,
             species.ion[is].vpa_IC.temperature_amplitude,
             species.ion[is].vpa_IC.temperature_phase, species.ion[is].vpa_IC.monomial_degree,
-            get(scan_input, "vpa_IC_v0_$is", 0.5*sqrt(vperp.L^2 + (0.5*vpa.L)^2)),
+            get(scan_input, "vpa_IC_v0$is", 0.5*sqrt(vperp.L^2 + (0.5*vpa.L)^2)),
             get(scan_input, "vpa_IC_vth0$is", 0.1*sqrt(vperp.L^2 + (0.5*vpa.L)^2)),
             get(scan_input, "vpa_IC_vpa0$is", 0.25*0.5*abs(vpa.L)),
             get(scan_input, "vpa_IC_vperp0$is", 0.5*abs(vperp.L)))
@@ -1152,8 +1152,6 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     T_wall = 1.0
     # wall potential at z = 0
     phi_wall = 0.0
-    # constant to test nonzero Er
-    Er_constant = 0.0
     # ratio of the neutral particle mass to the ion particle mass
     mn_over_mi = 1.0
     # ratio of the electron particle mass to the ion particle mass - value set later using
@@ -1164,7 +1162,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     recycling_fraction = 1.0
     gyrokinetic_ions = false
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
-        electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, Er_constant,
+        electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall,
         mn_over_mi, me_over_mi, recycling_fraction, gyrokinetic_ions, allocate_float(n_species))
     
     species_ion = Array{species_parameters_mutable,1}(undef,n_ion_species)
@@ -1337,6 +1335,8 @@ function check_coordinate_input(coord, coord_name, io)
         println(io,">$coord_name.bc = 'constant'.  enforcing constant incoming BC in $coord_name.")
     elseif coord.bc == "zero"
         println(io,">$coord_name.bc = 'zero'.  enforcing zero incoming BC in $coord_name. Enforcing zero at both boundaries if diffusion operator is present.")
+    elseif coord.bc == "zero-impose-regularity"
+        println(io,">$coord_name.bc = 'zero'.  enforcing zero incoming BC in $coord_name. Enforcing zero at both boundaries if diffusion operator is present. Enforce dF/dcoord = 0 at origin if coord = vperp.")
     elseif coord.bc == "zero_gradient"
         println(io,">$coord_name.bc = 'zero_gradient'.  enforcing zero gradients at both limits of $coord_name domain.")
     elseif coord.bc == "both_zero"
@@ -1355,9 +1355,9 @@ function check_coordinate_input(coord, coord_name, io)
                 coord.nelement_global, " elements across the $coord_name domain [",
                 0.0, ",", coord.L, "].")
 
-        if coord.bc != "zero" && coord.n_global > 1 && global_rank[] == 0
-            println("WARNING: regularity condition (df/dvperp=0 at vperp=0) not being "
-                    * "imposed. Collisions or vperp-diffusion will be unstable.")
+        if coord.bc == "zero-impose-regularity" && coord.n_global > 1 && global_rank[] == 0
+            println("WARNING: regularity condition (df/dvperp=0 at vperp=0) being "
+                    * "imposed explicitly.")
         end
     else
         println(io,">using ", coord.ngrid, " grid points per $coord_name element on ",

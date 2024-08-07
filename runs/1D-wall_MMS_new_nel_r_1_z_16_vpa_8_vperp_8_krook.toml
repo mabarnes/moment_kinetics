@@ -7,7 +7,6 @@ evolve_moments_parallel_flow = false
 evolve_moments_parallel_pressure = false
 evolve_moments_conservation = false
 force_Er_zero_at_wall = false #true
-Er_constant = 0.0
 T_e = 1.0
 T_wall = 1.0
 initial_density1 = 0.5
@@ -96,3 +95,5 @@ split_operators = false
 vpa_dissipation_coefficient = -1.0
 z_dissipation_coefficient = -1.0
 r_dissipation_coefficient = -1.0
+[geometry]
+Er_constant = 0.0

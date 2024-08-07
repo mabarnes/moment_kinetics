@@ -36,7 +36,8 @@ end
 update_phi updates the electrostatic potential, phi
 """
 function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments,
-                     z_spectral, r_spectral, scratch_dummy, gyroavs::gyro_operators)
+                     geometry, z_spectral, r_spectral, scratch_dummy,
+                     gyroavs::gyro_operators)
     n_ion_species = composition.n_ion_species
     # check bounds of fields and fvec arrays
     @boundscheck size(fields.phi,1) == z.n || throw(BoundsError(fields.phi))
@@ -138,8 +139,8 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
         end
     else
         @loop_r_z ir iz begin
-            fields.Er[iz,ir] = composition.Er_constant
-            # Er_constant defaults to 0.0 in moment_kinetics_input.jl
+            fields.Er[iz,ir] = geometry.input.Er_constant
+            # Er_constant defaults to 0.0 in geo.jl
         end
     end
     # if advancing electron fluid equations, solve for Ez directly from force balance

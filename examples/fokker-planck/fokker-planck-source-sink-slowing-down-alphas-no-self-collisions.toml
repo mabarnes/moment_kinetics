@@ -54,7 +54,7 @@ vperp_bc = "zero"
 # nuii sets the normalised input C[F,F] Fokker-Planck collision frequency
 nuii = 1.876334222e-3 #(1/nu_alphae, as computed from input diagnostic)
 Zi = 2.0
-self_collisions = true
+self_collisions = false
 slowing_down_test = true
 frequency_option = "manual"
 use_fokker_planck = true
@@ -85,7 +85,7 @@ sink_strength = 1.0
 sink_vth=0.07071067811865475                     
 
 [timestepping]
-nstep = 50000
-dt = 5.0e-4
-nwrite = 100
-nwrite_dfns = 100
+nstep = 250000
+dt = 1.0e-4
+nwrite = 500
+nwrite_dfns = 500
