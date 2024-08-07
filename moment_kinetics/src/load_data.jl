@@ -3922,7 +3922,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
     else
         # Use existing distributed I/O loading functions
         diagnostic_variable = false
-        if variable_name ∈ em_variables
+        if variable_name ∈ tuple(em_variables..., electron_moment_variables...)
             nd = 3
         elseif variable_name ∈ electron_dfn_variables
             nd = 5
