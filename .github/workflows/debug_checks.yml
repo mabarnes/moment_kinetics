@@ -31,7 +31,7 @@ jobs:
           sed -i -e "s/_debug_level = get_options.*/_debug_level = 2/" moment_kinetics/src/debugging.jl
 
           touch Project.toml
-          julia --project -O3 --check-bounds=yes -e 'using Pkg; Pkg.add(["MPI", "MPIPreferences", "PackageCompiler"]); using MPIPreferences; MPIPreferences.use_system_binary()'
+          julia --project -O3 --check-bounds=yes -e 'using Pkg; Pkg.add(["MPI", "MPIPreferences", "PackageCompiler", "Symbolics"]); using MPIPreferences; MPIPreferences.use_system_binary()'
           julia --project -O3 --check-bounds=yes -e 'using Pkg; Pkg.develop(path="moment_kinetics/"); Pkg.precompile()'
           julia --project -O3 --check-bounds=yes precompile.jl --debug 2
 
