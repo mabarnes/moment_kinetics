@@ -66,17 +66,24 @@ for input ∈ [base_input, cheb_input, wall_bc_input, wall_bc_cheb_input]
     push!(inputs_list, x)
 end
 
-collisions_input = merge(wall_bc_cheb_input, Dict("n_neutral_species" => 0,
+collisions_input1 = merge(wall_bc_cheb_input, Dict("n_neutral_species" => 0,
                                                   "krook_collisions" => Dict{String,Any}("use_krook" => true),
                                                   "fokker_planck_collisions" => Dict{String,Any}("use_fokker_planck" => true, "self_collisions" => true, "slowing_down_test" => true),
                                                   "vperp_discretization" => "gausslegendre_pseudospectral",
                                                   "vpa_discretization" => "gausslegendre_pseudospectral",
                                                  ))
+collisions_input2 = merge(wall_bc_cheb_input, Dict("n_neutral_species" => 0,
+                                                  "krook_collisions" => Dict{String,Any}("use_krook" => true),
+                                                  "fokker_planck_collisions" => Dict{String,Any}("use_fokker_planck" => true, "self_collisions" => true, "slowing_down_test" => true),
+                                                  "vperp_discretization" => "gausslegendre_pseudospectral",
+                                                  "vpa_discretization" => "gausslegendre_pseudospectral",
+                                                  "vperp_bc" => "zero-impose-regularity",
+                                                 ))
 # add an additional input for every geometry option available in addition to the default
 geo_input1 = merge(wall_bc_cheb_input, Dict("n_neutral_species" => 0,
                                             "geometry" => Dict{String,Any}("option" => "1D-mirror", "DeltaB" => 0.5, "pitch" => 0.5, "rhostar" => 1.0))) 
 
-push!(inputs_list, collisions_input, geo_input1)
+push!(inputs_list, collisions_input1, collisions_input2, geo_input1)
 
 for input in inputs_list
     run_moment_kinetics(input)

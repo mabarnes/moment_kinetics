@@ -31,7 +31,7 @@ end
 """
 update_phi updates the electrostatic potential, phi
 """
-function update_phi!(fields, fvec, vperp, z, r, composition, z_spectral, r_spectral, scratch_dummy, gyroavs::gyro_operators)
+function update_phi!(fields, fvec, vperp, z, r, composition, geometry, z_spectral, r_spectral, scratch_dummy, gyroavs::gyro_operators)
     n_ion_species = composition.n_ion_species
     @boundscheck size(fields.phi,1) == z.n || throw(BoundsError(fields.phi))
     @boundscheck size(fields.phi,2) == r.n || throw(BoundsError(fields.phi))
@@ -125,8 +125,8 @@ function update_phi!(fields, fvec, vperp, z, r, composition, z_spectral, r_spect
         end
     else
         @loop_r_z ir iz begin
-            fields.Er[iz,ir] = composition.Er_constant
-            # Er_constant defaults to 0.0 in moment_kinetics_input.jl
+            fields.Er[iz,ir] = geometry.input.Er_constant
+            # Er_constant defaults to 0.0 in geo.jl
         end
     end
     #Ez = - d phi / dz
@@ -136,8 +136,9 @@ function update_phi!(fields, fvec, vperp, z, r, composition, z_spectral, r_spect
                 scratch_dummy.buffer_r_3, scratch_dummy.buffer_r_4,
                 z_spectral,z)
     else
-        @serial_region begin
-            fields.Ez[:,:] .= 0.0
+        @loop_r_z ir iz begin
+            fields.Ez[iz,ir] = geometry.input.Ez_constant
+            # Ez_constant defaults to 0.0 in geo.jl
         end
     end
     
