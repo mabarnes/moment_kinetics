@@ -16,12 +16,13 @@ export io_input
 export pp_input
 export geometry_input
 export set_defaults_and_check_top_level!, set_defaults_and_check_section!,
-       Dict_to_NamedTuple
+       options_to_TOML, Dict_to_NamedTuple
 
 using ..communication
 using ..type_definitions: mk_float, mk_int
 
 using MPI
+using TOML
 
 """
 """
@@ -720,6 +721,27 @@ Useful as NamedTuple is immutable, so option values cannot be accidentally chang
 """
 function Dict_to_NamedTuple(d)
     return NamedTuple(Symbol(k)=>v for (k,v) ∈ d)
+end
+
+"""
+    options_to_toml(io::IO [=stdout], data::AbstractDict; sorted=false, by=identity)
+
+Convert `moment_kinetics` 'options' (in the form of a `Dict`) to TOML format.
+
+This function is defined so that we can handle some extra types, for example `Enum`.
+
+For descriptions of the arguments, see `TOML.print`.
+"""
+function options_to_TOML(args...; kwargs...)
+    function handle_extra_types(x)
+        if isa(x, Enum)
+            return string(x)
+        else
+            error("Unhandled type $(typeof(x)) for x=$x")
+        end
+    end
+
+    return TOML.print(handle_extra_types, args...; kwargs...)
 end
 
 end
