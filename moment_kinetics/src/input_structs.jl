@@ -704,11 +704,12 @@ function set_defaults_and_check_section!(options::AbstractDict, section_name;
 
     # Set default values if a key was not set explicitly
     explicit_keys = keys(section)
-    for (key_sym, value) ∈ kwargs
+    for (key_sym, default_value) ∈ kwargs
         key = String(key_sym)
-        if !(key ∈ explicit_keys)
-            section[key] = value
-        end
+
+        # Use `Base.get()` here to take advantage of our `Enum`-handling method of
+        # `Base.get()` defined above.
+        section[key] = get(section, key, default_value)
     end
 
     return section
