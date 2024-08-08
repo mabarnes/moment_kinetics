@@ -6,6 +6,7 @@ export define_coordinate, write_coordinate
 export equally_spaced_grid
 export set_element_boundaries
 
+using LinearAlgebra
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float, allocate_int
 using ..calculus: derivative!
@@ -85,6 +86,10 @@ struct coordinate{T <: AbstractVector{mk_float}}
     scratch6::Array{mk_float,1}
     # scratch7 is an array used for intermediate calculations requiring n entries
     scratch7::Array{mk_float,1}
+    # scratch8 is an array used for intermediate calculations requiring n entries
+    scratch8::Array{mk_float,1}
+    # scratch9 is an array used for intermediate calculations requiring n entries
+    scratch9::Array{mk_float,1}
     # scratch_shared is a shared-memory array used for intermediate calculations requiring
     # n entries
     scratch_shared::T
@@ -231,10 +236,11 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
         cell_width, igrid, ielement, imin, imax, igrid_full, input.discretization, input.fd_option, input.cheb_option,
         input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch),
         copy(scratch), copy(scratch), copy(scratch), copy(scratch), copy(scratch),
-        scratch_shared, scratch_shared2, scratch_2d, copy(scratch_2d), advection,
-        send_buffer, receive_buffer, input.comm, local_io_range, global_io_range,
-        element_scale, element_shift, input.element_spacing_option, element_boundaries,
-        radau_first_element, other_nodes, one_over_denominator)
+        copy(scratch), copy(scratch), scratch_shared, scratch_shared2, scratch_2d,
+        copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
+        local_io_range, global_io_range, element_scale, element_shift,
+        input.element_spacing_option, element_boundaries, radau_first_element,
+        other_nodes, one_over_denominator)
 
     if coord.n == 1 && occursin("v", coord.name)
         spectral = null_velocity_dimension_info()
@@ -252,8 +258,7 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
     elseif input.discretization == "gausslegendre_pseudospectral"
         # create arrays needed for explicit GaussLegendre pseudospectral treatment in this
         # coordinate and create the matrices for differentiation
-        spectral = setup_gausslegendre_pseudospectral(coord, collision_operator_dim=collision_operator_dim,
-                                                      dirichlet_bc=occursin("zero", coord.bc))
+        spectral = setup_gausslegendre_pseudospectral(coord, collision_operator_dim=collision_operator_dim)
         # obtain the local derivatives of the uniform grid with respect to the used grid
         derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
     else

@@ -416,6 +416,26 @@ function enforce_zero_incoming_bc!(pdf, speed, z, zero)
         end
     end
 end
+function get_ion_z_boundary_cutoff_indices(density, upar, ppar, evolve_upar, evolve_ppar,
+                                           z, vpa, zero)
+    if z.irank == 0
+        vth = sqrt(2.0*(ppar[1]/density[1]))
+        @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, vth,
+                                         upar[1], evolve_ppar, evolve_upar)
+        last_negative_vpa_ind = searchsortedlast(vpa.scratch, -zero)
+    else
+        last_negative_vpa_ind = nothing
+    end
+    if z.irank == z.nrank - 1
+        vth = sqrt(2.0*(ppar[end]/density[end]))
+        @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, vth,
+                                          upar[end], evolve_ppar, evolve_upar)
+        first_positive_vpa_ind = searchsortedfirst(vpa.scratch2, zero)
+    else
+        first_positive_vpa_ind = nothing
+    end
+    return last_negative_vpa_ind, first_positive_vpa_ind
+end
 function enforce_zero_incoming_bc!(pdf, z::coordinate, vpa::coordinate, density, upar,
                                    ppar, evolve_upar, evolve_ppar, zero)
     if z.irank != 0 && z.irank != z.nrank - 1
@@ -429,28 +449,15 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vpa::coordinate, density,
     # so use advection speed below instead of vpa
 
     # absolute velocity at left boundary
+    last_negative_vpa_ind, first_positive_vpa_ind =
+        get_ion_z_boundary_cutoff_indices(density, upar, ppar, evolve_upar, evolve_ppar,
+                                          z, vpa, zero)
     if z.irank == 0
-        @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, sqrt(2.0*(ppar[1]/density[1])),
-                                         upar[1], evolve_ppar, evolve_upar)
-        @loop_vpa ivpa begin
-            # for left boundary in zed (z = -Lz/2), want
-            # f(z=-Lz/2, v_parallel > 0) = 0
-            if vpa.scratch[ivpa] > zero
-                pdf[ivpa,:,1] .= 0.0
-            end
-        end
+        pdf[last_negative_vpa_ind+1:end, :, 1] .= 0.0
     end
     # absolute velocity at right boundary
     if z.irank == z.nrank - 1
-        @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, sqrt(2.0*(ppar[end]/density[end])),
-                                          upar[end], evolve_ppar, evolve_upar)
-        @loop_vpa ivpa begin
-            # for right boundary in zed (z = Lz/2), want
-            # f(z=Lz/2, v_parallel < 0) = 0
-            if vpa.scratch2[ivpa] < -zero
-                pdf[ivpa,:,end] .= 0.0
-            end
-        end
+        pdf[1:first_positive_vpa_ind-1, :, end] .= 0.0
     end
 
     # Special constraint-forcing code that tries to keep the modifications smooth at
@@ -478,9 +485,12 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vpa::coordinate, density,
             # Store v_parallel with upar shift removed in vpa.scratch
             vth = sqrt(2.0*ppar[iz]/density[iz])
             @. vpa.scratch = vpa.grid + upar[iz]/vth
-            # Introduce factor to ensure corrections go smoothly to zero near
-            # v_parallel=0
-            @. vpa.scratch2 = f * abs(vpa.scratch) / (1.0 + abs(vpa.scratch))
+            # Introduce factors to ensure corrections go smoothly to zero near
+            # v_parallel=0, and that there are no large corrections aw large w_parallel as
+            # those can have a strong effect on the parallel heat flux and make
+            # timestepping unstable when the cut-off point jumps from one grid point to
+            # another.
+            @. vpa.scratch2 = f * abs(vpa.scratch) / (1.0 + abs(vpa.scratch)) / (1.0 + (4.0 * vpa.scratch / vpa.L)^4)
             J1 = integrate_over_vspace(vpa.scratch2, vpa.grid, vpa.wgts)
             J2 = integrate_over_vspace(vpa.scratch2, vpa.grid, 2, vpa.wgts)
             J3 = integrate_over_vspace(vpa.scratch2, vpa.grid, 3, vpa.wgts)
@@ -498,9 +508,12 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vpa::coordinate, density,
 
             # Store v_parallel with upar shift removed in vpa.scratch
             @. vpa.scratch = vpa.grid + upar[iz]
-            # Introduce factor to ensure corrections go smoothly to zero near
-            # v_parallel=0
-            @. vpa.scratch2 = f * abs(vpa.scratch) / (1.0 + abs(vpa.scratch))
+            # Introduce factors to ensure corrections go smoothly to zero near
+            # v_parallel=0, and that there are no large corrections aw large w_parallel as
+            # those can have a strong effect on the parallel heat flux and make
+            # timestepping unstable when the cut-off point jumps from one grid point to
+            # another.
+            @. vpa.scratch2 = f * abs(vpa.scratch) / (1.0 + abs(vpa.scratch)) / (1.0 + (4.0 * vpa.scratch / vpa.L)^4)
             J1 = integrate_over_vspace(vpa.scratch2, vpa.grid, vpa.wgts)
             J2 = integrate_over_vspace(vpa.scratch2, vpa.grid, 2, vpa.wgts)
 
@@ -954,6 +967,8 @@ function enforce_v_boundary_condition_local!(f, bc, speed, v_diffusion, v, v_spe
     elseif bc == "periodic"
         f[1] = 0.5*(f[1]+f[end])
         f[end] = f[1]
+    elseif bc == "none"
+        # Do nothing
     else
         error("Unsupported boundary condition option '$bc' for $(v.name)")
     end
@@ -972,7 +987,7 @@ function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,5}, bc, vpe
 end
 
 function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,4}, bc, vperp, vperp_spectral, vperp_advect, diffusion)
-    if bc == "zero"
+    if bc == "zero" || bc == "zero-impose-regularity"
         nvperp = vperp.n
         ngrid = vperp.ngrid
         # set zero boundary condition
@@ -982,7 +997,7 @@ function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,4}, bc, vpe
             end
         end
         # set regularity condition d F / d vperp = 0 at vperp = 0
-        if vperp.discretization == "gausslegendre_pseudospectral" || vperp.discretization == "chebyshev_pseudospectral"
+        if bc == "zero-impose-regularity" && (vperp.discretization == "gausslegendre_pseudospectral" || vperp.discretization == "chebyshev_pseudospectral")
             D0 = vperp_spectral.radau.D0
             buffer = @view vperp.scratch[1:ngrid-1]
             @loop_r_z_vpa ir iz ivpa begin
@@ -992,6 +1007,8 @@ function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,4}, bc, vpe
                     f[ivpa,1,iz,ir] = -sum(buffer)/D0[1]
                 end
             end
+        elseif bc == "zero"
+            # do nothing
         else
             println("vperp.bc=\"$bc\" not supported by discretization "
                     * "$(vperp.discretization)")
