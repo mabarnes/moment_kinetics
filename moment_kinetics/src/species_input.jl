@@ -53,7 +53,7 @@ function get_species_input(toml_input)
     ion_spec_params_list = Array{ion_species_parameters,1}(undef,nspec_ion)
     neutral_spec_params_list = Array{neutral_species_parameters,1}(undef,nspec_neutral)
     for is in 1:nspec_ion
-        spec_section = set_defaults_and_check_section!(toml_input, "ion_species_"*string(is),
+        spec_section = set_defaults_and_check_section!(toml_input, "ion_species_$is",
             # [ion_species_1], [ion_species_2], etc 
             # mass of ion species
             mass = 1.0,
