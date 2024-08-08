@@ -121,7 +121,7 @@ function get_species_input(toml_input)
         ion_spec_params_list[is] = ion_species_parameters(; spec_input...)
     end
     for isn in 1:nspec_neutral
-        spec_section = set_defaults_and_check_section!(toml_input, "neutral_species_"*string(isn),
+        spec_section = set_defaults_and_check_section!(toml_input, "neutral_species_$isn",
             # [neutral_species_1], [neutral_species_2], etc
             # mass of neutral species
             mass = 1.0,
