@@ -160,7 +160,7 @@ function get_species_input(toml_input)
         r_IC_input= Dict(Symbol(k)=>v for (k,v) in r_IC_section)
         r_IC = spatial_initial_condition_input(; r_IC_input...)
         
-        vpa_IC_section = set_defaults_and_check_section!(toml_input, "vz_IC_neutral_species_"*string(isn),
+        vpa_IC_section = set_defaults_and_check_section!(toml_input, "vz_IC_neutral_species_$isn",
             # [neutral_vpa_IC_species_1], [neutral_vpa_IC_species_2], etc 
             initialization_option = "gaussian",
             width = 1.0,
