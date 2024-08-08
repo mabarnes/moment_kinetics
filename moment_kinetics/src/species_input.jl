@@ -130,7 +130,7 @@ function get_species_input(toml_input)
             # initial temperature
             initial_temperature = 1.0)
         
-        z_IC_section = set_defaults_and_check_section!(toml_input, "z_IC_neutral_species_"*string(isn),
+        z_IC_section = set_defaults_and_check_section!(toml_input, "z_IC_neutral_species_$isn",
             # [neutral_z_IC_species_1], [neutral_z_IC_species_2], etc 
             initialization_option = "gaussian",
             width = 0.125,
