@@ -94,7 +94,7 @@ function get_species_input(toml_input)
         r_IC_input= Dict(Symbol(k)=>v for (k,v) in r_IC_section)
         r_IC = spatial_initial_condition_input(; r_IC_input...)
         
-        vpa_IC_section = set_defaults_and_check_section!(toml_input, "vpa_IC_ion_species_"*string(is),
+        vpa_IC_section = set_defaults_and_check_section!(toml_input, "vpa_IC_ion_species_$is",
             # [ion_vpa_IC_species_1], [ion_vpa_IC_species_2], etc 
             initialization_option = "gaussian",
             width = 1.0,
