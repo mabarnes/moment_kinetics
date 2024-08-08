@@ -39,6 +39,7 @@ include("geo.jl")
 include("gyroaverages.jl")
 include("velocity_moments.jl")
 include("velocity_grid_transforms.jl")
+include("electron_fluid_equations.jl")
 include("em_fields.jl")
 include("bgk.jl")
 include("manufactured_solns.jl") # MRH Here?
@@ -53,12 +54,15 @@ include("vpa_advection.jl")
 include("z_advection.jl")
 include("r_advection.jl")
 include("vperp_advection.jl")
+include("electron_z_advection.jl")
+include("electron_vpa_advection.jl")
 include("neutral_r_advection.jl")
 include("neutral_z_advection.jl")
 include("neutral_vz_advection.jl")
 include("charge_exchange.jl")
 include("ionization.jl")
 include("krook_collisions.jl")
+include("maxwell_diffusion.jl")
 include("continuity.jl")
 include("energy_equation.jl")
 include("force_balance.jl")
@@ -68,6 +72,7 @@ include("moment_kinetics_input.jl")
 include("utils.jl")
 include("load_data.jl")
 include("analysis.jl")
+include("electron_kinetic_equation.jl")
 include("initial_conditions.jl")
 include("parameter_scans.jl")
 include("time_advance.jl")
@@ -97,7 +102,6 @@ using .type_definitions: mk_int
 using .utils: to_minutes, get_default_restart_filename,
               get_prefix_iblock_and_move_existing_file
 using .em_fields: setup_em_fields
-using .time_advance: setup_dummy_and_buffer_arrays
 using .time_advance: allocate_advection_structs
 
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
@@ -260,31 +264,31 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     pdf, moments, boundary_distributions =
         allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
                                  evolve_moments, collisions, external_source_settings,
-                                 num_diss_params)
+                                 num_diss_params, t_input)
 
     # create structs containing the information needed to treat advection in z, r, vpa, vperp, and vz
     # for ions, electrons and neutrals
     # NB: the returned advection_structs are yet to be initialized
     advection_structs = allocate_advection_structs(composition, z, r, vpa, vperp, vz, vr, vzeta)
 
-    # setup dummy arrays & buffer arrays for z r MPI                             
-    n_neutral_species_alloc = max(1, composition.n_neutral_species)
-    scratch_dummy = setup_dummy_and_buffer_arrays(r.n, z.n, vpa.n, vperp.n, vz.n, vr.n, vzeta.n, 
-        composition.n_ion_species, n_neutral_species_alloc)
-
     if restart === false
         restarting = false
         # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
         # each of which may be evolved separately depending on input choices.
-        init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
+        init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geometry,
                               composition, r, z, vperp, vpa, vzeta, vr, vz,
-                              vpa_spectral, vz_spectral, species,
-                              external_source_settings, manufactured_solns_input)
+                              z_spectral, r_spectral, vperp_spectral, vpa_spectral,
+                              vz_spectral, species, collisions, external_source_settings,
+                              manufactured_solns_input, t_input, num_diss_params,
+                              advection_structs, io_input, input_dict)
         # initialize time variable
         code_time = 0.
         dt = nothing
         dt_before_last_fail = nothing
+        electron_dt = nothing
+        electron_dt_before_last_fail = nothing
         previous_runs_info = nothing
+        restart_electron_physics = nothing
     else
         restarting = true
 
@@ -294,15 +298,31 @@ function setup_moment_kinetics(input_dict::AbstractDict;
             restart_filename = restart
         end
 
-        backup_prefix_iblock = get_prefix_iblock_and_move_existing_file(restart_filename,
-                                                                        io_input.output_dir)
+        backup_prefix_iblock, _, _ =
+            get_prefix_iblock_and_move_existing_file(restart_filename,
+                                                     io_input.output_dir)
 
         # Reload pdf and moments from an existing output file
-        code_time, dt, dt_before_last_fail, previous_runs_info, restart_time_index =
-            reload_evolving_fields!(pdf, moments, boundary_distributions,
+        code_time, dt, dt_before_last_fail, electron_dt, electron_dt_before_last_fail,
+        previous_runs_info, restart_time_index, restart_electron_physics =
+            reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                                     backup_prefix_iblock, restart_time_index,
                                     composition, geometry, r, z, vpa, vperp, vzeta, vr,
                                     vz)
+
+        begin_serial_region()
+        @serial_region begin
+            @. moments.electron.temp = composition.me_over_mi * moments.electron.vth^2
+            @. moments.electron.ppar = 0.5 * moments.electron.dens * moments.electron.temp
+        end
+        if composition.electron_physics ∈ (kinetic_electrons,
+                                           kinetic_electrons_with_temperature_equation)
+            begin_r_z_vperp_vpa_region()
+            @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+                pdf.electron.pdf_before_ion_timestep[ivpa,ivperp,iz,ir] =
+                    pdf.electron.norm[ivpa,ivperp,iz,ir]
+            end
+        end
 
         # Re-initialize the source amplitude here instead of loading it from the restart
         # file so that we can change the settings between restarts.
@@ -319,14 +339,16 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
 
-    moments, spectral_objects, scratch, scratch_implicit, advance, advance_implicit,
-    t_params, fp_arrays, gyroavs, manufactured_source_list, nl_solver_params =
+    moments, spectral_objects, scratch, scratch_implicit, scratch_electron, scratch_dummy,
+    advance, advance_implicit, t_params, fp_arrays, gyroavs, manufactured_source_list,
+    nl_solver_params =
         setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrophase,
             vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
             z_spectral, r_spectral, composition, moments, t_input, code_time, dt,
-            dt_before_last_fail, collisions, species, geometry, boundary_distributions,
-            external_source_settings, num_diss_params, manufactured_solns_input,
-            advection_structs, scratch_dummy, restarting, input_dict)
+            dt_before_last_fail, electron_dt, electron_dt_before_last_fail, collisions,
+            species, geometry, boundary_distributions, external_source_settings,
+            num_diss_params, manufactured_solns_input, advection_structs, io_input,
+            restarting, restart_electron_physics, input_dict)
 
     # This is the closest we can get to the end time of the setup before writing it to the
     # output file
@@ -339,25 +361,28 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         restart_time_index, previous_runs_info, time_for_setup, t_params,
         nl_solver_params)
     # write initial data to ascii files
-    write_data_to_ascii(pdf, moments, fields, vpa, vperp, z, r, code_time,
+    write_data_to_ascii(pdf, moments, fields, vpa, vperp, z, r, t_params.t[],
         composition.n_ion_species, composition.n_neutral_species, ascii_io)
     # write initial data to binary files
 
-    write_all_moments_data_to_binary(moments, fields, code_time,
-        composition.n_ion_species, composition.n_neutral_species, io_moments, 1, 0.0,
+    t_params.moments_output_counter[] += 1
+    write_all_moments_data_to_binary(scratch, moments, fields, composition.n_ion_species,
+        composition.n_neutral_species, io_moments, t_params.moments_output_counter[], 0.0,
         t_params, nl_solver_params, r, z)
-    write_all_dfns_data_to_binary(pdf, moments, fields, code_time,
-        composition.n_ion_species, composition.n_neutral_species, io_dfns, 1, 0.0,
-        t_params, nl_solver_params, r, z, vperp, vpa, vzeta, vr, vz)
+    t_params.dfns_output_counter[] += 1
+    write_all_dfns_data_to_binary(scratch, scratch_electron, moments, fields,
+        composition.n_ion_species, composition.n_neutral_species, io_dfns,
+        t_params.dfns_output_counter[], 0.0, t_params, nl_solver_params, r, z, vperp, vpa,
+        vzeta, vr, vz)
 
     begin_s_r_z_vperp_region()
 
-    return pdf, scratch, scratch_implicit, code_time, t_params, vz, vr, vzeta, vpa, vperp,
-           gyrophase, z, r, moments, fields, spectral_objects, advection_structs,
-           composition, collisions, geometry, gyroavs, boundary_distributions,
-           external_source_settings, num_diss_params, nl_solver_params, advance,
-           advance_implicit, fp_arrays, scratch_dummy, manufactured_source_list, ascii_io,
-           io_moments, io_dfns
+    return pdf, scratch, scratch_implicit, scratch_electron, t_params, vz, vr,
+           vzeta, vpa, vperp, gyrophase, z, r, moments, fields, spectral_objects,
+           advection_structs, composition, collisions, geometry, gyroavs,
+           boundary_distributions, external_source_settings, num_diss_params,
+           nl_solver_params, advance, advance_implicit, fp_arrays, scratch_dummy,
+           manufactured_source_list, ascii_io, io_moments, io_dfns
 end
 
 """

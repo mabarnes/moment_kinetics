@@ -364,8 +364,8 @@ function run_test(test_input, expected, rtol, atol, upar_rtol=nothing; args...)
             # open the netcdf file containing pdf data
             fid = open_readonly_output_file(path, "dfns")
             # load coordinates
-            vpa, vpa_spectral = load_coordinate_data(fid, "vpa")
-            vperp, vperp_spectral = load_coordinate_data(fid, "vperp")
+            vpa, vpa_spectral = load_coordinate_data(fid, "vpa"; ignore_MPI=true)
+            vperp, vperp_spectral = load_coordinate_data(fid, "vperp"; ignore_MPI=true)
 
             # load particle distribution function (pdf) data
             f_ion_vpavperpzrst = load_pdf_data(fid)
