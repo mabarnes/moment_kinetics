@@ -6,7 +6,6 @@ export mk_input
 export performance_test
 #export advective_form
 export read_input_file
-export get_default_rhostar
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
@@ -89,7 +88,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     reference_params = setup_reference_parameters(scan_input)
     
     ## set geometry_input
-    geometry_in = setup_geometry_input(scan_input, get_default_rhostar(reference_params))
+    geometry_in = setup_geometry_input(scan_input)
     
     charge_exchange = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(composition.ion[1].initial_temperature))
     charge_exchange_electron = get(scan_input, "electron_charge_exchange_frequency", 0.0)
@@ -1152,15 +1151,6 @@ function check_input_initialization(composition, species, io)
         end
         println(io)
     end
-end
-
-"""
-    function get_default_rhostar(reference_params)
-
-Calculate the normalised ion gyroradius at reference parameters
-"""
-function get_default_rhostar(reference_params)
-    return reference_params.cref / reference_params.Omegaref / reference_params.Lref
 end
 
 end

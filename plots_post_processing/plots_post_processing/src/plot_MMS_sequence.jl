@@ -29,7 +29,7 @@ using moment_kinetics.load_data: load_block_data, load_coordinate_data, load_inp
 using moment_kinetics.load_data: read_distributed_zr_data!, construct_global_zr_coords
 using moment_kinetics.velocity_moments: integrate_over_vspace
 using moment_kinetics.manufactured_solns: manufactured_solutions, manufactured_electric_fields
-using moment_kinetics.moment_kinetics_input: mk_input, read_input_file, get_default_rhostar
+using moment_kinetics.moment_kinetics_input: mk_input, read_input_file
 using moment_kinetics.input_structs: geometry_input
 using moment_kinetics.reference_parameters
 using moment_kinetics.species_input: get_species_input
@@ -242,13 +242,7 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
             Lr_in = 1.0
         end
         composition = get_species_input(scan_input)
-
-        reference_params = setup_reference_parameters(scan_input)
-        option = get(scan_input, "geometry_option", "constant-helical") #"1D-mirror"
-        pitch = get(scan_input, "pitch", 1.0)
-        rhostar = get(scan_input, "rhostar", get_default_rhostar(reference_params))
-        DeltaB = get(scan_input, "DeltaB", 1.0)
-        geo_in = geometry_input(rhostar,option,pitch,DeltaB)
+        geo_in = setup_geometry_input(scan_input)
 
         manufactured_solns_list = manufactured_solutions(manufactured_solns_input,Lr_in,z.L,r_bc,z_bc,geo_in,composition,species,r.n,vperp.n) 
         dfni_func = manufactured_solns_list.dfni_func

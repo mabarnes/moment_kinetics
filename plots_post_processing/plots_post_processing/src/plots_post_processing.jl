@@ -59,7 +59,7 @@ using moment_kinetics.velocity_moments: integrate_over_vspace
 using moment_kinetics.manufactured_solns: manufactured_solutions,
                                           manufactured_electric_fields,
                                           manufactured_geometry
-using moment_kinetics.moment_kinetics_input: mk_input, get, get_default_rhostar
+using moment_kinetics.moment_kinetics_input: mk_input, get
 using moment_kinetics.input_structs: geometry_input, grid_input, species_composition
 using moment_kinetics.input_structs: boltzmann_electron_response, #electron_physics_type,
                                      boltzmann_electron_response_with_simple_sheath
