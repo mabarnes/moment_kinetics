@@ -1,9 +1,10 @@
 test_type = "restart_interpolation"
+using moment_kinetics.type_definitions: OptionsDict
 
 # default inputs for tests
-base_input = Dict(
+base_input = OptionsDict(
      "run_name" => "base",
-     "composition" => Dict("n_ion_species" => 2,
+     "composition" => OptionsDict("n_ion_species" => 2,
                            "n_neutral_species" => 2,
                            "electron_physics" => "boltzmann_electron_response",         
                            "T_e" => 1.0),
@@ -14,7 +15,7 @@ base_input = Dict(
      "evolve_moments_conservation" => true,
      "charge_exchange_frequency" => 2*π*0.1,
      "ionization_frequency" => 0.0,
-     "timestepping" => Dict{String,Any}("nstep" => 3,
+     "timestepping" => OptionsDict("nstep" => 3,
                                         "dt" => 0.0,
                                         "nwrite" => 2,
                                         "type" => "SSPRK2",
@@ -41,29 +42,29 @@ base_input = Dict(
      "vzeta_nelement" => 1,
      "vr_ngrid" => 1,
      "vr_nelement" => 1,
-     "ion_numerical_dissipation" => Dict{String,Any}("force_minimum_pdf_value" => 0.0),
-     "neutral_numerical_dissipation" => Dict{String,Any}("force_minimum_pdf_value" => 0.0))
+     "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0),
+     "neutral_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0))
 
 test_input =
     merge(base_input,
-          Dict("run_name" => "full-f",
+          OptionsDict("run_name" => "full-f",
                "z_nelement" => 3,
                "vpa_nelement" => 3,
                "vz_nelement" => 3))
 
 test_input_split1 =
     merge(test_input,
-          Dict("run_name" => "split1",
+          OptionsDict("run_name" => "split1",
                "evolve_moments_density" => true))
 
 test_input_split2 =
     merge(test_input_split1 ,
-          Dict("run_name" => "split2",
+          OptionsDict("run_name" => "split2",
                "evolve_moments_parallel_flow" => true))
 
 test_input_split3 =
     merge(test_input_split2,
-          Dict("run_name" => "split3",
+          OptionsDict("run_name" => "split3",
                "evolve_moments_parallel_pressure" => true))
 
 test_input_list = [

@@ -10,7 +10,7 @@ using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data
                                  load_species_data, load_fields_data,
                                  load_ion_moments_data, load_pdf_data,
                                  load_time_data, load_species_data
-using moment_kinetics.type_definitions: mk_float
+using moment_kinetics.type_definitions: mk_float, OptionsDict
 
 const analytical_rtol = 3.e-2
 const regression_rtol = 2.e-8
@@ -225,13 +225,13 @@ end
 # default inputs for tests
 test_input_gauss_legendre = Dict("run_name" => "gausslegendre_pseudospectral",
                               "base_directory" => test_output_directory,
-                              "composition" => Dict{String,Any}("n_ion_species" => 1,
+                              "composition" => OptionsDict("n_ion_species" => 1,
                                                                 "n_neutral_species" => 0,
                                                                 "electron_physics" => "boltzmann_electron_response",
                                                                 "T_e" => 1.0),
-                             "ion_species_1" => Dict{String,Any}("initial_density" => 0.5,
+                             "ion_species_1" => OptionsDict("initial_density" => 0.5,
                                                                  "initial_temperature" => 1.0),
-                             "z_IC_ion_species_1" => Dict{String,Any}("initialization_option" => "sinusoid",
+                             "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
                                                                       "density_amplitude" => 0.0,
                                                                       "density_phase" => 0.0,
                                                                       "upar_amplitude" => 0.0,
@@ -251,7 +251,7 @@ test_input_gauss_legendre = Dict("run_name" => "gausslegendre_pseudospectral",
                               "charge_exchange_frequency" => 0.0,
                               "constant_ionization_rate" => false,
                               "electron_physics" => "boltzmann_electron_response",
-                              "fokker_planck_collisions" => Dict{String,Any}("use_fokker_planck" => true, "nuii" => 1.0, "frequency_option" => "manual"),
+                              "fokker_planck_collisions" => OptionsDict("use_fokker_planck" => true, "nuii" => 1.0, "frequency_option" => "manual"),
                               "evolve_moments_parallel_pressure" => false,
                               "evolve_moments_conservation" => false,
                               "evolve_moments_parallel_flow" => false,
@@ -266,7 +266,7 @@ test_input_gauss_legendre = Dict("run_name" => "gausslegendre_pseudospectral",
                               "r_nelement" => 1,
                               "r_nelement_local" => 1,
                               "r_bc" => "periodic",   
-                              "timestepping" => Dict{String,Any}("dt" => 0.01,
+                              "timestepping" => OptionsDict("dt" => 0.01,
                                                                  "nstep" => 5000,
                                                                  "nwrite" => 5000,
                                                                  "nwrite_dfns" => 5000 ))

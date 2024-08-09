@@ -14,7 +14,7 @@ using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data
                                  load_neutral_particle_moments_data,
                                  load_neutral_pdf_data, load_time_data, load_species_data
 using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
-using moment_kinetics.type_definitions: mk_float
+using moment_kinetics.type_definitions: mk_float, OptionsDict
 
 # Useful parameters
 const z_L = 1.0 # always 1 in normalized units?
@@ -85,23 +85,23 @@ const expected =
                 0.024284888662941113 0.010011392733734206 0.008423252360063494 0.019281192435730943 0.036719507768509525 0.041644492169994836 0.03692283098105331 0.03638215764882269 0.04191389118981368 0.04071460358290303 0.024284888662941134])
 
 # default inputs for tests
-test_input_full_f = Dict("composition" => Dict{String,Any}("n_ion_species" => 1,
+test_input_full_f = Dict("composition" => OptionsDict("n_ion_species" => 1,
                                                           "n_neutral_species" => 1,
                                                           "electron_physics" => "boltzmann_electron_response",
                                                           "T_e" => 1.0,
                                                           "T_wall" => 1.0),
-                        "ion_species_1" => Dict{String,Any}("initial_density" => 0.5,
+                        "ion_species_1" => OptionsDict("initial_density" => 0.5,
                                                             "initial_temperature" => 1.0),
-                        "z_IC_ion_species_1" => Dict{String,Any}("initialization_option" => "sinusoid",
+                        "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
                                                                  "density_amplitude" => 0.5,
                                                                  "density_phase" => 0.0,
                                                                  "upar_amplitude" => 0.0,
                                                                  "upar_phase" => 0.0,
                                                                  "temperature_amplitude" => 0.5,
                                                                  "temperature_phase" => mk_float(π)),
-                        "neutral_species_1" => Dict{String,Any}("initial_density" => 0.5,
+                        "neutral_species_1" => OptionsDict("initial_density" => 0.5,
                                                                 "initial_temperature" => 1.0),
-                        "z_IC_neutral_species_1" => Dict{String,Any}("initialization_option" => "sinusoid",
+                        "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "sinusoid",
                                                                      "density_amplitude" => 0.5,
                                                                      "density_phase" => mk_float(π),
                                                                      "upar_amplitude" => 0.0,
@@ -113,10 +113,10 @@ test_input_full_f = Dict("composition" => Dict{String,Any}("n_ion_species" => 1,
                          "evolve_moments_parallel_flow" => false,
                          "evolve_moments_parallel_pressure" => false,
                          "evolve_moments_conservation" => true,
-                         "krook_collisions" => Dict{String,Any}("use_krook" => true,"frequency_option" => "reference_parameters"),
+                         "krook_collisions" => OptionsDict("use_krook" => true,"frequency_option" => "reference_parameters"),
                          "charge_exchange_frequency" => 2*π*0.1,
                          "ionization_frequency" => 0.0,
-                         "timestepping" => Dict{String,Any}("nstep" => 100,
+                         "timestepping" => OptionsDict("nstep" => 100,
                                                             "dt" => 0.001,
                                                             "nwrite" => 100,
                                                             "nwrite_dfns" => 100,

@@ -1,7 +1,8 @@
+using moment_kinetics.type_definitions: OptionsDict
 test_type = "Harrison-Thompson wall boundary condition"
 
 # default inputs for tests
-test_input_finite_difference = Dict("composition" => Dict("n_ion_species" => 2,
+test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_species" => 2,
                                                           "n_neutral_species" => 2,
                                                           "T_e" => 1.0,
                                                           "T_wall" => 1.0,                             
@@ -16,7 +17,7 @@ test_input_finite_difference = Dict("composition" => Dict("n_ion_species" => 2,
                                     #"ionization_frequency" => 0.25,
                                     "ionization_frequency" => 0.688,
                                     "constant_ionization_rate" => true,
-                                    "timestepping" => Dict{String,Any}("nstep" => 3,
+                                    "timestepping" => OptionsDict("nstep" => 3,
                                                                        "dt" => 0.0005,
                                                                        "nwrite" => 2,
                                                                        "type" => "SSPRK2",
@@ -43,7 +44,7 @@ test_input_finite_difference = Dict("composition" => Dict("n_ion_species" => 2,
                                     "vr_nelement" => 1)
 
 test_input_chebyshev = merge(test_input_finite_difference,
-                             Dict("run_name" => "chebyshev_pseudospectral",
+                             OptionsDict("run_name" => "chebyshev_pseudospectral",
                                   "z_discretization" => "chebyshev_pseudospectral",
                                   "z_ngrid" => 3,
                                   "z_nelement" => 2,

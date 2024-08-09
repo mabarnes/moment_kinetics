@@ -9,7 +9,7 @@ using moment_kinetics.input_structs: advection_input
 using moment_kinetics.looping
 using moment_kinetics.looping: setup_loop_ranges!
 using moment_kinetics.nonlinear_solvers
-using moment_kinetics.type_definitions: mk_float, mk_int
+using moment_kinetics.type_definitions: mk_float, mk_int, OptionsDict
 
 using MPI
 
@@ -113,8 +113,8 @@ function linear_test()
         end
 
         nl_solver_params = setup_nonlinear_solve(
-            Dict{String,Any}("nonlinear_solver" =>
-                             Dict{String,Any}("rtol" => 0.0,
+            OptionsDict("nonlinear_solver" =>
+                             OptionsDict("rtol" => 0.0,
                                               "atol" => atol,
                                               "linear_restart" => restart,
                                               "linear_max_restarts" => max_restarts)),
@@ -245,8 +245,8 @@ function nonlinear_test()
         end
 
         nl_solver_params = setup_nonlinear_solve(
-            Dict{String,Any}("nonlinear_solver" =>
-                             Dict{String,Any}("rtol" => 0.0,
+            OptionsDict("nonlinear_solver" =>
+                             OptionsDict("rtol" => 0.0,
                                               "atol" => atol,
                                               "linear_restart" => restart,
                                               "linear_max_restarts" => max_restarts,

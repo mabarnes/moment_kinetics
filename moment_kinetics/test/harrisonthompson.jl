@@ -12,6 +12,7 @@ using moment_kinetics.load_data: open_readonly_output_file
 using moment_kinetics.load_data: load_fields_data, load_time_data
 using moment_kinetics.load_data: load_species_data, load_coordinate_data
 using moment_kinetics.input_structs: merge_dict_with_kwargs!
+using moment_kinetics.type_definitions: OptionsDict
 
 ionization_frequency = 0.688
 
@@ -62,21 +63,21 @@ function findphi(z, R_ion)
 end
 
 # default inputs for tests
-test_input_finite_difference = Dict("composition" => Dict{String,Any}("n_ion_species" => 1,
+test_input_finite_difference = Dict("composition" => OptionsDict("n_ion_species" => 1,
                                                                       "n_neutral_species" => 0,
                                                                       "electron_physics" => "boltzmann_electron_response",
                                                                       "T_e" => 1.0,
                                                                       "T_wall" => 1.0),
-                                    "ion_species_1" => Dict{String,Any}("initial_density" => 1.0,
+                                    "ion_species_1" => OptionsDict("initial_density" => 1.0,
                                                                         "initial_temperature" => 1.0),
-                                    "z_IC_ion_species_1" => Dict{String,Any}("initialization_option" => "gaussian",
+                                    "z_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
                                                                              "density_amplitude" => 0.0,
                                                                              "density_phase" => 0.0,
                                                                              "upar_amplitude" => 0.0,
                                                                              "upar_phase" => 0.0,
                                                                              "temperature_amplitude" => 0.0,
                                                                              "temperature_phase" => 0.0),
-                                    "vpa_IC_ion_species_1" => Dict{String,Any}("initialization_option" => "gaussian",
+                                    "vpa_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
                                                                              "density_amplitude" => 1.0,
                                                                              "density_phase" => 0.0,
                                                                              "upar_amplitude" => 0.0,
@@ -91,7 +92,7 @@ test_input_finite_difference = Dict("composition" => Dict{String,Any}("n_ion_spe
                                     "charge_exchange_frequency" => 0.0,
                                     "ionization_frequency" => 0.0,
                                     "constant_ionization_rate" => true,
-                                    "timestepping" => Dict{String,Any}("nstep" => 9000,
+                                    "timestepping" => OptionsDict("nstep" => 9000,
                                                                        "dt" => 0.0005,
                                                                        "nwrite" => 9000,
                                                                        "split_operators" => false),

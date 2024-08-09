@@ -1,13 +1,14 @@
+using moment_kinetics.type_definitions: OptionsDict
 test_type = "MMS"
 
 # default inputs for tests
-test_input = Dict(
-    "manufactured_solns" => Dict("use_for_advance"=>true),
+test_input = OptionsDict(
+    "manufactured_solns" => OptionsDict("use_for_advance"=>true),
     "evolve_moments_density" => false,
     "evolve_moments_parallel_flow" => false,
     "evolve_moments_parallel_pressure" => false,
     "evolve_moments_conservation" => false,
-    "composition" => Dict("n_ion_species" => 1,
+    "composition" => OptionsDict("n_ion_species" => 1,
                           "n_neutral_species" => 1,
                           "electron_physics" => "boltzmann_electron_response",
                           "T_e" => 1.0,
@@ -15,7 +16,7 @@ test_input = Dict(
     "run_name" => "MMS-2D-wall_cheb-with-neutrals",
     "charge_exchange_frequency" => 0.0,
     "ionization_frequency" => 0.0,
-    "timestepping" => Dict{String,Any}("nstep" => 3,
+    "timestepping" => OptionsDict("nstep" => 3,
                                        "dt" => 1.e-8,
                                        "nwrite" => 2,
                                        "type" => "SSPRK2",
@@ -52,7 +53,7 @@ test_input = Dict(
     "vzeta_L" => 12.0,
     "vzeta_bc" => "none",
     "vzeta_discretization" => "chebyshev_pseudospectral",
-    "geometry" => Dict{String,Any}("rhostar" => 1.0,),
+    "geometry" => OptionsDict("rhostar" => 1.0,),
 )
 
 test_input_list = [

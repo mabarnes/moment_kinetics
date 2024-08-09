@@ -1,13 +1,14 @@
+using moment_kinetics.type_definitions: OptionsDict
 test_type = "Fokker-Planck collisions"
 
 # default input for test
-test_input_full_f = Dict(
+test_input_full_f = OptionsDict(
      "run_name" => "full_f",
-     "timestepping" => Dict{String,Any}("dt" => 0.0,
+     "timestepping" => OptionsDict("dt" => 0.0,
                                         "nstep" => 3,
                                         "nwrite" => 2,
                                         "nwrite_dfns" => 2),
-     "composition" => Dict{String,Any}("n_ion_species" => 1,
+     "composition" => OptionsDict("n_ion_species" => 1,
                                        "n_neutral_species" => 0,
                                        "T_e" => 1.0,
                                        "T_wall" => 1.0,
@@ -16,9 +17,9 @@ test_input_full_f = Dict(
      "evolve_moments_density" => false,
      "evolve_moments_parallel_flow" => false,
      "evolve_moments_parallel_pressure" => false,
-     "ion_species_1" => Dict{String,Any}("initial_density" => 0.5,      
+     "ion_species_1" => OptionsDict("initial_density" => 0.5,      
                                          "initial_temperature" => 1.0),
-     "z_IC_ion_species_1" => Dict{String,Any}("density_amplitude" => 0.001,
+     "z_IC_ion_species_1" => OptionsDict("density_amplitude" => 0.001,
                                               "density_phase" => 0.0,
                                               "initialization_option" => "sinusoid",
                                               "temperature_amplitude" => 0.0,
@@ -28,7 +29,7 @@ test_input_full_f = Dict(
      "charge_exchange_frequency" => 0.0,
      "ionization_frequency" => 0.0,
      "constant_ionization_rate" => false,
-     "fokker_planck_collisions" => Dict{String,Any}("use_fokker_planck" => true,
+     "fokker_planck_collisions" => OptionsDict("use_fokker_planck" => true,
                                                     "nuii" => 1.0,
                                                     "frequency_option" => "manual"),
      "r_bc" => "periodic",

@@ -7,7 +7,7 @@ export performance_test
 #export advective_form
 export read_input_file
 
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions: mk_float, mk_int, OptionsDict
 using ..array_allocation: allocate_float
 using ..communication
 using ..coordinates: define_coordinate
@@ -448,9 +448,9 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     is_1V = (vperp.ngrid == vperp.nelement_global == 1 && vzeta.ngrid ==
              vzeta.nelement_global == 1 && vr.ngrid == vr.nelement_global == 1)
     
-    ion_num_diss_param_dict = get(scan_input, "ion_numerical_dissipation", Dict{String,Any}())
-    electron_num_diss_param_dict = get(scan_input, "electron_numerical_dissipation", Dict{String,Any}())
-    neutral_num_diss_param_dict = get(scan_input, "neutral_numerical_dissipation", Dict{String,Any}())
+    ion_num_diss_param_dict = get(scan_input, "ion_numerical_dissipation", OptionsDict())
+    electron_num_diss_param_dict = get(scan_input, "electron_numerical_dissipation", OptionsDict())
+    neutral_num_diss_param_dict = get(scan_input, "neutral_numerical_dissipation", OptionsDict())
     num_diss_params = setup_numerical_dissipation(ion_num_diss_param_dict,
                                                   electron_num_diss_param_dict,
                                                   neutral_num_diss_param_dict, is_1V)

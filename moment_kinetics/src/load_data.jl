@@ -30,7 +30,7 @@ using ..looping
 using ..moment_kinetics_input: mk_input
 using ..neutral_vz_advection: update_speed_neutral_vz!
 using ..neutral_z_advection: update_speed_neutral_z!
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions: mk_float, mk_int, OptionsDict
 using ..utils: get_CFL!, get_minimum_CFL_z, get_minimum_CFL_vpa, get_minimum_CFL_neutral_z,
                get_minimum_CFL_neutral_vz, enum_from_string
 using ..vpa_advection: update_speed_vpa!
@@ -189,7 +189,7 @@ function read_Dict_from_section(file_or_group, section_name; ignore_subsections=
     # Function that can be called recursively to read nested Dicts from sub-groups in
     # the output file
     section_io = get_group(file_or_group, section_name)
-    section = Dict{String,Any}()
+    section = OptionsDict()
 
     for key ∈ get_variable_keys(section_io)
         section[key] = load_variable(section_io, key)

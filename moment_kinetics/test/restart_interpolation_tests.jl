@@ -18,7 +18,7 @@ using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data
 using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
 using moment_kinetics.load_data: get_run_info_no_setup, close_run_info,
                                  postproc_load_variable
-using moment_kinetics.type_definitions: mk_float
+using moment_kinetics.type_definitions: mk_float, OptionsDict
 
 include("nonlinear_sound_wave_inputs_and_expected_data.jl")
 
@@ -30,7 +30,7 @@ if global_size[] > 1 && global_size[] % 2 == 0
     # Test using distributed-memory
     base_input["z_nelement_local"] = base_input["z_nelement"] ÷ 2
 end
-base_input["output"] = Dict{String,Any}("parallel_io" => false)
+base_input["output"] = OptionsDict("parallel_io" => false)
 
 restart_test_input_chebyshev =
     merge(deepcopy(base_input),

@@ -1,9 +1,10 @@
+using moment_kinetics.type_definitions: OptionsDict
 test_type = "gyroaverage"
 
 # default inputs for tests
-test_input = Dict(
+test_input = OptionsDict(
     "run_name" => "gyroaverage",
-    "composition" => Dict("n_ion_species" => 1,
+    "composition" => OptionsDict("n_ion_species" => 1,
                           "n_neutral_species" => 0,
                           "gyrokinetic_ions" => true,
                           "T_e" => 1.0,
@@ -12,16 +13,16 @@ test_input = Dict(
     "evolve_moments_parallel_flow" => false,
     "evolve_moments_parallel_pressure" => false,
     "evolve_moments_conservation" => false,
-    "ion_species_1" => Dict("initial_density" => 1.0,
+    "ion_species_1" => OptionsDict("initial_density" => 1.0,
                             "initial_temperature" => 1.0),
-    "z_IC_ion_species_1" => Dict("initialization_option" => "gaussian",
+    "z_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
                                  "density_amplitude" => 0.001,
                                  "density_phase" => 0.0,
                                  "upar_amplitude" => 1.0,
                                  "upar_phase" => 0.0,
                                  "temperature_amplitude" => 0.0,
                                  "temperature_phase" => 0.0),
-    "vpa_IC_ion_species_1" => Dict("initialization_option" => "gaussian",
+    "vpa_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
                                  "density_amplitude" => 1.0,
                                  "density_phase" => 0.0,
                                  "upar_amplitude" => 0.0,
@@ -31,7 +32,7 @@ test_input = Dict(
     "charge_exchange_frequency" => 0.0,
     "ionization_frequency" => 0.05,
     "constant_ionization_rate" => true,
-    "timestepping" => Dict{String,Any}("nstep" => 3,
+    "timestepping" => OptionsDict("nstep" => 3,
                                        "dt" => 1.0e-12,
                                        "nwrite" => 2,
                                        "nwrite_dfns" => 2,),
@@ -57,9 +58,9 @@ test_input = Dict(
     "vz_L" => 6.0,
     "vz_bc" => "zero",
     "vz_discretization" => "chebyshev_pseudospectral",
-    "numerical_dissipation" => Dict("vpa_dissipation_coefficient" => 1.0e-3,
+    "numerical_dissipation" => OptionsDict("vpa_dissipation_coefficient" => 1.0e-3,
                                     "vperp_dissipation_coefficient" => 1.0e-3),
-    "geometry" => Dict("DeltaB"=>0.0,
+    "geometry" => OptionsDict("DeltaB"=>0.0,
                        "option"=>"constant-helical",
                        "pitch"=>0.1,
                        "rhostar"=> 0.1),
