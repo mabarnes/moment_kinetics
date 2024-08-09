@@ -17,13 +17,14 @@ export io_input
 export pp_input
 export geometry_input
 export set_defaults_and_check_top_level!, set_defaults_and_check_section!,
-       Dict_to_NamedTuple
+       options_to_TOML, Dict_to_NamedTuple
 export merge_dict_with_kwargs!
 
 using ..communication
 using ..type_definitions: mk_float, mk_int
 
 using MPI
+using TOML
 
 """
 """
@@ -40,18 +41,24 @@ end
 an option but known at compile time when a `time_info` struct is passed as a function
 argument.
 """
-struct time_info{Terrorsum <: Real, Trkimp, Timpzero}
+struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero}
     n_variables::mk_int
     nstep::mk_int
     end_time::mk_float
+    t::MPISharedArray{mk_float,1}
     dt::MPISharedArray{mk_float,1}
     previous_dt::MPISharedArray{mk_float,1}
     next_output_time::MPISharedArray{mk_float,1}
     dt_before_output::MPISharedArray{mk_float,1}
     dt_before_last_fail::MPISharedArray{mk_float,1}
     CFL_prefactor::mk_float
-    step_to_output::MPISharedArray{Bool,1}
+    step_to_moments_output::MPISharedArray{Bool,1}
+    step_to_dfns_output::MPISharedArray{Bool,1}
+    write_moments_output::MPISharedArray{Bool,1}
+    write_dfns_output::MPISharedArray{Bool,1}
     step_counter::Ref{mk_int}
+    moments_output_counter::Ref{mk_int}
+    dfns_output_counter::Ref{mk_int}
     failure_counter::Ref{mk_int}
     failure_caused_by::Vector{mk_int}
     limit_caused_by::Vector{mk_int}
@@ -76,8 +83,11 @@ struct time_info{Terrorsum <: Real, Trkimp, Timpzero}
     last_fail_proximity_factor::mk_float
     minimum_dt::mk_float
     maximum_dt::mk_float
+    implicit_braginskii_conduction::Bool
+    implicit_electron_advance::Bool
     implicit_ion_advance::Bool
     implicit_vpa_advection::Bool
+    implicit_electron_ppar::Bool
     write_after_fixed_step_count::Bool
     error_sum_zero::Terrorsum
     split_operators::Bool
@@ -85,6 +95,8 @@ struct time_info{Terrorsum <: Real, Trkimp, Timpzero}
     converged_residual_value::mk_float
     use_manufactured_solns_for_advance::Bool
     stopfile::String
+    debug_io::T_debug_output # Currently only used by electrons
+    electron::T_electron
 end
 
 """
@@ -107,6 +119,8 @@ mutable struct advance_info
     neutral_ionization_collisions_1V::Bool
     ionization_source::Bool
     krook_collisions_ii::Bool
+    mxwl_diff_collisions_ii::Bool
+    mxwl_diff_collisions_nn::Bool
     explicit_weakform_fp_collisions::Bool
     external_source::Bool
     ion_numerical_dissipation::Bool
@@ -115,6 +129,8 @@ mutable struct advance_info
     continuity::Bool
     force_balance::Bool
     energy::Bool
+    electron_energy::Bool
+    electron_conduction::Bool
     neutral_external_source::Bool
     neutral_source_terms::Bool
     neutral_continuity::Bool
@@ -155,9 +171,19 @@ end
 
 """
 """
-const boltzmann_electron_response = "boltzmann_electron_response"
-const boltzmann_electron_response_with_simple_sheath = "boltzmann_electron_response_with_simple_sheath"
-export boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath
+@enum electron_physics_type begin
+    boltzmann_electron_response 
+    boltzmann_electron_response_with_simple_sheath 
+    braginskii_fluid
+    kinetic_electrons
+    kinetic_electrons_with_temperature_equation
+end
+export electron_physics_type
+export boltzmann_electron_response
+export boltzmann_electron_response_with_simple_sheath
+export braginskii_fluid
+export kinetic_electrons
+export kinetic_electrons_with_temperature_equation
 
 """
 """
@@ -405,11 +431,27 @@ struct drive_input
 end
 
 """
+Structs set up for the collision operators so far in use. These will each
+be contained in the main collisions_input struct below, as substructs. 
 """
+Base.@kwdef struct mxwl_diff_collisions_input
+    use_maxwell_diffusion::Bool
+    # different diffusion coefficients for each species, has units of 
+    # frequency * velocity^2. Diffusion coefficients usually denoted D
+    D_ii::mk_float
+    D_nn::mk_float
+    # Setting to switch between different options for Krook collision operator
+    diffusion_coefficient_option::String # "reference_parameters" # "manual", 
+end
+
 Base.@kwdef struct krook_collisions_input
     use_krook::Bool
     # Ion-ion Coulomb collision rate at the reference density and temperature
     nuii0::mk_float
+    # Electron-electron Coulomb collision rate at the reference density and temperature
+    nuee0::mk_float
+    # Electron-ion Coulomb collision rate at the reference density and temperature
+    nuei0::mk_float
     # Setting to switch between different options for Krook collision operator
     frequency_option::String # "reference_parameters" # "manual", 
 end
@@ -448,18 +490,30 @@ Base.@kwdef struct fkpl_collisions_input
 end
 
 """
+Collisions input struct to contain all the different collisions substructs and overall 
+collision input parameters.
 """
 struct collisions_input
-    # charge exchange collision frequency
+    # ion-neutral charge exchange collision frequency
     charge_exchange::mk_float
+    # electron-neutral charge exchange collision frequency
+    charge_exchange_electron::mk_float
     # ionization collision frequency
     ionization::mk_float
+    # ionization collision frequency for electrons (probably should be same as for ions)
+    ionization_electron::mk_float
+    # ionization energy cost
+    ionization_energy::mk_float
     # if constant_ionization_rate = true, use an ionization term that is constant in z
     constant_ionization_rate::Bool
+    # electron-ion collision frequency
+    nu_ei::mk_float
     # struct of parameters for the Krook operator
     krook::krook_collisions_input
     # struct of parameters for the Fokker-Planck operator
     fkpl::fkpl_collisions_input
+    # struct of parameters for the Maxwellian Diffusion operator
+    mxwl_diff::mxwl_diff_collisions_input
 end
 
 """
@@ -678,15 +732,17 @@ Utility method for converting a string to an Enum when getting from a Dict, base
 type of the default value
 """
 function get(d::Dict, key, default::Enum)
-    valstring = get(d, key, nothing)
-    if valstring == nothing
+    val_maybe_string = get(d, key, nothing)
+    if val_maybe_string == nothing
         return default
+    elseif isa(val_maybe_string, Enum)
+        return val_maybe_string
     # instances(typeof(default)) gets the possible values of the Enum. Then convert to
     # Symbol, then to String.
-    elseif valstring ∈ (split(s, ".")[end] for s ∈ String.(Symbol.(instances(typeof(default)))))
-        return eval(Symbol(valstring))
+    elseif val_maybe_string ∈ Tuple(split(s, ".")[end] for s ∈ string.(instances(typeof(default))))
+        return eval(Symbol(val_maybe_string))
     else
-        error("Expected a $(typeof(default)), but '$valstring' is not in "
+        error("Expected a $(typeof(default)), but '$val_maybe_string' is not in "
               * "$(instances(typeof(default)))")
     end
 end
@@ -760,16 +816,11 @@ function set_defaults_and_check_section!(options::AbstractDict, section_name;
     end
 
     # Set default values if a key was not set explicitly
-    explicit_keys = keys(section)
-    for (key_sym, value) ∈ kwargs
+    for (key_sym, default_value) ∈ kwargs
         key = String(key_sym)
-        if !(key ∈ explicit_keys)
-            # merge this entry to section Dict 
-            # (creating a temporary Dict seems necessary in general,
-            # rather than just referencing the unexisting key in the section Dict)
-            section = merge(section, Dict{String,Any}(key => value))
-            #section[key] = value
-        end
+        # Use `Base.get()` here to take advantage of our `Enum`-handling method of
+        # `Base.get()` defined above.
+        section[key] = get(section, key, default_value)
     end
 
     return section
@@ -800,6 +851,27 @@ function merge_dict_with_kwargs!(dict_base; args...)
         dict_base[k] = v
     end
     return nothing
+end
+
+"""
+    options_to_toml(io::IO [=stdout], data::AbstractDict; sorted=false, by=identity)
+
+Convert `moment_kinetics` 'options' (in the form of a `Dict`) to TOML format.
+
+This function is defined so that we can handle some extra types, for example `Enum`.
+
+For descriptions of the arguments, see `TOML.print`.
+"""
+function options_to_TOML(args...; kwargs...)
+    function handle_extra_types(x)
+        if isa(x, Enum)
+            return string(x)
+        else
+            error("Unhandled type $(typeof(x)) for x=$x")
+        end
+    end
+
+    return TOML.print(handle_extra_types, args...; kwargs...)
 end
 
 end

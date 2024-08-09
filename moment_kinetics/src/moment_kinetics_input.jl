@@ -15,6 +15,7 @@ using ..coordinates: define_coordinate
 using ..external_sources
 using ..file_io: io_has_parallel, input_option_error, open_ascii_output_file
 using ..krook_collisions: setup_krook_collisions_input
+using ..maxwell_diffusion: setup_mxwl_diff_collisions_input
 using ..fokker_planck: setup_fkpl_collisions_input
 using ..finite_differences: fd_check_option
 using ..input_structs
@@ -23,7 +24,6 @@ using ..reference_parameters
 using ..geo: init_magnetic_geometry, setup_geometry_input
 using ..species_input: get_species_input
 using MPI
-using Quadmath
 using TOML
 using UUIDs
 
@@ -76,6 +76,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     # this is the directory where the simulation data will be stored
     base_directory = get(scan_input, "base_directory", "runs")
     output_dir = joinpath(base_directory, run_name)
+
     # if evolve_moments.density = true, evolve density via continuity eqn
     # and g = f/n via modified drift kinetic equation
     evolve_moments.density = get(scan_input, "evolve_moments_density", false)
@@ -87,17 +88,32 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     # normalised values used in the code.
     reference_params = setup_reference_parameters(scan_input)
 
+    # Set me_over_mi here so we can use reference_params
+    composition.me_over_mi = reference_params.me / reference_params.mref
+
     ## set geometry_input
     geometry_in = setup_geometry_input(scan_input, get_default_rhostar(reference_params))
     
     charge_exchange = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(composition.ion[1].initial_temperature))
     ionization = get(scan_input, "ionization_frequency", charge_exchange)
+    ionization_electron = get(scan_input, "electron_ionization_frequency", ionization)
+    ionization_energy = get(scan_input, "ionization_energy", 0.0)
     constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
+    nu_ei = get(scan_input, "nu_ei", 0.0)
     # set up krook collision inputs
     krook_input = setup_krook_collisions_input(scan_input, reference_params)
-    # set up krook collision inputs
+    # set up Fokker-Planck collision inputs
     fkpl_input = setup_fkpl_collisions_input(scan_input, reference_params)
-    collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate, krook_input, fkpl_input)
+    # set up maxwell diffusion collision inputs
+    mxwl_diff_input = setup_mxwl_diff_collisions_input(scan_input, reference_params)
+    # write total collision struct using the structs above, as each setup function 
+    # for the collisions outputs itself a struct of the type of collision, which
+    # is a substruct of the overall collisions_input struct.
+    collisions = collisions_input(charge_exchange, charge_exchange_electron, ionization,
+                                  ionization_electron, ionization_energy,
+                                  constant_ionization_rate, 
+                                  nu_ei, krook_input,
+                                  fkpl_input, mxwl_diff_input)
 
     # parameters related to the time stepping
     timestepping_section = set_defaults_and_check_section!(
@@ -121,9 +137,14 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         last_fail_proximity_factor=1.05,
         minimum_dt=0.0,
         maximum_dt=Inf,
-        implicit_ion_advance=true,
+        implicit_braginskii_conduction=true,
+        implicit_electron_advance=true,
+        implicit_ion_advance=false,
         implicit_vpa_advection=false,
+        implicit_electron_ppar=false,
         write_after_fixed_step_count=false,
+        write_error_diagnostics=false,
+        write_steady_state_diagnostics=false,
         high_precision_error_sum=false,
        )
     if timestepping_section["nwrite"] > timestepping_section["nstep"]
@@ -137,6 +158,95 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     if timestepping_section["atol_upar"] === nothing
         timestepping_section["atol_upar"] = 1.0e-2 * timestepping_section["rtol"]
     end
+
+    # parameters related to electron time stepping
+    electron_timestepping_section = set_defaults_and_check_section!(
+        scan_input, "electron_timestepping";
+        nstep=50000,
+        dt=timestepping_section["dt"] * sqrt(composition.me_over_mi),
+        CFL_prefactor=timestepping_section["CFL_prefactor"],
+        nwrite=nothing,
+        nwrite_dfns=nothing,
+        type=timestepping_section["type"],
+        split_operators=false,
+        converged_residual_value=1.0e-3,
+        rtol=timestepping_section["rtol"],
+        atol=timestepping_section["atol"],
+        step_update_prefactor=timestepping_section["step_update_prefactor"],
+        max_increase_factor=timestepping_section["max_increase_factor"],
+        max_increase_factor_near_last_fail=timestepping_section["max_increase_factor_near_last_fail"],
+        last_fail_proximity_factor=timestepping_section["last_fail_proximity_factor"],
+        minimum_dt=timestepping_section["minimum_dt"] * sqrt(composition.me_over_mi),
+        maximum_dt=timestepping_section["maximum_dt"] * sqrt(composition.me_over_mi),
+        write_after_fixed_step_count=false,
+        write_error_diagnostics=false,
+        write_steady_state_diagnostics=false,
+        high_precision_error_sum=timestepping_section["high_precision_error_sum"],
+        initialization_residual_value=1.0,
+        no_restart=false,
+        debug_io=false,
+       )
+    if electron_timestepping_section["nwrite"] === nothing
+        electron_timestepping_section["nwrite"] = electron_timestepping_section["nstep"]
+    elseif electron_timestepping_section["nwrite"] > electron_timestepping_section["nstep"]
+        electron_timestepping_section["nwrite"] = electron_timestepping_section["nstep"]
+    end
+    if electron_timestepping_section["nwrite_dfns"] === nothing
+        electron_timestepping_section["nwrite_dfns"] = electron_timestepping_section["nstep"]
+    elseif electron_timestepping_section["nwrite_dfns"] > electron_timestepping_section["nstep"]
+        electron_timestepping_section["nwrite_dfns"] = electron_timestepping_section["nstep"]
+    end
+    # Make a copy because "stopfile_name" is not a separate input for the electrons, so we
+    # do not want to add a value to the `input_dict`. We also add a few dummy inputs that
+    # are not actually used for electrons.
+    electron_timestepping_section = copy(electron_timestepping_section)
+    electron_timestepping_section["stopfile_name"] = timestepping_section["stopfile_name"]
+    electron_timestepping_section["atol_upar"] = NaN
+    electron_timestepping_section["steady_state_residual"] = true
+    if !(0.0 < electron_timestepping_section["step_update_prefactor"] < 1.0)
+        error("[electron_timestepping] step_update_prefactor="
+              * "$(electron_timestepping_section["step_update_prefactor"]) must be between "
+              * "0.0 and 1.0.")
+    end
+    if electron_timestepping_section["max_increase_factor"] ≤ 1.0
+        error("[electron_timestepping] max_increase_factor="
+              * "$(electron_timestepping_section["max_increase_factor"]) must be greater than "
+              * "1.0.")
+    end
+    if electron_timestepping_section["max_increase_factor_near_last_fail"] ≤ 1.0
+        error("[electron_timestepping] max_increase_factor_near_last_fail="
+              * "$(electron_timestepping_section["max_increase_factor_near_last_fail"]) must "
+              * "be greater than 1.0.")
+    end
+    if !isinf(electron_timestepping_section["max_increase_factor_near_last_fail"]) &&
+        electron_timestepping_section["max_increase_factor_near_last_fail"] > electron_timestepping_section["max_increase_factor"]
+        error("[electron_timestepping] max_increase_factor_near_last_fail="
+              * "$(electron_timestepping_section["max_increase_factor_near_last_fail"]) should be "
+              * "less than max_increase_factor="
+              * "$(electron_timestepping_section["max_increase_factor"]).")
+    end
+    if electron_timestepping_section["last_fail_proximity_factor"] ≤ 1.0
+        error("[electron_timestepping] last_fail_proximity_factor="
+              * "$(electron_timestepping_section["last_fail_proximity_factor"]) must be "
+              * "greater than 1.0.")
+    end
+    if electron_timestepping_section["minimum_dt"] > electron_timestepping_section["maximum_dt"]
+        error("[electron_timestepping] minimum_dt="
+              * "$(electron_timestepping_section["minimum_dt"]) must be less than "
+              * "maximum_dt=$(electron_timestepping_section["maximum_dt"])")
+    end
+    if electron_timestepping_section["maximum_dt"] ≤ 0.0
+        error("[electron_timestepping] maximum_dt="
+              * "$(electron_timestepping_section["maximum_dt"]) must be positive")
+    end
+
+    # Make a copy of `timestepping_section` here as we do not want to add
+    # `electron_timestepping_section` to the `input_dict` because there is already an
+    # "electron_timestepping" section containing the input info - we only want to put
+    # `electron_timestepping_section` into the Dict that is used to make
+    # `timestepping_input`, so that it becomes part of `timestepping_input`.
+    timestepping_section = copy(timestepping_section)
+    timestepping_section["electron_t_input"] = electron_timestepping_section
     if !(0.0 < timestepping_section["step_update_prefactor"] < 1.0)
         error("step_update_prefactor=$(timestepping_section["step_update_prefactor"]) must "
               * "be between 0.0 and 1.0.")
@@ -275,7 +385,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     # supported options are "finite_difference_vperp" "chebyshev_pseudospectral"
     vperp.discretization = get(scan_input, "vperp_discretization", "chebyshev_pseudospectral")
     vperp.element_spacing_option = get(scan_input, "vperp_element_spacing_option", "uniform")
-    
+
     # overwrite some default parameters related to the gyrophase grid
     # ngrid is the number of grid points per element
     gyrophase.ngrid = get(scan_input, "gyrophase_ngrid", 17)
@@ -302,7 +412,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         # supported options are "chebyshev_pseudospectral" and "finite_difference"
         vz.discretization = get(scan_input, "vz_discretization", vpa.discretization)
         vz.element_spacing_option = get(scan_input, "vz_element_spacing_option", "uniform")
-    
+
         # overwrite some default parameters related to the vr grid
         # ngrid is the number of grid points per element
         vr.ngrid = get(scan_input, "vr_ngrid", 1)
@@ -391,14 +501,6 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         _block_synchronize()
     end
 
-    # Create output_dir if it does not exist.
-    if !ignore_MPI
-        if global_rank[] == 0
-            mkpath(output_dir)
-        end
-        _block_synchronize()
-    end
-
     # replace mutable structures with immutable ones to optimize performance
     # and avoid possible misunderstandings	
 	z_advection_immutable = advection_input(z.advection.option, z.advection.constant_speed,
@@ -440,12 +542,17 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     drive_immutable = drive_input(drive.force_phi, drive.amplitude, drive.frequency, force_Er_zero)
 
     # inputs for file I/O
+    io_settings = set_defaults_and_check_section!(
+        scan_input, "output";
+        ascii_output=false,
+        binary_format=hdf5,
+        parallel_io=nothing,
+       )
+    if io_settings["parallel_io"] === nothing
+        io_settings["parallel_io"] = io_has_parallel(Val(io_settings["binary_format"]))
+    end
     # Make copy of the section to avoid modifying the passed-in Dict
-    io_settings = copy(get(scan_input, "output", Dict{String,Any}()))
-    io_settings["ascii_output"] = get(io_settings, "ascii_output", false)
-    io_settings["binary_format"] = get(io_settings, "binary_format", hdf5)
-    io_settings["parallel_io"] = get(io_settings, "parallel_io",
-                                     io_has_parallel(Val(io_settings["binary_format"])))
+    io_settings = copy(io_settings)
     run_id = string(uuid4())
     if !ignore_MPI
         # Communicate run_id to all blocks
@@ -455,8 +562,13 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         run_id = string(run_id_chars...)
     end
     io_settings["run_id"] = run_id
-    io_immutable = io_input(; output_dir=output_dir, run_name=run_name,
-                              Dict(Symbol(k)=>v for (k,v) in io_settings)...)
+    io_settings["output_dir"] = output_dir
+    io_settings["run_name"] = run_name
+    io_settings["write_error_diagnostics"] = timestepping_section["write_error_diagnostics"]
+    io_settings["write_steady_state_diagnostics"] = timestepping_section["write_steady_state_diagnostics"]
+    io_settings["write_electron_error_diagnostics"] = timestepping_section["electron_t_input"]["write_error_diagnostics"]
+    io_settings["write_electron_steady_state_diagnostics"] = timestepping_section["electron_t_input"]["write_steady_state_diagnostics"]
+    io_immutable = Dict_to_NamedTuple(io_settings)
 
     # initialize z grid and write grid point locations to file
     if ignore_MPI
@@ -495,7 +607,8 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
                                               run_directory=run_directory,
                                               ignore_MPI=ignore_MPI)
 
-    external_source_settings = setup_external_sources!(scan_input, r, z)
+    external_source_settings = setup_external_sources!(scan_input, r, z,
+                                                       composition.electron_physics)
 
     if global_rank[] == 0 && save_inputs_to_txt
         # Make file to log some information about inputs into.

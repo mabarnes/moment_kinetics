@@ -78,8 +78,7 @@ function ion_ionization_collisions_1V!(f_out, fvec_in, vz, vpa, vperp, z, r, vz_
     @boundscheck r.n == size(f_out,4) || throw(BoundsError(f_out))
     @boundscheck composition.n_ion_species == size(f_out,5) || throw(BoundsError(f_out))
     
-    
-    begin_r_z_vpa_region()
+    begin_r_z_region()
 
     if moments.evolve_density
         # For now, assume species index `is` corresponds to the neutral
@@ -146,9 +145,14 @@ function ion_ionization_collisions_1V!(f_out, fvec_in, vz, vpa, vperp, z, r, vz_
             #NB: used quasineutrality to replace electron density n_e with ion density
             #NEEDS GENERALISATION TO n_ion_species > 1 (missing species charge: Sum_i Z_i n_i = n_e)
             isn = is
-            @loop_r_z_vpa ir iz ivpa begin
-                # apply ionization collisions to all ion species
-                f_out[ivpa,1,iz,ir,is] += dt*collisions.ionization*fvec_in.pdf_neutral[ivpa,1,1,iz,ir,isn]*fvec_in.density[iz,ir,is]
+            @loop_r_z ir iz begin
+                @views interpolate_to_grid_vpa!(vpa.scratch, vpa.grid,
+                                                fvec_in.pdf_neutral[:,1,1,iz,ir,isn], vz,
+                                                vz_spectral)
+                @loop_vpa ivpa begin
+                    # apply ionization collisions to all ion species
+                    f_out[ivpa,1,iz,ir,is] += dt*collisions.ionization*vpa.scratch[ivpa]*fvec_in.density[iz,ir,is]
+                end
             end
         end
     end
@@ -157,10 +161,9 @@ end
 function neutral_ionization_collisions_1V!(f_neutral_out, fvec_in, vz, vpa, vperp, z, r,
                                            vz_spectral, moments, composition, collisions, dt)
     # This routine assumes a 1D model with:
-    # nvz = nvpa and identical vz and vpa grids
     # nvperp = nvr = nveta = 1
     # constant charge_exchange_frequency independent of species
-    @boundscheck vpa.n == size(f_neutral_out,1) || throw(BoundsError(f_neutral_out))
+    @boundscheck vz.n == size(f_neutral_out,1) || throw(BoundsError(f_neutral_out))
     @boundscheck 1 == size(f_neutral_out,2) || throw(BoundsError(f_neutral_out))
     @boundscheck 1 == size(f_neutral_out,3) || throw(BoundsError(f_neutral_out))
     @boundscheck z.n == size(f_neutral_out,4) || throw(BoundsError(f_neutral_out))
@@ -168,18 +171,18 @@ function neutral_ionization_collisions_1V!(f_neutral_out, fvec_in, vz, vpa, vper
     @boundscheck composition.n_neutral_species == size(f_neutral_out,6) || throw(BoundsError(f_neutral_out))
 
     if !moments.evolve_density
-        begin_r_z_vpa_region()
+        begin_sn_r_z_vz_region()
 
-        @loop_s is begin
+        @loop_sn isn begin
             # ion ionisation rate =   < f_n > n_e R_ion
             # neutral "ionisation" (depopulation) rate =   -  f_n  n_e R_ion
             # no gyroaverage here as 1V code
             #NB: used quasineutrality to replace electron density n_e with ion density
             #NEEDS GENERALISATION TO n_ion_species > 1 (missing species charge: Sum_i Z_i n_i = n_e)
-            isn = is
-            @loop_r_z_vpa ir iz ivpa begin
+            is = isn
+            @loop_r_z_vz ir iz ivz begin
                 # apply ionization collisions to all neutral species
-                f_neutral_out[ivpa,1,1,iz,ir,isn] -= dt*collisions.ionization*fvec_in.pdf_neutral[ivpa,1,1,iz,ir,isn]*fvec_in.density[iz,ir,is]
+                f_neutral_out[ivz,1,1,iz,ir,isn] -= dt*collisions.ionization*fvec_in.pdf_neutral[ivz,1,1,iz,ir,isn]*fvec_in.density[iz,ir,is]
             end
         end
     end
