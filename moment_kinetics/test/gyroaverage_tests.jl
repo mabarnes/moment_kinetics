@@ -230,7 +230,7 @@ function gyroaverage_test(absolute_error; rhostar=0.1, pitch=0.5, ngrid=5, kr=2,
 end
 
 function create_test_composition()
-    input_dict = Dict{String,Any}("composition" => Dict("n_ion_species" => 1, "n_neutral_species" => 0, "gyrokinetic_ions" => true ) )
+    input_dict = Dict{String,Any}("composition" => Dict{String,Any}("n_ion_species" => 1, "n_neutral_species" => 0, "gyrokinetic_ions" => true ) )
     println(input_dict)
     return get_species_input(input_dict)
 end
