@@ -66,8 +66,8 @@ restart_test_input_chebyshev_split_3_moments =
 Run a sound-wave test for a single set of parameters
 """
 # Note 'name' should not be shared by any two tests in this file
-function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
-    # by passing keyword arguments to run_test, kwargs becomes a Tuple of Pairs which can be used to
+function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
+    # by passing keyword arguments to run_test, args becomes a Tuple of Pairs which can be used to
     # update the default inputs
 
     # Make a copy to make sure nothing modifies the input Dicts defined in this test
@@ -85,8 +85,8 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
     parallel_io = input["output"]["parallel_io"]
     # Convert keyword arguments to a unique name
     name = input["run_name"]
-    if length(kwargs) > 0
-        name = string(name, (string(String(k)[1], v) for (k, v) in kwargs)...)
+    if length(args) > 0
+        name = string(name, (string(String(k)[1], v) for (k, v) in args)...)
     end
     if parallel_io
         name *= "parallel-io"
@@ -280,7 +280,7 @@ end
 
 function runtests()
     function do_tests(label, rtol=1.0e-3, nstep=50, include_moment_kinetic=true;
-                      tol_3V=nothing, kwargs...)
+                      tol_3V=nothing, args...)
         # Only testing Chebyshev discretization because interpolation not yet implemented
         # for finite-difference
 
@@ -322,7 +322,7 @@ function runtests()
                 this_input = deepcopy(restart_test_input_chebyshev)
                 this_input["base_directory"] = test_output_directory
                 this_input["output"]["parallel_io"] = parallel_io
-                run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
+                run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
             end
             if include_moment_kinetic
                 message = "restart split 1 from $base_label$label"
@@ -330,21 +330,21 @@ function runtests()
                     this_input = deepcopy(restart_test_input_chebyshev_split_1_moment)
                     this_input["base_directory"] = test_output_directory
                     this_input["output"]["parallel_io"] = parallel_io
-                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
+                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
                 end
                 message = "restart split 2 from $base_label$label"
                 @testset "$message" begin
                     this_input = deepcopy(restart_test_input_chebyshev_split_2_moments)
                     this_input["base_directory"] = test_output_directory
                     this_input["output"]["parallel_io"] = parallel_io
-                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
+                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
                 end
                 message = "restart split 3 from $base_label$label"
                 @testset "$message" begin
                     this_input = deepcopy(restart_test_input_chebyshev_split_3_moments)
                     this_input["base_directory"] = test_output_directory
                     this_input["output"]["parallel_io"] = parallel_io
-                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
+                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
                 end
             end
 
