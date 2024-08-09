@@ -8,7 +8,6 @@ export time_info
 export advection_input, advection_input_mutable
 export grid_input, grid_input_mutable
 export initial_condition_input, initial_condition_input_mutable
-export mk_to_toml
 export species_parameters, species_parameters_mutable
 export species_composition
 export drive_input, drive_input_mutable
@@ -17,12 +16,13 @@ export io_input
 export pp_input
 export geometry_input
 export set_defaults_and_check_top_level!, set_defaults_and_check_section!,
-       Dict_to_NamedTuple
+       options_to_TOML, Dict_to_NamedTuple
 
 using ..communication
 using ..type_definitions: mk_float, mk_int
 
 using MPI
+using TOML
 
 """
 """
@@ -699,17 +699,6 @@ function get(d::Dict, key, default::Enum)
 end
 
 """
-Convert some types used by moment_kinetics to types that are supported by TOML
-"""
-function mk_to_toml(value)
-    if isa(value, Enum)
-        return string(value)
-    else
-        return value
-    end
-end
-
-"""
 Set the defaults for options in the top level of the input, and check that there are not
 any unexpected options (i.e. options that have no default).
 
@@ -778,9 +767,12 @@ function set_defaults_and_check_section!(options::AbstractDict, section_name;
     end
 
     # Set default values if a key was not set explicitly
-    for (key_sym, value) ∈ kwargs
+    for (key_sym, default_value) ∈ kwargs
         key = String(key_sym)
-        section[key] = get(section, key, value)
+
+        # Use `Base.get()` here to take advantage of our `Enum`-handling method of
+        # `Base.get()` defined above.
+        section[key] = get(section, key, default_value)
     end
 
     return section
@@ -793,6 +785,27 @@ Useful as NamedTuple is immutable, so option values cannot be accidentally chang
 """
 function Dict_to_NamedTuple(d)
     return NamedTuple(Symbol(k)=>v for (k,v) ∈ d)
+end
+
+"""
+    options_to_toml(io::IO [=stdout], data::AbstractDict; sorted=false, by=identity)
+
+Convert `moment_kinetics` 'options' (in the form of a `Dict`) to TOML format.
+
+This function is defined so that we can handle some extra types, for example `Enum`.
+
+For descriptions of the arguments, see `TOML.print`.
+"""
+function options_to_TOML(args...; kwargs...)
+    function handle_extra_types(x)
+        if isa(x, Enum)
+            return string(x)
+        else
+            error("Unhandled type $(typeof(x)) for x=$x")
+        end
+    end
+
+    return TOML.print(handle_extra_types, args...; kwargs...)
 end
 
 end
