@@ -48,8 +48,7 @@ using ..charge_exchange: ion_charge_exchange_collisions_1V!,
                          neutral_charge_exchange_collisions_3V!
 using ..electron_kinetic_equation: update_electron_pdf!, implicit_electron_advance!
 using ..ionization: ion_ionization_collisions_1V!, neutral_ionization_collisions_1V!,
-                    ion_ionization_collisions_3V!, neutral_ionization_collisions_3V!,
-                    constant_ionization_source!
+                    ion_ionization_collisions_3V!, neutral_ionization_collisions_3V!
 using ..krook_collisions: krook_collisions!
 using ..maxwell_diffusion: ion_vpa_maxwell_diffusion!, neutral_vz_maxwell_diffusion!
 using ..external_sources
@@ -1106,7 +1105,6 @@ function setup_advance_flags(moments, composition, t_params, collisions,
     advance_neutral_ionization = false
     advance_ion_ionization_1V = false
     advance_neutral_ionization_1V = false
-    advance_ionization_source = false
     advance_krook_collisions_ii = false
     advance_maxwell_diffusion_ii = false
     advance_maxwell_diffusion_nn = false
@@ -1187,10 +1185,6 @@ function setup_advance_flags(moments, composition, t_params, collisions,
                           * "vpa.n=$(vpa.n), vz.n=$(vz.n)")
                 end
             end
-        end
-        # exception for the case where ions are evolved alone but sourced by ionization
-        if collisions.ionization > 0.0 && collisions.constant_ionization_rate && !t_params.implicit_ion_advance
-            advance_ionization_source = true
         end
         # set flags for krook and maxwell diffusion collisions, and negative coefficient
         # in both cases (as usual) will mean not employing that operator (flag remains false)
@@ -1283,8 +1277,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
                         advance_neutral_vz_advection, advance_ion_cx, advance_neutral_cx,
                         advance_ion_cx_1V, advance_neutral_cx_1V, advance_ion_ionization,
                         advance_neutral_ionization, advance_ion_ionization_1V,
-                        advance_neutral_ionization_1V, advance_ionization_source,
-                        advance_krook_collisions_ii,
+                        advance_neutral_ionization_1V, advance_krook_collisions_ii,
                         advance_maxwell_diffusion_ii, advance_maxwell_diffusion_nn,
                         explicit_weakform_fp_collisions,
                         advance_external_source, advance_ion_numerical_dissipation,
@@ -1320,7 +1313,6 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
     advance_neutral_ionization = false
     advance_ion_ionization_1V = false
     advance_neutral_ionization_1V = false
-    advance_ionization_source = false
     advance_krook_collisions_ii = false
     advance_maxwell_diffusion_ii = false
     advance_maxwell_diffusion_nn = false
@@ -1376,7 +1368,6 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
                       * "vpa.n=$(vpa.n), vz.n=$(vz.n)")
             end
         end
-        advance_ionization_source = collisions.ionization > 0.0 && collisions.constant_ionization_rate
         advance_krook_collisions_ii = collisions.krook.nuii0 > 0.0
         advance_external_source = external_source_settings.ion.active
         advance_ion_numerical_dissipation = true
@@ -1418,8 +1409,7 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
                         advance_neutral_vz_advection, advance_ion_cx, advance_neutral_cx,
                         advance_ion_cx_1V, advance_neutral_cx_1V, advance_ion_ionization,
                         advance_neutral_ionization, advance_ion_ionization_1V,
-                        advance_neutral_ionization_1V,
-                        advance_ionization_source, advance_krook_collisions_ii,
+                        advance_neutral_ionization_1V, advance_krook_collisions_ii,
                         advance_maxwell_diffusion_ii, advance_maxwell_diffusion_nn,
                         explicit_weakform_fp_collisions,
                         advance_external_source, advance_ion_numerical_dissipation,
@@ -3341,10 +3331,6 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     elseif advance.neutral_ionization_collisions
         neutral_ionization_collisions_3V!(fvec_out.pdf_neutral, fvec_in, composition, vz,
                                           vr, vzeta, vpa, vperp, z, r, collisions, dt)
-    end
-    if advance.ionization_source
-        constant_ionization_source!(fvec_out.pdf, fvec_in, vpa, vperp, z, r, moments,
-                                    composition, collisions, dt)
     end
 
     # Add Krook collision operator for ions

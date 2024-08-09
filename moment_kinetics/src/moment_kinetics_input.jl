@@ -190,7 +190,6 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     ionization = get(scan_input, "ionization_frequency", charge_exchange)
     ionization_electron = get(scan_input, "electron_ionization_frequency", ionization)
     ionization_energy = get(scan_input, "ionization_energy", 0.0)
-    constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
     nu_ei = get(scan_input, "nu_ei", 0.0)
     # set up krook collision inputs
     krook_input = setup_krook_collisions_input(scan_input, reference_params)
@@ -202,10 +201,8 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     # for the collisions outputs itself a struct of the type of collision, which
     # is a substruct of the overall collisions_input struct.
     collisions = collisions_input(charge_exchange, charge_exchange_electron, ionization,
-                                  ionization_electron, ionization_energy,
-                                  constant_ionization_rate, 
-                                  nu_ei, krook_input,
-                                  fkpl_input, mxwl_diff_input)
+                                  ionization_electron, ionization_energy, nu_ei,
+                                  krook_input, fkpl_input, mxwl_diff_input)
 
     # parameters related to the time stepping
     timestepping_section = set_defaults_and_check_section!(
