@@ -142,10 +142,10 @@ function run_test(test_input, expected_phi, tolerance; args...)
 
     # Make a copy to make sure nothing modifies the input Dicts defined in this test
     # script.
-    test_input = deepcopy(test_input)
+    input = deepcopy(test_input)
 
     # Convert keyword arguments to a unique name
-    name = test_input["run_name"] * ", with element spacing: " * test_input["z_element_spacing_option"]
+    name = input["run_name"] * ", with element spacing: " * input["z_element_spacing_option"]
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
 
@@ -156,11 +156,7 @@ function run_test(test_input, expected_phi, tolerance; args...)
     # Provide some progress info
     println("    - testing ", name)
 
-    # Convert dict from symbol keys to String keys
-    modified_inputs = Dict(String(k) => v for (k, v) in args)
-
     # Update default inputs with values to be changed
-    input = merge(test_input, modified_inputs)
     merge_dict_with_kwargs!(input; args...)
     input["run_name"] = name
 

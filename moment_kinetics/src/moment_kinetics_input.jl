@@ -87,14 +87,12 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     # Reference parameters that define the conversion between physical quantities and
     # normalised values used in the code.
     reference_params = setup_reference_parameters(scan_input)
-
-    # Set me_over_mi here so we can use reference_params
-    composition.me_over_mi = reference_params.me / reference_params.mref
-
+    
     ## set geometry_input
     geometry_in = setup_geometry_input(scan_input, get_default_rhostar(reference_params))
     
     charge_exchange = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(composition.ion[1].initial_temperature))
+    charge_exchange_electron = get(scan_input, "electron_charge_exchange_frequency", 0.0)
     ionization = get(scan_input, "ionization_frequency", charge_exchange)
     ionization_electron = get(scan_input, "electron_ionization_frequency", ionization)
     ionization_energy = get(scan_input, "ionization_energy", 0.0)

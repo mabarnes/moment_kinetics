@@ -9,7 +9,7 @@ using Base.Filesystem: tempname
 using moment_kinetics.communication
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.file_io: io_has_parallel
-using moment_kinetics.input_structs: grid_input, advection_input, hdf5
+using moment_kinetics.input_structs: grid_input, advection_input, hdf5, merge_dict_with_kwargs!
 using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data,
                                  load_species_data, load_fields_data,
                                  load_ion_moments_data, load_pdf_data,
@@ -72,7 +72,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
 
     # Make a copy to make sure nothing modifies the input Dicts defined in this test
     # script.
-    test_input = deepcopy(test_input)
+    input = deepcopy(test_input)
 
     if tol_3V === nothing
         atol_3V = atol
@@ -82,9 +82,9 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
         rtol_3V = tol_3V
     end
 
-    parallel_io = test_input["output"]["parallel_io"]
+    parallel_io = input["output"]["parallel_io"]
     # Convert keyword arguments to a unique name
-    name = test_input["run_name"]
+    name = input["run_name"]
     if length(kwargs) > 0
         name = string(name, (string(String(k)[1], v) for (k, v) in kwargs)...)
     end
@@ -95,17 +95,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
     # Provide some progress info
     println("    - testing ", message)
 
-    # Convert from Tuple of Pairs with symbol keys to Dict with String keys
-    modified_inputs = Dict(String(k) => v for (k, v) in kwargs
-                           if String(k) ∉ keys(test_input["timestepping"]))
-    modified_timestepping_inputs = Dict(String(k) => v for (k, v) in kwargs
-                                        if String(k) ∈ keys(test_input["timestepping"]))
-
-    # Update default inputs with values to be changed
-    input = merge(test_input, modified_inputs)
-    input["timestepping"] = merge(test_input["timestepping"],
-                                  modified_timestepping_inputs)
-
+    merge_dict_with_kwargs!(input; args...)
     input["run_name"] = name
 
     # Suppress console output while running

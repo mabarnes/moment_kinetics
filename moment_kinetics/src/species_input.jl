@@ -11,9 +11,12 @@ using ..input_structs: set_defaults_and_check_section!
 using ..input_structs: species_composition, ion_species_parameters, neutral_species_parameters
 using ..input_structs: spatial_initial_condition_input, velocity_initial_condition_input
 using ..input_structs: boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath
+using ..reference_parameters: setup_reference_parameters
 
 function get_species_input(toml_input)
-
+    
+    reference_params = setup_reference_parameters(toml_input)
+    
     # read general composition parameters
     composition_section = set_defaults_and_check_section!(toml_input, "composition",
         # n_ion_species is the number of evolved ion species
@@ -35,7 +38,7 @@ function get_species_input(toml_input)
         # ratio of the neutral particle mass to the ion mass
         mn_over_mi = 1.0,
         # ratio of the electron particle mass to the ion mass
-        me_over_mi = 1.0/1836.0,
+        me_over_mi = reference_params.me / reference_params.mref,
         # if false use true Knudsen cosine for neutral wall bc
         use_test_neutral_wall_pdf = false,
         # The ion flux reaching the wall that is recycled as neutrals is reduced by
