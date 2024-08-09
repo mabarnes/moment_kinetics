@@ -17,7 +17,7 @@ using ..post_processing_input: pp
 using ..plots_post_processing: compare_ion_pdf_symbolic_test, compare_fields_symbolic_test
 using ..plots_post_processing: compare_moments_symbolic_test, compare_neutral_pdf_symbolic_test
 using ..plots_post_processing: allocate_global_zr_neutral_moments, allocate_global_zr_ion_moments
-using ..plots_post_processing: allocate_global_zr_fields, get_composition
+using ..plots_post_processing: allocate_global_zr_fields
 using ..plots_post_processing: get_coords_nelement, get_coords_ngrid
 using moment_kinetics.array_allocation: allocate_float
 using moment_kinetics.type_definitions: mk_float, mk_int
@@ -32,6 +32,7 @@ using moment_kinetics.manufactured_solns: manufactured_solutions, manufactured_e
 using moment_kinetics.moment_kinetics_input: mk_input, read_input_file, get_default_rhostar
 using moment_kinetics.input_structs: geometry_input
 using moment_kinetics.reference_parameters
+using moment_kinetics.species_input: get_species_input
 
 import Base: get
 
@@ -240,7 +241,7 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         else 
             Lr_in = 1.0
         end
-        composition = get_composition(scan_input)
+        composition = get_species_input(scan_input)
 
         reference_params = setup_reference_parameters(scan_input)
         option = get(scan_input, "geometry_option", "constant-helical") #"1D-mirror"

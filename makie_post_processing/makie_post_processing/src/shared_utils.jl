@@ -1,6 +1,6 @@
 module shared_utils
 
-export calculate_and_write_frequencies, get_geometry, get_composition
+export calculate_and_write_frequencies, get_geometry
 
 using moment_kinetics.analysis: fit_delta_phi_mode
 using moment_kinetics.array_allocation: allocate_float
@@ -61,14 +61,6 @@ function calculate_and_write_frequencies(run_name, ntime, time, z, itime_min, it
 
     end
     return frequency, growth_rate, shifted_time, fitted_delta_phi
-end
-
-"""
-"""
-function get_composition(scan_input)
-    composition = get_species_input(scan_input)
-    return composition
-
 end
 
 function get_geometry(scan_input,z,r)
