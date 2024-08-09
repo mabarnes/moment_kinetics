@@ -117,7 +117,6 @@ mutable struct advance_info
     neutral_ionization_collisions::Bool
     ion_ionization_collisions_1V::Bool
     neutral_ionization_collisions_1V::Bool
-    ionization_source::Bool
     krook_collisions_ii::Bool
     mxwl_diff_collisions_ii::Bool
     mxwl_diff_collisions_nn::Bool
@@ -504,8 +503,6 @@ struct collisions_input
     ionization_electron::mk_float
     # ionization energy cost
     ionization_energy::mk_float
-    # if constant_ionization_rate = true, use an ionization term that is constant in z
-    constant_ionization_rate::Bool
     # electron-ion collision frequency
     nu_ei::mk_float
     # struct of parameters for the Krook operator

@@ -6,65 +6,9 @@ export ion_ionization_collisions_1V!
 export neutral_ionization_collisions_1V!
 export ion_ionization_collisions_3V!
 export neutral_ionization_collisions_3V!
-export constant_ionization_source!
 
 using ..interpolation: interpolate_to_grid_vpa!
 using ..looping
-
-"""
-"""
-
-function constant_ionization_source!(f_out, fvec_in, vpa, vperp, z, r, moments,
-                                     composition, collisions, dt)
-    @boundscheck vpa.n == size(f_out,1) || throw(BoundsError(f_out))
-    @boundscheck vperp.n == size(f_out,2) || throw(BoundsError(f_out))
-    @boundscheck z.n == size(f_out,3) || throw(BoundsError(f_out))
-    @boundscheck r.n == size(f_out,4) || throw(BoundsError(f_out))
-    @boundscheck composition.n_ion_species == size(f_out,5) || throw(BoundsError(f_out))
-    
-    begin_s_r_z_region()
-
-    # Oddly the test in test/harrisonthompson.jl matches the analitical
-    # solution (which assumes width=0.0) better with width=0.5 than with,
-    # e.g., width=0.15. Possibly narrower widths would require more vpa
-    # resolution, which then causes crashes due to overshoots giving
-    # negative f??
-    width = 0.5
-    vperpwidth = 0.5
-    rwidth = 0.5
-    if vperp.n > 1
-        vperpprefac = 1.0/vperpwidth^2
-    else
-        vperpprefac = 1.0
-    end
-    # loop below relies on vperp[1] = 0 when vperp.n = 1
-    @loop_s_r is ir begin
-        rfac = exp( - (r.grid[ir]/rwidth)^2)
-
-        @loop_z iz begin
-            if moments.evolve_ppar && moments.evolve_upar
-                @. vpa.scratch = vpa.grid / moments.vth[iz] + fvec_in.upar[iz]
-                prefactor = moments.vth[iz] / fvec_in.dens[iz]
-            elseif moments.evolve_ppar
-                @. vpa.scratch = vpa.grid / moments.vth[iz]
-                prefactor = moments.vth[iz] / fvec_in.dens[iz]
-            elseif moments.evolve_upar
-                @. vpa.scratch = vpa.grid + fvec_in.upar[iz]
-                prefactor = 1.0 / fvec_in.dens[iz]
-            elseif moments.evolve_density
-                @. vpa.scratch = vpa.grid
-                prefactor = 1.0 / fvec_in.dens[iz]
-            else
-                @. vpa.scratch = vpa.grid
-                prefactor = 1.0
-            end
-            @loop_vperp_vpa ivperp ivpa begin
-                vperpfac = vperpprefac*exp( - (vperp.grid[ivperp]/vperpwidth)^2) 
-                f_out[ivpa,ivperp,iz,ir,is] += dt*rfac*vperpfac*collisions.ionization/width*prefactor*exp(-(vpa.scratch[ivpa]/width)^2)
-            end
-        end
-    end
-end 
 
 function ion_ionization_collisions_1V!(f_out, fvec_in, vz, vpa, vperp, z, r, vz_spectral,
                                        moments, composition, collisions, dt)
