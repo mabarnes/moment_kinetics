@@ -7,7 +7,6 @@ evolve_moments_parallel_flow = true
 evolve_moments_parallel_pressure = true
 evolve_moments_conservation = true
 recycling_fraction = 0.5
-krook_collisions_option = "reference_parameters"
 T_e = 0.2 # 1.0
 T_wall = 0.1
 initial_density1 = 1.0
@@ -79,6 +78,9 @@ nwrite_dfns = 10000
 split_operators = false
 steady_state_residual = true
 converged_residual_value = 1.0e-3
+
+[krook_collisions]
+use_krook = true
 
 [ion_source]
 active = true
