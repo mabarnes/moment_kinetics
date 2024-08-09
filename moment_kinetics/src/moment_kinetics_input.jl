@@ -97,11 +97,11 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     ionization_energy = get(scan_input, "ionization_energy", 0.0)
     nu_ei = get(scan_input, "nu_ei", 0.0)
     # set up krook collision inputs
-    krook_input = setup_krook_collisions_input(scan_input, reference_params)
+    krook_input = setup_krook_collisions_input(scan_input)
     # set up Fokker-Planck collision inputs
-    fkpl_input = setup_fkpl_collisions_input(scan_input, reference_params)
+    fkpl_input = setup_fkpl_collisions_input(scan_input)
     # set up maxwell diffusion collision inputs
-    mxwl_diff_input = setup_mxwl_diff_collisions_input(scan_input, reference_params)
+    mxwl_diff_input = setup_mxwl_diff_collisions_input(scan_input)
     # write total collision struct using the structs above, as each setup function 
     # for the collisions outputs itself a struct of the type of collision, which
     # is a substruct of the overall collisions_input struct.
