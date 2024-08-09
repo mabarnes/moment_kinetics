@@ -792,18 +792,13 @@ keyword arguments are also a mix of Dicts and non-Dicts
 """
 
 function merge_dict_with_kwargs!(dict_base; args...)
-    #println("before merge: ",dict_base)
     for (k,v) in args
-        println(k, " ", v)
-        if String(k) in keys(dict_base)
-            if isa(v,AbstractDict)
-                v = merge(dict_base[String(k)],v)
-            end            
+        k = String(k)
+        if k in keys(dict_base) && isa(v, AbstractDict)
+            v = merge(dict_base[k], v)
         end
-        dict_mod = Dict(String(k) => v)
-        dict_base = merge(dict_base, dict_mod)
+        dict_base[k] = v
     end
-    #println("after merge: ",dict_base)
     return nothing
 end
 
