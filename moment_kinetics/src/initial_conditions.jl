@@ -714,12 +714,14 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                             vpa_advect, scratch_dummy, t_params.electron,
                                             collisions, composition,
                                             external_source_settings, num_diss_params,
+                                            nl_solver_params.electron_advance,
                                             max_electron_pdf_iterations,
                                             max_electron_sim_time;
                                             io_electron=io_initial_electron,
                                             initial_time=code_time,
                                             residual_tolerance=t_input["initialization_residual_value"],
-                                            evolve_ppar=true)
+                                            evolve_ppar=true,
+                                            solution_method="artificial_time_derivative")
             if success != ""
                 error("!!!max number of iterations for electron pdf update exceeded!!!\n"
                       * "Stopping at $(Dates.format(now(), dateformat"H:MM:SS"))")
@@ -769,6 +771,11 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                                gyroavs, scratch_dummy, 0.0,
                                                initialisation_nl_solver_params)
             else
+                begin_serial_region()
+                @serial_region begin
+                    t_params.electron.dt[] = t_input["dt"]
+                    t_params.electron.previous_dt[] = t_input["dt"]
+                end
                 success =
                     update_electron_pdf!(scratch_electron, pdf.electron.norm, moments,
                                          fields.phi, r, z, vperp, vpa, z_spectral,
@@ -776,6 +783,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                          vpa_advect, scratch_dummy, t_params.electron,
                                          collisions, composition,
                                          external_source_settings, num_diss_params,
+                                         nl_solver_params.electron_advance,
                                          max_electron_pdf_iterations,
                                          max_electron_sim_time;
                                          io_electron=io_initial_electron)

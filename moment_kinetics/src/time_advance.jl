@@ -663,7 +663,9 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     else
        electron_conduction_nl_solve_parameters = nothing
     end
-    if t_params.implicit_electron_advance
+    if t_params.implicit_electron_advance ||
+            composition.electron_physics ∈ (kinetic_electrons,
+                                            kinetic_electrons_with_temperature_equation)
         nl_solver_electron_advance_params =
             setup_nonlinear_solve(input_dict,
                                   (r=r, z=z, vperp=vperp, vpa=vpa),
@@ -770,6 +772,11 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         resize!(t_params.electron.dfns_output_times, 0)
         t_params.electron.moments_output_counter[] = 1
         t_params.electron.dfns_output_counter[] = 1
+        begin_serial_region()
+        @serial_region begin
+            t_params.electron.dt[] = t_input["electron_t_input"]["dt"]
+            t_params.electron.previous_dt[] = t_input["electron_t_input"]["dt"]
+        end
     elseif composition.electron_physics != restart_electron_physics
         begin_serial_region()
         @serial_region begin
@@ -1498,7 +1505,7 @@ function setup_dummy_and_buffer_arrays(nr, nz, nvpa, nvperp, nvz, nvr, nvzeta,
     buffer_vpavperpr_5 = allocate_shared_float(nvpa,nvperp,nr)
     buffer_vpavperpr_6 = allocate_shared_float(nvpa,nvperp,nr)
 
-    if t_params.implicit_electron_advance
+    if t_params.implicit_electron_advance || true
         implicit_buffer_zr_1 = allocate_shared_float(nz,nr)
         implicit_buffer_zr_2 = allocate_shared_float(nz,nr)
         implicit_buffer_zr_3 = allocate_shared_float(nz,nr)
@@ -2017,8 +2024,8 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
                 scratch[t_params.n_rk_stages+1], pdf, moments, fields, nothing, nothing, vz,
                 vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
                 collisions, geometry, gyroavs, external_source_settings, num_diss_params,
-                t_params, advance, scratch_dummy, false; pdf_bc_constraints=false,
-                update_electrons=false)
+                t_params, nl_solver_params, advance, scratch_dummy, false;
+                pdf_bc_constraints=false, update_electrons=false)
         end
 
         if finish_now
@@ -2309,8 +2316,8 @@ function apply_all_bcs_constraints_update_moments!(
         this_scratch, pdf, moments, fields, boundary_distributions, scratch_electron, vz,
         vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
         collisions, geometry, gyroavs, external_source_settings, num_diss_params,
-        t_params, advance, scratch_dummy, diagnostic_moments; pdf_bc_constraints=true,
-        update_electrons=true)
+        t_params, nl_solver_params, advance, scratch_dummy, diagnostic_moments;
+        pdf_bc_constraints=true, update_electrons=true)
 
     begin_s_r_z_region()
 
@@ -2412,7 +2419,8 @@ function apply_all_bcs_constraints_update_moments!(
                z_spectral, vperp_spectral, vpa_spectral, electron_z_advect,
                electron_vpa_advect, scratch_dummy, t_params.electron, collisions,
                composition, external_source_settings, num_diss_params,
-               max_electron_pdf_iterations, max_electron_sim_time)
+               nl_solver_params.electron_advance, max_electron_pdf_iterations,
+               max_electron_sim_time)
             success = kinetic_electron_success
         end
     end
@@ -2489,12 +2497,12 @@ end
 
 """
     adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron,
-                              t_params, moments, fields,
+                              t_params, pdf, moments, fields, boundary_distributions,
                               composition, collisions, geometry,
                               external_source_settings, spectral_objects,
-                              advect_objects, gyroavs, num_diss_params, advance,
-                              scratch_dummy, r, z, vperp, vpa, vzeta, vr, vz,
-                              success, nl_max_its_fraction)
+                              advect_objects, gyroavs, num_diss_params,
+                              nl_solver_params, advance, scratch_dummy, r, z, vperp,
+                              vpa, vzeta, vr, vz, success, nl_max_its_fraction)
 
 Check the error estimate for the embedded RK method and adjust the timestep if
 appropriate.
@@ -2503,9 +2511,9 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron,
                                    t_params, pdf, moments, fields, boundary_distributions,
                                    composition, collisions, geometry,
                                    external_source_settings, spectral_objects,
-                                   advect_objects, gyroavs, num_diss_params, advance,
-                                   scratch_dummy, r, z, vperp, vpa, vzeta, vr, vz,
-                                   success, nl_max_its_fraction)
+                                   advect_objects, gyroavs, num_diss_params,
+                                   nl_solver_params, advance, scratch_dummy, r, z, vperp,
+                                   vpa, vzeta, vr, vz, success, nl_max_its_fraction)
     #error_norm_method = "Linf"
     error_norm_method = "L2"
 
@@ -2636,8 +2644,8 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron,
         loworder_constraints_scratch, pdf, moments, fields, boundary_distributions,
         scratch_electron, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
         advect_objects, composition, collisions, geometry, gyroavs,
-        external_source_settings, num_diss_params, t_params, advance, scratch_dummy,
-        false; update_electrons=false)
+        external_source_settings, num_diss_params, t_params, nl_solver_params, advance,
+        scratch_dummy, false; update_electrons=false)
 
     # Re-calculate moment derivatives in the `moments` struct, in case they were changed
     # by the previous call
@@ -2645,8 +2653,8 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron,
         scratch[t_params.n_rk_stages+1], pdf, moments, fields, boundary_distributions,
         scratch_electron, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
         advect_objects, composition, collisions, geometry, gyroavs,
-        external_source_settings, num_diss_params, t_params, advance, scratch_dummy,
-        false; pdf_bc_constraints=false, update_electrons=false)
+        external_source_settings, num_diss_params, t_params, nl_solver_params, advance,
+        scratch_dummy, false; pdf_bc_constraints=false, update_electrons=false)
 
     # Calculate the timstep error estimates
     if z.bc == "wall" && (moments.evolve_upar || moments.evolve_ppar)
@@ -3033,7 +3041,7 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t_params, vz,
                     boundary_distributions, scratch_electron, vz, vr, vzeta, vpa, vperp,
                     z, r, spectral_objects, advect_objects, composition, collisions,
                     geometry, gyroavs, external_source_settings, num_diss_params,
-                    t_params, advance, scratch_dummy, false)
+                    t_params, nl_solver_params, advance, scratch_dummy, false)
                 if success != ""
                     # Break out of the istage loop, as passing `success != ""` to the
                     # adaptive timestep update function will signal a failed timestep, so
@@ -3079,9 +3087,9 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t_params, vz,
             scratch[istage+1], pdf, moments, fields, boundary_distributions,
             scratch_electron, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
             advect_objects, composition, collisions, geometry, gyroavs,
-            external_source_settings, num_diss_params, t_params, advance, scratch_dummy,
-            diagnostic_moments; pdf_bc_constraints=apply_bc_constraints,
-            update_electrons=update_electrons)
+            external_source_settings, num_diss_params, t_params, nl_solver_params,
+            advance, scratch_dummy, diagnostic_moments;
+            pdf_bc_constraints=apply_bc_constraints, update_electrons=update_electrons)
         if success != ""
             # Break out of the istage loop, as passing `success != ""` to the
             # adaptive timestep update function will signal a failed timestep, so
@@ -3104,8 +3112,8 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t_params, vz,
                                   boundary_distributions, composition, collisions,
                                   geometry, external_source_settings, spectral_objects,
                                   advect_objects, gyroavs, num_diss_params,
-                                  advance, scratch_dummy, r, z, vperp, vpa,
-                                  vzeta, vr, vz, success, nl_max_its_fraction)
+                                  nl_solver_params, advance, scratch_dummy, r, z, vperp,
+                                  vpa, vzeta, vr, vz, success, nl_max_its_fraction)
     elseif success != ""
         error("Implicit part of timestep failed")
     end
@@ -3502,6 +3510,7 @@ function backward_euler!(fvec_out, fvec_in, scratch_electron, pdf, fields, momen
                                                 scratch_dummy, t_params.electron,
                                                 collisions, composition,
                                                 external_source_settings, num_diss_params,
+                                                nl_solver_params.electron_advance,
                                                 max_electron_pdf_iterations,
                                                 max_electron_sim_time; ion_dt=dt)
         success = (electron_success == "")
