@@ -3,6 +3,7 @@ using Pkg
 Pkg.activate(".")
 
 using moment_kinetics
+using moment_kinetics.type_definitions: OptionsDict
 
 # Create a temporary directory for test output
 test_output_directory = tempname()
@@ -10,7 +11,6 @@ mkpath(test_output_directory)
 
 base_input = Dict("run_name" => "precompilation",
                   "base_directory" => test_output_directory,
-                  "dt" => 0.0,
                   "r_ngrid" => 5,
                   "r_nelement" => 3,
                   "r_bc" => "periodic",
@@ -44,7 +44,7 @@ base_input = Dict("run_name" => "precompilation",
                   "vz_bc" => "zero",
                   "vz_L" => 8.0,
                   "vz_discretization" => "finite_difference",
-                  "timestepping" => Dict{String,Any}("nstep" => 1))
+                  "timestepping" => OptionsDict("nstep" => 1, "dt" => 2.0e-11))
 cheb_input = merge(base_input, Dict("r_discretization" => "chebyshev_pseudospectral",
                                     "z_discretization" => "chebyshev_pseudospectral",
                                     "vperp_discretization" => "chebyshev_pseudospectral",
@@ -66,22 +66,22 @@ for input ∈ [base_input, cheb_input, wall_bc_input, wall_bc_cheb_input]
     push!(inputs_list, x)
 end
 
-collisions_input1 = merge(wall_bc_cheb_input, Dict("n_neutral_species" => 0,
-                                                  "krook_collisions" => Dict{String,Any}("use_krook" => true),
-                                                  "fokker_planck_collisions" => Dict{String,Any}("use_fokker_planck" => true, "self_collisions" => true, "slowing_down_test" => true),
+collisions_input1 = merge(wall_bc_cheb_input, Dict( "composition" => OptionsDict("n_neutral_species" => 0),
+                                                  "krook_collisions" => OptionsDict("use_krook" => true),
+                                                  "fokker_planck_collisions" => OptionsDict("use_fokker_planck" => true, "self_collisions" => true, "slowing_down_test" => true),
                                                   "vperp_discretization" => "gausslegendre_pseudospectral",
                                                   "vpa_discretization" => "gausslegendre_pseudospectral",
                                                  ))
-collisions_input2 = merge(wall_bc_cheb_input, Dict("n_neutral_species" => 0,
-                                                  "krook_collisions" => Dict{String,Any}("use_krook" => true),
-                                                  "fokker_planck_collisions" => Dict{String,Any}("use_fokker_planck" => true, "self_collisions" => true, "slowing_down_test" => true),
+collisions_input2 = merge(wall_bc_cheb_input, Dict("composition" => OptionsDict("n_neutral_species" => 0),
+                                                  "krook_collisions" => OptionsDict("use_krook" => true),
+                                                  "fokker_planck_collisions" => OptionsDict("use_fokker_planck" => true, "self_collisions" => true, "slowing_down_test" => true),
                                                   "vperp_discretization" => "gausslegendre_pseudospectral",
                                                   "vpa_discretization" => "gausslegendre_pseudospectral",
                                                   "vperp_bc" => "zero-impose-regularity",
                                                  ))
 # add an additional input for every geometry option available in addition to the default
-geo_input1 = merge(wall_bc_cheb_input, Dict("n_neutral_species" => 0,
-                                            "geometry" => Dict{String,Any}("option" => "1D-mirror", "DeltaB" => 0.5, "pitch" => 0.5, "rhostar" => 1.0))) 
+geo_input1 = merge(wall_bc_cheb_input, Dict("composition" => OptionsDict("n_neutral_species" => 0),
+                                            "geometry" => OptionsDict("option" => "1D-mirror", "DeltaB" => 0.5, "pitch" => 0.5, "rhostar" => 1.0))) 
 
 kinetic_electron_input = merge(cheb_input, Dict("evolve_moments_density" => true,
                                                 "evolve_moments_parallel_flow" => true,
@@ -95,7 +95,7 @@ kinetic_electron_input = merge(cheb_input, Dict("evolve_moments_density" => true
                                                 "vr_ngrid" => 1,
                                                 "vr_nelement" => 1,
                                                 "electron_physics" => "kinetic_electrons",
-                                                "electron_timestepping" => Dict{String,Any}("nstep" => 1,
+                                                "electron_timestepping" => OptionsDict("nstep" => 1,
                                                                                             "dt" => 2.0e-11,
                                                                                             "initialization_residual_value" => 1.0e10,
                                                                                             "converged_residual_value" => 1.0e10,

@@ -3,6 +3,7 @@ using Pkg
 Pkg.activate(".")
 
 using moment_kinetics
+using moment_kinetics.type_definitions: OptionsDict
 
 # Create a temporary directory for test output
 test_output_directory = tempname()
@@ -10,7 +11,6 @@ mkpath(test_output_directory)
 
 input = Dict("run_name" => "precompilation",
              "base_directory" => test_output_directory,
-             "dt" => 0.0,
              "evolve_moments_density" => true,
              "evolve_moments_parallel_flow" => true,
              "evolve_moments_parallel_pressure" => true,
@@ -48,9 +48,9 @@ input = Dict("run_name" => "precompilation",
              "vz_bc" => "zero",
              "vz_L" => 8.0,
              "vz_discretization" => "chebyshev_pseudospectral",
-             "timestepping" => Dict{String,Any}("nstep" => 1,
+             "timestepping" => OptionsDict("nstep" => 1,
                                                 "dt" => 2.0e-11),
-             "electron_timestepping" => Dict{String,Any}("nstep" => 1,
+             "electron_timestepping" => OptionsDict("nstep" => 1,
                                                          "dt" => 2.0e-11,
                                                          "initialization_residual_value" => 1.0e10,
                                                          "converged_residual_value" => 1.0e10,
