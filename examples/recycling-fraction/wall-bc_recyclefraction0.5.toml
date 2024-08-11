@@ -1,7 +1,7 @@
-evolve_moments_density = true
-evolve_moments_parallel_flow = true
-evolve_moments_parallel_pressure = true
-evolve_moments_conservation = true
+evolve_moments_density = false
+evolve_moments_parallel_flow = false
+evolve_moments_parallel_pressure = false
+evolve_moments_conservation = false
 charge_exchange_frequency = 0.75
 ionization_frequency = 0.5
 constant_ionization_rate = false
@@ -27,7 +27,6 @@ vz_discretization = "chebyshev_pseudospectral"
 [composition]
 n_ion_species = 1
 n_neutral_species = 1
-electron_physics = "boltzmann_electron_response"
 recycling_fraction = 0.5
 T_e = 0.2 # 1.0
 T_wall = 0.1
@@ -37,7 +36,7 @@ initial_density = 1.0
 initial_temperature = 1.0
 
 [z_IC_ion_species_1]
-initialization_option = "gaussian"
+intialization_option = "gaussian"
 density_amplitude = 0.001
 density_phase = 0.0
 upar_amplitude = 1.0
@@ -68,7 +67,7 @@ temperature_amplitude = 0.0
 temperature_phase = 0.0
 
 [vpa_IC_neutral_species_1]
-initialization_option= "gaussian"
+initialization_option = "gaussian"
 density_amplitude = 1.0
 density_phase = 0.0
 upar_amplitude = 0.0
@@ -106,10 +105,8 @@ source_T = 2.0
 #vpa_dissipation_coefficient = 1.0e-1
 #vpa_dissipation_coefficient = 1.0e-2
 #vpa_dissipation_coefficient = 1.0e-3
-force_minimum_pdf_value = 0.0
 
 [neutral_numerical_dissipation]
 #vz_dissipation_coefficient = 1.0e-1
 #vz_dissipation_coefficient = 1.0e-2
 #vz_dissipation_coefficient = 1.0e-3
-force_minimum_pdf_value = 0.0
