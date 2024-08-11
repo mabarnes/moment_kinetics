@@ -849,16 +849,20 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
     # N.B. QQ varies with ielement for vperp, but not vpa
     # a radau element is used for the vperp grid (see get_QQ_local!())
     get_QQ_local!(QQ_j,j,lobatto,radau,coord,option)
+    if coord.bc == "periodic" && coord.nrank != 1
+        error("periodic boundary conditions not supported when dimension is distributed")
+    end
     if coord.bc == "periodic" && coord.nrank == 1
         QQ_global[imax[end], imin[j]:imax[j]] .+= QQ_j[1,:] ./ 2.0
-        QQ_global[imin[j],imin[j]:imax[j]] .+= QQ_j[1,:] ./ 2.0
+        QQ_global[1,1] += 1.0
+        QQ_global[1,end] += -1.0
     else
         QQ_global[imin[j],imin[j]:imax[j]] .+= QQ_j[1,:]
     end
     for k in 2:imax[j]-imin[j] 
         QQ_global[k,imin[j]:imax[j]] .+= QQ_j[k,:]
     end
-    if coord.nelement_local > 1 || (coord.bc == "periodic" && coord.nrank == 1)
+    if coord.nelement_local > 1
         QQ_global[imax[j],imin[j]:imax[j]] .+= QQ_j[ngrid,:]./2.0
     else
         QQ_global[imax[j],imin[j]:imax[j]] .+= QQ_j[ngrid,:]
@@ -875,7 +879,6 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
         if j == coord.nelement_local
             if coord.bc == "periodic" && coord.nrank == 1
                 QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:] / 2.0
-                QQ_global[imin[1],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:] / 2.0
             else
                 QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]
             end
@@ -884,7 +887,7 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
         end
     end
 
-    if dirichlet_bc
+    if dirichlet_bc && !coord.bc == "periodic"
         # Make matrix diagonal for first/last grid points so it does not change the values
         # there
         if !(coord.name == "vperp") 
