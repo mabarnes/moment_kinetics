@@ -3072,7 +3072,7 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t_params, vz,
                                 || t_params.implicit_coefficient_is_zero[istage+1])
         update_electrons = (t_params.rk_coefs_implicit === nothing
                             || !(t_params.implicit_electron_advance || t_params.implicit_electron_ppar)
-                            || t_params.implicit_coefficient_is_zero[istage+1]
+                            || (istage < n_rk_stages && t_params.implicit_coefficient_is_zero[istage+1])
                             || (istage == n_rk_stages && t_params.implicit_coefficient_is_zero[1]))
         diagnostic_moments = diagnostic_checks && istage == n_rk_stages
         success = apply_all_bcs_constraints_update_moments!(
