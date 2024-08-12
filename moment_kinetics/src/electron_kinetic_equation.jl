@@ -1850,6 +1850,7 @@ function electron_kinetic_equation_euler_update!(fvec_out, fvec_in, moments, z, 
             # Add source term to turn steady state solution into a backward-Euler update of
             # electron_ppar with the ion timestep `ion_dt`.
             ppar_out = fvec_out.electron_ppar
+            ppar_in = fvec_in.electron_ppar
             ppar_previous_ion_step = moments.electron.ppar
             begin_r_z_region()
             @loop_r_z ir iz begin
@@ -1859,7 +1860,7 @@ function electron_kinetic_equation_euler_update!(fvec_out, fvec_in, moments, z, 
                 #   RHS(ppar) - (ppar - ppar_previous_ion_step) / ion_dt = 0,
                 # resulting in a backward-Euler step (as long as the pseudo-timestepping
                 # loop converges).
-                ppar_out[iz,ir] += -dt * (ppar_out[iz,ir] - ppar_previous_ion_step[iz,ir]) / ion_dt
+                ppar_out[iz,ir] += -dt * (ppar_in[iz,ir] - ppar_previous_ion_step[iz,ir]) / ion_dt
             end
         end
     end
