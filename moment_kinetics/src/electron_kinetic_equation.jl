@@ -650,6 +650,13 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                   moments.neutral.pz, moments.electron, collisions,
                                   ion_dt, composition, external_source_settings.electron,
                                   num_diss_params, z)
+
+        if t_params.dt[] > 0.5 * ion_dt
+            begin_serial_region()
+            @serial_region begin
+                t_params.dt[] = 0.5 * ion_dt
+            end
+        end
     end
 
     if !evolve_ppar
@@ -1086,6 +1093,13 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                      t_params.moments_output_counter[], r, z, vperp, vpa)
                 finish_electron_io(io_electron)
             end
+        end
+    end
+    if ion_dt !== nothing && t_params.dt[] != t_params.previous_dt[]
+        # Reset dt in case it was reduced to be less than 0.5*ion_dt
+        begin_serial_region()
+        @serial_region begin
+            t_params.dt[] = t_params.previous_dt[]
         end
     end
     if !electron_pdf_converged
