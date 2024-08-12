@@ -45,7 +45,7 @@ temperature_amplitude = 0.0
 temperature_phase = 0.0
 
 [vpa_IC_ion_species_1]
-option = "gaussian"
+initialization_option = "gaussian"
 density_amplitude = 1.0
 density_phase = 0.0
 upar_amplitude = 0.0
