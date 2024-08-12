@@ -720,8 +720,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                             io_electron=io_initial_electron,
                                             initial_time=code_time,
                                             residual_tolerance=t_input["initialization_residual_value"],
-                                            evolve_ppar=true,
-                                            solution_method="artificial_time_derivative")
+                                            evolve_ppar=true)
             if success != ""
                 error("!!!max number of iterations for electron pdf update exceeded!!!\n"
                       * "Stopping at $(Dates.format(now(), dateformat"H:MM:SS"))")

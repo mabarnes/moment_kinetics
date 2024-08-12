@@ -708,7 +708,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         error("Cannot use implicit_ion_advance and implicit_vpa_advection at the same "
               * "time")
     end
-    if nl_solver_electron_advance_params !== nothing && t_params.implicit_electron_ppar
+    if t_params.implicit_electron_advance && t_params.implicit_electron_ppar
         error("Cannot use implicit_electron_advance and implicit_electron_ppar at the "
               * "same time.")
     end
@@ -3489,7 +3489,7 @@ function backward_euler!(fvec_out, fvec_in, scratch_electron, pdf, fields, momen
     electron_z_advect, electron_vpa_advect = advect_objects.electron_z_advect, advect_objects.electron_vpa_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
-    if nl_solver_params.electron_advance !== nothing
+    if t_params.implicit_electron_advance
         success = implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron,
                                              moments, fields, collisions, composition,
                                              geometry, external_source_settings,
@@ -3499,9 +3499,7 @@ function backward_euler!(fvec_out, fvec_in, scratch_electron, pdf, fields, momen
                                              electron_vpa_advect, gyroavs, scratch_dummy,
                                              dt, nl_solver_params.electron_advance)
     elseif t_params.implicit_electron_ppar
-        #max_electron_pdf_iterations = 1000
-        #max_electron_sim_time = nothing
-        max_electron_pdf_iterations = nothing
+        max_electron_pdf_iterations = 1000
         max_electron_sim_time = 1.0e-3
         electron_success = update_electron_pdf!(scratch_electron, pdf.electron.norm,
                                                 moments, fields.phi, r, z, vperp, vpa,

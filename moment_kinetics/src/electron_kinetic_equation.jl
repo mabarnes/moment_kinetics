@@ -652,10 +652,6 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                   num_diss_params, z)
     end
 
-    if evolve_ppar
-        error("advancing electron_ppar is not supported yet in electron_backward_euler()")
-    end
-
     if !evolve_ppar
         # ppar is not updated in the pseudo-timestepping loop below. So that we can read
         # ppar from the scratch structs, copy moments.electron.ppar into all of them.
@@ -734,15 +730,16 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
             end
         end
 
-        # Do a forward-Euler update of the electron pdf, and (if evove_ppar=true) the
-        # electron parallel pressure as an initial guess.
+        # Do a forward-Euler update of the electron pdf as an initial guess. Even when
+        # evolving electron_ppar, do not update electron_ppar here because if dt is bigger
+        # than ion_dt, then an explicit timestep will likely make electron_ppar over-shoot
+        # which would just take more iterations in the Newton-Krylov solve to fix.
         electron_kinetic_equation_euler_update!(new_scratch, old_scratch, moments, z,
                                                 vperp, vpa, z_spectral, vpa_spectral,
                                                 z_advect, vpa_advect, scratch_dummy,
                                                 collisions, composition,
                                                 external_source_settings, num_diss_params,
-                                                t_params.dt[]; evolve_ppar=evolve_ppar,
-                                                ion_dt=ion_dt)
+                                                t_params.dt[])
 
         # Do a backward-Euler update of the electron pdf, and (if evove_ppar=true) the
         # electron parallel pressure.
@@ -767,16 +764,14 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
             if evolve_ppar
                 this_dens = moments.electron.dens
                 this_upar = moments.electron.upar
-                if update_vth
-                    begin_r_z_region()
-                    this_vth = moments.electron.vth
-                    @loop_r_z ir iz begin
-                        # update the electron thermal speed using the updated electron
-                        # parallel pressure
-                        this_vth[iz,ir] = sqrt(abs(2.0 * electron_ppar_newvar[iz,ir] /
-                                                   (this_dens[iz,ir] *
-                                                    composition.me_over_mi)))
-                    end
+                begin_r_z_region()
+                this_vth = moments.electron.vth
+                @loop_r_z ir iz begin
+                    # update the electron thermal speed using the updated electron
+                    # parallel pressure
+                    this_vth[iz,ir] = sqrt(abs(2.0 * electron_ppar_newvar[iz,ir] /
+                                               (this_dens[iz,ir] *
+                                                composition.me_over_mi)))
                 end
                 calculate_electron_moment_derivatives!(
                     moments,
@@ -793,13 +788,17 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                      z_spectral, z)
             end
 
-            begin_r_z_region()
-            @loop_r_z ir iz begin
-                electron_ppar_residual[iz,ir] = 0.0
+            if evolve_ppar
+                begin_r_z_region()
+                @loop_r_z ir iz begin
+                    electron_ppar_residual[iz,ir] = electron_ppar_old[iz,ir]
+                end
+            else
+                begin_r_z_region()
+                @loop_r_z ir iz begin
+                    electron_ppar_residual[iz,ir] = 0.0
+                end
             end
-            #electron_energy_residual!(electron_ppar_residual, electron_ppar_newvar, fvec_in,
-            #                          moments, collisions, composition,
-            #                          external_source_settings, num_diss_params, z, dt)
 
             # electron_kinetic_equation_euler_update!() just adds dt*d(g_e)/dt to the
             # electron_pdf member of the first argument, so if we set the electron_pdf member
@@ -817,7 +816,9 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                                     vpa, z_spectral, vpa_spectral, z_advect,
                                                     vpa_advect, scratch_dummy, collisions,
                                                     composition, external_source_settings,
-                                                    num_diss_params, t_params.dt[])
+                                                    num_diss_params, t_params.dt[];
+                                                    evolve_ppar=evolve_ppar,
+                                                    ion_dt=ion_dt)
 
             # Now
             #   residual = f_electron_old + dt*RHS(f_electron_newvar)
@@ -825,6 +826,12 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
             begin_s_r_z_vperp_vpa_region()
             @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
                 f_electron_residual[ivpa,ivperp,iz,ir,is] = f_electron_newvar[ivpa,ivperp,iz,ir,is] - f_electron_residual[ivpa,ivperp,iz,ir,is]
+            end
+            if evolve_ppar
+                begin_r_z_region()
+                @loop_r_z ir iz begin
+                    electron_ppar_residual[iz,ir] = electron_ppar_newvar[iz,ir] - electron_ppar_residual[iz,ir]
+                end
             end
 
             # Set residual to zero where pdf_electron is determined by boundary conditions.
