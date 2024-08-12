@@ -37,7 +37,7 @@ initial_temperature = 1.0
 
 [z_IC_ion_species_1]
 initialization_option = "gaussian"
-density_amplitude1 = 0.001
+density_amplitude = 0.001
 density_phase = 0.0
 upar_amplitude = 1.0
 upar_phase = 0.0
