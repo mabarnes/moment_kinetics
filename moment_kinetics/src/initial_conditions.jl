@@ -770,11 +770,6 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                                gyroavs, scratch_dummy, 0.0,
                                                initialisation_nl_solver_params)
             else
-                begin_serial_region()
-                @serial_region begin
-                    t_params.electron.dt[] = t_input["dt"]
-                    t_params.electron.previous_dt[] = t_input["dt"]
-                end
                 success =
                     update_electron_pdf!(scratch_electron, pdf.electron.norm, moments,
                                          fields.phi, r, z, vperp, vpa, z_spectral,

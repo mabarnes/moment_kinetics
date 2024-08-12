@@ -599,6 +599,12 @@ end
 """
 Update the electron distribution function using backward-Euler for an artifical time
 advance of the electron kinetic equation until a steady-state solution is reached.
+
+Note that this function does not use the [`runge_kutta`](@ref) timestep functionality.
+`t_params.previous_dt[]` is used to store the (adaptively updated) initial timestep of the
+pseudotimestepping loop (initial value of `t_params.dt[]` within
+`electron_backward_euler!()`). `t_params.dt[]` is adapted according to the iteration
+counts of the Newton solver.
 """
 function electron_backward_euler!(scratch, pdf, moments, phi, collisions, composition, r,
         z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
@@ -609,6 +615,11 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
 
     if max_electron_pdf_iterations === nothing && max_electron_sim_time === nothing
         error("Must set one of max_electron_pdf_iterations and max_electron_sim_time")
+    end
+
+    begin_serial_region()
+    @serial_region begin
+        t_params.dt[] = t_params.previous_dt[]
     end
 
     begin_r_z_region()
@@ -637,6 +648,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                            num_diss_params.electron.moment_dissipation_coefficient,
                                            composition.electron_physics)
 
+    reduced_by_ion_dt = false
     if ion_dt !== nothing
         evolve_ppar = true
 
@@ -656,6 +668,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
             @serial_region begin
                 t_params.dt[] = 0.5 * ion_dt
             end
+            reduced_by_ion_dt = true
         end
     end
 
@@ -708,6 +721,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                  t_params.moments_output_counter[], r, z, vperp, vpa)
         end
     end
+    first_step = true
     # evolve (artificially) in time until the residual is less than the tolerance
     while (!electron_pdf_converged
            && ((max_electron_pdf_iterations !== nothing && t_params.step_counter[] - initial_step_counter < max_electron_pdf_iterations)
@@ -919,8 +933,81 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                        left_preconditioner=nothing,
                                        right_preconditioner=nothing,
                                        coords=(r=r, z=z, vperp=vperp, vpa=vpa))
-        if !newton_success
-            error("electron_backward_euler() Newton solve failed")
+        if newton_success
+            #println("Newton its ", nl_solver_params.max_nonlinear_iterations_this_step[], " ", t_params.dt[])
+            begin_serial_region()
+            @serial_region begin
+                # update the time following the pdf update
+                t_params.t[] += t_params.dt[]
+
+                if first_step && !reduced_by_ion_dt
+                    # Adjust t_params.previous_dt[] which gives the initial timestep for
+                    # the electron pseudotimestepping loop.
+                    # If ion_dt<t_params.previous_dt[], assume that this is because we are
+                    # taking a short ion step to an output time, so we do not want to mess
+                    # up t_params.previous_dt[], which should be set sensibly for a
+                    # 'normal' timestep.
+                    if t_params.dt[] < t_params.previous_dt[]
+                        # Had to decrease timestep on the first step to get convergence,
+                        # so start next ion timestep with the decreased value.
+                        print("decreasing previous_dt due to failures ", t_params.previous_dt[])
+                        t_params.previous_dt[] = t_params.dt[]
+                        println(" -> ", t_params.previous_dt[])
+                    #elseif nl_solver_params.max_linear_iterations_this_step[] > max(0.4 * nl_solver_params.nonlinear_max_iterations, 5)
+                    elseif nl_solver_params.max_linear_iterations_this_step[] > 10
+                        # Step succeeded, but took a lot of iterations so decrease initial
+                        # step size.
+                        print("decreasing previous_dt due to iteration count ", t_params.previous_dt[])
+                        t_params.previous_dt[] /= t_params.max_increase_factor
+                        println(" -> ", t_params.previous_dt[])
+                    #elseif nl_solver_params.max_linear_iterations_this_step[] < max(0.1 * nl_solver_params.nonlinear_max_iterations, 2)
+                    elseif nl_solver_params.max_linear_iterations_this_step[] < 2
+                        # Only took a few iterations, so increase initial step size.
+                        print("increasing previous_dt due to iteration count ", t_params.previous_dt[])
+                        t_params.previous_dt[] *= t_params.max_increase_factor
+                        println(" -> ", t_params.previous_dt[])
+                    end
+                end
+
+                # Adjust the timestep depending on the iteration count.
+                # Note nl_solver_params.max_linear_iterations_this_step[] gives the total
+                # number of iterations, so is a better measure of the total work done by
+                # the solver than the nonlinear iteration count, or the linear iterations
+                # per nonlinear iteration
+                #if nl_solver_params.max_linear_iterations_this_step[] > max(0.2 * nl_solver_params.nonlinear_max_iterations, 10)
+                if nl_solver_params.max_linear_iterations_this_step[] > 5 && t_params.dt[] > t_params.previous_dt[]
+                    # Step succeeded, but took a lot of iterations so decrease step size.
+                    t_params.dt[] /= t_params.max_increase_factor
+                #elseif nl_solver_params.max_linear_iterations_this_step[] < max(0.05 * nl_solver_params.nonlinear_max_iterations, 5)
+                elseif nl_solver_params.max_linear_iterations_this_step[] < 2
+                #elseif nl_solver_params.max_nonlinear_iterations_this_step[] < 3
+                    # Only took a few iterations, so increase step size.
+                    t_params.dt[] *= t_params.max_increase_factor
+                end
+#if nl_solver_params.max_nonlinear_iterations_this_step[] < 4
+#    # Only took a few iterations, so increase step size.
+#    t_params.dt[] *= 1.5
+#elseif nl_solver_params.max_nonlinear_iterations_this_step[] > 10
+#    # Only took a few iterations, so increase step size.
+#    t_params.dt[] *= 0.9
+#end
+            end
+            _block_synchronize()
+
+            first_step = false
+        else
+            begin_serial_region()
+            @serial_region begin
+                t_params.dt[] *= 0.5
+            end
+            _block_synchronize()
+
+            # Swap old_scratch and new_scratch so that the next step restarts from the
+            # same state
+            scratch[1] = new_scratch
+            scratch[t_params.n_rk_stages+1] = old_scratch
+            old_scratch = scratch[1]
+            new_scratch = scratch[t_params.n_rk_stages+1]
         end
 
         apply_electron_bc_and_constraints!(new_scratch, phi, moments, z, vperp, vpa,
@@ -966,43 +1053,8 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
         end
         update_derived_moments_and_derivatives()
 
-        #if t_params.adaptive && istage == t_params.n_rk_stages
-        #    if ion_dt === nothing
-        #        local_max_dt = Inf
-        #    else
-        #        # Ensure timestep is not too big, so that d(electron_ppar)/dt 'source
-        #        # term' is numerically stable.
-        #        local_max_dt = 0.5 * ion_dt
-        #    end
-        #    electron_adaptive_timestep_update!(scratch, t_params.t[], t_params,
-        #                                       moments, phi, z_advect, vpa_advect,
-        #                                       composition, r, z, vperp, vpa,
-        #                                       vperp_spectral, vpa_spectral,
-        #                                       external_source_settings,
-        #                                       num_diss_params;
-        #                                       evolve_ppar=evolve_ppar,
-        #                                       local_max_dt=local_max_dt)
-        #    # Re-do this in case electron_adaptive_timestep_update!() re-arranged the
-        #    # `scratch` vector
-        #    new_scratch = scratch[istage+1]
-        #    old_scratch = scratch[istage]
-
-        #    if t_params.previous_dt[] == 0.0
-        #        # Re-calculate moments and moment derivatives as the timstep needs to
-        #        # be re-done with a smaller dt, so scratch[t_params.n_rk_stages+1] has
-        #        # been reset to the values from the beginning of the timestep here.
-        #        update_derived_moments_and_derivatives(true)
-        #    end
-        #end
-
-        # update the time following the pdf update
-        @serial_region begin
-            t_params.t[] += t_params.previous_dt[]
-        end
-        _block_synchronize()
-
         residual = -1.0
-        if t_params.previous_dt[] > 0.0
+        if newton_success
             # Calculate residuals to decide if iteration is converged.
             # Might want an option to calculate the residual only after a certain number
             # of iterations (especially during initialization when there are likely to be
@@ -1046,8 +1098,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                 end
             end
         end
-        if ((t_params.adaptive && t_params.write_moments_output[])
-            || (!t_params.adaptive && t_params.step_counter[] % t_params.nwrite_moments == 0)
+        if ((t_params.step_counter[] % t_params.nwrite_moments == 0)
             || (do_debug_io && (t_params.step_counter[] % debug_io_nwrite == 0)))
 
             begin_serial_region()

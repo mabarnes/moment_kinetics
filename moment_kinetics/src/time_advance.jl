@@ -772,11 +772,6 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         resize!(t_params.electron.dfns_output_times, 0)
         t_params.electron.moments_output_counter[] = 1
         t_params.electron.dfns_output_counter[] = 1
-        begin_serial_region()
-        @serial_region begin
-            t_params.electron.dt[] = t_input["electron_t_input"]["dt"]
-            t_params.electron.previous_dt[] = t_input["electron_t_input"]["dt"]
-        end
     elseif composition.electron_physics != restart_electron_physics
         begin_serial_region()
         @serial_region begin
@@ -2379,9 +2374,7 @@ function apply_all_bcs_constraints_update_moments!(
                                            composition.electron_physics)
     if composition.electron_physics ∈ (kinetic_electrons,
                                        kinetic_electrons_with_temperature_equation)
-        #max_electron_pdf_iterations = 1000
-        #max_electron_sim_time = nothing
-        max_electron_pdf_iterations = nothing
+        max_electron_pdf_iterations = 1000
         max_electron_sim_time = 1.0e-3
 
         # Copy ion and electron moments from `scratch` into `moments` to be used in

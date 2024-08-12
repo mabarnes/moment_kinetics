@@ -109,10 +109,10 @@ converged_residual_value = 1.0e-2
 #debug_io = 10000
 
 [nonlinear_solver]
-nonlinear_max_iterations = 1000
+nonlinear_max_iterations = 100
 rtol = 1.0e-5
 atol = 1.0e-12
-linear_restart = 40
+#linear_restart = 40
 #linear_restart = 200
 
 [ion_numerical_dissipation]
