@@ -331,20 +331,27 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
                 s *= 0.5
             end
 
+            #if residual_norm > previous_residual_norm
+            #    # Failed to find a point that decreases the residual, so try a negative
+            #    # step
+            #    s = -1.0e-5
+            #    parallel_map((x,delta_x) -> x + s * delta_x, w, x, delta_x)
+            #    residual_func!(residual, x)
+            #    residual_norm = distributed_norm(residual)
+            #    if residual_norm > previous_residual_norm
+            #        # That didn't work either, so just take the full step and hope for
+            #        # convergence later
+            #        parallel_map((x,delta_x) -> x + s * delta_x, w, x, delta_x)
+            #        residual_func!(residual, x)
+            #        residual_norm = distributed_norm(residual)
+            #    end
+            #end
             if residual_norm > previous_residual_norm
-                # Failed to find a point that decreases the residual, so try a negative
-                # step
-                s = -1.0e-5
+                # Line search didn't work, so just take the full step and hope for
+                # convergence later
                 parallel_map((x,delta_x) -> x + s * delta_x, w, x, delta_x)
                 residual_func!(residual, x)
                 residual_norm = distributed_norm(residual)
-                if residual_norm > previous_residual_norm
-                    # That didn't work either, so just take the full step and hope for
-                    # convergence later
-                    parallel_map((x,delta_x) -> x + s * delta_x, w, x, delta_x)
-                    residual_func!(residual, x)
-                    residual_norm = distributed_norm(residual)
-                end
             end
         end
         parallel_map((w) -> w, x, w)
