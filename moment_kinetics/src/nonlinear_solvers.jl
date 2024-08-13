@@ -104,7 +104,7 @@ function setup_nonlinear_solve(input_dict, coords, outer_coords=(); default_rtol
         V .= 0.0
     elseif electron_ppar_pdf_solve
         H = allocate_shared_float(linear_restart + 1, linear_restart)
-        V_ppar = allocate_shared_float(coords.z.n, coords.r.n, linear_restart+1)
+        V_ppar = allocate_shared_float(coords.z.n, linear_restart+1)
         V_pdf = allocate_shared_float(reverse(coord_sizes)..., linear_restart+1)
 
         begin_serial_region()
@@ -409,10 +409,10 @@ function get_distributed_norm(coords, rtol, atol, x)
         this_norm = distributed_norm_z
     elseif dims == (:vpa,)
         this_norm = distributed_norm_vpa
-    elseif dims == (:r, :z, :vperp, :vpa)
+    elseif dims == (:z, :vperp, :vpa)
         # Intended for implicit solve combining electron_ppar and pdf_electron, so will
         # not work for a single variable.
-        this_norm = distributed_norm_r_z_vperp_vpa
+        this_norm = distributed_norm_z_vperp_vpa
     elseif dims == (:s, :r, :z, :vperp, :vpa)
         this_norm = distributed_norm_s_r_z_vperp_vpa
     else
@@ -473,34 +473,28 @@ function distributed_norm_vpa(residual::AbstractArray{mk_float, 1}; coords, rtol
     return residual_norm
 end
 
-function distributed_norm_r_z_vperp_vpa(residual::Tuple{AbstractArray{mk_float, 2},AbstractArray{mk_float, 4}};
-                                        coords, rtol, atol, x)
+function distributed_norm_z_vperp_vpa(residual::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}};
+                                      coords, rtol, atol, x)
     ppar_residual, pdf_residual = residual
     x_ppar, x_pdf = x
-    r = coords.r
     z = coords.z
     vperp = coords.vperp
     vpa = coords.vpa
 
-    if r.irank < r.nrank - 1
-        rend = r.n
-    else
-        rend = r.n + 1
-    end
     if z.irank < z.nrank - 1
         zend = z.n
     else
         zend = z.n + 1
     end
 
-    begin_r_z_region()
+    begin_z_region()
 
     ppar_local_norm_square = 0.0
-    @loop_r_z ir iz begin
-        if ir == rend || iz == zend
+    @loop_z iz begin
+        if iz == zend
             continue
         end
-        ppar_local_norm_square += (ppar_residual[iz,ir] / (rtol * abs(x_ppar[iz,ir]) + atol))^2
+        ppar_local_norm_square += (ppar_residual[iz] / (rtol * abs(x_ppar[iz]) + atol))^2
     end
 
     _block_synchronize()
@@ -508,20 +502,20 @@ function distributed_norm_r_z_vperp_vpa(residual::Tuple{AbstractArray{mk_float, 
 
     if block_rank[] == 0
         ppar_global_norm_square = MPI.Allreduce(ppar_block_norm_square, +, comm_inter_block[])
-        ppar_global_norm_square = ppar_global_norm_square / (r.n_global * z.n_global)
+        ppar_global_norm_square = ppar_global_norm_square / z.n_global
     else
         ppar_global_norm_square = nothing
     end
 
-    begin_r_z_vperp_vpa_region()
+    begin_z_vperp_vpa_region()
 
     pdf_local_norm_square = 0.0
-    @loop_r_z ir iz begin
-        if ir == rend || iz == zend
+    @loop_z iz begin
+        if iz == zend
             continue
         end
         @loop_vperp_vpa ivperp ivpa begin
-            pdf_local_norm_square += (pdf_residual[ivpa,ivperp,iz,ir] / (rtol * abs(x_pdf[ivpa,ivperp,iz,ir]) + atol))^2
+            pdf_local_norm_square += (pdf_residual[ivpa,ivperp,iz] / (rtol * abs(x_pdf[ivpa,ivperp,iz]) + atol))^2
         end
     end
 
@@ -530,7 +524,7 @@ function distributed_norm_r_z_vperp_vpa(residual::Tuple{AbstractArray{mk_float, 
 
     if block_rank[] == 0
         pdf_global_norm_square = MPI.Allreduce(pdf_block_norm_square, +, comm_inter_block[])
-        pdf_global_norm_square = pdf_global_norm_square / (r.n_global * z.n_global * vperp.n_global * vpa.n_global)
+        pdf_global_norm_square = pdf_global_norm_square / (z.n_global * vperp.n_global * vpa.n_global)
 
         global_norm = sqrt(mean((ppar_global_norm_square, pdf_global_norm_square)))
     else
@@ -598,10 +592,10 @@ function get_distributed_dot(coords, rtol, atol, x)
         this_dot = distributed_dot_z
     elseif dims == (:vpa,)
         this_dot = distributed_dot_vpa
-    elseif dims == (:r, :z, :vperp, :vpa)
+    elseif dims == (:z, :vperp, :vpa)
         # Intended for implicit solve combining electron_ppar and pdf_electron, so will
         # not work for a single variable.
-        this_dot = distributed_dot_r_z_vperp_vpa
+        this_dot = distributed_dot_z_vperp_vpa
     elseif dims == (:s, :r, :z, :vperp, :vpa)
         this_dot = distributed_dot_s_r_z_vperp_vpa
     else
@@ -663,37 +657,31 @@ function distributed_dot_vpa(v::AbstractArray{mk_float, 1}, w::AbstractArray{mk_
     return local_dot
 end
 
-function distributed_dot_r_z_vperp_vpa(v::Tuple{AbstractArray{mk_float, 2},AbstractArray{mk_float, 4}},
-                                       w::Tuple{AbstractArray{mk_float, 2},AbstractArray{mk_float, 4}};
-                                       coords, atol, rtol, x)
+function distributed_dot_z_vperp_vpa(v::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}},
+                                     w::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}};
+                                     coords, atol, rtol, x)
     v_ppar, v_pdf = v
     w_ppar, w_pdf = w
     x_ppar, x_pdf = x
 
-    r = coords.r
     z = coords.z
     vperp = coords.vperp
     vpa = coords.vpa
 
-    if r.irank < r.nrank - 1
-        rend = r.n
-    else
-        rend = r.n + 1
-    end
     if z.irank < z.nrank - 1
         zend = z.n
     else
         zend = z.n + 1
     end
 
-    begin_r_z_region()
+    begin_z_region()
 
     ppar_local_dot = 0.0
-    @loop_r_z ir iz begin
-        if ir == rend || iz == zend
+    @loop_z iz begin
+        if iz == zend
             continue
         end
-        ppar_local_dot += v_ppar[iz,ir] * w_ppar[iz,ir] / (rtol * abs(x_ppar[iz,ir]) + atol)^2
+        ppar_local_dot += v_ppar[iz] * w_ppar[iz] / (rtol * abs(x_ppar[iz]) + atol)^2
     end
 
     _block_synchronize()
@@ -701,19 +689,19 @@ function distributed_dot_r_z_vperp_vpa(v::Tuple{AbstractArray{mk_float, 2},Abstr
 
     if block_rank[] == 0
         ppar_global_dot = MPI.Allreduce(ppar_block_dot, +, comm_inter_block[])
-        ppar_global_dot = ppar_global_dot / (r.n_global * z.n_global)
+        ppar_global_dot = ppar_global_dot / z.n_global
     else
         ppar_global_dot = nothing
     end
 
-    begin_r_z_vperp_vpa_region()
+    begin_z_vperp_vpa_region()
 
     pdf_local_dot = 0.0
-    @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-        if ir == rend || iz == zend
+    @loop_z_vperp_vpa iz ivperp ivpa begin
+        if iz == zend
             continue
         end
-        pdf_local_dot += v_pdf[ivpa,ivperp,iz,ir] * w_pdf[ivpa,ivperp,iz,ir] / (rtol * abs(x_pdf[ivpa,ivperp,iz,ir]) + atol)^2
+        pdf_local_dot += v_pdf[ivpa,ivperp,iz] * w_pdf[ivpa,ivperp,iz] / (rtol * abs(x_pdf[ivpa,ivperp,iz]) + atol)^2
     end
 
     _block_synchronize()
@@ -721,7 +709,7 @@ function distributed_dot_r_z_vperp_vpa(v::Tuple{AbstractArray{mk_float, 2},Abstr
 
     if block_rank[] == 0
         pdf_global_dot = MPI.Allreduce(pdf_block_dot, +, comm_inter_block[])
-        pdf_global_dot = pdf_global_dot / (r.n_global * z.n_global * vperp.n_global * vpa.n_global)
+        pdf_global_dot = pdf_global_dot / (z.n_global * vperp.n_global * vpa.n_global)
 
         global_dot = mean((ppar_global_dot, pdf_global_dot))
     else
@@ -786,10 +774,10 @@ function get_parallel_map(coords)
         return parallel_map_z
     elseif dims == (:vpa,)
         return parallel_map_vpa
-    elseif dims == (:r, :z, :vperp, :vpa)
+    elseif dims == (:z, :vperp, :vpa)
         # Intended for implicit solve combining electron_ppar and pdf_electron, so will
         # not work for a single variable.
-        return parallel_map_r_z_vperp_vpa
+        return parallel_map_z_vperp_vpa
     elseif dims == (:s, :r, :z, :vperp, :vpa)
         return parallel_map_s_r_z_vperp_vpa
     else
@@ -857,59 +845,59 @@ function parallel_map_vpa(func, result::AbstractArray{mk_float, 1}, x1, x2)
     return nothing
 end
 
-function parallel_map_r_z_vperp_vpa(func, result::Tuple{AbstractArray{mk_float, 2},AbstractArray{mk_float, 4}})
+function parallel_map_z_vperp_vpa(func, result::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}})
 
     result_ppar, result_pdf = result
 
-    begin_r_z_region()
+    begin_z_region()
 
-    @loop_r_z ir iz begin
-        result_ppar[iz,ir] = func()
+    @loop_z iz begin
+        result_ppar[iz] = func()
     end
 
-    begin_r_z_vperp_vpa_region()
+    begin_z_vperp_vpa_region()
 
-    @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-        result_pdf[ivpa,ivperp,iz,ir] = func()
+    @loop_z_vperp_vpa iz ivperp ivpa begin
+        result_pdf[ivpa,ivperp,iz] = func()
     end
 
     return nothing
 end
-function parallel_map_r_z_vperp_vpa(func, result::Tuple{AbstractArray{mk_float, 2},AbstractArray{mk_float, 4}}, x1)
+function parallel_map_z_vperp_vpa(func, result::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}}, x1)
 
     result_ppar, result_pdf = result
     x1_ppar, x1_pdf = x1
 
-    begin_r_z_region()
+    begin_z_region()
 
-    @loop_r_z ir iz begin
-        result_ppar[iz,ir] = func(x1_ppar[iz,ir])
+    @loop_z iz begin
+        result_ppar[iz] = func(x1_ppar[iz])
     end
 
-    begin_r_z_vperp_vpa_region()
+    begin_z_vperp_vpa_region()
 
-    @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-        result_pdf[ivpa,ivperp,iz,ir] = func(x1_pdf[ivpa,ivperp,iz,ir])
+    @loop_z_vperp_vpa iz ivperp ivpa begin
+        result_pdf[ivpa,ivperp,iz] = func(x1_pdf[ivpa,ivperp,iz])
     end
 
     return nothing
 end
-function parallel_map_r_z_vperp_vpa(func, result::Tuple{AbstractArray{mk_float, 2},AbstractArray{mk_float, 4}}, x1, x2)
+function parallel_map_z_vperp_vpa(func, result::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}}, x1, x2)
 
     result_ppar, result_pdf = result
     x1_ppar, x1_pdf = x1
     x2_ppar, x2_pdf = x2
 
-    begin_r_z_region()
+    begin_z_region()
 
-    @loop_r_z ir iz begin
-        result_ppar[iz,ir] = func(x1_ppar[iz,ir], x2_ppar[iz,ir])
+    @loop_z iz begin
+        result_ppar[iz] = func(x1_ppar[iz], x2_ppar[iz])
     end
 
-    begin_r_z_vperp_vpa_region()
+    begin_z_vperp_vpa_region()
 
-    @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-        result_pdf[ivpa,ivperp,iz,ir] = func(x1_pdf[ivpa,ivperp,iz,ir], x2_pdf[ivpa,ivperp,iz,ir])
+    @loop_z_vperp_vpa iz ivperp ivpa begin
+        result_pdf[ivpa,ivperp,iz] = func(x1_pdf[ivpa,ivperp,iz], x2_pdf[ivpa,ivperp,iz])
     end
 
     return nothing
@@ -958,10 +946,10 @@ function get_parallel_delta_x_calc(coords)
         return parallel_delta_x_calc_z
     elseif dims == (:vpa,)
         return parallel_delta_x_calc_vpa
-    elseif dims == (:r, :z, :vperp, :vpa)
+    elseif dims == (:z, :vperp, :vpa)
         # Intended for implicit solve combining electron_ppar and pdf_electron, so will
         # not work for a single variable.
-        return parallel_delta_x_calc_r_z_vperp_vpa
+        return parallel_delta_x_calc_z_vperp_vpa
     elseif dims == (:s, :r, :z, :vperp, :vpa)
         return parallel_delta_x_calc_s_r_z_vperp_vpa
     else
@@ -996,26 +984,26 @@ function parallel_delta_x_calc_vpa(delta_x::AbstractArray{mk_float, 1}, V, y)
     return nothing
 end
 
-function parallel_delta_x_calc_r_z_vperp_vpa(delta_x::Tuple{AbstractArray{mk_float, 2},AbstractArray{mk_float, 4}}, V, y)
+function parallel_delta_x_calc_z_vperp_vpa(delta_x::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}}, V, y)
 
     delta_x_ppar, delta_x_pdf = delta_x
     V_ppar, V_pdf = V
 
     ny = length(y)
 
-    begin_r_z_region()
+    begin_z_region()
 
-    @loop_r_z ir iz begin
+    @loop_z iz begin
         for iy ∈ 1:ny
-            delta_x_ppar[iz,ir] += y[iy] * V_ppar[iz,ir,iy]
+            delta_x_ppar[iz] += y[iy] * V_ppar[iz,iy]
         end
     end
 
-    begin_r_z_vperp_vpa_region()
+    begin_z_vperp_vpa_region()
 
-    @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+    @loop_z_vperp_vpa iz ivperp ivpa begin
         for iy ∈ 1:ny
-            delta_x_pdf[ivpa,ivperp,iz,ir] += y[iy] * V_pdf[ivpa,ivperp,iz,ir,iy]
+            delta_x_pdf[ivpa,ivperp,iz] += y[iy] * V_pdf[ivpa,ivperp,iz,iy]
         end
     end
 

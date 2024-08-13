@@ -154,19 +154,19 @@ struct scratch_dummy_arrays
     buffer_vpavperpzrs_1::MPISharedArray{mk_float,5}
     buffer_vpavperpzrs_2::MPISharedArray{mk_float,5}
     # buffers to hold moment quantities for implicit solves
-    implicit_buffer_zr_1::MPISharedArray{mk_float,2}
-    implicit_buffer_zr_2::MPISharedArray{mk_float,2}
-    implicit_buffer_zr_3::MPISharedArray{mk_float,2}
-    implicit_buffer_zr_4::MPISharedArray{mk_float,2}
-    implicit_buffer_zr_5::MPISharedArray{mk_float,2}
-    implicit_buffer_zr_6::MPISharedArray{mk_float,2}
+    implicit_buffer_z_1::MPISharedArray{mk_float,1}
+    implicit_buffer_z_2::MPISharedArray{mk_float,1}
+    implicit_buffer_z_3::MPISharedArray{mk_float,1}
+    implicit_buffer_z_4::MPISharedArray{mk_float,1}
+    implicit_buffer_z_5::MPISharedArray{mk_float,1}
+    implicit_buffer_z_6::MPISharedArray{mk_float,1}
     # buffers to hold electron for implicit solves
-    implicit_buffer_vpavperpzr_1::MPISharedArray{mk_float,4}
-    implicit_buffer_vpavperpzr_2::MPISharedArray{mk_float,4}
-    implicit_buffer_vpavperpzr_3::MPISharedArray{mk_float,4}
-    implicit_buffer_vpavperpzr_4::MPISharedArray{mk_float,4}
-    implicit_buffer_vpavperpzr_5::MPISharedArray{mk_float,4}
-    implicit_buffer_vpavperpzr_6::MPISharedArray{mk_float,4}
+    implicit_buffer_vpavperpz_1::MPISharedArray{mk_float,3}
+    implicit_buffer_vpavperpz_2::MPISharedArray{mk_float,3}
+    implicit_buffer_vpavperpz_3::MPISharedArray{mk_float,3}
+    implicit_buffer_vpavperpz_4::MPISharedArray{mk_float,3}
+    implicit_buffer_vpavperpz_5::MPISharedArray{mk_float,3}
+    implicit_buffer_vpavperpz_6::MPISharedArray{mk_float,3}
     # buffers to hold ion pdf for implicit solves
     implicit_buffer_vpavperpzrs_1::MPISharedArray{mk_float,5}
     implicit_buffer_vpavperpzrs_2::MPISharedArray{mk_float,5}
@@ -668,8 +668,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                             kinetic_electrons_with_temperature_equation)
         nl_solver_electron_advance_params =
             setup_nonlinear_solve(input_dict,
-                                  (r=r, z=z, vperp=vperp, vpa=vpa),
-                                  ();
+                                  (z=z, vperp=vperp, vpa=vpa),
+                                  (r,);
                                   default_rtol=t_params.rtol / 10.0,
                                   default_atol=t_params.atol / 10.0,
                                   electron_ppar_pdf_solve=true,
@@ -1501,33 +1501,33 @@ function setup_dummy_and_buffer_arrays(nr, nz, nvpa, nvperp, nvz, nvr, nvzeta,
     buffer_vpavperpr_6 = allocate_shared_float(nvpa,nvperp,nr)
 
     if t_params.implicit_electron_advance || true
-        implicit_buffer_zr_1 = allocate_shared_float(nz,nr)
-        implicit_buffer_zr_2 = allocate_shared_float(nz,nr)
-        implicit_buffer_zr_3 = allocate_shared_float(nz,nr)
-        implicit_buffer_zr_4 = allocate_shared_float(nz,nr)
-        implicit_buffer_zr_5 = allocate_shared_float(nz,nr)
-        implicit_buffer_zr_6 = allocate_shared_float(nz,nr)
+        implicit_buffer_z_1 = allocate_shared_float(nz)
+        implicit_buffer_z_2 = allocate_shared_float(nz)
+        implicit_buffer_z_3 = allocate_shared_float(nz)
+        implicit_buffer_z_4 = allocate_shared_float(nz)
+        implicit_buffer_z_5 = allocate_shared_float(nz)
+        implicit_buffer_z_6 = allocate_shared_float(nz)
 
-        implicit_buffer_vpavperpzr_1 = allocate_shared_float(nvpa,nvperp,nz,nr)
-        implicit_buffer_vpavperpzr_2 = allocate_shared_float(nvpa,nvperp,nz,nr)
-        implicit_buffer_vpavperpzr_3 = allocate_shared_float(nvpa,nvperp,nz,nr)
-        implicit_buffer_vpavperpzr_4 = allocate_shared_float(nvpa,nvperp,nz,nr)
-        implicit_buffer_vpavperpzr_5 = allocate_shared_float(nvpa,nvperp,nz,nr)
-        implicit_buffer_vpavperpzr_6 = allocate_shared_float(nvpa,nvperp,nz,nr)
+        implicit_buffer_vpavperpz_1 = allocate_shared_float(nvpa,nvperp,nz)
+        implicit_buffer_vpavperpz_2 = allocate_shared_float(nvpa,nvperp,nz)
+        implicit_buffer_vpavperpz_3 = allocate_shared_float(nvpa,nvperp,nz)
+        implicit_buffer_vpavperpz_4 = allocate_shared_float(nvpa,nvperp,nz)
+        implicit_buffer_vpavperpz_5 = allocate_shared_float(nvpa,nvperp,nz)
+        implicit_buffer_vpavperpz_6 = allocate_shared_float(nvpa,nvperp,nz)
     else
-        implicit_buffer_zr_1 = allocate_shared_float(0,0)
-        implicit_buffer_zr_2 = allocate_shared_float(0,0)
-        implicit_buffer_zr_3 = allocate_shared_float(0,0)
-        implicit_buffer_zr_4 = allocate_shared_float(0,0)
-        implicit_buffer_zr_5 = allocate_shared_float(0,0)
-        implicit_buffer_zr_6 = allocate_shared_float(0,0)
+        implicit_buffer_z_1 = allocate_shared_float(0)
+        implicit_buffer_z_2 = allocate_shared_float(0)
+        implicit_buffer_z_3 = allocate_shared_float(0)
+        implicit_buffer_z_4 = allocate_shared_float(0)
+        implicit_buffer_z_5 = allocate_shared_float(0)
+        implicit_buffer_z_6 = allocate_shared_float(0)
 
-        implicit_buffer_vpavperpzr_1 = allocate_shared_float(0,0,0,0)
-        implicit_buffer_vpavperpzr_2 = allocate_shared_float(0,0,0,0)
-        implicit_buffer_vpavperpzr_3 = allocate_shared_float(0,0,0,0)
-        implicit_buffer_vpavperpzr_4 = allocate_shared_float(0,0,0,0)
-        implicit_buffer_vpavperpzr_5 = allocate_shared_float(0,0,0,0)
-        implicit_buffer_vpavperpzr_6 = allocate_shared_float(0,0,0,0)
+        implicit_buffer_vpavperpz_1 = allocate_shared_float(0,0,0)
+        implicit_buffer_vpavperpz_2 = allocate_shared_float(0,0,0)
+        implicit_buffer_vpavperpz_3 = allocate_shared_float(0,0,0)
+        implicit_buffer_vpavperpz_4 = allocate_shared_float(0,0,0)
+        implicit_buffer_vpavperpz_5 = allocate_shared_float(0,0,0)
+        implicit_buffer_vpavperpz_6 = allocate_shared_float(0,0,0)
     end
 
     if t_params.implicit_ion_advance
@@ -1581,8 +1581,8 @@ function setup_dummy_and_buffer_arrays(nr, nz, nvpa, nvperp, nvz, nvr, nvzeta,
         buffer_vpavperpzs_1,buffer_vpavperpzs_2,buffer_vpavperpzs_3,buffer_vpavperpzs_4,buffer_vpavperpzs_5,buffer_vpavperpzs_6,
         buffer_vpavperprs_1,buffer_vpavperprs_2,buffer_vpavperprs_3,buffer_vpavperprs_4,buffer_vpavperprs_5,buffer_vpavperprs_6,
         buffer_vpavperpzrs_1,buffer_vpavperpzrs_2,
-        implicit_buffer_zr_1,implicit_buffer_zr_2,implicit_buffer_zr_3,implicit_buffer_zr_4,implicit_buffer_zr_5,implicit_buffer_zr_6,
-        implicit_buffer_vpavperpzr_1,implicit_buffer_vpavperpzr_2,implicit_buffer_vpavperpzr_3,implicit_buffer_vpavperpzr_4,implicit_buffer_vpavperpzr_5,implicit_buffer_vpavperpzr_6,
+        implicit_buffer_z_1,implicit_buffer_z_2,implicit_buffer_z_3,implicit_buffer_z_4,implicit_buffer_z_5,implicit_buffer_z_6,
+        implicit_buffer_vpavperpz_1,implicit_buffer_vpavperpz_2,implicit_buffer_vpavperpz_3,implicit_buffer_vpavperpz_4,implicit_buffer_vpavperpz_5,implicit_buffer_vpavperpz_6,
         implicit_buffer_vpavperpzrs_1,implicit_buffer_vpavperpzrs_2,implicit_buffer_vpavperpzrs_3,implicit_buffer_vpavperpzrs_4,implicit_buffer_vpavperpzrs_5,implicit_buffer_vpavperpzrs_6,
         buffer_vzvrvzetazsn_1,buffer_vzvrvzetazsn_2,buffer_vzvrvzetazsn_3,buffer_vzvrvzetazsn_4,buffer_vzvrvzetazsn_5,buffer_vzvrvzetazsn_6,
         buffer_vzvrvzetarsn_1,buffer_vzvrvzetarsn_2,buffer_vzvrvzetarsn_3,buffer_vzvrvzetarsn_4,buffer_vzvrvzetarsn_5,buffer_vzvrvzetarsn_6,
@@ -3451,8 +3451,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
                                   fvec_in.upar, fvec_in.ppar, fvec_in.density_neutral,
                                   fvec_in.uz_neutral, fvec_in.pz_neutral,
                                   moments.electron, collisions, dt, composition,
-                                  external_source_settings.electron, num_diss_params, z;
-                                  conduction=advance.electron_conduction)
+                                  external_source_settings.electron, num_diss_params, r,
+                                  z; conduction=advance.electron_conduction)
     elseif advance.electron_conduction
         # Explicit version of the implicit part of the IMEX timestep, need to evaluate
         # only the conduction term.

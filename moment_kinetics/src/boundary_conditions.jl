@@ -987,24 +987,33 @@ function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,5}, bc, vpe
 end
 
 function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,4}, bc, vperp, vperp_spectral, vperp_advect, diffusion)
+    @loop_r ir begin
+        @views enforce_vperp_boundary_condition!(f[:,:,:,ir], bc, vperp, vperp_spectral,
+                                                 vperp_advect, diffusion, ir)
+    end
+    return nothing
+end
+
+function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,3}, bc, vperp,
+                                           vperp_spectral, vperp_advect, diffusion, ir)
     if bc == "zero" || bc == "zero-impose-regularity"
         nvperp = vperp.n
         ngrid = vperp.ngrid
         # set zero boundary condition
-        @loop_r_z_vpa ir iz ivpa begin
+        @loop_z_vpa iz ivpa begin
             if diffusion || vperp_advect.speed[nvperp,ivpa,iz,ir] < 0.0
-                f[ivpa,nvperp,iz,ir] = 0.0
+                f[ivpa,nvperp,iz] = 0.0
             end
         end
         # set regularity condition d F / d vperp = 0 at vperp = 0
         if bc == "zero-impose-regularity" && (vperp.discretization == "gausslegendre_pseudospectral" || vperp.discretization == "chebyshev_pseudospectral")
             D0 = vperp_spectral.radau.D0
             buffer = @view vperp.scratch[1:ngrid-1]
-            @loop_r_z_vpa ir iz ivpa begin
+            @loop_z_vpa iz ivpa begin
                 if diffusion || vperp_advect.speed[1,ivpa,iz,ir] > 0.0
                     # adjust F(vperp = 0) so that d F / d vperp = 0 at vperp = 0
-                    @views @. buffer = D0[2:ngrid] * f[ivpa,2:ngrid,iz,ir]
-                    f[ivpa,1,iz,ir] = -sum(buffer)/D0[1]
+                    @views @. buffer = D0[2:ngrid] * f[ivpa,2:ngrid,iz]
+                    f[ivpa,1,iz] = -sum(buffer)/D0[1]
                 end
             end
         elseif bc == "zero"

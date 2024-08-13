@@ -4434,8 +4434,10 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             begin_serial_region()
             # Only need some struct with a 'speed' variable
             advect = (speed=@view(speed[:,:,:,:,it]),)
-            @views update_electron_speed_z!(advect, upar[:,:,it], vth[:,:,it],
-                                            run_info.vpa.grid)
+            for ir ∈ 1:run_info.r.n
+                @views update_electron_speed_z!(advect, upar[:,ir,it], vth[:,ir,it],
+                                                run_info.vpa.grid, ir)
+            end
         end
 
         # Horrible hack so that we can get the speed back without rearranging the
@@ -4512,9 +4514,12 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                                  external_source_density_amplitude=external_source_density_amplitude[:,:,it],
                                  external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,it],
                                  external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,it]),)
-            @views update_electron_speed_vpa!(advect, density[:,:,it], upar[:,:,it],
-                                              ppar[:,:,it], moments, run_info.vpa.grid,
-                                              run_info.external_source_settings.electron)
+            for ir ∈ 1:run_info.r.n
+                @views update_electron_speed_vpa!(advect, density[:,ir,it], upar[:,ir,it],
+                                                  ppar[:,ir,it], moments, run_info.vpa.grid,
+                                                  run_info.external_source_settings.electron,
+                                                  ir)
+            end
         end
 
         variable = speed

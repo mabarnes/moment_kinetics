@@ -752,15 +752,18 @@ end
                               vpa, dt)
 
 Add external source term to the electron kinetic equation.
+
+Note that this function operates on a single point in `r`, given by `ir`, and `pdf_out`,
+`pdf_in`, `electron_density`, and `electron_upar` should have no r-dimension.
 """
 function external_electron_source!(pdf_out, pdf_in, electron_density, electron_upar,
                                    moments, composition, electron_source_settings, vperp,
-                                   vpa, dt)
-    begin_r_z_vperp_region()
+                                   vpa, dt, ir)
+    begin_z_vperp_region()
 
     me_over_mi = composition.me_over_mi
 
-    source_amplitude = moments.electron.external_source_amplitude
+    source_amplitude = @view moments.electron.external_source_amplitude[:,ir]
     source_T = electron_source_settings.source_T
     if vperp.n == 1
         vth_factor = 1.0 / sqrt(source_T / me_over_mi)
@@ -770,18 +773,18 @@ function external_electron_source!(pdf_out, pdf_in, electron_density, electron_u
     vpa_grid = vpa.grid
     vperp_grid = vperp.grid
 
-    vth = moments.electron.vth
-    @loop_r_z ir iz begin
-        this_vth = vth[iz,ir]
-        this_upar = electron_upar[iz,ir]
-        this_prefactor = dt * this_vth / electron_density[iz,ir] * vth_factor *
-                         source_amplitude[iz,ir]
+    vth = @view moments.electron.vth[:,ir]
+    @loop_z iz begin
+        this_vth = vth[iz]
+        this_upar = electron_upar[iz]
+        this_prefactor = dt * this_vth / electron_density[iz] * vth_factor *
+                         source_amplitude[iz]
         @loop_vperp_vpa ivperp ivpa begin
             # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
             # normalisation of F
             vperp_unnorm = vperp_grid[ivperp] * this_vth
             vpa_unnorm = vpa_grid[ivpa] * this_vth + this_upar
-            pdf_out[ivpa,ivperp,iz,ir] +=
+            pdf_out[ivpa,ivperp,iz] +=
                 this_prefactor *
                 exp(-(vperp_unnorm^2 + vpa_unnorm^2) * me_over_mi / source_T)
         end
@@ -789,9 +792,9 @@ function external_electron_source!(pdf_out, pdf_in, electron_density, electron_u
 
     if electron_source_settings.source_type == "energy"
         # Take particles out of pdf so source does not change density
-        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-            pdf_out[ivpa,ivperp,iz,ir] -= dt * source_amplitude[iz,ir] *
-                                             pdf_in[ivpa,ivperp,iz,ir]
+        @loop_z_vperp_vpa iz ivperp ivpa begin
+            pdf_out[ivpa,ivperp,iz] -= dt * source_amplitude[iz] *
+                                            pdf_in[ivpa,ivperp,iz]
         end
     end
 
