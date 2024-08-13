@@ -53,7 +53,11 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
 
     # Check for input options that used to exist, but do not any more. If these are
     # present, the user probably needs to update their input file.
-    removed_options_list = ("Bzed", "Bmag", "rhostar", "geometry_option", "pitch", "DeltaB")
+    removed_options_list = ("Bzed", "Bmag", "rhostar", "geometry_option", "pitch", "DeltaB",
+       "n_ion_species","n_neutral_species","recycling_fraction","gyrokinetic_ions","T_e","T_wall",
+       "z_IC_option1","z_IC_option2","vpa_IC_option1","vpa_IC_option2",
+       "boltzmann_electron_response","boltzmann_electron_response_with_simple_sheath",
+       "electron_physics","nstep","dt")
     for opt in removed_options_list
         if opt ∈ keys(scan_input)
             error("Option '$opt' is no longer used. Please update your input file. You "
