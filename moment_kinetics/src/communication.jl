@@ -433,7 +433,7 @@ end
             previous_is_read .= true
             previous_is_written = Array{Bool}(undef, dims)
             previous_is_written .= true
-            return DebugMPISharedArray(array, is_initialized, is_read, is_written,
+            return DebugMPISharedArray(array, accessed, is_initialized, is_read, is_written,
                                        creation_stack_trace, previous_is_read,
                                        previous_is_written)
         end
