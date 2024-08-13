@@ -2,6 +2,7 @@ module electron_kinetic_equation
 
 using LinearAlgebra
 using MPI
+using SparseArrays
 
 export get_electron_critical_velocities
 
@@ -12,6 +13,8 @@ using ..boundary_conditions: enforce_v_boundary_condition_local!,
                              enforce_vperp_boundary_condition!
 using ..calculus: derivative!, second_derivative!, integral
 using ..communication
+using ..gauss_legendre: gausslegendre_info
+using ..input_structs
 using ..interpolation: interpolate_to_grid_1d!
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
@@ -660,14 +663,6 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                   ion_dt, composition, external_source_settings.electron,
                                   num_diss_params, r, z)
 
-        if t_params.dt[] > 0.5 * ion_dt
-            begin_serial_region()
-            @serial_region begin
-                t_params.dt[] = 0.5 * ion_dt
-            end
-            reduced_by_ion_dt = true
-        end
-
         begin_r_z_region()
         @loop_r_z ir iz begin
             # update the electron thermal speed using the updated electron parallel pressure
@@ -744,6 +739,10 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
         # initialise the electron pdf convergence flag to false
         electron_pdf_converged = false
 
+        # Reset nl_solver_params.stage_counter[] so that the preconditioner is re-computed at
+        # the first step
+        nl_solver_params.stage_counter[] = 0
+
         first_step = true
         # evolve (artificially) in time until the residual is less than the tolerance
         while (!electron_pdf_converged
@@ -783,6 +782,137 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                                     scratch_dummy, collisions,
                                                     composition, external_source_settings,
                                                     num_diss_params, t_params.dt[], ir)
+
+            if nl_solver_params.preconditioner_type == "electron_split_lu"
+                if nl_solver_params.stage_counter[] % nl_solver_params.preconditioner_update_interval == 0
+                    if z.irank == 0
+                        ppar_matrix = allocate_float(z.n, z.n)
+                        ppar_matrix .= 0.0
+
+                        if composition.electron_physics == kinetic_electrons_with_temperature_equation
+                            error("kinetic_electrons_with_temperature_equation not "
+                                  * "supported yet in preconditioner")
+                        elseif composition.electron_physics != kinetic_electrons
+                            error("Unsupported electron_physics=$(composition.electron_physics) "
+                                  * "in electron_backward_euler!() preconditioner.")
+                        end
+
+                        dt = t_params.dt[]
+                        vth = @view moments.electron.vth[:,ir]
+                        dens = @view moments.electron.dens[:,ir]
+                        upar = @view moments.electron.upar[:,ir]
+                        ddens_dz = @view moments.electron.ddens_dz[:,ir]
+                        dupar_dz = @view moments.electron.dupar_dz[:,ir]
+                        dppar_dz = @view moments.electron.dppar_dz[:,ir]
+
+                        # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
+                        @views third_moment = @. 0.5 * moments.electron.qpar[:,ir] / electron_ppar_new / vth
+
+                        # Note that as
+                        #   qpar = 2 * ppar * vth * third_moment
+                        #        = 2 * ppar^(3/2) / dens^(1/2) * third_moment
+                        # we have that
+                        #   d(qpar)/dz = 2 * ppar^(3/2) / dens^(1/2) * d(third_moment)/dz
+                        #                - ppar^(3/2) / dens^(3/2) * third_moment * d(dens)/dz
+                        #                + 3 * ppar^(1/2) / dens^(1/2) * third_moment * d(ppar)/dz
+                        # so for the Jacobian
+                        #   d[d(qpar)/dz)]/d[ppar]
+                        #     = 3 * ppar^(1/2) / dens^(1/2) * d(third_moment)/dz
+                        #       - 3/2 * ppar^(1/2) / dens^(3/2) * third_moment * d(dens)/dz
+                        #       + 3/2 / ppar^(1/2) / dens^(1/2) * third_moment * d(ppar)/dz
+                        #       + 3 * ppar^(1/2) / dens^(1/2) * third_moment * d(.)/dz
+                        dthird_moment_dz = z.scratch2
+                        derivative_z!(z.scratch2, third_moment, buffer_1, buffer_2,
+                                      buffer_3, buffer_4, z_spectral, z)
+
+                        # Diagonal terms
+                        for row ∈ 1:z.n
+                            ppar_matrix[row,row] = 1.0
+
+                            # 3*ppar*dupar_dz
+                            ppar_matrix[row,row] += 3.0 * dt * dupar_dz[row]
+
+                            # terms from d(qpar)/dz
+                            ppar_matrix[row,row] +=
+                                dt * (3.0 * sqrt(electron_ppar_new[row] / dens[row]) * dthird_moment_dz[row]
+                                      - 1.5 * sqrt(electron_ppar_new[row]) / dens[row]^1.5 * third_moment[row] * ddens_dz[row]
+                                      + 1.5 / sqrt(electron_ppar_new[row] / dens[row]) * third_moment[row] * dppar_dz[row])
+                        end
+                        if ion_dt !== nothing
+                            # Backward-Euler forcing term
+                            for row ∈ 1:z.n
+                                ppar_matrix[row,row] += dt / ion_dt 
+                            end
+                        end
+
+
+                        # d(.)/dz terms
+                        # Note that the z-derivative matrix is local to this block, and
+                        # for the preconditioner we do not include any distributed-MPI
+                        # communication (we rely on the JFNK iteration to sort out the
+                        # coupling between blocks).
+                        if !isa(z_spectral, gausslegendre_info)
+                            error("Only gausslegendre_pseudospectral coordinate type is "
+                                  * "supported by electron_backward_euler!() "
+                                  * "preconditioner because we need differentiation"
+                                  * "matrices.")
+                        end
+                        z_deriv_matrix = z_spectral.D_matrix
+                        for row ∈ 1:z.n
+                            @. ppar_matrix[row,:] +=
+                                dt * (upar[row]
+                                      + 3.0 * sqrt(electron_ppar_new[row] / dens[row]) * third_moment[row]) *
+                                z_deriv_matrix[row,:]
+                        end
+
+                        if num_diss_params.electron.moment_dissipation_coefficient > 0.0
+                            error("z-diffusion of electron_ppar not yet supported in "
+                                  * "preconditioner")
+                        end
+                        if collisions.nu_ei > 0.0
+                            error("electron-ion collision terms for electron_ppar not yet "
+                                  * "supported in preconditioner")
+                        end
+                        if composition.n_neutral_species > 0 && collisions.charge_exchange_electron > 0.0
+                            error("electron 'charge exchange' terms for electron_ppar not yet "
+                                  * "supported in preconditioner")
+                        end
+                        if composition.n_neutral_species > 0 && collisions.ionization_electron > 0.0
+                            error("electron ionization terms for electron_ppar not yet "
+                                  * "supported in preconditioner")
+                        end
+
+                        nl_solver_params.preconditioners.ppar[ir] = lu(sparse(ppar_matrix))
+                    else
+                        ppar_matrix = allocate_float(0, 0)
+                        ppar_matrix[] = 1.0
+                    end
+                end
+
+                function split_precon!(x)
+                    precon_ppar, precon_f = x
+
+                    begin_z_region()
+                    ppar_precon_matrix = nl_solver_params.preconditioners.ppar[ir]
+                    @loop_z iz begin
+                        z.scratch[iz] = precon_ppar[iz]
+                    end
+
+                    begin_serial_region()
+                    @serial_region begin
+                        ldiv!(precon_ppar, ppar_precon_matrix, z.scratch)
+                    end
+                end
+
+                left_preconditioner = identity
+                right_preconditioner = split_precon!
+            elseif nl_solver_params.preconditioner_type == "none"
+                left_preconditioner = identity
+                right_preconditioner = identity
+            else
+                error("preconditioner_type=$(nl_solver_params.preconditioner_type) is not "
+                      * "supported by electron_backward_euler!().")
+            end
 
             # Do a backward-Euler update of the electron pdf, and (if evove_ppar=true) the
             # electron parallel pressure.
@@ -941,8 +1071,8 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
             newton_success = newton_solve!((electron_ppar_new, f_electron_new),
                                            residual_func!, residual, delta_x, rhs_delta,
                                            v, w, nl_solver_params;
-                                           left_preconditioner=identity,
-                                           right_preconditioner=identity,
+                                           left_preconditioner=left_preconditioner,
+                                           right_preconditioner=right_preconditioner,
                                            coords=(z=z, vperp=vperp, vpa=vpa))
             if newton_success
                 #println("Newton its ", nl_solver_params.max_nonlinear_iterations_this_step[], " ", t_params.dt[])

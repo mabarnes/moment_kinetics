@@ -62,6 +62,7 @@ struct nl_solver_info{TH,TV,Tlig,Tprecon}
     serial_solve::Bool
     max_nonlinear_iterations_this_step::Ref{mk_int}
     max_linear_iterations_this_step::Ref{mk_int}
+    preconditioner_type::String
     preconditioner_update_interval::mk_int
     preconditioners::Tprecon
 end
@@ -77,7 +78,7 @@ for example a preconditioner object for each point in that outer loop.
 """
 function setup_nonlinear_solve(input_dict, coords, outer_coords=(); default_rtol=1.0e-5,
                                default_atol=1.0e-12, serial_solve=false,
-                               electron_ppar_pdf_solve=false, preconditioner_type=nothing)
+                               electron_ppar_pdf_solve=false, preconditioner_type="none")
     nl_solver_section = set_defaults_and_check_section!(
         input_dict, "nonlinear_solver";
         rtol=default_rtol,
@@ -131,8 +132,18 @@ function setup_nonlinear_solve(input_dict, coords, outer_coords=(); default_rtol
         # These will be calculated properly within the time loop.
         preconditioners = fill(lu(sparse(1.0*I, total_size_coords, total_size_coords)),
                                reverse(outer_coord_sizes))
-    else
+    elseif preconditioner_type == "electron_split_lu"
+        preconditioners = (z=fill(lu(sparse(1.0*I, coords.z.n, coords.z.n)),
+                                  tuple(coords.vpa.n, reverse(outer_coord_sizes)...)),
+                           vpa=fill(lu(sparse(1.0*I, coords.vpa.n, coords.vpa.n)),
+                                    tuple(coords.z.n, reverse(outer_coord_sizes)...)),
+                           ppar=fill(lu(sparse(1.0*I, coords.z.n, coords.z.n)),
+                                     reverse(outer_coord_sizes)),
+                          )
+    elseif preconditioner_type == "none"
         preconditioners = nothing
+    else
+        error("Unrecognised preconditioner_type=$preconditioner_type")
     end
 
     linear_initial_guess = zeros(linear_restart)
@@ -143,6 +154,7 @@ function setup_nonlinear_solve(input_dict, coords, outer_coords=(); default_rtol
                           linear_restart, nl_solver_input.linear_max_restarts, H, V,
                           linear_initial_guess, Ref(0), Ref(0), Ref(0), Ref(0), Ref(0),
                           Ref(0), Ref(0), serial_solve, Ref(0), Ref(0),
+                          preconditioner_type,
                           nl_solver_input.preconditioner_update_interval, preconditioners)
 end
 
