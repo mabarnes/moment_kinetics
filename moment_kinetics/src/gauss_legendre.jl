@@ -94,6 +94,8 @@ struct gausslegendre_info{TSparse, TLU} <: weak_discretization_info
     K_matrix::TSparse
     # global (1D) weak Laplacian derivative matrix
     L_matrix::TSparse
+    # global (1D) strong first derivative matrix
+    D_matrix::TSparse
     # global (1D) LU object
     mass_matrix_lu::TLU
     # dummy matrix for local operators
@@ -113,14 +115,16 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true, 
     mass_matrix = allocate_float(coord.n,coord.n)
     K_matrix = allocate_float(coord.n,coord.n)
     L_matrix = allocate_float(coord.n,coord.n)
+    D_matrix = allocate_float(coord.n,coord.n)
 
     setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M"; dirichlet_bc=dirichlet_bc)
     setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms"; dirichlet_bc=dirichlet_bc)
     setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms"; dirichlet_bc=dirichlet_bc)
+    setup_global_weak_form_matrix!(D_matrix, lobatto, radau, coord, "D"; dirichlet_bc=dirichlet_bc)
     mass_matrix_lu = lu(sparse(mass_matrix))
     Qmat = allocate_float(coord.ngrid,coord.ngrid)
 
-    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),sparse(K_matrix),sparse(L_matrix),mass_matrix_lu,Qmat)
+    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),sparse(K_matrix),sparse(L_matrix),sparse(D_matrix),mass_matrix_lu,Qmat)
 end
 
 function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_dim=true)
@@ -933,6 +937,8 @@ function get_QQ_local!(QQ::Array{mk_float,2},ielement,
             get_LL_local!(QQ,ielement,lobatto,radau,coord)
         elseif option == "L_with_BC_terms"
             get_LL_local!(QQ,ielement,lobatto,radau,coord,explicit_BC_terms=true)
+        elseif option == "D"
+            get_DD_local!(QQ,ielement,lobatto,radau,coord)
         end
         return nothing
 end
@@ -1098,6 +1104,18 @@ function get_LL_local!(QQ,ielement,
             end
         end
         return nothing
+end
+
+# Strong-form differentiation matrix
+function get_DD_local!(QQ, ielement, lobatto::gausslegendre_base_info,
+                       radau::gausslegendre_base_info, coord)
+    scale_factor = coord.element_scale[ielement]
+    if coord.name == "vperp" && ielement == 1 && coord.irank == 0
+        @. QQ = radau.Dmat / scale_factor
+    else
+        @. QQ = lobatto.Dmat / scale_factor
+    end
+    return nothing
 end
 
 # mass matrix without vperp factor (matrix N)
