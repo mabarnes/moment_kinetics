@@ -2438,89 +2438,89 @@ function electron_kinetic_equation_euler_update!(fvec_out, fvec_in, moments, z, 
     return nothing
 end
 
-"""
-electron_kinetic_equation_residual! calculates the residual of the (time-independent) electron kinetic equation
-INPUTS:
-    residual = dummy array to be filled with the residual of the electron kinetic equation
-OUTPUT:
-    residual = updated residual of the electron kinetic equation
-"""
-function electron_kinetic_equation_residual!(residual, max_term, single_term, pdf, dens, upar, vth, ppar, upar_ion,
-                                             ddens_dz, dppar_dz, dqpar_dz, dvth_dz, 
-                                             z, vperp, vpa, z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-                                             collisions, external_source_settings,
-                                             num_diss_params, dt_electron)
-
-    # initialise the residual to zero                                             
-    begin_r_vperp_vpa_region()
-    @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-        residual[ivpa,ivperp,iz,ir] = 0.0
-    end
-    # calculate the contribution to the residual from the z advection term
-    electron_z_advection!(residual, pdf, upar, vth, z_advect, z, vpa.grid, z_spectral, scratch_dummy, -1.0)
-    #dt_max_zadv = simple_z_advection!(residual, pdf, vth, z, vpa.grid, dt_electron)
-    #single_term .= residual
-    #max_term .= abs.(residual)
-    #println("z_adv residual = ", maximum(abs.(single_term)))
-    #println("z_advection: ", sum(residual), " dqpar_dz: ", sum(abs.(dqpar_dz)))
-    #calculate_contribution_from_z_advection!(residual, pdf, vth, z, vpa.grid, z_spectral, scratch_dummy)
-    # add in the contribution to the residual from the wpa advection term
-    electron_vpa_advection!(residual, pdf, ppar, vth, dppar_dz, dqpar_dz, dvth_dz, 
-                            vpa_advect, vpa, vpa_spectral, scratch_dummy, -1.0,
-                            external_source_settings.electron)
-    #dt_max_vadv = simple_vpa_advection!(residual, pdf, ppar, vth, dppar_dz, dqpar_dz, dvth_dz, vpa, dt_electron)
-    #@. single_term = residual - single_term
-    #max_term .= max.(max_term, abs.(single_term))
-    #@. single_term = residual
-    #println("v_adv residual = ", maximum(abs.(single_term)))
-    #add_contribution_from_wpa_advection!(residual, pdf, vth, ppar, dppar_dz, dqpar_dz, dvth_dz, vpa, vpa_spectral)
-    # add in the contribution to the residual from the term proportional to the pdf
-    add_contribution_from_pdf_term!(residual, pdf, ppar, dens, moments, vpa.grid, z, -1.0,
-                                    external_source_settings.electron)
-    #@. single_term = residual - single_term
-    #max_term .= max.(max_term, abs.(single_term))
-    #@. single_term = residual
-    #println("pdf_term residual = ", maximum(abs.(single_term)))
-    # @loop_vpa ivpa begin
-    #     @loop_z iz begin
-    #         println("LHS: ", residual[ivpa,1,iz,1], " vpa: ", vpa.grid[ivpa], " z: ", z.grid[iz], " dvth_dz: ", dvth_dz[iz,1], " type: ", 1) 
-    #     end
-    #     println("")
-    # end
-    # println("")
-    # add in numerical dissipation terms
-    add_dissipation_term!(residual, pdf, scratch_dummy, z_spectral, z, vpa, vpa_spectral,
-                          num_diss_params, -1.0)
-    #@. single_term = residual - single_term
-    #println("dissipation residual = ", maximum(abs.(single_term)))
-    #max_term .= max.(max_term, abs.(single_term))
-    # add in particle and heat source term(s)
-    #@. single_term = residual
-    #add_source_term!(residual, vpa.grid, z.grid, dvth_dz)
-    #@. single_term = residual - single_term
-    #max_term .= max.(max_term, abs.(single_term))
-    #stop()
-    # @loop_vpa ivpa begin
-    #     @loop_z iz begin
-    #         println("total_residual: ", residual[ivpa,1,iz,1], " vpa: ", vpa.grid[ivpa], " z: ", z.grid[iz], " dvth_dz: ", dvth_dz[iz,1], " type: ", 2) 
-    #     end
-    #     println("")
-    # end
-    # stop()
-    #dt_max = min(dt_max_zadv, dt_max_vadv)
-
-    if collisions.krook_collision_frequency_prefactor_ee > 0.0
-        # Add a Krook collision operator
-        # Set dt=-1 as we update the residual here rather than adding an update to
-        # 'fvec_out'.
-        electron_krook_collisions!(residual, pdf, dens, upar, upar_ion, vth,
-                                   collisions, vperp, vpa, -1.0)
-    end
-
-    dt_max = dt_electron
-    #println("dt_max: ", dt_max, " dt_max_zadv: ", dt_max_zadv, " dt_max_vadv: ", dt_max_vadv)
-    return dt_max
-end
+#"""
+#electron_kinetic_equation_residual! calculates the residual of the (time-independent) electron kinetic equation
+#INPUTS:
+#    residual = dummy array to be filled with the residual of the electron kinetic equation
+#OUTPUT:
+#    residual = updated residual of the electron kinetic equation
+#"""
+#function electron_kinetic_equation_residual!(residual, max_term, single_term, pdf, dens, upar, vth, ppar, upar_ion,
+#                                             ddens_dz, dppar_dz, dqpar_dz, dvth_dz, 
+#                                             z, vperp, vpa, z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+#                                             collisions, external_source_settings,
+#                                             num_diss_params, dt_electron)
+#
+#    # initialise the residual to zero                                             
+#    begin_r_vperp_vpa_region()
+#    @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+#        residual[ivpa,ivperp,iz,ir] = 0.0
+#    end
+#    # calculate the contribution to the residual from the z advection term
+#    electron_z_advection!(residual, pdf, upar, vth, z_advect, z, vpa.grid, z_spectral, scratch_dummy, -1.0)
+#    #dt_max_zadv = simple_z_advection!(residual, pdf, vth, z, vpa.grid, dt_electron)
+#    #single_term .= residual
+#    #max_term .= abs.(residual)
+#    #println("z_adv residual = ", maximum(abs.(single_term)))
+#    #println("z_advection: ", sum(residual), " dqpar_dz: ", sum(abs.(dqpar_dz)))
+#    #calculate_contribution_from_z_advection!(residual, pdf, vth, z, vpa.grid, z_spectral, scratch_dummy)
+#    # add in the contribution to the residual from the wpa advection term
+#    electron_vpa_advection!(residual, pdf, ppar, vth, dppar_dz, dqpar_dz, dvth_dz, 
+#                            vpa_advect, vpa, vpa_spectral, scratch_dummy, -1.0,
+#                            external_source_settings.electron)
+#    #dt_max_vadv = simple_vpa_advection!(residual, pdf, ppar, vth, dppar_dz, dqpar_dz, dvth_dz, vpa, dt_electron)
+#    #@. single_term = residual - single_term
+#    #max_term .= max.(max_term, abs.(single_term))
+#    #@. single_term = residual
+#    #println("v_adv residual = ", maximum(abs.(single_term)))
+#    #add_contribution_from_wpa_advection!(residual, pdf, vth, ppar, dppar_dz, dqpar_dz, dvth_dz, vpa, vpa_spectral)
+#    # add in the contribution to the residual from the term proportional to the pdf
+#    add_contribution_from_pdf_term!(residual, pdf, ppar, dens, moments, vpa.grid, z, -1.0,
+#                                    external_source_settings.electron)
+#    #@. single_term = residual - single_term
+#    #max_term .= max.(max_term, abs.(single_term))
+#    #@. single_term = residual
+#    #println("pdf_term residual = ", maximum(abs.(single_term)))
+#    # @loop_vpa ivpa begin
+#    #     @loop_z iz begin
+#    #         println("LHS: ", residual[ivpa,1,iz,1], " vpa: ", vpa.grid[ivpa], " z: ", z.grid[iz], " dvth_dz: ", dvth_dz[iz,1], " type: ", 1) 
+#    #     end
+#    #     println("")
+#    # end
+#    # println("")
+#    # add in numerical dissipation terms
+#    add_dissipation_term!(residual, pdf, scratch_dummy, z_spectral, z, vpa, vpa_spectral,
+#                          num_diss_params, -1.0)
+#    #@. single_term = residual - single_term
+#    #println("dissipation residual = ", maximum(abs.(single_term)))
+#    #max_term .= max.(max_term, abs.(single_term))
+#    # add in particle and heat source term(s)
+#    #@. single_term = residual
+#    #add_source_term!(residual, vpa.grid, z.grid, dvth_dz)
+#    #@. single_term = residual - single_term
+#    #max_term .= max.(max_term, abs.(single_term))
+#    #stop()
+#    # @loop_vpa ivpa begin
+#    #     @loop_z iz begin
+#    #         println("total_residual: ", residual[ivpa,1,iz,1], " vpa: ", vpa.grid[ivpa], " z: ", z.grid[iz], " dvth_dz: ", dvth_dz[iz,1], " type: ", 2) 
+#    #     end
+#    #     println("")
+#    # end
+#    # stop()
+#    #dt_max = min(dt_max_zadv, dt_max_vadv)
+#
+#    if collisions.krook_collision_frequency_prefactor_ee > 0.0
+#        # Add a Krook collision operator
+#        # Set dt=-1 as we update the residual here rather than adding an update to
+#        # 'fvec_out'.
+#        electron_krook_collisions!(residual, pdf, dens, upar, upar_ion, vth,
+#                                   collisions, vperp, vpa, -1.0)
+#    end
+#
+#    dt_max = dt_electron
+#    #println("dt_max: ", dt_max, " dt_max_zadv: ", dt_max_zadv, " dt_max_vadv: ", dt_max_vadv)
+#    return dt_max
+#end
 
 function simple_z_advection!(advection_term, pdf, vth, z, vpa, dt_max_in)
     dt_max = dt_max_in
