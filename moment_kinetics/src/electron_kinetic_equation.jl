@@ -1127,6 +1127,21 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
             end
         end
     end
+
+    if r.n > 1
+        error("Limits on iteration count and simtime assume 1D simulations. "
+              * "Need to fix handling of t_params.t[] and t_params.step_counter[], "
+              * "and also t_params.max_step_count_this_ion_step[] and "
+              * "t_params.max_t_increment_this_ion_step[]")
+    else
+        t_params.max_step_count_this_ion_step[] =
+            max(t_params.step_counter[] - initial_step_counter,
+                t_params.max_step_count_this_ion_step[])
+        t_params.max_t_increment_this_ion_step[] =
+            max(t_params.t[] - initial_time,
+                t_params.max_t_increment_this_ion_step[])
+    end
+
     if ion_dt !== nothing && t_params.dt[] != t_params.previous_dt[]
         # Reset dt in case it was reduced to be less than 0.5*ion_dt
         begin_serial_region()

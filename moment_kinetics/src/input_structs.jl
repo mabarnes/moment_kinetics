@@ -55,6 +55,8 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     write_moments_output::MPISharedArray{Bool,1}
     write_dfns_output::MPISharedArray{Bool,1}
     step_counter::Ref{mk_int}
+    max_step_count_this_ion_step::Ref{mk_int}
+    max_t_increment_this_ion_step::Ref{mk_float}
     moments_output_counter::Ref{mk_int}
     dfns_output_counter::Ref{mk_int}
     failure_counter::Ref{mk_int}

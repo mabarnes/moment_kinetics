@@ -441,12 +441,13 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      previous_dt_shared, next_output_time, dt_before_output,
                      dt_before_last_fail, CFL_prefactor, step_to_moments_output,
                      step_to_dfns_output, write_moments_output, write_dfns_output, Ref(0),
-                     Ref(0), Ref(0), Ref(0), mk_int[], mk_int[], t_input["nwrite"],
-                     t_input["nwrite_dfns"], moments_output_times, dfns_output_times,
-                     t_input["type"], rk_coefs, rk_coefs_implicit,
-                     implicit_coefficient_is_zero, n_rk_stages, rk_order, adaptive,
-                     low_storage, t_input["rtol"], t_input["atol"], t_input["atol_upar"],
-                     t_input["step_update_prefactor"], t_input["max_increase_factor"],
+                     Ref(0), Ref{mk_float}(0.0), Ref(0), Ref(0), Ref(0), mk_int[],
+                     mk_int[], t_input["nwrite"], t_input["nwrite_dfns"],
+                     moments_output_times, dfns_output_times, t_input["type"], rk_coefs,
+                     rk_coefs_implicit, implicit_coefficient_is_zero, n_rk_stages,
+                     rk_order, adaptive, low_storage, t_input["rtol"], t_input["atol"],
+                     t_input["atol_upar"], t_input["step_update_prefactor"],
+                     t_input["max_increase_factor"],
                      t_input["max_increase_factor_near_last_fail"],
                      t_input["last_fail_proximity_factor"], t_input["minimum_dt"],
                      t_input["maximum_dt"],
@@ -2019,7 +2020,7 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
                 scratch[t_params.n_rk_stages+1], pdf, moments, fields, nothing, nothing, vz,
                 vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
                 collisions, geometry, gyroavs, external_source_settings, num_diss_params,
-                t_params, nl_solver_params, advance, scratch_dummy, false;
+                t_params, nl_solver_params, advance, scratch_dummy, false, 0, 0.0;
                 pdf_bc_constraints=false, update_electrons=false)
         end
 
@@ -2311,8 +2312,9 @@ function apply_all_bcs_constraints_update_moments!(
         this_scratch, pdf, moments, fields, boundary_distributions, scratch_electron, vz,
         vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
         collisions, geometry, gyroavs, external_source_settings, num_diss_params,
-        t_params, nl_solver_params, advance, scratch_dummy, diagnostic_moments;
-        pdf_bc_constraints=true, update_electrons=true)
+        t_params, nl_solver_params, advance, scratch_dummy, diagnostic_moments,
+        max_electron_pdf_iterations, max_electron_sim_time; pdf_bc_constraints=true,
+        update_electrons=true)
 
     begin_s_r_z_region()
 
@@ -2374,8 +2376,6 @@ function apply_all_bcs_constraints_update_moments!(
                                            composition.electron_physics)
     if composition.electron_physics ∈ (kinetic_electrons,
                                        kinetic_electrons_with_temperature_equation)
-        max_electron_pdf_iterations = 1000
-        max_electron_sim_time = 1.0e-3
 
         # Copy ion and electron moments from `scratch` into `moments` to be used in
         # electron kinetic equation update
@@ -2638,7 +2638,7 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron,
         scratch_electron, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
         advect_objects, composition, collisions, geometry, gyroavs,
         external_source_settings, num_diss_params, t_params, nl_solver_params, advance,
-        scratch_dummy, false; update_electrons=false)
+        scratch_dummy, false, 0, 0.0; update_electrons=false)
 
     # Re-calculate moment derivatives in the `moments` struct, in case they were changed
     # by the previous call
@@ -2647,7 +2647,7 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron,
         scratch_electron, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
         advect_objects, composition, collisions, geometry, gyroavs,
         external_source_settings, num_diss_params, t_params, nl_solver_params, advance,
-        scratch_dummy, false; pdf_bc_constraints=false, update_electrons=false)
+        scratch_dummy, false, 0, 0.0; pdf_bc_constraints=false, update_electrons=false)
 
     # Calculate the timstep error estimates
     if z.bc == "wall" && (moments.evolve_upar || moments.evolve_ppar)
@@ -2936,6 +2936,9 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t_params, vz,
 
     n_rk_stages = t_params.n_rk_stages
 
+    max_electron_pdf_iterations = 1000
+    max_electron_sim_time = 1.0e-3
+
     first_scratch = scratch[1]
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         first_scratch.pdf[ivpa,ivperp,iz,ir,is] = pdf.ion.norm[ivpa,ivperp,iz,ir,is]
@@ -3034,7 +3037,8 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t_params, vz,
                     boundary_distributions, scratch_electron, vz, vr, vzeta, vpa, vperp,
                     z, r, spectral_objects, advect_objects, composition, collisions,
                     geometry, gyroavs, external_source_settings, num_diss_params,
-                    t_params, nl_solver_params, advance, scratch_dummy, false)
+                    t_params, nl_solver_params, advance, scratch_dummy, false,
+                    max_electron_pdf_iterations, max_electron_sim_time)
                 if success != ""
                     # Break out of the istage loop, as passing `success != ""` to the
                     # adaptive timestep update function will signal a failed timestep, so
@@ -3081,8 +3085,9 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t_params, vz,
             scratch_electron, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
             advect_objects, composition, collisions, geometry, gyroavs,
             external_source_settings, num_diss_params, t_params, nl_solver_params,
-            advance, scratch_dummy, diagnostic_moments;
-            pdf_bc_constraints=apply_bc_constraints, update_electrons=update_electrons)
+            advance, scratch_dummy, diagnostic_moments, max_electron_pdf_iterations,
+            max_electron_sim_time; pdf_bc_constraints=apply_bc_constraints,
+            update_electrons=update_electrons)
         if success != ""
             # Break out of the istage loop, as passing `success != ""` to the
             # adaptive timestep update function will signal a failed timestep, so
@@ -3093,7 +3098,27 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t_params, vz,
 
     if t_params.adaptive
         nl_max_its_fraction = 0.0
-        for p ∈ nl_solver_params
+        if t_params.implicit_electron_advance
+            params_to_check = (nl_solver_params.ion_advance,
+                               nl_solver_params.vpa_advection,
+                               nl_solver_params.electron_conduction,
+                               nl_solver_params.electron_advance)
+        else
+            # nl_solver_params.electron_advance is used for the backward-Euler timestep in
+            # electron timestepping, so its iteration count is not relevant here. Instead,
+            # check the number of electron pseudo-timesteps or pseudo-time increment
+            # compared to their maximum values
+            params_to_check = (nl_solver_params.ion_advance,
+                               nl_solver_params.vpa_advection,
+                               nl_solver_params.electron_conduction)
+            if t_params.electron !== nothing
+                electron_time_advance_fraction =
+                    min(t_params.electron.max_step_count_this_ion_step[] / max_electron_pdf_iterations,
+                        t_params.electron.max_t_increment_this_ion_step[] / max_electron_sim_time)
+                nl_max_its_fraction = max(electron_time_advance_fraction, nl_max_its_fraction)
+            end
+        end
+        for p ∈ params_to_check
             if p !== nothing
                 nl_max_its_fraction =
                     max(p.max_nonlinear_iterations_this_step[] / p.nonlinear_max_iterations,
@@ -3118,6 +3143,11 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t_params, vz,
     reset_nonlinear_per_stage_counters!(nl_solver_params.ion_advance)
     reset_nonlinear_per_stage_counters!(nl_solver_params.vpa_advection)
     reset_nonlinear_per_stage_counters!(nl_solver_params.electron_conduction)
+    if !t_params.implicit_electron_advance && t_params.electron !== nothing
+        t_params.electron.max_step_count_this_ion_step[] = 0
+        t_params.electron.max_t_increment_this_ion_step[] = 0.0
+    end
+
 
     if t_params.previous_dt[] > 0.0
         istage = n_rk_stages+1
