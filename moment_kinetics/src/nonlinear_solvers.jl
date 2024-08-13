@@ -685,7 +685,7 @@ function distributed_dot_r_z_vperp_vpa(v::Tuple{AbstractArray{mk_float, 2},Abstr
 
     if block_rank[] == 0
         ppar_global_dot = MPI.Allreduce(ppar_block_dot, +, comm_inter_block[])
-        ppar_global_dot = ppar_global_dot / (r.n_global * z.n_global * vperp.n_global * vpa.n_global)
+        ppar_global_dot = ppar_global_dot / (r.n_global * z.n_global)
     else
         ppar_global_dot = nothing
     end
