@@ -448,8 +448,6 @@ function implicit_braginskii_conduction!(fvec_out, fvec_in, moments, z, r, dt, z
         end
     end
 
-    nl_solver_params.stage_counter[] += 1
-
     return true
 end
 

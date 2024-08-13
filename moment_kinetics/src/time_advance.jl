@@ -3115,8 +3115,9 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t_params, vz,
 #    println()
 #end
 
-    reset_nonlinear_per_stage_counters(nl_solver_params.ion_advance)
-    reset_nonlinear_per_stage_counters(nl_solver_params.vpa_advection)
+    reset_nonlinear_per_stage_counters!(nl_solver_params.ion_advance)
+    reset_nonlinear_per_stage_counters!(nl_solver_params.vpa_advection)
+    reset_nonlinear_per_stage_counters!(nl_solver_params.electron_conduction)
 
     if t_params.previous_dt[] > 0.0
         istage = n_rk_stages+1
@@ -3789,8 +3790,6 @@ function implicit_ion_advance!(fvec_out, fvec_in, pdf, fields, moments, advect_o
                             rhs_delta, v, w, nl_solver_params, coords=coords,
                             left_preconditioner=left_preconditioner,
                             right_preconditioner=right_preconditioner)
-
-    nl_solver_params.stage_counter[] += 1
 
     return success
 end

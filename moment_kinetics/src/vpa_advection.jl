@@ -309,8 +309,6 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, z_advect, vpa_
         end
     end
 
-    nl_solver_params.stage_counter[] += 1
-
     return true
 end
 

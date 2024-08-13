@@ -728,8 +728,6 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                || (max_electron_sim_time !== nothing && t_params.t[] - initial_time < max_electron_sim_time))
            && t_params.dt[] > 0.0 && !isnan(t_params.dt[]))
 
-        reset_nonlinear_per_stage_counters(nl_solver_params)
-
         old_scratch = scratch[1]
         new_scratch = scratch[t_params.n_rk_stages+1]
 
@@ -1113,7 +1111,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
             end
         end
 
-        # check to see if the electron pdf satisfies the electron kinetic equation to within the specified tolerance
+        reset_nonlinear_per_stage_counters!(nl_solver_params)
 
         t_params.step_counter[] += 1
         if electron_pdf_converged
