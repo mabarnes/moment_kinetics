@@ -651,10 +651,10 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
 
         # Use forward-Euler step (with `ion_dt` as the timestep) as initial guess for
         # updated electron_ppar
-        electron_energy_equation!(scratch[t_params.n_rk_stages+1].electron_ppar,
-                                  moments.electron.ppar, moments.electron.dens,
-                                  moments.electron.upar, moments.ion.dens,
-                                  moments.ion.upar, moments.ion.ppar,
+        ppar_guess = scratch[t_params.n_rk_stages+1].electron_ppar
+        electron_energy_equation!(ppar_guess, moments.electron.ppar,
+                                  moments.electron.dens, moments.electron.upar,
+                                  moments.ion.dens, moments.ion.upar, moments.ion.ppar,
                                   moments.neutral.dens, moments.neutral.uz,
                                   moments.neutral.pz, moments.electron, collisions,
                                   ion_dt, composition, external_source_settings.electron,
@@ -667,6 +667,21 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
             end
             reduced_by_ion_dt = true
         end
+
+        begin_r_z_region()
+        @loop_r_z ir iz begin
+            # update the electron thermal speed using the updated electron parallel pressure
+            moments.electron.vth[iz,ir] = sqrt(abs(2.0 * ppar_guess[iz,ir] /
+                                                   (moments.electron.dens[iz,ir] *
+                                                    composition.me_over_mi)))
+        end
+        calculate_electron_moment_derivatives!(moments,
+                                               (electron_density=moments.electron.dens,
+                                                electron_upar=moments.electron.upar,
+                                                electron_ppar=ppar_guess),
+                                               scratch_dummy, z, z_spectral,
+                                               num_diss_params.electron.moment_dissipation_coefficient,
+                                               composition.electron_physics)
     end
 
     if !evolve_ppar
