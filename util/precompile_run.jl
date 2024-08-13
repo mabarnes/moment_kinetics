@@ -94,7 +94,7 @@ kinetic_electron_input = merge(cheb_input, Dict("evolve_moments_density" => true
                                                 "vzeta_nelement" => 1,
                                                 "vr_ngrid" => 1,
                                                 "vr_nelement" => 1,
-                                                "electron_physics" => "kinetic_electrons",
+                                                "composition" => OptionsDict("electron_physics" => "kinetic_electrons"),
                                                 "electron_timestepping" => OptionsDict("nstep" => 1,
                                                                                             "dt" => 2.0e-11,
                                                                                             "initialization_residual_value" => 1.0e10,
