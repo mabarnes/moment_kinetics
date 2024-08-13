@@ -44,7 +44,6 @@ vpa_IC_temperature_phase2 = 0.0
 charge_exchange_frequency = 0.75
 ionization_frequency = 0.0
 constant_ionization_rate = false
-nu_ei = 1000.0
 r_ngrid = 1
 r_nelement = 1
 z_ngrid = 5
