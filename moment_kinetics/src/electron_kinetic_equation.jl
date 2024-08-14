@@ -31,7 +31,8 @@ using ..electron_vpa_advection: electron_vpa_advection!, update_electron_speed_v
 using ..em_fields: update_phi!
 using ..external_sources: external_electron_source!
 using ..file_io: get_electron_io_info, write_electron_state, finish_electron_io
-using ..krook_collisions: electron_krook_collisions!
+using ..krook_collisions: electron_krook_collisions!, get_collision_frequency_ee,
+                          get_collision_frequency_ei
 using ..moment_constraints: hard_force_moment_constraints!,
                             moment_constraints_on_residual!
 using ..moment_kinetics_structs: scratch_pdf, scratch_electron_pdf, electron_pdf_substruct
@@ -785,6 +786,103 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
 
             if nl_solver_params.preconditioner_type == "electron_split_lu"
                 if nl_solver_params.stage_counter[] % nl_solver_params.preconditioner_update_interval == 0
+                    dt = t_params.dt[]
+                    vth = @view moments.electron.vth[:,ir]
+                    me = composition.me_over_mi
+                    dens = @view moments.electron.dens[:,ir]
+                    upar = @view moments.electron.upar[:,ir]
+                    ppar = electron_ppar_new
+                    ddens_dz = @view moments.electron.ddens_dz[:,ir]
+                    dupar_dz = @view moments.electron.dupar_dz[:,ir]
+                    dppar_dz = @view moments.electron.dppar_dz[:,ir]
+                    dvth_dz = @view moments.electron.dvth_dz[:,ir]
+                    dqpar_dz = @view moments.electron.dqpar_dz[:,ir]
+                    source_amplitude = moments.electron.external_source_amplitude
+                    source_density_amplitude = moments.electron.external_source_density_amplitude
+                    source_momentum_amplitude = moments.electron.external_source_momentum_amplitude
+                    source_pressure_amplitude = moments.electron.external_source_pressure_amplitude
+
+                    # Note the region(s) used here must be the same as the region(s) used
+                    # when the matrices are used in `split_precon!()`, so that the
+                    # parallelisation is the same and each matrix is used on the same
+                    # process that created it.
+
+                    # z-advection preconditioner
+                    begin_vperp_vpa_region()
+                    update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
+                    @loop_vperp_vpa ivperp ivpa begin
+                        z_matrix = allocate_float(z.n, z.n)
+                        z_matrix .= 0.0
+
+                        z_speed = @view z_advect[1].speed[:,ivpa,ivperp,ir]
+                        for ielement ∈ 1:z.nelement_local
+                            imin = z.imin[ielement] - (ielement != 1)
+                            imax = z.imax[ielement]
+                            if ielement == 1
+                                z_matrix[imin,imin:imax] .+= z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement]
+                            else
+                                if z_speed[imin] < 0.0
+                                    z_matrix[imin,imin:imax] .+= z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement]
+                                elseif z_speed[imin] > 0.0
+                                    # Do nothing
+                                else
+                                    z_matrix[imin,imin:imax] .+= 0.5 .* z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement]
+                                end
+                            end
+                            z_matrix[imin+1:imax-1,imin:imax] .+= z_spectral.lobatto.Dmat[2:end-1,:] ./ z.element_scale[ielement]
+                            if ielement == z.nelement_local
+                                z_matrix[imax,imin:imax] .+= z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement]
+                            else
+                                if z_speed[imax] < 0.0
+                                    # Do nothing
+                                elseif z_speed[imax] > 0.0
+                                    z_matrix[imax,imin:imax] .+= z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement]
+                                else
+                                    z_matrix[imax,imin:imax] .+= 0.5 .* z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement]
+                                end
+                            end
+                        end
+                        # Multiply by advection speed
+                        for row ∈ 1:z.n
+                            z_matrix[row,:] .*= dt * z_speed[row]
+                        end
+
+                        # Diagonal entries
+                        for row ∈ 1:z.n
+                            z_matrix[row,row] += 1.0
+
+                            # Terms from `add_contribution_from_pdf_term!()`
+                            z_matrix[row,row] += dt * (0.5 * dqpar_dz[row] / ppar[row]
+                                                       + vpa.grid[ivpa] * vth[row] * (ddens_dz[row] / dens[row]
+                                                                                      - dvth_dz[row] / vth[row]))
+                        end
+                        if external_source_settings.electron.active
+                            for row ∈ 1:z.n
+                                # Source terms from `add_contribution_from_pdf_term!()`
+                                z_matrix[row,row] += dt * (1.5 * source_density_amplitude[row] / dens[row]
+                                                           - (0.5 * source_pressure_amplitude[row]
+                                                              + source_momentum_amplitude[row]) / ppar[row]
+                                                          )
+                            end
+                            if external_source_settings.electron.source_type == "energy"
+                                for row ∈ 1:z.n
+                                    # Contribution from `external_electron_source!()`
+                                    z_matrix[row,row] += dt * source_amplitude[row]
+                                end
+                            end
+                        end
+                        if collisions.krook.nuee0 > 0.0 || collisions.krook.nuei0 > 0.0
+                            for row ∈ 1:z.n
+                                # Contribution from electron_krook_collisions!()
+                                nu_ee = get_collision_frequency_ee(collisions, dens[row], vth[row])
+                                nu_ei = get_collision_frequency_ei(collisions, dens[row], vth[row])
+                                z_matrix[row,row] += dt * (nu_ee + nu_ei)
+                            end
+                        end
+
+                        nl_solver_params.preconditioners.z[ivpa,ivperp,ir] = lu(sparse(z_matrix))
+                    end
+
                     if z.irank == 0
                         ppar_matrix = allocate_float(z.n, z.n)
                         ppar_matrix .= 0.0
@@ -797,30 +895,22 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                   * "in electron_backward_euler!() preconditioner.")
                         end
 
-                        dt = t_params.dt[]
-                        vth = @view moments.electron.vth[:,ir]
-                        dens = @view moments.electron.dens[:,ir]
-                        upar = @view moments.electron.upar[:,ir]
-                        ddens_dz = @view moments.electron.ddens_dz[:,ir]
-                        dupar_dz = @view moments.electron.dupar_dz[:,ir]
-                        dppar_dz = @view moments.electron.dppar_dz[:,ir]
-
                         # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
                         @views third_moment = @. 0.5 * moments.electron.qpar[:,ir] / electron_ppar_new / vth
 
                         # Note that as
                         #   qpar = 2 * ppar * vth * third_moment
-                        #        = 2 * ppar^(3/2) / dens^(1/2) * third_moment
+                        #        = 2 * ppar^(3/2) / dens^(1/2) / me^(1/2) * third_moment
                         # we have that
-                        #   d(qpar)/dz = 2 * ppar^(3/2) / dens^(1/2) * d(third_moment)/dz
-                        #                - ppar^(3/2) / dens^(3/2) * third_moment * d(dens)/dz
-                        #                + 3 * ppar^(1/2) / dens^(1/2) * third_moment * d(ppar)/dz
+                        #   d(qpar)/dz = 2 * ppar^(3/2) / dens^(1/2) / me^(1/2) * d(third_moment)/dz
+                        #                - ppar^(3/2) / dens^(3/2) / me^(1/2) * third_moment * d(dens)/dz
+                        #                + 3 * ppar^(1/2) / dens^(1/2) / me^(1/2) * third_moment * d(ppar)/dz
                         # so for the Jacobian
                         #   d[d(qpar)/dz)]/d[ppar]
-                        #     = 3 * ppar^(1/2) / dens^(1/2) * d(third_moment)/dz
-                        #       - 3/2 * ppar^(1/2) / dens^(3/2) * third_moment * d(dens)/dz
-                        #       + 3/2 / ppar^(1/2) / dens^(1/2) * third_moment * d(ppar)/dz
-                        #       + 3 * ppar^(1/2) / dens^(1/2) * third_moment * d(.)/dz
+                        #     = 3 * ppar^(1/2) / dens^(1/2) / me^(1/2) * d(third_moment)/dz
+                        #       - 3/2 * ppar^(1/2) / dens^(3/2) / me^(1/2) * third_moment * d(dens)/dz
+                        #       + 3/2 / ppar^(1/2) / dens^(1/2) / me^(1/2) * third_moment * d(ppar)/dz
+                        #       + 3 * ppar^(1/2) / dens^(1/2) / me^(1/2) * third_moment * d(.)/dz
                         dthird_moment_dz = z.scratch2
                         derivative_z!(z.scratch2, third_moment, buffer_1, buffer_2,
                                       buffer_3, buffer_4, z_spectral, z)
@@ -834,9 +924,9 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
 
                             # terms from d(qpar)/dz
                             ppar_matrix[row,row] +=
-                                dt * (3.0 * sqrt(electron_ppar_new[row] / dens[row]) * dthird_moment_dz[row]
-                                      - 1.5 * sqrt(electron_ppar_new[row]) / dens[row]^1.5 * third_moment[row] * ddens_dz[row]
-                                      + 1.5 / sqrt(electron_ppar_new[row] / dens[row]) * third_moment[row] * dppar_dz[row])
+                                dt * (3.0 * sqrt(electron_ppar_new[row] / dens[row] / me) * dthird_moment_dz[row]
+                                      - 1.5 * sqrt(electron_ppar_new[row] / me) / dens[row]^1.5 * third_moment[row] * ddens_dz[row]
+                                      + 1.5 / sqrt(electron_ppar_new[row] / dens[row] / me) * third_moment[row] * dppar_dz[row])
                         end
                         if ion_dt !== nothing
                             # Backward-Euler forcing term
@@ -861,7 +951,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                         for row ∈ 1:z.n
                             @. ppar_matrix[row,:] +=
                                 dt * (upar[row]
-                                      + 3.0 * sqrt(electron_ppar_new[row] / dens[row]) * third_moment[row]) *
+                                      + 3.0 * sqrt(electron_ppar_new[row] / dens[row] / me) * third_moment[row]) *
                                 z_deriv_matrix[row,:]
                         end
 
@@ -891,6 +981,15 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
 
                 function split_precon!(x)
                     precon_ppar, precon_f = x
+
+                    begin_vperp_vpa_region()
+                    @loop_vperp_vpa ivperp ivpa begin
+                        z_precon_matrix = nl_solver_params.preconditioners.z[ivpa,ivperp,ir]
+                        f_slice = @view precon_f[ivpa,ivperp,:]
+                        @views z.scratch .= f_slice
+                        ldiv!(z.scratch2, z_precon_matrix, z.scratch)
+                        f_slice .= z.scratch2
+                    end
 
                     begin_z_region()
                     ppar_precon_matrix = nl_solver_params.preconditioners.ppar[ir]
