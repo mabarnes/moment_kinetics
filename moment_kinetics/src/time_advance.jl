@@ -674,7 +674,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                   default_rtol=t_params.rtol / 10.0,
                                   default_atol=t_params.atol / 10.0,
                                   electron_ppar_pdf_solve=true,
-                                  preconditioner_type="electron_split_lu")
+                                  #preconditioner_type="electron_split_lu")
+                                  preconditioner_type="electron_lu")
     else
         nl_solver_electron_advance_params = nothing
     end
