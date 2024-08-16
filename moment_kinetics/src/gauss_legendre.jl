@@ -102,13 +102,13 @@ struct gausslegendre_info{TSparse, TLU} <: weak_discretization_info
     Qmat::Array{mk_float,2}
 end
 
-function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true, dirichlet_bc=false)
+function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true, dirichlet_bc=false, handle_global_periodic=false)
     lobatto = setup_gausslegendre_pseudospectral_lobatto(coord,collision_operator_dim=collision_operator_dim)
     radau = setup_gausslegendre_pseudospectral_radau(coord,collision_operator_dim=collision_operator_dim)
 
     if collision_operator_dim
         S_matrix = allocate_float(coord.n,coord.n)
-        setup_global_weak_form_matrix!(S_matrix, lobatto, radau, coord, "S")
+        setup_global_weak_form_matrix!(S_matrix, lobatto, radau, coord, "S", handle_periodic=handle_global_periodic)
     else
         S_matrix = allocate_float(0, 0)
     end
@@ -117,10 +117,10 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true, 
     L_matrix = allocate_float(coord.n,coord.n)
     D_matrix = allocate_float(coord.n,coord.n)
 
-    setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M"; dirichlet_bc=dirichlet_bc)
-    setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms"; dirichlet_bc=dirichlet_bc)
-    setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms"; dirichlet_bc=dirichlet_bc)
-    setup_global_weak_form_matrix!(D_matrix, lobatto, radau, coord, "D"; dirichlet_bc=dirichlet_bc)
+    setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M"; dirichlet_bc=dirichlet_bc, handle_periodic=handle_global_periodic)
+    setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms"; dirichlet_bc=dirichlet_bc, handle_periodic=handle_global_periodic)
+    setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms"; dirichlet_bc=dirichlet_bc, handle_periodic=handle_global_periodic)
+    setup_global_weak_form_matrix!(D_matrix, lobatto, radau, coord, "D"; dirichlet_bc=dirichlet_bc, handle_periodic=handle_global_periodic)
     mass_matrix_lu = lu(sparse(mass_matrix))
     Qmat = allocate_float(coord.ngrid,coord.ngrid)
 
@@ -839,7 +839,7 @@ where M is the mass matrix and K is the stiffness matrix.
 function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
                                lobatto::gausslegendre_base_info,
                                radau::gausslegendre_base_info, 
-                               coord,option; dirichlet_bc=false)
+                               coord,option; dirichlet_bc=false, handle_periodic=true)
     QQ_j = allocate_float(coord.ngrid,coord.ngrid)
     QQ_jp1 = allocate_float(coord.ngrid,coord.ngrid)
     
@@ -853,10 +853,10 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
     # N.B. QQ varies with ielement for vperp, but not vpa
     # a radau element is used for the vperp grid (see get_QQ_local!())
     get_QQ_local!(QQ_j,j,lobatto,radau,coord,option)
-    if coord.bc == "periodic" && coord.nrank != 1
+    if handle_periodic && coord.bc == "periodic" && coord.nrank != 1
         error("periodic boundary conditions not supported when dimension is distributed")
     end
-    if coord.bc == "periodic" && coord.nrank == 1
+    if handle_periodic && coord.bc == "periodic" && coord.nrank == 1
         QQ_global[imax[end], imin[j]:imax[j]] .+= QQ_j[1,:] ./ 2.0
         QQ_global[1,1] += 1.0
         QQ_global[1,end] += -1.0
@@ -881,7 +881,7 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
         end
         # upper boundary assembly on element 
         if j == coord.nelement_local
-            if coord.bc == "periodic" && coord.nrank == 1
+            if handle_periodic && coord.bc == "periodic" && coord.nrank == 1
                 QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:] / 2.0
             else
                 QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]
@@ -891,7 +891,7 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
         end
     end
 
-    if dirichlet_bc && !coord.bc == "periodic"
+    if dirichlet_bc && !(handle_periodic && coord.bc == "periodic")
         # Make matrix diagonal for first/last grid points so it does not change the values
         # there
         if !(coord.name == "vperp") 
