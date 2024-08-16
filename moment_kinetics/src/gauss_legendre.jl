@@ -96,6 +96,9 @@ struct gausslegendre_info{TSparse, TLU} <: weak_discretization_info
     L_matrix::TSparse
     # global (1D) strong first derivative matrix
     D_matrix::TSparse
+    # global (1D) weak second derivative matrix, with inverse mass matrix included (so
+    # matrix is dense)
+    dense_second_deriv_matrix::AbstractArray{mk_float,2}
     # global (1D) LU object
     mass_matrix_lu::TLU
     # dummy matrix for local operators
@@ -121,10 +124,11 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true, 
     setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms"; dirichlet_bc=dirichlet_bc, handle_periodic=handle_global_periodic)
     setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms"; dirichlet_bc=dirichlet_bc, handle_periodic=handle_global_periodic)
     setup_global_weak_form_matrix!(D_matrix, lobatto, radau, coord, "D"; dirichlet_bc=dirichlet_bc, handle_periodic=handle_global_periodic)
+    dense_second_deriv_matrix = inv(mass_matrix) * K_matrix
     mass_matrix_lu = lu(sparse(mass_matrix))
     Qmat = allocate_float(coord.ngrid,coord.ngrid)
 
-    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),sparse(K_matrix),sparse(L_matrix),sparse(D_matrix),mass_matrix_lu,Qmat)
+    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),sparse(K_matrix),sparse(L_matrix),sparse(D_matrix),dense_second_deriv_matrix,mass_matrix_lu,Qmat)
 end
 
 function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_dim=true)
