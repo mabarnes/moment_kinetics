@@ -276,6 +276,13 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
     parallel_map = get_parallel_map(coords)
     parallel_delta_x_calc = get_parallel_delta_x_calc(coords)
 
+    if left_preconditioner === nothing
+        left_preconditioner = identity
+    end
+    if right_preconditioner === nothing
+        right_preconditioner = identity
+    end
+
     residual_func!(residual, x)
     residual_norm = distributed_norm(residual)
     counter = 0
@@ -290,13 +297,6 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
     while (counter < 1 && residual_norm > 1.0e-8) || residual_norm > 1.0
         counter += 1
         #println("\nNewton ", counter)
-
-        if left_preconditioner === nothing
-            left_preconditioner = identity
-        end
-        if right_preconditioner === nothing
-            right_preconditioner = identity
-        end
 
         # Solve (approximately?):
         #   J δx = -RHS(x)
