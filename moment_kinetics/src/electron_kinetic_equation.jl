@@ -641,6 +641,9 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                                  composition.me_over_mi)))
         scratch[t_params.n_rk_stages+1].electron_ppar[iz,ir] = moments.electron.ppar[iz,ir]
     end
+    calculate_electron_qpar_from_pdf!(moments.electron.qpar, moments.electron.ppar,
+                                      moments.electron.vth,
+                                      scratch[t_params.n_rk_stages+1].pdf_electron, vpa)
     calculate_electron_moment_derivatives!(moments,
                                            (electron_density=moments.electron.dens,
                                             electron_upar=moments.electron.upar,
@@ -671,6 +674,10 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                                    (moments.electron.dens[iz,ir] *
                                                     composition.me_over_mi)))
         end
+        calculate_electron_qpar_from_pdf!(moments.electron.qpar, ppar_guess,
+                                          moments.electron.vth,
+                                          scratch[t_params.n_rk_stages+1].pdf_electron,
+                                          vpa)
         calculate_electron_moment_derivatives!(moments,
                                                (electron_density=moments.electron.dens,
                                                 electron_upar=moments.electron.upar,
@@ -783,6 +790,18 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                                     scratch_dummy, collisions,
                                                     composition, external_source_settings,
                                                     num_diss_params, t_params.dt[], ir)
+            # Calculate heat flux and derivatives using updated f_electron
+            @views calculate_electron_qpar_from_pdf_no_r!(moments.electron.qpar[:,ir],
+                                                          electron_ppar_new,
+                                                          moments.electron.vth[:,ir],
+                                                          f_electron_new, vpa, ir)
+            @views calculate_electron_moment_derivatives_no_r!(
+                       moments,
+                       (electron_density=moments.electron.dens[:,ir],
+                        electron_upar=moments.electron.upar[:,ir],
+                        electron_ppar=electron_ppar_new),
+                       scratch_dummy, z, z_spectral,
+                       num_diss_params.electron.moment_dissipation_coefficient, ir)
 
             if nl_solver_params.preconditioner_type == "electron_split_lu"
                 if nl_solver_params.stage_counter[] % nl_solver_params.preconditioner_update_interval == 0
@@ -1024,12 +1043,6 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                                         vpa_spectral, vpa_advect,
                                                         num_diss_params, composition, ir)
 
-                # Calculate heat flux and derivatives using new_variables
-                calculate_electron_qpar_from_pdf_no_r!(moments.electron.qpar,
-                                                       electron_ppar_newvar,
-                                                       moments.electron.vth,
-                                                       f_electron_newvar, vpa, ir)
-
                 if evolve_ppar
                     this_dens = moments.electron.dens
                     this_upar = moments.electron.upar
@@ -1042,6 +1055,13 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                                    (this_dens[iz,ir] *
                                                     composition.me_over_mi)))
                     end
+                    # Calculate heat flux and derivatives using new_variables
+                    @views calculate_electron_qpar_from_pdf_no_r!(moments.electron.qpar[:,ir],
+                                                                  electron_ppar_newvar,
+                                                                  moments.electron.vth[:,ir],
+                                                                  f_electron_newvar, vpa,
+                                                                  ir)
+
                     calculate_electron_moment_derivatives_no_r!(
                         moments,
                         (electron_density=this_dens,
@@ -1050,6 +1070,12 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                         scratch_dummy, z, z_spectral,
                         num_diss_params.electron.moment_dissipation_coefficient, ir)
                 else
+                    # Calculate heat flux and derivatives using new_variables
+                    @views calculate_electron_qpar_from_pdf_no_r!(moments.electron.qpar[:,ir],
+                                                                  electron_ppar_newvar,
+                                                                  moments.electron.vth[:,ir],
+                                                                  f_electron_newvar, vpa,
+                                                                  ir)
                     # compute the z-derivative of the parallel electron heat flux
                     @views derivative_z!(moments.electron.dqpar_dz[:,ir],
                                          moments.electron.qpar[:,ir], buffer_1, buffer_2,
@@ -1255,10 +1281,10 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
             if !evolve_ppar
                 # update the electron heat flux
                 moments.electron.qpar_updated[] = false
-                calculate_electron_qpar_from_pdf_no_r!(moments.electron.qpar,
-                                                       electron_ppar_new,
-                                                       moments.electron.vth,
-                                                       f_electron_new, vpa, ir)
+                @views calculate_electron_qpar_from_pdf_no_r!(moments.electron.qpar[:,ir],
+                                                              electron_ppar_new,
+                                                              moments.electron.vth[:,ir],
+                                                              f_electron_new, vpa, ir)
 
                 # compute the z-derivative of the parallel electron heat flux
                 @views derivative_z!(moments.electron.dqpar_dz[:,ir],
@@ -1460,10 +1486,10 @@ function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, mo
                                                     num_diss_params, composition, ir)
 
             # Calculate heat flux and derivatives using new_variables
-            calculate_electron_qpar_from_pdf_no_r!(moments.electron.qpar,
-                                                   electron_ppar_new,
-                                                   moments.electron.vth,
-                                                   f_electron_new, vpa, ir)
+            @views calculate_electron_qpar_from_pdf_no_r!(moments.electron.qpar[:,ir],
+                                                          electron_ppar_new,
+                                                          moments.electron.vth[:,ir],
+                                                          f_electron_new, vpa, ir)
 
             this_dens = moments.electron.dens
             this_upar = moments.electron.upar
