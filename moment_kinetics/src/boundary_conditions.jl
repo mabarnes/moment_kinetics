@@ -1029,4 +1029,31 @@ function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,3}, bc, vpe
     end
 end
 
+"""
+    skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa)
+
+This function returns `true` when the grid point specified by `iz`, `ivperp`, `ivpa` would
+be set by the boundary conditions on the electron distribution function. When this
+happens, the corresponding row should be skipped when adding contributions to the Jacobian
+matrix, so that the row remains the same as a row of the identity matrix, so that the
+Jacobian matrix does not modify those points. Returns `false` otherwise.
+"""
+function skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa)
+    # z boundary condition
+    if z.bc == "wall" && (iz == 1 || iz == z.n)
+        error("Need to do something about wall boundary condition in preconditioner matrix")
+    end
+
+    # vperp boundary condition
+    if vperp.n > 1 && ivperp == vperp.n
+        return true
+    end
+
+    if ivpa == 1 || ivpa == vpa.n
+        return true
+    end
+
+    return false
+end
+
 end # boundary_conditions

@@ -4,9 +4,12 @@ module electron_z_advection
 
 export electron_z_advection!
 export update_electron_speed_z!
+export add_electron_z_advection_to_Jacobian!
 
 using ..advection: advance_f_df_precomputed!
+using ..boundary_conditions: skip_f_electron_bc_points_in_Jacobian
 using ..chebyshev: chebyshev_info
+using ..gauss_legendre: gausslegendre_info
 using ..looping
 using ..derivatives: derivative_z_pdf_vpavperpz!
 using ..calculus: second_derivative!
@@ -65,6 +68,99 @@ function update_electron_speed_z!(advect, upar, vth, vpa)
     @loop_r ir begin
         @views update_electron_speed_z!(advect, upar[:,ir], vth[:,ir], vpa, ir)
     end
+    return nothing
+end
+
+function add_electron_z_advection_to_Jacobian!(jacobian_matrix, f, dens, upar, ppar, vth,
+                                               me, z, vperp, vpa, z_spectral, z_advect,
+                                               scratch_dummy, dt, ir; f_offset=0,
+                                               ppar_offset=0)
+    if f_offset == ppar_offset
+        error("Got f_offset=$f_offset the same as ppar_offset=$ppar_offset. f and ppar "
+              * "cannot be in same place in state vector.")
+    end
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2)
+    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n
+    @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n
+
+    v_size = vperp.n * vpa.n
+
+    dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
+
+    begin_vperp_vpa_region()
+    update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
+
+    @loop_vperp_vpa ivperp ivpa begin
+        @views z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_advect[1].speed[:,ivpa,ivperp,ir]
+    end
+    #calculate the upwind derivative
+    @views derivative_z_pdf_vpavperpz!(dpdf_dz, f, z_advect[1].adv_fac[:,:,:,ir],
+                                       scratch_dummy.buffer_vpavperpr_1[:,:,ir],
+                                       scratch_dummy.buffer_vpavperpr_2[:,:,ir],
+                                       scratch_dummy.buffer_vpavperpr_3[:,:,ir],
+                                       scratch_dummy.buffer_vpavperpr_4[:,:,ir],
+                                       scratch_dummy.buffer_vpavperpr_5[:,:,ir],
+                                       scratch_dummy.buffer_vpavperpr_6[:,:,ir],
+                                       z_spectral, z)
+
+    if !isa(z_spectral, gausslegendre_info)
+        error("Only gausslegendre_pseudospectral z-coordinate type is supported by "
+              * "add_electron_z_advection_to_Jacobian!() preconditioner because we need "
+              * "differentiation matrices.")
+    end
+    z_deriv_matrix = z_spectral.D_matrix
+
+    begin_z_vperp_vpa_region()
+    @loop_z_vperp_vpa iz ivperp ivpa begin
+        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa)
+            continue
+        end
+
+        # Rows corresponding to pdf_electron
+        row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa + f_offset
+        v_remainder = (ivperp - 1) * vpa.n + ivpa + f_offset
+
+        ielement_z = z.ielement[iz]
+        igrid_z = z.igrid[iz]
+        icolumn_min_z = z.imin[ielement_z] - (ielement_z != 1)
+        icolumn_max_z = z.imax[ielement_z]
+
+        z_speed = z_advect[1].speed[iz,ivpa,ivperp,ir]
+
+        # Contributions from (w_∥*vth + upar)*dg/dz
+        if ielement_z == 1 && igrid_z == 1
+            jacobian_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] .+=
+            dt * z_speed * z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement_z]
+        elseif ielement_z == z.nelement_local && igrid_z == z.ngrid
+            jacobian_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] .+=
+            dt * z_speed * z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement_z]
+        elseif igrid_z == z.ngrid
+            # Note igrid_z is only ever 1 when ielement_z==1, because
+            # of the way element boundaries are counted.
+            icolumn_min_z_next = z.imin[ielement_z+1] - 1
+            icolumn_max_z_next = z.imax[ielement_z+1]
+            if z_speed < 0.0
+                jacobian_matrix[row,(icolumn_min_z_next-1)*v_size+v_remainder:v_size:(icolumn_max_z_next-1)*v_size+v_remainder] .+=
+                dt * z_speed * z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement_z+1]
+            elseif z_speed > 0.0
+                jacobian_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] .+=
+                dt * z_speed * z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement_z]
+            else
+                jacobian_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] .+=
+                dt * z_speed * 0.5 * z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement_z]
+                jacobian_matrix[row,(icolumn_min_z_next-1)*v_size+v_remainder:v_size:(icolumn_max_z_next-1)*v_size+v_remainder] .+=
+                dt * z_speed * 0.5 * z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement_z+1]
+            end
+        else
+            jacobian_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] .+=
+            dt * z_speed * z_spectral.lobatto.Dmat[igrid_z,:] ./ z.element_scale[ielement_z]
+        end
+        # vth = sqrt(2*p/n/me)
+        # so d(vth)/d(ppar) = 1/n/me/sqrt(2*p/n/me) = 1/n/me/vth
+        # and d(w_∥*vth*dg/dz)/d(ppar) = 1/n/me/vth*w_∥*dg/dz
+        jacobian_matrix[row,ppar_offset+iz] += dt / dens[iz] / me / vth[iz] * vpa.grid[ivpa] * dpdf_dz[ivpa,ivperp,iz]
+    end
+
     return nothing
 end
 

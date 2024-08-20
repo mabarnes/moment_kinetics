@@ -14,9 +14,11 @@ module external_sources
 export setup_external_sources!, external_ion_source!, external_neutral_source!,
        external_ion_source_controller!, external_neutral_source_controller!,
        initialize_external_source_amplitude!,
-       initialize_external_source_controller_integral!
+       initialize_external_source_controller_integral!,
+       add_external_electron_source_to_Jacobian!
 
 using ..array_allocation: allocate_float, allocate_shared_float
+using ..boundary_conditions: skip_f_electron_bc_points_in_Jacobian
 using ..calculus
 using ..communication
 using ..coordinates
@@ -796,6 +798,77 @@ function external_electron_source!(pdf_out, pdf_in, electron_density, electron_u
             pdf_out[ivpa,ivperp,iz] -= dt * source_amplitude[iz] *
                                             pdf_in[ivpa,ivperp,iz]
         end
+    end
+
+    return nothing
+end
+
+function add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments,
+                                                   me, z_speed, external_source_settings,
+                                                   z, vperp, vpa, dt, ir; f_offset=0,
+                                                   ppar_offset=0)
+    if f_offset == ppar_offset
+        error("Got f_offset=$f_offset the same as ppar_offset=$ppar_offset. f and ppar "
+              * "cannot be in same place in state vector.")
+    end
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2)
+    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n
+    @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n
+
+    if !external_source_settings.electron.active
+        return nothing
+    end
+
+    source_amplitude = moments.electron.external_source_amplitude
+    source_T = external_source_settings.electron.source_T
+    dens = @view moments.electron.dens[:,ir]
+    upar = @view moments.electron.upar[:,ir]
+    ppar = @view moments.electron.ppar[:,ir]
+    vth = @view moments.electron.vth[:,ir]
+    if vperp.n == 1
+        vth_factor = 1.0 / sqrt(source_T / me)
+    else
+        vth_factor = 1.0 / sqrt(source_T / me)^1.5
+    end
+    vperp_grid = vperp.grid
+    vpa_grid = vpa.grid
+    v_size = vperp.n * vpa.n
+
+    begin_z_vperp_vpa_region()
+    if external_source_settings.electron.source_type == "energy"
+        @loop_z_vperp_vpa iz ivperp ivpa begin
+            if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa,
+                                                     z_speed)
+                continue
+            end
+
+            # Rows corresponding to pdf_electron
+            row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa + f_offset
+
+            # Contribution from `external_electron_source!()`
+            jacobian_matrix[row,row] += dt * source_amplitude[iz]
+        end
+    end
+    @loop_z_vperp_vpa iz ivperp ivpa begin
+        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
+            continue
+        end
+
+        # Rows corresponding to pdf_electron
+        row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa + f_offset
+
+        # Contributions from
+        #   -vth/n*vth_factor*source_amplitude*exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T)
+        # Using
+        #   d(vth[irowz])/d(ppar[icolz]) = 1/2*vth/ppar * delta(irowz,icolz)
+        #
+        #   d(exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T)[irowz])/d(ppar[icolz])
+        #     = -2*(w_⟂^2+(w_∥*vth+u)*w_∥)*me/source_T * 1/2*vth/ppar * exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T) * delta(irowz,icolz)
+        #     = -(w_⟂^2+(w_∥*vth+u)*w_∥)*me/source_T * vth/ppar * exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T) * delta(irowz,icolz)
+        jacobian_matrix[row,ppar_offset+iz] +=
+            -dt * vth[iz] / dens[iz] * vth_factor * source_amplitude[iz] *
+                  (0.5/ppar[iz] - (vperp_grid[ivperp]^2 + (vpa_grid[ivpa]*vth[iz] + upar[iz])*vpa_grid[ivpa])*me/source_T*vth[iz]/ppar[iz]) *
+                  exp(-((vperp_grid[ivperp]*vth[iz])^2 + (vpa_grid[ivpa]*vth[iz] + upar[iz])^2) * me / source_T)
     end
 
     return nothing

@@ -10,7 +10,8 @@ using ..looping
 using ..analysis: steady_state_residuals
 using ..derivatives: derivative_z!, derivative_z_pdf_vpavperpz!
 using ..boundary_conditions: enforce_v_boundary_condition_local!,
-                             enforce_vperp_boundary_condition!
+                             enforce_vperp_boundary_condition!,
+                             skip_f_electron_bc_points_in_Jacobian
 using ..calculus: derivative!, second_derivative!, integral
 using ..communication
 using ..gauss_legendre: gausslegendre_info
@@ -25,14 +26,19 @@ using ..electron_fluid_equations: calculate_electron_moments!,
                                   calculate_electron_parallel_friction_force!
 using ..electron_fluid_equations: electron_energy_equation!,
                                   electron_energy_equation_no_r!,
+                                  add_electron_energy_equation_to_Jacobian!,
                                   electron_energy_residual!
-using ..electron_z_advection: electron_z_advection!, update_electron_speed_z!
-using ..electron_vpa_advection: electron_vpa_advection!, update_electron_speed_vpa!
+using ..electron_z_advection: electron_z_advection!, update_electron_speed_z!,
+                              add_electron_z_advection_to_Jacobian!
+using ..electron_vpa_advection: electron_vpa_advection!, update_electron_speed_vpa!,
+                                add_electron_vpa_advection_to_Jacobian!
 using ..em_fields: update_phi!
-using ..external_sources: external_electron_source!
+using ..external_sources: external_electron_source!,
+                          add_external_electron_source_to_Jacobian!
 using ..file_io: get_electron_io_info, write_electron_state, finish_electron_io
 using ..krook_collisions: electron_krook_collisions!, get_collision_frequency_ee,
-                          get_collision_frequency_ei
+                          get_collision_frequency_ei,
+                          add_electron_krook_collisions_to_Jacobian!
 using ..moment_constraints: hard_force_moment_constraints!,
                             moment_constraints_on_residual!
 using ..moment_kinetics_structs: scratch_pdf, scratch_electron_pdf, electron_pdf_substruct
@@ -1026,448 +1032,21 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                 right_preconditioner = split_precon!
             elseif nl_solver_params.preconditioner_type == "electron_lu"
                 if nl_solver_params.stage_counter[] % nl_solver_params.preconditioner_update_interval == 0
-                    dt = t_params.dt[]
-                    f = f_electron_new
-                    vth = @view moments.electron.vth[:,ir]
-                    me = composition.me_over_mi
-                    dens = @view moments.electron.dens[:,ir]
-                    upar = @view moments.electron.upar[:,ir]
-                    ppar = electron_ppar_new
-                    qpar = @view moments.electron.qpar[:,ir]
-                    ddens_dz = @view moments.electron.ddens_dz[:,ir]
-                    dupar_dz = @view moments.electron.dupar_dz[:,ir]
-                    dppar_dz = @view moments.electron.dppar_dz[:,ir]
-                    dvth_dz = @view moments.electron.dvth_dz[:,ir]
-                    dqpar_dz = @view moments.electron.dqpar_dz[:,ir]
-                    vpa_dissipation_coefficient = num_diss_params.electron.vpa_dissipation_coefficient
-                    source_amplitude = moments.electron.external_source_amplitude
-                    source_density_amplitude = moments.electron.external_source_density_amplitude
-                    source_momentum_amplitude = moments.electron.external_source_momentum_amplitude
-                    source_pressure_amplitude = moments.electron.external_source_pressure_amplitude
+                    orig_lu, precon_matrix, input_buffer, output_buffer = nl_solver_params.preconditioners[ir]
 
-                    dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
-                    dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
+                    fill_electron_kinetic_equation_Jacobian!(
+                        precon_matrix, f_electron_new, electron_ppar_new, moments,
+                        collisions, composition, z, vperp, vpa, z_spectral,
+                        vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                        external_source_settings, num_diss_params, t_params.dt[], ion_dt,
+                        ir, evolve_ppar)
 
-                    begin_vperp_vpa_region()
-                    update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
-
-                    @loop_vperp_vpa ivperp ivpa begin
-                        @views z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_advect[1].speed[:,ivpa,ivperp,ir]
+                    begin_serial_region()
+                    if block_rank[] == 0
+                        nl_solver_params.preconditioners[ir] = (lu(sparse(precon_matrix)), precon_matrix, input_buffer, output_buffer)
+                    else
+                        nl_solver_params.preconditioners[ir] = (orig_lu, precon_matrix, input_buffer, output_buffer)
                     end
-                    #calculate the upwind derivative
-                    @views derivative_z_pdf_vpavperpz!(
-                               dpdf_dz, f, z_advect[1].adv_fac[:,:,:,ir],
-                               scratch_dummy.buffer_vpavperpr_1[:,:,ir],
-                               scratch_dummy.buffer_vpavperpr_2[:,:,ir],
-                               scratch_dummy.buffer_vpavperpr_3[:,:,ir],
-                               scratch_dummy.buffer_vpavperpr_4[:,:,ir],
-                               scratch_dummy.buffer_vpavperpr_5[:,:,ir],
-                               scratch_dummy.buffer_vpavperpr_6[:,:,ir], z_spectral, z)
-
-                    begin_z_vperp_region()
-                    update_electron_speed_vpa!(vpa_advect[1], dens, upar, ppar, moments,
-                                               vpa.grid,
-                                               external_source_settings.electron, ir)
-                    @loop_z_vperp iz ivperp begin
-                        @views @. vpa_advect[1].adv_fac[:,ivperp,iz,ir] = -vpa_advect[1].speed[:,ivperp,iz,ir]
-                    end
-                    #calculate the upwind derivative of the electron pdf w.r.t. wpa
-                    @loop_z_vperp iz ivperp begin
-                        @views derivative!(dpdf_dvpa[:,ivperp,iz],
-                                           f[:,ivperp,iz], vpa,
-                                           vpa_advect[1].adv_fac[:,ivperp,iz,ir],
-                                           vpa_spectral)
-                    end
-
-                    # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
-                    third_moment = scratch_dummy.buffer_z_1
-                    dthird_moment_dz = scratch_dummy.buffer_z_2
-                    begin_z_region()
-                    @loop_z iz begin
-                        third_moment[iz] = 0.5 * qpar[iz] / ppar[iz] / vth[iz]
-                    end
-                    derivative_z!(dthird_moment_dz, third_moment, buffer_1, buffer_2,
-                                  buffer_3, buffer_4, z_spectral, z)
-
-                    if !isa(z_spectral, gausslegendre_info)
-                        error("Only gausslegendre_pseudospectral z-coordinate type is "
-                              * "supported by electron_backward_euler!() "
-                              * "preconditioner because we need differentiation"
-                              * "matrices.")
-                    end
-                    z_deriv_matrix = z_spectral.D_matrix
-
-                    if !isa(vpa_spectral, gausslegendre_info)
-                        error("Only gausslegendre_pseudospectral vpa-coordinate type is "
-                              * "supported by electron_backward_euler!() "
-                              * "preconditioner because we need differentiation"
-                              * "matrices.")
-                    end
-                    vpa_deriv_matrix = vpa_spectral.D_matrix
-                    vpa_dense_second_deriv_matrix = vpa_spectral.dense_second_deriv_matrix
-
-                    _, precon_matrix, input_buffer, output_buffer = nl_solver_params.preconditioners[ir]
-
-                    pdf_size = z.n * vperp.n * vpa.n
-                    z_size = z.n
-                    v_size = vperp.n * vpa.n
-                    ppar_size = z.n
-                    total_size = pdf_size + ppar_size
-                    begin_z_vperp_vpa_region()
-                    @loop_z_vperp_vpa iz ivperp ivpa begin
-                        # Rows corresponding to pdf_electron
-                        row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa
-                        v_remainder = (ivperp - 1) * vpa.n + ivpa
-
-                        precon_matrix[row,:] .= 0.0
-                        precon_matrix[row,row] += 1.0
-
-                        if z.bc == "wall" && (iz == 1 || iz == z.n)
-                            error("Need to do something about wall boundary condition in preconditioner matrix")
-                        end
-                        if ivpa == 1 || ivpa == vpa.n || (vperp.n > 1 && ivperp == vperp.n)
-                            # Leave matrix as identity for these rows to impose Dirichlet
-                            # boundary condition.
-                            continue
-                        end
-
-                        ielement_z = z.ielement[iz]
-                        igrid_z = z.igrid[iz]
-                        icolumn_min_z = z.imin[ielement_z] - (ielement_z != 1)
-                        icolumn_max_z = z.imax[ielement_z]
-
-                        ielement_vpa = vpa.ielement[ivpa]
-                        igrid_vpa = vpa.igrid[ivpa]
-                        icolumn_min_vpa = vpa.imin[ielement_vpa] - (ielement_vpa != 1)
-                        icolumn_max_vpa = vpa.imax[ielement_vpa]
-
-                        z_speed = z_advect[1].speed[iz,ivpa,ivperp,ir]
-
-                        # Contributions from (w_∥*vth + upar)*dg/dz
-                        if ielement_z == 1 && igrid_z == 1
-                            precon_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] .+=
-                                dt * z_speed * z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement_z]
-                        elseif ielement_z == z.nelement_local && igrid_z == z.ngrid
-                            precon_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] .+=
-                                dt * z_speed * z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement_z]
-                        elseif igrid_z == z.ngrid
-                            # Note igrid_z is only ever 1 when ielement_z==1, because
-                            # of the way element boundaries are counted.
-                            icolumn_min_z_next = z.imin[ielement_z+1] - 1
-                            icolumn_max_z_next = z.imax[ielement_z+1]
-                            if z_speed < 0.0
-                                precon_matrix[row,(icolumn_min_z_next-1)*v_size+v_remainder:v_size:(icolumn_max_z_next-1)*v_size+v_remainder] .+=
-                                    dt * z_speed * z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement_z+1]
-                            elseif z_speed > 0.0
-                                precon_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] .+=
-                                    dt * z_speed * z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement_z]
-                            else
-                                precon_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] .+=
-                                    dt * z_speed * 0.5 * z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement_z]
-                                precon_matrix[row,(icolumn_min_z_next-1)*v_size+v_remainder:v_size:(icolumn_max_z_next-1)*v_size+v_remainder] .+=
-                                    dt * z_speed * 0.5 * z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement_z+1]
-                            end
-                        else
-                            precon_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] .+=
-                                dt * z_speed * z_spectral.lobatto.Dmat[igrid_z,:] ./ z.element_scale[ielement_z]
-                        end
-                        # vth = sqrt(2*p/n/me)
-                        # so d(vth)/d(ppar) = 1/n/me/sqrt(2*p/n/me) = 1/n/me/vth
-                        # and d(w_∥*vth*dg/dz)/d(ppar) = 1/n/me/vth*w_∥*dg/dz
-                        precon_matrix[row,pdf_size+iz] += dt / dens[iz] / me / vth[iz] * vpa.grid[ivpa] * dpdf_dz[ivpa,ivperp,iz]
-
-                        vpa_speed = vpa_advect[1].speed[ivpa,ivperp,iz,ir]
-
-                        # Contributions from
-                        #   (1/2*vth/p*dp/dz + 1/2*w_∥/p*dq/dz - w_∥^2*dvth/dz
-                        #    + source_density_amplitude*u/n/vth
-                        #    - w_∥*1/2*(source_pressure_amplitude + 2*u*source_momentum_amplitude)/p
-                        #    + w_∥*1/2*source_density_amplitude/n) * dg/dw_∥
-                        if ielement_vpa == 1 && igrid_vpa == 1
-                            precon_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa] .+=
-                                dt * vpa_speed * vpa_spectral.lobatto.Dmat[1,:] ./ vpa.element_scale[ielement_vpa]
-                        elseif ielement_vpa == vpa.nelement_local && igrid_vpa == vpa.ngrid
-                            precon_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa] .+=
-                                dt * vpa_speed * vpa_spectral.lobatto.Dmat[end,:] ./ vpa.element_scale[ielement_vpa]
-                        elseif igrid_vpa == vpa.ngrid
-                            # Note igrid_vpa is only ever 1 when ielement_vpa==1, because
-                            # of the way element boundaries are counted.
-                            icolumn_min_vpa_next = vpa.imin[ielement_vpa+1] - 1
-                            icolumn_max_vpa_next = vpa.imax[ielement_vpa+1]
-                            if vpa_speed < 0.0
-                                precon_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa_next:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa_next] .+=
-                                    dt * vpa_speed * vpa_spectral.lobatto.Dmat[1,:] ./ vpa.element_scale[ielement_vpa+1]
-                            elseif vpa_speed > 0.0
-                                precon_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa] .+=
-                                    dt * vpa_speed * vpa_spectral.lobatto.Dmat[end,:] ./ vpa.element_scale[ielement_vpa]
-                            else
-                                precon_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa] .+=
-                                    dt * vpa_speed * 0.5 * vpa_spectral.lobatto.Dmat[end,:] ./ vpa.element_scale[ielement_vpa]
-                                precon_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa_next:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa_next] .+=
-                                    dt * vpa_speed * 0.5 * vpa_spectral.lobatto.Dmat[1,:] ./ vpa.element_scale[ielement_vpa+1]
-                            end
-                        else
-                            precon_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa] .+=
-                                dt * vpa_speed * vpa_spectral.lobatto.Dmat[igrid_vpa,:] ./ vpa.element_scale[ielement_vpa]
-                        end
-                        # q = 2*p*vth*∫dw_∥ w_∥^3 g
-                        #   = 2*p^(3/2)*sqrt(2/n/me)*∫dw_∥ w_∥^3 g
-                        # dq/dz = 3*sqrt(2*p/n/me)*∫dw_∥ w_∥^3 g * dp/dz
-                        #         - p^(3/2)*sqrt(2/me)/n^(3/2)*∫dw_∥ w_∥^3 g * dn/dz
-                        #         + 2*p*vth*∫dw_∥ w_∥^3 dg/dz
-                        # w_∥*0.5/p*dq/dz = w_∥*1.5*sqrt(2/p/n/me)*∫dw_∥ w_∥^3 g * dp/dz
-                        #                   - w_∥*0.5*sqrt(2*p/me)/n^(3/2)*∫dw_∥ w_∥^3 g * dn/dz
-                        #                   + w_∥*sqrt(2*p/n/me)*∫dw_∥ w_∥^3 dg/dz
-                        #                 = w_∥*1.5*sqrt(2/p/n/me)*∫dw_∥ w_∥^3 g * dp/dz
-                        #                   - w_∥*0.5*sqrt(2*p/me)/n^(3/2)*∫dw_∥ w_∥^3 g * dn/dz
-                        #                   + w_∥*vth*∫dw_∥ w_∥^3 dg/dz
-                        # d(w_∥*0.5/p*dq/dz[irowz])/d(g[icolvpa,icolvperp,icolz]) =
-                        #   w_∥*(1.5*sqrt(2/p/n/me)*dp/dz - 0.5*sqrt(2*p/me)/n^(3/2)*dn/dz) * delta(irowz,icolz) * vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
-                        #   + w_∥*vth * vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_matrix[irowz,icolz]
-                        # d(w_∥*0.5/p*dq/dz[irowz])/d(p[icolz]) =
-                        #   (-w_∥*3/4*sqrt(2/n/me)/p^(3/2)*∫dw_∥ w_∥^3 g * dp/dz - w_∥*1/4*sqrt(2/me)/sqrt(p)/n^(3/2)*∫dw_∥ w_∥^3 g * dn/dz + w_∥*1/2*sqrt(2/n/me)/sqrt(p)*∫dw_∥ w_∥^3 dg/dz)[irowz] * delta(irowz,icolz)
-                        #   + w_∥*(1.5*sqrt(2/p/n/me)*∫dw_∥ w_∥^3 g)[irowz] * z_deriv_matrix[irowz,icolz]
-                        for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-                            col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa
-                            precon_matrix[row,col] += dt * dpdf_dvpa[ivpa,ivperp,iz] *
-                                vpa.grid[ivpa] * (1.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*dppar_dz[iz]
-                                                  - 0.5*sqrt(2.0*ppar[iz]/me)/dens[iz]^1.5*ddens_dz[iz]) *
-                                               vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
-                        end
-                        for icolz ∈ 1:z.n, icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-                            col = (icolz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa
-                            precon_matrix[row,col] += dt * dpdf_dvpa[ivpa,ivperp,iz] *
-                                vpa.grid[ivpa] * vth[iz] * vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_matrix[iz,icolz]
-                        end
-                        precon_matrix[row,pdf_size+iz] += dt * dpdf_dvpa[ivpa,ivperp,iz] * vpa.grid[ivpa] *
-                            (-0.75*sqrt(2.0/dens[iz]/me)/ppar[iz]^1.5*third_moment[iz]*dppar_dz[iz]
-                             - 0.25*sqrt(2.0/me/ppar[iz])/dens[iz]^1.5*third_moment[iz]*ddens_dz[iz]
-                             + 0.5*sqrt(2.0/dens[iz]/me/ppar[iz])*dthird_moment_dz[iz])
-                        for icolz ∈ 1:z.n
-                            col = pdf_size + icolz
-                            precon_matrix[row,col] += dt * dpdf_dvpa[ivpa,ivperp,iz] * vpa.grid[ivpa] * 1.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*third_moment[iz] * z_deriv_matrix[iz,icolz]
-                        end
-                        #   (1/2*vth/p*dp/dz - w_∥^2*dvth/dz
-                        #    + source_density_amplitude*u/n/vth
-                        #    - w_∥*1/2*(source_pressure_amplitude + 2*u*source_momentum_amplitude)/p
-                        #    + w_∥*1/2*source_density_amplitude/n)
-                        # = (1/2*sqrt(2/p/n)*dp/dz - w_∥^2*dvth/dz
-                        #    + source_density_amplitude*u/sqrt(2*p*n)
-                        #    - w_∥*1/2*(source_pressure_amplitude + 2*u*source_momentum_amplitude)/p
-                        #    + w_∥*1/2*source_density_amplitude/n)
-                        #
-                        # dvth/dz = d/dz(sqrt(2*p/n/me))
-                        #         = 1/n/me/sqrt(2*p/n/me)*dp/dz - p/n^2/me/sqrt(2*p/n/me)*dn/dz
-                        #         = 1/sqrt(2*p*n*me)*dp/dz - 1/2*sqrt(2*p/n/me)/n*dn/dz
-                        # d(dvth/dz[irowz])/d(ppar[icolz]) =
-                        #   (-1/2/sqrt(2*n*me)/p^(3/2)*dp/dz - 1/4*sqrt(2/me)/p^(1/2)/n^(3/2)*dn/dz)[irowz] * delta(irowz,icolz)
-                        #   +1/sqrt(2*p*n*me)[irowz] * z_deriv_matrix[irowz,icolz]
-                        #
-                        # ⇒ d((1/2*vth/p*dp/dz - w_∥^2*dvth/dz
-                        #      + source_density_amplitude*u/n/vth
-                        #      - w_∥*1/2*(source_pressure_amplitude + 2*u*source_momentum_amplitude)/p
-                        #      + w_∥*1/2*source_density_amplitude/n)[irowz]/d(ppar[icolz])
-                        # = (-1/4*sqrt(2/n/me)/p^(3/2)*dp/dz
-                        #    - w_∥^2*(-1/2/sqrt(2*n*me)/p^(3/2)*dp/dz - 1/4*sqrt(2/me)/p^(1/2)/n^(3/2)*dn/dz)
-                        #    - 1/2*source_density_amplitude*u/sqrt(2*n)/p^(3/2)
-                        #    + w_∥*1/2*(source_pressure_amplitude + 2*u*source_momentum_amplitude)/p^2)[irowz] * delta(irowz,icolz)
-                        #   + (1/2*sqrt(2/p/n/me) - w_∥^2/sqrt(2*p*n*me))[irowz] * z_deriv_matrix[irowz,icolz]
-                        precon_matrix[row,pdf_size+iz] += dt * (
-                            -0.25*sqrt(2.0/dens[iz]/me)/ppar[iz]^1.5*dppar_dz[iz]
-                            - vpa.grid[ivpa]^2*(-0.5/sqrt(2.0*dens[iz]*me)/ppar[iz]^1.5*dppar_dz[iz] - 0.25*sqrt(2.0/me/ppar[iz])/dens[iz]^1.5*ddens_dz[iz])
-                           ) * dpdf_dvpa[ivpa,ivperp,iz]
-                        if external_source_settings.electron.active
-                            precon_matrix[row,pdf_size+iz] += dt * (
-                                -0.5*source_density_amplitude[iz]*upar[iz]/sqrt(2.0*dens[iz])/ppar[iz]^1.5
-                                + vpa.grid[ivpa]*0.5*(source_pressure_amplitude[iz] + 2.0*upar[iz]*source_momentum_amplitude[iz])/ppar[iz]^2
-                               ) * dpdf_dvpa[ivpa,ivperp,iz]
-                        end
-                        for icolz ∈ 1:z.n
-                            col = pdf_size + icolz
-                            precon_matrix[row,col] += dt * (
-                                0.5*sqrt(2.0/ppar[iz]/dens[iz]/me)
-                                - vpa.grid[ivpa]^2/sqrt(2.0*ppar[iz]*dens[iz]*me)
-                               ) * dpdf_dvpa[ivpa,ivperp,iz] * z_deriv_matrix[iz,icolz]
-                        end
-
-                        # Terms from `add_contribution_from_pdf_term!()`
-                        # (0.5/p*dq/dz + w_∥*vth*(1/n*dn/dz - 1/vth*dvth/dz))*g
-                        #
-                        # q = 2*p*vth*∫dw_∥ w_∥^3 g
-                        #   = 2*p^(3/2)*sqrt(2/n/me)*∫dw_∥ w_∥^3 g
-                        # dq/dz = 3*sqrt(2*p/n/me)*∫dw_∥ w_∥^3 g * dp/dz
-                        #         - p^(3/2)*sqrt(2/me)/n^(3/2)*∫dw_∥ w_∥^3 g * dn/dz
-                        #         + 2*p*vth*∫dw_∥ w_∥^3 dg/dz
-                        # 0.5/p*dq/dz = 1.5*sqrt(2/p/n/me)*∫dw_∥ w_∥^3 g * dp/dz
-                        #               - 0.5*sqrt(2*p/me)/n^(3/2)*∫dw_∥ w_∥^3 g * dn/dz
-                        #               + sqrt(2*p/n/me)*∫dw_∥ w_∥^3 dg/dz
-                        #             = 1.5*sqrt(2/p/n/me)*∫dw_∥ w_∥^3 g * dp/dz
-                        #               - 0.5*sqrt(2*p/me)/n^(3/2)*∫dw_∥ w_∥^3 g * dn/dz
-                        #               + vth*∫dw_∥ w_∥^3 dg/dz
-                        # d(0.5/p*dq/dz[irowz])/d(g[icolvpa,icolvperp,icolz]) =
-                        #   (1.5*sqrt(2/p/n/me)*dp/dz - 0.5*sqrt(2*p/me)/n^(3/2)*dn/dz) * delta(irowz,icolz) * vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
-                        #   + vth * vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_matrix[irowz,icolz]
-                        # d(0.5/p*dq/dz[irowz])/d(p[icolz]) =
-                        #   (-3/4*sqrt(2/n/me)/p^(3/2)*∫dw_∥ w_∥^3 g * dp/dz - 1/4*sqrt(2/me)/sqrt(p)/n^(3/2)*∫dw_∥ w_∥^3 g * dn/dz + 1/2*sqrt(2/n/me)/sqrt(p)*∫dw_∥ w_∥^3 dg/dz)[irowz] * delta(irowz,icolz)
-                        #   + (1.5*sqrt(2/p/n/me)*∫dw_∥ w_∥^3 g)[irowz] * z_deriv_matrix[irowz,icolz]
-                        #
-                        # dvth/dz = d/dz(sqrt(2*p/n/me))
-                        #         = 1/n/me/sqrt(2*p/n/me)*dp/dz - p/n^2/me/sqrt(2*p/n/me)*dn/dz
-                        #         = 1/n/me/vth*dp/dz - p/n^2/me/vth*dn/dz
-                        #         = 1/n/me/vth*dp/dz - 1/2*vth/n*dn/dz
-                        # ⇒ vth*(1/n*dn/dz - 1/vth*dvth/dz)
-                        #   = (vth/n*dn/dz - dvth/dz)
-                        #   = (vth/n*dn/dz - 1/n/me/vth*dp/dz + 1/2*vth/n*dn/dz)
-                        #   = (3/2*vth/n*dn/dz - 1/n/me/vth*dp/dz)
-                        #   = (3/2*sqrt(2*p/me)/n^(3/2)*dn/dz - 1/sqrt(2*p*n*me)*dp/dz)
-                        # d(vth*(1/n*dn/dz - 1/vth*dvth/dz)[irowz])/d(ppar[icolz]) =
-                        #   (3/4*sqrt(2/me)/p^(1/2)/n^(3/2)*dn/dz + 1/2/sqrt(2*n*me)/p^(3/2)*dp/dz)[irowz] * delta(irowz,icolz)
-                        #   -1/sqrt(2*p*n*me)[irowz] * z_deriv_matrix[irowz,icolz]
-                        #
-                        precon_matrix[row,row] += dt * (0.5 * dqpar_dz[iz] / ppar[iz]
-                                                        + vpa.grid[ivpa] * vth[iz] * (ddens_dz[iz] / dens[iz]
-                                                                                      - dvth_dz[iz] / vth[iz]))
-                        for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-                            col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa
-                            precon_matrix[row,col] +=
-                                dt * f[ivpa,ivperp,iz] *
-                                (1.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*dppar_dz[iz] - 0.5*sqrt(2.0*ppar[iz]/me)/dens[iz]^1.5*ddens_dz[iz]) *
-                                vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
-                        end
-                        for icolz ∈ 1:z.n, icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-                            col = (icolz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa
-                            precon_matrix[row,col] +=
-                                dt * f[ivpa,ivperp,iz] * vth[iz] *
-                                vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_matrix[iz,icolz]
-                        end
-                        precon_matrix[row,pdf_size+iz] +=
-                            dt * f[ivpa,ivperp,iz] *
-                            (-0.75*sqrt(2.0/dens[iz]/me)/ppar[iz]^1.5*third_moment[iz]*dppar_dz[iz]
-                             - 0.25*sqrt(2.0/ppar[iz]/me)/dens[iz]^1.5*third_moment[iz]*ddens_dz[iz]
-                             + 0.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*dthird_moment_dz[iz]
-                             + vpa.grid[ivpa] * (0.75*sqrt(2.0/me/ppar[iz])/dens[iz]^1.5*ddens_dz[iz]
-                                                 + 0.5/sqrt(2.0*dens[iz]*me)/ppar[iz]^1.5*dppar_dz[iz]))
-                        for icolz ∈ 1:z.n
-                            col = pdf_size + icolz
-                            precon_matrix[row,col] += dt * f[ivpa,ivperp,iz] *
-                                (1.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*third_moment[iz]
-                                 - vpa.grid[ivpa]/sqrt(2.0*ppar[iz]*dens[iz]*me)) * z_deriv_matrix[iz,icolz]
-                        end
-
-                        # Terms from add_dissipation_term!()
-                        if vpa_dissipation_coefficient > 0.0
-                            for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-                                col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa
-                                precon_matrix[row,col] -= dt * vpa_dissipation_coefficient * vpa_dense_second_deriv_matrix[ivpa,icolvpa]
-                            end
-                        end
-
-                        if external_source_settings.electron.active
-                            # Source terms from `add_contribution_from_pdf_term!()`
-                            precon_matrix[row,row] += dt * (1.5 * source_density_amplitude[iz] / dens[iz]
-                                                            - (0.5 * source_pressure_amplitude[iz]
-                                                               + source_momentum_amplitude[iz]) / ppar[iz]
-                                                           )
-                            if external_source_settings.electron.source_type == "energy"
-                                # Contribution from `external_electron_source!()`
-                                precon_matrix[row,row] += dt * source_amplitude[iz]
-                            end
-                        end
-
-                        if collisions.krook.nuee0 > 0.0 || collisions.krook.nuei0 > 0.0
-                            # Contribution from electron_krook_collisions!()
-                            nu_ee = get_collision_frequency_ee(collisions, dens[iz], vth[iz])
-                            nu_ei = get_collision_frequency_ei(collisions, dens[iz], vth[iz])
-                            precon_matrix[row,row] += dt * (nu_ee + nu_ei)
-                        end
-                    end
-
-                    if composition.electron_physics == kinetic_electrons_with_temperature_equation
-                        error("kinetic_electrons_with_temperature_equation not "
-                              * "supported yet in preconditioner")
-                    elseif composition.electron_physics != kinetic_electrons
-                        error("Unsupported electron_physics=$(composition.electron_physics) "
-                              * "in electron_backward_euler!() preconditioner.")
-                    end
-                    if num_diss_params.electron.moment_dissipation_coefficient > 0.0
-                        error("z-diffusion of electron_ppar not yet supported in "
-                              * "preconditioner")
-                    end
-                    if collisions.nu_ei > 0.0
-                        error("electron-ion collision terms for electron_ppar not yet "
-                              * "supported in preconditioner")
-                    end
-                    if composition.n_neutral_species > 0 && collisions.charge_exchange_electron > 0.0
-                        error("electron 'charge exchange' terms for electron_ppar not yet "
-                              * "supported in preconditioner")
-                    end
-                    if composition.n_neutral_species > 0 && collisions.ionization_electron > 0.0
-                        error("electron ionization terms for electron_ppar not yet "
-                              * "supported in preconditioner")
-                    end
-                    begin_z_region()
-                    @loop_z iz begin
-                        # Rows corresponding to electron_ppar
-                        row = pdf_size + iz
-
-                        precon_matrix[row,:] .= 0.0
-                        precon_matrix[row,row] += 1.0
-
-                        # Note that as
-                        #   q = 2 * p * vth * ∫dw_∥ w_∥^3 g
-                        #     = 2 * p^(3/2) * sqrt(2) / n^(1/2) / me^(1/2) * ∫dw_∥ w_∥^3 g
-                        # we have that
-                        #   d(q)/dz = 2 * p^(3/2) * sqrt(2) / n^(1/2) / me^(1/2) * ∫dw_∥ w_∥^3 d(g)/dz
-                        #             - p^(3/2) * sqrt(2) / n^(3/2) / me^(1/2) * ∫dw_∥ w_∥^3 g * d(n)/dz
-                        #             + 3 * p^(1/2) * sqrt(2) / n^(1/2) / me^(1/2) * ∫dw_∥ w_∥^3 g * d(p)/dz
-                        # so for the Jacobian
-                        #   d(d(q)/dz)[irowz])/d(p[icolz])
-                        #     = (3 * sqrt(2) * p^(1/2) / n^(1/2) / me^(1/2) * ∫dw_∥ w_∥^3 d(g)/dz
-                        #        - 3/2 * sqrt(2) * p^(1/2) / n^(3/2) / me^(1/2) * ∫dw_∥ w_∥^3 g * d(n)/dz
-                        #        + 3/2 * sqrt(2) / p^(1/2) / n^(1/2) / me^(1/2) * ∫dw_∥ w_∥^3 g * d(p)/dz)[irowz] * delta[irowz,icolz]
-                        #       + (3 * sqrt(2) * p^(1/2) / n^(1/2) / me^(1/2) * ∫dw_∥ w_∥^3 g)[irowz] * z_deriv_matrix[irowz,icolz]
-                        #   d(d(q)/dz)[irowz])/d(g[icolvpa,icolvperp,icolz])
-                        #     = (2 * sqrt(2) * p^(3/2) / n^(1/2) / me^(1/2))[irowz] * vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_matrix[irowz,icolz]
-                        #       + sqrt(2) * (-p^(3/2) / n^(3/2) / me^(1/2) * dn/dz + 3.0 * p^(1/2) / n^(1/2) / me^(1/2) * dp/dz)[irowz] * vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * delta[irowz,icolz]
-
-                        # upar*dppar_dz
-                        for icolz ∈ 1:z.n
-                            col = pdf_size + icolz
-                            precon_matrix[row,col] +=
-                                dt * upar[iz] * z_deriv_matrix[iz,icolz]
-                        end
-
-                        # 3*ppar*dupar_dz
-                        precon_matrix[row,row] += 3.0 * dt * dupar_dz[iz]
-
-                        # terms from d(qpar)/dz
-                        precon_matrix[row,row] +=
-                            dt * (3.0 * sqrt(2.0 * ppar[iz] / dens[iz] / me) * dthird_moment_dz[iz]
-                                  - 1.5 * sqrt(2.0 * ppar[iz] / me) / dens[iz]^1.5 * third_moment[iz] * ddens_dz[iz]
-                                  + 1.5 * sqrt(2.0 / ppar[iz] / dens[iz] / me) * third_moment[iz] * dppar_dz[iz])
-                        for icolz ∈ 1:z.n
-                            col = pdf_size + icolz
-                            precon_matrix[row,col] += dt * 3.0 * sqrt(2.0 * ppar[iz] / dens[iz] / me) * third_moment[iz] * z_deriv_matrix[iz,icolz]
-                        end
-                        for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-                            col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa
-                            precon_matrix[row,col] += dt * (-(ppar[iz]/dens[iz])^1.5*sqrt(2.0/me)*ddens_dz[iz]
-                                                            + 3.0*sqrt(2.0*ppar[iz]/dens[iz]/me)*dppar_dz[iz]) *
-                                                           vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
-                        end
-                        for icolz ∈ 1:z.n, icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-                            col = (icolz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa
-                            precon_matrix[row,col] += dt * 2.0*ppar[iz]^1.5*sqrt(2.0/dens[iz]/me) *
-                                                           vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_matrix[iz,icolz]
-                        end
-
-                        if ion_dt !== nothing
-                            # Backward-Euler forcing term
-                            precon_matrix[row,row] += dt / ion_dt
-                        end
-                    end
-
-                    nl_solver_params.preconditioners[ir] = (lu(sparse(precon_matrix)), precon_matrix, input_buffer, output_buffer)
                 end
 
 
@@ -3240,6 +2819,107 @@ function electron_kinetic_equation_euler_update!(f_out, ppar_out, f_in, ppar_in,
     return nothing
 end
 
+"""
+    fill_electron_kinetic_equation_Jacobian!(jacobian_matrix, f, moments, collisions,
+                                             composition, z, vperp, vpa, z_spectral,
+                                             vperp_specral, vpa_spectral, z_advect,
+                                             vpa_advect, scratch_dummy, external_source_settings,
+                                             num_diss_params, dt, ion_dt,
+                                             ir, evolve_ppar)
+
+Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equation and (if
+`evolve_ppar=true`) the electron energy equation.
+"""
+function fill_electron_kinetic_equation_Jacobian!(jacobian_matrix, f, ppar, moments,
+                                                  collisions, composition, z, vperp, vpa,
+                                                  z_spectral, vperp_spectral,
+                                                  vpa_spectral, z_advect, vpa_advect,
+                                                  scratch_dummy, external_source_settings,
+                                                  num_diss_params, dt, ion_dt, ir,
+                                                  evolve_ppar)
+    buffer_1 = @view scratch_dummy.buffer_rs_1[ir,1]
+    buffer_2 = @view scratch_dummy.buffer_rs_2[ir,1]
+    buffer_3 = @view scratch_dummy.buffer_rs_3[ir,1]
+    buffer_4 = @view scratch_dummy.buffer_rs_4[ir,1]
+
+    vth = @view moments.electron.vth[:,ir]
+    me = composition.me_over_mi
+    dens = @view moments.electron.dens[:,ir]
+    upar = @view moments.electron.upar[:,ir]
+    qpar = @view moments.electron.qpar[:,ir]
+    ddens_dz = @view moments.electron.ddens_dz[:,ir]
+    dupar_dz = @view moments.electron.dupar_dz[:,ir]
+    dppar_dz = @view moments.electron.dppar_dz[:,ir]
+    dvth_dz = @view moments.electron.dvth_dz[:,ir]
+    dqpar_dz = @view moments.electron.dqpar_dz[:,ir]
+
+    upar_ion = @view moments.ion.upar[:,ir,1]
+
+    # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
+    third_moment = scratch_dummy.buffer_z_1
+    dthird_moment_dz = scratch_dummy.buffer_z_2
+    begin_z_region()
+    @loop_z iz begin
+        third_moment[iz] = 0.5 * qpar[iz] / ppar[iz] / vth[iz]
+    end
+    derivative_z!(dthird_moment_dz, third_moment, buffer_1, buffer_2,
+                  buffer_3, buffer_4, z_spectral, z)
+
+    pdf_size = z.n * vperp.n * vpa.n
+    v_size = vperp.n * vpa.n
+
+    # Initialise jacobian_matrix to the identity
+    begin_z_vperp_vpa_region()
+    @loop_z_vperp_vpa iz ivperp ivpa begin
+        # Rows corresponding to pdf_electron
+        row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa
+        v_remainder = (ivperp - 1) * vpa.n + ivpa
+
+        jacobian_matrix[row,:] .= 0.0
+        jacobian_matrix[row,row] += 1.0
+    end
+    begin_z_region()
+    @loop_z iz begin
+        # Rows corresponding to electron_ppar
+        row = pdf_size + iz
+
+        jacobian_matrix[row,:] .= 0.0
+        jacobian_matrix[row,row] += 1.0
+    end
+
+    add_electron_z_advection_to_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, me, z, vperp, vpa, z_spectral,
+        z_advect, scratch_dummy, dt, ir; ppar_offset=pdf_size)
+    add_electron_vpa_advection_to_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
+        dthird_moment_dz, moments, me, z, vperp, vpa, z_spectral, vpa_spectral,
+        vpa_advect, scratch_dummy, external_source_settings, dt, ir; ppar_offset=pdf_size)
+    add_contribution_from_electron_pdf_term_to_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
+        dvth_dz, dqpar_dz, dthird_moment_dz, moments, me, external_source_settings, z,
+        vperp, vpa, z_spectral, scratch_dummy, dt, ir; ppar_offset=pdf_size)
+    add_electron_dissipation_term_to_Jacobian!(
+        jacobian_matrix, f, num_diss_params, z, vperp, vpa, vpa_spectral, dt, ir)
+    add_electron_krook_collisions_to_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, upar_ion, collisions, z, vperp, vpa,
+        dt, ir; ppar_offset=pdf_size)
+    add_external_electron_source_to_Jacobian!(
+        jacobian_matrix, f, moments, me, z_speed, external_source_settings, z, vperp, vpa,
+        dt, ir; ppar_offset=pdf_size)
+    if evolve_ppar
+        add_electron_energy_equation_to_Jacobian!(
+            jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dupar_dz,
+            dppar_dz, dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
+            num_diss_params, dt, ir; ppar_offset=pdf_size)
+    end
+    if ion_dt !== nothing
+        add_ion_dt_forcing_of_electron_ppar_to_Jacobian!(
+            jacobian_matrix, z, dt, ion_dt, ir; ppar_offset=pdf_size)
+    end
+
+    return nothing
+end
+
 #"""
 #electron_kinetic_equation_residual! calculates the residual of the (time-independent) electron kinetic equation
 #INPUTS:
@@ -3419,6 +3099,40 @@ function add_dissipation_term!(pdf_out, pdf_in, scratch_dummy, z_spectral, z, vp
         @views second_derivative!(vpa.scratch, pdf_in[:,ivperp,iz], vpa, vpa_spectral)
         @. pdf_out[:,ivperp,iz] += dt * num_diss_params.electron.vpa_dissipation_coefficient * vpa.scratch
     end
+    return nothing
+end
+
+function add_electron_dissipation_term_to_Jacobian!(jacobian_matrix, f, num_diss_params,
+                                                    z, vperp, vpa, vpa_spectral, dt, ir;
+                                                    f_offset=0)
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2)
+    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n
+
+    vpa_dissipation_coefficient = num_diss_params.electron.vpa_dissipation_coefficient
+
+    if vpa_dissipation_coefficient ≤ 0.0
+        return nothing
+    end
+
+    v_size = vperp.n * vpa.n
+    vpa_dense_second_deriv_matrix = vpa_spectral.dense_second_deriv_matrix
+
+    begin_z_vperp_vpa_region()
+    @loop_z_vperp_vpa iz ivperp ivpa begin
+        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa)
+            continue
+        end
+
+        # Rows corresponding to pdf_electron
+        row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa + f_offset
+
+        # Terms from add_dissipation_term!()
+        for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+            col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+            jacobian_matrix[row,col] -= dt * vpa_dissipation_coefficient * vpa_dense_second_deriv_matrix[ivpa,icolvpa]
+        end
+    end
+
     return nothing
 end
 
@@ -3655,6 +3369,127 @@ function add_contribution_from_pdf_term!(pdf_out, pdf_in, ppar, dens, upar, mome
                 pdf_out[ivpa,ivperp,iz] -= term * pdf_in[ivpa,ivperp,iz]
             end
         end
+    end
+
+    return nothing
+end
+
+function add_contribution_from_electron_pdf_term_to_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
+        dvth_dz, dqpar_dz, dthird_moment_dz, moments, me, external_source_settings, z,
+        vperp, vpa, z_spectral, scratch_dummy, dt, ir; f_offset=0, ppar_offset=0)
+
+    if f_offset == ppar_offset
+        error("Got f_offset=$f_offset the same as ppar_offset=$ppar_offset. f and ppar "
+              * "cannot be in same place in state vector.")
+    end
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2)
+    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n
+    @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n
+
+    source_density_amplitude = moments.electron.external_source_density_amplitude
+    source_momentum_amplitude = moments.electron.external_source_momentum_amplitude
+    source_pressure_amplitude = moments.electron.external_source_pressure_amplitude
+    z_deriv_matrix = z_spectral.D_matrix
+    v_size = vperp.n * vpa.n
+
+    begin_z_vperp_vpa_region()
+    @loop_z_vperp_vpa iz ivperp ivpa begin
+        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa)
+            continue
+        end
+
+        # Rows corresponding to pdf_electron
+        row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa + f_offset
+        v_remainder = (ivperp - 1) * vpa.n + ivpa
+
+        # Terms from `add_contribution_from_pdf_term!()`
+        # (0.5/p*dq/dz + w_∥*vth*(1/n*dn/dz - 1/vth*dvth/dz))*g
+        #
+        # q = 2*p*vth*∫dw_∥ w_∥^3 g
+        #   = 2*p^(3/2)*sqrt(2/n/me)*∫dw_∥ w_∥^3 g
+        # dq/dz = 3*sqrt(2*p/n/me)*∫dw_∥ w_∥^3 g * dp/dz
+        #         - p^(3/2)*sqrt(2/me)/n^(3/2)*∫dw_∥ w_∥^3 g * dn/dz
+        #         + 2*p*vth*∫dw_∥ w_∥^3 dg/dz
+        # 0.5/p*dq/dz = 1.5*sqrt(2/p/n/me)*∫dw_∥ w_∥^3 g * dp/dz
+        #               - 0.5*sqrt(2*p/me)/n^(3/2)*∫dw_∥ w_∥^3 g * dn/dz
+        #               + sqrt(2*p/n/me)*∫dw_∥ w_∥^3 dg/dz
+        #             = 1.5*sqrt(2/p/n/me)*∫dw_∥ w_∥^3 g * dp/dz
+        #               - 0.5*sqrt(2*p/me)/n^(3/2)*∫dw_∥ w_∥^3 g * dn/dz
+        #               + vth*∫dw_∥ w_∥^3 dg/dz
+        # d(0.5/p*dq/dz[irowz])/d(g[icolvpa,icolvperp,icolz]) =
+        #   (1.5*sqrt(2/p/n/me)*dp/dz - 0.5*sqrt(2*p/me)/n^(3/2)*dn/dz) * delta(irowz,icolz) * vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
+        #   + vth * vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_matrix[irowz,icolz]
+        # d(0.5/p*dq/dz[irowz])/d(p[icolz]) =
+        #   (-3/4*sqrt(2/n/me)/p^(3/2)*∫dw_∥ w_∥^3 g * dp/dz - 1/4*sqrt(2/me)/sqrt(p)/n^(3/2)*∫dw_∥ w_∥^3 g * dn/dz + 1/2*sqrt(2/n/me)/sqrt(p)*∫dw_∥ w_∥^3 dg/dz)[irowz] * delta(irowz,icolz)
+        #   + (1.5*sqrt(2/p/n/me)*∫dw_∥ w_∥^3 g)[irowz] * z_deriv_matrix[irowz,icolz]
+        #
+        # dvth/dz = d/dz(sqrt(2*p/n/me))
+        #         = 1/n/me/sqrt(2*p/n/me)*dp/dz - p/n^2/me/sqrt(2*p/n/me)*dn/dz
+        #         = 1/n/me/vth*dp/dz - p/n^2/me/vth*dn/dz
+        #         = 1/n/me/vth*dp/dz - 1/2*vth/n*dn/dz
+        # ⇒ vth*(1/n*dn/dz - 1/vth*dvth/dz)
+        #   = (vth/n*dn/dz - dvth/dz)
+        #   = (vth/n*dn/dz - 1/n/me/vth*dp/dz + 1/2*vth/n*dn/dz)
+        #   = (3/2*vth/n*dn/dz - 1/n/me/vth*dp/dz)
+        #   = (3/2*sqrt(2*p/me)/n^(3/2)*dn/dz - 1/sqrt(2*p*n*me)*dp/dz)
+        # d(vth*(1/n*dn/dz - 1/vth*dvth/dz)[irowz])/d(ppar[icolz]) =
+        #   (3/4*sqrt(2/me)/p^(1/2)/n^(3/2)*dn/dz + 1/2/sqrt(2*n*me)/p^(3/2)*dp/dz)[irowz] * delta(irowz,icolz)
+        #   -1/sqrt(2*p*n*me)[irowz] * z_deriv_matrix[irowz,icolz]
+        #
+        jacobian_matrix[row,row] += dt * (0.5 * dqpar_dz[iz] / ppar[iz]
+                                          + vpa.grid[ivpa] * vth[iz] * (ddens_dz[iz] / dens[iz]
+                                                                        - dvth_dz[iz] / vth[iz]))
+        for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+            col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+            jacobian_matrix[row,col] +=
+                dt * f[ivpa,ivperp,iz] *
+                (1.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*dppar_dz[iz] - 0.5*sqrt(2.0*ppar[iz]/me)/dens[iz]^1.5*ddens_dz[iz]) *
+                vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
+        end
+        for icolz ∈ 1:z.n, icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+            col = (icolz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+            jacobian_matrix[row,col] +=
+                dt * f[ivpa,ivperp,iz] * vth[iz] *
+                vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_matrix[iz,icolz]
+        end
+        if external_source_settings.electron.active
+            # Source terms from `add_contribution_from_pdf_term!()`
+            jacobian_matrix[row,row] += dt * (1.5 * source_density_amplitude[iz] / dens[iz]
+                                              - (0.5 * source_pressure_amplitude[iz]
+                                                 + source_momentum_amplitude[iz]) / ppar[iz]
+                                             )
+        end
+        jacobian_matrix[row,ppar_offset+iz] +=
+            dt * f[ivpa,ivperp,iz] *
+            (-0.75*sqrt(2.0/dens[iz]/me)/ppar[iz]^1.5*third_moment[iz]*dppar_dz[iz]
+             - 0.25*sqrt(2.0/ppar[iz]/me)/dens[iz]^1.5*third_moment[iz]*ddens_dz[iz]
+             + 0.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*dthird_moment_dz[iz]
+             + vpa.grid[ivpa] * (0.75*sqrt(2.0/me/ppar[iz])/dens[iz]^1.5*ddens_dz[iz]
+                                 + 0.5/sqrt(2.0*dens[iz]*me)/ppar[iz]^1.5*dppar_dz[iz]))
+        for icolz ∈ 1:z.n
+            col = ppar_offset + icolz
+            jacobian_matrix[row,col] += dt * f[ivpa,ivperp,iz] *
+                (1.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*third_moment[iz]
+                 - vpa.grid[ivpa]/sqrt(2.0*ppar[iz]*dens[iz]*me)) * z_deriv_matrix[iz,icolz]
+        end
+    end
+
+    return nothing
+end
+
+function add_ion_dt_forcing_of_electron_ppar_to_Jacobian!(jacobian_matrix, z, dt, ion_dt,
+                                                          ir; ppar_offset=0)
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2)
+    @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n
+
+    begin_z_region()
+    @loop_z iz begin
+        # Rows corresponding to electron_ppar
+        row = ppar_offset + iz
+
+        # Backward-Euler forcing term
+        jacobian_matrix[row,row] += dt / ion_dt
     end
 
     return nothing
