@@ -1202,14 +1202,14 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                                       vperp, vperp_spectral, vperp_adv,
                                                       vperp_diffusion, ir)
                 end
-                if z.bc == "wall" && (z.irank == 0 || z.irank == z.nrank - 1)
-                    # Wall boundary conditions. Note that as density, upar, ppar do not
-                    # change in this implicit step, f_electron_newvar, f_old, and residual
-                    # should all be zero at exactly the same set of grid points, so it is
-                    # reasonable to zero-out `residual` to impose the boundary condition. We
-                    # impose this after subtracting f_old in case rounding errors, etc. mean
-                    # that at some point f_old had a different boundary condition cut-off
-                    # index.
+                if z.bc ∈ ("wall", "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
+                    # Boundary conditions on incoming part of distribution function. Note
+                    # that as density, upar, ppar do not change in this implicit step,
+                    # f_electron_newvar, f_old, and residual should all be zero at exactly
+                    # the same set of grid points, so it is reasonable to zero-out
+                    # `residual` to impose the boundary condition. We impose this after
+                    # subtracting f_old in case rounding errors, etc. mean that at some
+                    # point f_old had a different boundary condition cut-off index.
                     begin_vperp_vpa_region()
                     v_unnorm = vpa.scratch
                     zero = 1.0e-14
@@ -1615,14 +1615,14 @@ function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, mo
                 enforce_vperp_boundary_condition!(f_electron_residual, vperp.bc, vperp, vperp_spectral,
                                                   vperp_adv, vperp_diffusion)
             end
-            if z.bc == "wall" && (z.irank == 0 || z.irank == z.nrank - 1)
-                # Wall boundary conditions. Note that as density, upar, ppar do not
-                # change in this implicit step, f_new, f_old, and residual should all
-                # be zero at exactly the same set of grid points, so it is reasonable
-                # to zero-out `residual` to impose the boundary condition. We impose
-                # this after subtracting f_old in case rounding errors, etc. mean that
-                # at some point f_old had a different boundary condition cut-off
-                # index.
+            if z.bc ∈ ("wall", "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
+                # Boundary conditions on incoming part of distribution function. Note that
+                # as density, upar, ppar do not change in this implicit step, f_new,
+                # f_old, and residual should all be zero at exactly the same set of grid
+                # points, so it is reasonable to zero-out `residual` to impose the
+                # boundary condition. We impose this after subtracting f_old in case
+                # rounding errors, etc. mean that at some point f_old had a different
+                # boundary condition cut-off index.
                 begin_vperp_vpa_region()
                 v_unnorm = vpa.scratch
                 zero = 1.0e-14
@@ -1845,6 +1845,28 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
     if z.bc == "periodic"
         # Nothing more to do for z-periodic boundary conditions
         return nothing
+    elseif z.bc == "constant"
+        begin_r_vperp_vpa_region()
+        density_offset = 1.0
+        vwidth = 1.0/sqrt(composition.me_over_mi)
+        dens = moments.electron.dens
+        if z.irank == 0
+            speed = z_adv[1].speed
+            @loop_r_vperp_vpa ir ivperp ivpa begin
+                if speed[1,ivpa,ivperp,ir] > 0.0
+                    pdf[ivpa,ivperp,1,ir,is] = density_offset / dens[1,ir] * vthe[1,ir] * exp(-(speed[1,ivpa,ivperp,ir]^2 + vperp.grid[ivperp]^2)/vwidth^2)
+                end
+            end
+        end
+        if z.irank == z.nrank - 1
+            speed = z_adv[is].speed
+            @loop_r_vperp_vpa ir ivperp ivpa begin
+                if speed[end,ivpa,ivperp,ir] > 0.0
+                    pdf[ivpa,ivperp,end,ir,is] = density_offset / dens[end,ir] * vthe[end,ir] * exp(-(speed[end,ivpa,ivperp,ir]^2 + vperp.grid[ivperp]^2)/vwidth^2)
+                end
+            end
+        end
+        return nothing
     end
 
     # first enforce the boundary condition at z_min.
@@ -1888,7 +1910,7 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
 
     if z.irank == 0
         if z.bc != "wall"
-            error("Options other than wall or z-periodic bc not implemented yet for electrons")
+            error("Options other than wall, constant or z-periodic bc not implemented yet for electrons")
         end
         @loop_r ir begin
             # Impose sheath-edge boundary condition, while also imposing moment
