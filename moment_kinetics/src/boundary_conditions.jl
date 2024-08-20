@@ -146,16 +146,40 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::St
         density_offset = 1.0
         vwidth = 1.0
         if z.irank == 0
-            @loop_s_r_vperp_vpa is ir ivperp ivpa begin
-                if adv[is].speed[ivpa,1,ir] > 0.0
-                    pdf[ivpa,ivperp,1,ir,is] = density_offset * exp(-(vpa.grid[ivpa]^2 + vperp.grid[ivperp]^2)/vwidth^2) / sqrt(pi)
+            @loop_s is begin
+                speed = adv[is].speed
+                @loop_r ir begin
+                    prefactor = density_offset
+                    if moments.evolve_density
+                        prefactor /= density[1,ir,is]
+                    end
+                    if moments.evolve_ppar
+                        prefactor *= moments.ion.vth[1,ir,is]
+                    end
+                    @loop_vperp_vpa ivperp ivpa begin
+                        if speed[1,ivpa,ivperp,ir] > 0.0
+                            pdf[ivpa,ivperp,1,ir,is] = prefactor * exp(-(speed[1,ivpa,ivperp,ir]^2 + vperp.grid[ivperp]^2)/vwidth^2)
+                        end
+                    end
                 end
             end
         end
         if z.irank == z.nrank - 1
-            @loop_s_r_vperp_vpa is ir ivperp ivpa begin
-                if adv[is].speed[ivpa,end,ir] > 0.0
-                    pdf[ivpa,ivperp,end,ir,is] = density_offset * exp(-(vpa.grid[ivpa]^2 + vperp.grid[ivperp]^2)/vwidth^2) / sqrt(pi)
+            @loop_s is begin
+                speed = adv[is].speed
+                @loop_r ir begin
+                    prefactor = density_offset
+                    if moments.evolve_density
+                        prefactor /= density[end,ir,is]
+                    end
+                    if moments.evolve_ppar
+                        prefactor *= moments.ion.vth[end,ir,is]
+                    end
+                    @loop_vperp_vpa ivperp ivpa begin
+                        if speed[end,ivpa,ivperp,ir] > 0.0
+                            pdf[ivpa,ivperp,end,ir,is] = prefactor * exp(-(speed[end,ivpa,ivperp,ir]^2 + vperp.grid[ivperp]^2)/vwidth^2)
+                        end
+                    end
                 end
             end
         end
@@ -327,20 +351,42 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
         density_offset = 1.0
         vwidth = 1.0
         if z.irank == 0
-            @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
-                if adv[isn].speed[ivz,ivr,ivzeta,1,ir] > 0.0
-                    pdf[ivz,ivr,ivzeta,1,ir,is] = density_offset *
-                        exp(-(vzeta.grid[ivzeta]^2 + vr.grid[ivr] + vz.grid[ivz])/vwidth^2) /
-                        sqrt(pi)
+            @loop_sn isn begin
+                speed = adv[isn].speed
+                @loop_r ir begin
+                    prefactor = density_offset
+                    if moments.evolve_density
+                        density_offset /= density[1,ir,isn]
+                    end
+                    if moments.evolve_ppar
+                        density_offset *= moments.neutral.vth[1,ir,isn]
+                    end
+                    @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                        if speed[1,ivz,ivr,ivzeta,ir] > 0.0
+                            pdf[ivz,ivr,ivzeta,1,ir,isn] = prefactor *
+                                exp(-(speed[1,ivz,ivr,ivzeta,ir]^2 + vr.grid[ivr] + vz.grid[ivz])/vwidth^2)
+                        end
+                    end
                 end
             end
         end
         if z.irank == z.nrank - 1
-            @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
-                if adv[isn].speed[ivz,ivr,ivzeta,end,ir] > 0.0
-                    pdf[ivz,ivr,ivzeta,end,ir,is] = density_offset *
-                        exp(-(vzeta.grid[ivzeta]^2 + vr.grid[ivr] + vz.grid[ivz])/vwidth^2) /
-                        sqrt(pi)
+            @loop_sn isn begin
+                speed = adv[isn].speed
+                @loop_r ir begin
+                    prefactor = density_offset
+                    if moments.evolve_density
+                        density_offset /= density[end,ir,isn]
+                    end
+                    if moments.evolve_ppar
+                        density_offset *= moments.neutral.vth[end,ir,isn]
+                    end
+                    @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                        if speed[end,ivz,ivr,ivzeta,ir] > 0.0
+                            pdf[ivz,ivr,ivzeta,end,ir,isn] = prefactor *
+                                exp(-(speed[end,ivz,ivr,ivzeta,ir][ivzeta]^2 + vr.grid[ivr] + vz.grid[ivz])/vwidth^2)
+                        end
+                    end
                 end
             end
         end
