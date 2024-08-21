@@ -226,7 +226,14 @@ function get_default_restart_filename(io_input, prefix; error_if_no_file_found=t
         error("Unrecognized binary_format '$binary_format'")
     end
     restart_filename_pattern = joinpath(io_input.output_dir, io_input.run_name * ".$prefix*." * ext)
-    restart_filename_glob = glob(restart_filename_pattern)
+    if isabspath(restart_filename_pattern)
+        # Special handling for absolute paths, as these give an error when `glob()` is
+        # called normally
+        restart_filename_glob = glob(basename(restart_filename_pattern),
+                                     dirname(restart_filename_pattern))
+    else
+        restart_filename_glob = glob(restart_filename_pattern)
+    end
     if length(restart_filename_glob) == 0
         if error_if_no_file_found
             error("No '$prefix' output file to restart from found matching the pattern "
