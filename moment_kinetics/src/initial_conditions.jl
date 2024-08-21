@@ -266,7 +266,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
                                external_source_settings, scratch_dummy, scratch,
                                scratch_electron, nl_solver_params, t_params, t_input,
                                num_diss_params, advection_structs, io_input, input_dict;
-                               restart_electron_physics)
+                               restart_electron_physics, skip_electron_solve=false)
     
     moments.electron.dens_updated[] = false
     # initialise the electron density profile
@@ -474,7 +474,8 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
                              advection_structs.electron_vpa_advect, scratch_dummy,
                              collisions, composition, geometry, external_source_settings,
                              num_diss_params, gyroavs, nl_solver_params, t_params,
-                             t_input["electron_t_input"], io_input, input_dict)
+                             t_input["electron_t_input"], io_input, input_dict;
+                             skip_electron_solve=skip_electron_solve)
 
     return nothing
 end
@@ -571,7 +572,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                   scratch_dummy, collisions, composition, geometry,
                                   external_source_settings, num_diss_params, gyroavs,
                                   nl_solver_params, t_params, t_input, io_input,
-                                  input_dict)
+                                  input_dict; skip_electron_solve)
 
     # now that the initial electron pdf is given, the electron parallel heat flux should be updated
     # if using kinetic electrons
@@ -705,25 +706,28 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                                     previous_runs_info,
                                                     "initial_electron")
 
-            # Can't let this counter stay set to 0
-            t_params.electron.dfns_output_counter[] = max(t_params.electron.dfns_output_counter[], 1)
-            success =
-                @views update_electron_pdf!(scratch_electron, pdf.electron.norm, moments,
-                                            fields.phi, r, z, vperp, vpa, z_spectral,
-                                            vperp_spectral, vpa_spectral, z_advect,
-                                            vpa_advect, scratch_dummy, t_params.electron,
-                                            collisions, composition,
-                                            external_source_settings, num_diss_params,
-                                            nl_solver_params.electron_advance,
-                                            max_electron_pdf_iterations,
-                                            max_electron_sim_time;
-                                            io_electron=io_initial_electron,
-                                            initial_time=code_time,
-                                            residual_tolerance=t_input["initialization_residual_value"],
-                                            evolve_ppar=true)
-            if success != ""
-                error("!!!max number of iterations for electron pdf update exceeded!!!\n"
-                      * "Stopping at $(Dates.format(now(), dateformat"H:MM:SS"))")
+            if !skip_electron_solve
+                # Can't let this counter stay set to 0
+                t_params.electron.dfns_output_counter[] = max(t_params.electron.dfns_output_counter[], 1)
+                success =
+                    @views update_electron_pdf!(scratch_electron, pdf.electron.norm,
+                                                moments, fields.phi, r, z, vperp, vpa,
+                                                z_spectral, vperp_spectral, vpa_spectral,
+                                                z_advect, vpa_advect, scratch_dummy,
+                                                t_params.electron, collisions,
+                                                composition, external_source_settings,
+                                                num_diss_params,
+                                                nl_solver_params.electron_advance,
+                                                max_electron_pdf_iterations,
+                                                max_electron_sim_time;
+                                                io_electron=io_initial_electron,
+                                                initial_time=code_time,
+                                                residual_tolerance=t_input["initialization_residual_value"],
+                                                evolve_ppar=true)
+                if success != ""
+                    error("!!!max number of iterations for electron pdf update exceeded!!!\n"
+                          * "Stopping at $(Dates.format(now(), dateformat"H:MM:SS"))")
+                end
             end
 
             # Now run without evolve_ppar=true to get pdf_electron fully to steady state,
@@ -731,7 +735,9 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
             if global_rank[] == 0
                 println("Initializing electrons - evolving pdf_electron only to steady state")
             end
-            if t_params.implicit_electron_advance
+            if skip_electron_solve
+                success = ""
+            elseif t_params.implicit_electron_advance
                 # Create new nl_solver_info ojbect with higher maximum iterations for
                 # initialisation.
                 initialisation_nl_solver_params =

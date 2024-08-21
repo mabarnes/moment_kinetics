@@ -479,7 +479,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                              geometry, boundary_distributions, external_source_settings,
                              num_diss_params, manufactured_solns_input,
                              advection_structs, io_input, restarting,
-                             restart_electron_physics, input_dict)
+                             restart_electron_physics, input_dict;
+                             skip_electron_solve=false)
     # define some local variables for convenience/tidiness
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
@@ -789,7 +790,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                               external_source_settings, scratch_dummy, scratch,
                               scratch_electron, nl_solver_params, t_params, t_input,
                               num_diss_params, advection_structs, io_input, input_dict;
-                              restart_electron_physics=restart_electron_physics)
+                              restart_electron_physics=restart_electron_physics,
+                              skip_electron_solve=skip_electron_solve)
     end
 
     # update the derivatives of the electron moments as these may be needed when
