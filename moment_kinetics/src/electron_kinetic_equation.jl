@@ -859,8 +859,8 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                         v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[iz,ir],
                                                     moments.electron.upar[iz,ir], true, true)
                         @loop_vperp_vpa ivperp ivpa begin
-                            if v_unnorm > -zero
-                                f_electron_residual[ivpa,ivperp,iz,ir] .= 0.0
+                            if v_unnorm[ivpa] > -zero
+                                f_electron_residual[ivpa,ivperp,iz,ir] = 0.0
                             end
                         end
                     end
@@ -870,9 +870,9 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                     @loop_r ir begin
                         v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[iz,ir],
                                                     moments.electron.upar[iz,ir], true, true)
-                        @loop_vperp_vpa ivpa ivperp begin
-                            if v_unnorm < zero
-                                f_electron_residual[ivpa,ivperp,iz,ir] .= 0.0
+                        @loop_vperp_vpa ivperp ivpa begin
+                            if v_unnorm[ivpa] < zero
+                                f_electron_residual[ivpa,ivperp,iz,ir] = 0.0
                             end
                         end
                     end
@@ -1222,8 +1222,8 @@ function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, mo
                     v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[iz,ir],
                                                 fvec_in.electron_upar[iz,ir], true, true)
                     @loop_vperp_vpa ivperp ivpa begin
-                        if v_unnorm > -zero
-                            f_electron_residual[ivpa,ivperp,iz,ir] .= 0.0
+                        if v_unnorm[ivpa] > -zero
+                            f_electron_residual[ivpa,ivperp,iz,ir] = 0.0
                         end
                     end
                 end
@@ -1233,9 +1233,9 @@ function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, mo
                 @loop_r ir begin
                     v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[iz,ir],
                                                 fvec_in.electron_upar[iz,ir], true, true)
-                    @loop_vperp_vpa ivpa ivperp begin
-                        if v_unnorm < zero
-                            f_electron_residual[ivpa,ivperp,iz,ir] .= 0.0
+                    @loop_vperp_vpa ivperp ivpa begin
+                        if v_unnorm[ivpa] < zero
+                            f_electron_residual[ivpa,ivperp,iz,ir] = 0.0
                         end
                     end
                 end
