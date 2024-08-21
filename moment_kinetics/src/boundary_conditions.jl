@@ -1084,10 +1084,15 @@ happens, the corresponding row should be skipped when adding contributions to th
 matrix, so that the row remains the same as a row of the identity matrix, so that the
 Jacobian matrix does not modify those points. Returns `false` otherwise.
 """
-function skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa)
+function skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
     # z boundary condition
-    if z.bc == "wall" && (iz == 1 || iz == z.n)
-        error("Need to do something about wall boundary condition in preconditioner matrix")
+    if z.bc ∈ ("wall", "constant")
+        if z.irank == 0 && iz == 1 && z_speed[iz,ivpa,ivperp] ≥ 0.0
+            return true
+        end
+        if z.irank == z.nrank - 1 && iz == z.n && z_speed[iz,ivpa,ivperp] ≤ 0.0
+            return true
+        end
     end
 
     # vperp boundary condition

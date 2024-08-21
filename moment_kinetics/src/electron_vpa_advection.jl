@@ -93,7 +93,7 @@ function add_electron_vpa_advection_to_Jacobian!(jacobian_matrix, f, dens, upar,
                                                  vth, third_moment, ddens_dz, dppar_dz,
                                                  dthird_moment_dz, moments, me, z, vperp,
                                                  vpa, z_spectral, vpa_spectral,
-                                                 vpa_advect, scratch_dummy,
+                                                 vpa_advect, z_speed, scratch_dummy,
                                                  external_source_settings, dt, ir;
                                                  f_offset=0, ppar_offset=0)
     if f_offset == ppar_offset
@@ -132,7 +132,7 @@ function add_electron_vpa_advection_to_Jacobian!(jacobian_matrix, f, dens, upar,
 
     begin_z_vperp_vpa_region()
     @loop_z_vperp_vpa iz ivperp ivpa begin
-        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa)
+        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
             continue
         end
 

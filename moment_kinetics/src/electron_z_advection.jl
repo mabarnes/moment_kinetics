@@ -89,9 +89,10 @@ function add_electron_z_advection_to_Jacobian!(jacobian_matrix, f, dens, upar, p
 
     begin_vperp_vpa_region()
     update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
+    z_speed_array = @view z_advect[1].speed[:,:,:,1]
 
     @loop_vperp_vpa ivperp ivpa begin
-        @views z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_advect[1].speed[:,ivpa,ivperp,ir]
+        @views z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_speed_array[:,ivpa,ivperp]
     end
     #calculate the upwind derivative
     @views derivative_z_pdf_vpavperpz!(dpdf_dz, f, z_advect[1].adv_fac[:,:,:,ir],
@@ -112,7 +113,8 @@ function add_electron_z_advection_to_Jacobian!(jacobian_matrix, f, dens, upar, p
 
     begin_z_vperp_vpa_region()
     @loop_z_vperp_vpa iz ivperp ivpa begin
-        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa)
+        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa,
+                                                 z_speed_array)
             continue
         end
 
@@ -125,7 +127,7 @@ function add_electron_z_advection_to_Jacobian!(jacobian_matrix, f, dens, upar, p
         icolumn_min_z = z.imin[ielement_z] - (ielement_z != 1)
         icolumn_max_z = z.imax[ielement_z]
 
-        z_speed = z_advect[1].speed[iz,ivpa,ivperp,ir]
+        z_speed = z_speed_array[iz,ivpa,ivperp]
 
         # Contributions from (w_∥*vth + upar)*dg/dz
         if ielement_z == 1 && igrid_z == 1

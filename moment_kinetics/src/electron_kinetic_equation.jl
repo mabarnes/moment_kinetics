@@ -2909,22 +2909,25 @@ function fill_electron_kinetic_equation_Jacobian!(jacobian_matrix, f, ppar, mome
         jacobian_matrix[row,row] += 1.0
     end
 
+    z_speed = @view z_advect[1].speed[:,:,:,ir]
+
     add_electron_z_advection_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, me, z, vperp, vpa, z_spectral,
         z_advect, scratch_dummy, dt, ir; ppar_offset=pdf_size)
     add_electron_vpa_advection_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
         dthird_moment_dz, moments, me, z, vperp, vpa, z_spectral, vpa_spectral,
-        vpa_advect, scratch_dummy, external_source_settings, dt, ir; ppar_offset=pdf_size)
+        vpa_advect, z_speed, scratch_dummy, external_source_settings, dt, ir;
+        ppar_offset=pdf_size)
     add_contribution_from_electron_pdf_term_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
         dvth_dz, dqpar_dz, dthird_moment_dz, moments, me, external_source_settings, z,
-        vperp, vpa, z_spectral, scratch_dummy, dt, ir; ppar_offset=pdf_size)
+        vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir; ppar_offset=pdf_size)
     add_electron_dissipation_term_to_Jacobian!(
-        jacobian_matrix, f, num_diss_params, z, vperp, vpa, vpa_spectral, dt, ir)
+        jacobian_matrix, f, num_diss_params, z, vperp, vpa, vpa_spectral, z_speed, dt, ir)
     add_electron_krook_collisions_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, upar_ion, collisions, z, vperp, vpa,
-        dt, ir; ppar_offset=pdf_size)
+        z_speed, dt, ir; ppar_offset=pdf_size)
     add_external_electron_source_to_Jacobian!(
         jacobian_matrix, f, moments, me, z_speed, external_source_settings, z, vperp, vpa,
         dt, ir; ppar_offset=pdf_size)
@@ -3125,8 +3128,8 @@ function add_dissipation_term!(pdf_out, pdf_in, scratch_dummy, z_spectral, z, vp
 end
 
 function add_electron_dissipation_term_to_Jacobian!(jacobian_matrix, f, num_diss_params,
-                                                    z, vperp, vpa, vpa_spectral, dt, ir;
-                                                    f_offset=0)
+                                                    z, vperp, vpa, vpa_spectral, z_speed,
+                                                    dt, ir; f_offset=0)
     @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2)
     @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n
 
@@ -3141,7 +3144,7 @@ function add_electron_dissipation_term_to_Jacobian!(jacobian_matrix, f, num_diss
 
     begin_z_vperp_vpa_region()
     @loop_z_vperp_vpa iz ivperp ivpa begin
-        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa)
+        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
             continue
         end
 
@@ -3399,7 +3402,7 @@ end
 function add_contribution_from_electron_pdf_term_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
         dvth_dz, dqpar_dz, dthird_moment_dz, moments, me, external_source_settings, z,
-        vperp, vpa, z_spectral, scratch_dummy, dt, ir; f_offset=0, ppar_offset=0)
+        vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir; f_offset=0, ppar_offset=0)
 
     if f_offset == ppar_offset
         error("Got f_offset=$f_offset the same as ppar_offset=$ppar_offset. f and ppar "
@@ -3417,7 +3420,7 @@ function add_contribution_from_electron_pdf_term_to_Jacobian!(
 
     begin_z_vperp_vpa_region()
     @loop_z_vperp_vpa iz ivperp ivpa begin
-        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa)
+        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
             continue
         end
 
