@@ -13,7 +13,7 @@ using moment_kinetics
 module MKTestUtilities
 
 export use_verbose, force_optional_dependencies, @long, quietoutput, get_MPI_tempdir,
-       global_rank, global_size, maxabs_norm, @testset_skip
+       global_rank, global_size, maxabs_norm, elementwise_isapprox, @testset_skip
 
 using moment_kinetics.communication: comm_world, global_rank, global_size
 using moment_kinetics.command_line_options: get_options
@@ -82,6 +82,18 @@ Pass this function to the `norm` argument of `isapprox()` to test the maximum er
 between two arrays.
 """
 maxabs_norm(x) = maximum(abs.(x))
+
+"""
+    elementwise_isapprox(args...; kwargs...)
+
+Calls `isapprox()` but forces the comparison to be done element-by-element, rather than
+testing `norm(x-y)<max(rtol*max(norm(x),norm(y)),atol)`, which would effectively ignore
+errors in small values. Takes the same args/kwargs as `isapprox()`, except for the `norm`
+kwarg.
+"""
+@inline function elementwise_isapprox(args...; kwargs...)
+    return isapprox(args...; norm=(x)->NaN, kwargs...)
+end
 
 """
 Get a single temporary directory that is the same on all MPI ranks
