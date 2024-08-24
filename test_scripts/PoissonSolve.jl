@@ -58,10 +58,17 @@ function run_poisson_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelemen
   
    poisson = init_spatial_poisson(radial,polar,radial_spectral)
    phi = allocate_float(radial.n,polar.n)
+   exact_phi = allocate_float(radial.n,polar.n)
    rho = allocate_float(radial.n,polar.n)
    @. rho = 1.0
+   #@. rho = sinpi(2*radial.grid/radial.L)
    spatial_poisson_solve!(phi,rho,poisson,radial,polar)
    println(phi)
+   println(phi[1])
+   @. exact_phi[:,1] = 0.25*(radial.grid^2 -1)
+   println(exact_phi)
+   println("Maximum error value: ",maximum(abs.(phi- exact_phi)))
+   #println(radial.grid)
    finalize_comms!()
    return nothing
 end

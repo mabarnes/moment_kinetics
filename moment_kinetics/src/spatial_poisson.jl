@@ -73,8 +73,11 @@ function init_spatial_poisson(radial::coordinate, polar::coordinate, radial_spec
           get_QQ_local!(KJ,irel,radial_spectral.lobatto,radial_spectral.radau,radial,"J")
           get_QQ_local!(PP,irel,radial_spectral.lobatto,radial_spectral.radau,radial,"P")
           # assemble the Laplacian matrix 
-          @. laplacian[imin:imax,imin:imax,im] += KJ - PP + (im^2)*MN
+          @. laplacian[imin:imax,imin:imax,im] += KJ - PP + ((im-1)^2)*MN
       end
+      # set rows for Dirichlet BCs on phi
+      laplacian[nrtot,:,im] .= 0.0
+      laplacian[nrtot,nrtot,im] = 1.0
    end
    for irel in 1:nrelement 
        imin, imax = get_imin_imax(radial,irel)
@@ -114,9 +117,13 @@ function spatial_poisson_solve!(phi,rho,poisson_arrays,radial,polar)
    # first FFT rho to hat{rho} appropriate for using the 1D radial operators
    @. phi = 0.0
    npolar = polar.n
+   nradial = radial.n
    for im in 1:npolar
       # solve the linear system
+      # form the rhs vector
       mul!(rhs_dummy,sourcevec,rho[:,im])
+      # set the Dirichlet BC phi = 0
+      rhs_dummy[nradial] = 0.0
       lu_object_lhs = laplacian_lu_objs[im]
       ldiv!(phi_dummy, lu_object_lhs, rhs_dummy)
       phi[:,im] = phi_dummy
