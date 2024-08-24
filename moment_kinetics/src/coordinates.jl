@@ -126,6 +126,8 @@ struct coordinate{T <: AbstractVector{mk_float}}
     other_nodes::Array{mk_float,3}
     # One over the denominators of the Lagrange polynomials
     one_over_denominator::Array{mk_float,2}
+    # flag to determine if the coordinate is cylindrical
+    cylindrical::Bool
 end
 
 """
@@ -148,16 +150,18 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
     # obtain (local) index mapping from the grid within each element
     # to the full grid
     imin, imax, igrid_full = elemental_to_full_grid_map(input.ngrid, input.nelement_local)
+    # check name of coordinate to determine if radial or vperp cylindrical coordinate
+    cylindrical = (input.name == "vperp") || (input.name == "r")
     # initialise the data used to construct the grid
     # boundaries for each element
-    element_boundaries = set_element_boundaries(input.nelement_global, input.L, input.element_spacing_option, input.name)
+    element_boundaries = set_element_boundaries(input.nelement_global, input.L, input.element_spacing_option, cylindrical)
     # shift and scale factors for each local element
     element_scale, element_shift = set_element_scale_and_shift(input.nelement_global, input.nelement_local, input.irank, element_boundaries)
     # initialize the grid and the integration weights associated with the grid
     # also obtain the Chebyshev theta grid and spacing if chosen as discretization option
     grid, wgts, uniform_grid, radau_first_element = init_grid(input.ngrid,
         input.nelement_local, n_global, n_local, input.irank, input.L, element_scale,
-        element_shift, imin, imax, igrid, input.discretization, input.name)
+        element_shift, imin, imax, igrid, input.discretization, input.name, cylindrical)
     # calculate the widths of the cells between neighboring grid points
     cell_width = grid_spacing(grid, n_local)
     # duniform_dgrid is the local derivative of the uniform grid with respect to
@@ -240,7 +244,7 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
         copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
         local_io_range, global_io_range, element_scale, element_shift,
         input.element_spacing_option, element_boundaries, radau_first_element,
-        other_nodes, one_over_denominator)
+        other_nodes, one_over_denominator, cylindrical)
 
     if coord.n == 1 && occursin("v", coord.name)
         spectral = null_velocity_dimension_info()
@@ -271,7 +275,7 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
     return coord, spectral
 end
 
-function set_element_boundaries(nelement_global, L, element_spacing_option, coord_name)
+function set_element_boundaries(nelement_global, L, element_spacing_option, coord_cylindrical)
     # set global element boundaries between [-L/2,L/2]
     element_boundaries = allocate_float(nelement_global+1)
     if element_spacing_option == "sqrt" && nelement_global > 3
@@ -301,7 +305,7 @@ function set_element_boundaries(nelement_global, L, element_spacing_option, coor
     else 
         println("ERROR: element_spacing_option: ",element_spacing_option, " not supported")
     end
-    if coord_name == "vperp"
+    if coord_cylindrical
         #shift so that the range of element boundaries is [0,L]
         for j in 1:nelement_global+1
             element_boundaries[j] += L/2.0
@@ -327,7 +331,7 @@ end
 setup a grid with n_global grid points on the interval [-L/2,L/2]
 """
 function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_scale, element_shift,
-                   imin, imax, igrid, discretization, name)
+                   imin, imax, igrid, discretization, name, cylindrical)
     uniform_grid = equally_spaced_grid(n_global, n_local, irank, L)
     uniform_grid_shifted = equally_spaced_grid_shifted(n_global, n_local, irank, L)
     radau_first_element = false
@@ -342,7 +346,7 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
             wgts[1] = 1.0
         end
     elseif discretization == "chebyshev_pseudospectral"
-        if name == "vperp"
+        if cylindrical
             # initialize chebyshev grid defined on [-L/2,L/2]
             grid, wgts = scaled_chebyshev_radau_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax, irank)
             wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
@@ -358,7 +362,7 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
             grid, wgts = scaled_chebyshev_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax)
         end
     elseif discretization == "gausslegendre_pseudospectral"
-        if name == "vperp"
+        if cylindrical
             # use a radau grid for the 1st element near the origin
             grid, wgts = scaled_gauss_legendre_radau_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax, irank)
             wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
@@ -368,7 +372,7 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
             grid, wgts = scaled_gauss_legendre_lobatto_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax)
         end
     elseif discretization == "finite_difference"
-        if name == "vperp"
+        if cylindrical
             # initialize equally spaced grid defined on [0,L]
             grid = uniform_grid_shifted
             # use composite Simpson's rule to obtain integration weights associated with this coordinate

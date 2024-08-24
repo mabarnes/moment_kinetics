@@ -291,7 +291,7 @@ function elementwise_derivative!(coord, ff, chebyshev::chebyshev_info)
         imin = coord.imin[j]-k
         # imax is the maximum index on the full grid for this (jth) element
         imax = coord.imax[j]        
-        if coord.name == "vperp" && coord.irank == 0 # differentiate this element with the Radau scheme
+        if coord.cylindrical && coord.irank == 0 # differentiate this element with the Radau scheme
             @views mul!(df[:,j],chebyshev.radau.Dmat[:,:],ff[imin:imax])
         else #differentiate using the Lobatto scheme
             @views mul!(df[:,j],chebyshev.lobatto.Dmat[:,:],ff[imin:imax])
@@ -324,7 +324,7 @@ function elementwise_derivative!(coord, ff, chebyshev::chebyshev_info)
         # at element boundaries (see below for further explanation)
         k = 0
         j = 1 # the first element
-        if coord.name == "vperp" && coord.irank == 0 # differentiate this element with the Radau scheme
+        if coord.cylindrical && coord.irank == 0 # differentiate this element with the Radau scheme
             imin = coord.imin[j]-k
             # imax is the maximum index on the full grid for this (jth) element
             imax = coord.imax[j]
