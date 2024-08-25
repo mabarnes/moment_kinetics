@@ -11,6 +11,7 @@ using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float, allocate_int
 using ..calculus: derivative!
 using ..chebyshev: scaled_chebyshev_grid, scaled_chebyshev_radau_grid, setup_chebyshev_pseudospectral
+using ..fourier: scaled_fourier_grid, setup_fourier_pseudospectral
 using ..communication
 using ..finite_differences: finite_difference_info
 using ..gauss_legendre: scaled_gauss_legendre_lobatto_grid, scaled_gauss_legendre_radau_grid, setup_gausslegendre_pseudospectral
@@ -265,6 +266,18 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
         spectral = setup_gausslegendre_pseudospectral(coord, collision_operator_dim=collision_operator_dim)
         # obtain the local derivatives of the uniform grid with respect to the used grid
         derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
+    elseif input.discretization == "fourier_pseudospectral"
+        if !(coord.bc == "none")
+         error("fourier_pseudospectral option requires bc='none' (periodicity enforced by basis functions, not be explicit assignment)")
+        end
+        if !(coord.nelement_global == 1)
+         error("fourier_pseudospectral option requires nelement=1")
+        end        
+        # create arrays needed for explicit GaussLegendre pseudospectral treatment in this
+        # coordinate and create the matrices for differentiation
+        spectral = setup_fourier_pseudospectral(coord, run_directory; ignore_MPI=ignore_MPI)
+        # obtain the local derivatives of the uniform grid with respect to the used grid
+        derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
     else
         # finite_difference_info is just a type so that derivative methods, etc., dispatch
         # to the finite difference versions, it does not contain any information.
@@ -370,6 +383,12 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
             radau_first_element = true
         else
             grid, wgts = scaled_gauss_legendre_lobatto_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax)
+        end
+    elseif discretization == "fourier_pseudospectral"
+        if cylindrical
+            error("fourier_pseudospectral is inappropriate for cylindrical radial coordinates")
+        else
+            grid, wgts = scaled_fourier_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax)
         end
     elseif discretization == "finite_difference"
         if cylindrical

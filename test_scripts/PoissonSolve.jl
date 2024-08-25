@@ -13,6 +13,7 @@ using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.spatial_poisson: init_spatial_poisson, spatial_poisson_solve!
 using moment_kinetics.communication
 using moment_kinetics.looping
+using moment_kinetics.calculus: derivative!
 
 function run_poisson_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelement_polar=1,ngrid_polar=1,Lpolar=2.0*pi)
 
@@ -36,7 +37,7 @@ function run_poisson_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelemen
    # coordinate
    element_spacing_option = "uniform"
    polar_input = grid_input("polar", ngrid_polar, nelement_global_polar, nelement_local_polar, 
-      nrank, irank, Lpolar, discretization, fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
+      nrank, irank, Lpolar, "fourier_pseudospectral", fd_option, cheb_option, "none", adv_input,comm,element_spacing_option)
    radial_input = grid_input("r", ngrid_radial, nelement_global_radial, nelement_local_radial, 
       nrank, irank, Lradial, discretization, fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
    # create the coordinate struct 'x'
@@ -56,6 +57,25 @@ function run_poisson_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelemen
    
    begin_serial_region()
   
+   println("Test fourier_pseudospectral")
+   ff = allocate_float(polar.n)
+   df = allocate_float(polar.n)
+   df_exact = allocate_float(polar.n)
+   df_err = allocate_float(polar.n)
+   for i in 1:polar.n
+      ff[i] = sin(2.0*pi*polar.grid[i]/polar.L)
+      df_exact[i] = cos(2.0*pi*polar.grid[i]/polar.L)*(2.0*pi/polar.L)
+   end
+   #println("ff: ",ff)
+   derivative!(df,ff,polar,polar_spectral)
+   #println("polar.grid: ",polar.grid)
+   @. df_err = abs(df - df_exact)
+   println("maximum(df_err): ",maximum(df_err))
+   #println("df_exact: ",df_exact)
+   #println(polar.wgts)
+   println("wgts err: ",abs( 1.0 - (sum(polar.wgts)/polar.L) ))
+   
+   println("Test Poisson")
    poisson = init_spatial_poisson(radial,polar,radial_spectral)
    phi = allocate_float(radial.n,polar.n)
    exact_phi = allocate_float(radial.n,polar.n)
@@ -63,11 +83,11 @@ function run_poisson_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelemen
    @. rho = 1.0
    #@. rho = sinpi(2*radial.grid/radial.L)
    spatial_poisson_solve!(phi,rho,poisson,radial,polar)
-   println(phi)
-   println(phi[1])
+   #println(phi)
+   #println(phi[1])
    @. exact_phi[:,1] = 0.25*(radial.grid^2 -1)
-   println(exact_phi)
-   println("Maximum error value: ",maximum(abs.(phi- exact_phi)))
+   #println(exact_phi)
+   #println("Maximum error value: ",maximum(abs.(phi- exact_phi)))
    #println(radial.grid)
    finalize_comms!()
    return nothing
