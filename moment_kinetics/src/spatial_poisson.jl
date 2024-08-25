@@ -16,6 +16,8 @@ using ..array_allocation: allocate_float
 using SparseArrays: sparse, AbstractSparseArray
 using LinearAlgebra: ldiv!, mul!, LU, lu
 using SuiteSparse
+using ..fourier: fourier_info, fourier_forward_transform!, fourier_backward_transform! 
+using ..moment_kinetics_structs: null_spatial_dimension_info
 
 struct poisson_arrays 
    # an array of lu objects for solving the mth polar harmonic of Poisson's equation
@@ -25,8 +27,9 @@ struct poisson_arrays
    laplacian::Array{mk_float,3}
    # the matrix that needs to multiply the nodal values of the source function
    sourcevec::Array{mk_float,2}
-   rhs_dummy::Array{mk_float,1}
-   phi_dummy::Array{mk_float,1}
+   rhohat::Array{Complex{mk_float},2}
+   rhs_dummy::Array{Complex{mk_float},1}
+   phi_dummy::Array{Complex{mk_float},1}
 end
 
 """
@@ -44,6 +47,27 @@ function get_imin_imax(coord,iel)
     return imin, imax
 end
 
+
+function mwavenumber(polar,im)
+   npolar = polar.n
+   if mod(npolar,2) == 0
+      imid = mk_int((npolar/2))
+   else
+      imid = mk_int(((npolar-1)/2))
+   end
+   mwvc = (2.0*pi/polar.L)
+   if npolar > 1
+      if im < imid+1
+         mwvc *= (im-1)
+      else
+         mwvc *= ((im-1)-npolar)
+      end
+   else
+      mwvc *= (im-1)
+   end   
+   return mwvc
+end
+
 """
 function to initialise the arrays needed for the weak-form
 Poisson's equation problem
@@ -57,6 +81,7 @@ function init_spatial_poisson(radial::coordinate, polar::coordinate, radial_spec
    nrelement = radial.nelement_global
    laplacian = allocate_float(nrtot,nrtot,npolar)
    sourcevec = allocate_float(nrtot,nrtot)
+   rhohat = allocate_float(nrtot,npolar)
    rhs_dummy = allocate_float(nrtot)
    phi_dummy = allocate_float(nrtot)
    MR = allocate_float(nrgrid,nrgrid)
@@ -67,13 +92,14 @@ function init_spatial_poisson(radial::coordinate, polar::coordinate, radial_spec
    @. laplacian = 0.0
    @. sourcevec = 0.0
    for im in 1:npolar
+      mwn = mwavenumber(polar,im)
       for irel in 1:nrelement 
           imin, imax = get_imin_imax(radial,irel)
           get_QQ_local!(MN,irel,radial_spectral.lobatto,radial_spectral.radau,radial,"N")
           get_QQ_local!(KJ,irel,radial_spectral.lobatto,radial_spectral.radau,radial,"J")
           get_QQ_local!(PP,irel,radial_spectral.lobatto,radial_spectral.radau,radial,"P")
           # assemble the Laplacian matrix 
-          @. laplacian[imin:imax,imin:imax,im] += KJ - PP + ((im-1)^2)*MN
+          @. laplacian[imin:imax,imin:imax,im] += KJ - PP - ((mwn)^2)*MN
       end
       # set rows for Dirichlet BCs on phi
       laplacian[nrtot,:,im] .= 0.0
@@ -96,7 +122,7 @@ function init_spatial_poisson(radial::coordinate, polar::coordinate, radial_spec
    for im in 1:npolar
       laplacian_lu_objs[im] = lu(laplacian_sparse[im])
    end
-   return poisson_arrays(laplacian_lu_objs,laplacian,sourcevec,rhs_dummy,phi_dummy)
+   return poisson_arrays(laplacian_lu_objs,laplacian,sourcevec,rhohat,rhs_dummy,phi_dummy)
 end
 
 """
@@ -108,27 +134,44 @@ nabla^2 phi = rho in cylindrical polar coordinates
 """
 # for now just support npolar = 1
 # by skipping the FFT
-function spatial_poisson_solve!(phi,rho,poisson_arrays,radial,polar)
+function spatial_poisson_solve!(phi,rho,poisson_arrays,radial,polar,polar_spectral::Union{fourier_info,null_spatial_dimension_info})
    laplacian_lu_objs = poisson_arrays.laplacian_lu_objs
    sourcevec = poisson_arrays.sourcevec
    phi_dummy = poisson_arrays.phi_dummy
    rhs_dummy = poisson_arrays.rhs_dummy
+   rhohat = poisson_arrays.rhohat
+   #phihat = poisson_arrays.phihat
    
-   # first FFT rho to hat{rho} appropriate for using the 1D radial operators
-   @. phi = 0.0
    npolar = polar.n
    nradial = radial.n
+   if npolar > 1
+      # first FFT rho to hat{rho} appropriate for using the 1D radial operators
+      for irad in 1:nradial
+         @views fourier_forward_transform!(rhohat[irad,:], polar_spectral.fext, rho[irad,:], polar_spectral.forward, polar_spectral.imidm, polar_spectral.imidp, polar.ngrid)
+      end
+   else
+      @. rhohat = complex(rho,0.0)
+   end
+   
    for im in 1:npolar
       # solve the linear system
       # form the rhs vector
-      mul!(rhs_dummy,sourcevec,rho[:,im])
+      mul!(rhs_dummy,sourcevec,rhohat[:,im])
       # set the Dirichlet BC phi = 0
       rhs_dummy[nradial] = 0.0
       lu_object_lhs = laplacian_lu_objs[im]
       ldiv!(phi_dummy, lu_object_lhs, rhs_dummy)
-      phi[:,im] = phi_dummy
+      rhohat[:,im] = phi_dummy
    end
-   # finally iFFT from hat{phi} to phi 
+   
+   if npolar > 1
+      # finally iFFT from hat{phi} to phi 
+      for irad in 1:nradial
+         @views fourier_backward_transform!(phi[irad,:], polar_spectral.fext, rhohat[irad,:], polar_spectral.backward, polar_spectral.imidm, polar_spectral.imidp, polar.ngrid)
+      end
+   else
+      @. phi = real(rhohat)
+   end
    return nothing
 end
 

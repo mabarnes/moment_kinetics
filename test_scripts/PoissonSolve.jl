@@ -1,9 +1,10 @@
 export run_poisson_test
 #using Printf
-#using Plots
-#using LaTeXStrings
+using Plots
+#gr()
+using LaTeXStrings
 using MPI
-#using Measures
+using Measures
 #using Dates
 import moment_kinetics
 using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
@@ -15,7 +16,24 @@ using moment_kinetics.communication
 using moment_kinetics.looping
 using moment_kinetics.calculus: derivative!
 
-function run_poisson_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelement_polar=1,ngrid_polar=1,Lpolar=2.0*pi)
+function plot_test_data(func_exact,func_num,func_err,func_name,radial,polar)
+    @views heatmap(polar.grid, radial.grid, func_num[:,:], ylabel=L"r", xlabel=L"\theta", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt, projection =:polar)
+                outfile = string(func_name*"_num.pdf")
+                savefig(outfile)
+    @views heatmap(polar.grid, radial.grid, func_exact[:,:], ylabel=L"r", xlabel=L"\theta", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt, projection =:polar)
+                outfile = string(func_name*"_exact.pdf")
+                savefig(outfile)
+    @views heatmap(polar.grid, radial.grid, func_err[:,:], ylabel=L"r", xlabel=L"\theta", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt, projection =:polar)
+                outfile = string(func_name*"_err.pdf")
+                savefig(outfile)
+    return nothing
+end
+
+
+function run_poisson_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelement_polar=1,ngrid_polar=1,Lpolar=2.0*pi,kk=1.0)
 
    nelement_local_polar = nelement_polar # number of elements per rank
    nelement_global_polar = nelement_local_polar # total number of elements 
@@ -79,16 +97,35 @@ function run_poisson_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelemen
    poisson = init_spatial_poisson(radial,polar,radial_spectral)
    phi = allocate_float(radial.n,polar.n)
    exact_phi = allocate_float(radial.n,polar.n)
+   err_phi = allocate_float(radial.n,polar.n)
    rho = allocate_float(radial.n,polar.n)
-   @. rho = 1.0
+   
+   for ipol in 1:polar.n
+      for irad in 1:radial.n
+         exact_phi[irad,ipol] = 0.25*(radial.grid[irad]^2 -1)
+         rho[irad,ipol] = 1.0
+      end
+   end
    #@. rho = sinpi(2*radial.grid/radial.L)
-   spatial_poisson_solve!(phi,rho,poisson,radial,polar)
+   spatial_poisson_solve!(phi,rho,poisson,radial,polar,polar_spectral)
    #println(phi)
-   #println(phi[1])
-   @. exact_phi[:,1] = 0.25*(radial.grid^2 -1)
    #println(exact_phi)
-   #println("Maximum error value: ",maximum(abs.(phi- exact_phi)))
-   #println(radial.grid)
+   println("Maximum error value Test rho=1 : ",maximum(abs.(phi- exact_phi)))
+   
+   for ipol in 1:polar.n
+      for irad in 1:radial.n
+         exact_phi[irad,ipol] = 0.25*(radial.grid[irad]^2 -1)*cos(2.0*pi*kk*polar.grid[ipol]/polar.L)
+         rho[irad,ipol] = cos(2.0*kk*pi*polar.grid[ipol]/polar.L)
+      end
+   end
+   
+   #@. rho = sinpi(2*radial.grid/radial.L)
+   spatial_poisson_solve!(phi,rho,poisson,radial,polar,polar_spectral)
+   @. err_phi = abs(phi - exact_phi)
+   #println(phi)
+   #println(exact_phi)
+   println("Maximum error value Test rho = cos(2 pi kk P/L): ",maximum(err_phi))
+   plot_test_data(exact_phi,phi,err_phi,"phi",radial,polar)
    finalize_comms!()
    return nothing
 end

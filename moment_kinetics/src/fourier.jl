@@ -6,6 +6,8 @@ export setup_fourier_pseudospectral
 export scaled_fourier_grid
 export fourier_spectral_derivative!
 export fourier_info
+export fourier_forward_transform!
+export fourier_backward_transform!
 
 using FFTW
 using MPI
