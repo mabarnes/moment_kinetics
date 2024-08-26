@@ -31,7 +31,7 @@ function plot_test_data(func_exact,func_num,func_err,func_name,radial,polar)
 end
 
 
-function run_poisson_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelement_polar=1,ngrid_polar=1,Lpolar=2.0*pi,kk::mk_int=1)
+function run_poisson_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelement_polar=1,ngrid_polar=1,Lpolar=2.0*pi,kk::mk_int=1,plot_results=false)
 
    nelement_local_polar = nelement_polar # number of elements per rank
    nelement_global_polar = nelement_local_polar # total number of elements 
@@ -106,6 +106,9 @@ function run_poisson_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelemen
    if !(mod(kk,1) == 0)
       error("ERROR: kk integer required for test")
    end
+   if abs(polar.L - 2.0*pi) >1.0e-14
+      error("ERROR: polar coordinate assumed angle for definition of the following test - set Lpolar = 2.0*pi")
+   end
    
    for ipol in 1:polar.n
       for irad in 1:radial.n
@@ -117,7 +120,9 @@ function run_poisson_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelemen
    spatial_poisson_solve!(phi,rho,poisson,radial,polar,polar_spectral)
    @. err_phi = abs(phi - exact_phi)
    println("Maximum error value Test rho = (kk^2 - (kk+1)^2) * cos(2 pi kk P/L) * r^(kk-1): ",maximum(err_phi))
-   plot_test_data(exact_phi,phi,err_phi,"phi",radial,polar)
+   if plot_results
+      plot_test_data(exact_phi,phi,err_phi,"phi",radial,polar)
+   end
    finalize_comms!()
    return nothing
 end
