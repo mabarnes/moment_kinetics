@@ -26,6 +26,7 @@ using ..electron_kinetic_equation: implicit_electron_advance!
 using ..em_fields: update_phi!
 using ..file_io: setup_electron_io, write_electron_state, finish_electron_io
 using ..load_data: reload_electron_data!
+using ..moment_constraints: hard_force_moment_constraints!
 using ..moment_kinetics_structs: scratch_pdf, pdf_substruct, electron_pdf_substruct,
                                  pdf_struct, moments_struct, boundary_distributions_struct
 using ..nonlinear_solvers: nl_solver_info
@@ -1631,13 +1632,17 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
         @loop_r ir begin
             # Initialise an unshifted Maxwellian as a first step
             @loop_z iz begin
-                vpa_over_vth = @. vpa.scratch3 = vpa.grid + upar[iz,ir] / vth[iz,ir]
                 @loop_vperp ivperp begin
-                    @. pdf[:,ivperp,iz,ir] = exp(-vpa_over_vth^2)
+                    @. pdf[:,ivperp,iz,ir] = exp(-vpa.grid^2)
                 end
             end
         end
     end
+
+    # Ensure initial electron distribution function obeys constraints
+    hard_force_moment_constraints!(pdf, moments, vpa)
+
+    return nothing
 end
 
 function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, geometry,composition)

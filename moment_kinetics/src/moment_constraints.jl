@@ -89,6 +89,16 @@ function hard_force_moment_constraints!(f, moments, vpa)
 
     return A, B, C
 end
+function hard_force_moment_constraints!(f::AbstractArray{mk_float,4}, moments, vpa)
+    A = moments.electron.constraints_A_coefficient
+    B = moments.electron.constraints_B_coefficient
+    C = moments.electron.constraints_C_coefficient
+    begin_r_z_region()
+    @loop_r_z ir iz begin
+        A[iz,ir], B[iz,ir], C[iz,ir] =
+            hard_force_moment_constraints!(@view(f[:,:,iz,ir]), moments, vpa)
+    end
+end
 function hard_force_moment_constraints!(f::AbstractArray{mk_float,5}, moments, vpa)
     A = moments.ion.constraints_A_coefficient
     B = moments.ion.constraints_B_coefficient

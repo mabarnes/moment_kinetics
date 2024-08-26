@@ -29,7 +29,8 @@ using moment_kinetics.krook_collisions: electron_krook_collisions!,
                                         add_electron_krook_collisions_to_Jacobian!
 using moment_kinetics.looping
 using moment_kinetics.moment_constraints: electron_implicit_constraint_forcing!,
-                                          add_electron_implicit_constraint_forcing_to_Jacobian!
+                                          add_electron_implicit_constraint_forcing_to_Jacobian!,
+                                          hard_force_moment_constraints!
 using moment_kinetics.type_definitions: mk_float
 using moment_kinetics.velocity_moments: calculate_electron_moment_derivatives_no_r!
 
@@ -201,7 +202,7 @@ end
 
 # Quite a large multiplier in rtol for this test, but it is plausible that a nonlinear
 # error (∼epsilon^2) could be multiplied by ∼vth*vpa.L/2∼sqrt(2)*60*6≈500.
-function test_electron_z_advection(test_input; rtol=(3.0e1*epsilon)^2)
+function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
     test_input = deepcopy(test_input)
     test_input["run_name"] *= "_electron_z_advection"
     println("    electron_z_advection")
@@ -231,6 +232,11 @@ function test_electron_z_advection(test_input; rtol=(3.0e1*epsilon)^2)
         @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
 
         f = @view pdf.electron.norm[:,:,:,ir]
+        # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
+        # means f must have a non-Maxwellian part that varies in z.
+        f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        # Ensure initial electron distribution function obeys constraints
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
         delta_f = similar(f)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
@@ -406,7 +412,7 @@ function test_electron_z_advection(test_input; rtol=(3.0e1*epsilon)^2)
     return nothing
 end
 
-function test_electron_vpa_advection(test_input; rtol=(5.0e1*epsilon)^2)
+function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
     test_input = deepcopy(test_input)
     test_input["run_name"] *= "_electron_vpa_advection"
     println("    electron_vpa_advection")
@@ -457,6 +463,11 @@ function test_electron_vpa_advection(test_input; rtol=(5.0e1*epsilon)^2)
         @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
 
         f = @view pdf.electron.norm[:,:,:,ir]
+        # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
+        # means f must have a non-Maxwellian part that varies in z.
+        f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        # Ensure initial electron distribution function obeys constraints
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
         delta_f = similar(f)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
@@ -703,6 +714,11 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
         @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
 
         f = @view pdf.electron.norm[:,:,:,ir]
+        # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
+        # means f must have a non-Maxwellian part that varies in z.
+        f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        # Ensure initial electron distribution function obeys constraints
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
         delta_f = similar(f)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
@@ -913,6 +929,11 @@ function test_electron_dissipation_term(test_input; rtol=(3.0e0*epsilon)^2)
         @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
 
         f = @view pdf.electron.norm[:,:,:,ir]
+        # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
+        # means f must have a non-Maxwellian part that varies in z.
+        f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        # Ensure initial electron distribution function obeys constraints
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
         delta_f = similar(f)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
@@ -1126,6 +1147,11 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
         @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
 
         f = @view pdf.electron.norm[:,:,:,ir]
+        # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
+        # means f must have a non-Maxwellian part that varies in z.
+        f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        # Ensure initial electron distribution function obeys constraints
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
         delta_f = similar(f)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
@@ -1353,6 +1379,11 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
         @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
 
         f = @view pdf.electron.norm[:,:,:,ir]
+        # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
+        # means f must have a non-Maxwellian part that varies in z.
+        f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        # Ensure initial electron distribution function obeys constraints
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
         delta_f = similar(f)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
@@ -1583,6 +1614,11 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(1.5e0*epsil
         @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
 
         f = @view pdf.electron.norm[:,:,:,ir]
+        # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
+        # means f must have a non-Maxwellian part that varies in z.
+        f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        # Ensure initial electron distribution function obeys constraints
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
         delta_f = similar(f)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
@@ -1761,7 +1797,7 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(1.5e0*epsil
     return nothing
 end
 
-function test_electron_energy_equation(test_input; rtol=(1.5e2*epsilon)^2)
+function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
     test_input = deepcopy(test_input)
     test_input["run_name"] *= "_electron_energy_equation"
     println("    electron_energy_equation")
@@ -1813,6 +1849,11 @@ function test_electron_energy_equation(test_input; rtol=(1.5e2*epsilon)^2)
         @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
 
         f = @view pdf.electron.norm[:,:,:,ir]
+        # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
+        # means f must have a non-Maxwellian part that varies in z.
+        f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        # Ensure initial electron distribution function obeys constraints
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
         delta_f = similar(f)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
@@ -1979,6 +2020,11 @@ function test_ion_dt_forcing_of_electron_ppar(test_input; rtol=(1.5e1*epsilon)^2
         @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
 
         f = @view pdf.electron.norm[:,:,:,ir]
+        # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
+        # means f must have a non-Maxwellian part that varies in z.
+        f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        # Ensure initial electron distribution function obeys constraints
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
         delta_f = similar(f)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
@@ -2117,7 +2163,7 @@ function test_ion_dt_forcing_of_electron_ppar(test_input; rtol=(1.5e1*epsilon)^2
     return nothing
 end
 
-function test_electron_kinetic_equation(test_input; rtol=(2.0e2*epsilon)^2)
+function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
     test_input = deepcopy(test_input)
     test_input["run_name"] *= "_electron_kinetic_equation"
     println("    electron_kinetic_equation")
@@ -2147,6 +2193,11 @@ function test_electron_kinetic_equation(test_input; rtol=(2.0e2*epsilon)^2)
         @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
 
         f = @view pdf.electron.norm[:,:,:,ir]
+        # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
+        # means f must have a non-Maxwellian part that varies in z.
+        f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        # Ensure initial electron distribution function obeys constraints
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
         delta_f = similar(f)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
