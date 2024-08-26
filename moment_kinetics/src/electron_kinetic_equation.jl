@@ -11,7 +11,7 @@ using ..analysis: steady_state_residuals
 using ..derivatives: derivative_z!, derivative_z_pdf_vpavperpz!
 using ..boundary_conditions: enforce_v_boundary_condition_local!,
                              enforce_vperp_boundary_condition!,
-                             skip_f_electron_bc_points_in_Jacobian
+                             skip_f_electron_bc_points_in_Jacobian, vpagrid_to_dzdt
 using ..calculus: derivative!, second_derivative!, integral
 using ..communication
 using ..gauss_legendre: gausslegendre_info
@@ -40,7 +40,9 @@ using ..krook_collisions: electron_krook_collisions!, get_collision_frequency_ee
                           get_collision_frequency_ei,
                           add_electron_krook_collisions_to_Jacobian!
 using ..moment_constraints: hard_force_moment_constraints!,
-                            moment_constraints_on_residual!
+                            moment_constraints_on_residual!,
+                            electron_implicit_constraint_forcing!,
+                            add_electron_implicit_constraint_forcing_to_Jacobian!
 using ..moment_kinetics_structs: scratch_pdf, scratch_electron_pdf, electron_pdf_substruct
 using ..nonlinear_solvers
 using ..runge_kutta: rk_update_variable!, rk_loworder_solution!, local_error_norm,
@@ -366,7 +368,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                            scratch[istage].electron_ppar[:,ir], moments, z, vperp, vpa,
                            z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                            collisions, composition, external_source_settings,
-                           num_diss_params, t_params.dt[], ir; evolve_ppar=evolve_ppar,
+                           num_diss_params, t_params, ir; evolve_ppar=evolve_ppar,
                            ion_dt=ion_dt)
             end
             speedup_hack!(scratch[istage+1], scratch[istage], z_speedup_fac, z, vpa;
@@ -795,7 +797,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                                     vpa_spectral, z_advect, vpa_advect,
                                                     scratch_dummy, collisions,
                                                     composition, external_source_settings,
-                                                    num_diss_params, t_params.dt[], ir)
+                                                    num_diss_params, t_params, ir)
             # Calculate heat flux and derivatives using updated f_electron
             @views calculate_electron_qpar_from_pdf_no_r!(moments.electron.qpar[:,ir],
                                                           electron_ppar_new,
@@ -1038,7 +1040,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                         precon_matrix, f_electron_new, electron_ppar_new, moments,
                         collisions, composition, z, vperp, vpa, z_spectral,
                         vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-                        external_source_settings, num_diss_params, t_params.dt[], ion_dt,
+                        external_source_settings, num_diss_params, t_params, ion_dt,
                         ir, evolve_ppar)
 
                     begin_serial_region()
@@ -1169,8 +1171,9 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                     f_electron_residual, electron_ppar_residual, f_electron_newvar,
                     electron_ppar_newvar, moments, z, vperp, vpa, z_spectral,
                     vpa_spectral, z_advect, vpa_advect, scratch_dummy, collisions,
-                    composition, external_source_settings, num_diss_params, t_params.dt[],
-                    ir; evolve_ppar=evolve_ppar, ion_dt=ion_dt)
+                    composition, external_source_settings, num_diss_params, t_params,
+                    ir; evolve_ppar=evolve_ppar, ion_dt=ion_dt,
+                    soft_force_constraints=true)
 
                 # Now
                 #   residual = f_electron_old + dt*RHS(f_electron_newvar)
@@ -1595,7 +1598,8 @@ function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, mo
                 f_electron_residual, electron_ppar_residual, f_electron_new,
                 electron_ppar_new, moments, z, vperp, vpa, z_spectral, vpa_spectral, z_advect,
                 vpa_advect, scratch_dummy, collisions, composition, external_source_settings,
-                num_diss_params, pdf_electron_normalisation_factor, ir)
+                num_diss_params, pdf_electron_normalisation_factor, t_params, ir;
+                soft_force_constraints=true)
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 f_electron_residual[ivpa,ivperp,iz] /= sqrt(1.0 + vpa.grid[ivpa]^2)
             end
@@ -2757,7 +2761,7 @@ end
                                             z_advect, vpa_advect, scratch_dummy,
                                             collisions, composition,
                                             external_source_settings,
-                                            num_diss_params, dt, ir;
+                                            num_diss_params, t_params, ir;
                                             evolve_ppar=false, ion_dt=nothing)
 
 Do a forward-Euler update of the electron kinetic equation.
@@ -2772,8 +2776,11 @@ function electron_kinetic_equation_euler_update!(f_out, ppar_out, f_in, ppar_in,
                                                  z_advect, vpa_advect, scratch_dummy,
                                                  collisions, composition,
                                                  external_source_settings,
-                                                 num_diss_params, dt, ir;
-                                                 evolve_ppar=false, ion_dt=nothing)
+                                                 num_diss_params, t_params, ir;
+                                                 evolve_ppar=false, ion_dt=nothing,
+                                                 soft_force_constraints=false)
+    dt = t_params.dt[]
+
     # add the contribution from the z advection term
     @views electron_z_advection!(f_out, f_in, moments.electron.upar[:,ir],
                                  moments.electron.vth[:,ir], z_advect, z, vpa.grid,
@@ -2812,6 +2819,12 @@ function electron_kinetic_equation_euler_update!(f_out, ppar_out, f_in, ppar_in,
                                          vperp, vpa, dt, ir)
     end
 
+    if soft_force_constraints
+        electron_implicit_constraint_forcing!(f_out, f_in,
+                                              t_params.constraint_forcing_rate, vpa, dt,
+                                              ir)
+    end
+
     if evolve_ppar
         @views electron_energy_equation_no_r!(
                    ppar_out, ppar_in, moments.electron.dens[:,ir],
@@ -2846,7 +2859,7 @@ end
                                              composition, z, vperp, vpa, z_spectral,
                                              vperp_specral, vpa_spectral, z_advect,
                                              vpa_advect, scratch_dummy, external_source_settings,
-                                             num_diss_params, dt, ion_dt,
+                                             num_diss_params, t_params, ion_dt,
                                              ir, evolve_ppar)
 
 Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equation and (if
@@ -2857,8 +2870,10 @@ function fill_electron_kinetic_equation_Jacobian!(jacobian_matrix, f, ppar, mome
                                                   z_spectral, vperp_spectral,
                                                   vpa_spectral, z_advect, vpa_advect,
                                                   scratch_dummy, external_source_settings,
-                                                  num_diss_params, dt, ion_dt, ir,
+                                                  num_diss_params, t_params, ion_dt, ir,
                                                   evolve_ppar)
+    dt = t_params.dt[]
+
     buffer_1 = @view scratch_dummy.buffer_rs_1[ir,1]
     buffer_2 = @view scratch_dummy.buffer_rs_2[ir,1]
     buffer_3 = @view scratch_dummy.buffer_rs_3[ir,1]
@@ -2931,6 +2946,9 @@ function fill_electron_kinetic_equation_Jacobian!(jacobian_matrix, f, ppar, mome
     add_external_electron_source_to_Jacobian!(
         jacobian_matrix, f, moments, me, z_speed, external_source_settings, z, vperp, vpa,
         dt, ir; ppar_offset=pdf_size)
+    add_electron_implicit_constraint_forcing_to_Jacobian!(
+        jacobian_matrix, f, z_speed, z, vperp, vpa, t_params.constraint_forcing_rate, dt,
+        ir)
     if evolve_ppar
         add_electron_energy_equation_to_Jacobian!(
             jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dupar_dz,

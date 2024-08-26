@@ -96,6 +96,9 @@ struct coordinate{T <: AbstractVector{mk_float}}
     # scratch_shared2 is a shared-memory array used for intermediate calculations requiring
     # n entries
     scratch_shared2::T
+    # scratch_shared3 is a shared-memory array used for intermediate calculations requiring
+    # n entries
+    scratch_shared3::T
     # scratch_2d and scratch2_2d are arrays used for intermediate calculations requiring
     # ngrid x nelement entries
     scratch_2d::Array{mk_float,2}
@@ -168,15 +171,18 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
     if ignore_MPI
         scratch_shared = allocate_float(n_local)
         scratch_shared2 = allocate_float(n_local)
+        scratch_shared3 = allocate_float(n_local)
     else
         scratch_shared = allocate_shared_float(n_local)
         scratch_shared2 = allocate_shared_float(n_local)
+        scratch_shared3 = allocate_shared_float(n_local)
     end
-    # Initialise scratch_shared and scratch_shared2 so that the debug checks do not
-    # complain when they get printed by `println(io, all_inputs)` in mk_input().
+    # Initialise scratch_shared* so that the debug checks do not complain when they get
+    # printed by `println(io, all_inputs)` in mk_input().
     if block_rank[] == 0
         scratch_shared .= NaN
         scratch_shared2 .= NaN
+        scratch_shared3 .= NaN
     end
     if !ignore_MPI
         _block_synchronize()
@@ -236,8 +242,8 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
         cell_width, igrid, ielement, imin, imax, igrid_full, input.discretization, input.fd_option, input.cheb_option,
         input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch),
         copy(scratch), copy(scratch), copy(scratch), copy(scratch), copy(scratch),
-        copy(scratch), copy(scratch), scratch_shared, scratch_shared2, scratch_2d,
-        copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
+        copy(scratch), copy(scratch), scratch_shared, scratch_shared2, scratch_shared3,
+        scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
         local_io_range, global_io_range, element_scale, element_shift,
         input.element_spacing_option, element_boundaries, radau_first_element,
         other_nodes, one_over_denominator)

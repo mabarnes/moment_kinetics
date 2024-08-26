@@ -5,12 +5,15 @@ function.
 """
 module moment_constraints
 
+using ..boundary_conditions: skip_f_electron_bc_points_in_Jacobian
 using ..communication: _block_synchronize
 using ..looping
 using ..type_definitions: mk_float
 using ..velocity_moments: integrate_over_vspace, update_qpar!
 
-export hard_force_moment_constraints!, hard_force_moment_constraints_neutral!
+export hard_force_moment_constraints!, hard_force_moment_constraints_neutral!,
+       electron_implicit_constraint_forcing!,
+       add_electron_implicit_constraint_forcing_to_Jacobian!
 
 """
     hard_force_moment_constraints!(f, moments, vpa)
@@ -227,6 +230,92 @@ function moment_constraints_on_residual!(residual::AbstractArray{T,N},
     end
 
     return A, B, C
+end
+
+"""
+    electron_implicit_constraint_forcing!(f_out, f_in, constraint_forcing_rate, vpa,
+                                          dt, ir)
+
+Add terms to the electron kinetic equation that force the moment constraints to be
+approximately satisfied. Needed to avoid large errors when taking large, implicit
+timesteps that do not guarantee accurate time evolution.
+"""
+function electron_implicit_constraint_forcing!(f_out, f_in, constraint_forcing_rate, vpa,
+                                               dt, ir)
+    begin_z_region()
+    vpa_grid = vpa.grid
+    @loop_z iz begin
+        @views zeroth_moment = integrate_over_vspace(f_in[:,1,iz], vpa.wgts)
+        @views first_moment = integrate_over_vspace(f_in[:,1,iz], vpa.grid, vpa.wgts)
+        @views second_moment = integrate_over_vspace(f_in[:,1,iz], vpa.grid, 2, vpa.wgts)
+
+        @loop_vperp_vpa ivperp ivpa begin
+            f_out[ivpa,ivperp,iz] +=
+                dt * constraint_forcing_rate *
+                ((1.0 - zeroth_moment)
+                 - first_moment*vpa_grid[ivpa]
+                 + (0.5 - second_moment)*vpa_grid[ivpa]^2) * f_in[ivpa,ivperp,iz]
+        end
+    end
+
+    return nothing
+end
+
+"""
+    add_electron_implicit_constraint_forcing_to_Jacobian!(jacobian_matrix, f,
+                                                          z_speed, z, vperp, vpa,
+                                                          constraint_forcing_rate,
+                                                          dt, ir; f_offset=0)
+
+Add the contributions corresponding to [`electron_implicit_constraint_forcing!`](@ref) to
+`jacobian_matrix`.
+"""
+function add_electron_implicit_constraint_forcing_to_Jacobian!(jacobian_matrix, f,
+                                                               z_speed, z, vperp, vpa,
+                                                               constraint_forcing_rate,
+                                                               dt, ir; f_offset=0)
+    vpa_grid = vpa.grid
+    vpa_wgts = vpa.wgts
+    v_size = vperp.n * vpa.n
+
+    zeroth_moment = z.scratch_shared
+    first_moment = z.scratch_shared2
+    second_moment = z.scratch_shared3
+    begin_z_region()
+    @loop_z iz begin
+        @views zeroth_moment[iz] = integrate_over_vspace(f[:,1,iz], vpa_wgts)
+        @views first_moment[iz] = integrate_over_vspace(f[:,1,iz], vpa_grid, vpa_wgts)
+        @views second_moment[iz] = integrate_over_vspace(f[:,1,iz], vpa_grid, 2, vpa_wgts)
+    end
+
+    begin_z_vperp_vpa_region()
+    @loop_z_vperp_vpa iz ivperp ivpa begin
+        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
+            continue
+        end
+
+        # Rows corresponding to pdf_electron
+        row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa + f_offset
+
+        # Diagonal terms
+        jacobian_matrix[row,row] += -dt * constraint_forcing_rate *
+                                          ((1.0 - zeroth_moment[iz])
+                                           - first_moment[iz]*vpa_grid[ivpa]
+                                           + (0.5 - second_moment[iz])*vpa_grid[ivpa]^2)
+
+        # Integral terms
+        # d(∫dw_∥ w_∥^n g[irow])/d(g[icol]) = vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^n
+        for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+            col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+            jacobian_matrix[row,col] += dt * constraint_forcing_rate *
+                                             (1.0
+                                              + vpa_grid[icolvpa]*vpa_grid[ivpa]
+                                              + vpa_grid[icolvpa]^2*vpa_grid[ivpa]^2) *
+                                             vpa_wgts[icolvpa]/sqrt(π) * f[ivpa,ivperp,iz]
+        end
+    end
+
+    return nothing
 end
 
 end
