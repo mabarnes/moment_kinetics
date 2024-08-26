@@ -1,7 +1,5 @@
 export run_poisson_test
-#using Printf
 using Plots
-#gr()
 using LaTeXStrings
 using MPI
 using Measures
@@ -17,34 +15,30 @@ using moment_kinetics.looping
 using moment_kinetics.calculus: derivative!
 
 function plot_test_data(func_exact,func_num,func_err,func_name,radial,polar)
-    @views heatmap(polar.grid, radial.grid, func_num[:,:], ylabel=L"r", xlabel=L"\theta", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt, projection =:polar)
+    @views heatmap(polar.grid, radial.grid, func_num[:,:], ylabel=L"r", xlabel=L"\theta", c = :deep, interpolation = :cubic, #, projection =:polar
+                windowsize = (360,240), margin = 15pt)
                 outfile = string(func_name*"_num.pdf")
                 savefig(outfile)
-    @views heatmap(polar.grid, radial.grid, func_exact[:,:], ylabel=L"r", xlabel=L"\theta", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt, projection =:polar)
+    @views heatmap(polar.grid, radial.grid, func_exact[:,:], ylabel=L"r", xlabel=L"\theta", c = :deep, interpolation = :cubic, #, projection =:polar
+                windowsize = (360,240), margin = 15pt)
                 outfile = string(func_name*"_exact.pdf")
                 savefig(outfile)
-    @views heatmap(polar.grid, radial.grid, func_err[:,:], ylabel=L"r", xlabel=L"\theta", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt, projection =:polar)
+    @views heatmap(polar.grid, radial.grid, func_err[:,:], ylabel=L"r", xlabel=L"\theta", c = :deep, interpolation = :cubic, #, projection =:polar
+                windowsize = (360,240), margin = 15pt)
                 outfile = string(func_name*"_err.pdf")
                 savefig(outfile)
     return nothing
 end
 
 
-function run_poisson_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelement_polar=1,ngrid_polar=1,Lpolar=2.0*pi,kk=1.0)
+function run_poisson_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelement_polar=1,ngrid_polar=1,Lpolar=2.0*pi,kk::mk_int=1)
 
    nelement_local_polar = nelement_polar # number of elements per rank
    nelement_global_polar = nelement_local_polar # total number of elements 
    nelement_local_radial = nelement_radial # number of elements per rank
    nelement_global_radial = nelement_local_radial # total number of elements 
-   #Lvpa = 12.0 #physical box size in reference units 
-   #Lvperp = 6.0 #physical box size in reference units 
-   bc = "" #not required to take a particular value, not used 
+   bc = "none" #not required to take a particular value, not used, set to "none" to avoid extra BC impositions 
    # fd_option and adv_input not actually used so given values unimportant
-   #discretization = "chebyshev_pseudospectral"
-   discretization = "gausslegendre_pseudospectral"
    fd_option = "fourth_order_centered"
    cheb_option = "matrix"
    adv_input = advection_input("default", 1.0, 0.0, 0.0)
@@ -55,13 +49,10 @@ function run_poisson_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelemen
    # coordinate
    element_spacing_option = "uniform"
    polar_input = grid_input("polar", ngrid_polar, nelement_global_polar, nelement_local_polar, 
-      nrank, irank, Lpolar, "fourier_pseudospectral", fd_option, cheb_option, "none", adv_input,comm,element_spacing_option)
+      nrank, irank, Lpolar, "fourier_pseudospectral", fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
    radial_input = grid_input("r", ngrid_radial, nelement_global_radial, nelement_local_radial, 
-      nrank, irank, Lradial, discretization, fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
-   # create the coordinate struct 'x'
+      nrank, irank, Lradial, "gausslegendre_pseudospectral", fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
    println("made inputs")
-  # println("vpa: ngrid: ",ngrid," nelement: ",nelement_local_vpa, " Lvpa: ",Lvpa)
-  # println("vperp: ngrid: ",ngrid," nelement: ",nelement_local_vperp, " Lvperp: ",Lvperp)
   
    # Set up MPI
    initialize_comms!()
@@ -106,25 +97,26 @@ function run_poisson_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelemen
          rho[irad,ipol] = 1.0
       end
    end
-   #@. rho = sinpi(2*radial.grid/radial.L)
    spatial_poisson_solve!(phi,rho,poisson,radial,polar,polar_spectral)
-   #println(phi)
-   #println(exact_phi)
    println("Maximum error value Test rho=1 : ",maximum(abs.(phi- exact_phi)))
+   
+   if kk < 1
+      error("ERROR: kk >=1 required for test")
+   end
+   if !(mod(kk,1) == 0)
+      error("ERROR: kk integer required for test")
+   end
    
    for ipol in 1:polar.n
       for irad in 1:radial.n
-         exact_phi[irad,ipol] = 0.25*(radial.grid[irad]^2 -1)*cos(2.0*pi*kk*polar.grid[ipol]/polar.L)
-         rho[irad,ipol] = cos(2.0*kk*pi*polar.grid[ipol]/polar.L)
+         exact_phi[irad,ipol] = (1.0 - radial.grid[irad])*(radial.grid[irad]^kk)*cos(2.0*pi*kk*polar.grid[ipol]/polar.L)
+         rho[irad,ipol] = (kk^2 - (kk+1)^2)*(radial.grid[irad]^(kk-1))*cos(2.0*kk*pi*polar.grid[ipol]/polar.L)
       end
    end
    
-   #@. rho = sinpi(2*radial.grid/radial.L)
    spatial_poisson_solve!(phi,rho,poisson,radial,polar,polar_spectral)
    @. err_phi = abs(phi - exact_phi)
-   #println(phi)
-   #println(exact_phi)
-   println("Maximum error value Test rho = cos(2 pi kk P/L): ",maximum(err_phi))
+   println("Maximum error value Test rho = (kk^2 - (kk+1)^2) * cos(2 pi kk P/L) * r^(kk-1): ",maximum(err_phi))
    plot_test_data(exact_phi,phi,err_phi,"phi",radial,polar)
    finalize_comms!()
    return nothing
