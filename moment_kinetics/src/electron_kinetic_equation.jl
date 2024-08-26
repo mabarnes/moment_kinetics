@@ -1103,10 +1103,13 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                 electron_ppar_residual, f_electron_residual = residual
                 electron_ppar_newvar, f_electron_newvar = new_variables
 
-                apply_electron_bc_and_constraints_no_r!(f_electron_newvar, phi, moments,
-                                                        z, vperp, vpa, vperp_spectral,
-                                                        vpa_spectral, vpa_advect,
-                                                        num_diss_params, composition, ir)
+                # enforce the boundary condition(s) on the electron pdf
+                @views enforce_boundary_condition_on_electron_pdf!(
+                           f_electron_newvar, phi, moments.electron.vth[:,ir],
+                           moments.electron.upar[:,ir], z, vperp, vpa, vperp_spectral,
+                           vpa_spectral, vpa_advect, moments,
+                           num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
+                           composition.me_over_mi)
 
                 if evolve_ppar
                     this_dens = moments.electron.dens
@@ -1237,15 +1240,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                         end
                     end
                 end
-                begin_z_region()
-                @loop_z iz begin
-                    @views moment_constraints_on_residual!(f_electron_residual[:,:,iz],
-                                                           f_electron_newvar[:,:,iz],
-                                                           (evolve_density=true,
-                                                            evolve_upar=true,
-                                                            evolve_ppar=true),
-                                                           vpa)
-                end
+
                 return nothing
             end
 
