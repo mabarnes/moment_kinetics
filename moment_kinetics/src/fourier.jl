@@ -24,15 +24,15 @@ struct fourier_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.Scaled
     # fext is an array for storing f(z) on the extended domain needed
     # to perform complex-to-complex FFT using the fact that f(theta) is even in theta
     fext::Array{Complex{mk_float},1}
-    # Chebyshev spectral coefficients of distribution function f
+    # Fourier spectral coefficients of distribution function f
     # first dimension contains location within element
     # second dimension indicates the element
     f::Array{Complex{mk_float},2}
-    # Chebyshev spectral coefficients of derivative of f
+    # Fourier spectral coefficients of derivative of f
     df::Array{Complex{mk_float},1}
-    # plan for the complex-to-complex, in-place, forward Fourier transform on Chebyshev-Gauss-Lobatto/Radau grid
+    # plan for the complex-to-complex, in-place, forward Fourier transform on uniform grid
     forward::TForward
-    # plan for the complex-to-complex, in-place, backward Fourier transform on Chebyshev-Gauss-Lobatto/Radau grid
+    # plan for the complex-to-complex, in-place, backward Fourier transform on uniform grid
     # backward_transform::FFTW.cFFTWPlan
     backward::TBackward
     # midpoint integer, highest integer of postive physical wavenumbers
@@ -203,6 +203,7 @@ function elementwise_derivative!(coord, ff, fourier::fourier_info)
        fourier.f[:,j], fourier.df, fourier.fext, fourier.forward, fourier.backward, fourier.imidm, fourier.imidp, coord)
    # and multiply by scaling factor needed to go
    # from Fourier z coordinate to actual z
+   # factor 2 because Fourier grid normally runs from [0,1), but here we defined it [-1,1).
    for i ∈ 1:coord.ngrid
        df[i,j] /= 2.0*coord.element_scale[j]
    end
@@ -211,9 +212,9 @@ function elementwise_derivative!(coord, ff, fourier::fourier_info)
 end
 
 """
-    elementwise_derivative!(coord, ff, adv_fac, spectral::chebyshev_info)
+    elementwise_derivative!(coord, ff, adv_fac, spectral::fourier_info)
 
-Fourier transform f to get Chebyshev spectral coefficients and use them to calculate f'.
+Fourier transform f to get Fourier spectral coefficients and use them to calculate f'.
 
 Note: Fourier derivative does not make use of upwinding information. This function 
 is only provided for compatibility
@@ -278,7 +279,7 @@ function fourier_forward_transform!(fhat, fext, ff, transform, imidm, imidp, n)
             fext[j] = complex(ff[j-imidm],0.0) 
         end
     end
-    # perform the forward, complex-to-complex FFT in-place (cheby.fext is overwritten)
+    # perform the forward, complex-to-complex FFT in-place (fext is overwritten)
     transform*fext
     # set out data
     fhat .= fext
