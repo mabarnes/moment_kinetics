@@ -4,7 +4,9 @@ module JacobianMatrixTests
 
 include("setup.jl")
 
+using moment_kinetics: setup_moment_kinetics, cleanup_moment_kinetics!
 using moment_kinetics.analysis: vpagrid_to_dzdt
+using moment_kinetics.array_allocation: allocate_shared_float
 using moment_kinetics.boundary_conditions: enforce_v_boundary_condition_local!,
                                            enforce_vperp_boundary_condition!
 using moment_kinetics.derivatives: derivative_z!
@@ -172,10 +174,15 @@ test_input = Dict("run_name" => "jacobian_matrix",
 function get_mk_state(test_input)
     mk_state = nothing
     quietoutput() do
-        mk_state = moment_kinetics.setup_moment_kinetics(test_input;
-                                                         skip_electron_solve=true)
+        mk_state = setup_moment_kinetics(test_input; skip_electron_solve=true)
     end
     return mk_state
+end
+function cleanup_mk_state!(args...)
+    quietoutput() do
+        cleanup_moment_kinetics!(args...)
+    end
+    return nothing
 end
 
 function generate_norm_factor(perturbed_residual::AbstractArray{mk_float,3})
@@ -227,33 +234,41 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
         vpa_advect = advection_structs.vpa_advect
         me = composition.me_over_mi
 
-        delta_p = similar(ppar)
+        delta_p = allocate_shared_float(size(ppar)...)
         p_amplitude = epsilon * maximum(ppar)
-        @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
-
         f = @view pdf.electron.norm[:,:,:,ir]
-        # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
-        # means f must have a non-Maxwellian part that varies in z.
-        f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
-        # Ensure initial electron distribution function obeys constraints
+        begin_serial_region()
+        @serial_region begin
+            @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
+
+            # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
+            # means f must have a non-Maxwellian part that varies in z.
+            f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+            # Ensure initial electron distribution function obeys constraints
+        end
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
-        delta_f = similar(f)
+        delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
-        delta_f .= f_amplitude .*
-                   reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
-                   reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
-                   f
+        begin_serial_region()
+        @serial_region begin
+            delta_f .= f_amplitude .*
+                       reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
+                       reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
+                       f
+        end
 
         pdf_size = length(f)
         p_size = length(ppar)
         total_size = pdf_size + p_size
 
-        jacobian_matrix = zeros(mk_float, total_size, total_size)
-        for row ∈ 1:total_size
-            # Initialise identity matrix
-            jacobian_matrix[row,row] = 1.0
+        jacobian_matrix = allocate_shared_float(total_size, total_size)
+        @serial_region begin
+            for row ∈ 1:total_size
+                # Initialise identity matrix
+                jacobian_matrix[row,row] = 1.0
+            end
         end
 
         add_electron_z_advection_to_Jacobian!(
@@ -346,67 +361,77 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
             return nothing
         end
 
-        original_residual = zeros(mk_float, size(f))
-        perturbed_residual = zeros(mk_float, size(f))
+        original_residual = allocate_shared_float(size(f)...)
+        perturbed_residual = allocate_shared_float(size(f)...)
 
         @testset "δf only" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f.+delta_f, ppar)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[1:pdf_size] .= vec(delta_f)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[1:pdf_size] .= vec(delta_f)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                       zeros(p_size); atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           zeros(p_size); atol=1.0e-15)
 
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
         @testset "δp only" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f, ppar .+ delta_p)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[pdf_size+1:end] .= vec(delta_p)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[pdf_size+1:end] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                       delta_state[pdf_size+1:end]; atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           delta_state[pdf_size+1:end]; atol=1.0e-15)
 
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
         @testset "δf and δp" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f.+delta_f, ppar.+delta_p)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[1:pdf_size] .= vec(delta_f)
-            delta_state[pdf_size+1:end] .= vec(delta_p)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[1:pdf_size] .= vec(delta_f)
+                delta_state[pdf_size+1:end] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                       delta_state[pdf_size+1:end]; atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           delta_state[pdf_size+1:end]; atol=1.0e-15)
 
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
+        cleanup_mk_state!(ascii_io, io_moments, io_dfns)
     end
 
     return nothing
@@ -458,33 +483,42 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
-        delta_p = similar(ppar)
+        delta_p = allocate_shared_float(size(ppar)...)
         p_amplitude = epsilon * maximum(ppar)
-        @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
-
         f = @view pdf.electron.norm[:,:,:,ir]
-        # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
-        # means f must have a non-Maxwellian part that varies in z.
-        f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        begin_serial_region()
+        @serial_region begin
+            @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
+
+            # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
+            # means f must have a non-Maxwellian part that varies in z.
+            f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        end
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
-        delta_f = similar(f)
+        delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
-        delta_f .= f_amplitude .*
-                   reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
-                   reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
-                   f
+        begin_serial_region()
+        @serial_region begin
+            delta_f .= f_amplitude .*
+                       reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
+                       reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
+                       f
+        end
 
         pdf_size = length(f)
         p_size = length(ppar)
         total_size = pdf_size + p_size
 
-        jacobian_matrix = zeros(mk_float, total_size, total_size)
-        for row ∈ 1:total_size
-            # Initialise identity matrix
-            jacobian_matrix[row,row] = 1.0
+        jacobian_matrix = allocate_shared_float(total_size, total_size)
+        begin_serial_region()
+        @serial_region begin
+            for row ∈ 1:total_size
+                # Initialise identity matrix
+                jacobian_matrix[row,row] = 1.0
+            end
         end
 
         add_electron_vpa_advection_to_Jacobian!(
@@ -580,82 +614,92 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
             return nothing
         end
 
-        original_residual = zeros(mk_float, size(f))
-        perturbed_residual = zeros(mk_float, size(f))
+        original_residual = allocate_shared_float(size(f)...)
+        perturbed_residual = allocate_shared_float(size(f)...)
 
         @testset "δf only" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f.+delta_f, ppar)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[1:pdf_size] .= vec(delta_f)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[1:pdf_size] .= vec(delta_f)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                       zeros(p_size); atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           zeros(p_size); atol=1.0e-15)
 
-            # Divide out the z-average of the magnitude of perturbed_residual from the
-            # difference, so that different orders of magnitude at different w_∥ are all
-            # tested sensibly, but occasional small values of the residual do not make the
-            # test fail.
-            # Since we have already normalised, pass `rtol` to `atol` for the comparison.
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                # Divide out the z-average of the magnitude of perturbed_residual from the
+                # difference, so that different orders of magnitude at different w_∥ are all
+                # tested sensibly, but occasional small values of the residual do not make the
+                # test fail.
+                # Since we have already normalised, pass `rtol` to `atol` for the comparison.
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
         @testset "δp only" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f, ppar .+ delta_p)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[pdf_size+1:end] .= vec(delta_p)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[pdf_size+1:end] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                       delta_state[pdf_size+1:end]; atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           delta_state[pdf_size+1:end]; atol=1.0e-15)
 
-            # Divide out the z-average of the magnitude of perturbed_residual from the
-            # difference, so that different orders of magnitude at different w_∥ are all
-            # tested sensibly, but occasional small values of the residual do not make the
-            # test fail.
-            # Since we have already normalised, pass `rtol` to `atol` for the comparison.
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                # Divide out the z-average of the magnitude of perturbed_residual from the
+                # difference, so that different orders of magnitude at different w_∥ are all
+                # tested sensibly, but occasional small values of the residual do not make the
+                # test fail.
+                # Since we have already normalised, pass `rtol` to `atol` for the comparison.
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
         @testset "δf and δp" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f.+delta_f, ppar.+delta_p)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[1:pdf_size] .= vec(delta_f)
-            delta_state[pdf_size+1:end] .= vec(delta_p)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[1:pdf_size] .= vec(delta_f)
+                delta_state[pdf_size+1:end] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                       delta_state[pdf_size+1:end]; atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           delta_state[pdf_size+1:end]; atol=1.0e-15)
 
-            # Divide out the z-average of the magnitude of perturbed_residual from the
-            # difference, so that different orders of magnitude at different w_∥ are all
-            # tested sensibly, but occasional small values of the residual do not make the
-            # test fail.
-            # Since we have already normalised, pass `rtol` to `atol` for the comparison.
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                # Divide out the z-average of the magnitude of perturbed_residual from the
+                # difference, so that different orders of magnitude at different w_∥ are all
+                # tested sensibly, but occasional small values of the residual do not make the
+                # test fail.
+                # Since we have already normalised, pass `rtol` to `atol` for the comparison.
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
+        cleanup_mk_state!(ascii_io, io_moments, io_dfns)
     end
 
     return nothing
@@ -709,33 +753,42 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
-        delta_p = similar(ppar)
+        delta_p = allocate_shared_float(size(ppar)...)
         p_amplitude = epsilon * maximum(ppar)
-        @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
-
         f = @view pdf.electron.norm[:,:,:,ir]
-        # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
-        # means f must have a non-Maxwellian part that varies in z.
-        f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        begin_serial_region()
+        @serial_region begin
+            @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
+
+            # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
+            # means f must have a non-Maxwellian part that varies in z.
+            f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        end
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
-        delta_f = similar(f)
+        delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
-        delta_f .= f_amplitude .*
-                   reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
-                   reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
-                   f
+        begin_serial_region()
+        @serial_region begin
+            delta_f .= f_amplitude .*
+                       reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
+                       reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
+                       f
+        end
 
         pdf_size = length(f)
         p_size = length(ppar)
         total_size = pdf_size + p_size
 
-        jacobian_matrix = zeros(mk_float, total_size, total_size)
-        for row ∈ 1:total_size
-            # Initialise identity matrix
-            jacobian_matrix[row,row] = 1.0
+        jacobian_matrix = allocate_shared_float(total_size, total_size)
+        begin_serial_region()
+        @serial_region begin
+            for row ∈ 1:total_size
+                # Initialise identity matrix
+                jacobian_matrix[row,row] = 1.0
+            end
         end
 
         add_contribution_from_electron_pdf_term_to_Jacobian!(
@@ -830,67 +883,77 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
             return nothing
         end
 
-        original_residual = zeros(mk_float, size(f))
-        perturbed_residual = zeros(mk_float, size(f))
+        original_residual = allocate_shared_float(size(f)...)
+        perturbed_residual = allocate_shared_float(size(f)...)
 
         @testset "δf only" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f.+delta_f, ppar)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[1:pdf_size] .= vec(delta_f)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[1:pdf_size] .= vec(delta_f)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                       zeros(p_size); atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           zeros(p_size); atol=1.0e-15)
 
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
         @testset "δp only" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f, ppar .+ delta_p)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[pdf_size+1:end] .= vec(delta_p)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[pdf_size+1:end] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                       delta_state[pdf_size+1:end]; atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           delta_state[pdf_size+1:end]; atol=1.0e-15)
 
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
         @testset "δf and δp" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f.+delta_f, ppar.+delta_p)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[1:pdf_size] .= vec(delta_f)
-            delta_state[pdf_size+1:end] .= vec(delta_p)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[1:pdf_size] .= vec(delta_f)
+                delta_state[pdf_size+1:end] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                       delta_state[pdf_size+1:end]; atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           delta_state[pdf_size+1:end]; atol=1.0e-15)
 
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
+        cleanup_mk_state!(ascii_io, io_moments, io_dfns)
     end
 
     return nothing
@@ -924,33 +987,42 @@ function test_electron_dissipation_term(test_input; rtol=(3.0e0*epsilon)^2)
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
-        delta_p = similar(ppar)
+        delta_p = allocate_shared_float(size(ppar)...)
         p_amplitude = epsilon * maximum(ppar)
-        @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
-
         f = @view pdf.electron.norm[:,:,:,ir]
-        # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
-        # means f must have a non-Maxwellian part that varies in z.
-        f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        begin_serial_region()
+        @serial_region begin
+            @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
+
+            # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
+            # means f must have a non-Maxwellian part that varies in z.
+            f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        end
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
-        delta_f = similar(f)
+        delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
-        delta_f .= f_amplitude .*
-                   reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
-                   reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
-                   f
+        begin_serial_region()
+        @serial_region begin
+            delta_f .= f_amplitude .*
+                       reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
+                       reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
+                       f
+        end
 
         pdf_size = length(f)
         p_size = length(ppar)
         total_size = pdf_size + p_size
 
-        jacobian_matrix = zeros(mk_float, total_size, total_size)
-        for row ∈ 1:total_size
-            # Initialise identity matrix
-            jacobian_matrix[row,row] = 1.0
+        jacobian_matrix = allocate_shared_float(total_size, total_size)
+        begin_serial_region()
+        @serial_region begin
+            for row ∈ 1:total_size
+                # Initialise identity matrix
+                jacobian_matrix[row,row] = 1.0
+            end
         end
 
         add_electron_dissipation_term_to_Jacobian!(
@@ -1043,67 +1115,77 @@ function test_electron_dissipation_term(test_input; rtol=(3.0e0*epsilon)^2)
             return nothing
         end
 
-        original_residual = zeros(mk_float, size(f))
-        perturbed_residual = zeros(mk_float, size(f))
+        original_residual = allocate_shared_float(size(f)...)
+        perturbed_residual = allocate_shared_float(size(f)...)
 
         @testset "δf only" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f.+delta_f, ppar)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[1:pdf_size] .= vec(delta_f)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[1:pdf_size] .= vec(delta_f)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                       zeros(p_size); atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           zeros(p_size); atol=1.0e-15)
 
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
         @testset "δp only" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f, ppar .+ delta_p)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[pdf_size+1:end] .= vec(delta_p)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[pdf_size+1:end] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                       delta_state[pdf_size+1:end]; atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           delta_state[pdf_size+1:end]; atol=1.0e-15)
 
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
         @testset "δf and δp" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f.+delta_f, ppar.+delta_p)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[1:pdf_size] .= vec(delta_f)
-            delta_state[pdf_size+1:end] .= vec(delta_p)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[1:pdf_size] .= vec(delta_f)
+                delta_state[pdf_size+1:end] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                       delta_state[pdf_size+1:end]; atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           delta_state[pdf_size+1:end]; atol=1.0e-15)
 
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
+        cleanup_mk_state!(ascii_io, io_moments, io_dfns)
     end
 
     return nothing
@@ -1142,33 +1224,42 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
-        delta_p = similar(ppar)
+        delta_p = allocate_shared_float(size(ppar)...)
         p_amplitude = epsilon * maximum(ppar)
-        @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
-
         f = @view pdf.electron.norm[:,:,:,ir]
-        # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
-        # means f must have a non-Maxwellian part that varies in z.
-        f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        begin_serial_region()
+        @serial_region begin
+            @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
+
+            # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
+            # means f must have a non-Maxwellian part that varies in z.
+            f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        end
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
-        delta_f = similar(f)
+        delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
-        delta_f .= f_amplitude .*
-                   reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
-                   reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
-                   f
+        begin_serial_region()
+        @serial_region begin
+            delta_f .= f_amplitude .*
+                       reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
+                       reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
+                       f
+        end
 
         pdf_size = length(f)
         p_size = length(ppar)
         total_size = pdf_size + p_size
 
-        jacobian_matrix = zeros(mk_float, total_size, total_size)
-        for row ∈ 1:total_size
-            # Initialise identity matrix
-            jacobian_matrix[row,row] = 1.0
+        jacobian_matrix = allocate_shared_float(total_size, total_size)
+        begin_serial_region()
+        @serial_region begin
+            for row ∈ 1:total_size
+                # Initialise identity matrix
+                jacobian_matrix[row,row] = 1.0
+            end
         end
 
         add_electron_krook_collisions_to_Jacobian!(
@@ -1262,67 +1353,77 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
             return nothing
         end
 
-        original_residual = zeros(mk_float, size(f))
-        perturbed_residual = zeros(mk_float, size(f))
+        original_residual = allocate_shared_float(size(f)...)
+        perturbed_residual = allocate_shared_float(size(f)...)
 
         @testset "δf only" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f.+delta_f, ppar)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[1:pdf_size] .= vec(delta_f)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[1:pdf_size] .= vec(delta_f)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                       zeros(p_size); atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           zeros(p_size); atol=1.0e-15)
 
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
         @testset "δp only" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f, ppar .+ delta_p)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[pdf_size+1:end] .= vec(delta_p)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[pdf_size+1:end] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                       delta_state[pdf_size+1:end]; atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           delta_state[pdf_size+1:end]; atol=1.0e-15)
 
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
         @testset "δf and δp" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f.+delta_f, ppar.+delta_p)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[1:pdf_size] .= vec(delta_f)
-            delta_state[pdf_size+1:end] .= vec(delta_p)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[1:pdf_size] .= vec(delta_f)
+                delta_state[pdf_size+1:end] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                       delta_state[pdf_size+1:end]; atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           delta_state[pdf_size+1:end]; atol=1.0e-15)
 
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
+        cleanup_mk_state!(ascii_io, io_moments, io_dfns)
     end
 
     return nothing
@@ -1374,33 +1475,42 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
-        delta_p = similar(ppar)
+        delta_p = allocate_shared_float(size(ppar)...)
         p_amplitude = epsilon * maximum(ppar)
-        @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
-
         f = @view pdf.electron.norm[:,:,:,ir]
-        # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
-        # means f must have a non-Maxwellian part that varies in z.
-        f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        begin_serial_region()
+        @serial_region begin
+            @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
+
+            # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
+            # means f must have a non-Maxwellian part that varies in z.
+            f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        end
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
-        delta_f = similar(f)
+        delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
-        delta_f .= f_amplitude .*
-                   reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
-                   reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
-                   f
+        begin_serial_region()
+        @serial_region begin
+            delta_f .= f_amplitude .*
+                       reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
+                       reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
+                       f
+        end
 
         pdf_size = length(f)
         p_size = length(ppar)
         total_size = pdf_size + p_size
 
-        jacobian_matrix = zeros(mk_float, total_size, total_size)
-        for row ∈ 1:total_size
-            # Initialise identity matrix
-            jacobian_matrix[row,row] = 1.0
+        jacobian_matrix = allocate_shared_float(total_size, total_size)
+        begin_serial_region()
+        @serial_region begin
+            for row ∈ 1:total_size
+                # Initialise identity matrix
+                jacobian_matrix[row,row] = 1.0
+            end
         end
 
         add_external_electron_source_to_Jacobian!(
@@ -1494,67 +1604,77 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
             return nothing
         end
 
-        original_residual = zeros(mk_float, size(f))
-        perturbed_residual = zeros(mk_float, size(f))
+        original_residual = allocate_shared_float(size(f)...)
+        perturbed_residual = allocate_shared_float(size(f)...)
 
         @testset "δf only" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f.+delta_f, ppar)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[1:pdf_size] .= vec(delta_f)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[1:pdf_size] .= vec(delta_f)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                       zeros(p_size); atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           zeros(p_size); atol=1.0e-15)
 
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
         @testset "δp only" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f, ppar .+ delta_p)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[pdf_size+1:end] .= vec(delta_p)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[pdf_size+1:end] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                       delta_state[pdf_size+1:end]; atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           delta_state[pdf_size+1:end]; atol=1.0e-15)
 
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
         @testset "δf and δp" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f.+delta_f, ppar.+delta_p)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[1:pdf_size] .= vec(delta_f)
-            delta_state[pdf_size+1:end] .= vec(delta_p)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[1:pdf_size] .= vec(delta_f)
+                delta_state[pdf_size+1:end] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                       delta_state[pdf_size+1:end]; atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           delta_state[pdf_size+1:end]; atol=1.0e-15)
 
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
+        cleanup_mk_state!(ascii_io, io_moments, io_dfns)
     end
 
     return nothing
@@ -1609,33 +1729,42 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(1.5e0*epsil
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
-        delta_p = similar(ppar)
+        delta_p = allocate_shared_float(size(ppar)...)
         p_amplitude = epsilon * maximum(ppar)
-        @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
-
         f = @view pdf.electron.norm[:,:,:,ir]
-        # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
-        # means f must have a non-Maxwellian part that varies in z.
-        f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        begin_serial_region()
+        @serial_region begin
+            @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
+
+            # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
+            # means f must have a non-Maxwellian part that varies in z.
+            f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        end
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
-        delta_f = similar(f)
+        delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
-        delta_f .= f_amplitude .*
-                   reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
-                   reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
-                   f
+        begin_serial_region()
+        @serial_region begin
+            delta_f .= f_amplitude .*
+                       reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
+                       reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
+                       f
+        end
 
         pdf_size = length(f)
         p_size = length(ppar)
         total_size = pdf_size + p_size
 
-        jacobian_matrix = zeros(mk_float, total_size, total_size)
-        for row ∈ 1:total_size
-            # Initialise identity matrix
-            jacobian_matrix[row,row] = 1.0
+        jacobian_matrix = allocate_shared_float(total_size, total_size)
+        begin_serial_region()
+        @serial_region begin
+            for row ∈ 1:total_size
+                # Initialise identity matrix
+                jacobian_matrix[row,row] = 1.0
+            end
         end
 
         add_electron_implicit_constraint_forcing_to_Jacobian!(
@@ -1729,69 +1858,79 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(1.5e0*epsil
             return nothing
         end
 
-        original_residual = zeros(mk_float, size(f))
-        perturbed_residual = zeros(mk_float, size(f))
+        original_residual = allocate_shared_float(size(f)...)
+        perturbed_residual = allocate_shared_float(size(f)...)
 
         @testset "δf only" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f.+delta_f, ppar)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[1:pdf_size] .= vec(delta_f)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[1:pdf_size] .= vec(delta_f)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                       zeros(p_size); atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           zeros(p_size); atol=1.0e-15)
 
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
         @testset "δp only" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f, ppar .+ delta_p)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[pdf_size+1:end] .= vec(delta_p)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[pdf_size+1:end] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                       delta_state[pdf_size+1:end]; atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           delta_state[pdf_size+1:end]; atol=1.0e-15)
 
-            # No norm factor, because both perturbed residuals should be zero here, as
-            # delta_p does not affect this term, and `f` (with no `delta_f`) obeys the
-            # constraints exactly, so this term vanishes.
-            @test elementwise_isapprox(perturbed_residual,
-                                       reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n);
-                                       rtol=0.0, atol=1.0e-15)
+                # No norm factor, because both perturbed residuals should be zero here, as
+                # delta_p does not affect this term, and `f` (with no `delta_f`) obeys the
+                # constraints exactly, so this term vanishes.
+                @test elementwise_isapprox(perturbed_residual,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n);
+                                           rtol=0.0, atol=1.0e-15)
+            end
         end
 
         @testset "δf and δp" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f.+delta_f, ppar.+delta_p)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[1:pdf_size] .= vec(delta_f)
-            delta_state[pdf_size+1:end] .= vec(delta_p)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[1:pdf_size] .= vec(delta_f)
+                delta_state[pdf_size+1:end] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                       delta_state[pdf_size+1:end]; atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           delta_state[pdf_size+1:end]; atol=1.0e-15)
 
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
+        cleanup_mk_state!(ascii_io, io_moments, io_dfns)
     end
 
     return nothing
@@ -1844,33 +1983,42 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
-        delta_p = similar(ppar)
+        delta_p = allocate_shared_float(size(ppar)...)
         p_amplitude = epsilon * maximum(ppar)
-        @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
-
         f = @view pdf.electron.norm[:,:,:,ir]
-        # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
-        # means f must have a non-Maxwellian part that varies in z.
-        f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        begin_serial_region()
+        @serial_region begin
+            @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
+
+            # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
+            # means f must have a non-Maxwellian part that varies in z.
+            f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        end
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
-        delta_f = similar(f)
+        delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
-        # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
-        # low-order moments vanish exactly.
-        delta_f .= f_amplitude .*
-                   reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
-                   reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
-                   f
+        begin_serial_region()
+        @serial_region begin
+            # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
+            # low-order moments vanish exactly.
+            delta_f .= f_amplitude .*
+                       reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
+                       reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
+                       f
+        end
 
         pdf_size = length(f)
         p_size = length(ppar)
         total_size = pdf_size + p_size
 
-        jacobian_matrix = zeros(mk_float, total_size, total_size)
-        for row ∈ 1:total_size
-            # Initialise identity matrix
-            jacobian_matrix[row,row] = 1.0
+        jacobian_matrix = allocate_shared_float(total_size, total_size)
+        begin_serial_region()
+        @serial_region begin
+            for row ∈ 1:total_size
+                # Initialise identity matrix
+                jacobian_matrix[row,row] = 1.0
+            end
         end
 
         add_electron_energy_equation_to_Jacobian!(
@@ -1921,67 +2069,77 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
             end
         end
 
-        original_residual = zeros(mk_float, size(ppar))
-        perturbed_residual = zeros(mk_float, size(ppar))
+        original_residual = allocate_shared_float(size(ppar)...)
+        perturbed_residual = allocate_shared_float(size(ppar)...)
 
         @testset "δf only" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f.+delta_f, ppar)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[1:pdf_size] .= vec(delta_f)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[pdf_size+1:end]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[1:pdf_size] .= vec(delta_f)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[pdf_size+1:end]
 
-            # Check f did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[1:pdf_size],
-                                       delta_state[1:pdf_size]; atol=1.0e-15)
+                # Check f did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[1:pdf_size],
+                                           delta_state[1:pdf_size]; atol=1.0e-15)
 
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       perturbed_with_Jacobian ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           perturbed_with_Jacobian ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
         @testset "δp only" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f, ppar .+ delta_p)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[pdf_size+1:end] .= vec(delta_p)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[pdf_size+1:end]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[pdf_size+1:end] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[pdf_size+1:end]
 
-            # Check f did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[1:pdf_size],
-                                       zeros(pdf_size); atol=1.0e-15)
+                # Check f did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[1:pdf_size],
+                                           zeros(pdf_size); atol=1.0e-15)
 
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       perturbed_with_Jacobian ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           perturbed_with_Jacobian ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
         @testset "δf and δp" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f.+delta_f, ppar.+delta_p)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[1:pdf_size] .= vec(delta_f)
-            delta_state[pdf_size+1:end] .= vec(delta_p)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[pdf_size+1:end]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[1:pdf_size] .= vec(delta_f)
+                delta_state[pdf_size+1:end] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[pdf_size+1:end]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[1:pdf_size],
-                                       delta_state[1:pdf_size]; atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[1:pdf_size],
+                                           delta_state[1:pdf_size]; atol=1.0e-15)
 
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       perturbed_with_Jacobian ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           perturbed_with_Jacobian ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
+        cleanup_mk_state!(ascii_io, io_moments, io_dfns)
     end
 
     return nothing
@@ -2015,33 +2173,42 @@ function test_ion_dt_forcing_of_electron_ppar(test_input; rtol=(1.5e1*epsilon)^2
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
-        delta_p = similar(ppar)
+        delta_p = allocate_shared_float(size(ppar)...)
         p_amplitude = epsilon * maximum(ppar)
-        @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
-
         f = @view pdf.electron.norm[:,:,:,ir]
-        # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
-        # means f must have a non-Maxwellian part that varies in z.
-        f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        begin_serial_region()
+        @serial_region begin
+            @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
+
+            # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
+            # means f must have a non-Maxwellian part that varies in z.
+            f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        end
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
-        delta_f = similar(f)
+        delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
-        delta_f .= f_amplitude .*
-                   reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
-                   reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
-                   f
+        begin_serial_region()
+        @serial_region begin
+            delta_f .= f_amplitude .*
+                       reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
+                       reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
+                       f
+        end
 
         pdf_size = length(f)
         p_size = length(ppar)
         total_size = pdf_size + p_size
 
-        jacobian_matrix = zeros(mk_float, total_size, total_size)
-        for row ∈ 1:total_size
-            # Initialise identity matrix
-            jacobian_matrix[row,row] = 1.0
+        jacobian_matrix = allocate_shared_float(total_size, total_size)
+        begin_serial_region()
+        @serial_region begin
+            for row ∈ 1:total_size
+                # Initialise identity matrix
+                jacobian_matrix[row,row] = 1.0
+            end
         end
 
         add_ion_dt_forcing_of_electron_ppar_to_Jacobian!(
@@ -2094,70 +2261,80 @@ function test_ion_dt_forcing_of_electron_ppar(test_input; rtol=(1.5e1*epsilon)^2
             end
         end
 
-        original_residual = zeros(mk_float, size(ppar))
-        perturbed_residual = zeros(mk_float, size(ppar))
+        original_residual = allocate_shared_float(size(ppar)...)
+        perturbed_residual = allocate_shared_float(size(ppar)...)
 
         @testset "δf only" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f.+delta_f, ppar)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[1:pdf_size] .= vec(delta_f)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[pdf_size+1:end]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[1:pdf_size] .= vec(delta_f)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[pdf_size+1:end]
 
-            # Check f did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[1:pdf_size],
-                                       delta_state[1:pdf_size]; atol=1.0e-15)
+                # Check f did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[1:pdf_size],
+                                           delta_state[1:pdf_size]; atol=1.0e-15)
 
-            # No norm factor, because both perturbed residuals should be zero here, as
-            # delta_f does not affect this term, and `ppar` is used as
-            # `ppar_previous_ion_step` in this test, so the residuals are exactly zero if
-            # there is no delta_p.
-            @test elementwise_isapprox(perturbed_residual,
-                                       perturbed_with_Jacobian;
-                                       rtol=0.0, atol=1.0e-15)
+                # No norm factor, because both perturbed residuals should be zero here, as
+                # delta_f does not affect this term, and `ppar` is used as
+                # `ppar_previous_ion_step` in this test, so the residuals are exactly zero if
+                # there is no delta_p.
+                @test elementwise_isapprox(perturbed_residual,
+                                           perturbed_with_Jacobian;
+                                           rtol=0.0, atol=1.0e-15)
+            end
         end
 
         @testset "δp only" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f, ppar .+ delta_p)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[pdf_size+1:end] .= vec(delta_p)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[pdf_size+1:end]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[pdf_size+1:end] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[pdf_size+1:end]
 
-            # Check f did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[1:pdf_size],
-                                       zeros(pdf_size); atol=1.0e-15)
+                # Check f did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[1:pdf_size],
+                                           zeros(pdf_size); atol=1.0e-15)
 
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       perturbed_with_Jacobian ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           perturbed_with_Jacobian ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
         @testset "δf and δp" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f.+delta_f, ppar.+delta_p)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[1:pdf_size] .= vec(delta_f)
-            delta_state[pdf_size+1:end] .= vec(delta_p)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[pdf_size+1:end]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[1:pdf_size] .= vec(delta_f)
+                delta_state[pdf_size+1:end] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[pdf_size+1:end]
 
-            # Check ppar did not get perturbed by the Jacobian
-            @test elementwise_isapprox(residual_update_with_Jacobian[1:pdf_size],
-                                       delta_state[1:pdf_size]; atol=1.0e-15)
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[1:pdf_size],
+                                           delta_state[1:pdf_size]; atol=1.0e-15)
 
-            norm_factor = generate_norm_factor(perturbed_residual)
-            @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                       perturbed_with_Jacobian ./ norm_factor;
-                                       rtol=0.0, atol=rtol)
+                norm_factor = generate_norm_factor(perturbed_residual)
+                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+                                           perturbed_with_Jacobian ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
+        cleanup_mk_state!(ascii_io, io_moments, io_dfns)
     end
 
     return nothing
@@ -2188,33 +2365,42 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         z_advect = advection_structs.z_advect
         vpa_advect = advection_structs.vpa_advect
 
-        delta_p = similar(ppar)
+        delta_p = allocate_shared_float(size(ppar)...)
         p_amplitude = epsilon * maximum(ppar)
-        @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
-
         f = @view pdf.electron.norm[:,:,:,ir]
-        # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
-        # means f must have a non-Maxwellian part that varies in z.
-        f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        begin_serial_region()
+        @serial_region begin
+            @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
+
+            # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
+            # means f must have a non-Maxwellian part that varies in z.
+            f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        end
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
-        delta_f = similar(f)
+        delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
-        delta_f .= f_amplitude .*
-                   reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
-                   reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
-                   f
+        begin_serial_region()
+        @serial_region begin
+            delta_f .= f_amplitude .*
+                       reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
+                       reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
+                       f
+        end
 
         pdf_size = length(f)
         p_size = length(ppar)
         total_size = pdf_size + p_size
 
-        jacobian_matrix = zeros(mk_float, total_size, total_size)
-        for row ∈ 1:total_size
-            # Initialise identity matrix
-            jacobian_matrix[row,row] = 1.0
+        jacobian_matrix = allocate_shared_float(total_size, total_size)
+        begin_serial_region()
+        @serial_region begin
+            for row ∈ 1:total_size
+                # Initialise identity matrix
+                jacobian_matrix[row,row] = 1.0
+            end
         end
 
         fill_electron_kinetic_equation_Jacobian!(
@@ -2320,84 +2506,88 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             return nothing
         end
 
-        original_residual_f = zeros(mk_float, size(f))
-        original_residual_p = zeros(mk_float, size(ppar))
-        perturbed_residual_f = zeros(mk_float, size(f))
-        perturbed_residual_p = zeros(mk_float, size(ppar))
+        original_residual_f = allocate_shared_float(size(f)...)
+        original_residual_p = allocate_shared_float(size(ppar)...)
+        perturbed_residual_f = allocate_shared_float(size(f)...)
+        perturbed_residual_p = allocate_shared_float(size(ppar)...)
 
         @testset "δf only" begin
             residual_func!(original_residual_f, original_residual_p, f, ppar)
             residual_func!(perturbed_residual_f, perturbed_residual_p, f.+delta_f, ppar)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[1:pdf_size] .= vec(delta_f)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian_f = vec(original_residual_f) .+ residual_update_with_Jacobian[1:pdf_size]
-            perturbed_with_Jacobian_p = vec(original_residual_p) .+ residual_update_with_Jacobian[pdf_size+1:end]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[1:pdf_size] .= vec(delta_f)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian_f = vec(original_residual_f) .+ residual_update_with_Jacobian[1:pdf_size]
+                perturbed_with_Jacobian_p = vec(original_residual_p) .+ residual_update_with_Jacobian[pdf_size+1:end]
 
-            norm_factor_f = generate_norm_factor(perturbed_residual_f)
-            @test elementwise_isapprox(perturbed_residual_f ./ norm_factor_f,
-                                       reshape(perturbed_with_Jacobian_f, vpa.n, vperp.n, z.n) ./ norm_factor_f;
-                                       rtol=0.0, atol=rtol)
-            norm_factor_p = generate_norm_factor(perturbed_residual_p)
-            @test elementwise_isapprox(perturbed_residual_p ./ norm_factor_p,
-                                       perturbed_with_Jacobian_p ./ norm_factor_p;
-                                       rtol=0.0, atol=rtol)
+                norm_factor_f = generate_norm_factor(perturbed_residual_f)
+                @test elementwise_isapprox(perturbed_residual_f ./ norm_factor_f,
+                                           reshape(perturbed_with_Jacobian_f, vpa.n, vperp.n, z.n) ./ norm_factor_f;
+                                           rtol=0.0, atol=rtol)
+                norm_factor_p = generate_norm_factor(perturbed_residual_p)
+                @test elementwise_isapprox(perturbed_residual_p ./ norm_factor_p,
+                                           perturbed_with_Jacobian_p ./ norm_factor_p;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
         @testset "δp only" begin
             residual_func!(original_residual_f, original_residual_p, f, ppar)
             residual_func!(perturbed_residual_f, perturbed_residual_p, f, ppar.+delta_p)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[pdf_size+1:end] .= vec(delta_p)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian_f = vec(original_residual_f) .+ residual_update_with_Jacobian[1:pdf_size]
-            perturbed_with_Jacobian_p = vec(original_residual_p) .+ residual_update_with_Jacobian[pdf_size+1:end]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[pdf_size+1:end] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian_f = vec(original_residual_f) .+ residual_update_with_Jacobian[1:pdf_size]
+                perturbed_with_Jacobian_p = vec(original_residual_p) .+ residual_update_with_Jacobian[pdf_size+1:end]
 
-            norm_factor_f = generate_norm_factor(perturbed_residual_f)
-            @test elementwise_isapprox(perturbed_residual_f ./ norm_factor_f,
-                                       reshape(perturbed_with_Jacobian_f, vpa.n, vperp.n, z.n) ./ norm_factor_f;
-                                       rtol=0.0, atol=rtol)
-            norm_factor_p = generate_norm_factor(perturbed_residual_p)
-            @test elementwise_isapprox(perturbed_residual_p ./ norm_factor_p,
-                                       perturbed_with_Jacobian_p ./ norm_factor_p;
-                                       rtol=0.0, atol=rtol)
+                norm_factor_f = generate_norm_factor(perturbed_residual_f)
+                @test elementwise_isapprox(perturbed_residual_f ./ norm_factor_f,
+                                           reshape(perturbed_with_Jacobian_f, vpa.n, vperp.n, z.n) ./ norm_factor_f;
+                                           rtol=0.0, atol=rtol)
+                norm_factor_p = generate_norm_factor(perturbed_residual_p)
+                @test elementwise_isapprox(perturbed_residual_p ./ norm_factor_p,
+                                           perturbed_with_Jacobian_p ./ norm_factor_p;
+                                           rtol=0.0, atol=rtol)
+            end
         end
 
         @testset "δf and δp" begin
             residual_func!(original_residual_f, original_residual_p, f, ppar)
             residual_func!(perturbed_residual_f, perturbed_residual_p, f.+delta_f, ppar.+delta_p)
 
-            delta_state = zeros(mk_float, total_size)
-            delta_state[1:pdf_size] .= vec(delta_f)
-            delta_state[pdf_size+1:end] .= vec(delta_p)
-            residual_update_with_Jacobian = jacobian_matrix * delta_state
-            perturbed_with_Jacobian_f = vec(original_residual_f) .+ residual_update_with_Jacobian[1:pdf_size]
-            perturbed_with_Jacobian_p = vec(original_residual_p) .+ residual_update_with_Jacobian[pdf_size+1:end]
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[1:pdf_size] .= vec(delta_f)
+                delta_state[pdf_size+1:end] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian_f = vec(original_residual_f) .+ residual_update_with_Jacobian[1:pdf_size]
+                perturbed_with_Jacobian_p = vec(original_residual_p) .+ residual_update_with_Jacobian[pdf_size+1:end]
 
-            norm_factor_f = generate_norm_factor(perturbed_residual_f)
-            @test elementwise_isapprox(perturbed_residual_f ./ norm_factor_f,
-                                       reshape(perturbed_with_Jacobian_f, vpa.n, vperp.n, z.n) ./ norm_factor_f;
-                                       rtol=0.0, atol=rtol)
-            norm_factor_p = generate_norm_factor(perturbed_residual_p)
-            @test elementwise_isapprox(perturbed_residual_p ./ norm_factor_p,
-                                       perturbed_with_Jacobian_p ./ norm_factor_p;
-                                       rtol=0.0, atol=rtol)
+                norm_factor_f = generate_norm_factor(perturbed_residual_f)
+                @test elementwise_isapprox(perturbed_residual_f ./ norm_factor_f,
+                                           reshape(perturbed_with_Jacobian_f, vpa.n, vperp.n, z.n) ./ norm_factor_f;
+                                           rtol=0.0, atol=rtol)
+                norm_factor_p = generate_norm_factor(perturbed_residual_p)
+                @test elementwise_isapprox(perturbed_residual_p ./ norm_factor_p,
+                                           perturbed_with_Jacobian_p ./ norm_factor_p;
+                                           rtol=0.0, atol=rtol)
+            end
         end
+
+        cleanup_mk_state!(ascii_io, io_moments, io_dfns)
     end
 
     return nothing
 end
 
 function runtests()
-    # Only run this test in serial, for simplicity. We are testing correctness of the
-    # matrix construction here, not performance or parallelisation, etc.
-    if global_size[] > 1
-        @testset_skip "Jacobian matrix tests are only implemented for serial runs." "Jacobaian matrix"
-        return nothing
-    end
-
     # Create a temporary directory for test output
     test_output_directory = get_MPI_tempdir()
     test_input["base_directory"] = test_output_directory
