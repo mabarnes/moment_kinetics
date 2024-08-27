@@ -7765,17 +7765,39 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                         plot_1d(time, linear_iterations, label=prefix * " " * p * " L per NL", ax=ax)
                     end
                 end
+            end
+
+            if has_nl_solver
+                put_legend_right(nl_solvers_fig, ax)
+            end
+
+
+            # Plot electron solver diagnostics
+            electron_solver_fig, ax = get_1d_ax(; xlabel="time", ylabel="electron steps per ion step")
+
+            has_electron_solve = false
+            for ri ∈ run_info
+                if length(run_info) == 1
+                    prefix = ""
+                else
+                    prefix = ri.run_name * " "
+                end
+                if it !== nothing
+                    time = ri.time[it]
+                else
+                    time = ri.time
+                end
 
                 if ri.composition.electron_physics ∈ (kinetic_electrons,
                                                       kinetic_electrons_with_temperature_equation)
-                    has_nl_solver = true
+                    has_electron_solve = true
                     electron_steps_per_ion_step = get_variable(ri, "electron_steps_per_ion_step")
                     plot_1d(time, electron_steps_per_ion_step, label=prefix * " electron steps per solve", ax=ax)
                 end
             end
 
-            if has_nl_solver
-                put_legend_right(nl_solvers_fig, ax)
+            if has_electron_solve
+                put_legend_right(electron_solver_fig, ax)
             end
 
 
@@ -7792,6 +7814,11 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                 if has_nl_solver
                     outfile = plot_prefix * "nonlinear_solver_iterations.pdf"
                     save(outfile, nl_solvers_fig)
+                end
+
+                if has_electron_solve
+                    outfile = plot_prefix * "electron_steps.pdf"
+                    save(outfile, electron_solver_fig)
                 end
             else
                 display(steps_fig)
