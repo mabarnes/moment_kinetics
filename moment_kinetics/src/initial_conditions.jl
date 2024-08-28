@@ -787,7 +787,8 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                          nl_solver_params.electron_advance,
                                          max_electron_pdf_iterations,
                                          max_electron_sim_time;
-                                         io_electron=io_initial_electron)
+                                         io_electron=io_initial_electron,
+                                         evolve_ppar=true, ion_dt=t_params.dt[])
             end
             if success != ""
                 error("!!!max number of iterations for electron pdf update exceeded!!!\n"
