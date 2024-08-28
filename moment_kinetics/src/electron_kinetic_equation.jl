@@ -2954,12 +2954,13 @@ function fill_electron_kinetic_equation_Jacobian!(jacobian_matrix, f, ppar, mome
     add_electron_implicit_constraint_forcing_to_Jacobian!(
         jacobian_matrix, f, z_speed, z, vperp, vpa, t_params.constraint_forcing_rate, dt,
         ir)
-    if evolve_ppar
-        add_electron_energy_equation_to_Jacobian!(
-            jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dupar_dz,
-            dppar_dz, dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
-            num_diss_params, dt, ir; ppar_offset=pdf_size)
-    end
+    # Always add the electron energy equation term, even if evolve_ppar=false, so that the
+    # Jacobian matrix always has the same shape, meaning that we can always reuse the LU
+    # factorization struct.
+    add_electron_energy_equation_to_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dupar_dz,
+        dppar_dz, dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
+        num_diss_params, dt, ir; ppar_offset=pdf_size)
     if ion_dt !== nothing
         add_ion_dt_forcing_of_electron_ppar_to_Jacobian!(
             jacobian_matrix, z, dt, ion_dt, ir; ppar_offset=pdf_size)
