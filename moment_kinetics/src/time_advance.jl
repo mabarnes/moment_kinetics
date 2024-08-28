@@ -2408,9 +2408,7 @@ function apply_all_bcs_constraints_update_moments!(
         # to the beginning of the ion/neutral timestep, so the electron solution
         # calculated here would be discarded - we might as well skip calculating it in
         # that case.
-        if update_electrons &&
-                !(t_params.implicit_electron_advance || t_params.implicit_electron_ppar) &&
-                success == ""
+        if update_electrons && !(t_params.implicit_electron_advance) && success == ""
             kinetic_electron_success = update_electron_pdf!(
                scratch_electron, pdf.electron.norm, moments, fields.phi, r, z, vperp, vpa,
                z_spectral, vperp_spectral, vpa_spectral, electron_z_advect,
