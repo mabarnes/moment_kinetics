@@ -142,7 +142,7 @@ function setup_nonlinear_solve(input_dict, coords, outer_coords=(); default_rtol
                           )
     elseif preconditioner_type == "electron_lu"
         pdf_plus_ppar_size = total_size_coords + coords.z.n
-        preconditioners = fill((lu(sparse(1.0*I, pdf_plus_ppar_size, pdf_plus_ppar_size)),
+        preconditioners = fill((lu(sparse(1.0*I, 1, 1)),
                                 allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size),
                                 allocate_shared_float(pdf_plus_ppar_size),
                                 allocate_shared_float(pdf_plus_ppar_size),
