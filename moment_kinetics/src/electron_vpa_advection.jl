@@ -128,7 +128,9 @@ function add_electron_vpa_advection_to_Jacobian!(jacobian_matrix, f, dens, upar,
               * "need differentiation matrices.")
     end
 
-    z_deriv_matrix = z_spectral.D_matrix
+    z_deriv_matrix = z_spectral.D_matrix_csr
+    vpa_Dmat = vpa_spectral.lobatto.Dmat
+    vpa_element_scale = vpa.element_scale
 
     begin_z_vperp_vpa_region()
     @loop_z_vperp_vpa iz ivperp ivpa begin
@@ -153,10 +155,10 @@ function add_electron_vpa_advection_to_Jacobian!(jacobian_matrix, f, dens, upar,
         #    + w_∥*1/2*source_density_amplitude/n) * dg/dw_∥
         if ielement_vpa == 1 && igrid_vpa == 1
             jacobian_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa] .+=
-                dt * vpa_speed * vpa_spectral.lobatto.Dmat[1,:] ./ vpa.element_scale[ielement_vpa]
+                dt * vpa_speed * vpa_Dmat[1,:] ./ vpa_element_scale[ielement_vpa]
         elseif ielement_vpa == vpa.nelement_local && igrid_vpa == vpa.ngrid
             jacobian_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa] .+=
-                dt * vpa_speed * vpa_spectral.lobatto.Dmat[end,:] ./ vpa.element_scale[ielement_vpa]
+                dt * vpa_speed * vpa_Dmat[end,:] ./ vpa_element_scale[ielement_vpa]
         elseif igrid_vpa == vpa.ngrid
             # Note igrid_vpa is only ever 1 when ielement_vpa==1, because
             # of the way element boundaries are counted.
@@ -164,19 +166,19 @@ function add_electron_vpa_advection_to_Jacobian!(jacobian_matrix, f, dens, upar,
             icolumn_max_vpa_next = vpa.imax[ielement_vpa+1]
             if vpa_speed < 0.0
                 jacobian_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa_next:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa_next] .+=
-                    dt * vpa_speed * vpa_spectral.lobatto.Dmat[1,:] ./ vpa.element_scale[ielement_vpa+1]
+                    dt * vpa_speed * vpa_Dmat[1,:] ./ vpa_element_scale[ielement_vpa+1]
             elseif vpa_speed > 0.0
                 jacobian_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa] .+=
-                    dt * vpa_speed * vpa_spectral.lobatto.Dmat[end,:] ./ vpa.element_scale[ielement_vpa]
+                    dt * vpa_speed * vpa_Dmat[end,:] ./ vpa_element_scale[ielement_vpa]
             else
                 jacobian_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa] .+=
-                    dt * vpa_speed * 0.5 * vpa_spectral.lobatto.Dmat[end,:] ./ vpa.element_scale[ielement_vpa]
+                    dt * vpa_speed * 0.5 * vpa_Dmat[end,:] ./ vpa_element_scale[ielement_vpa]
                 jacobian_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa_next:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa_next] .+=
-                    dt * vpa_speed * 0.5 * vpa_spectral.lobatto.Dmat[1,:] ./ vpa.element_scale[ielement_vpa+1]
+                    dt * vpa_speed * 0.5 * vpa_Dmat[1,:] ./ vpa_element_scale[ielement_vpa+1]
             end
         else
             jacobian_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa] .+=
-                dt * vpa_speed * vpa_spectral.lobatto.Dmat[igrid_vpa,:] ./ vpa.element_scale[ielement_vpa]
+                dt * vpa_speed * vpa_Dmat[igrid_vpa,:] ./ vpa_element_scale[ielement_vpa]
         end
         # q = 2*p*vth*∫dw_∥ w_∥^3 g
         #   = 2*p^(3/2)*sqrt(2/n/me)*∫dw_∥ w_∥^3 g
@@ -202,18 +204,22 @@ function add_electron_vpa_advection_to_Jacobian!(jacobian_matrix, f, dens, upar,
                                   - 0.5*sqrt(2.0*ppar[iz]/me)/dens[iz]^1.5*ddens_dz[iz]) *
                                vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
         end
-        for icolz ∈ 1:z.n, icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+        z_deriv_row_startind = z_deriv_matrix.rowptr[iz]
+        z_deriv_row_endind = z_deriv_matrix.rowptr[iz+1] - 1
+        z_deriv_colinds = @view z_deriv_matrix.colval[z_deriv_row_startind:z_deriv_row_endind]
+        z_deriv_row_nonzeros = @view z_deriv_matrix.nzval[z_deriv_row_startind:z_deriv_row_endind]
+        for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros), icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
             col = (icolz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
             jacobian_matrix[row,col] += dt * dpdf_dvpa[ivpa,ivperp,iz] *
-                vpa.grid[ivpa] * vth[iz] * vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_matrix[iz,icolz]
+                vpa.grid[ivpa] * vth[iz] * vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_entry
         end
         jacobian_matrix[row,ppar_offset+iz] += dt * dpdf_dvpa[ivpa,ivperp,iz] * vpa.grid[ivpa] *
             (-0.75*sqrt(2.0/dens[iz]/me)/ppar[iz]^1.5*third_moment[iz]*dppar_dz[iz]
              - 0.25*sqrt(2.0/me/ppar[iz])/dens[iz]^1.5*third_moment[iz]*ddens_dz[iz]
              + 0.5*sqrt(2.0/dens[iz]/me/ppar[iz])*dthird_moment_dz[iz])
-        for icolz ∈ 1:z.n
+        for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros)
             col = ppar_offset + icolz
-            jacobian_matrix[row,col] += dt * dpdf_dvpa[ivpa,ivperp,iz] * vpa.grid[ivpa] * 1.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*third_moment[iz] * z_deriv_matrix[iz,icolz]
+            jacobian_matrix[row,col] += dt * dpdf_dvpa[ivpa,ivperp,iz] * vpa.grid[ivpa] * 1.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*third_moment[iz] * z_deriv_entry
         end
         #   (1/2*vth/p*dp/dz - w_∥^2*dvth/dz
         #    + source_density_amplitude*u/n/vth
@@ -250,12 +256,12 @@ function add_electron_vpa_advection_to_Jacobian!(jacobian_matrix, f, dens, upar,
                 + vpa.grid[ivpa]*0.5*(source_pressure_amplitude[iz] + 2.0*upar[iz]*source_momentum_amplitude[iz])/ppar[iz]^2
                ) * dpdf_dvpa[ivpa,ivperp,iz]
         end
-        for icolz ∈ 1:z.n
+        for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros)
             col = ppar_offset + icolz
             jacobian_matrix[row,col] += dt * (
                 0.5*sqrt(2.0/ppar[iz]/dens[iz]/me)
                 - vpa.grid[ivpa]^2/sqrt(2.0*ppar[iz]*dens[iz]*me)
-               ) * dpdf_dvpa[ivpa,ivperp,iz] * z_deriv_matrix[iz,icolz]
+               ) * dpdf_dvpa[ivpa,ivperp,iz] * z_deriv_entry
         end
     end
 

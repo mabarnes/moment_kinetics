@@ -25,6 +25,7 @@ using FastGaussQuadrature
 using LegendrePolynomials: Pl, dnPl
 using LinearAlgebra: mul!, lu, LU
 using SparseArrays: sparse, AbstractSparseArray
+using SparseMatricesCSR
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 import ..calculus: elementwise_derivative!, mass_matrix_solve!
@@ -82,7 +83,7 @@ struct gausslegendre_base_info
     Y31::Array{mk_float,3}
 end
 
-struct gausslegendre_info{TSparse, TLU} <: weak_discretization_info
+struct gausslegendre_info{TSparse, TSparseCSR, TLU} <: weak_discretization_info
     lobatto::gausslegendre_base_info
     radau::gausslegendre_base_info
     # global (1D) mass matrix
@@ -96,9 +97,11 @@ struct gausslegendre_info{TSparse, TLU} <: weak_discretization_info
     L_matrix::TSparse
     # global (1D) strong first derivative matrix
     D_matrix::TSparse
+    # global (1D) strong first derivative matrix in Compressed Sparse Row (CSR) format
+    D_matrix_csr::TSparseCSR
     # global (1D) weak second derivative matrix, with inverse mass matrix included (so
     # matrix is dense)
-    dense_second_deriv_matrix::AbstractArray{mk_float,2}
+    dense_second_deriv_matrix::Array{mk_float,2}
     # global (1D) LU object
     mass_matrix_lu::TLU
     # dummy matrix for local operators
@@ -128,7 +131,7 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true, 
     mass_matrix_lu = lu(sparse(mass_matrix))
     Qmat = allocate_float(coord.ngrid,coord.ngrid)
 
-    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),sparse(K_matrix),sparse(L_matrix),sparse(D_matrix),dense_second_deriv_matrix,mass_matrix_lu,Qmat)
+    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),sparse(K_matrix),sparse(L_matrix),sparse(D_matrix),convert(SparseMatrixCSR{1,mk_float,mk_int},D_matrix),dense_second_deriv_matrix,mass_matrix_lu,Qmat)
 end
 
 function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_dim=true)

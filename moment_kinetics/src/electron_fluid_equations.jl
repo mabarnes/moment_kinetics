@@ -377,7 +377,7 @@ function add_electron_energy_equation_to_Jacobian!(jacobian_matrix, f, dens, upa
     end
 
     me = composition.me_over_mi
-    z_deriv_matrix = z_spectral.D_matrix
+    z_deriv_matrix = z_spectral.D_matrix_csr
     v_size = vperp.n * vpa.n
 
     begin_z_region()
@@ -403,10 +403,14 @@ function add_electron_energy_equation_to_Jacobian!(jacobian_matrix, f, dens, upa
         #       + sqrt(2) * (-p^(3/2) / n^(3/2) / me^(1/2) * dn/dz + 3.0 * p^(1/2) / n^(1/2) / me^(1/2) * dp/dz)[irowz] * vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * delta[irowz,icolz]
 
         # upar*dppar_dz
-        for icolz ∈ 1:z.n
+        z_deriv_row_startind = z_deriv_matrix.rowptr[iz]
+        z_deriv_row_endind = z_deriv_matrix.rowptr[iz+1] - 1
+        z_deriv_colinds = @view z_deriv_matrix.colval[z_deriv_row_startind:z_deriv_row_endind]
+        z_deriv_row_nonzeros = @view z_deriv_matrix.nzval[z_deriv_row_startind:z_deriv_row_endind]
+        for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros)
             col = ppar_offset + icolz
             jacobian_matrix[row,col] +=
-                dt * upar[iz] * z_deriv_matrix[iz,icolz]
+                dt * upar[iz] * z_deriv_entry
         end
 
         # 3*ppar*dupar_dz
@@ -417,9 +421,9 @@ function add_electron_energy_equation_to_Jacobian!(jacobian_matrix, f, dens, upa
             dt * (3.0 * sqrt(2.0 * ppar[iz] / dens[iz] / me) * dthird_moment_dz[iz]
                   - 1.5 * sqrt(2.0 * ppar[iz] / me) / dens[iz]^1.5 * third_moment[iz] * ddens_dz[iz]
                   + 1.5 * sqrt(2.0 / ppar[iz] / dens[iz] / me) * third_moment[iz] * dppar_dz[iz])
-        for icolz ∈ 1:z.n
+        for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros)
             col = ppar_offset + icolz
-            jacobian_matrix[row,col] += dt * 3.0 * sqrt(2.0 * ppar[iz] / dens[iz] / me) * third_moment[iz] * z_deriv_matrix[iz,icolz]
+            jacobian_matrix[row,col] += dt * 3.0 * sqrt(2.0 * ppar[iz] / dens[iz] / me) * third_moment[iz] * z_deriv_entry
         end
         for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
             col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
@@ -427,10 +431,10 @@ function add_electron_energy_equation_to_Jacobian!(jacobian_matrix, f, dens, upa
                                               + 3.0*sqrt(2.0*ppar[iz]/dens[iz]/me)*dppar_dz[iz]) *
                                              vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
         end
-        for icolz ∈ 1:z.n, icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+        for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros), icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
             col = (icolz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
             jacobian_matrix[row,col] += dt * 2.0*ppar[iz]^1.5*sqrt(2.0/dens[iz]/me) *
-                                             vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_matrix[iz,icolz]
+                                             vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_entry
         end
     end
 

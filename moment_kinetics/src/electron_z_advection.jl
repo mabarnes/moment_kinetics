@@ -109,7 +109,8 @@ function add_electron_z_advection_to_Jacobian!(jacobian_matrix, f, dens, upar, p
               * "add_electron_z_advection_to_Jacobian!() preconditioner because we need "
               * "differentiation matrices.")
     end
-    z_deriv_matrix = z_spectral.D_matrix
+    z_Dmat = z_spectral.lobatto.Dmat
+    z_element_scale = z.element_scale
 
     begin_z_vperp_vpa_region()
     @loop_z_vperp_vpa iz ivperp ivpa begin
@@ -132,10 +133,10 @@ function add_electron_z_advection_to_Jacobian!(jacobian_matrix, f, dens, upar, p
         # Contributions from (w_∥*vth + upar)*dg/dz
         if ielement_z == 1 && igrid_z == 1
             jacobian_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] .+=
-            dt * z_speed * z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement_z]
+            dt * z_speed * z_Dmat[1,:] ./ z_element_scale[ielement_z]
         elseif ielement_z == z.nelement_local && igrid_z == z.ngrid
             jacobian_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] .+=
-            dt * z_speed * z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement_z]
+            dt * z_speed * z_Dmat[end,:] ./ z_element_scale[ielement_z]
         elseif igrid_z == z.ngrid
             # Note igrid_z is only ever 1 when ielement_z==1, because
             # of the way element boundaries are counted.
@@ -143,19 +144,19 @@ function add_electron_z_advection_to_Jacobian!(jacobian_matrix, f, dens, upar, p
             icolumn_max_z_next = z.imax[ielement_z+1]
             if z_speed < 0.0
                 jacobian_matrix[row,(icolumn_min_z_next-1)*v_size+v_remainder:v_size:(icolumn_max_z_next-1)*v_size+v_remainder] .+=
-                dt * z_speed * z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement_z+1]
+                dt * z_speed * z_Dmat[1,:] ./ z_element_scale[ielement_z+1]
             elseif z_speed > 0.0
                 jacobian_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] .+=
-                dt * z_speed * z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement_z]
+                dt * z_speed * z_Dmat[end,:] ./ z_element_scale[ielement_z]
             else
                 jacobian_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] .+=
-                dt * z_speed * 0.5 * z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement_z]
+                dt * z_speed * 0.5 * z_Dmat[end,:] ./ z_element_scale[ielement_z]
                 jacobian_matrix[row,(icolumn_min_z_next-1)*v_size+v_remainder:v_size:(icolumn_max_z_next-1)*v_size+v_remainder] .+=
-                dt * z_speed * 0.5 * z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement_z+1]
+                dt * z_speed * 0.5 * z_Dmat[1,:] ./ z_element_scale[ielement_z+1]
             end
         else
             jacobian_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] .+=
-            dt * z_speed * z_spectral.lobatto.Dmat[igrid_z,:] ./ z.element_scale[ielement_z]
+            dt * z_speed * z_Dmat[igrid_z,:] ./ z_element_scale[ielement_z]
         end
         # vth = sqrt(2*p/n/me)
         # so d(vth)/d(ppar) = 1/n/me/sqrt(2*p/n/me) = 1/n/me/vth

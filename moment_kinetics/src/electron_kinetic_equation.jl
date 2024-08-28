@@ -3428,7 +3428,7 @@ function add_contribution_from_electron_pdf_term_to_Jacobian!(
     source_density_amplitude = moments.electron.external_source_density_amplitude
     source_momentum_amplitude = moments.electron.external_source_momentum_amplitude
     source_pressure_amplitude = moments.electron.external_source_pressure_amplitude
-    z_deriv_matrix = z_spectral.D_matrix
+    z_deriv_matrix = z_spectral.D_matrix_csr
     v_size = vperp.n * vpa.n
 
     begin_z_vperp_vpa_region()
@@ -3485,11 +3485,15 @@ function add_contribution_from_electron_pdf_term_to_Jacobian!(
                 (1.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*dppar_dz[iz] - 0.5*sqrt(2.0*ppar[iz]/me)/dens[iz]^1.5*ddens_dz[iz]) *
                 vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
         end
-        for icolz ∈ 1:z.n, icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+        z_deriv_row_startind = z_deriv_matrix.rowptr[iz]
+        z_deriv_row_endind = z_deriv_matrix.rowptr[iz+1] - 1
+        z_deriv_colinds = @view z_deriv_matrix.colval[z_deriv_row_startind:z_deriv_row_endind]
+        z_deriv_row_nonzeros = @view z_deriv_matrix.nzval[z_deriv_row_startind:z_deriv_row_endind]
+        for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros), icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
             col = (icolz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
             jacobian_matrix[row,col] +=
                 dt * f[ivpa,ivperp,iz] * vth[iz] *
-                vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_matrix[iz,icolz]
+                vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_entry
         end
         if external_source_settings.electron.active
             # Source terms from `add_contribution_from_pdf_term!()`
@@ -3505,11 +3509,11 @@ function add_contribution_from_electron_pdf_term_to_Jacobian!(
              + 0.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*dthird_moment_dz[iz]
              + vpa.grid[ivpa] * (0.75*sqrt(2.0/me/ppar[iz])/dens[iz]^1.5*ddens_dz[iz]
                                  + 0.5/sqrt(2.0*dens[iz]*me)/ppar[iz]^1.5*dppar_dz[iz]))
-        for icolz ∈ 1:z.n
+        for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros)
             col = ppar_offset + icolz
             jacobian_matrix[row,col] += dt * f[ivpa,ivperp,iz] *
                 (1.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*third_moment[iz]
-                 - vpa.grid[ivpa]/sqrt(2.0*ppar[iz]*dens[iz]*me)) * z_deriv_matrix[iz,icolz]
+                 - vpa.grid[ivpa]/sqrt(2.0*ppar[iz]*dens[iz]*me)) * z_deriv_entry
         end
     end
 
