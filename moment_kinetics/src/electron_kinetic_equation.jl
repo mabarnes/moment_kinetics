@@ -755,10 +755,6 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
         # initialise the electron pdf convergence flag to false
         electron_pdf_converged = false
 
-        # Reset nl_solver_params.stage_counter[] so that the preconditioner is re-computed at
-        # the first step
-        nl_solver_params.stage_counter[] = 0
-
         first_step = true
         # evolve (artificially) in time until the residual is less than the tolerance
         while (!electron_pdf_converged
