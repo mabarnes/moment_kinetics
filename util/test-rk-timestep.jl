@@ -194,8 +194,9 @@ function rk_advance_butcher(a, b, y0, dt, nsteps, a_implicit=nothing, b_implicit
     error = zeros(nsteps+1)
 
     for it ∈ 1:nsteps
-        kscratch[1] = dt*f(y)
         kscratch_implicit[1] = dt*f_implicit(y, a_implicit[1,1] * dt)
+        ystage = backward_euler(y, dt * a_implicit[1,1])
+        kscratch[1] = dt*f(ystage)
         for i ∈ 2:n_rk_stages
             ytilde = y +
                      sum(a[i,j] * kscratch[j] for j ∈ 1:i-1) +
