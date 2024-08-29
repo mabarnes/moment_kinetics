@@ -459,12 +459,11 @@ function convert_butcher_tableau_for_moment_kinetics(a::Matrix{Rational{Int64}},
 end
 
 function convert_rk_coefs_to_butcher_tableau(rk_coefs::AbstractArray{T,N},
-                                             adaptive,
+                                             adaptive, low_storage,
                                              rk_coefs_implicit=zeros(T, size(rk_coefs, 1) - 1, size(rk_coefs, 2) + 1),
                                              implicit_coefficient_is_zero=nothing
                                             ) where {T,N}
     using_rationals = eltype(rk_coefs) <: Rational || eltype(rk_coefs_implicit) <: Rational
-    low_storage = size(rk_coefs, 1) == 3
     if adaptive
         n_rk_stages = size(rk_coefs, 2) - 1
     else
@@ -654,7 +653,7 @@ function convert_and_check_butcher_tableau(name, a, b,
 
     # Consistency check: converting back should give the original a, b.
     a_check, b_check, a_check_implicit, b_check_implicit =
-        convert_rk_coefs_to_butcher_tableau(rk_coefs, adaptive, rk_coefs_implicit, implicit_coefficient_is_zero)
+        convert_rk_coefs_to_butcher_tableau(rk_coefs, adaptive, low_storage, rk_coefs_implicit, implicit_coefficient_is_zero)
 
     if eltype(a) == Rational
         if a_check != a
@@ -704,7 +703,7 @@ function convert_and_check_butcher_tableau(name, a, b,
     end
 end
 
-function convert_and_check_rk_coefs(name, rk_coefs, adaptive=false,
+function convert_and_check_rk_coefs(name, rk_coefs, adaptive=false, low_storage=true,
                                     rk_coefs_implicit=zeros(eltype(rk_coefs),
                                                             size(rk_coefs, 1),
                                                             size(rk_coefs, 2) + 1),
@@ -717,7 +716,7 @@ function convert_and_check_rk_coefs(name, rk_coefs, adaptive=false,
     if imex
         print("rk_coefs_implicit="); display(rk_coefs_implicit)
     end
-    a, b, a_implicit, b_implicit = convert_rk_coefs_to_butcher_tableau(rk_coefs, adaptive, rk_coefs_implicit, implicit_coefficient_is_zero)
+    a, b, a_implicit, b_implicit = convert_rk_coefs_to_butcher_tableau(rk_coefs, adaptive, low_storage, rk_coefs_implicit, implicit_coefficient_is_zero)
     print("a="); display(a)
     print("b="); display(b)
     if imex

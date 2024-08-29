@@ -327,7 +327,7 @@ methods = Dict(
                                 ),
    )
 
-a, b = convert_rk_coefs_to_butcher_tableau(methods["RKF45"].rk_coefs, true)
+a, b = convert_rk_coefs_to_butcher_tableau(methods["RKF45"].rk_coefs, true, false)
 methods["RKF45 attempt 2"] = (rk_coefs = methods["RKF45"].rk_coefs,
                              a = a, b = b)
 
