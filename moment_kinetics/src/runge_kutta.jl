@@ -200,6 +200,70 @@ function setup_runge_kutta_coefficients!(type, input_CFL_prefactor, split_operat
         else
             CFL_prefactor = input_CFL_prefactor
         end
+    elseif type == "PareschiRusso2(2,2,2)"
+        # 2nd-order, 2-stage IMEX method 'IMEX-SSP2(2,2,2)' from Pareschi & Russo 2005, Table II
+        # (https://doi.org/10.1007/s10915-004-4636-4)
+        rk_coefs = mk_float[-0.4142135623730950488016887242096980785696718753769480731766797379907324784621711 -0.5                                                                             ;
+                             0.9999999999999999999999999999999999999999999999999999999999999999999999999999827 -1.207106781186547524400844362104849039284835937688474036588339868995366239231094;
+                            -0.0                                                                                0.5                                                                             ]
+        rk_coefs_implicit = mk_float[ 0.2928932188134524755991556378951509607151640623115259634116601310046337607689404 0.4142135623730950488016887242096980785696718753769480731766797379907324784621883 1.0;
+                                     -0.0                                                                               0.2928932188134524755991556378951509607151640623115259634116601310046337607689404 1.207106781186547524400844362104849039284835937688474036588339868995366239231094]
+        implicit_coefficient_is_zero = Bool[false, false]
+        n_rk_stages = 2
+        rk_order = 2
+        adaptive = false
+        low_storage = false
+        CFL_prefactor = NaN
+    elseif type == "PareschiRusso2(3,2,2)"
+# 2nd-order, 3-stage IMEX method 'IMEX-SSP2(3,2,2)' from Pareschi & Russo 2005, Table III
+# (https://doi.org/10.1007/s10915-004-4636-4)
+        rk_coefs = mk_float[2 -1 -1//2;
+                            0  0  0   ;
+                            0  1 -1//2;
+                            0  0  1//2]
+        rk_coefs_implicit = mk_float[1//2 -1    1    1//2;
+                                     0     1//2 0    1//2;
+                                     0     0    1//2 1//2]
+        implicit_coefficient_is_zero = Bool[false, false, false]
+        n_rk_stages = 3
+        rk_order = 2
+        adaptive = false
+        low_storage = false
+        CFL_prefactor = NaN
+    elseif type == "PareschiRusso2(3,3,2)"
+        # 2nd-order, 3-stage IMEX method 'IMEX-SSP2(3,2,2)' from Pareschi & Russo 2005, Table III
+        # (https://doi.org/10.1007/s10915-004-4636-4)
+        rk_coefs = mk_float[1    -4//3 -1//9;
+                            1//2 -1//3 -4//9;
+                            0     1//2 -1//3;
+                            0     0     1//3]
+        rk_coefs_implicit = mk_float[1//4 -1//2 4//3 4//9;
+                                     0     1//4 5//6 4//9;
+                                     0     0    1//3 2//3]
+        implicit_coefficient_is_zero = Bool[false, false, false]
+        n_rk_stages = 3
+        rk_order = 2
+        adaptive = false
+        low_storage = false
+        CFL_prefactor = NaN
+    elseif type == "PareschiRusso3(4,3,3)"
+        # 3rd-order, 4-stage IMEX method 'IMEX-SSP3(4,3,3)' from Pareschi & Russo 2005, Table VI
+        # (https://doi.org/10.1007/s10915-004-4636-4)
+        rk_coefs = mk_float[ 2.0 -5.27491721763532  0.9999999999999688     -0.1666666666666453;
+                            -0.0  0.0               1.4589197899688663e-17  0.0               ;
+                            -0.0  1.0              -0.0343646522044047     -0.500000000000007 ;
+                            -0.0 -0.0               0.25                   -2.091639072545107 ;
+                            -0.0 -0.0              -0.0                     0.6666666666666664]
+        rk_coefs_implicit = mk_float[ 0.24169426078821 -1.0               3.13745860881766  1.0436096431476471e-14 0.16666666666665975;
+                                     -0.0               0.24169426078821  2.13745860881766 -0.24999999999997924    0.3333333333333193 ;
+                                     -0.0              -0.0               0.24169426078821  0.034364652204404655   0.500000000000007  ;
+                                     -0.0              -0.0              -0.0               0.24169426078821       2.0916390725451066 ]
+        implicit_coefficient_is_zero = Bool[false, false, false, false]
+        n_rk_stages = 4
+        rk_order = 3
+        adaptive = false
+        low_storage = false
+        CFL_prefactor = NaN
     elseif type == "SSPRK4"
         n_rk_stages = 4
         rk_coefs = allocate_float(3, n_rk_stages)
