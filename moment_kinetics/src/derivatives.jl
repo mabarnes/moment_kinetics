@@ -12,7 +12,7 @@ export derivative_r!, derivative_r_chrg!, derivative_r_ntrl!
 export derivative_z!, derivative_z_chrg!, derivative_z_ntrl!
 
 using ..calculus: derivative!, second_derivative!, reconcile_element_boundaries_MPI!,
-                  apply_adv_fac!
+                  reconcile_element_boundaries_MPI_z_pdf_vpavperpz!, apply_adv_fac!
 using ..communication
 using ..type_definitions: mk_float
 using ..looping
@@ -265,62 +265,9 @@ function derivative_z_pdf_vpavperpz!(dfdz::AbstractArray{mk_float,3}, f::Abstrac
     # now reconcile element boundaries across
     # processes with large message
     if z.nelement_local < z.nelement_global
-        # synchronize buffers
-        # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
-        # -- or from a @serial_region or from an if statment isolating a single rank on a block
-        _block_synchronize()
-        @serial_region begin
-            # now deal with endpoints that are stored across ranks
-            comm = z.comm
-            nrank = z.nrank
-            irank = z.irank
-            # sending pattern is cyclic. First we send data form irank -> irank + 1
-            # to fix the lower endpoints, then we send data from irank -> irank - 1
-            # to fix upper endpoints. Special exception for the periodic points.
-            # receive_buffer[1] is for data received, send_buffer[1] is data to be sent
-
-            # send highest end point on THIS rank
-            # pass data from irank -> irank + 1, receive data from irank - 1
-            idst = mod(irank+1,nrank) # destination rank for sent data
-            isrc = mod(irank-1,nrank) # source rank for received data
-            rreq1 = MPI.Irecv!(z_receive_buffer1, comm; source=isrc, tag=1)
-            sreq1 = MPI.Isend(dfdz_upper_endpoints, comm; dest=idst, tag=1)
-
-            # send lowest end point on THIS rank
-            # pass data from irank -> irank - 1, receive data from irank + 1
-            idst = mod(irank-1,nrank) # destination rank for sent data
-            isrc = mod(irank+1,nrank) # source rank for received data
-            rreq2 = MPI.Irecv!(z_receive_buffer2, comm; source=isrc, tag=2)
-            sreq2 = MPI.Isend(dfdz_lower_endpoints, comm; dest=idst, tag=2)
-            stats = MPI.Waitall([rreq1, sreq1, rreq2, sreq2])
-
-            # now update receive buffers, taking into account the reconciliation
-            if irank == 0
-                if z.bc == "periodic"
-                    @. z_receive_buffer1 = 0.5 * (z_receive_buffer1 * dfdz_lower_endpoints)
-                else # directly use value from Cheb at extreme lower point
-                    z_receive_buffer1 .= dfdz_lower_endpoints
-                end
-            else
-                @. z_receive_buffer1 = 0.5 * (z_receive_buffer1 * dfdz_lower_endpoints)
-            end
-            #now update the dfdz array -- using a slice appropriate to the dimension reconciled
-            @views dfdz[:,:,1] .= z_receive_buffer1
-
-            if irank == nrank-1
-                if z.bc == "periodic"
-                    @. z_receive_buffer2 = 0.5 * (z_receive_buffer2 * dfdz_upper_endpoints)
-                else #directly use value from Cheb
-                    z_receive_buffer2 .= dfdz_upper_endpoints
-                end
-            else
-                @. z_receive_buffer2 = 0.5 * (z_receive_buffer2 * dfdz_upper_endpoints)
-            end
-            #now update the dfdz array -- using a slice appropriate to the dimension reconciled
-            @views dfdz[:,:,end] .= z_receive_buffer2
-        end
-        # synchronize buffers
-        _block_synchronize()
+        reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(
+            dfdz, dfdz_lower_endpoints, dfdz_upper_endpoints, z_receive_buffer1,
+            z_receive_buffer2, z)
     end
 end
 
@@ -897,64 +844,9 @@ function derivative_z_pdf_vpavperpz!(dfdz::AbstractArray{mk_float,3}, f::Abstrac
     # now reconcile element boundaries across
     # processes with large message
     if z.nelement_local < z.nelement_global
-        # synchronize buffers
-        # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
-        # -- or from a @serial_region or from an if statment isolating a single rank on a block
-        _block_synchronize()
-        @serial_region begin
-            # now deal with endpoints that are stored across ranks
-            comm = z.comm
-            nrank = z.nrank
-            irank = z.irank
-            # sending pattern is cyclic. First we send data form irank -> irank + 1
-            # to fix the lower endpoints, then we send data from irank -> irank - 1
-            # to fix upper endpoints. Special exception for the periodic points.
-            # receive_buffer[1] is for data received, send_buffer[1] is data to be sent
-
-            # send highest end point on THIS rank
-            # pass data from irank -> irank + 1, receive data from irank - 1
-            idst = mod(irank+1,nrank) # destination rank for sent data
-            isrc = mod(irank-1,nrank) # source rank for received data
-            rreq1 = MPI.Irecv!(z_receive_buffer1, comm; source=isrc, tag=1)
-            sreq1 = MPI.Isend(dfdz_upper_endpoints, comm; dest=idst, tag=1)
-
-            # send lowest end point on THIS rank
-            # pass data from irank -> irank - 1, receive data from irank + 1
-            idst = mod(irank-1,nrank) # destination rank for sent data
-            isrc = mod(irank+1,nrank) # source rank for received data
-            rreq2 = MPI.Irecv!(z_receive_buffer2, comm; source=isrc, tag=2)
-            sreq2 = MPI.Isend(dfdz_lower_endpoints, comm; dest=idst, tag=2)
-            stats = MPI.Waitall([rreq1, sreq1, rreq2, sreq2])
-
-            # now update receive buffers, taking into account the reconciliation
-            if irank == 0
-                if z.bc == "periodic"
-                    # depending on adv_fac, update the extreme lower endpoint with data from irank = nrank -1	
-                    apply_adv_fac!(z_receive_buffer1, adv_fac_lower_endpoints, dfdz_lower_endpoints, 1)
-                else # directly use value from Cheb at extreme lower point
-                    z_receive_buffer1 .= dfdz_lower_endpoints
-                end
-            else # depending on adv_fac, update the lower endpoint with data from irank = nrank -1	
-                apply_adv_fac!(z_receive_buffer1, adv_fac_lower_endpoints, dfdz_lower_endpoints, 1)
-            end
-            #now update the dfdz array -- using a slice appropriate to the dimension reconciled
-            @views dfdz[:,:,1] .= z_receive_buffer1
-
-            if irank == nrank-1
-                if z.bc == "periodic"
-                    # depending on adv_fac, update the extreme upper endpoint with data from irank = 0
-                    apply_adv_fac!(z_receive_buffer2, adv_fac_upper_endpoints, dfdz_upper_endpoints, -1)
-                else #directly use value from Cheb
-                    z_receive_buffer2 .= dfdz_upper_endpoints
-                end
-            else # enforce continuity at upper endpoint
-                apply_adv_fac!(z_receive_buffer2, adv_fac_upper_endpoints, dfdz_upper_endpoints, -1)
-            end
-            #now update the dfdz array -- using a slice appropriate to the dimension reconciled
-            @views dfdz[:,:,end] .= z_receive_buffer2
-        end
-        # synchronize buffers
-        _block_synchronize()
+        reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(
+            dfdz, adv_fac_lower_buffer, adv_fac_upper_buffer, dfdz_lower_endpoints,
+            dfdz_upper_endpoints, z_receive_buffer1, z_receive_buffer2, z)
     end
 end
 

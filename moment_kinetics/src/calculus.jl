@@ -541,7 +541,7 @@ function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
     # synchronize buffers
     _block_synchronize()
 end
-	
+
 function apply_adv_fac!(buffer::AbstractArray{mk_float,Ndims},adv_fac::AbstractArray{mk_float,Ndims},endpoints::AbstractArray{mk_float,Ndims},sgn::mk_int) where Ndims
 		#buffer contains off-process endpoint
 		#adv_fac < 0 is positive advection speed
@@ -632,6 +632,158 @@ function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
         end
         #now update the df1d array -- using a slice appropriate to the dimension reconciled
         assign_endpoint!(df1d,receive_buffer2,"upper",coord)
+
+    end
+    # synchronize buffers
+    _block_synchronize()
+end
+
+# Special version for pdf_electron with no r-dimension, which has the same number of
+# dimensions as an ion/neutral moment variable, but different dimensions.
+function reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(df1d::AbstractArray{mk_float,3},
+	dfdx_lower_endpoints::AbstractArray{mk_float,2}, dfdx_upper_endpoints::AbstractArray{mk_float,2},
+	receive_buffer1::AbstractArray{mk_float,2}, receive_buffer2::AbstractArray{mk_float,2}, coord)
+	
+    # synchronize buffers
+    # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
+    # -- or from a @serial_region or from an if statment isolating a single rank on a block
+    _block_synchronize()
+    #if block_rank[] == 0 # lead process on this shared-memory block
+    @serial_region begin
+
+        # now deal with endpoints that are stored across ranks
+        comm = coord.comm
+        nrank = coord.nrank
+        irank = coord.irank
+        #send_buffer = coord.send_buffer
+        #receive_buffer = coord.receive_buffer
+        # sending pattern is cyclic. First we send data form irank -> irank + 1
+        # to fix the lower endpoints, then we send data from irank -> irank - 1
+        # to fix upper endpoints. Special exception for the periodic points.
+        # receive_buffer[1] is for data received, send_buffer[1] is data to be sent
+
+        # pass data from irank -> irank + 1, receive data from irank - 1
+        idst = mod(irank+1,nrank) # destination rank for sent data
+        isrc = mod(irank-1,nrank) # source rank for received data
+        #MRH what value should tag take here and below? Esp if nrank >= 32
+        rreq1 = MPI.Irecv!(receive_buffer1, comm; source=isrc, tag=1)
+        sreq1 = MPI.Isend(dfdx_upper_endpoints, comm; dest=idst, tag=1)
+        #print("$irank: Sending   $irank -> $idst = $dfdx_upper_endpoints\n")
+
+        # pass data from irank -> irank - 1, receive data from irank + 1
+        idst = mod(irank-1,nrank) # destination rank for sent data
+        isrc = mod(irank+1,nrank) # source rank for received data
+        #MRH what value should tag take here and below? Esp if nrank >= 32
+        rreq2 = MPI.Irecv!(receive_buffer2, comm; source=isrc, tag=2)
+        sreq2 = MPI.Isend(dfdx_lower_endpoints, comm; dest=idst, tag=2)
+        #print("$irank: Sending   $irank -> $idst = $dfdx_lower_endpoints\n")
+        stats = MPI.Waitall([rreq1, sreq1, rreq2, sreq2])
+        #print("$irank: Received $isrc -> $irank = $receive_buffer1\n")
+        #print("$irank: Received $isrc -> $irank = $receive_buffer2\n")
+
+        # now update receive buffers, taking into account the reconciliation
+        if irank == 0
+            if coord.bc == "periodic"
+                #update the extreme lower endpoint with data from irank = nrank -1	
+                receive_buffer1 .= 0.5*(receive_buffer1 .+ dfdx_lower_endpoints)
+            else #directly use value from Cheb
+                receive_buffer1 .= dfdx_lower_endpoints
+            end
+        else # enforce continuity at lower endpoint
+            receive_buffer1 .= 0.5*(receive_buffer1 .+ dfdx_lower_endpoints)
+        end
+        #now update the df1d array -- using a slice appropriate to the dimension reconciled
+        @views df1d[:,:,1] .= receive_buffer1
+
+        if irank == nrank-1
+            if coord.bc == "periodic"
+                #update the extreme upper endpoint with data from irank = 0
+                receive_buffer2 .= 0.5*(receive_buffer2 .+ dfdx_upper_endpoints)
+            else #directly use value from Cheb
+                receive_buffer2 .= dfdx_upper_endpoints
+            end
+        else # enforce continuity at upper endpoint
+            receive_buffer2 .= 0.5*(receive_buffer2 .+ dfdx_upper_endpoints)
+        end
+        #now update the df1d array -- using a slice appropriate to the dimension reconciled
+        @views df1d[:,:,end] .= receive_buffer2
+
+    end
+    # synchronize buffers
+    _block_synchronize()
+end
+
+# Special version for pdf_electron with no r-dimension, which has the same number of
+# dimensions as an ion/neutral moment variable, but different dimensions.
+function reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(df1d::AbstractArray{mk_float,3},
+	adv_fac_lower_endpoints::AbstractArray{mk_float,2}, adv_fac_upper_endpoints::AbstractArray{mk_float,2},
+	dfdx_lower_endpoints::AbstractArray{mk_float,2}, dfdx_upper_endpoints::AbstractArray{mk_float,2},
+	receive_buffer1::AbstractArray{mk_float,2}, receive_buffer2::AbstractArray{mk_float,2}, coord)
+	
+    # synchronize buffers
+    # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
+    # -- or from a @serial_region or from an if statment isolating a single rank on a block
+    _block_synchronize()
+    #if block_rank[] == 0 # lead process on this shared-memory block
+    @serial_region begin
+        # now deal with endpoints that are stored across ranks
+        comm = coord.comm
+        nrank = coord.nrank
+        irank = coord.irank
+        #send_buffer = coord.send_buffer
+        #receive_buffer = coord.receive_buffer
+        # sending pattern is cyclic. First we send data form irank -> irank + 1
+        # to fix the lower endpoints, then we send data from irank -> irank - 1
+        # to fix upper endpoints. Special exception for the periodic points.
+        # receive_buffer[1] is for data received, send_buffer[1] is data to be sent
+
+        # send highest end point on THIS rank
+        # pass data from irank -> irank + 1, receive data from irank - 1
+        idst = mod(irank+1,nrank) # destination rank for sent data
+        isrc = mod(irank-1,nrank) # source rank for received data
+        #MRH what value should tag take here and below? Esp if nrank >= 32
+        rreq1 = MPI.Irecv!(receive_buffer1, comm; source=isrc, tag=1)
+        sreq1 = MPI.Isend(dfdx_upper_endpoints, comm; dest=idst, tag=1)
+        #print("$irank: Sending   $irank -> $idst = $dfdx_upper_endpoints\n")
+
+        # send lowest end point on THIS rank
+        # pass data from irank -> irank - 1, receive data from irank + 1
+        idst = mod(irank-1,nrank) # destination rank for sent data
+        isrc = mod(irank+1,nrank) # source rank for received data
+        #MRH what value should tag take here and below? Esp if nrank >= 32
+        rreq2 = MPI.Irecv!(receive_buffer2, comm; source=isrc, tag=2)
+        sreq2 = MPI.Isend(dfdx_lower_endpoints, comm; dest=idst, tag=2)
+        #print("$irank: Sending   $irank -> $idst = $dfdx_lower_endpoints\n")
+        stats = MPI.Waitall([rreq1, sreq1, rreq2, sreq2])
+        #print("$irank: Received $isrc -> $irank = $receive_buffer1\n")
+        #print("$irank: Received $isrc -> $irank = $receive_buffer2\n")
+
+        # now update receive buffers, taking into account the reconciliation
+        if irank == 0
+            if coord.bc == "periodic"
+                # depending on adv_fac, update the extreme lower endpoint with data from irank = nrank -1	
+                apply_adv_fac!(receive_buffer1,adv_fac_lower_endpoints,dfdx_lower_endpoints,1)
+            else # directly use value from Cheb at extreme lower point
+                receive_buffer1 .= dfdx_lower_endpoints
+            end
+        else # depending on adv_fac, update the lower endpoint with data from irank = nrank -1	
+            apply_adv_fac!(receive_buffer1,adv_fac_lower_endpoints,dfdx_lower_endpoints,1)
+        end
+        #now update the df1d array -- using a slice appropriate to the dimension reconciled
+        @views df1d[:,:,1] .= receive_buffer1
+
+        if irank == nrank-1
+            if coord.bc == "periodic"
+                # depending on adv_fac, update the extreme upper endpoint with data from irank = 0
+                apply_adv_fac!(receive_buffer2,adv_fac_upper_endpoints,dfdx_upper_endpoints,-1)
+            else #directly use value from Cheb
+                receive_buffer2 .= dfdx_upper_endpoints
+            end
+        else # enforce continuity at upper endpoint
+            apply_adv_fac!(receive_buffer2,adv_fac_upper_endpoints,dfdx_upper_endpoints,-1)
+        end
+        #now update the df1d array -- using a slice appropriate to the dimension reconciled
+        @views df1d[:,:,end] .= receive_buffer2
 
     end
     # synchronize buffers
