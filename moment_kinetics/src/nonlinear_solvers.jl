@@ -146,6 +146,8 @@ function setup_nonlinear_solve(input_dict, coords, outer_coords=(); default_rtol
                                 allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size),
                                 allocate_shared_float(pdf_plus_ppar_size),
                                 allocate_shared_float(pdf_plus_ppar_size),
+                                allocate_shared_float(coords.vpa.n,coords.vperp.n),
+                                allocate_shared_float(coords.vpa.n,coords.vperp.n),
                                ),
                                reverse(outer_coord_sizes))
     elseif preconditioner_type == "none"

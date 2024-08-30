@@ -12,7 +12,9 @@ using ..derivatives: derivative_z!, derivative_z_pdf_vpavperpz!
 using ..boundary_conditions: enforce_v_boundary_condition_local!,
                              enforce_vperp_boundary_condition!,
                              skip_f_electron_bc_points_in_Jacobian, vpagrid_to_dzdt
-using ..calculus: derivative!, second_derivative!, integral
+using ..calculus: derivative!, second_derivative!, integral,
+                  reconcile_element_boundaries_MPI!,
+                  reconcile_element_boundaries_MPI_z_pdf_vpavperpz!
 using ..communication
 using ..gauss_legendre: gausslegendre_info
 using ..input_structs
@@ -1019,30 +1021,37 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                 right_preconditioner = split_precon!
             elseif nl_solver_params.preconditioner_type == "electron_lu"
                 if nl_solver_params.stage_counter[] % nl_solver_params.preconditioner_update_interval == 0
-                    orig_lu, precon_matrix, input_buffer, output_buffer = nl_solver_params.preconditioners[ir]
+                    orig_lu, precon_matrix, input_buffer, output_buffer, adv_fac_lower,
+                        adv_fac_upper = nl_solver_params.preconditioners[ir]
 
                     fill_electron_kinetic_equation_Jacobian!(
                         precon_matrix, f_electron_new, electron_ppar_new, moments,
                         collisions, composition, z, vperp, vpa, z_spectral,
                         vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                         external_source_settings, num_diss_params, t_params, ion_dt,
-                        ir, evolve_ppar)
+                        ir, evolve_ppar, adv_fac_lower, adv_fac_upper)
 
                     begin_serial_region()
                     if block_rank[] == 0
                         if size(orig_lu) == (1, 1)
                             # Have not properly created the LU decomposition before, so
                             # cannot reuse it.
-                            nl_solver_params.preconditioners[ir] = (lu(sparse(precon_matrix)), precon_matrix, input_buffer, output_buffer)
+                            nl_solver_params.preconditioners[ir] =
+                                (lu(sparse(precon_matrix)), precon_matrix, input_buffer,
+                                 output_buffer, adv_fac_lower, adv_fac_upper)
                         else
                             # LU decomposition was previously created. The Jacobian always
                             # has the same sparsity pattern, so by using `lu!()` we can
                             # reuse some setup.
                             lu!(orig_lu, sparse(precon_matrix); check=false)
-                            nl_solver_params.preconditioners[ir] = (orig_lu, precon_matrix, input_buffer, output_buffer)
+                            nl_solver_params.preconditioners[ir] =
+                                (orig_lu, precon_matrix, input_buffer, output_buffer,
+                                 adv_fac_lower, adv_fac_upper)
                         end
                     else
-                        nl_solver_params.preconditioners[ir] = (orig_lu, precon_matrix, input_buffer, output_buffer)
+                        nl_solver_params.preconditioners[ir] =
+                            (orig_lu, precon_matrix, input_buffer, output_buffer,
+                             adv_fac_lower, adv_fac_upper)
                     end
                 end
 
@@ -1050,7 +1059,8 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                 function lu_precon!(x)
                     precon_ppar, precon_f = x
 
-                    precon_lu, _, input_buffer, output_buffer = nl_solver_params.preconditioners[ir]
+                    precon_lu, _, input_buffer, output_buffer, adv_fac_lower,
+                        adv_fac_upper = nl_solver_params.preconditioners[ir]
 
                     begin_serial_region()
                     counter = 1
@@ -1078,6 +1088,30 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                         precon_ppar[iz] = output_buffer[counter]
                         counter += 1
                     end
+
+                    # Ensure values of precon_f and precon_ppar are consistent across
+                    # distributed-MPI block boundaries. For precon_f take the upwind
+                    # value, and for precon_ppar take the average.
+                    f_lower_endpoints = @view scratch_dummy.buffer_vpavperpr_1[:,:,ir]
+                    f_upper_endpoints = @view scratch_dummy.buffer_vpavperpr_2[:,:,ir]
+                    receive_buffer1 = @view scratch_dummy.buffer_vpavperpr_3[:,:,ir]
+                    receive_buffer2 = @view scratch_dummy.buffer_vpavperpr_4[:,:,ir]
+                    begin_vperp_vpa_region()
+                    @loop_vperp_vpa ivperp ivpa begin
+                        f_lower_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,1]
+                        f_upper_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,end]
+                    end
+                    reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(
+                        precon_f, adv_fac_lower, adv_fac_upper, f_lower_endpoints,
+                        f_upper_endpoints, receive_buffer1, receive_buffer2, z)
+
+                    begin_serial_region()
+                    @serial_region begin
+                        buffer_1[] = precon_ppar[1]
+                        buffer_2[] = precon_ppar[end]
+                    end
+                    reconcile_element_boundaries_MPI!(
+                        precon_ppar, buffer_1, buffer_2, buffer_3, buffer_4, z)
 
                     return nothing
                 end
@@ -2845,12 +2879,14 @@ function electron_kinetic_equation_euler_update!(f_out, ppar_out, f_in, ppar_in,
 end
 
 """
-    fill_electron_kinetic_equation_Jacobian!(jacobian_matrix, f, moments, collisions,
-                                             composition, z, vperp, vpa, z_spectral,
-                                             vperp_specral, vpa_spectral, z_advect,
-                                             vpa_advect, scratch_dummy, external_source_settings,
+    fill_electron_kinetic_equation_Jacobian!(jacobian_matrix, f, ppar, moments,
+                                             collisions, composition, z, vperp, vpa,
+                                             z_spectral, vperp_specral,
+                                             vpa_spectral, z_advect, vpa_advect,
+                                             scratch_dummy, external_source_settings,
                                              num_diss_params, t_params, ion_dt,
-                                             ir, evolve_ppar)
+                                             ir, evolve_ppar, adv_fac_lower,
+                                             adv_fac_upper)
 
 Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equation and (if
 `evolve_ppar=true`) the electron energy equation.
@@ -2861,7 +2897,8 @@ function fill_electron_kinetic_equation_Jacobian!(jacobian_matrix, f, ppar, mome
                                                   vpa_spectral, z_advect, vpa_advect,
                                                   scratch_dummy, external_source_settings,
                                                   num_diss_params, t_params, ion_dt, ir,
-                                                  evolve_ppar)
+                                                  evolve_ppar, adv_fac_lower,
+                                                  adv_fac_upper)
     dt = t_params.dt[]
 
     buffer_1 = @view scratch_dummy.buffer_rs_1[ir,1]
@@ -2915,6 +2952,11 @@ function fill_electron_kinetic_equation_Jacobian!(jacobian_matrix, f, ppar, mome
     end
 
     z_speed = @view z_advect[1].speed[:,:,:,ir]
+    begin_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        adv_fac_lower[ivpa,ivperp] = -z_speed[ivpa,ivperp,1]
+        adv_fac_upper[ivpa,ivperp] = -z_speed[ivpa,ivperp,end]
+    end
 
     add_electron_z_advection_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, me, z, vperp, vpa, z_spectral,
