@@ -3034,13 +3034,15 @@ function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t_params, vz,
                 # The result of the implicit solve gives the state vector at 'istage'
                 # which is used as input to the explicit part of the IMEX time step.
                 old_scratch = scratch_implicit[istage]
+                update_electrons = !(t_params.implicit_electron_advance || t_params.implicit_electron_ppar)
                 success = apply_all_bcs_constraints_update_moments!(
                     scratch_implicit[istage], pdf, moments, fields,
                     boundary_distributions, scratch_electron, vz, vr, vzeta, vpa, vperp,
                     z, r, spectral_objects, advect_objects, composition, collisions,
                     geometry, gyroavs, external_source_settings, num_diss_params,
                     t_params, nl_solver_params, advance, scratch_dummy, false,
-                    max_electron_pdf_iterations, max_electron_sim_time)
+                    max_electron_pdf_iterations, max_electron_sim_time;
+                    update_electrons=update_electrons)
                 if success != ""
                     # Break out of the istage loop, as passing `success != ""` to the
                     # adaptive timestep update function will signal a failed timestep, so
