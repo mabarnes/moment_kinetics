@@ -684,17 +684,14 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                                               r_range, z_range, restart_r,
                                               restart_r_spectral, restart_z,
                                               restart_z_spectral, interpolation_needed)
-            moments.ion.dens_updated .= true
             moments.ion.upar .= reload_moment("parallel_flow", dynamic, time_index, r, z,
                                               r_range, z_range, restart_r,
                                               restart_r_spectral, restart_z,
                                               restart_z_spectral, interpolation_needed)
-            moments.ion.upar_updated .= true
             moments.ion.ppar .= reload_moment("parallel_pressure", dynamic, time_index, r,
                                               z, r_range, z_range, restart_r,
                                               restart_r_spectral, restart_z,
                                               restart_z_spectral, interpolation_needed)
-            moments.ion.ppar_updated .= true
             moments.ion.pperp .= reload_moment("perpendicular_pressure", dynamic,
                                                time_index, r, z, r_range, z_range,
                                                restart_r, restart_r_spectral, restart_z,
@@ -703,7 +700,6 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                                               r, z, r_range, z_range, restart_r,
                                               restart_r_spectral, restart_z,
                                               restart_z_spectral, interpolation_needed)
-            moments.ion.qpar_updated .= true
             moments.ion.vth .= reload_moment("thermal_speed", dynamic, time_index, r, z,
                                              r_range, z_range, restart_r,
                                              restart_r_spectral, restart_z,
@@ -805,28 +801,24 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                                                             restart_r_spectral, restart_z,
                                                             restart_z_spectral,
                                                             interpolation_needed)
-            moments.electron.dens_updated[] = true
             moments.electron.upar .= reload_electron_moment("electron_parallel_flow",
                                                             dynamic, time_index, r, z,
                                                             r_range, z_range, restart_r,
                                                             restart_r_spectral, restart_z,
                                                             restart_z_spectral,
                                                             interpolation_needed)
-            moments.electron.upar_updated[] = true
             moments.electron.ppar .= reload_electron_moment("electron_parallel_pressure",
                                                             dynamic, time_index, r, z,
                                                             r_range, z_range, restart_r,
                                                             restart_r_spectral, restart_z,
                                                             restart_z_spectral,
                                                             interpolation_needed)
-            moments.electron.ppar_updated[] = true
             moments.electron.qpar .= reload_electron_moment("electron_parallel_heat_flux",
                                                             dynamic, time_index, r, z,
                                                             r_range, z_range, restart_r,
                                                             restart_r_spectral, restart_z,
                                                             restart_z_spectral,
                                                             interpolation_needed)
-            moments.electron.qpar_updated[] = true
             moments.electron.vth .= reload_electron_moment("electron_thermal_speed",
                                                            dynamic, time_index, r, z,
                                                            r_range, z_range, restart_r,
@@ -895,25 +887,21 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                                                       restart_r, restart_r_spectral,
                                                       restart_z, restart_z_spectral,
                                                       interpolation_needed)
-                moments.neutral.dens_updated .= true
                 moments.neutral.uz .= reload_moment("uz_neutral", dynamic, time_index, r,
                                                     z, r_range, z_range, restart_r,
                                                     restart_r_spectral, restart_z,
                                                     restart_z_spectral,
                                                     interpolation_needed)
-                moments.neutral.uz_updated .= true
                 moments.neutral.pz .= reload_moment("pz_neutral", dynamic, time_index, r,
                                                     z, r_range, z_range, restart_r,
                                                     restart_r_spectral, restart_z,
                                                     restart_z_spectral,
                                                     interpolation_needed)
-                moments.neutral.pz_updated .= true
                 moments.neutral.qz .= reload_moment("qz_neutral", dynamic, time_index, r,
                                                     z, r_range, z_range, restart_r,
                                                     restart_r_spectral, restart_z,
                                                     restart_z_spectral,
                                                     interpolation_needed)
-                moments.neutral.qz_updated .= true
                 moments.neutral.vth .= reload_moment("thermal_speed_neutral", dynamic,
                                                      time_index, r, z, r_range, z_range,
                                                      restart_r, restart_r_spectral,
@@ -1024,6 +1012,18 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
             close(fid)
         end
     end
+    moments.ion.dens_updated .= true
+    moments.ion.upar_updated .= true
+    moments.ion.ppar_updated .= true
+    moments.ion.qpar_updated .= true
+    moments.electron.dens_updated[] = true
+    moments.electron.upar_updated[] = true
+    moments.electron.ppar_updated[] = true
+    moments.electron.qpar_updated[] = true
+    moments.neutral.dens_updated .= true
+    moments.neutral.uz_updated .= true
+    moments.neutral.pz_updated .= true
+    moments.neutral.qz_updated .= true
 
     restart_electron_physics = MPI.bcast(restart_electron_physics, 0, comm_block[])
 
