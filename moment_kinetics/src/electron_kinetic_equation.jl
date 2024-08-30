@@ -783,17 +783,6 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                 end
             end
 
-            # Do a forward-Euler update of the electron pdf as an initial guess. Even when
-            # evolving electron_ppar, do not update electron_ppar here because if dt is bigger
-            # than ion_dt, then an explicit timestep will likely make electron_ppar over-shoot
-            # which would just take more iterations in the Newton-Krylov solve to fix.
-            electron_kinetic_equation_euler_update!(f_electron_new, electron_ppar_new,
-                                                    f_electron_old, electron_ppar_old,
-                                                    moments, z, vperp, vpa, z_spectral,
-                                                    vpa_spectral, z_advect, vpa_advect,
-                                                    scratch_dummy, collisions,
-                                                    composition, external_source_settings,
-                                                    num_diss_params, t_params, ir)
             # Calculate heat flux and derivatives using updated f_electron
             @views calculate_electron_qpar_from_pdf_no_r!(moments.electron.qpar[:,ir],
                                                           electron_ppar_new,
