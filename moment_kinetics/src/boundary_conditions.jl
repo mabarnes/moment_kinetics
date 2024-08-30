@@ -1086,13 +1086,16 @@ Jacobian matrix does not modify those points. Returns `false` otherwise.
 """
 function skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
     # z boundary condition
-    if z.bc ∈ ("wall", "constant")
-        if z.irank == 0 && iz == 1 && z_speed[iz,ivpa,ivperp] ≥ 0.0
-            return true
-        end
-        if z.irank == z.nrank - 1 && iz == z.n && z_speed[iz,ivpa,ivperp] ≤ 0.0
-            return true
-        end
+    # Treat as if using Dirichlet boundary condition for incoming part of the distribution
+    # function on the block boundary, regardless of the actual boundary condition and
+    # whether this is an internal boundary or an actual domain boundary. This prevents the
+    # matrix evaluated for a single block (without coupling to neighbouring blocks) from
+    # becoming singular
+    if iz == 1 && z_speed[iz,ivpa,ivperp] ≥ 0.0
+        return true
+    end
+    if iz == z.n && z_speed[iz,ivpa,ivperp] ≤ 0.0
+        return true
     end
 
     # vperp boundary condition
