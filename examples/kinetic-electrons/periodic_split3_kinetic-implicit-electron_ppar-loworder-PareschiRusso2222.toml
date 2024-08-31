@@ -48,7 +48,7 @@ r_ngrid = 1
 r_nelement = 1
 z_ngrid = 5
 z_nelement = 16
-#z_nelement_local = 16
+z_nelement_local = 2
 z_bc = "periodic"
 #z_discretization = "chebyshev_pseudospectral"
 z_discretization = "gausslegendre_pseudospectral"
@@ -68,32 +68,25 @@ vz_discretization = "gausslegendre_pseudospectral"
 vz_element_spacing_option = "coarse_tails"
 
 [timestepping]
-type = "KennedyCarpenterARK324"
+type = "PareschiRusso2(2,2,2)"
 implicit_electron_advance = false
 implicit_electron_ppar = true
 implicit_ion_advance = false
 implicit_vpa_advection = false
-nstep = 1000000
-dt = 1.0e-6
-minimum_dt = 1.0e-7
-#maximum_dt = 2.0e-5
-rtol = 1.0e-4
-max_increase_factor_near_last_fail = 1.001
-last_fail_proximity_factor = 1.1
-max_increase_factor = 1.05
-nwrite = 10000
-nwrite_dfns = 10000
+nstep = 500000
+dt = 2.0e-4
+#nwrite = 50
+#nwrite_dfns = 50
+nwrite = 5
+nwrite_dfns = 5
 steady_state_residual = true
 converged_residual_value = 1.0e-3
-
-#write_after_fixed_step_count = true
-#nstep = 1
 
 [electron_timestepping]
 nstep = 5000000
 #nstep = 1
 #dt = 2.0e-8
-dt = 2.0e-5
+dt = 5.0e-5
 maximum_dt = 1.0
 nwrite = 10000
 nwrite_dfns = 100000
@@ -109,13 +102,12 @@ converged_residual_value = 1.0e-2
 constraint_forcing_rate = 1.0e-4
 
 [nonlinear_solver]
-nonlinear_max_iterations = 20 #100
+#nonlinear_max_iterations = 20 #100
+nonlinear_max_iterations = 1000
 rtol = 1.0e-8 #1.0e-5
 atol = 1.0e-16
-#linear_restart = 40
-#linear_restart = 200
 linear_restart = 5
-preconditioner_update_interval = 100
+preconditioner_update_interval = 100 #1000
 
 [ion_numerical_dissipation]
 vpa_dissipation_coefficient = 1.0e0
