@@ -2075,6 +2075,13 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
                 # respect to vcut
                 delta_v = - epsilon / epsilonprime
 
+                if vcut > vthe[1,ir] && epsilonprime < 0.0
+                    # epsilon should be increasing with vcut at epsilon=0, so if
+                    # epsilonprime is negative, the solution is actually at a lower vcut -
+                    # at larger vcut, epsilon will just tend to 0 but never reach it.
+                    delta_v = -0.1 * vthe[1,ir]
+                end
+
                 # Prevent the step size from getting too big, to make Newton iteration
                 # more robust.
                 delta_v = min(delta_v, 0.1 * vthe[1,ir])
@@ -2334,6 +2341,13 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
                 # Newton iteration update. Note that primes denote derivatives with
                 # respect to vcut
                 delta_v = - epsilon / epsilonprime
+
+                if vcut > vthe[1,ir] && epsilonprime > 0.0
+                    # epsilon should be decreasing with vcut at epsilon=0, so if
+                    # epsilonprime is positive, the solution is actually at a lower vcut -
+                    # at larger vcut, epsilon will just tend to 0 but never reach it.
+                    delta_v = -0.1 * vthe[1,ir]
+                end
 
                 # Prevent the step size from getting too big, to make Newton iteration
                 # more robust.
