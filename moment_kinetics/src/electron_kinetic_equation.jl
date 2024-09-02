@@ -1362,6 +1362,10 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                 end
                 _block_synchronize()
 
+                # Force the preconditioner to be recalculated, because we have just
+                # changed `dt` by a fairly large amount.
+                nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
+
                 # Swap old_scratch and new_scratch so that the next step restarts from the
                 # same state
                 scratch[1] = new_scratch
