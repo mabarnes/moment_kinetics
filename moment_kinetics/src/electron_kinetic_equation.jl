@@ -1043,7 +1043,16 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                             # LU decomposition was previously created. The Jacobian always
                             # has the same sparsity pattern, so by using `lu!()` we can
                             # reuse some setup.
-                            lu!(orig_lu, sparse(precon_matrix); check=false)
+                            try
+                                lu!(orig_lu, sparse(precon_matrix); check=false)
+                            catch e
+                                if !isa(e, ArgumentError)
+                                    rethrow(e)
+                                end
+                                println("Sparsity pattern of matrix changed, rebuilding "
+                                        * " LU from scratch")
+                                orig_lu = lu(sparse(precon_matrix))
+                            end
                             nl_solver_params.preconditioners[ir] =
                                 (orig_lu, precon_matrix, input_buffer, output_buffer,
                                  adv_fac_lower, adv_fac_upper)
