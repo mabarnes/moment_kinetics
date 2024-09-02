@@ -1407,7 +1407,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                 begin_z_vperp_vpa_region()
                 residual = steady_state_residuals(new_scratch.pdf_electron,
                                                   old_scratch.pdf_electron,
-                                                  t_params.previous_dt[]; use_mpi=true,
+                                                  t_params.dt[]; use_mpi=true,
                                                   only_max_abs=true)
                 if global_rank[] == 0
                     residual = first(values(residual))[1]
@@ -1416,7 +1416,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                     ppar_residual =
                         steady_state_residuals(new_scratch.electron_ppar,
                                                old_scratch.electron_ppar,
-                                               t_params.previous_dt[]; use_mpi=true,
+                                               t_params.dt[]; use_mpi=true,
                                                only_max_abs=true)
                     if global_rank[] == 0
                         ppar_residual = first(values(ppar_residual))[1]
