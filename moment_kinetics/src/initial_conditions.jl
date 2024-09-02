@@ -754,7 +754,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                    nl_solver_params.electron_advance.global_n_solves,
                                    nl_solver_params.electron_advance.global_nonlinear_iterations,
                                    nl_solver_params.electron_advance.global_linear_iterations,
-                                   nl_solver_params.electron_advance.stage_counter,
+                                   nl_solver_params.electron_advance.solves_since_precon_update,
                                    nl_solver_params.electron_advance.serial_solve,
                                    nl_solver_params.electron_advance.max_nonlinear_iterations_this_step,
                                    nl_solver_params.electron_advance.preconditioner_update_interval,

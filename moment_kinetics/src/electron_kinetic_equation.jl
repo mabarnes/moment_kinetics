@@ -799,7 +799,9 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                        num_diss_params.electron.moment_dissipation_coefficient, ir)
 
             if nl_solver_params.preconditioner_type == "electron_split_lu"
-                if nl_solver_params.stage_counter[] % nl_solver_params.preconditioner_update_interval == 0
+                if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
+                    nl_solver_params.solves_since_precon_update[] = 0
+
                     dt = t_params.dt[]
                     vth = @view moments.electron.vth[:,ir]
                     me = composition.me_over_mi
@@ -1020,7 +1022,9 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                 left_preconditioner = identity
                 right_preconditioner = split_precon!
             elseif nl_solver_params.preconditioner_type == "electron_lu"
-                if nl_solver_params.stage_counter[] % nl_solver_params.preconditioner_update_interval == 0
+                if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
+                    nl_solver_params.solves_since_precon_update[] = 0
+
                     orig_lu, precon_matrix, input_buffer, output_buffer, adv_fac_lower,
                         adv_fac_upper = nl_solver_params.preconditioners[ir]
 

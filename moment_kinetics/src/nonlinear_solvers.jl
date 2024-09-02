@@ -58,7 +58,7 @@ struct nl_solver_info{TH,TV,Tlig,Tprecon}
     global_n_solves::Ref{mk_int}
     global_nonlinear_iterations::Ref{mk_int}
     global_linear_iterations::Ref{mk_int}
-    stage_counter::Ref{mk_int}
+    solves_since_precon_update::Ref{mk_int}
     serial_solve::Bool
     max_nonlinear_iterations_this_step::Ref{mk_int}
     max_linear_iterations_this_step::Ref{mk_int}
@@ -163,8 +163,8 @@ function setup_nonlinear_solve(input_dict, coords, outer_coords=(); default_rtol
                           nl_solver_input.linear_rtol, nl_solver_input.linear_atol,
                           linear_restart, nl_solver_input.linear_max_restarts, H, V,
                           linear_initial_guess, Ref(0), Ref(0), Ref(0), Ref(0), Ref(0),
-                          Ref(0), Ref(0), serial_solve, Ref(0), Ref(0),
-                          preconditioner_type,
+                          Ref(0), Ref(nl_solver_input.preconditioner_update_interval),
+                          serial_solve, Ref(0), Ref(0), preconditioner_type,
                           nl_solver_input.preconditioner_update_interval, preconditioners)
 end
 
@@ -184,7 +184,7 @@ function reset_nonlinear_per_stage_counters!(nl_solver_params::Union{nl_solver_i
     nl_solver_params.max_linear_iterations_this_step[] = 0
 
     # Also increment the stage counter
-    nl_solver_params.stage_counter[] += 1
+    nl_solver_params.solves_since_precon_update[] += 1
 
     return nothing
 end
