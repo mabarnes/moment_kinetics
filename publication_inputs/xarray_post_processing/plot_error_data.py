@@ -54,7 +54,7 @@ def get_fkpl_error_data(filename):
     marker_list = ['r--o','b--s','g--.','m--x','c--v','k']
     C_list = [max_C_err,L2_C_err,n_err,u_err,p_err,expected_diff]
     nelements = [nelement_list for item in C_list] 
-    ylab_list = ["$\\epsilon_{\\infty}(C[F,F])$", "$\\epsilon_{L_2}(C[F,F])$",
+    ylab_list = ["$\\epsilon_{\\infty}(C[F,F])$", "$\\epsilon_{2}(C[F,F])$",
                  "$|\\Delta n|$",
                  "$|\\Delta u_{||}|$",
                  "$|\\Delta p |$",
@@ -98,10 +98,10 @@ def get_fkpl_error_data(filename):
     #expected_diff, 
     expected_integral]
     nelements = [nelement_list for item in L2norm_list] 
-    ylab_list = ["$\\epsilon_{L_2}(d H / d v_{||})$","$\\epsilon_{L_2}(d H / d v_{\\perp})$",
-                 "$\\epsilon_{L_2}(d^2 G / d v_{\\perp} d v_{||})$", 
-                 "$\\epsilon_{L_2}(d^2 G / d v^2_{||})$", 
-                 "$\\epsilon_{L_2}(d^2 G / d v^2_{\\perp})$",
+    ylab_list = ["$\\epsilon_{2}(d H / d v_{||})$","$\\epsilon_{2}(d H / d v_{\\perp})$",
+                 "$\\epsilon_{2}(d^2 G / d v_{\\perp} d v_{||})$", 
+                 "$\\epsilon_{2}(d^2 G / d v^2_{||})$", 
+                 "$\\epsilon_{2}(d^2 G / d v^2_{\\perp})$",
                  #"$(1/"+nelement_string+")^{"+ngrid_string+"-1}$",
                  "$(1/"+nelement_string+")^{"+ngrid_string+"+1}$"]
     plot_1d_loglog_list_pdf (nelements,L2norm_list,marker_list,"$"+ nelement_string+"$", pdf,
