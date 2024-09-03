@@ -165,7 +165,7 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, composition,
     for it ∈ 1:ntime, ir ∈ 1:nr
         v_parallel = vpagrid_to_dzdt(vpa.grid, vth[1,ir,is,it], upar[1,ir,is,it],
                                      evolve_ppar, evolve_upar)
-        vpabar = @. v_parallel - 0.5 * geometry.rhostar * Er[1,ir,it] / geometry.bzed
+        vpabar = @. v_parallel - 0.5 * geometry.rhostar * Er[1,ir,it] / geometry.bzed[1,ir]
 
         # Get rid of a zero if it is there to avoid a blow up - f should be zero at that
         # point anyway
@@ -187,7 +187,7 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, composition,
 
         v_parallel = vpagrid_to_dzdt(vpa.grid, vth[end,ir,is,it], upar[end,ir,is,it],
                                      evolve_ppar, evolve_upar)
-        vpabar = @. v_parallel - 0.5 * geometry.rhostar * Er[end,ir,it] / geometry.bzed
+        vpabar = @. v_parallel - 0.5 * geometry.rhostar * Er[end,ir,it] / geometry.bzed[end,ir]
 
         # Get rid of a zero if it is there to avoid a blow up - f should be zero at that
         # point anyway
