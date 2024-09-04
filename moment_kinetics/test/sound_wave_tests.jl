@@ -142,11 +142,18 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
     input = deepcopy(test_input)
 
     # Convert keyword arguments to a unique name
+    function stringify_arg(key, value)
+        if isa(value, AbstractDict)
+            return string(string(key)[1], (stringify_arg(k, v) for (k, v) in value)...)
+        else
+            return string(string(key)[1], value)
+        end
+    end
     name = input["run_name"]
     shortname = name
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
-        shortname = string(shortname, "_", (string(string(k)[1], v) for (k, v) in args)...)
+        shortname = string(shortname, "_", (stringify_arg(k, v) for (k, v) in args)...)
 
         # Remove trailing "_"
         name = chop(name)
@@ -289,7 +296,8 @@ function run_test_set_finite_difference()
                    [-0.34705779901310196, -0.34704885164065513, -0.3470379898466833,
                     -0.3470252574909716, -0.3470107059829777, -0.3469943940725544], 30;
                    composition = OptionsDict("T_e" => 0.5), 
-                   nstep=1300, charge_exchange_frequency=2*π*0.0)
+                   timestepping = OptionsDict("nstep" => 1300),
+                   charge_exchange_frequency=2*π*0.0)
     @long run_test(test_input_finite_difference, 2*π*0.0, -2*π*0.2727,
                    [-0.34705779901310196, -0.34704885164065513, -0.3470379898466833,
                     -0.3470252574909716, -0.3470107059829777, -0.3469943940725544];
@@ -353,7 +361,8 @@ function run_test_set_finite_difference_split_1_moment()
              [-0.34705779901310196, -0.34704885164065513, -0.3470379898466833,
               -0.3470252574909716, -0.3470107059829777, -0.3469943940725544], 30;
              composition = OptionsDict("T_e" => 0.5),
-             nstep=1300, charge_exchange_frequency=2*π*0.0)
+             timestepping = OptionsDict("nstep" => 1300),
+             charge_exchange_frequency=2*π*0.0)
     run_test(test_input_finite_difference_split_1_moment, 2*π*0.0, -2*π*0.2727,
              [-0.34705779901310196, -0.34704885164065513, -0.3470379898466833,
               -0.3470252574909716, -0.3470107059829777, -0.3469943940725544];
@@ -417,7 +426,8 @@ function run_test_set_finite_difference_split_2_moments()
              [-0.34706673733456106, -0.3470627566790802, -0.3470579059173919,
               -0.347052193699157, -0.34704563020982493, -0.3470382271523149], 30;
              composition = OptionsDict("T_e" => 0.5),
-             nstep=1300, z_ngrid=150, charge_exchange_frequency=2*π*0.0)
+             timestepping = OptionsDict("nstep" => 1300), z_ngrid=150,
+             charge_exchange_frequency=2*π*0.0)
     run_test(test_input_finite_difference_split_2_moments, 2*π*0.0, -2*π*0.2727,
              [-0.34705779901310196, -0.34704885164065513, -0.3470379898466833,
               -0.3470252574909716, -0.3470107059829777, -0.3469943940725544];
@@ -486,7 +496,8 @@ function run_test_set_finite_difference_split_3_moments()
                                  -0.3470379898466833, -0.3470252574909716,
                                  -0.3470107059829777, -0.3469943940725544], 30;
                    composition = OptionsDict("T_e" => 0.5),
-                   nstep=1300, charge_exchange_frequency=2*π*0.0)
+                   timestepping = OptionsDict("nstep" => 1300),
+                   charge_exchange_frequency=2*π*0.0)
     @long run_test(test_input_finite_difference_split_3_moments, 2*π*0.0, -2*π*0.2727,
                    [-0.34705779901310196, -0.34704885164065513, -0.3470379898466833,
                     -0.3470252574909716, -0.3470107059829777, -0.3469943940725544];
@@ -551,7 +562,8 @@ function run_test_set_chebyshev()
                    [-0.34657359027997264, -0.34629088790428314, -0.34612578140467837,
                     -0.34607740653471614, -0.34607384011343095, -0.34607740653471614],
                    30; composition = OptionsDict("T_e" => 0.5),
-                   nstep=1300, charge_exchange_frequency=2*π*0.0)
+                   timestepping = OptionsDict("nstep" => 1300),
+                   charge_exchange_frequency=2*π*0.0)
     @long run_test(test_input_chebyshev, 2*π*0.0, -2*π*0.2727,
                    [-0.34657359027997264, -0.34629088790428314, -0.34612578140467837,
                     -0.34607740653471614, -0.34607384011343095, -0.34607740653471614];
@@ -617,7 +629,8 @@ function run_test_set_chebyshev_split_1_moment()
                    [-0.34657359027997264, -0.34629088790428314, -0.34612578140467837,
                     -0.34607740653471614, -0.34607384011343095, -0.34607740653471614],
                    30; composition = OptionsDict("T_e" => 0.5),
-                   nstep=1300, charge_exchange_frequency=2*π*0.0)
+                   timestepping = OptionsDict("nstep" => 1300),
+                   charge_exchange_frequency=2*π*0.0)
     @long run_test(test_input_chebyshev_split_1_moment, 2*π*0.0, -2*π*0.2727,
                    [-0.34657359027997264, -0.34629088790428314, -0.34612578140467837,
                     -0.34607740653471614, -0.34607384011343095, -0.34607740653471614];
@@ -683,7 +696,7 @@ function run_test_set_chebyshev_split_2_moments()
                    [-0.34657359027997264, -0.34629088790428314, -0.34612578140467837,
                     -0.34607740653471614, -0.34607384011343095, -0.34607740653471614],
                    40; composition = OptionsDict("T_e" => 0.5),
-                   nstep=1300, nwrite=10,
+                   timestepping = OptionsDict("nstep" => 1300, "nwrite" => 10),
                    charge_exchange_frequency=2*π*0.0)
     @long run_test(test_input_chebyshev_split_2_moments, 2*π*0.0, -2*π*0.2727,
                    [-0.34657359027997264, -0.34629088790428314, -0.34612578140467837,
@@ -750,7 +763,8 @@ function run_test_set_chebyshev_split_3_moments()
                    [-0.34657359027997264, -0.34629088790428314, -0.34612578140467837,
                     -0.34607740653471614, -0.34607384011343095, -0.34607740653471614],
                    80; composition = OptionsDict("T_e" => 0.5),
-                   nstep=1300, nwrite=5, charge_exchange_frequency=2*π*0.0)
+                   timestepping = OptionsDict("nstep" => 1300, "nwrite" => 5),
+                   charge_exchange_frequency=2*π*0.0)
     @long run_test(test_input_chebyshev_split_3_moments, 2*π*0.0, -2*π*0.2727,
                    [-0.34657359027997264, -0.34629088790428314, -0.34612578140467837,
                     -0.34607740653471614, -0.34607384011343095, -0.34607740653471614];

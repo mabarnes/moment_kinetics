@@ -34,7 +34,7 @@ base_input["output"] = OptionsDict("parallel_io" => false)
 
 restart_test_input_chebyshev =
     merge(deepcopy(base_input),
-          Dict("run_name" => "restart_chebyshev_pseudospectral",
+          OptionsDict("run_name" => "restart_chebyshev_pseudospectral",
                "r_ngrid" => 3, "r_nelement" => 2,
                "r_discretization" => "chebyshev_pseudospectral",
                "z_ngrid" => 17, "z_nelement" => 2,
@@ -47,18 +47,18 @@ end
 
 restart_test_input_chebyshev_split_1_moment =
     merge(deepcopy(restart_test_input_chebyshev),
-          Dict("run_name" => "restart_chebyshev_pseudospectral_split_1_moment",
+          OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_1_moment",
                "evolve_moments_density" => true))
 
 restart_test_input_chebyshev_split_2_moments =
     merge(deepcopy(restart_test_input_chebyshev_split_1_moment),
-          Dict("run_name" => "restart_chebyshev_pseudospectral_split_2_moments",
+          OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_2_moments",
                "r_ngrid" => 1, "r_nelement" => 1,
                "evolve_moments_parallel_flow" => true))
 
 restart_test_input_chebyshev_split_3_moments =
     merge(deepcopy(restart_test_input_chebyshev_split_2_moments),
-          Dict("run_name" => "restart_chebyshev_pseudospectral_split_3_moments",
+          OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_3_moments",
                "evolve_moments_parallel_pressure" => true,
                "vpa_L" => 1.5*vpa_L, "vz_L" => 1.5*vpa_L))
 
@@ -84,9 +84,19 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
 
     parallel_io = input["output"]["parallel_io"]
     # Convert keyword arguments to a unique name
+    function stringify_arg(key, value)
+        if isa(value, AbstractDict)
+            return string(string(key)[1], (stringify_arg(k, v) for (k, v) in value)...)
+        else
+            return string(string(key)[1], value)
+        end
+    end
     name = input["run_name"]
     if length(args) > 0
-        name = string(name, (string(String(k)[1], v) for (k, v) in args)...)
+        name = string(name, "_", (stringify_arg(k, v) for (k, v) in args)...)
+
+        # Remove trailing "_"
+        name = chop(name)
     end
     if parallel_io
         name *= "parallel-io"
@@ -288,14 +298,14 @@ function runtests()
 
         base_input_full_f = deepcopy(base_input)
         base_input_full_f["timestepping"] = merge(base_input["timestepping"],
-                                                  Dict("nstep" => nstep))
+                                                  OptionsDict("nstep" => nstep))
         base_input_evolve_density = merge(base_input_full_f,
-                                          Dict("evolve_moments_density" => true))
+                                          OptionsDict("evolve_moments_density" => true))
         base_input_evolve_upar = merge(base_input_evolve_density,
-                                       Dict("evolve_moments_parallel_flow" => true,
+                                       OptionsDict("evolve_moments_parallel_flow" => true,
                                             "vpa_L" => 1.5*vpa_L, "vz_L" => 1.5*vpa_L))
         base_input_evolve_ppar = merge(base_input_evolve_upar,
-                                       Dict("evolve_moments_parallel_pressure" => true,
+                                       OptionsDict("evolve_moments_parallel_pressure" => true,
                                             "vpa_L" => 1.5*vpa_L, "vz_L" => 1.5*vpa_L))
 
         for (base, base_label) ∈ ((base_input_full_f, "full-f"),
@@ -363,11 +373,11 @@ function runtests()
         # Note: only do 2 steps in 2V/3V mode because it is so slow. Also, linear
         # interpolation used for ion-neutral coupling in 2V/3V case has low accuracy, so
         # use looser tolerance for various things.
-        @long do_tests(", 2V/3V", 1.0e-1, 98, false; tol_3V=0.3, nstep=2, r_ngrid=1,
-                       r_nelement=1, vperp_ngrid=17, vperp_nelement=4, vperp_L=vpa_L,
-                       vpa_ngrid=17, vpa_nelement=8, vzeta_ngrid=17, vzeta_nelement=4,
-                       vzeta_L=vpa_L, vr_ngrid=17, vr_nelement=4, vr_L=vpa_L, vz_ngrid=17,
-                       vz_nelement=8)
+        @long do_tests(", 2V/3V", 1.0e-1, 98, false; tol_3V=0.3,
+                       timestepping=OptionsDict("nstep" => 2), r_ngrid=1, r_nelement=1,
+                       vperp_ngrid=17, vperp_nelement=4, vperp_L=vpa_L, vpa_ngrid=17,
+                       vpa_nelement=8, vzeta_ngrid=17, vzeta_nelement=4, vzeta_L=vpa_L,
+                       vr_ngrid=17, vr_nelement=4, vr_L=vpa_L, vz_ngrid=17, vz_nelement=8)
 
         if io_has_parallel(Val(hdf5))
             orig_base_input = deepcopy(base_input)
@@ -381,10 +391,11 @@ function runtests()
             # interpolation used for ion-neutral coupling in 2V/3V case has low accuracy,
             # so use looser tolerance for various things.
             @long do_tests(", 2V/3V, parallel I/O", 2.0e-1, 98, false; tol_3V=0.3,
-                           nstep=2, r_ngrid=1, r_nelement=1, vperp_ngrid=17,
-                           vperp_nelement=4, vperp_L=vpa_L, vpa_ngrid=17, vpa_nelement=8,
-                           vzeta_ngrid=17, vzeta_nelement=4, vzeta_L=vpa_L, vr_ngrid=17,
-                           vr_nelement=4, vr_L=vpa_L, vz_ngrid=17, vz_nelement=8)
+                           timestepping=OptionsDict("nstep" => 2), r_ngrid=1,
+                           r_nelement=1, vperp_ngrid=17, vperp_nelement=4, vperp_L=vpa_L,
+                           vpa_ngrid=17, vpa_nelement=8, vzeta_ngrid=17, vzeta_nelement=4,
+                           vzeta_L=vpa_L, vr_ngrid=17, vr_nelement=4, vr_L=vpa_L,
+                           vz_ngrid=17, vz_nelement=8)
 
             global base_input = orig_base_input
         end
