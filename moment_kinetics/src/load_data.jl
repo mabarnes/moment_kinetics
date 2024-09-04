@@ -3509,11 +3509,11 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         dummy_input = grid_input("dummy", 1, 1, 1, 1, 0, 1.0,
                                  "chebyshev_pseudospectral", "", "", "periodic",
                                  dummy_adv_input, dummy_comm, "uniform")
-        vzeta, vzeta_spectral = define_coordinate(dummy_input)
+        vzeta, vzeta_spectral = define_coordinate(dummy_input; ignore_MPI = true)
         vzeta_chunk_size = 1
-        vr, vr_spectral = define_coordinate(dummy_input)
+        vr, vr_spectral = define_coordinate(dummy_input; ignore_MPI = true)
         vr_chunk_size = 1
-        vz, vz_spectral = define_coordinate(dummy_input)
+        vz, vz_spectral = define_coordinate(dummy_input; ignore_MPI = true)
         vz_chunk_size = 1
     end
 
