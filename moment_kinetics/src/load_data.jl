@@ -4,7 +4,8 @@ module load_data
 
 export open_readonly_output_file
 export load_fields_data
-export load_ion_particle_moments_data
+export load_ion_moments_data
+export load_electron_moments_data
 export load_neutral_particle_moments_data
 export load_pdf_data
 export load_neutral_pdf_data
@@ -19,6 +20,8 @@ using ..array_allocation: allocate_float, allocate_int
 using ..calculus: derivative!
 using ..communication
 using ..coordinates: coordinate, define_coordinate
+using ..electron_vpa_advection: update_electron_speed_vpa!
+using ..electron_z_advection: update_electron_speed_z!
 using ..file_io: check_io_implementation, get_group, get_subgroup_keys, get_variable_keys
 using ..input_structs
 using ..interpolation: interpolate_to_grid_1d!
@@ -27,9 +30,9 @@ using ..looping
 using ..moment_kinetics_input: mk_input
 using ..neutral_vz_advection: update_speed_neutral_vz!
 using ..neutral_z_advection: update_speed_neutral_z!
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions: mk_float, mk_int, OptionsDict
 using ..utils: get_CFL!, get_minimum_CFL_z, get_minimum_CFL_vpa, get_minimum_CFL_neutral_z,
-               get_minimum_CFL_neutral_vz
+               get_minimum_CFL_neutral_vz, enum_from_string
 using ..vpa_advection: update_speed_vpa!
 using ..z_advection: update_speed_z!
 
@@ -41,20 +44,37 @@ const timestep_diagnostic_variables = ("time_for_run", "step_counter", "dt",
                                        "failure_counter", "failure_caused_by",
                                        "steps_per_output", "failures_per_output",
                                        "failure_caused_by_per_output",
-                                       "average_successful_dt")
+                                       "average_successful_dt", "electron_step_counter",
+                                       "electron_dt", "electron_failure_counter",
+                                       "electron_failure_caused_by",
+                                       "electron_steps_per_ion_step",
+                                       "electron_steps_per_output",
+                                       "electron_failures_per_output",
+                                       "electron_failure_caused_by_per_output",
+                                       "electron_average_successful_dt")
 const em_variables = ("phi", "Er", "Ez")
 const ion_moment_variables = ("density", "parallel_flow", "parallel_pressure",
                               "thermal_speed", "temperature", "parallel_heat_flux",
-                              "collision_frequency_ii", "sound_speed", "mach_number")
+                              "collision_frequency_ii", "sound_speed", "mach_number",
+                              "total_energy", "total_energy_flux")
+const electron_moment_variables = ("electron_density", "electron_parallel_flow",
+                                   "electron_parallel_pressure", "electron_thermal_speed",
+                                   "electron_temperature", "electron_parallel_heat_flux",
+                                   "collision_frequency_ee", "collision_frequency_ei",
+                                   "electron_dudz", "electron_dpdz", "electron_dqdz")
 const neutral_moment_variables = ("density_neutral", "uz_neutral", "pz_neutral",
                                   "thermal_speed_neutral", "temperature_neutral",
-                                  "qz_neutral")
+                                  "qz_neutral", "total_energy_neutral",
+                                  "total_energy_flux_neutral")
 const all_moment_variables = tuple(em_variables..., ion_moment_variables...,
+                                   electron_moment_variables...,
                                    neutral_moment_variables...)
 
 const ion_dfn_variables = ("f",)
+const electron_dfn_variables = ("f_electron",)
 const neutral_dfn_variables = ("f_neutral",)
-const all_dfn_variables = tuple(ion_dfn_variables..., neutral_dfn_variables...)
+const all_dfn_variables = tuple(ion_dfn_variables..., electron_dfn_variables...,
+                                neutral_dfn_variables...)
 
 const ion_variables = tuple(ion_moment_variables..., ion_dfn_variables)
 const neutral_variables = tuple(neutral_moment_variables..., neutral_dfn_variables)
@@ -63,6 +83,11 @@ const all_variables = tuple(all_moment_variables..., all_dfn_variables...)
 function open_file_to_read end
 function open_file_to_read(::Val{hdf5}, filename)
     return h5open(filename, "r")
+end
+
+function get_attribute end
+function get_attribute(file_or_group_or_var::Union{HDF5.H5DataStore,HDF5.Dataset}, name)
+    return attrs(file_or_group_or_var)[name]
 end
 
 """
@@ -164,7 +189,7 @@ function read_Dict_from_section(file_or_group, section_name; ignore_subsections=
     # Function that can be called recursively to read nested Dicts from sub-groups in
     # the output file
     section_io = get_group(file_or_group, section_name)
-    section = Dict{String,Any}()
+    section = OptionsDict()
 
     for key ∈ get_variable_keys(section_io)
         section[key] = load_variable(section_io, key)
@@ -492,6 +517,31 @@ function load_ion_moments_data(fid; printout=false, extended_moments = false)
     end
 end
 
+"""
+"""
+function load_electron_moments_data(fid; printout=false)
+    if printout
+        print("Loading electron velocity moments data...")
+    end
+
+    group = get_group(fid, "dynamic_data")
+
+    # Read electron parallel pressure
+    parallel_pressure = load_variable(group, "electron_parallel_pressure")
+
+    # Read electron parallel heat flux
+    parallel_heat_flux = load_variable(group, "electron_parallel_heat_flux")
+
+    # Read electron thermal speed
+    thermal_speed = load_variable(group, "electron_thermal_speed")
+
+    if printout
+        println("done.")
+    end
+
+    return parallel_pressure, parallel_heat_flux, thermal_speed
+end
+
 function load_neutral_particle_moments_data(fid; printout=false)
     if printout
         print("Loading neutral particle velocity moments data...")
@@ -561,13 +611,16 @@ end
 """
 Reload pdf and moments from an existing output file.
 """
-function reload_evolving_fields!(pdf, moments, boundary_distributions,
+function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                                  restart_prefix_iblock, time_index, composition, geometry,
                                  r, z, vpa, vperp, vzeta, vr, vz)
     code_time = 0.0
     dt = nothing
     dt_before_last_fail = nothing
+    electron_dt = nothing
+    electron_dt_before_last_fail = nothing
     previous_runs_info = nothing
+    restart_electron_physics = nothing
     begin_serial_region()
     @serial_region begin
         fid = open_readonly_output_file(restart_prefix_iblock[1], "dfns";
@@ -581,6 +634,8 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
             end
             restart_evolve_density, restart_evolve_upar, restart_evolve_ppar =
                 load_mk_options(fid)
+
+            restart_input = load_input(fid)
 
             previous_runs_info = load_run_info_history(fid)
 
@@ -621,6 +676,10 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                 get_reload_ranges(parallel_io, restart_r, restart_z, restart_vperp,
                                   restart_vpa, restart_vzeta, restart_vr, restart_vz)
 
+            fields.phi .= reload_electron_moment("phi", dynamic, time_index, r, z,
+                                                 r_range, z_range, restart_r,
+                                                 restart_r_spectral, restart_z,
+                                                 restart_z_spectral, interpolation_needed)
             moments.ion.dens .= reload_moment("density", dynamic, time_index, r, z,
                                               r_range, z_range, restart_r,
                                               restart_r_spectral, restart_z,
@@ -636,6 +695,10 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                                               restart_r_spectral, restart_z,
                                               restart_z_spectral, interpolation_needed)
             moments.ion.ppar_updated .= true
+            moments.ion.pperp .= reload_moment("perpendicular_pressure", dynamic,
+                                               time_index, r, z, r_range, z_range,
+                                               restart_r, restart_r_spectral, restart_z,
+                                               restart_z_spectral, interpolation_needed)
             moments.ion.qpar .= reload_moment("parallel_heat_flux", dynamic, time_index,
                                               r, z, r_range, z_range, restart_r,
                                               restart_r_spectral, restart_z,
@@ -735,6 +798,96 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                                         restart_vpa_spectral, interpolation_needed,
                                         restart_evolve_density, restart_evolve_upar,
                                         restart_evolve_ppar)
+
+            moments.electron.dens .= reload_electron_moment("electron_density", dynamic,
+                                                            time_index, r, z, r_range,
+                                                            z_range, restart_r,
+                                                            restart_r_spectral, restart_z,
+                                                            restart_z_spectral,
+                                                            interpolation_needed)
+            moments.electron.dens_updated[] = true
+            moments.electron.upar .= reload_electron_moment("electron_parallel_flow",
+                                                            dynamic, time_index, r, z,
+                                                            r_range, z_range, restart_r,
+                                                            restart_r_spectral, restart_z,
+                                                            restart_z_spectral,
+                                                            interpolation_needed)
+            moments.electron.upar_updated[] = true
+            moments.electron.ppar .= reload_electron_moment("electron_parallel_pressure",
+                                                            dynamic, time_index, r, z,
+                                                            r_range, z_range, restart_r,
+                                                            restart_r_spectral, restart_z,
+                                                            restart_z_spectral,
+                                                            interpolation_needed)
+            moments.electron.ppar_updated[] = true
+            moments.electron.qpar .= reload_electron_moment("electron_parallel_heat_flux",
+                                                            dynamic, time_index, r, z,
+                                                            r_range, z_range, restart_r,
+                                                            restart_r_spectral, restart_z,
+                                                            restart_z_spectral,
+                                                            interpolation_needed)
+            moments.electron.qpar_updated[] = true
+            moments.electron.vth .= reload_electron_moment("electron_thermal_speed",
+                                                           dynamic, time_index, r, z,
+                                                           r_range, z_range, restart_r,
+                                                           restart_r_spectral, restart_z,
+                                                           restart_z_spectral,
+                                                           interpolation_needed)
+            if "electron_constraints_A_coefficient" ∈ keys(dynamic)
+                moments.electron.constraints_A_coefficient .=
+                    reload_electron_moment("electron_constraints_A_coefficient", dynamic,
+                                           time_index, r, z, r_range, z_range, restart_r,
+                                           restart_r_spectral, restart_z,
+                                           restart_z_spectral, interpolation_needed)
+            else
+                moments.electron.constraints_A_coefficient .= 0.0
+            end
+            if "electron_constraints_B_coefficient" ∈ keys(dynamic)
+                moments.electron.constraints_B_coefficient .=
+                    reload_electron_moment("electron_constraints_B_coefficient", dynamic,
+                                           time_index, r, z, r_range, z_range, restart_r,
+                                           restart_r_spectral, restart_z,
+                                           restart_z_spectral, interpolation_needed)
+            else
+                moments.electron.constraints_B_coefficient .= 0.0
+            end
+            if "electron_constraints_C_coefficient" ∈ keys(dynamic)
+                moments.electron.constraints_C_coefficient .=
+                    reload_electron_moment("electron_constraints_C_coefficient", dynamic,
+                                           time_index, r, z, r_range, z_range, restart_r,
+                                           restart_r_spectral, restart_z,
+                                           restart_z_spectral, interpolation_needed)
+            else
+                moments.electron.constraints_C_coefficient .= 0.0
+            end
+
+            # For now, electrons are always fully moment_kinetic
+            restart_electron_evolve_density, restart_electron_evolve_upar,
+                restart_electron_evolve_ppar = true, true, true
+            electron_evolve_density, electron_evolve_upar, electron_evolve_ppar =
+                true, true, true
+            if "electron_physics" ∈ keys(restart_input)
+                restart_electron_physics = enum_from_string(electron_physics_type,
+                                                            restart_input["electron_physics"])
+            else
+                restart_electron_physics = boltzmann_electron_response
+            end
+            if pdf.electron !== nothing &&
+                    restart_electron_physics ∈ (kinetic_electrons,
+                                                kinetic_electrons_with_temperature_equation)
+                pdf.electron.norm .=
+                    reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa,
+                                        r_range, z_range, vperp_range, vpa_range,
+                                        restart_r, restart_r_spectral, restart_z,
+                                        restart_z_spectral, restart_vperp,
+                                        restart_vperp_spectral, restart_vpa,
+                                        restart_vpa_spectral, interpolation_needed,
+                                        restart_evolve_density, restart_evolve_upar,
+                                        restart_evolve_ppar)
+            elseif pdf.electron !== nothing
+                # The electron distribution function will be initialized later
+                pdf.electron.norm .= 0.0
+            end
 
             if composition.n_neutral_species > 0
                 moments.neutral.dens .= reload_moment("density_neutral", dynamic,
@@ -860,12 +1013,118 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions,
                 dt_before_last_fail = load_slice(dynamic, "dt_before_last_fail",
                                                 time_index)
             end
+            if "electron_dt" ∈ keys(dynamic)
+                electron_dt = load_slice(dynamic, "electron_dt", time_index)
+            end
+            if "electron_dt_before_last_fail" ∈ keys(dynamic)
+                electron_dt_before_last_fail =
+                    load_slice(dynamic, "electron_dt_before_last_fail", time_index)
+            end
         finally
             close(fid)
         end
     end
 
-    return code_time, dt, dt_before_last_fail, previous_runs_info, time_index
+    restart_electron_physics = MPI.bcast(restart_electron_physics, 0, comm_block[])
+
+    return code_time, dt, dt_before_last_fail, electron_dt, electron_dt_before_last_fail,
+           previous_runs_info, time_index, restart_electron_physics
+end
+
+"""
+Reload electron pdf and moments from an existing output file.
+"""
+function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, time_index,
+                               geometry, r, z, vpa, vperp, vzeta, vr, vz)
+    code_time = 0.0
+    pdf_electron_converged = false
+    previous_runs_info = nothing
+    begin_serial_region()
+    @serial_region begin
+        fid = open_readonly_output_file(restart_prefix_iblock[1], "initial_electron";
+                                        iblock=restart_prefix_iblock[2])
+        try # finally to make sure to close file0
+            overview = get_group(fid, "overview")
+            dynamic = get_group(fid, "dynamic_data")
+            parallel_io = load_variable(overview, "parallel_io")
+            if time_index < 0
+                time_index, _, _ = load_time_data(fid)
+            end
+            #restart_evolve_density, restart_evolve_upar, restart_evolve_ppar =
+            #    load_mk_options(fid)
+            # For now, electrons are always fully moment_kinetic
+            restart_evolve_density, restart_evolve_upar, restart_evolve_ppar = true, true,
+                                                                               true
+            evolve_density, evolve_upar, evolve_ppar = true, true, true
+
+            previous_runs_info = load_run_info_history(fid)
+
+            restart_n_ion_species, restart_n_neutral_species = load_species_data(fid)
+            restart_r, restart_r_spectral, restart_z, restart_z_spectral, restart_vperp,
+                restart_vperp_spectral, restart_vpa, restart_vpa_spectral, restart_vzeta,
+                restart_vzeta_spectral, restart_vr,restart_vr_spectral, restart_vz,
+                restart_vz_spectral = load_restart_coordinates(fid, r, z, vperp, vpa,
+                                                               vzeta, vr, vz, parallel_io)
+
+            # Test whether any interpolation is needed
+            interpolation_needed = Dict(
+                x.name => x.n != restart_x.n || !all(isapprox.(x.grid, restart_x.grid))
+                for (x, restart_x) ∈ ((z, restart_z), (r, restart_r),
+                                      (vperp, restart_vperp), (vpa, restart_vpa)))
+
+            code_time = load_slice(dynamic, "time", time_index)
+
+            pdf_electron_converged = get_attribute(fid, "pdf_electron_converged")
+
+            r_range, z_range, vperp_range, vpa_range, vzeta_range, vr_range, vz_range =
+                get_reload_ranges(parallel_io, restart_r, restart_z, restart_vperp,
+                                  restart_vpa, restart_vzeta, restart_vr, restart_vz)
+
+            moments.electron.upar_updated[] = true
+            moments.electron.ppar .=
+                reload_electron_moment("electron_parallel_pressure", dynamic, time_index,
+                                       r, z, r_range, z_range, restart_r,
+                                       restart_r_spectral, restart_z, restart_z_spectral,
+                                       interpolation_needed)
+            moments.electron.ppar_updated[] = true
+            moments.electron.qpar .=
+                reload_electron_moment("electron_parallel_heat_flux", dynamic, time_index,
+                                       r, z, r_range, z_range, restart_r,
+                                       restart_r_spectral, restart_z, restart_z_spectral,
+                                       interpolation_needed)
+            moments.electron.qpar_updated[] = true
+            moments.electron.vth .=
+                reload_electron_moment("electron_thermal_speed", dynamic, time_index, r,
+                                       z, r_range, z_range, restart_r, restart_r_spectral,
+                                       restart_z, restart_z_spectral,
+                                       interpolation_needed)
+
+            pdf.electron.norm .=
+                reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa,
+                                    r_range, z_range, vperp_range, vpa_range, restart_r,
+                                    restart_r_spectral, restart_z, restart_z_spectral,
+                                    restart_vperp, restart_vperp_spectral, restart_vpa,
+                                    restart_vpa_spectral, interpolation_needed,
+                                    restart_evolve_density, restart_evolve_upar,
+                                    restart_evolve_ppar)
+
+            new_dt = load_slice(dynamic, "electron_dt", time_index)
+            if new_dt > 0.0
+                # if the reloaded electron_dt was 0.0, then the previous run would not
+                # have been using kinetic electrons, so we only use the value if it is
+                # positive
+                t_params.dt[] = new_dt
+            end
+            t_params.previous_dt[] = t_params.dt[]
+            t_params.dt_before_output[] = t_params.dt[]
+            t_params.dt_before_last_fail[] =
+                load_slice(dynamic, "electron_dt_before_last_fail", time_index)
+        finally
+            close(fid)
+        end
+    end
+
+    return code_time, pdf_electron_converged, previous_runs_info, time_index
 end
 
 function load_restart_coordinates(fid, r, z, vperp, vpa, vzeta, vr, vz, parallel_io)
@@ -885,15 +1144,20 @@ function load_restart_coordinates(fid, r, z, vperp, vpa, vzeta, vr, vz, parallel
         restart_vz, restart_vz_spectral, _ =
             load_coordinate_data(fid, "vz"; irank=vz.irank, nrank=vz.nrank)
     else
-        restart_z, restart_z_spectral, _ = load_coordinate_data(fid, "z")
-        restart_r, restart_r_spectral, _ = load_coordinate_data(fid, "r")
+        restart_z, restart_z_spectral, _ =
+            load_coordinate_data(fid, "z")
+        restart_r, restart_r_spectral, _ =
+            load_coordinate_data(fid, "r")
         restart_vperp, restart_vperp_spectral, _ =
             load_coordinate_data(fid, "vperp")
-        restart_vpa, restart_vpa_spectral, _ = load_coordinate_data(fid, "vpa")
+        restart_vpa, restart_vpa_spectral, _ =
+            load_coordinate_data(fid, "vpa")
         restart_vzeta, restart_vzeta_spectral, _ =
             load_coordinate_data(fid, "vzeta")
-        restart_vr, restart_vr_spectral, _ = load_coordinate_data(fid, "vr")
-        restart_vz, restart_vz_spectral, _ = load_coordinate_data(fid, "vz")
+        restart_vr, restart_vr_spectral, _ =
+            load_coordinate_data(fid, "vr")
+        restart_vz, restart_vz_spectral, _ =
+            load_coordinate_data(fid, "vz")
 
         if restart_r.nrank != r.nrank
             error("Not using parallel I/O, and distributed MPI layout has "
@@ -992,6 +1256,30 @@ function reload_moment(var_name, dynamic, time_index, r, z, r_range, z_range, re
             @views interpolate_to_grid_1d!(new_moment[:,ir,is], z.grid,
                                            moment[:,ir,is], restart_z,
                                            restart_z_spectral)
+        end
+        moment = new_moment
+    end
+    return moment
+end
+
+function reload_electron_moment(var_name, dynamic, time_index, r, z, r_range, z_range,
+                                restart_r, restart_r_spectral, restart_z,
+                                restart_z_spectral, interpolation_needed)
+    moment = load_slice(dynamic, var_name, z_range, r_range, time_index)
+    orig_nz, orig_nr = size(moment)
+    if interpolation_needed["r"]
+        new_moment = allocate_float(orig_nz, r.n)
+        for iz ∈ 1:orig_nz
+            @views interpolate_to_grid_1d!(new_moment[iz,:], r.grid, moment[iz,:],
+                                           restart_r, restart_r_spectral)
+        end
+        moment = new_moment
+    end
+    if interpolation_needed["z"]
+        new_moment = allocate_float(z.n, r.n)
+        for ir ∈ 1:r.n
+            @views interpolate_to_grid_1d!(new_moment[:,ir], z.grid, moment[:,ir],
+                                           restart_z, restart_z_spectral)
         end
         moment = new_moment
     end
@@ -1500,6 +1788,281 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
         # Need to unnormalise by vth
         for is ∈ nspecies, iz ∈ 1:z.n
             this_pdf[:,:,iz,is] ./= moments.ion.vth[iz,ir,is]
+        end
+    end
+
+    return this_pdf
+end
+
+function reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_range,
+                             z_range, vperp_range, vpa_range, restart_r,
+                             restart_r_spectral, restart_z, restart_z_spectral,
+                             restart_vperp, restart_vperp_spectral, restart_vpa,
+                             restart_vpa_spectral, interpolation_needed,
+                             restart_evolve_density, restart_evolve_upar,
+                             restart_evolve_ppar)
+
+    # Currently, electrons are always fully moment-kinetic
+    evolve_density = true
+    evolve_upar = true
+    evolve_ppar = true
+
+    this_pdf = load_slice(dynamic, "f_electron", vpa_range, vperp_range, z_range, r_range,
+                          time_index)
+    orig_nvpa, orig_nvperp, orig_nz, orig_nr = size(this_pdf)
+    if interpolation_needed["r"]
+        new_pdf = allocate_float(orig_nvpa, orig_nvperp, orig_nz, r.n)
+        for iz ∈ 1:orig_nz, ivperp ∈ 1:orig_nvperp,
+            ivpa ∈ 1:orig_nvpa
+            @views interpolate_to_grid_1d!(
+                       new_pdf[ivpa,ivperp,iz,:], r.grid,
+                       this_pdf[ivpa,ivperp,iz,:], restart_r,
+                       restart_r_spectral)
+        end
+        this_pdf = new_pdf
+    end
+    if interpolation_needed["z"]
+        new_pdf = allocate_float(orig_nvpa, orig_nvperp, z.n, r.n)
+        for ir ∈ 1:r.n, ivperp ∈ 1:orig_nvperp,
+            ivpa ∈ 1:orig_nvpa
+            @views interpolate_to_grid_1d!(
+                       new_pdf[ivpa,ivperp,:,ir], z.grid,
+                       this_pdf[ivpa,ivperp,:,ir], restart_z,
+                       restart_z_spectral)
+        end
+        this_pdf = new_pdf
+    end
+
+    # Current moment-kinetic implementation is only 1V, so no need to handle a
+    # normalised vperp coordinate. This will need to change when 2V
+    # moment-kinetics is implemented.
+    if interpolation_needed["vperp"]
+        new_pdf = allocate_float(orig_nvpa, vperp.n, z.n, r.n)
+        for ir ∈ 1:r.n, iz ∈ 1:z.n, ivpa ∈ 1:orig_nvpa
+            @views interpolate_to_grid_1d!(
+                       new_pdf[ivpa,:,iz,ir], vperp.grid,
+                       this_pdf[ivpa,:,iz,ir], restart_vperp,
+                       restart_vperp_spectral)
+        end
+        this_pdf = new_pdf
+    end
+
+    if (
+        (evolve_density == restart_evolve_density &&
+         evolve_upar == restart_evolve_upar && evolve_ppar ==
+         restart_evolve_ppar)
+        || (!evolve_upar && !restart_evolve_upar &&
+            !evolve_ppar && !restart_evolve_ppar)
+       )
+        # No chages to velocity-space coordinates, so just interpolate from
+        # one grid to the other
+        if interpolation_needed["vpa"]
+            new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
+            for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+                @views interpolate_to_grid_1d!(
+                           new_pdf[:,ivperp,iz,ir], vpa.grid,
+                           this_pdf[:,ivperp,iz,ir], restart_vpa,
+                           restart_vpa_spectral)
+            end
+            this_pdf = new_pdf
+        end
+    elseif (!evolve_upar && !evolve_ppar &&
+            restart_evolve_upar && !restart_evolve_ppar)
+        # vpa = new_wpa = old_wpa + upar
+        # => old_wpa = new_wpa - upar
+        new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
+        for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+            restart_vpa_vals = vpa.grid .- moments.electron.upar[iz,ir]
+            @views interpolate_to_grid_1d!(
+                       new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], restart_vpa,
+                       restart_vpa_spectral)
+        end
+        this_pdf = new_pdf
+    elseif (!evolve_upar && !evolve_ppar &&
+            !restart_evolve_upar && restart_evolve_ppar)
+        # vpa = new_wpa = old_wpa*vth
+        # => old_wpa = new_wpa/vth
+        new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
+        for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+            restart_vpa_vals = vpa.grid ./ moments.electron.vth[iz,ir]
+            @views interpolate_to_grid_1d!(
+                       new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], restart_vpa,
+                       restart_vpa_spectral)
+        end
+        this_pdf = new_pdf
+    elseif (!evolve_upar && !evolve_ppar &&
+            restart_evolve_upar && restart_evolve_ppar)
+        # vpa = new_wpa = old_wpa*vth + upar
+        # => old_wpa = (new_wpa - upar)/vth
+        new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
+        for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+            restart_vpa_vals =
+            @. (vpa.grid - moments.electron.upar[iz,ir]) /
+                moments.electron.vth[iz,ir]
+            @views interpolate_to_grid_1d!(
+                       new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], restart_vpa,
+                       restart_vpa_spectral)
+        end
+        this_pdf = new_pdf
+    elseif (evolve_upar && !evolve_ppar &&
+            !restart_evolve_upar && !restart_evolve_ppar)
+        # vpa = new_wpa + upar = old_wpa
+        # => old_wpa = new_wpa + upar
+        new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
+        for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+            restart_vpa_vals = vpa.grid .+ moments.electron.upar[iz,ir]
+            @views interpolate_to_grid_1d!(
+                       new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], restart_vpa,
+                       restart_vpa_spectral)
+        end
+        this_pdf = new_pdf
+    elseif (evolve_upar && !evolve_ppar &&
+            !restart_evolve_upar && restart_evolve_ppar)
+        # vpa = new_wpa + upar = old_wpa*vth
+        # => old_wpa = (new_wpa + upar)/vth
+        new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
+        for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+            restart_vpa_vals =
+            @. (vpa.grid + moments.electron.upar[iz,ir]) /
+                moments.electron.vth
+            @views interpolate_to_grid_1d!(
+                       new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], restart_vpa,
+                       restart_vpa_spectral)
+        end
+        this_pdf = new_pdf
+    elseif (evolve_upar && !evolve_ppar &&
+            restart_evolve_upar && restart_evolve_ppar)
+        # vpa = new_wpa + upar = old_wpa*vth + upar
+        # => old_wpa = new_wpa/vth
+        new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
+        for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+            restart_vpa_vals = vpa.grid ./ moments.electron.vth[iz,ir]
+            @views interpolate_to_grid_1d!(
+                       new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], restart_vpa,
+                       restart_vpa_spectral)
+        end
+        this_pdf = new_pdf
+    elseif (!evolve_upar && evolve_ppar &&
+            !restart_evolve_upar && !restart_evolve_ppar)
+        # vpa = new_wpa*vth = old_wpa
+        # => old_wpa = new_wpa*vth
+        new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
+        for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+            restart_vpa_vals = vpa.grid .* moments.electron.vth[iz,ir]
+            @views interpolate_to_grid_1d!(
+                       new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], restart_vpa,
+                       restart_vpa_spectral)
+        end
+        this_pdf = new_pdf
+    elseif (!evolve_upar && evolve_ppar &&
+            restart_evolve_upar && !restart_evolve_ppar)
+        # vpa = new_wpa*vth = old_wpa + upar
+        # => old_wpa = new_wpa*vth - upar/vth
+        new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
+        for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+            restart_vpa_vals = @. vpa.grid * moments.electron.vth[iz,ir] -
+                                  moments.electron.upar[iz,ir]
+            @views interpolate_to_grid_1d!(
+                       new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], restart_vpa,
+                       restart_vpa_spectral)
+        end
+        this_pdf = new_pdf
+    elseif (!evolve_upar && evolve_ppar &&
+            restart_evolve_upar && restart_evolve_ppar)
+        # vpa = new_wpa*vth = old_wpa*vth + upar
+        # => old_wpa = new_wpa - upar/vth
+        new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
+        for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+            restart_vpa_vals =
+            @. vpa.grid -
+            moments.electron.upar[iz,ir]/moments.electron.vth[iz,ir]
+            @views interpolate_to_grid_1d!(
+                       new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], restart_vpa,
+                       restart_vpa_spectral)
+        end
+        this_pdf = new_pdf
+    elseif (evolve_upar && evolve_ppar &&
+            !restart_evolve_upar && !restart_evolve_ppar)
+        # vpa = new_wpa*vth + upar = old_wpa
+        # => old_wpa = new_wpa*vth + upar
+        new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
+        for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+            restart_vpa_vals = @. vpa.grid * moments.electron.vth[iz,ir] +
+                                  moments.electron.upar[iz,ir]
+            @views interpolate_to_grid_1d!(
+                       new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], restart_vpa,
+                       restart_vpa_spectral)
+        end
+        this_pdf = new_pdf
+    elseif (evolve_upar && evolve_ppar &&
+            restart_evolve_upar && !restart_evolve_ppar)
+        # vpa = new_wpa*vth + upar = old_wpa + upar
+        # => old_wpa = new_wpa*vth
+        new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
+        for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+            restart_vpa_vals = vpa.grid .* moments.electron.vth[iz,ir]
+            @views interpolate_to_grid_1d!(
+                       new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], restart_vpa,
+                       restart_vpa_spectral)
+        end
+        this_pdf = new_pdf
+    elseif (evolve_upar && evolve_ppar &&
+            !restart_evolve_upar && restart_evolve_ppar)
+        # vpa = new_wpa*vth + upar = old_wpa*vth
+        # => old_wpa = new_wpa + upar/vth
+        new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
+        for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
+            restart_vpa_vals =
+            @. vpa.grid +
+            moments.electron.upar[iz,ir] / moments.electron.vth[iz,ir]
+            @views interpolate_to_grid_1d!(
+                       new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], restart_vpa,
+                       restart_vpa_spectral)
+        end
+        this_pdf = new_pdf
+    else
+        # This should never happen, as all combinations of evolve_* options
+        # should be handled above.
+        error("Unsupported combination of moment-kinetic options:"
+              * " evolve_density=", evolve_density
+              * " evolve_upar=", evolve_upar
+              * " evolve_ppar=", evolve_ppar
+              * " restart_evolve_density=", restart_evolve_density
+              * " restart_evolve_upar=", restart_evolve_upar
+              * " restart_evolve_ppar=", restart_evolve_ppar)
+    end
+    if evolve_density && !restart_evolve_density
+        # Need to normalise by density
+        for ir ∈ 1:r.n, iz ∈ 1:z.n
+            this_pdf[:,:,iz,ir] ./= moments.electron.dens[iz,ir]
+        end
+    elseif !evolve_density && restart_evolve_density
+        # Need to unnormalise by density
+        for ir ∈ 1:r.n, iz ∈ 1:z.n
+            this_pdf[:,:,iz,ir] .*= moments.electron.dens[iz,ir]
+        end
+    end
+    if evolve_ppar && !restart_evolve_ppar
+        # Need to normalise by vth
+        for ir ∈ 1:r.n, iz ∈ 1:z.n
+            this_pdf[:,:,iz,ir] .*= moments.electron.vth[iz,ir]
+        end
+    elseif !evolve_ppar && restart_evolve_ppar
+        # Need to unnormalise by vth
+        for ir ∈ 1:r.n, iz ∈ 1:z.n
+            this_pdf[:,:,iz,ir] ./= moments.electron.vth[iz,ir]
         end
     end
 
@@ -2091,10 +2654,10 @@ restarts (which are sequential in time), so concatenate the data from each entry
 The slice to take is specified by the keyword arguments.
 """
 function load_distributed_ion_pdf_slice(run_names::Tuple, nblocks::Tuple, t_range,
-                                        n_species::mk_int, r::coordinate,
-                                        z::coordinate, vperp::coordinate,
-                                        vpa::coordinate; is=nothing, ir=nothing,
-                                        iz=nothing, ivperp=nothing, ivpa=nothing)
+                                        n_species::mk_int, r::coordinate, z::coordinate,
+                                        vperp::coordinate, vpa::coordinate; is=nothing,
+                                        ir=nothing, iz=nothing, ivperp=nothing,
+                                        ivpa=nothing)
     # dimension of pdf is [vpa,vperp,z,r,species,t]
 
     result_dims = mk_int[]
@@ -2280,6 +2843,202 @@ function load_distributed_ion_pdf_slice(run_names::Tuple, nblocks::Tuple, t_rang
     end
     if isa(is, mk_int)
         thisdim = ndims(f_global) - 1
+        f_global = selectdim(f_global, thisdim, 1)
+    end
+    if isa(t_range, mk_int)
+        thisdim = ndims(f_global)
+        f_global = selectdim(f_global, thisdim, 1)
+    end
+
+    return f_global
+end
+
+"""
+Read a slice of an electron distribution function
+
+run_names is a tuple. If it has more than one entry, this means that there are multiple
+restarts (which are sequential in time), so concatenate the data from each entry together.
+
+The slice to take is specified by the keyword arguments.
+"""
+function load_distributed_electron_pdf_slice(run_names::Tuple, nblocks::Tuple, t_range,
+                                             n_species::mk_int, r::coordinate,
+                                             z::coordinate, vperp::coordinate,
+                                             vpa::coordinate; ir=nothing, iz=nothing,
+                                             ivperp=nothing, ivpa=nothing)
+    # dimension of pdf is [vpa,vperp,z,r,t]
+
+    result_dims = mk_int[]
+    if ivpa === nothing
+        ivpa = 1:vpa.n_global
+        push!(result_dims, vpa.n_global)
+    elseif !isa(ivpa, mk_int)
+        push!(result_dims, length(ivpa))
+    end
+    if ivperp === nothing
+        ivperp = 1:vperp.n_global
+        push!(result_dims, vperp.n_global)
+    elseif !isa(ivperp, mk_int)
+        push!(result_dims, length(ivperp))
+    end
+    if iz === nothing
+        iz = 1:z.n_global
+        push!(result_dims, z.n_global)
+    elseif isa(iz, mk_int)
+        push!(result_dims, 1)
+    else
+        push!(result_dims, length(iz))
+    end
+    if ir === nothing
+        ir = 1:r.n_global
+        push!(result_dims, r.n_global)
+    elseif isa(ir, mk_int)
+        push!(result_dims, 1)
+    else
+        push!(result_dims, length(ir))
+    end
+    push!(result_dims, length(t_range))
+
+    f_global = allocate_float(result_dims...)
+
+    local_tind_start = 1
+    local_tind_end = -1
+    global_tind_start = 1
+    global_tind_end = -1
+    for (run_name, nb) in zip(run_names, nblocks)
+        for iblock in 0:nb-1
+            fid = open_readonly_output_file(run_name, "dfns", iblock=iblock, printout=false)
+
+            z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid)
+
+            # max index set to avoid double assignment of repeated points
+            # nr/nz if irank = nrank-1, (nr-1)/(nz-1) otherwise
+            imax_r = (r_irank == r.nrank - 1 ? r.n : r.n - 1)
+            imax_z = (z_irank == z.nrank - 1 ? z.n : z.n - 1)
+            local_r_range = 1:imax_r
+            local_z_range = 1:imax_z
+            global_r_range = iglobal_func(1, r_irank, r.n):iglobal_func(imax_r, r_irank, r.n)
+            global_z_range = iglobal_func(1, z_irank, z.n):iglobal_func(imax_z, z_irank, z.n)
+
+            if ir !== nothing && !any(i ∈ global_r_range for i in ir)
+                # No data for the slice on this rank
+                continue
+            elseif isa(ir, StepRange)
+                # Note that `findfirst(test, array)` returns the index `i` of the first
+                # element of `array` for which `test(array[i])` is `true`.
+                # `findlast()` similarly finds the index of the last element...
+                start_ind = findfirst(i -> i>=ir.start, global_r_range)
+                start = global_r_range[start_ind]
+                stop_ind = findlast(i -> i<=ir.stop, global_r_range)
+                stop = global_r_range[stop_ind]
+                local_r_range = (local_r_range.start + start - global_r_range.start):ir.step:(local_r_range.stop + stop - global_r_range.stop)
+                global_r_range = findfirst(i->i ∈ global_r_range, ir):findlast(i->i ∈ global_r_range, ir)
+            elseif isa(ir, UnitRange)
+                start_ind = findfirst(i -> i>=ir.start, global_r_range)
+                start = global_r_range[start_ind]
+                stop_ind = findlast(i -> i<=ir.stop, global_r_range)
+                stop = global_r_range[stop_ind]
+                local_r_range = (local_r_range.start + start - global_r_range.start):(local_r_range.stop + stop - global_r_range.stop)
+                global_r_range = findfirst(i->i ∈ global_r_range, ir):findlast(i->i ∈ global_r_range, ir)
+            elseif isa(ir, mk_int)
+                local_r_range = ir - (global_r_range.start - 1)
+                global_r_range = ir
+            end
+            if iz !== nothing && !any(i ∈ global_z_range for i in iz)
+                # No data for the slice on this rank
+                continue
+            elseif isa(iz, StepRange)
+                # Note that `findfirst(test, array)` returns the index `i` of the first
+                # element of `array` for which `test(array[i])` is `true`.
+                # `findlast()` similarly finds the index of the last element...
+                start_ind = findfirst(i -> i>=iz.start, global_z_range)
+                start = global_z_range[start_ind]
+                stop_ind = findlast(i -> i<=iz.stop, global_z_range)
+                stop = global_z_range[stop_ind]
+                local_z_range = (local_z_range.start + start - global_z_range.start):iz.step:(local_z_range.stop + stop - global_z_range.stop)
+                global_z_range = findfirst(i->i ∈ global_z_range, iz):findlast(i->i ∈ global_z_range, iz)
+            elseif isa(iz, UnitRange)
+                start_ind = findfirst(i -> i>=iz.start, global_z_range)
+                start = global_z_range[start_ind]
+                stop_ind = findlast(i -> i<=iz.stop, global_z_range)
+                stop = global_z_range[stop_ind]
+                local_z_range = (local_z_range.start + start - global_z_range.start):(local_z_range.stop + stop - global_z_range.stop)
+                global_z_range = findfirst(i->i ∈ global_z_range, iz):findlast(i->i ∈ global_z_range, iz)
+            elseif isa(iz, mk_int)
+                local_z_range = iz - (global_z_range.start - 1)
+                global_z_range = iz
+            end
+
+            f_local_slice = load_pdf_data(fid)
+
+            if local_tind_start > 1
+                # The run being loaded is a restart (as local_tind_start=1 for the first
+                # run), so skip the first point, as this is a duplicate of the last point
+                # of the previous restart
+                skip_first = 1
+            else
+                skip_first = 0
+            end
+            ntime_local = size(f_local_slice, ndims(f_local_slice)) - skip_first
+            local_tind_end = local_tind_start + ntime_local - 1
+            local_t_range = collect(it - local_tind_start + 1 + skip_first
+                                    for it ∈ t_range
+                                    if local_tind_start <= it <= local_tind_end)
+            global_tind_end = global_tind_start + length(local_t_range) - 1
+
+            f_global_slice = selectdim(f_global, ndims(f_global),
+                                       global_tind_start:global_tind_end)
+
+            # Note: use selectdim() and get the dimension from thisdim because the actual
+            # number of dimensions in f_global_slice, f_local_slice is different depending
+            # on which combination of ivpa, ivperp, iz, ir, and is was passed.
+            thisdim = ndims(f_local_slice) - 5
+            f_local_slice = selectdim(f_local_slice, thisdim, ivpa)
+
+            thisdim = ndims(f_local_slice) - 4
+            f_local_slice = selectdim(f_local_slice, thisdim, ivperp)
+
+            thisdim = ndims(f_local_slice) - 3
+            if isa(iz, mk_int)
+                f_global_slice = selectdim(f_global_slice, thisdim, 1)
+                f_local_slice = selectdim(f_local_slice, thisdim,
+                                          ilocal_func(iz, z_irank, z.n))
+            else
+                f_global_slice = selectdim(f_global_slice, thisdim, global_z_range)
+                f_local_slice = selectdim(f_local_slice, thisdim, local_z_range)
+            end
+
+            thisdim = ndims(f_local_slice) - 2
+            if isa(ir, mk_int)
+                f_global_slice = selectdim(f_global_slice, thisdim, 1)
+                f_local_slice = selectdim(f_local_slice, thisdim,
+                                          ilocal_func(ir, r_irank, r.n))
+            else
+                f_global_slice = selectdim(f_global_slice, thisdim, global_r_range)
+                f_local_slice = selectdim(f_local_slice, thisdim, local_r_range)
+            end
+
+            thisdim = ndims(f_local_slice) - 1
+            f_global_slice = selectdim(f_global_slice, thisdim)
+            f_local_slice = selectdim(f_local_slice, thisdim)
+
+            # Select time slice
+            thisdim = ndims(f_local_slice)
+            f_local_slice = selectdim(f_local_slice, thisdim, local_t_range)
+
+            f_global_slice .= f_local_slice
+            close(fid)
+        end
+        local_tind_start = local_tind_end + 1
+        global_tind_start = global_tind_end + 1
+    end
+
+    if isa(iz, mk_int)
+        thisdim = ndims(f_global) - 3
+        f_global = selectdim(f_global, thisdim, 1)
+    end
+    if isa(ir, mk_int)
+        thisdim = ndims(f_global) - 2
         f_global = selectdim(f_global, thisdim, 1)
     end
     if isa(t_range, mk_int)
@@ -2526,9 +3285,9 @@ end
 
 """
     get_run_info_no_setup(run_dir...; itime_min=1, itime_max=0, itime_skip=1, dfns=false,
-                          do_setup=true, setup_input_file=nothing)
+                          initial_electron=false)
     get_run_info_no_setup((run_dir, restart_index)...; itime_min=1, itime_max=0,
-                          itime_skip=1, dfns=false, do_setup=true, setup_input_file=nothing)
+                          itime_skip=1, dfns=false, initial_electron=false)
 
 Get file handles and other info for a single run
 
@@ -2550,7 +3309,8 @@ argument can be a String `run_dir` giving a directory to read output from or a T
 mix Strings and Tuples in a call).
 
 By default load data from moments files, pass `dfns=true` to load from distribution
-functions files.
+functions files, or `initial_electron=true` and `dfns=true` to load from initial electron
+state files.
 
 The `itime_min`, `itime_max` and `itime_skip` options can be used to select only a slice
 of time points when loading data. In `makie_post_process` these options are read from the
@@ -2561,14 +3321,19 @@ defaults for the remaining options. If either `itime_min` or `itime_max` are ≤
 values are used as offsets from the final time index of the run.
 """
 function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractString,Union{Int,Nothing}}}...;
-                               itime_min=1, itime_max=0, itime_skip=1, dfns=false)
+                               itime_min=1, itime_max=0, itime_skip=1, dfns=false,
+                               initial_electron=false)
     if length(run_dir) == 0
         error("No run_dir passed")
+    end
+    if initial_electron && !dfns
+        error("When `initial_electron=true` is passed, `dfns=true` must also be passed")
     end
     if length(run_dir) > 1
         run_info = Tuple(get_run_info_no_setup(r; itime_min=itime_min,
                                                itime_max=itime_max, itime_skip=itime_skip,
-                                               dfns=dfns)
+                                               dfns=dfns,
+                                               initial_electron=initial_electron)
                          for r ∈ run_dir)
         return run_info
     end
@@ -2589,6 +3354,7 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
               * "`(String, Nothing)`. Got $run_dir")
     end
 
+    electron_debug = false
     if isfile(this_run_dir)
         # this_run_dir is actually a filename. Assume it is a moment_kinetics output file
         # and infer the directory and the run_name from the filename.
@@ -2600,8 +3366,13 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
             run_name = split(filename, ".moments.")[1]
         elseif occursin(".dfns.", filename)
             run_name = split(filename, ".dfns.")[1]
+        elseif occursin(".initial_electron.", filename)
+            run_name = split(filename, ".initial_electron.")[1]
+        elseif occursin(".electron_debug.", filename)
+            run_name = split(filename, ".electron_debug.")[1]
+            electron_debug = true
         else
-            error("Cannot recognise '$this_run_dir' as a moment_kinetics output file")
+            error("Cannot recognise '$this_run_dir/$filename' as a moment_kinetics output file")
         end
     elseif isdir(this_run_dir)
         # Normalise by removing any trailing slash - with a slash basename() would return an
@@ -2618,18 +3389,36 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         # Find output files from all restarts in the directory
         counter = 1
         run_prefixes = Vector{String}()
-        while true
-            # Test if output files exist for this value of counter
-            prefix_with_count = base_prefix * "_$counter"
-            if length(glob(basename(prefix_with_count) * ".*.h5", dirname(prefix_with_count))) > 0 ||
-                length(glob(basename(prefix_with_count) * ".*.cdf", dirname(prefix_with_count))) > 0
+        if initial_electron
+            while true
+                # Test if output files exist for this value of counter
+                prefix_with_count = base_prefix * "_$counter"
+                if length(glob(basename(prefix_with_count) * ".initial_elctron*.h5", dirname(prefix_with_count))) > 0 ||
+                    length(glob(basename(prefix_with_count) * ".initial_elctron*.cdf", dirname(prefix_with_count))) > 0
 
-                push!(run_prefixes, prefix_with_count)
-            else
-                # No more output files found
-                break
+                    push!(run_prefixes, prefix_with_count)
+                else
+                    # No more output files found
+                    break
+                end
+                counter += 1
             end
-            counter += 1
+        else
+            while true
+                # Test if output files exist for this value of counter
+                prefix_with_count = base_prefix * "_$counter"
+                if length(glob(basename(prefix_with_count) * ".dfns*.h5", dirname(prefix_with_count))) > 0 ||
+                    length(glob(basename(prefix_with_count) * ".dfns*.cdf", dirname(prefix_with_count))) > 0 ||
+                    length(glob(basename(prefix_with_count) * ".moments*.h5", dirname(prefix_with_count))) > 0 ||
+                    length(glob(basename(prefix_with_count) * ".moments*.cdf", dirname(prefix_with_count))) > 0
+
+                    push!(run_prefixes, prefix_with_count)
+                else
+                    # No more output files found
+                    break
+                end
+                counter += 1
+            end
         end
         # Add the final run which does not have a '_$counter' suffix
         push!(run_prefixes, base_prefix)
@@ -2642,7 +3431,13 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         error("Invalid restart_index=$restart_index")
     end
 
-    if dfns
+    if initial_electron
+        if electron_debug
+            ext = "electron_debug"
+        else
+            ext = "initial_electron"
+        end
+    elseif dfns
         ext = "dfns"
     else
         ext = "moments"
@@ -2714,16 +3509,51 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         dummy_input = grid_input("dummy", 1, 1, 1, 1, 0, 1.0,
                                  "chebyshev_pseudospectral", "", "", "periodic",
                                  dummy_adv_input, dummy_comm, "uniform")
-        vzeta, vzeta_spectral = define_coordinate(dummy_input)
+        vzeta, vzeta_spectral = define_coordinate(dummy_input; ignore_MPI = true)
         vzeta_chunk_size = 1
-        vr, vr_spectral = define_coordinate(dummy_input)
+        vr, vr_spectral = define_coordinate(dummy_input; ignore_MPI = true)
         vr_chunk_size = 1
-        vz, vz_spectral = define_coordinate(dummy_input)
+        vz, vz_spectral = define_coordinate(dummy_input; ignore_MPI = true)
         vz_chunk_size = 1
     end
 
     # Get variable names just from the first restart, for simplicity
     variable_names = get_variable_keys(get_group(fids0[1], "dynamic_data"))
+    if initial_electron
+        evolving_variables = ("f_electron",)
+    else
+        evolving_variables = ["f"]
+        if evolve_density
+            push!(evolving_variables, "density")
+        end
+        if evolve_upar
+            push!(evolving_variables, "parallel_flow")
+        end
+        if evolve_ppar
+            push!(evolving_variables, "parallel_pressure")
+        end
+        if composition.electron_physics ∈ (kinetic_electrons,
+                                           kinetic_electrons_with_temperature_equation)
+            push!(evolving_variables, "f_electron")
+        end
+        if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons,
+                                           kinetic_electrons_with_temperature_equation)
+            push!(evolving_variables, "electron_parallel_pressure")
+        end
+        if composition.n_neutral_species > 0
+            push!(evolving_variables, "f_neutral")
+            if evolve_density
+                push!(evolving_variables, "density_neutral")
+            end
+            if evolve_upar
+                push!(evolving_variables, "uz_neutral")
+            end
+            if evolve_ppar
+                push!(evolving_variables, "pz_neutral")
+            end
+        end
+        evolving_variables = Tuple(evolving_variables)
+    end
 
     if parallel_io
         files = fids0
@@ -2753,7 +3583,8 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
                 z_chunk_size=z_chunk_size, vperp_chunk_size=vperp_chunk_size,
                 vpa_chunk_size=vpa_chunk_size, vzeta_chunk_size=vzeta_chunk_size,
                 vr_chunk_size=vr_chunk_size, vz_chunk_size=vz_chunk_size,
-                variable_names=variable_names, dfns=dfns)
+                variable_names=variable_names, evolving_variables=evolving_variables,
+                dfns=dfns)
 
     return run_info
 end
@@ -2967,6 +3798,15 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             end
             !isa(it, mk_int) && push!(dims, nt)
             result = allocate_float(dims...)
+        elseif nd == 5
+            # electron distribution function variable with dimensions (vpa,vperp,z,r,t)
+            dims = Vector{mk_int}()
+            !isa(ivpa, mk_int) && push!(dims, nvpa)
+            !isa(ivperp, mk_int) && push!(dims, nvperp)
+            !isa(iz, mk_int) && push!(dims, nz)
+            !isa(ir, mk_int) && push!(dims, nr)
+            !isa(it, mk_int) && push!(dims, nt)
+            result = allocate_float(dims...)
         elseif nd == 6
             # ion distribution function variable with dimensions (vpa,vperp,z,r,s,t)
             nspecies = size(variable[1], 5)
@@ -2976,7 +3816,6 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             !isa(iz, mk_int) && push!(dims, nz)
             !isa(ir, mk_int) && push!(dims, nr)
             if is === (:)
-                nspecies = size(variable[1], 3)
                 push!(dims, nspecies)
             elseif !isa(is, mk_int)
                 push!(dims, nspecies)
@@ -2993,7 +3832,6 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             !isa(iz, mk_int) && push!(dims, nz)
             !isa(ir, mk_int) && push!(dims, nr)
             if is === (:)
-                nspecies = size(variable[1], 3)
                 push!(dims, nspecies)
             elseif !isa(is, mk_int)
                 push!(dims, nspecies)
@@ -3028,6 +3866,8 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                         result .= v[iz,ir,tind]
                     elseif nd == 4
                         result .= v[iz,ir,is,tind]
+                    elseif nd == 5
+                        result .= v[ivpa,ivperp,iz,ir,tind]
                     elseif nd == 6
                         result .= v[ivpa,ivperp,iz,ir,is,tind]
                     elseif nd == 7
@@ -3062,6 +3902,8 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                         selectdim(result, ndims(result), global_it_start:global_it_end) .= v[iz,ir,tinds]
                     elseif nd == 4
                         selectdim(result, ndims(result), global_it_start:global_it_end) .= v[iz,ir,is,tinds]
+                    elseif nd == 5
+                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[ivpa,ivperp,iz,ir,tinds]
                     elseif nd == 6
                         selectdim(result, ndims(result), global_it_start:global_it_end) .= v[ivpa,ivperp,iz,ir,is,tinds]
                     elseif nd == 7
@@ -3080,8 +3922,10 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
     else
         # Use existing distributed I/O loading functions
         diagnostic_variable = false
-        if variable_name ∈ em_variables
+        if variable_name ∈ tuple(em_variables..., electron_moment_variables...)
             nd = 3
+        elseif variable_name ∈ electron_dfn_variables
+            nd = 5
         elseif variable_name ∈ ion_dfn_variables
             nd = 6
         elseif variable_name ∈ neutral_dfn_variables
@@ -3099,7 +3943,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             fid = open_readonly_output_file(run_info.files[1], run_info.ext, iblock=0)
             group = get_group(fid, "dynamic_data")
             result = load_variable(group, variable_name)
-            result = selectdim(result, ndims(result), global_it_start:global_it_end)
+            result = selectdim(result, ndims(result), it)
         elseif nd == 3
             result = allocate_float(run_info.z.n, run_info.r.n, run_info.nt)
             read_distributed_zr_data!(result, variable_name, run_info.files,
@@ -3117,6 +3961,13 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                                       run_info.ext, run_info.nblocks, run_info.z_local.n,
                                       run_info.r_local.n, run_info.itime_skip)
             result = result[iz,ir,is,it]
+        elseif nd === 5
+            result = load_distributed_electron_pdf_slice(run_info.files, run_info.nblocks,
+                                                         it, run_info.n_ion_species,
+                                                         run_info.r_local,
+                                                         run_info.z_local, run_info.vperp,
+                                                         run_info.vpa; ir=ir, iz=iz,
+                                                         ivperp=ivperp, ivpa=ivpa)
         elseif nd === 6
             result = load_distributed_ion_pdf_slice(run_info.files, run_info.nblocks, it,
                                                     run_info.n_ion_species,
@@ -3201,6 +4052,30 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         return variable
     end
 
+    # Select a slice of an electron distribution function sized variable
+    function select_slice_of_variable(variable::AbstractArray{T,5} where T; it=nothing,
+                                      is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                                      ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                                      ivz=nothing)
+        if it !== nothing
+            variable = selectdim(variable, 5, kwargs[:it])
+        end
+        if ir !== nothing
+            variable = selectdim(variable, 4, kwargs[:ir])
+        end
+        if iz !== nothing
+            variable = selectdim(variable, 3, kwargs[:iz])
+        end
+        if ivperp !== nothing
+            variable = selectdim(variable, 2, kwargs[:ivperp])
+        end
+        if ivpa !== nothing
+            variable = selectdim(variable, 1, kwargs[:ivpa])
+        end
+
+        return variable
+    end
+
     # Select a slice of a neutral distribution function sized variable
     function select_slice_of_variable(variable::AbstractArray{T,7} where T; it=nothing,
                                       is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
@@ -3253,14 +4128,72 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
     end
 
     if variable_name == "temperature"
-        vth = postproc_load_variable(run_info, "thermal_speed"; kwargs...)
+        vth = get_variable(run_info, "thermal_speed"; kwargs...)
         variable = vth.^2
     elseif variable_name == "collision_frequency_ii"
-        n = postproc_load_variable(run_info, "density"; kwargs...)
-        vth = postproc_load_variable(run_info, "thermal_speed"; kwargs...)
+        n = get_variable(run_info, "density"; kwargs...)
+        vth = get_variable(run_info, "thermal_speed"; kwargs...)
         variable = get_collision_frequency_ii(run_info.collisions, n, vth)
+    elseif variable_name == "collision_frequency_ee"
+        n = get_variable(run_info, "electron_density"; kwargs...)
+        vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
+        variable = get_collision_frequency_ee(run_info.collisions, n, vth)
+    elseif variable_name == "collision_frequency_ei"
+        n = get_variable(run_info, "electron_density"; kwargs...)
+        vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
+        variable = get_collision_frequency_ei(run_info.collisions, n, vth)
+    elseif variable_name == "electron_temperature"
+        vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
+        variable = run_info.composition.me_over_mi .* vth.^2
+    elseif variable_name == "electron_dudz"
+        upar = get_variable(run_info, "electron_parallel_flow"; kwargs...)
+        variable = similar(upar)
+        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
+            error("Cannot take z-derivative when iz!==nothing")
+        end
+        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            for it ∈ 1:size(variable, 2)
+                @views derivative!(variable[:,it], upar[:,it], run_info.z, run_info.z_spectral)
+            end
+        else
+            for it ∈ 1:size(variable, 3), ir ∈ 1:run_info.r.n
+                @views derivative!(variable[:,ir,it], upar[:,ir,it], run_info.z, run_info.z_spectral)
+            end
+        end
+    elseif variable_name == "electron_dpdz"
+        ppar = get_variable(run_info, "electron_parallel_pressure"; kwargs...)
+        variable = similar(ppar)
+        println("electron_dpdz kwargs ", kwargs)
+        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
+            error("Cannot take z-derivative when iz!==nothing")
+        end
+        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            println("check range ", (kwargs[:it] === nothing ? (1:run_info.nt) : (1:length(kwargs[:it]))))
+            for it ∈ 1:size(variable, 2)
+                @views derivative!(variable[:,it], ppar[:,it], run_info.z, run_info.z_spectral)
+            end
+        else
+            for it ∈ 1:size(variable, 3), ir ∈ 1:run_info.r.n
+                @views derivative!(variable[:,ir,it], ppar[:,ir,it], run_info.z, run_info.z_spectral)
+            end
+        end
+    elseif variable_name == "electron_dqdz"
+        qpar = get_variable(run_info, "electron_parallel_heat_flux"; kwargs...)
+        variable = similar(qpar)
+        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
+            error("Cannot take z-derivative when iz!==nothing")
+        end
+        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            for it ∈ 1:size(variable, 2)
+                @views derivative!(variable[:,it], qpar[:,it], run_info.z, run_info.z_spectral)
+            end
+        else
+            for it ∈ 1:size(variable, 3), ir ∈ 1:run_info.r.n
+                @views derivative!(variable[:,ir,it], qpar[:,ir,it], run_info.z, run_info.z_spectral)
+            end
+        end
     elseif variable_name == "temperature_neutral"
-        vth = postproc_load_variable(run_info, "thermal_speed_neutral"; kwargs...)
+        vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
         variable = vth.^2
     elseif variable_name == "sound_speed"
         T_e = run_info.composition.T_e
@@ -3276,6 +4209,58 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
         cs = get_variable(run_info, "sound_speed"; kwargs...)
         variable = upar ./ cs
+    elseif variable_name == "total_energy"
+        if run_info.vperp.n > 1
+            error("total_energy is so far only implemented for 1D1V case")
+        else
+            ppar = get_variable(run_info, "parallel_pressure"; kwargs...)
+            upar = get_variable(run_info, "parallel_flow"; kwargs...)
+            n = get_variable(run_info, "density"; kwargs...)
+
+            variable = @. ppar + 0.5*n*upar^2
+        end
+    elseif variable_name == "total_energy_neutral"
+        if run_info.vzeta.n > 1 || run_info.vr.n > 1
+            error("total_energy_neutral is so far only implemented for 1D1V case")
+        else
+            ppar = get_variable(run_info, "pz_neutral"; kwargs...)
+            upar = get_variable(run_info, "uz_neutral"; kwargs...)
+            n = get_variable(run_info, "density_neutral"; kwargs...)
+
+            # Factor of 3/2 in front of 1/2*n*vth^2*upar because this in 1V - would be 5/2
+            # for 2V/3V cases.
+            variable = @. ppar + 0.5*n*upar^2
+        end
+    elseif variable_name == "total_energy_flux"
+        if run_info.vperp.n > 1
+            error("total_energy_flux is so far only implemented for 1D1V case")
+        else
+            qpar = get_variable(run_info, "parallel_heat_flux"; kwargs...)
+            vth = get_variable(run_info, "thermal_speed"; kwargs...)
+            upar = get_variable(run_info, "parallel_flow"; kwargs...)
+            n = get_variable(run_info, "density"; kwargs...)
+
+            # Note factor of 0.5 in front of qpar because the definition of qpar (see e.g.
+            # `update_qpar_species!()`) is unconventional (i.e. missing a factor of 0.5).
+            # Factor of 3/2 in front of 1/2*n*vth^2*upar because this in 1V - would be 5/2
+            # for 2V/3V cases.
+            variable = @. 0.5*qpar + 0.75*n*vth^2*upar + 0.5*n*upar^3
+        end
+    elseif variable_name == "total_energy_flux_neutral"
+        if run_info.vzeta.n > 1 || run_info.vr.n > 1
+            error("total_energy_flux_neutral is so far only implemented for 1D1V case")
+        else
+            qpar = get_variable(run_info, "qz_neutral"; kwargs...)
+            vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
+            upar = get_variable(run_info, "uz_neutral"; kwargs...)
+            n = get_variable(run_info, "density_neutral"; kwargs...)
+
+            # Note factor of 0.5 in front of qpar because the definition of qpar (see e.g.
+            # `update_qpar_species!()`) is unconventional (i.e. missing a factor of 0.5).
+            # Factor of 3/2 in front of 1/2*n*vth^2*upar because this in 1V - would be 5/2
+            # for 2V/3V cases.
+            variable = @. 0.5*qpar + 0.75*n*vth^2*upar + 0.5*n*upar^3
+        end
     elseif variable_name == "z_advect_speed"
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
@@ -3422,6 +4407,114 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                                      run_info.composition, run_info.collisions,
                                      run_info.external_source_settings.ion,
                                      run_info.time[it], run_info.geometry)
+        end
+
+        variable = speed
+        variable = select_slice_of_variable(variable; kwargs...)
+     elseif variable_name == "electron_z_advect_speed"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        upar = get_variable(run_info, "electron_parallel_flow")
+        vth = get_variable(run_info, "electron_thermal_speed")
+        nz, nr, nt = size(upar)
+        nvperp = run_info.vperp.n
+        nvpa = run_info.vpa.n
+
+        speed = allocate_float(nz, nvpa, nvperp, nr, nt)
+
+        setup_distributed_memory_MPI(1,1,1,1)
+        setup_loop_ranges!(0, 1; s=run_info.n_ion_species, sn=run_info.n_neutral_species,
+                           r=nr, z=nz,
+                           vperp=(run_info.vperp === nothing ? 1 : run_info.vperp.n),
+                           vpa=(run_info.vpa === nothing ? 1 : run_info.vpa.n),
+                           vzeta=(run_info.vzeta === nothing ? 1 : run_info.vzeta.n),
+                           vr=(run_info.vr === nothing ? 1 : run_info.vr.n),
+                           vz=(run_info.vz === nothing ? 1 : run_info.vz.n))
+        for it ∈ 1:nt
+            begin_serial_region()
+            # Only need some struct with a 'speed' variable
+            advect = (speed=@view(speed[:,:,:,:,it]),)
+            @views update_electron_speed_z!(advect, upar[:,:,it], vth[:,:,it],
+                                            run_info.vpa.grid)
+        end
+
+        # Horrible hack so that we can get the speed back without rearranging the
+        # dimensions, if we want that to pass it to a utility function from the main code
+        # (e.g. to calculate a CFL limit).
+        if normalize_advection_speed_shape
+            variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
+            for it ∈ 1:nt, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
+                variable[ivpa,ivperp,iz,ir,it] = speed[iz,ivpa,ivperp,ir,it]
+            end
+            variable = select_slice_of_variable(variable; kwargs...)
+        else
+            variable = speed
+            if :it ∈ keys(kwargs)
+                variable = selectdim(variable, 5, kwargs[:it])
+            end
+            if :ir ∈ keys(kwargs)
+                variable = selectdim(variable, 4, kwargs[:ir])
+            end
+            if :ivperp ∈ keys(kwargs)
+                variable = selectdim(variable, 3, kwargs[:ivperp])
+            end
+            if :ivpa ∈ keys(kwargs)
+                variable = selectdim(variable, 2, kwargs[:ivpa])
+            end
+            if :iz ∈ keys(kwargs)
+                variable = selectdim(variable, 1, kwargs[:iz])
+            end
+        end
+    elseif variable_name == "electron_vpa_advect_speed"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        density = get_variable(run_info, "electron_density")
+        upar = get_variable(run_info, "electron_parallel_flow")
+        ppar = get_variable(run_info, "electron_parallel_pressure")
+        vth = get_variable(run_info, "electron_thermal_speed")
+        dppar_dz = get_z_derivative(run_info, "electron_parallel_pressure")
+        dvth_dz = get_z_derivative(run_info, "electron_thermal_speed")
+        dqpar_dz = get_z_derivative(run_info, "electron_parallel_heat_flux")
+        if run_info.external_source_settings.electron.active
+            external_source_amplitude = get_variable(run_info, "external_source_electron_amplitude")
+            external_source_density_amplitude = get_variable(run_info, "external_source_electron_density_amplitude")
+            external_source_momentum_amplitude = get_variable(run_info, "external_source_electron_momentum_amplitude")
+            external_source_pressure_amplitude = get_variable(run_info, "external_source_electron_pressure_amplitude")
+        else
+            external_source_amplitude = zeros(0,0,run_info.nt)
+            external_source_density_amplitude = zeros(0,0,run_info.nt)
+            external_source_momentum_amplitude = zeros(0,0,run_info.nt)
+            external_source_pressure_amplitude = zeros(0,0,run_info.nt)
+        end
+
+        nz, nr, nt = size(vth)
+        nvperp = run_info.vperp.n
+        nvpa = run_info.vpa.n
+
+        speed=allocate_float(nvpa, nvperp, nz, nr, nt)
+        setup_distributed_memory_MPI(1,1,1,1)
+        setup_loop_ranges!(0, 1; s=run_info.n_ion_species, sn=run_info.n_neutral_species,
+                           r=nr, z=nz,
+                           vperp=(run_info.vperp === nothing ? 1 : run_info.vperp.n),
+                           vpa=(run_info.vpa === nothing ? 1 : run_info.vpa.n),
+                           vzeta=(run_info.vzeta === nothing ? 1 : run_info.vzeta.n),
+                           vr=(run_info.vr === nothing ? 1 : run_info.vr.n),
+                           vz=(run_info.vz === nothing ? 1 : run_info.vz.n))
+        for it ∈ 1:nt
+            begin_serial_region()
+            # Only need some struct with a 'speed' variable
+            advect = (speed=@view(speed[:,:,:,:,it]),)
+            moments = (electron=(vth=vth[:,:,it],
+                                 dppar_dz=dppar_dz[:,:,it],
+                                 dqpar_dz=dqpar_dz[:,:,it],
+                                 dvth_dz=dvth_dz[:,:,it],
+                                 external_source_amplitude=external_source_amplitude[:,:,it],
+                                 external_source_density_amplitude=external_source_density_amplitude[:,:,it],
+                                 external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,it],
+                                 external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,it]),)
+            @views update_electron_speed_vpa!(advect, density[:,:,it], upar[:,:,it],
+                                              ppar[:,:,it], moments, run_info.vpa.grid,
+                                              run_info.external_source_settings.electron)
         end
 
         variable = speed
@@ -3595,6 +4688,39 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             # Don't want a meaningless Inf...
             variable[1] = 0.0
         end
+    elseif variable_name == "electron_steps_per_ion_step"
+        electron_steps_per_output = get_variable(run_info, "electron_steps_per_output"; kwargs...)
+        ion_steps_per_output = get_variable(run_info, "steps_per_output"; kwargs...)
+        variable = electron_steps_per_output ./ ion_steps_per_output
+    elseif variable_name == "electron_steps_per_output"
+        variable = get_per_step_from_cumulative_variable(run_info, "electron_step_counter"; kwargs...)
+    elseif variable_name == "electron_failures_per_output"
+        variable = get_per_step_from_cumulative_variable(run_info, "electron_failure_counter"; kwargs...)
+    elseif variable_name == "electron_failure_caused_by_per_output"
+        variable = get_per_step_from_cumulative_variable(run_info, "electron_failure_caused_by"; kwargs...)
+    elseif variable_name == "electron_limit_caused_by_per_output"
+        variable = get_per_step_from_cumulative_variable(run_info, "electron_limit_caused_by"; kwargs...)
+    elseif variable_name == "electron_average_successful_dt"
+        electron_steps_per_output = get_variable(run_info, "electron_steps_per_output"; kwargs...)
+        electron_failures_per_output = get_variable(run_info, "electron_failures_per_output"; kwargs...)
+        electron_successful_steps_per_output = electron_steps_per_output - electron_failures_per_output
+        electron_pseudotime = get_variable("electron_cumulative_pseudotime"; kwargs...)
+
+        delta_t = copy(electron_pseudotime)
+        for i ∈ length(delta_t):-1:2
+            delta_t[i] -= delta_t[i-1]
+        end
+
+        variable = delta_t ./ electron_successful_steps_per_output
+        for i ∈ eachindex(electron_successful_steps_per_output)
+            if electron_successful_steps_per_output[i] == 0
+                variable[i] = 0.0
+            end
+        end
+        if electron_successful_steps_per_output[1] == 0
+            # Don't want a meaningless Inf...
+            variable[1] = 0.0
+        end
     elseif variable_name == "CFL_ion_z"
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
@@ -3619,6 +4745,34 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         CFL = similar(speed)
         for it ∈ 1:nt
             @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.vpa)
+        end
+
+        variable = CFL
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "CFL_electron_z"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "electron_z_advect_speed";
+                             normalize_advection_speed_shape=false)
+        nz, nvpa, nvperp, nr, nt = size(speed)
+        CFL = similar(speed)
+        for it ∈ 1:nt
+            @views get_CFL!(CFL[:,:,:,:,it], speed[:,:,:,:,it], run_info.z)
+        end
+
+        variable = allocate_float(nvpa, nvperp, nz, nr, nt)
+        for it ∈ 1:nt, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
+            variable[ivpa,ivperp,iz,ir,it] = CFL[iz,ivpa,ivperp,ir,it]
+        end
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "CFL_electron_vpa"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "electron_vpa_advect_speed")
+        nt = size(speed, 5)
+        CFL = similar(speed)
+        for it ∈ 1:nt
+            @views get_CFL!(CFL[:,:,:,:,it], speed[:,:,:,:,it], run_info.vpa)
         end
 
         variable = CFL
@@ -3684,6 +4838,31 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             variable[it] = min_CFL
         end
         variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "minimum_CFL_electron_z"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "electron_z_advect_speed";
+                             normalize_advection_speed_shape=false)
+        nt = size(speed, 5)
+        variable = allocate_float(nt)
+        begin_serial_region()
+        for it ∈ 1:nt
+            min_CFL = get_minimum_CFL_z(@view(speed[:,:,:,:,it]), run_info.z)
+            variable[it] = min_CFL
+        end
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == "minimum_CFL_electron_vpa"
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "electron_vpa_advect_speed")
+        nt = size(speed, 5)
+        variable = allocate_float(nt)
+        begin_serial_region()
+        for it ∈ 1:nt
+            min_CFL = get_minimum_CFL_vpa(@view(speed[:,:,:,:,it]), run_info.vpa)
+            variable[it] = min_CFL
+        end
+        variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == "minimum_CFL_neutral_z"
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
@@ -3717,6 +4896,39 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             variable[it] = min_CFL
         end
         variable = select_slice_of_variable(variable; kwargs...)
+    elseif occursin("_timestep_error", variable_name)
+        prefix = split(variable_name, "_timestep_error")[1]
+        full_order = get_variable(run_info, prefix; kwargs...)
+        low_order = get_variable(run_info, prefix * "_loworder"; kwargs...)
+        variable = low_order .- full_order
+    elseif occursin("_timestep_residual", variable_name)
+        prefix = split(variable_name, "_timestep_residual")[1]
+        full_order = get_variable(run_info, prefix; kwargs...)
+        low_order = get_variable(run_info, prefix * "_loworder"; kwargs...)
+        if prefix == "pdf_electron"
+            rtol = run_info.input["electron_timestepping"]["rtol"]
+            atol = run_info.input["electron_timestepping"]["atol"]
+        else
+            rtol = run_info.input["timestepping"]["rtol"]
+            atol = run_info.input["timestepping"]["atol"]
+        end
+        variable = @. (low_order - full_order) / (rtol * abs(full_order) + atol)
+    elseif occursin("_steady_state_residual", variable_name)
+        prefix = split(variable_name, "_steady_state_residual")[1]
+        end_step = get_variable(run_info, prefix; kwargs...)
+        begin_step = get_variable(run_info, prefix * "_start_last_timestep"; kwargs...)
+        if prefix == "f_electron"
+            dt = get_variable(run_info, "electron_previous_dt"; kwargs...)
+        else
+            dt = get_variable(run_info, "previous_dt"; kwargs...)
+        end
+        dt = reshape(dt, ones(mk_int, ndims(end_step)-1)..., length(dt))
+        for i ∈ eachindex(dt)
+            if dt[i] ≤ 0.0
+                dt[i] = Inf
+            end
+        end
+        variable = (end_step .- begin_step) ./ dt
     elseif occursin("_nonlinear_iterations_per_solve", variable_name)
         prefix = split(variable_name, "_nonlinear_iterations_per_solve")[1]
         nl_nsolves = get_per_step_from_cumulative_variable(

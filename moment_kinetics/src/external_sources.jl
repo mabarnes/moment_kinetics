@@ -20,7 +20,7 @@ using ..array_allocation: allocate_float, allocate_shared_float
 using ..calculus
 using ..communication
 using ..coordinates
-using ..input_structs: set_defaults_and_check_section!, Dict_to_NamedTuple
+using ..input_structs
 using ..looping
 using ..velocity_moments: get_density
 
@@ -39,7 +39,7 @@ and z-coordinates.
 Returns a NamedTuple `(ion=ion_source_settings, neutral=neutral_source_settings)`
 containing two NamedTuples of settings.
 """
-function setup_external_sources!(input_dict, r, z)
+function setup_external_sources!(input_dict, r, z, electron_physics)
     function get_settings(neutrals)
         input = set_defaults_and_check_section!(
                      input_dict, neutrals ? "neutral_source" : "ion_source";
@@ -199,7 +199,43 @@ function setup_external_sources!(input_dict, r, z)
                 PI_density_target_rank=PI_density_target_rank)
     end
 
-    return (ion=get_settings(false), neutral=get_settings(true))
+    function get_electron_settings(ion_settings)
+        # Note most settings for the electron source are copied from the ion source,
+        # because we require that the particle sources are the same for ions and
+        # electrons. `source_T` can be set independently, and when using
+        # `source_type="energy"`, the `source_strength` could also be set.
+        input = set_defaults_and_check_section!(
+                     input_dict, "electron_source";
+                     source_strength=ion_settings.source_strength,
+                     source_T=ion_settings.source_T,
+                    )
+        if ion_settings.source_type != "energy"
+            # Need to keep same amplitude for ions and electrons so there is no charge
+            # source.
+            if input["source_strength"] != ion_settings.source_strength
+                println("When not using source_type=\"energy\", source_strength for "
+                        * "electrons must be equal to source_strength for ions to ensure "
+                        * "no charge is injected by the source. Overriding electron "
+                        * "source_strength...")
+            end
+            input["source_strength"] = ion_settings.source_strength
+        end
+        return (; (Symbol(k)=>v for (k,v) ∈ input)..., active=ion_settings.active,
+                r_amplitude=ion_settings.r_amplitude,
+                z_amplitude=ion_settings.z_amplitude,
+                source_type=ion_settings.source_type)
+    end
+
+    ion_settings = get_settings(false)
+    if electron_physics ∈ (braginskii_fluid, kinetic_electrons,
+                           kinetic_electrons_with_temperature_equation)
+        electron_settings = get_electron_settings(ion_settings)
+    else
+        electron_settings = (active=false,)
+    end
+    neutral_settings = get_settings(true)
+
+    return (ion=ion_settings, electron=electron_settings, neutral=neutral_settings)
 end
 
 """
@@ -241,6 +277,10 @@ Initialize the arrays `moments.ion.external_source_amplitude`,
 `moments.ion.external_source_density_amplitude`,
 `moments.ion.external_source_momentum_amplitude`,
 `moments.ion.external_source_pressure_amplitude`,
+`moments.electron.external_source_amplitude`,
+`moments.electron.external_source_density_amplitude`,
+`moments.electron.external_source_momentum_amplitude`,
+`moments.electron.external_source_pressure_amplitude`,
 `moments.neutral.external_source_amplitude`,
 `moments.neutral.external_source_density_amplitude`,
 `moments.neutral.external_source_momentum_amplitude`, and
@@ -313,6 +353,67 @@ function initialize_external_source_amplitude!(moments, external_source_settings
                         ion_source_settings.r_amplitude[ir] *
                         ion_source_settings.z_amplitude[iz]
                 end
+            end
+        end
+    end
+
+    electron_source_settings = external_source_settings.electron
+    if electron_source_settings.active
+        if electron_source_settings.source_type == "energy"
+            @loop_r_z ir iz begin
+                moments.electron.external_source_amplitude[iz,ir] =
+                    electron_source_settings.source_strength *
+                    electron_source_settings.r_amplitude[ir] *
+                    electron_source_settings.z_amplitude[iz]
+            end
+            @loop_r_z ir iz begin
+                moments.electron.external_source_density_amplitude[iz,ir] = 0.0
+            end
+            @loop_r_z ir iz begin
+                moments.electron.external_source_momentum_amplitude[iz,ir] =
+                    - moments.electron.dens[iz,ir] * moments.electron.upar[iz,ir] *
+                      electron_source_settings.source_strength *
+                      electron_source_settings.r_amplitude[ir] *
+                      electron_source_settings.z_amplitude[iz]
+            end
+            @loop_r_z ir iz begin
+                moments.electron.external_source_pressure_amplitude[iz,ir] =
+                    (0.5 * electron_source_settings.source_T +
+                     moments.electron.upar[iz,ir]^2 - moments.electron.ppar[iz,ir]) *
+                    electron_source_settings.source_strength *
+                    electron_source_settings.r_amplitude[ir] *
+                    electron_source_settings.z_amplitude[iz]
+            end
+        else
+            @loop_r_z ir iz begin
+                moments.electron.external_source_amplitude[iz,ir] =
+                    moments.ion.external_source_amplitude[iz,ir]
+            end
+            if moments.evolve_density
+                @loop_r_z ir iz begin
+                    moments.electron.external_source_density_amplitude[iz,ir] =
+                        moments.ion.external_source_density_amplitude[iz,ir]
+                end
+            else
+                @loop_r_z ir iz begin
+                    # Note set this using *ion* settings to force electron density source
+                    # to always be equal to ion density source (even when
+                    # evolve_density=false) to ensure the source does not inject charge
+                    # into the simulation.
+                    moments.electron.external_source_density_amplitude[iz,ir] =
+                        ion_source_settings.source_strength *
+                        ion_source_settings.r_amplitude[ir] *
+                        ion_source_settings.z_amplitude[iz]
+                end
+            end
+            @loop_r_z ir iz begin
+                moments.electron.external_source_momentum_amplitude[iz,ir] = 0.0
+            end
+            @loop_r_z ir iz begin
+                moments.electron.external_source_pressure_amplitude[iz,ir] =
+                    (0.5 * electron_source_settings.source_T +
+                     moments.electron.upar[iz,ir]^2) *
+                    moments.electron.external_source_amplitude[iz,ir]
             end
         end
     end
@@ -508,10 +609,18 @@ function external_ion_source!(pdf, fvec, moments, ion_source_settings, vperp, vp
         end
 
         if source_type == "energy"
-            # Take particles out of pdf so source does not change density
-            @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-                pdf[ivpa,ivperp,iz,ir,is] -= dt * source_amplitude[iz,ir] *
-                    fvec.pdf[ivpa,ivperp,iz,ir,is]
+            if moments.evolve_density
+                # Take particles out of pdf so source does not change density
+                @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+                    pdf[ivpa,ivperp,iz,ir,is] -= dt * source_amplitude[iz,ir] *
+                        fvec.pdf[ivpa,ivperp,iz,ir,is]
+                end
+            else
+                # Take particles out of pdf so source does not change density
+                @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+                    pdf[ivpa,ivperp,iz,ir,is] -= dt * source_amplitude[iz,ir] *
+                        fvec.pdf[ivpa,ivperp,iz,ir,is] / fvec.density[iz,ir,is]
+                end
             end
         end
     elseif source_type == "alphas" || source_type == "alphas-with-losses"
@@ -639,6 +748,57 @@ function external_ion_source!(pdf, fvec, moments, ion_source_settings, vperp, vp
 end
 
 """
+    external_electron_source!(pdf, fvec, moments, electron_source_settings, vperp,
+                              vpa, dt)
+
+Add external source term to the electron kinetic equation.
+"""
+function external_electron_source!(pdf_out, pdf_in, electron_density, electron_upar,
+                                   moments, composition, electron_source_settings, vperp,
+                                   vpa, dt)
+    begin_r_z_vperp_region()
+
+    me_over_mi = composition.me_over_mi
+
+    source_amplitude = moments.electron.external_source_amplitude
+    source_T = electron_source_settings.source_T
+    if vperp.n == 1
+        vth_factor = 1.0 / sqrt(source_T / me_over_mi)
+    else
+        vth_factor = 1.0 / (source_T / me_over_mi)^1.5
+    end
+    vpa_grid = vpa.grid
+    vperp_grid = vperp.grid
+
+    vth = moments.electron.vth
+    @loop_r_z ir iz begin
+        this_vth = vth[iz,ir]
+        this_upar = electron_upar[iz,ir]
+        this_prefactor = dt * this_vth / electron_density[iz,ir] * vth_factor *
+                         source_amplitude[iz,ir]
+        @loop_vperp_vpa ivperp ivpa begin
+            # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
+            # normalisation of F
+            vperp_unnorm = vperp_grid[ivperp] * this_vth
+            vpa_unnorm = vpa_grid[ivpa] * this_vth + this_upar
+            pdf_out[ivpa,ivperp,iz,ir] +=
+                this_prefactor *
+                exp(-(vperp_unnorm^2 + vpa_unnorm^2) * me_over_mi / source_T)
+        end
+    end
+
+    if electron_source_settings.source_type == "energy"
+        # Take particles out of pdf so source does not change density
+        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+            pdf_out[ivpa,ivperp,iz,ir] -= dt * source_amplitude[iz,ir] *
+                                             pdf_in[ivpa,ivperp,iz,ir]
+        end
+    end
+
+    return nothing
+end
+
+"""
     external_neutral_source!(pdf, fvec, moments, neutral_source_settings, vzeta, vr,
                             vz, dt)
 
@@ -745,12 +905,15 @@ function external_ion_source_controller!(fvec_in, moments, ion_source_settings, 
 
     is = 1
     ion_moments = moments.ion
+    density = fvec_in.density
+    upar = fvec_in.upar
+    ppar = fvec_in.ppar
 
     if ion_source_settings.source_type == "Maxwellian"
         if moments.evolve_ppar
             @loop_r_z ir iz begin
                 ion_moments.external_source_pressure_amplitude[iz,ir] =
-                    (0.5 * ion_source_settings.source_T + fvec_in.upar[iz,ir,is]^2) *
+                    (0.5 * ion_source_settings.source_T + upar[iz,ir,is]^2) *
                     ion_moments.external_source_amplitude[iz,ir]
             end
         end
@@ -758,7 +921,7 @@ function external_ion_source_controller!(fvec_in, moments, ion_source_settings, 
         if moments.evolve_upar
             @loop_r_z ir iz begin
                 ion_moments.external_source_momentum_amplitude[iz,ir] =
-                    - ion_moments.density[iz,ir] * ion_moments.upar[iz,ir] *
+                    - density[iz,ir] * upar[iz,ir] *
                       ion_source_settings.source_strength *
                       ion_source_settings.r_amplitude[ir] *
                       ion_source_settings.z_amplitude[iz]
@@ -767,8 +930,7 @@ function external_ion_source_controller!(fvec_in, moments, ion_source_settings, 
         if moments.evolve_ppar
             @loop_r_z ir iz begin
                 ion_moments.external_source_pressure_amplitude[iz,ir] =
-                    (0.5 * ion_source_settings.source_T + ion_moments.upar[iz,ir]^2 -
-                     ion_moments.ppar[iz,ir]) *
+                    (0.5 * ion_source_settings.source_T + upar[iz,ir]^2 - ppar[iz,ir]) *
                     ion_source_settings.source_strength *
                     ion_source_settings.r_amplitude[ir] *
                     ion_source_settings.z_amplitude[iz]
@@ -784,8 +946,8 @@ function external_ion_source_controller!(fvec_in, moments, ion_source_settings, 
                     ion_source_settings.PI_density_target_iz !== nothing
                 # This process has the target point
 
-                n_mid = fvec_in.density[ion_source_settings.PI_density_target_iz,
-                                        ion_source_settings.PI_density_target_ir, is]
+                n_mid = density[ion_source_settings.PI_density_target_iz,
+                                ion_source_settings.PI_density_target_ir, is]
                 n_error = ion_source_settings.PI_density_target - n_mid
 
                 ion_moments.external_source_controller_integral[1,1] +=
@@ -820,14 +982,13 @@ function external_ion_source_controller!(fvec_in, moments, ion_source_settings, 
         if moments.evolve_ppar
             @loop_r_z ir iz begin
                 ion_moments.external_source_pressure_amplitude[iz,ir] =
-                    (0.5 * ion_source_settings.source_T + fvec_in.upar[iz,ir,is]^2) *
+                    (0.5 * ion_source_settings.source_T + upar[iz,ir,is]^2) *
                     amplitude * ion_source_settings.controller_source_profile[iz,ir]
             end
         end
     elseif ion_source_settings.source_type == "density_profile_control"
         begin_r_z_region()
 
-        density = fvec_in.density
         target = ion_source_settings.PI_density_target
         P = ion_source_settings.PI_density_controller_P
         I = ion_source_settings.PI_density_controller_I
@@ -847,7 +1008,7 @@ function external_ion_source_controller!(fvec_in, moments, ion_source_settings, 
         if moments.evolve_ppar
             @loop_r_z ir iz begin
                 ion_moments.external_source_pressure_amplitude[iz,ir] =
-                    (0.5 * ion_source_settings.source_T + fvec_in.upar[iz,ir,is]^2) *
+                    (0.5 * ion_source_settings.source_T + upar[iz,ir,is]^2) *
                     amplitude[iz,ir]
             end
         end
@@ -861,6 +1022,75 @@ function external_ion_source_controller!(fvec_in, moments, ion_source_settings, 
         # do nothing
     else
         error("Unrecognised source_type=$(ion_source_settings.source_type)")
+    end
+
+    return nothing
+end
+
+"""
+    external_electron_source_controller!(fvec_in, moments, electron_source_settings, dt)
+
+Calculate the amplitude, e.g. when using a PI controller for the density to set the
+external source amplitude.
+
+As the electron density source must be equal to the ion density source in order not to
+inject charge into the simulation, the electron source (at least in some modes of
+operation) depends on the ion source, so [`external_ion_source_controller`](@ref) must be
+called before this function is called so that `moments.ion.external_source_amplitude` is
+up to date.
+"""
+function external_electron_source_controller!(fvec_in, moments, electron_source_settings,
+                                              dt)
+    begin_r_z_region()
+
+    is = 1
+    electron_moments = moments.electron
+    ion_source_amplitude = moments.ion.external_source_amplitude
+
+    if electron_source_settings.source_type == "Maxwellian"
+        @loop_r_z ir iz begin
+            electron_moments.external_source_pressure_amplitude[iz,ir] =
+                (0.5 * electron_source_settings.source_T +
+                 fvec_in.electron_upar[iz,ir,is]^2) *
+                electron_moments.external_source_amplitude[iz,ir]
+        end
+    elseif electron_source_settings.source_type == "energy"
+        @loop_r_z ir iz begin
+            electron_moments.external_source_momentum_amplitude[iz,ir] =
+                - electron_moments.density[iz,ir] * electron_moments.upar[iz,ir] *
+                  electron_source_settings.source_strength *
+                  electron_source_settings.r_amplitude[ir] *
+                  electron_source_settings.z_amplitude[iz]
+        end
+        @loop_r_z ir iz begin
+            electron_moments.external_source_pressure_amplitude[iz,ir] =
+                (0.5 * electron_source_settings.source_T + electron_moments.upar[iz,ir]^2 -
+                 electron_moments.ppar[iz,ir]) *
+                electron_source_settings.source_strength *
+                electron_source_settings.r_amplitude[ir] *
+                electron_source_settings.z_amplitude[iz]
+        end
+    else
+        @loop_r_z ir iz begin
+            electron_moments.external_source_amplitude[iz,ir] = ion_source_amplitude[iz,ir]
+        end
+        @loop_r_z ir iz begin
+            electron_moments.external_source_momentum_amplitude[iz,ir] =
+                - electron_moments.density[iz,ir] * electron_moments.upar[iz,ir] *
+                  electron_moments.external_source_amplitude[iz,ir]
+        end
+        @loop_r_z ir iz begin
+            electron_moments.external_source_pressure_amplitude[iz,ir] =
+                (0.5 * electron_source_settings.source_T + electron_moments.upar[iz,ir]^2 -
+                 electron_moments.ppar[iz,ir]) *
+                electron_moments.external_source_amplitude[iz,ir]
+        end
+    end
+
+    # Density source is always the same as the ion one
+    @loop_r_z ir iz begin
+        electron_moments.external_source_density_amplitude[iz,ir] =
+            moments.ion.external_source_density_amplitude[iz,ir]
     end
 
     return nothing

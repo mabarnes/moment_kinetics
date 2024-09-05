@@ -20,6 +20,7 @@ export setup_distributed_memory_MPI
 export setup_distributed_memory_MPI_for_weights_precomputation
 export _block_synchronize, _anyv_subblock_synchronize
 
+using LinearAlgebra
 using MPI
 using SHA
 
@@ -127,6 +128,10 @@ function __init__()
     global_size[] = MPI.Comm_size(comm_world)
     #block_rank[] = MPI.Comm_rank(comm_block)
     #block_size[] = MPI.Comm_size(comm_block)
+
+    # Ensure BLAS only uses 1 thread, to avoid oversubscribing processes as we are
+    # probably already fully parallelised.
+    BLAS.set_num_threads(1)
 end
 
 """
@@ -428,7 +433,7 @@ end
             previous_is_read .= true
             previous_is_written = Array{Bool}(undef, dims)
             previous_is_written .= true
-            return DebugMPISharedArray(array, is_initialized, is_read, is_written,
+            return DebugMPISharedArray(array, accessed, is_initialized, is_read, is_written,
                                        creation_stack_trace, previous_is_read,
                                        previous_is_written)
         end

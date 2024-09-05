@@ -5,12 +5,12 @@ using Base.Filesystem: tempname
 using MPI
 
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.input_structs: grid_input, advection_input
+using moment_kinetics.input_structs: grid_input, advection_input, merge_dict_with_kwargs!
 using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data,
                                  load_species_data, load_fields_data,
                                  load_ion_moments_data, load_pdf_data,
                                  load_time_data, load_species_data
-using moment_kinetics.type_definitions: mk_float
+using moment_kinetics.type_definitions: mk_float, OptionsDict
 
 const analytical_rtol = 3.e-2
 const regression_rtol = 2.e-8
@@ -225,11 +225,19 @@ end
 # default inputs for tests
 test_input_gauss_legendre = Dict("run_name" => "gausslegendre_pseudospectral",
                               "base_directory" => test_output_directory,
-                              "n_ion_species" => 1,
-                              "n_neutral_species" => 0,
-                              "T_wall" => 1.0,
-                              "T_e" => 1.0,
-                              "initial_temperature2" => 1.0,
+                              "composition" => OptionsDict("n_ion_species" => 1,
+                                                                "n_neutral_species" => 0,
+                                                                "electron_physics" => "boltzmann_electron_response",
+                                                                "T_e" => 1.0),
+                             "ion_species_1" => OptionsDict("initial_density" => 0.5,
+                                                                 "initial_temperature" => 1.0),
+                             "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
+                                                                      "density_amplitude" => 0.0,
+                                                                      "density_phase" => 0.0,
+                                                                      "upar_amplitude" => 0.0,
+                                                                      "upar_phase" => 0.0,
+                                                                      "temperature_amplitude" => 0.0,
+                                                                      "temperature_phase" => 0.0),
                               "vpa_ngrid" => 3,
                               "vpa_L" => 6.0,
                               "vpa_nelement" => 6,
@@ -239,34 +247,14 @@ test_input_gauss_legendre = Dict("run_name" => "gausslegendre_pseudospectral",
                               "vperp_nelement" => 3,
                               "vperp_L" => 3.0,
                               "vperp_discretization" => "gausslegendre_pseudospectral",
-                              #"split_operators" => false,
                               "ionization_frequency" => 0.0,
                               "charge_exchange_frequency" => 0.0,
-                              "constant_ionization_rate" => false,
-                              "electron_physics" => "boltzmann_electron_response",
-                              "fokker_planck_collisions" => Dict{String,Any}("use_fokker_planck" => true, "nuii" => 1.0, "frequency_option" => "manual"),
-                              "z_IC_upar_amplitude1" => 0.0,
-                              "z_IC_density_amplitude1" => 0.0,
-                              "z_IC_upar_amplitude2" => 0.0,
-                              "z_IC_temperature_phase1" => 0.0,
-                              "z_IC_temperature_amplitude1" => 0.0,
+                              "fokker_planck_collisions" => OptionsDict("use_fokker_planck" => true, "nuii" => 1.0, "frequency_option" => "manual"),
                               "evolve_moments_parallel_pressure" => false,
                               "evolve_moments_conservation" => false,
-                              "z_IC_option1" => "sinusoid",
                               "evolve_moments_parallel_flow" => false,
-                              "z_IC_density_phase2" => 0.0,
                               "z_discretization" => "chebyshev_pseudospectral",                              
-                              "z_IC_upar_phase2" => 0.0,
                               "evolve_moments_density" => false,
-                              "z_IC_temperature_amplitude2" => 0.0,
-                              "initial_density1" => 0.5,
-                              "z_IC_upar_phase1" => 0.0,
-                              "initial_density2" => 0.5,
-                              "z_IC_density_phase1" => 0.0,
-                              "z_IC_option2" => "sinusoid",
-                              "z_IC_density_amplitude2" => 0.001,
-                              "initial_temperature1" => 1.0,
-                              "z_IC_temperature_phase2" => 0.0,
                               "z_ngrid" => 1,
                               "z_nelement_local" => 1,  
                               "z_nelement" => 1,
@@ -276,14 +264,14 @@ test_input_gauss_legendre = Dict("run_name" => "gausslegendre_pseudospectral",
                               "r_nelement" => 1,
                               "r_nelement_local" => 1,
                               "r_bc" => "periodic",   
-                              "timestepping" => Dict{String,Any}("dt" => 0.01,
+                              "timestepping" => OptionsDict("dt" => 0.01,
                                                                  "nstep" => 5000,
                                                                  "nwrite" => 5000,
                                                                  "nwrite_dfns" => 5000 ))
 
 
 """
-Run a sound-wave test for a single set of parameters
+Run a test for a single set of parameters
 """
 # Note 'name' should not be shared by any two tests in this file
 function run_test(test_input, expected, rtol, atol, upar_rtol=nothing; args...)
@@ -292,14 +280,14 @@ function run_test(test_input, expected, rtol, atol, upar_rtol=nothing; args...)
 
     # Make a copy to make sure nothing modifies the input Dicts defined in this test
     # script.
-    test_input = deepcopy(test_input)
+    input = deepcopy(test_input)
     
     if upar_rtol === nothing
         upar_rtol = rtol
     end
 
     # Convert keyword arguments to a unique name
-    name = test_input["run_name"]
+    name = input["run_name"]
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
 
@@ -310,12 +298,8 @@ function run_test(test_input, expected, rtol, atol, upar_rtol=nothing; args...)
     # Provide some progress info
     println("    - testing ", name)
 
-    # Convert dict from symbol keys to String keys
-    modified_inputs = Dict(String(k) => v for (k, v) in args)
-
     # Update default inputs with values to be changed
-    input = merge(test_input, modified_inputs)
-
+    merge_dict_with_kwargs!(input; args...)
     input["run_name"] = name
     # Suppress console output while running
     quietoutput() do
@@ -364,8 +348,8 @@ function run_test(test_input, expected, rtol, atol, upar_rtol=nothing; args...)
             # open the netcdf file containing pdf data
             fid = open_readonly_output_file(path, "dfns")
             # load coordinates
-            vpa, vpa_spectral = load_coordinate_data(fid, "vpa")
-            vperp, vperp_spectral = load_coordinate_data(fid, "vperp")
+            vpa, vpa_spectral = load_coordinate_data(fid, "vpa"; ignore_MPI=true)
+            vperp, vperp_spectral = load_coordinate_data(fid, "vperp"; ignore_MPI=true)
 
             # load particle distribution function (pdf) data
             f_ion_vpavperpzrst = load_pdf_data(fid)

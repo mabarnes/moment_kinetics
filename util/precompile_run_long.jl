@@ -6,6 +6,7 @@ using Pkg
 Pkg.activate(".")
 
 using moment_kinetics
+using moment_kinetics.type_definitions: OptionsDict
 
 # Create a temporary directory for test output
 test_output_directory = tempname()
@@ -13,7 +14,6 @@ mkpath(test_output_directory)
 
 base_input = Dict("run_name"=>"precompilation",
                   "base_directory" => test_output_directory,
-                  "dt" => 0.0,
                   "z_ngrid" => 5,
                   "z_nelement" => 1,
                   "z_bc" => "periodic",
@@ -22,13 +22,13 @@ base_input = Dict("run_name"=>"precompilation",
                   "vpa_nelement" => 1,
                   "vpa_bc" => "periodic",
                   "vpa_discretization" => "finite_difference",
-                  "timestepping" => Dict{String,Any}("nstep" => 1))
+                  "timestepping" => OptionsDict("nstep" => 1, "dt" => 2.0e-11))
 cheb_input = merge(base_input, Dict("z_discretization" => "chebyshev_pseudospectral",
                                     "vpa_discretization" => "chebyshev_pseudospectral"))
 wall_bc_input = merge(base_input, Dict("z_bc" => "wall"))
 wall_bc_cheb_input = merge(cheb_input, Dict("z_bc" => "wall"))
 
-inputs_list = Vector{Dict{String, Any}}(undef, 0)
+inputs_list = Vector{OptionsDict}(undef, 0)
 for input ∈ [base_input, cheb_input, wall_bc_input, wall_bc_cheb_input]
     push!(inputs_list, input)
     x = merge(input, Dict("evolve_moments_density" => true, "ionization_frequency" => 0.0))

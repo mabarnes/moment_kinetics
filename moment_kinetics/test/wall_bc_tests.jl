@@ -9,60 +9,61 @@ using Base.Filesystem: tempname
 using MPI
 
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.input_structs: grid_input, advection_input
+using moment_kinetics.input_structs: grid_input, advection_input, merge_dict_with_kwargs!
 using moment_kinetics.interpolation: interpolate_to_grid_z
 using moment_kinetics.load_data: open_readonly_output_file
 using moment_kinetics.load_data: load_fields_data,
                                  load_pdf_data, load_time_data,
                                  load_species_data
+using moment_kinetics.type_definitions: OptionsDict
 
 # default inputs for tests
-test_input_finite_difference = Dict("n_ion_species" => 1,
-                                    "n_neutral_species" => 1,
-                                    "boltzmann_electron_response" => true,
+test_input_finite_difference = Dict("composition" => OptionsDict("n_ion_species" => 1,
+                                                                      "n_neutral_species" => 1,
+                                                                      "electron_physics" => "boltzmann_electron_response",
+                                                                      "T_e" => 1.0,
+                                                                      "T_wall" => 1.0),
+                                    "ion_species_1" => OptionsDict("initial_density" => 1.0,
+                                                                        "initial_temperature" => 1.0),
+                                    "z_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                                             "density_amplitude" => 0.0,
+                                                                             "density_phase" => 0.0,
+                                                                             "upar_amplitude" => 0.0,
+                                                                             "upar_phase" => 0.0,
+                                                                             "temperature_amplitude" => 0.0,
+                                                                             "temperature_phase" => 0.0),
+                                    "vpa_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                                             "density_amplitude" => 1.0,
+                                                                             "density_phase" => 0.0,
+                                                                             "upar_amplitude" => 0.0,
+                                                                             "upar_phase" => 0.0,
+                                                                             "temperature_amplitude" => 0.0,
+                                                                             "temperature_phase" => 0.0),
+                                    "neutral_species_1" => OptionsDict("initial_density" => 1.0,
+                                                                            "initial_temperature" => 1.0),
+                                    "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                                                 "density_amplitude" => 0.001,
+                                                                                 "density_phase" => 0.0,
+                                                                                 "upar_amplitude" => 0.0,
+                                                                                 "upar_phase" => 0.0,
+                                                                                 "temperature_amplitude" => 0.0,
+                                                                                 "temperature_phase" => 0.0),  
+                                    "vpa_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                                                 "density_amplitude" => 1.0,
+                                                                                 "density_phase" => 0.0,
+                                                                                 "upar_amplitude" => 0.0,
+                                                                                 "upar_phase" => 0.0,
+                                                                                 "temperature_amplitude" => 0.0,
+                                                                                 "temperature_phase" => 0.0),  
                                     "run_name" => "finite_difference",
                                     "evolve_moments_density" => false,
                                     "evolve_moments_parallel_flow" => false,
                                     "evolve_moments_parallel_pressure" => false,
                                     "evolve_moments_conservation" => false,
-                                    "T_e" => 1.0,
-                                    "T_wall" => 1.0,
-                                    "initial_density1" => 1.0,
-                                    "initial_temperature1" => 1.0,
-                                    "z_IC_option1" => "gaussian",
-                                    "z_IC_density_amplitude1" => 0.0,
-                                    "z_IC_density_phase1" => 0.0,
-                                    "z_IC_upar_amplitude1" => 0.0,
-                                    "z_IC_upar_phase1" => 0.0,
-                                    "z_IC_temperature_amplitude1" => 0.0,
-                                    "z_IC_temperature_phase1" => 0.0,
-                                    "vpa_IC_option1" => "gaussian",
-                                    "vpa_IC_density_amplitude1" => 1.0,
-                                    "vpa_IC_density_phase1" => 0.0,
-                                    "vpa_IC_upar_amplitude1" => 0.0,
-                                    "vpa_IC_upar_phase1" => 0.0,
-                                    "vpa_IC_temperature_amplitude1" => 0.0,
-                                    "vpa_IC_temperature_phase1" => 0.0,
-                                    "initial_density2" => 1.0,
-                                    "initial_temperature2" => 1.0,
-                                    "z_IC_option2" => "gaussian",
-                                    "z_IC_density_amplitude2" => 0.001,
-                                    "z_IC_density_phase2" => 0.0,
-                                    "z_IC_upar_amplitude2" => 0.0,
-                                    "z_IC_upar_phase2" => 0.0,
-                                    "z_IC_temperature_amplitude2" => 0.0,
-                                    "z_IC_temperature_phase2" => 0.0,
-                                    "vpa_IC_option2" => "gaussian",
-                                    "vpa_IC_density_amplitude2" => 1.0,
-                                    "vpa_IC_density_phase2" => 0.0,
-                                    "vpa_IC_upar_amplitude2" => 0.0,
-                                    "vpa_IC_upar_phase2" => 0.0,
-                                    "vpa_IC_temperature_amplitude2" => 0.0,
-                                    "vpa_IC_temperature_phase2" => 0.0,
                                     "charge_exchange_frequency" => 2.0,
                                     "ionization_frequency" => 2.0,
                                     "constant_ionization_rate" => false,
-                                    "timestepping" => Dict{String,Any}("nstep" => 10000,
+                                    "timestepping" => OptionsDict("nstep" => 10000,
                                                                        "dt" => 1.0e-5,
                                                                        "nwrite" => 100,
                                                                        "split_operators" => false),
@@ -142,10 +143,10 @@ function run_test(test_input, expected_phi, tolerance; args...)
 
     # Make a copy to make sure nothing modifies the input Dicts defined in this test
     # script.
-    test_input = deepcopy(test_input)
+    input = deepcopy(test_input)
 
     # Convert keyword arguments to a unique name
-    name = test_input["run_name"] * ", with element spacing: " * test_input["z_element_spacing_option"]
+    name = input["run_name"] * ", with element spacing: " * input["z_element_spacing_option"]
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
 
@@ -156,12 +157,8 @@ function run_test(test_input, expected_phi, tolerance; args...)
     # Provide some progress info
     println("    - testing ", name)
 
-    # Convert dict from symbol keys to String keys
-    modified_inputs = Dict(String(k) => v for (k, v) in args)
-
     # Update default inputs with values to be changed
-    input = merge(test_input, modified_inputs)
-
+    merge_dict_with_kwargs!(input; args...)
     input["run_name"] = name
 
     # Suppress console output while running
@@ -246,30 +243,30 @@ function runtests()
         @testset "Chebyshev uniform" begin
             test_input_chebyshev["base_directory"] = test_output_directory
             run_test(test_input_chebyshev,
-                     [-1.1689445031600718, -0.7479504438063098, -0.6947559936893813,
-                      -0.6917252442591313, -0.7180152498764835, -0.9980114095597415],
+                     [-1.168944495073113, -0.747950464799219, -0.6947560093910274,
+                      -0.6917252594440765, -0.7180152693147238, -0.9980114030684668],
                      2.e-3)
         end
         
         @testset "Chebyshev sqrt grid odd" begin
             test_input_chebyshev_sqrt_grid_odd["base_directory"] = test_output_directory
             run_test(test_input_chebyshev_sqrt_grid_odd,
-                     [-1.2047298885671576, -0.9431378294506091, -0.8084332392927167,
-                     -0.7812620422650213, -0.7233303514000929, -0.7003878610612269,
-                     -0.69572751349158, -0.6933148921301019, -0.6992503992521327,
-                     -0.7115787972775218, -0.7596015032228407, -0.795776514029509,
-                     -0.876303297135126, -1.1471244425913258],
+                     [-1.2047298844053338, -0.9431378244038217, -0.8084332486925859,
+                      -0.7812620574297168, -0.7233303715713063, -0.700387877851292,
+                      -0.695727529425101, -0.6933149075958859, -0.6992504158371133,
+                      -0.7115788158947632, -0.7596015227027635, -0.7957765261319207,
+                      -0.876303296785542, -1.1471244373220089],
                      2.e-3)
         end
         @testset "Chebyshev sqrt grid even" begin
             test_input_chebyshev_sqrt_grid_even["base_directory"] = test_output_directory
             run_test(test_input_chebyshev_sqrt_grid_even,
-                     [-1.213617049279473, -1.0054529928344382, -0.871444761913497,
-                     -0.836017699317097, -0.7552110924643832, -0.7264644073096705,
-                     -0.7149147366621806, -0.6950077192395091, -0.6923364889119271,
-                     -0.6950077192395089, -0.7149147366621814, -0.7264644073096692,
-                     -0.7552110924643836, -0.8360176993170979, -0.8714447619134948,
-                     -1.0054529928344376, -1.2136170492794727],
+                     [-1.213617044609117, -1.0054529856551995, -0.8714447622540997,
+                      -0.836017704148175, -0.7552111126205924, -0.7264644278204795,
+                      -0.7149147557607726, -0.6950077350352664, -0.6923365041825125,
+                      -0.6950077350352668, -0.7149147557607729, -0.7264644278204795,
+                      -0.7552111126205917, -0.8360177041481733, -0.8714447622540994,
+                      -1.0054529856552, -1.213617044609118],
                      2.e-3)
         end
     end

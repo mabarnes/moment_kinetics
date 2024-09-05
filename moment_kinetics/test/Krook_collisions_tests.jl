@@ -7,14 +7,14 @@ include("setup.jl")
 using Base.Filesystem: tempname
 
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.input_structs: grid_input, advection_input
+using moment_kinetics.input_structs: grid_input, advection_input, merge_dict_with_kwargs!
 using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data,
                                  load_species_data, load_fields_data,
                                  load_ion_moments_data, load_pdf_data,
                                  load_neutral_particle_moments_data,
                                  load_neutral_pdf_data, load_time_data, load_species_data
 using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
-using moment_kinetics.type_definitions: mk_float
+using moment_kinetics.type_definitions: mk_float, OptionsDict
 
 # Useful parameters
 const z_L = 1.0 # always 1 in normalized units?
@@ -85,37 +85,38 @@ const expected =
                 0.024284888662941113 0.010011392733734206 0.008423252360063494 0.019281192435730943 0.036719507768509525 0.041644492169994836 0.03692283098105331 0.03638215764882269 0.04191389118981368 0.04071460358290303 0.024284888662941134])
 
 # default inputs for tests
-test_input_full_f = Dict("n_ion_species" => 1,
-                         "n_neutral_species" => 1,
-                         "boltzmann_electron_response" => true,
+test_input_full_f = Dict("composition" => OptionsDict("n_ion_species" => 1,
+                                                          "n_neutral_species" => 1,
+                                                          "electron_physics" => "boltzmann_electron_response",
+                                                          "T_e" => 1.0,
+                                                          "T_wall" => 1.0),
+                        "ion_species_1" => OptionsDict("initial_density" => 0.5,
+                                                            "initial_temperature" => 1.0),
+                        "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
+                                                                 "density_amplitude" => 0.5,
+                                                                 "density_phase" => 0.0,
+                                                                 "upar_amplitude" => 0.0,
+                                                                 "upar_phase" => 0.0,
+                                                                 "temperature_amplitude" => 0.5,
+                                                                 "temperature_phase" => mk_float(π)),
+                        "neutral_species_1" => OptionsDict("initial_density" => 0.5,
+                                                                "initial_temperature" => 1.0),
+                        "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "sinusoid",
+                                                                     "density_amplitude" => 0.5,
+                                                                     "density_phase" => mk_float(π),
+                                                                     "upar_amplitude" => 0.0,
+                                                                     "upar_phase" => 0.0,
+                                                                     "temperature_amplitude" => 0.5,
+                                                                     "temperature_phase" => 0.0),  
                          "run_name" => "full_f",
                          "evolve_moments_density" => false,
                          "evolve_moments_parallel_flow" => false,
                          "evolve_moments_parallel_pressure" => false,
                          "evolve_moments_conservation" => true,
-                         "krook_collisions" => Dict{String,Any}("use_krook" => true,"frequency_option" => "reference_parameters"),
-                         "T_e" => 1.0,
-                         "initial_density1" => 0.5,
-                         "initial_temperature1" => 1.0,
-                         "initial_density2" => 0.5,
-                         "initial_temperature2" => 1.0,
-                         "z_IC_option1" => "sinusoid",
-                         "z_IC_density_amplitude1" => 0.5,
-                         "z_IC_density_phase1" => 0.0,
-                         "z_IC_upar_amplitude1" => 0.0,
-                         "z_IC_upar_phase1" => 0.0,
-                         "z_IC_temperature_amplitude1" => 0.5,
-                         "z_IC_temperature_phase1" => mk_float(π),
-                         "z_IC_option2" => "sinusoid",
-                         "z_IC_density_amplitude2" => 0.5,
-                         "z_IC_density_phase2" => mk_float(π),
-                         "z_IC_upar_amplitude2" => 0.0,
-                         "z_IC_upar_phase2" => 0.0,
-                         "z_IC_temperature_amplitude2" => 0.5,
-                         "z_IC_temperature_phase2" => 0.0,
+                         "krook_collisions" => OptionsDict("use_krook" => true,"frequency_option" => "reference_parameters"),
                          "charge_exchange_frequency" => 2*π*0.1,
                          "ionization_frequency" => 0.0,
-                         "timestepping" => Dict{String,Any}("nstep" => 100,
+                         "timestepping" => OptionsDict("nstep" => 100,
                                                             "dt" => 0.001,
                                                             "nwrite" => 100,
                                                             "nwrite_dfns" => 100,
@@ -166,10 +167,10 @@ function run_test(test_input, rtol, atol; args...)
 
     # Make a copy to make sure nothing modifies the input Dicts defined in this test
     # script.
-    test_input = deepcopy(test_input)
+    input = deepcopy(test_input)
 
     # Convert keyword arguments to a unique name
-    name = test_input["run_name"]
+    name = input["run_name"]
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
 
@@ -180,12 +181,8 @@ function run_test(test_input, rtol, atol; args...)
     # Provide some progress info
     println("    - testing ", name)
 
-    # Convert dict from symbol keys to String keys
-    modified_inputs = Dict(String(k) => v for (k, v) in args)
-
     # Update default inputs with values to be changed
-    input = merge(test_input, modified_inputs)
-
+    merge_dict_with_kwargs!(input; args...)
     input["run_name"] = name
 
     # Suppress console output while running
@@ -228,7 +225,7 @@ function run_test(test_input, rtol, atol; args...)
             # load velocity moments data
             n_ion_zrst, upar_ion_zrst, ppar_ion_zrst, qpar_ion_zrst, v_t_ion_zrst = load_ion_moments_data(fid)
             n_neutral_zrst, upar_neutral_zrst, ppar_neutral_zrst, qpar_neutral_zrst, v_t_neutral_zrst = load_neutral_particle_moments_data(fid)
-            z, z_spectral = load_coordinate_data(fid, "z")
+            z, z_spectral = load_coordinate_data(fid, "z"; ignore_MPI=true)
 
             close(fid)
             
@@ -238,7 +235,7 @@ function run_test(test_input, rtol, atol; args...)
             # load particle distribution function (pdf) data
             f_ion_vpavperpzrst = load_pdf_data(fid)
             f_neutral_vzvrvzetazrst = load_neutral_pdf_data(fid)
-            vpa, vpa_spectral = load_coordinate_data(fid, "vpa")
+            vpa, vpa_spectral = load_coordinate_data(fid, "vpa"; ignore_MPI=true)
 
             close(fid)
             
