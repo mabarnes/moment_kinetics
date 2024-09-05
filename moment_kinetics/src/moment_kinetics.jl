@@ -289,7 +289,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
         vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
         drive_input, external_source_settings, num_diss_params,
-        manufactured_solns_input, bc_params = input
+        manufactured_solns_input = input
 
     # Create loop range variables for shared-memory-parallel loops
     if debug_loop_type === nothing
@@ -315,7 +315,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     pdf, moments, boundary_distributions =
         allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
                                  evolve_moments, collisions, external_source_settings,
-                                 num_diss_params, bc_params)
+                                 num_diss_params)
 
     if restart === false
         restarting = false

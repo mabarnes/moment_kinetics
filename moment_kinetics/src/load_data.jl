@@ -274,7 +274,7 @@ function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=no
                        discretization, fd_option, cheb_option, bc, advection_input("", 0.0, 0.0, 0.0),
                        MPI.COMM_NULL, element_spacing_option)
 
-    coord, spectral = define_coordinate(input, parallel_io)
+    coord, spectral = define_coordinate(input, nothing, parallel_io)
 
     return coord, spectral, chunk_size
 end
@@ -2454,11 +2454,11 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
             dummy_input = grid_input("dummy", 1, 1, 1, 1, 0, 1.0,
                                      "chebyshev_pseudospectral", "", "", "periodic",
                                      dummy_adv_input, dummy_comm, "uniform")
-            vzeta, vzeta_spectral = define_coordinate(dummy_input)
+            vzeta, vzeta_spectral = define_coordinate(dummy_input, nothing)
             vzeta_chunk_size = 1
-            vr, vr_spectral = define_coordinate(dummy_input)
+            vr, vr_spectral = define_coordinate(dummy_input, nothing)
             vr_chunk_size = 1
-            vz, vz_spectral = define_coordinate(dummy_input)
+            vz, vz_spectral = define_coordinate(dummy_input, nothing)
             vz_chunk_size = 1
         end
     end
@@ -2981,8 +2981,8 @@ function construct_global_zr_coords(r_local, z_local)
             coord_local.advection, MPI.COMM_NULL, coord_local.element_spacing_option)
     end
 
-    r_global, r_global_spectral = define_coordinate(make_global_input(r_local))
-    z_global, z_global_spectral = define_coordinate(make_global_input(z_local))
+    r_global, r_global_spectral = define_coordinate(make_global_input(r_local), nothing)
+    z_global, z_global_spectral = define_coordinate(make_global_input(z_local), nothing)
 
     return r_global, r_global_spectral, z_global, z_global_spectral
 end

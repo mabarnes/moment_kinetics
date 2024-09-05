@@ -51,8 +51,8 @@ function create_grids(ngrid,nelement_vpa,nelement_vperp;
         #println("made inputs")
         #println("vpa: ngrid: ",ngrid," nelement: ",nelement_local_vpa, " Lvpa: ",Lvpa)
         #println("vperp: ngrid: ",ngrid," nelement: ",nelement_local_vperp, " Lvperp: ",Lvperp)
-        vpa, vpa_spectral = define_coordinate(vpa_input)
-        vperp, vperp_spectral = define_coordinate(vperp_input)
+        vpa, vpa_spectral = define_coordinate(vpa_input, nothing)
+        vperp, vperp_spectral = define_coordinate(vperp_input, nothing)
         
         # Set up MPI
         initialize_comms!()

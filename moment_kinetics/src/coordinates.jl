@@ -12,6 +12,7 @@ using ..calculus: derivative!
 using ..chebyshev: scaled_chebyshev_grid, scaled_chebyshev_radau_grid, setup_chebyshev_pseudospectral
 using ..finite_differences: finite_difference_info
 using ..gauss_legendre: scaled_gauss_legendre_lobatto_grid, scaled_gauss_legendre_radau_grid, setup_gausslegendre_pseudospectral
+using ..input_structs
 using ..quadrature: composite_simpson_weights
 using ..input_structs: advection_input
 using ..moment_kinetics_structs: null_spatial_dimension_info, null_velocity_dimension_info
@@ -21,7 +22,7 @@ using MPI
 """
 structure containing basic information related to coordinates
 """
-struct coordinate
+struct coordinate{Tbparams}
     # name is the name of the variable associated with this coordiante
     name::String
     # n_global is the total number of grid points associated with this coordinate
@@ -62,6 +63,9 @@ struct coordinate
     cheb_option::String
     # bc is the boundary condition option for this coordinate
     bc::String
+    # struct containing some parameters that may be used for applying the boundary
+    # condition.
+    boundary_parameters::Tbparams
     # wgts contains the integration weights associated with each grid point
     wgts::Array{mk_float,1}
     # uniform_grid contains location of grid points mapped to a uniform grid
@@ -105,7 +109,7 @@ create arrays associated with a given coordinate,
 setup the coordinate grid, and populate the coordinate structure
 containing all of this information
 """
-function define_coordinate(input, parallel_io::Bool=false; init_YY::Bool=true)
+function define_coordinate(input, input_dict, parallel_io::Bool=false; init_YY::Bool=true)
     # total number of grid points is ngrid for the first element
     # plus ngrid-1 unique points for each additional element due
     # to the repetition of a point at the element boundary
@@ -130,6 +134,22 @@ function define_coordinate(input, parallel_io::Bool=false; init_YY::Bool=true)
         imin, imax, igrid, input.discretization, input.name)
     # calculate the widths of the cells between neighboring grid points
     cell_width = grid_spacing(grid, n_local)
+    # Get some parameters that may be used for the boundary condition
+    if input_dict === nothing
+        boundary_parameters = nothing
+    else
+        boundary_parameters_defaults = Dict{Symbol,Any}()
+        if input.name == "z"
+            # parameter controlling the cutoff of the ion distribution function in the vpa
+            # domain at the wall in z
+            boundary_parameters_defaults[:epsz] = 0.0
+        end
+        boundary_parameters_input = set_defaults_and_check_section!(
+            input_dict, "$(input.name)_boundary_condition_parameters";
+            boundary_parameters_defaults...
+           )
+        boundary_parameters = Dict_to_NamedTuple(boundary_parameters_input)
+    end
     # duniform_dgrid is the local derivative of the uniform grid with respect to
     # the coordinate grid
     duniform_dgrid = allocate_float(input.ngrid, input.nelement_local)
@@ -164,9 +184,10 @@ function define_coordinate(input, parallel_io::Bool=false; init_YY::Bool=true)
     coord = coordinate(input.name, n_global, n_local, input.ngrid,
         input.nelement_global, input.nelement_local, input.nrank, input.irank, input.L, grid,
         cell_width, igrid, ielement, imin, imax, igrid_full, input.discretization, input.fd_option, input.cheb_option,
-        input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
-        scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
-        local_io_range, global_io_range, element_scale, element_shift, input.element_spacing_option)
+        input.bc, boundary_parameters, wgts, uniform_grid, duniform_dgrid, scratch,
+        copy(scratch), copy(scratch), scratch_2d, copy(scratch_2d), advection,
+        send_buffer, receive_buffer, input.comm, local_io_range, global_io_range,
+        element_scale, element_shift, input.element_spacing_option)
 
     if coord.n == 1 && occursin("v", coord.name)
         spectral = null_velocity_dimension_info()

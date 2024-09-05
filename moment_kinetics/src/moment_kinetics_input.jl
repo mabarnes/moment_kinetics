@@ -18,7 +18,6 @@ using ..krook_collisions: setup_krook_collisions
 using ..finite_differences: fd_check_option
 using ..input_structs
 using ..numerical_dissipation: setup_numerical_dissipation
-using ..initial_conditions: setup_boundary_parameters
 using ..reference_parameters
 using ..geo: init_magnetic_geometry, setup_geometry_input
 
@@ -379,8 +378,6 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
              vzeta.nelement_global == 1 && vr.ngrid == vr.nelement_global == 1)
     num_diss_params = setup_numerical_dissipation(
         get(scan_input, "numerical_dissipation", Dict{String,Any}()), is_1V)
-    bc_params = setup_boundary_parameters(
-        get(scan_input, "boundary_condition_parameters", Dict{String,Any}()))
     # vperp.bc is set here (a bit out of place) so that we can use
     # num_diss_params.vperp_dissipation_coefficient to set the default.
     vperp.bc = get(scan_input, "vperp_bc",
@@ -517,21 +514,21 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
                               Dict(Symbol(k)=>v for (k,v) in io_settings)...)
 
     # initialize z grid and write grid point locations to file
-    z, z_spectral = define_coordinate(z_immutable, io_immutable.parallel_io)
+    z, z_spectral = define_coordinate(z_immutable, scan_input, io_immutable.parallel_io)
     # initialize r grid and write grid point locations to file
-    r, r_spectral = define_coordinate(r_immutable, io_immutable.parallel_io)
+    r, r_spectral = define_coordinate(r_immutable, scan_input, io_immutable.parallel_io)
     # initialize vpa grid and write grid point locations to file
-    vpa, vpa_spectral = define_coordinate(vpa_immutable, io_immutable.parallel_io)
+    vpa, vpa_spectral = define_coordinate(vpa_immutable, scan_input, io_immutable.parallel_io)
     # initialize vperp grid and write grid point locations to file
-    vperp, vperp_spectral = define_coordinate(vperp_immutable, io_immutable.parallel_io)
+    vperp, vperp_spectral = define_coordinate(vperp_immutable, scan_input, io_immutable.parallel_io)
     # initialize gyrophase grid and write grid point locations to file
-    gyrophase, gyrophase_spectral = define_coordinate(gyrophase_immutable, io_immutable.parallel_io)
+    gyrophase, gyrophase_spectral = define_coordinate(gyrophase_immutable, scan_input, io_immutable.parallel_io)
     # initialize vz grid and write grid point locations to file
-    vz, vz_spectral = define_coordinate(vz_immutable, io_immutable.parallel_io)
+    vz, vz_spectral = define_coordinate(vz_immutable, scan_input, io_immutable.parallel_io)
     # initialize vr grid and write grid point locations to file
-    vr, vr_spectral = define_coordinate(vr_immutable, io_immutable.parallel_io)
+    vr, vr_spectral = define_coordinate(vr_immutable, scan_input, io_immutable.parallel_io)
     # initialize vr grid and write grid point locations to file
-    vzeta, vzeta_spectral = define_coordinate(vzeta_immutable, io_immutable.parallel_io)
+    vzeta, vzeta_spectral = define_coordinate(vzeta_immutable, scan_input, io_immutable.parallel_io)
 
     external_source_settings = setup_external_sources!(scan_input, r, z)
 
@@ -562,7 +559,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
                   vpa, vpa_spectral, vperp, vperp_spectral, gyrophase, gyrophase_spectral,
                   vz, vz_spectral, vr, vr_spectral, vzeta, vzeta_spectral, composition,
                   species_immutable, collisions, geometry, drive_immutable,
-                  external_source_settings, num_diss_params, manufactured_solns_input, bc_params)
+                  external_source_settings, num_diss_params, manufactured_solns_input)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
     close(io)
