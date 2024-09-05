@@ -18,11 +18,13 @@ vpa_nelement = 63
 vpa_L = 36.0
 vpa_bc = "zero"
 vpa_discretization = "chebyshev_pseudospectral"
+vpa_element_spacing_option = "coarse_tails"
 vz_ngrid = 6
 vz_nelement = 63
 vz_L = 36.0
 vz_bc = "zero"
 vz_discretization = "chebyshev_pseudospectral"
+vz_element_spacing_option = "coarse_tails"
 
 [composition]
 n_ion_species = 1

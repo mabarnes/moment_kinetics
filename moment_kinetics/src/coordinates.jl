@@ -293,7 +293,34 @@ function set_element_boundaries(nelement_global, L, element_spacing_option, coor
         for j in 1:nsqrt
             element_boundaries[(nelement_global+1)+ 1 - j] = (L/2.0) - fac*(L/2.0)*((j-1)/(nsqrt-1))^2
         end
-        
+    elseif element_spacing_option == "coarse_tails"
+        # Element boundaries at
+        #
+        # x = (1 + (BT)^2 / 3) T tan(BT a) / (1 + (BT a)^2 / 3)
+        #
+        # where a = (i - 1 - c) / c, c = (n-1)/2, i is the grid index, so that a=-1 at
+        # i=1, a=1 at i=n and a=0 on the central grid point (if n is odd, so that there is
+        # a central point). Also B=1/T*atan(L/2T).
+        #
+        # Choosing x∼tan(a) gives dx/da∼1+x^2 so that we get grid spacing roughly
+        # proportional to x^2 for large |x|, which for w_∥ advection compensates the
+        # w_∥^2 terms in moment-kinetics so that the CFL condition should be roughly
+        # constant across the grid. The constant B.T multiplying a inside the tan() is
+        # chosen so that the transition between roughly constant spacing and roughly x^2
+        # spacing happens at x=T. The (1 + (BT a)^2 / 3) denominator removes the quadratic
+        # part of the Taylor expansion of dx/da around a=0 so that we get a flatter region
+        # of grid spacing for |x|<T. The rest of the factors ensure that x(±1)=±L/2.
+        #
+        # We choose T=5 so that the electron sheath cutoff, which is around
+        # v_∥/vth≈3≈w_∥ is captured in the finer grid spacing in the 'constant' region.
+        T = 5.0
+        BT = atan(L / 2.0 / T)
+        a = (collect(1:nelement_global+1) .- 1 .- nelement_global ./ 2.0) ./ (nelement_global ./ 2.0)
+        @. element_boundaries = tan(BT * a) / (1.0 + (BT * a)^2 / 3.0)
+
+        # Rather than writing out all the necessary factors explicitly, just normalise the
+        # element_boundaries array so that its first/last values are ±L/2.
+        @. element_boundaries *= L / 2.0 / element_boundaries[end]
     elseif element_spacing_option == "uniform" || (element_spacing_option == "sqrt" && nelement_global < 4) # uniform spacing 
         for j in 1:nelement_global+1
             element_boundaries[j] = L*((j-1)/(nelement_global) - 0.5)

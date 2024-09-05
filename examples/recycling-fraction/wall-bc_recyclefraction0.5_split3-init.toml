@@ -18,11 +18,13 @@ vpa_nelement = 63
 vpa_L = 36.0
 vpa_bc = "zero"
 vpa_discretization = "chebyshev_pseudospectral"
+vpa_element_spacing_option = "coarse_tails"
 vz_ngrid = 6
 vz_nelement = 63
 vz_L = 36.0
 vz_bc = "zero"
 vz_discretization = "chebyshev_pseudospectral"
+vz_element_spacing_option = "coarse_tails"
 
 [composition]
 n_ion_species = 1
@@ -81,8 +83,8 @@ type = "Fekete4(3)"
 nstep = 100000
 dt = 1.0e-5
 minimum_dt = 1.0e-6
-nwrite = 1000
-nwrite_dfns = 1000
+nwrite = 10000
+nwrite_dfns = 10000
 split_operators = false
 steady_state_residual = true
 converged_residual_value = 1.0e-3
