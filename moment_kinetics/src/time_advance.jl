@@ -2659,11 +2659,12 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron,
                 density = @view scratch[t_params.n_rk_stages+1].density[:,ir,is]
                 upar = @view scratch[t_params.n_rk_stages+1].upar[:,ir,is]
                 ppar = @view scratch[t_params.n_rk_stages+1].ppar[:,ir,is]
+                phi = fields.phi[:,ir]
                 last_negative_vpa_ind, first_positive_vpa_ind =
                     get_ion_z_boundary_cutoff_indices(density, upar, ppar,
                                                       moments.evolve_upar,
                                                       moments.evolve_ppar, z, vpa,
-                                                      1.0e-14)
+                                                      1.0e-14, phi)
                 if z.irank == 0
                     scratch[2].pdf[last_negative_vpa_ind,:,1,ir,is] .=
                         scratch[t_params.n_rk_stages+1].pdf[last_negative_vpa_ind,:,1,ir,is]

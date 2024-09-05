@@ -177,7 +177,8 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, phi, moments, b
                 @loop_r ir begin
                     @views enforce_zero_incoming_bc!(
                         pdf[:,:,:,ir,is], z, vpa, density[:,ir,is], upar[:,ir,is],
-                        ppar[:,ir,is], moments.evolve_upar, moments.evolve_ppar, zero)
+                        ppar[:,ir,is], moments.evolve_upar, moments.evolve_ppar, zero,
+                        phi[:,ir])
                 end
             else
                 @loop_r ir begin
@@ -427,27 +428,32 @@ function enforce_zero_incoming_bc!(pdf, speed, z, zero, phi, epsz)
     end
 end
 function get_ion_z_boundary_cutoff_indices(density, upar, ppar, evolve_upar, evolve_ppar,
-                                           z, vpa, zero)
+                                           z, vpa, zero, phi)
+    epsz = z.boundary_parameters.epsz
     if z.irank == 0
+        deltaphi = phi[2] - phi[1]
+        vcut = deltaphi > 0 ? sqrt(deltaphi)*(epsz^0.25) : 0.0
         vth = sqrt(2.0*(ppar[1]/density[1]))
         @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, vth,
                                          upar[1], evolve_ppar, evolve_upar)
-        last_negative_vpa_ind = searchsortedlast(vpa.scratch, -zero)
+        last_negative_vpa_ind = searchsortedlast(vpa.scratch, min(-zero, -vcut))
     else
         last_negative_vpa_ind = nothing
     end
     if z.irank == z.nrank - 1
+        deltaphi = phi[end-1] - phi[end]
+        vcut = deltaphi > 0 ? sqrt(deltaphi)*(epsz^0.25) : 0.0
         vth = sqrt(2.0*(ppar[end]/density[end]))
         @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, vth,
                                           upar[end], evolve_ppar, evolve_upar)
-        first_positive_vpa_ind = searchsortedfirst(vpa.scratch2, zero)
+        first_positive_vpa_ind = searchsortedfirst(vpa.scratch2, max(zero, vcut))
     else
         first_positive_vpa_ind = nothing
     end
     return last_negative_vpa_ind, first_positive_vpa_ind
 end
 function enforce_zero_incoming_bc!(pdf, z::coordinate, vpa::coordinate, density, upar,
-                                   ppar, evolve_upar, evolve_ppar, zero)
+                                   ppar, evolve_upar, evolve_ppar, zero, phi)
     if z.irank != 0 && z.irank != z.nrank - 1
         # No z-boundary in this block
         return nothing
@@ -461,7 +467,7 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vpa::coordinate, density,
     # absolute velocity at left boundary
     last_negative_vpa_ind, first_positive_vpa_ind =
         get_ion_z_boundary_cutoff_indices(density, upar, ppar, evolve_upar, evolve_ppar,
-                                          z, vpa, zero)
+                                          z, vpa, zero, phi)
     if z.irank == 0
         pdf[last_negative_vpa_ind+1:end, :, 1] .= 0.0
     end
