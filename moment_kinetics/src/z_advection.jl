@@ -21,13 +21,13 @@ function z_advection!(f_out, fvec_in, moments, fields, advect, z, vpa, vperp, r,
     @loop_s is begin
         # get the updated speed along the z direction using the current f
         @views update_speed_z!(advect[is], fvec_in.upar[:,:,is],
-                               moments.charged.vth[:,:,is], moments.evolve_upar,
-                               moments.evolve_ppar, fields, vpa, vperp, z, r, t, geometry)
+                               moments.ion.vth[:,:,is], moments.evolve_upar,
+                               moments.evolve_ppar, fields, vpa, vperp, z, r, t, geometry, is)
         # update adv_fac
         @loop_r_vperp_vpa ir ivperp ivpa begin
             @views adjust_advection_speed!(advect[is].speed[:,ivpa,ivperp,ir],
                                            fvec_in.density[:,ir,is],
-                                           moments.charged.vth[:,ir,is],
+                                           moments.ion.vth[:,ir,is],
                                            moments.evolve_density, moments.evolve_ppar)
             @views @. advect[is].adv_fac[:,ivpa,ivperp,ir] = -dt*advect[is].speed[:,ivpa,ivperp,ir]
             # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
@@ -35,7 +35,7 @@ function z_advection!(f_out, fvec_in, moments, fields, advect, z, vpa, vperp, r,
             @views unnormalize_pdf!(
                 scratch_dummy.buffer_vpavperpzrs_2[ivpa,ivperp,:,ir,is],
                 fvec_in.pdf[ivpa,ivperp,:,ir,is], fvec_in.density[:,ir,is],
-                moments.charged.vth[:,ir,is], moments.evolve_density, moments.evolve_ppar)
+                moments.ion.vth[:,ir,is], moments.evolve_density, moments.evolve_ppar)
         end
     end
     #calculate the upwind derivative
@@ -85,7 +85,7 @@ end
 calculate the advection speed in the z-direction at each grid point
 """
 function update_speed_z!(advect, upar, vth, evolve_upar, evolve_ppar, fields, vpa, vperp,
-                         z, r, t, geometry)
+                         z, r, t, geometry, is)
     @boundscheck r.n == size(advect.speed,4) || throw(BoundsError(advect))
     @boundscheck vperp.n == size(advect.speed,3) || throw(BoundsError(advect))
     @boundscheck vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
@@ -106,7 +106,7 @@ function update_speed_z!(advect, upar, vth, evolve_upar, evolve_ppar, fields, vp
                 # vpa bzed
                 @. @views advect.speed[:,ivpa,ivperp,ir] = vpa.grid[ivpa]*bzed[:,ir]
                 # ExB drift
-                @. @views advect.speed[:,ivpa,ivperp,ir] += ExBfac*bzeta[:,ir]*jacobian[:,ir]/Bmag[:,ir]*fields.Er[:,ir]
+                @. @views advect.speed[:,ivpa,ivperp,ir] += ExBfac*bzeta[:,ir]*jacobian[:,ir]/Bmag[:,ir]*fields.gEr[ivperp,:,ir,is]
                 # magnetic curvature drift
                 @. @views advect.speed[:,ivpa,ivperp,ir] += rhostar*(vpa.grid[ivpa]^2)*cvdriftz[:,ir]
                 # magnetic grad B drift

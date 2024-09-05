@@ -20,6 +20,7 @@ export setup_distributed_memory_MPI
 export setup_distributed_memory_MPI_for_weights_precomputation
 export _block_synchronize, _anyv_subblock_synchronize
 
+using LinearAlgebra
 using MPI
 using SHA
 
@@ -100,7 +101,7 @@ const anyv_subblock_size = Ref{mk_int}()
 
 """
 """
-const anyv_isubblock_index = Ref{mk_int}()
+const anyv_isubblock_index = Ref{Union{mk_int,Nothing}}()
 
 """
 """
@@ -117,14 +118,20 @@ const global_Win_store = Vector{MPI.Win}(undef, 0)
 """
 """
 function __init__()
-    MPI.Init()
-
+    if !MPI.Initialized()
+        MPI.Init()
+    end
+    
     comm_world.val = MPI.COMM_WORLD.val
 
     global_rank[] = MPI.Comm_rank(comm_world)
     global_size[] = MPI.Comm_size(comm_world)
     #block_rank[] = MPI.Comm_rank(comm_block)
     #block_size[] = MPI.Comm_size(comm_block)
+
+    # Ensure BLAS only uses 1 thread, to avoid oversubscribing processes as we are
+    # probably already fully parallelised.
+    BLAS.set_num_threads(1)
 end
 
 """
@@ -388,23 +395,23 @@ end
     Special type for debugging race conditions in accesses to shared-memory arrays.
     Only used if debugging._debug_level is high enough.
     """
-    struct DebugMPISharedArray{T, N} <: AbstractArray{T, N}
-        data::Array{T,N}
+    struct DebugMPISharedArray{T, N, TArray <: AbstractArray{T,N}, TIntArray <: AbstractArray{mk_int,N}, TBoolArray <: AbstractArray{Bool,N}} <: AbstractArray{T, N}
+        data::TArray
         accessed::Ref{Bool}
-        is_initialized::Array{mk_int,N}
-        is_read::Array{Bool,N}
-        is_written::Array{Bool, N}
+        is_initialized::TIntArray
+        is_read::TBoolArray
+        is_written::TBoolArray
         creation_stack_trace::String
         @debug_detect_redundant_block_synchronize begin
-            previous_is_read::Array{Bool,N}
-            previous_is_written::Array{Bool, N}
+            previous_is_read::TBoolArray
+            previous_is_written::TBoolArray
         end
     end
 
     export DebugMPISharedArray
 
     # Constructors
-    function DebugMPISharedArray(array::Array, comm)
+    function DebugMPISharedArray(array::AbstractArray, comm)
         dims = size(array)
         is_initialized = allocate_shared(mk_int, dims; comm=comm, maybe_debug=false)
         if block_rank[] == 0
@@ -426,7 +433,7 @@ end
             previous_is_read .= true
             previous_is_written = Array{Bool}(undef, dims)
             previous_is_written .= true
-            return DebugMPISharedArray(array, is_initialized, is_read, is_written,
+            return DebugMPISharedArray(array, accessed, is_initialized, is_read, is_written,
                                        creation_stack_trace, previous_is_read,
                                        previous_is_written)
         end
@@ -455,7 +462,7 @@ end
         A.accessed[] = true
         return getindex(A.data, I...)
     end
-    function Base.setindex!(A::DebugMPISharedArray{T, N}, v::T, I::Vararg{mk_int,N}) where {T, N}
+    function Base.setindex!(A::DebugMPISharedArray{T, N}, v::Number, I::Vararg{mk_int,N}) where {T, N}
         @debug_track_initialized begin
             A.is_initialized[I...] = 1
         end
@@ -482,6 +489,16 @@ end
               * "silently disable the debug checks")
     end
 
+    # Explicit overload for view() so the result is a DebugMPISharedArray
+    import Base: view
+    function view(A::DebugMPISharedArray, inds...)
+        return DebugMPISharedArray(
+            (isa(getfield(A, name), AbstractArray) ?
+             view(getfield(A, name), inds...) :
+             getfield(A, name)
+             for name ∈ fieldnames(typeof(A)))...)
+    end
+
     # Explicit overload for vec() so the result is a DebugMPISharedArray
     import Base: vec
     function vec(A::DebugMPISharedArray)
@@ -496,11 +513,22 @@ end
     # SparseArray A
     import LinearAlgebra: ldiv!, Factorization
     function ldiv!(Y::DebugMPISharedArray, A::Factorization, B::DebugMPISharedArray)
+        @debug_track_initialized begin
+            Y.is_initialized .= 1
+        end
+        Y.is_written .= true
+        Y.accessed[] = true
         return ldiv!(Y.data, A, B.data)
     end
 
     import MPI: Buffer
     function Buffer(A::DebugMPISharedArray)
+        @debug_track_initialized begin
+            A.is_initialized .= 1
+        end
+        A.is_read .= true
+        A.is_written .= true
+        A.accessed[] = true
         return Buffer(A.data)
     end
 
@@ -508,6 +536,11 @@ end
     # instances, so their is_read and is_written members can be checked and
     # reset by _block_synchronize()
     const global_debugmpisharedarray_store = Vector{DebugMPISharedArray}(undef, 0)
+    # 'anyv' regions require a separate array store, because within an anyv region,
+    # processes in the same shared memory block may still not be synchronized if they are
+    # in different anyv sub-blocks, so debug checks within an anyv region should only
+    # consider the anyv-specific arrays.
+    const global_anyv_debugmpisharedarray_store = Vector{DebugMPISharedArray}(undef, 0)
 end
 
 """
@@ -544,6 +577,19 @@ Array{mk_float}
 function allocate_shared(T, dims; comm=nothing, maybe_debug=true)
     if comm === nothing
         comm = comm_block[]
+    elseif comm == MPI.COMM_NULL
+        # If `comm` is a null communicator (on this process), then this array is just a
+        # dummy that will not be used.
+        array = Array{T}(undef, (0 for _ ∈ dims)...)
+
+        @debug_shared_array begin
+            # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
+            if maybe_debug
+                array = DebugMPISharedArray(array, comm)
+            end
+        end
+
+        return array
     end
     br = MPI.Comm_rank(comm)
     bs = MPI.Comm_size(comm)
@@ -610,7 +656,11 @@ function allocate_shared(T, dims; comm=nothing, maybe_debug=true)
         # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
         if maybe_debug
             debug_array = DebugMPISharedArray(array, comm)
-            push!(global_debugmpisharedarray_store, debug_array)
+            if comm == comm_anyv_subblock[]
+                push!(global_anyv_debugmpisharedarray_store, debug_array)
+            else
+                push!(global_debugmpisharedarray_store, debug_array)
+            end
             return debug_array
         end
     end
@@ -739,11 +789,17 @@ end
     Raises an error if any array has been accessed incorrectly since the previous call
     to _block_synchronize()
 
-    Can be added when debugging to help in down where an error occurs.
+    Can be added when debugging to help pin down where an error occurs.
     """
-    function debug_check_shared_memory(; kwargs...)
-        for (arraynum, array) ∈ enumerate(global_debugmpisharedarray_store)
-            debug_check_shared_array(array; kwargs...)
+    function debug_check_shared_memory(; comm=comm_block[], kwargs...)
+        if comm == comm_anyv_subblock[]
+            for (arraynum, array) ∈ enumerate(global_anyv_debugmpisharedarray_store)
+                debug_check_shared_array(array; comm=comm, kwargs...)
+            end
+        else
+            for (arraynum, array) ∈ enumerate(global_debugmpisharedarray_store)
+                debug_check_shared_array(array; comm=comm, kwargs...)
+            end
         end
         return nothing
     end
@@ -886,6 +942,10 @@ sub-blocks, depending on how the species and spatial dimensions are split up.
 `_anyv_subblock_synchronize()`.
 """
 function _anyv_subblock_synchronize()
+    if comm_anyv_subblock[] == MPI.COMM_NULL
+        # No synchronization to do for a null communicator
+        return nothing
+    end
 
     MPI.Barrier(comm_anyv_subblock[])
 
@@ -920,7 +980,7 @@ function _anyv_subblock_synchronize()
         # * If an element is written to, only the rank that writes to it should read it.
         #
         @debug_detect_redundant_block_synchronize previous_was_unnecessary = true
-        for (arraynum, array) ∈ enumerate(global_debugmpisharedarray_store)
+        for (arraynum, array) ∈ enumerate(global_anyv_debugmpisharedarray_store)
 
             debug_check_shared_array(array; comm=comm_anyv_subblock[])
 
@@ -1034,6 +1094,7 @@ end
 """
 function free_shared_arrays()
     @debug_shared_array resize!(global_debugmpisharedarray_store, 0)
+    @debug_shared_array resize!(global_anyv_debugmpisharedarray_store, 0)
 
     for w ∈ global_Win_store
         MPI.free(w)

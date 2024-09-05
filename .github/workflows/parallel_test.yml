@@ -3,23 +3,29 @@ name: Run tests in parallel
 
 on: [push, pull_request, workflow_dispatch]
 
+permissions:
+  actions: write
+  contents: read
+
 jobs:
   test-ubuntu:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 150
 
     steps:
       - uses: actions/checkout@v4
       - uses: mpi4py/setup-mpi@v1
         with:
           mpi: 'openmpi'
-      - uses: julia-actions/setup-julia@v1
+      - uses: julia-actions/setup-julia@latest
         with:
           version: '1.10'
           arch: x64
+      - uses: julia-actions/cache@v1
       - run: |
           touch Project.toml
-          julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["MPI", "MPIPreferences", "NCDatasets", "Random", "SpecialFunctions", "Test"]); Pkg.develop(path="moment_kinetics/"); using MPIPreferences; MPIPreferences.use_system_binary()'
+          julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["MPI", "MPIPreferences"]); using MPIPreferences; MPIPreferences.use_system_binary()'
+          julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["NCDatasets", "Random", "SpecialFunctions", "Test"]); Pkg.develop(path="moment_kinetics/")'
           julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.precompile()'
           # Need to use openmpi so that the following arguments work:
           # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
@@ -43,13 +49,15 @@ jobs:
       - uses: mpi4py/setup-mpi@v1
         with:
           mpi: 'openmpi'
-      - uses: julia-actions/setup-julia@v1
+      - uses: julia-actions/setup-julia@latest
         with:
           version: '1.10'
-          arch: x64
+      - uses: julia-actions/cache@v1
       - run: |
+          export MPILIBPATH=$(find /opt/homebrew/Cellar/open-mpi/ -name libmpi.dylib)
           touch Project.toml
-          julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["MPI", "MPIPreferences", "NCDatasets", "Random", "SpecialFunctions", "Test"]); Pkg.develop(path="moment_kinetics/"); using MPIPreferences; MPIPreferences.use_system_binary()'
+          julia --project -O3 --check-bounds=no -e "import Pkg; Pkg.add([\"MPI\", \"MPIPreferences\"]); using MPIPreferences; MPIPreferences.use_system_binary(library_names=\"$MPILIBPATH\")"
+          julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["NCDatasets", "Random", "SpecialFunctions", "Test"]); Pkg.develop(path="moment_kinetics/")'
           julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.precompile()'
           # Need to use openmpi so that the following arguments work:
           # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes

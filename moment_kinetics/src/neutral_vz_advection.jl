@@ -127,19 +127,21 @@ function update_speed_n_u_p_evolution_neutral!(advect, fvec, moments, vz, z, r,
         end
     end
     if neutral_source_settings.active
-        source_amplitude = moments.neutral.external_source_amplitude
-        source_T = neutral_source_settings.source_T
+        source_density_amplitude = moments.neutral.external_source_density_amplitude
+        source_momentum_amplitude = moments.neutral.external_source_momentum_amplitude
+        source_pressure_amplitude = moments.neutral.external_source_pressure_amplitude
         density = fvec.density_neutral
         uz = fvec.uz_neutral
         pz = fvec.pz_neutral
         vth = moments.neutral.vth
         vz_grid = vz.grid
         @loop_s_r_z is ir iz begin
-            prefactor = source_amplitude[iz,ir]
-            term1 = prefactor * uz[iz,ir,is]/(density[iz,ir,is]*vth[iz,ir,is])
+            term1 = source_density_amplitude[iz,ir] * uz[iz,ir,is]/(density[iz,ir,is]*vth[iz,ir,is])
             term2_over_vpa =
-                0.5 * prefactor * (-(0.5*source_T + uz[iz,ir,is]^2) / pz[iz,ir,is]
-                                   + 1.0/density[iz,ir,is])
+                -0.5 * (source_pressure_amplitude[iz,ir] +
+                        2.0 * uz[iz,ir,is] * source_momentum_amplitude[iz,ir]) /
+                       pz[iz,ir,is] +
+                0.5 * source_density_amplitude[iz,ir] / density[iz,ir,is]
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 advect[is].speed[ivz,ivr,ivzeta,iz,ir] += term1 +
                                                           vz_grid[ivz] * term2_over_vpa
@@ -218,13 +220,12 @@ function update_speed_n_u_evolution_neutral!(advect, fvec, moments, vz, z, r, co
         end
     end
     if neutral_source_settings.active
-        source_amplitude = moments.neutral.external_source_amplitude
-        source_T = neutral_source_settings.source_T
+        source_density_amplitude = moments.neutral.external_source_density_amplitude
         density = fvec.density_neutral
         uz = fvec.uz_neutral
         vth = moments.neutral.vth
         @loop_sn_r_z isn ir iz begin
-            term = source_amplitude[iz,ir] * uz[iz,ir,isn] / density[iz,ir,isn]
+            term = source_density_amplitude[iz,ir] * uz[iz,ir,isn] / density[iz,ir,isn]
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 advect[isn].speed[ivz,ivr,ivzeta,iz,ir] += term
             end

@@ -15,9 +15,13 @@ jobs:
       - uses: julia-actions/setup-julia@latest
         with:
           version: '1.10'
+      - uses: julia-actions/cache@v1
       - name: Install dependencies
         run: |
-          pip3 install --user matplotlib
+          # Version 3.9.0 of matplotlib causes an error with PyPlot.jl, so pin
+          # matplotlib version to 3.8.3 until this is fixed. See
+          # https://github.com/JuliaPy/PyPlot.jl/issues/582).
+          pip3 install --user "matplotlib==3.8.3"
       - name: Build and deploy
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Authenticate with GitHub Actions token
@@ -32,6 +36,9 @@ jobs:
           version: '1.10'
       - name: Install dependencies
         run: |
-          pip3 install --user matplotlib
+          # Version 3.9.0 of matplotlib causes an error with PyPlot.jl, so pin
+          # matplotlib version to 3.8.3 until this is fixed. See
+          # https://github.com/JuliaPy/PyPlot.jl/issues/582).
+          pip3 install --user "matplotlib==3.8.3"
       - name: Build and deploy
         run: julia --project=docs/ docs/make-pdf.jl

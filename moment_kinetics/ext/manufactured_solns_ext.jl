@@ -43,6 +43,8 @@ using IfElse
     # does not appear in a particular geometric coefficient, because 
     # that coefficient is a constant. 
     struct geometric_coefficients_sym{}
+        Er_constant::mk_float
+        Ez_constant::mk_float
         rhostar::mk_float
         Bzed::Union{mk_float,Num}
         Bzeta::Union{mk_float,Num}
@@ -62,6 +64,8 @@ using IfElse
         option = geometry_input_data.option
         rhostar = geometry_input_data.rhostar
         pitch = geometry_input_data.pitch
+        Er_constant = geometry_input_data.Er_constant
+        Ez_constant = geometry_input_data.Ez_constant
         if option == "constant-helical" || option == "default"
             bzed = pitch
             bzeta = sqrt(1 - bzed^2)
@@ -90,10 +94,20 @@ using IfElse
             end
             dBdz = expand_derivatives(Dz(Bmag))
             jacobian = 1.0
+        elseif option == "0D-Spitzer-test"
+            Bmag = 1.0
+            dBdz = geometry_input_data.dBdz_constant
+            dBdr = geometry_input_data.dBdr_constant
+            bzed = pitch
+            bzeta = sqrt(1 - bzed^2)
+            Bzed = Bmag*bzed
+            Bzeta = Bmag*bzeta
+            jacobian = 1.0
         else
             input_option_error("$option", option)
         end
-        geo_sym = geometric_coefficients_sym(rhostar,Bzed,Bzeta,Bmag,bzed,bzeta,dBdz,dBdr,jacobian)
+        geo_sym = geometric_coefficients_sym(Er_constant,Ez_constant,
+          rhostar,Bzed,Bzeta,Bmag,bzed,bzeta,dBdz,dBdr,jacobian)
         return geo_sym
     end
 
@@ -272,7 +286,7 @@ using IfElse
             upari = 0.0
         elseif z_bc == "wall"
             densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
-            Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr,manufactured_solns_input,species)
+            Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,geometry,nr,manufactured_solns_input,species)
             Bzeta = geometry.Bzeta
             Bmag = geometry.Bmag
             rhostar = geometry.rhostar
@@ -357,7 +371,7 @@ using IfElse
 
         if manufactured_solns_input.type == "default"
             # calculate the electric fields and the potential
-            Er, Ez, phi = electric_fields(Lr, Lz, r_bc, z_bc, composition, nr,
+            Er, Ez, phi = electric_fields(Lr, Lz, r_bc, z_bc, composition, geometry, nr,
                                           manufactured_solns_input, species)
 
             # get geometric/composition data
@@ -402,7 +416,7 @@ using IfElse
         return dfni
     end
 
-    function electric_fields(Lr, Lz, r_bc, z_bc, composition, nr,
+    function electric_fields(Lr, Lz, r_bc, z_bc, composition, geometry, nr,
                              manufactured_solns_input, species)
        
         # define derivative operators
@@ -437,8 +451,8 @@ using IfElse
         # calculate the electric fields
         dense = densi # get the electron density via quasineutrality with Zi = 1
         phi = composition.T_e*log(dense/N_e) # use the adiabatic response of electrons for me/mi -> 0
-        Er = -Dr(phi)*rfac + composition.Er_constant
-        Ez = -Dz(phi)
+        Er = -Dr(phi)*rfac + geometry.Er_constant
+        Ez = -Dz(phi)      + geometry.Ez_constant
         
         Er_expanded = expand_derivatives(Er)
         Ez_expanded = expand_derivatives(Ez)
@@ -450,7 +464,7 @@ using IfElse
                                     geometry_input_data::geometry_input, composition, species, nr, nvperp)
         # calculate the geometry symbolically
         geometry = geometry_sym(geometry_input_data,Lz,Lr,nr)
-        charged_species = species.charged[1]
+        ion_species = species.ion[1]
         if composition.n_neutral_species > 0
             neutral_species = species.neutral[1]
         else
@@ -458,17 +472,17 @@ using IfElse
         end
 
         densi = densi_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
-                          charged_species)
+                          ion_species)
         upari = upari_sym(Lr, Lz, r_bc, z_bc, composition, geometry, nr, manufactured_solns_input,
-                          charged_species)
+                          ion_species)
         ppari = ppari_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
-                          charged_species)
+                          ion_species)
         pperpi = pperpi_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
-                          charged_species, nvperp)
+                          ion_species, nvperp)
         vthi = vthi_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
-                          charged_species, nvperp)
+                          ion_species, nvperp)
         dfni = dfni_sym(Lr, Lz, r_bc, z_bc, composition, geometry, nr,
-                        manufactured_solns_input, charged_species)
+                        manufactured_solns_input, ion_species)
 
         densn = densn_sym(Lr, Lz, r_bc, z_bc, geometry,composition,
                           manufactured_solns_input, neutral_species)
@@ -500,11 +514,13 @@ using IfElse
         return manufactured_solns_list
     end 
     
-    function manufactured_electric_fields(Lr, Lz, r_bc, z_bc, composition, nr,
+    function manufactured_electric_fields(Lr, Lz, r_bc, z_bc, composition, geometry_input_data::geometry_input, nr,
                                           manufactured_solns_input, species)
         
+        # calculate the geometry symbolically
+        geometry = geometry_sym(geometry_input_data,Lz,Lr,nr)
         # calculate the electric fields and the potential
-        Er, Ez, phi = electric_fields(Lr, Lz, r_bc, z_bc, composition, nr,
+        Er, Ez, phi = electric_fields(Lr, Lz, r_bc, z_bc, composition, geometry, nr,
                                       manufactured_solns_input, species)
         
         Er_func = build_function(Er, z, r, t, expression=Val{false})
@@ -538,7 +554,7 @@ using IfElse
             geometry_input_data::geometry_input, collisions,
             num_diss_params, species)
         geometry = geometry_sym(geometry_input_data,z_coord.L,r_coord.L,r_coord.n)
-        charged_species = species.charged[1]
+        ion_species = species.ion[1]
         if composition.n_neutral_species > 0
             neutral_species = species.neutral[1]
         else
@@ -547,16 +563,16 @@ using IfElse
 
         # ion manufactured solutions
         densi = densi_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition,
-                          manufactured_solns_input, charged_species)
-        upari = upari_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition, geometry, r_coord.n, manufactured_solns_input, charged_species)
+                          manufactured_solns_input, ion_species)
+        upari = upari_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition, geometry, r_coord.n, manufactured_solns_input, ion_species)
         vthi = vthi_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition, manufactured_solns_input,
-                          charged_species, vperp_coord.n)
+                          ion_species, vperp_coord.n)
         dfni = dfni_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition,
-                        geometry, r_coord.n, manufactured_solns_input, charged_species)
+                        geometry, r_coord.n, manufactured_solns_input, ion_species)
         #dfni in vr vz vzeta coordinates
         vrvzvzeta_dfni = cartesian_dfni_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc,
                                             composition, manufactured_solns_input,
-                                            charged_species)
+                                            ion_species)
 
         # neutral manufactured solutions
         densn = densn_sym(r_coord.L,z_coord.L, r_coord.bc, z_coord.bc, geometry,
@@ -603,8 +619,8 @@ using IfElse
         
         # calculate the electric fields and the potential
         Er, Ez, phi = electric_fields(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc,
-                                      composition, r_coord.n, manufactured_solns_input,
-                                      charged_species)
+                                      composition, geometry, r_coord.n, manufactured_solns_input,
+                                      ion_species)
 
         # the adiabatic invariant (for compactness)
         mu = 0.5*(vperp^2)/Bmag
@@ -621,10 +637,10 @@ using IfElse
                + dvperpdt * Dvperp(dfni)
                + cx_frequency*( densn*dfni - densi*gav_dfnn )
                - ionization_frequency*dense*gav_dfnn )
-        nu_krook = collisions.krook_collision_frequency_prefactor
+        nu_krook = collisions.krook.nuii0
         if nu_krook > 0.0
             Ti_over_Tref = vthi^2
-            if collisions.krook_collisions_option == "manual"
+            if collisions.krook.frequency_option == "manual"
                 nuii_krook = nu_krook
             else # default option
                 nuii_krook = nu_krook * densi * Ti_over_Tref^(-1.5)
@@ -638,31 +654,31 @@ using IfElse
             Si += - nuii_krook*(FMaxwellian - dfni)
         end
         include_num_diss_in_MMS = true
-        if num_diss_params.vpa_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
-            Si += - num_diss_params.vpa_dissipation_coefficient*Dvpa(Dvpa(dfni))
+        if num_diss_params.ion.vpa_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Si += - num_diss_params.ion.vpa_dissipation_coefficient*Dvpa(Dvpa(dfni))
         end
-        if num_diss_params.vperp_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
-            Si += - num_diss_params.vperp_dissipation_coefficient*Dvperp(Dvperp(dfni))
+        if num_diss_params.ion.vperp_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Si += - num_diss_params.ion.vperp_dissipation_coefficient*Dvperp(Dvperp(dfni))
         end
-        if num_diss_params.r_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
-            Si += - rfac*num_diss_params.r_dissipation_coefficient*Dr(Dr(dfni))
+        if num_diss_params.ion.r_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Si += - rfac*num_diss_params.ion.r_dissipation_coefficient*Dr(Dr(dfni))
         end
-        if num_diss_params.z_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
-            Si += - num_diss_params.z_dissipation_coefficient*Dz(Dz(dfni))
+        if num_diss_params.ion.z_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Si += - num_diss_params.ion.z_dissipation_coefficient*Dz(Dz(dfni))
         end
 
         Source_i = expand_derivatives(Si)
         
         # the neutral source to maintain the manufactured solution
         Sn = Dt(dfnn) + vz * Dz(dfnn) + rfac*vr * Dr(dfnn) + cx_frequency* (densi*dfnn - densn*vrvzvzeta_dfni) + ionization_frequency*dense*dfnn
-        if num_diss_params.vz_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
-            Sn += - num_diss_params.vz_dissipation_coefficient*Dvz(Dvz(dfnn))
+        if num_diss_params.neutral.vz_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Sn += - num_diss_params.neutral.vz_dissipation_coefficient*Dvz(Dvz(dfnn))
         end
-        if num_diss_params.r_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
-            Sn += - rfac*num_diss_params.r_dissipation_coefficient*Dr(Dr(dfnn))
+        if num_diss_params.neutral.r_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Sn += - rfac*num_diss_params.neutral.r_dissipation_coefficient*Dr(Dr(dfnn))
         end
-        if num_diss_params.z_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
-            Sn += - num_diss_params.z_dissipation_coefficient*Dz(Dz(dfnn))
+        if num_diss_params.neutral.z_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Sn += - num_diss_params.neutral.z_dissipation_coefficient*Dz(Dz(dfnn))
         end
         
         Source_n = expand_derivatives(Sn)

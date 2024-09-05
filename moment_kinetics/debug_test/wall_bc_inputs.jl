@@ -1,60 +1,28 @@
 test_type = "Wall boundary conditions"
+using moment_kinetics.type_definitions: OptionsDict
+using moment_kinetics.input_structs: merge_dict_of_dicts
 
 # default inputs for tests
-test_input_finite_difference_1D1V = Dict(
+test_input_finite_difference_1D1V = OptionsDict(
     "run_name" => "finite_difference_1D1V",
-    "n_ion_species" => 2,
-    "n_neutral_species" => 2,
-    "boltzmann_electron_response" => true,
+    "composition" => OptionsDict("n_ion_species" => 2,
+                          "n_neutral_species" => 2,
+                          "electron_physics" => "boltzmann_electron_response",                      
+                          "T_e" => 1.0,
+                          "T_wall" => 1.0),
     "base_directory" => test_output_directory,
     "evolve_moments_density" => false,
     "evolve_moments_parallel_flow" => false,
     "evolve_moments_parallel_pressure" => false,
     "evolve_moments_conservation" => true,
-    "electron_physics" => "boltzmann_electron_response",
-    "T_e" => 1.0,
-    "T_wall" => 1.0,
-    "initial_density1" => 1.0,
-    "initial_temperature1" => 1.0,
-    "z_IC_option1" => "gaussian",
-    "z_IC_density_amplitude1" => 0.001,
-    "z_IC_density_phase1" => 0.0,
-    "z_IC_upar_amplitude1" => 0.0,
-    "z_IC_upar_phase1" => 0.0,
-    "z_IC_temperature_amplitude1" => 0.0,
-    "z_IC_temperature_phase1" => 0.0,
-    "vpa_IC_option1" => "gaussian",
-    "vpa_IC_density_amplitude1" => 1.0,
-    "vpa_IC_density_phase1" => 0.0,
-    "vpa_IC_upar_amplitude1" => 0.0,
-    "vpa_IC_upar_phase1" => 0.0,
-    "vpa_IC_temperature_amplitude1" => 0.0,
-    "vpa_IC_temperature_phase1" => 0.0,
-    "initial_density2" => 1.0,
-    "initial_temperature2" => 1.0,
-    "z_IC_option2" => "gaussian",
-    "z_IC_density_amplitude2" => 0.001,
-    "z_IC_density_phase2" => 0.0,
-    "z_IC_upar_amplitude2" => 0.0,
-    "z_IC_upar_phase2" => 0.0,
-    "z_IC_temperature_amplitude2" => 0.0,
-    "z_IC_temperature_phase2" => 0.0,
-    "vpa_IC_option2" => "gaussian",
-    "vpa_IC_density_amplitude2" => 1.0,
-    "vpa_IC_density_phase2" => 0.0,
-    "vpa_IC_upar_amplitude2" => 0.0,
-    "vpa_IC_upar_phase2" => 0.0,
-    "vpa_IC_temperature_amplitude2" => 0.0,
-    "vpa_IC_temperature_phase2" => 0.0,
     "charge_exchange_frequency" => 2.0,
     "ionization_frequency" => 2.0,
     "constant_ionization_rate" => false,
-    "nstep" => 3,
-    "dt" => 1.0e-8,
-    "nwrite" => 2,
-    "use_semi_lagrange" => false,
-    "n_rk_stages" => 2,
-    "split_operators" => false,
+    "timestepping" => OptionsDict("nstep" => 3,
+                                       "dt" => 1.0e-8,
+                                       "nwrite" => 2,
+                                       "type" => "SSPRK2",
+                                       "split_operators" => false),
     "r_ngrid" => 1,
     "r_nelement" => 1,
     "z_ngrid" => 4,
@@ -78,14 +46,14 @@ test_input_finite_difference_1D1V = Dict(
     "vr_ngrid" => 1,
     "vr_nelement" => 1)
 
-test_input_finite_difference_simple_sheath_1D1V = merge(
+test_input_finite_difference_simple_sheath_1D1V = merge_dict_of_dicts(
     test_input_finite_difference_1D1V,
-    Dict("run_name" => "finite_difference_simple_sheath_1D1V",
-         "electron_physics" => "boltzmann_electron_response_with_simple_sheath"))
+    OptionsDict("run_name" => "finite_difference_simple_sheath_1D1V",
+                "composition" => OptionsDict("electron_physics" => "boltzmann_electron_response_with_simple_sheath"))) 
 
 test_input_finite_difference = merge(
     test_input_finite_difference_1D1V,
-    Dict("run_name" => "finite_difference",
+    OptionsDict("run_name" => "finite_difference",
          "r_ngrid" => 4,
          "r_nelement" => 1,
          "r_discretization" => "finite_difference",
@@ -102,14 +70,14 @@ test_input_finite_difference = merge(
          "vzeta_nelement" => 1,
          "vzeta_discretization" => "finite_difference"))
 
-test_input_finite_difference_simple_sheath = merge(
+test_input_finite_difference_simple_sheath = merge_dict_of_dicts(
     test_input_finite_difference,
-    Dict("run_name" => "finite_difference_simple_sheath",
-         "electron_physics" => "boltzmann_electron_response_with_simple_sheath"))
+    OptionsDict("run_name" => "finite_difference_simple_sheath",
+         "composition" => OptionsDict("electron_physics" => "boltzmann_electron_response_with_simple_sheath")))
 
 test_input_chebyshev_1D1V = merge(
     test_input_finite_difference_1D1V,
-    Dict("run_name" => "chebyshev_pseudospectral_1D1V",
+    OptionsDict("run_name" => "chebyshev_pseudospectral_1D1V",
          "z_discretization" => "chebyshev_pseudospectral",
          "z_ngrid" => 3,
          "z_nelement" => 2,
@@ -121,26 +89,26 @@ test_input_chebyshev_1D1V = merge(
          "vz_nelement" => 2))
 
 test_input_chebyshev_split1_1D1V = merge(test_input_chebyshev_1D1V,
-                                     Dict("run_name" => "chebyshev_pseudospectral_split1_1D1V",
+                                     OptionsDict("run_name" => "chebyshev_pseudospectral_split1_1D1V",
                                           "evolve_moments_density" => true))
 
 test_input_chebyshev_split2_1D1V = merge(test_input_chebyshev_split1_1D1V,
-                                     Dict("run_name" => "chebyshev_pseudospectral_split2_1D1V",
+                                     OptionsDict("run_name" => "chebyshev_pseudospectral_split2_1D1V",
                                           "evolve_moments_parallel_flow" => true))
 
 test_input_chebyshev_split3_1D1V = merge(test_input_chebyshev_split2_1D1V,
-                                     Dict("run_name" => "chebyshev_pseudospectral_split3_1D1V",
+                                     OptionsDict("run_name" => "chebyshev_pseudospectral_split3_1D1V",
                                           "evolve_moments_parallel_pressure" => true))
 
 
-test_input_chebyshev_simple_sheath_1D1V = merge(
+test_input_chebyshev_simple_sheath_1D1V = merge_dict_of_dicts(
     test_input_chebyshev_1D1V,
-    Dict("run_name" => "chebyshev_pseudospectral_simple_sheath_1D1V",
-         "electron_physics" => "boltzmann_electron_response_with_simple_sheath"))
+    OptionsDict("run_name" => "chebyshev_pseudospectral_simple_sheath_1D1V",
+         "composition" => OptionsDict("electron_physics" => "boltzmann_electron_response_with_simple_sheath")))
 
 test_input_chebyshev = merge(
     test_input_chebyshev_1D1V,
-    Dict("run_name" => "chebyshev_pseudospectral",
+    OptionsDict("run_name" => "chebyshev_pseudospectral",
          "r_discretization" => "chebyshev_pseudospectral",
          "r_ngrid" => 3,
          "r_nelement" => 1,
@@ -157,21 +125,21 @@ test_input_chebyshev = merge(
          "vzeta_ngrid" => 3,
          "vzeta_nelement" => 1))
 
-test_input_chebyshev_simple_sheath = merge(
+test_input_chebyshev_simple_sheath = merge_dict_of_dicts(
     test_input_chebyshev,
-    Dict("run_name" => "chebyshev_pseudospectral_simple_sheath",
-         "electron_physics" => "boltzmann_electron_response_with_simple_sheath"))
+    OptionsDict("run_name" => "chebyshev_pseudospectral_simple_sheath",
+         "composition" => OptionsDict("electron_physics" => "boltzmann_electron_response_with_simple_sheath")))
 
 test_input_list = [
      #test_input_finite_difference,
      #test_input_finite_difference_simple_sheath,
      #test_input_finite_difference_1D1V,
      #test_input_finite_difference_simple_sheath_1D1V,
-     test_input_chebyshev,
+     #test_input_chebyshev,
      test_input_chebyshev_simple_sheath,
-     test_input_chebyshev_1D1V,
-     test_input_chebyshev_split1_1D1V,
-     test_input_chebyshev_split2_1D1V,
-     test_input_chebyshev_split3_1D1V,
+     #test_input_chebyshev_1D1V,
+     #test_input_chebyshev_split1_1D1V,
+     #test_input_chebyshev_split2_1D1V,
+     #test_input_chebyshev_split3_1D1V,
      test_input_chebyshev_simple_sheath_1D1V,
     ]

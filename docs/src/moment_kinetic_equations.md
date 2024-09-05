@@ -89,7 +89,7 @@ energy equation over $\tilde{v}_{\|}$ instead of $w_{\|}$,
   \tilde{p}_{\|,s}
   & = \frac{1}{\sqrt{\pi}}\int d\tilde{v}_{\|}\left(\tilde{v}_{\|}
       - \tilde{u}_{s}\right)^{2}\tilde{f}_{s}
-    = \int d\tilde{v}_{\|}\tilde{v}_{\|}^{2}\tilde{f}_{s}
+    = \frac{1}{\sqrt{\pi}}\int d\tilde{v}_{\|}\tilde{v}_{\|}^{2}\tilde{f}_{s}
       - \tilde{n}_{s}\tilde{u}_{s}^{2}\\
 %
   \tilde{q}_{\|,s}
@@ -184,7 +184,7 @@ tildes from here on)
   \frac{\partial u_{i}}{\partial t} + \frac{1}{n_{i}}\frac{\partial p_{\|,i}}{\partial z}
   + u_{i}\frac{\partial u_{i}}{\partial z} + \frac{1}{2}\frac{\partial\phi}{\partial z}
   &= -R_{in}n_{n}\left(u_{i}-u_{n}\right)
-    + R_{\mathrm{ion}}\frac{n_{i}n_{n}}{n_{s}}\left(u_{n}-u_{i}\right)
+    + R_{\mathrm{ion}}n_{i}n_{n}\left(u_{n}-u_{i}\right)
     - \frac{u_{i}}{n_{i}} \int dv_\parallel S_{i}
 \end{align}
 ```
@@ -440,16 +440,16 @@ The derivatives transform as
 \begin{align}
   \left.\frac{\partial f_{s}}{\partial t}\right|_{z,v\|}
   & \rightarrow\left.\frac{\partial f_{s}}{\partial t}\right|_{z,w\|}
-               - \frac{1}{v_{\mathrm{th},s}}\frac{\partial u_{s}}{\partial t}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}
-               - \frac{w_{\|,s}}{v_{\mathrm{th},s}}\frac{\partial v_{\mathrm{th},s}}{\partial t}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}\\
+               - \frac{1}{v_{\mathrm{th},s}}\frac{\partial u_{s}}{\partial t}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,t}
+               - \frac{w_{\|,s}}{v_{\mathrm{th},s}}\frac{\partial v_{\mathrm{th},s}}{\partial t}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,t}\\
 %
   \left.\frac{\partial f_{s}}{\partial z}\right|_{z,v\|}
-  & \rightarrow\left.\frac{\partial f_{s}}{\partial z}\right|_{z,w\|}
-               - \frac{1}{v_{\mathrm{th},s}}\frac{\partial u_{s}}{\partial z}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}
-               - \frac{w_{\|,s}}{v_{\mathrm{th},s}}\frac{\partial v_{\mathrm{th},s}}{\partial z}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}\\
+  & \rightarrow\left.\frac{\partial f_{s}}{\partial z}\right|_{t,w\|}
+               - \frac{1}{v_{\mathrm{th},s}}\frac{\partial u_{s}}{\partial z}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,t}
+               - \frac{w_{\|,s}}{v_{\mathrm{th},s}}\frac{\partial v_{\mathrm{th},s}}{\partial z}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,wt}\\
 %
   \left.\frac{\partial f_{s}}{\partial v_{\|}}\right|_{z,v\|}
-  & \rightarrow\frac{1}{v_{\mathrm{th},s}}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}
+  & \rightarrow\frac{1}{v_{\mathrm{th},s}}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,t}
 \end{align}
 ```
 
@@ -1018,7 +1018,7 @@ and for neutrals where several of the ionization terms cancel
   & \qquad-\frac{w_{\|,n}}{2}\frac{1}{p_{\|,n}}\left(-\frac{\partial q_{\|,n}}{\partial z}
   - R_{in}\left(n_{i}p_{\|,n} - n_{n}p_{\|,i}
   - n_{n}n_{i}\left(u_{n} - u_{i}\right)^{2}\right)
-  + \int dv_\parallel S_{n} + u_{n}^2\int dv_\parallel v_\parallel^2 S_{n}
+  + \int dv_\parallel v_\parallel^2 S_{n} + u_{n}^2\int dv_\parallel S_{n}
   + v_{\mathrm{th},n}w_{\|,n}\frac{\partial p_{\|,n}}{\partial z}\right) \\
   & \qquad\left. + \frac{w_{\parallel,n}}{2}\frac{1}{n_{n}}\int dv_\parallel S_{n}
   + \frac{w_{\|,n}^{2}}{2}\frac{v_{\mathrm{th},n}}{n_{n}}\frac{\partial n_{n}}{\partial z}\right]\frac{\partial g_{n}}{\partial w_{\|,n}} \\

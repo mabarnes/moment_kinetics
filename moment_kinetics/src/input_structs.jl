@@ -2,24 +2,29 @@
 """
 module input_structs
 
+export advance_info
 export evolve_moments_options
-export time_input
+export time_info
 export advection_input, advection_input_mutable
 export grid_input, grid_input_mutable
 export initial_condition_input, initial_condition_input_mutable
-export species_parameters, species_parameters_mutable
+export spatial_initial_condition_input, velocity_initial_condition_input
+export ion_species_parameters, neutral_species_parameters, species_parameters_mutable
 export species_composition
 export drive_input, drive_input_mutable
-export collisions_input
+export collisions_input, krook_collisions_input, fkpl_collisions_input
 export io_input
 export pp_input
 export geometry_input
 export set_defaults_and_check_top_level!, set_defaults_and_check_section!,
-       Dict_to_NamedTuple
+       options_to_TOML, Dict_to_NamedTuple
+export merge_dict_with_kwargs!, merge_dict_of_dicts!, merge_dict_of_dicts
 
+using ..communication
 using ..type_definitions: mk_float, mk_int
 
 using MPI
+using TOML
 
 """
 """
@@ -32,18 +37,66 @@ mutable struct evolve_moments_options
 end
 
 """
+`t_error_sum` is included so that a type which might be mk_float or Float128 can be set by
+an option but known at compile time when a `time_info` struct is passed as a function
+argument.
 """
-struct time_input
+struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero}
+    n_variables::mk_int
     nstep::mk_int
-    dt::mk_float
+    end_time::mk_float
+    t::MPISharedArray{mk_float,1}
+    dt::MPISharedArray{mk_float,1}
+    previous_dt::MPISharedArray{mk_float,1}
+    next_output_time::MPISharedArray{mk_float,1}
+    dt_before_output::MPISharedArray{mk_float,1}
+    dt_before_last_fail::MPISharedArray{mk_float,1}
+    CFL_prefactor::mk_float
+    step_to_moments_output::MPISharedArray{Bool,1}
+    step_to_dfns_output::MPISharedArray{Bool,1}
+    write_moments_output::MPISharedArray{Bool,1}
+    write_dfns_output::MPISharedArray{Bool,1}
+    step_counter::Ref{mk_int}
+    moments_output_counter::Ref{mk_int}
+    dfns_output_counter::Ref{mk_int}
+    failure_counter::Ref{mk_int}
+    failure_caused_by::Vector{mk_int}
+    limit_caused_by::Vector{mk_int}
     nwrite_moments::mk_int
     nwrite_dfns::mk_int
+    moments_output_times::Vector{mk_float}
+    dfns_output_times::Vector{mk_float}
+    type::String
+    rk_coefs::Array{mk_float,2}
+    rk_coefs_implicit::Trkimp
+    implicit_coefficient_is_zero::Timpzero
     n_rk_stages::mk_int
+    rk_order::mk_int
+    adaptive::Bool
+    low_storage::Bool
+    rtol::mk_float
+    atol::mk_float
+    atol_upar::mk_float
+    step_update_prefactor::mk_float
+    max_increase_factor::mk_float
+    max_increase_factor_near_last_fail::mk_float
+    last_fail_proximity_factor::mk_float
+    minimum_dt::mk_float
+    maximum_dt::mk_float
+    implicit_braginskii_conduction::Bool
+    implicit_electron_advance::Bool
+    implicit_ion_advance::Bool
+    implicit_vpa_advection::Bool
+    implicit_electron_ppar::Bool
+    write_after_fixed_step_count::Bool
+    error_sum_zero::Terrorsum
     split_operators::Bool
     steady_state_residual::Bool
     converged_residual_value::mk_float
     use_manufactured_solns_for_advance::Bool
     stopfile::String
+    debug_io::T_debug_output # Currently only used by electrons
+    electron::T_electron
 end
 
 """
@@ -56,25 +109,32 @@ mutable struct advance_info
     neutral_z_advection::Bool
     neutral_r_advection::Bool
     neutral_vz_advection::Bool
-    cx_collisions::Bool
-    cx_collisions_1V::Bool
-    ionization_collisions::Bool
-    ionization_collisions_1V::Bool
-    ionization_source::Bool
-    krook_collisions::Bool
+    ion_cx_collisions::Bool
+    neutral_cx_collisions::Bool
+    ion_cx_collisions_1V::Bool
+    neutral_cx_collisions_1V::Bool
+    ion_ionization_collisions::Bool
+    neutral_ionization_collisions::Bool
+    ion_ionization_collisions_1V::Bool
+    neutral_ionization_collisions_1V::Bool
+    krook_collisions_ii::Bool
+    mxwl_diff_collisions_ii::Bool
+    mxwl_diff_collisions_nn::Bool
     explicit_weakform_fp_collisions::Bool
     external_source::Bool
-    numerical_dissipation::Bool
+    ion_numerical_dissipation::Bool
+    neutral_numerical_dissipation::Bool
     source_terms::Bool
     continuity::Bool
     force_balance::Bool
     energy::Bool
+    electron_energy::Bool
+    electron_conduction::Bool
     neutral_external_source::Bool
     neutral_source_terms::Bool
     neutral_continuity::Bool
     neutral_force_balance::Bool
     neutral_energy::Bool
-    rk_coefs::Array{mk_float,2}
     manufactured_solns_test::Bool
     r_diffusion::Bool #flag to control how r bc is imposed when r diffusion terms are present
     vpa_diffusion::Bool #flag to control how vpa bc is imposed when vpa diffusion terms are present
@@ -110,8 +170,19 @@ end
 
 """
 """
-@enum electron_physics_type boltzmann_electron_response boltzmann_electron_response_with_simple_sheath
-export electron_physics_type, boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath
+@enum electron_physics_type begin
+    boltzmann_electron_response 
+    boltzmann_electron_response_with_simple_sheath 
+    braginskii_fluid
+    kinetic_electrons
+    kinetic_electrons_with_temperature_equation
+end
+export electron_physics_type
+export boltzmann_electron_response
+export boltzmann_electron_response_with_simple_sheath
+export braginskii_fluid
+export kinetic_electrons
+export kinetic_electrons_with_temperature_equation
 
 """
 """
@@ -194,7 +265,7 @@ end
 
 """
 """
-struct initial_condition_input
+Base.@kwdef struct spatial_initial_condition_input
     # initialization inputs for one coordinate of a separable distribution function
     initialization_option::String
     # inputs for "gaussian" initial condition
@@ -209,6 +280,30 @@ struct initial_condition_input
     temperature_phase::mk_float
     # inputs for "monomial" initial condition
     monomial_degree::mk_int
+end
+
+"""
+"""
+Base.@kwdef struct velocity_initial_condition_input
+    # initialization inputs for one coordinate of a separable distribution function
+    initialization_option::String
+    # inputs for "gaussian" initial condition
+    width::mk_float
+    # inputs for "sinusoid" initial condition
+    wavenumber::mk_int
+    density_amplitude::mk_float
+    density_phase::mk_float
+    upar_amplitude::mk_float
+    upar_phase::mk_float
+    temperature_amplitude::mk_float
+    temperature_phase::mk_float
+    # inputs for "monomial" initial condition
+    monomial_degree::mk_int
+    # inputs for "isotropic-beam", "directed-beam" initial conditions
+    v0::mk_float
+    vth0::mk_float
+    vpa0::mk_float
+    vperp0::mk_float
 end
 
 """
@@ -230,25 +325,49 @@ end
 
 """
 """
-struct species_parameters
-    # type is the type of species; options are 'ion' or 'neutral'
+Base.@kwdef struct ion_species_parameters
+    # type is the type of species
     type::String
+    # mass/reference mass
+    mass::mk_float
+    # charge number, absolute w.r.t. proton charge
+    zeds::mk_float
     # array containing the initial line-averaged temperature for this species
     initial_temperature::mk_float
     # array containing the initial line-averaged density for this species
     initial_density::mk_float
     # struct containing the initial condition info in z for this species
-    z_IC::initial_condition_input
+    z_IC::spatial_initial_condition_input
     # struct containing the initial condition info in r for this species
-    r_IC::initial_condition_input
+    r_IC::spatial_initial_condition_input
     # struct containing the initial condition info in vpa for this species
-    vpa_IC::initial_condition_input
+    vpa_IC::velocity_initial_condition_input
 end
 
 """
 """
-mutable struct species_composition
+Base.@kwdef struct neutral_species_parameters
+    # type is the type of species
+    type::String
+    # mass/reference mass
+    mass::mk_float
+    # array containing the initial line-averaged temperature for this species
+    initial_temperature::mk_float
+    # array containing the initial line-averaged density for this species
+    initial_density::mk_float
+    # struct containing the initial condition info in z for this species
+    z_IC::spatial_initial_condition_input
+    # struct containing the initial condition info in r for this species
+    r_IC::spatial_initial_condition_input
+    # struct containing the initial condition info in vpa for this species
+    vpa_IC::velocity_initial_condition_input
+end
+
+"""
+"""
+Base.@kwdef struct species_composition
     # n_species = total number of evolved species (including ions, neutrals and electrons)
+    # a diagnostic, not an input parameter
     n_species::mk_int
     # n_ion_species is the number of evolved ion species
     n_ion_species::mk_int
@@ -269,8 +388,6 @@ mutable struct species_composition
     T_wall::mk_float
     # wall potential used if electron_physics=boltzmann_electron_response_with_simple_sheath
     phi_wall::mk_float
-    # constant for testing nonzero Er
-    Er_constant::mk_float
     # ratio of the neutral particle mass to the ion mass
     mn_over_mi::mk_float
     # ratio of the electron particle mass to the ion mass
@@ -278,8 +395,14 @@ mutable struct species_composition
     # The ion flux reaching the wall that is recycled as neutrals is reduced by
     # `recycling_fraction` to account for ions absorbed by the wall.
     recycling_fraction::mk_float
-    # scratch buffer whose size is n_species
-    scratch::Vector{mk_float}
+    # gyrokinetic_ions is a flag determining if the ion species is gyrokinetic
+    # gyrokinetic_ions = true -> use gyroaveraged fields at fixed guiding centre and moments of the pdf computed at fixed r
+    # gyrokinetic_ions = false -> use drift kinetic approximation
+    gyrokinetic_ions::Bool
+    # array of structs of parameters for each ion species
+    ion::Vector{ion_species_parameters}
+    # array of structs of parameters for each neutral species
+    neutral::Vector{neutral_species_parameters}
 end
 
 """
@@ -307,22 +430,87 @@ struct drive_input
 end
 
 """
+Structs set up for the collision operators so far in use. These will each
+be contained in the main collisions_input struct below, as substructs. 
 """
-mutable struct collisions_input
-    # charge exchange collision frequency
+Base.@kwdef struct mxwl_diff_collisions_input
+    use_maxwell_diffusion::Bool
+    # different diffusion coefficients for each species, has units of 
+    # frequency * velocity^2. Diffusion coefficients usually denoted D
+    D_ii::mk_float
+    D_nn::mk_float
+    # Setting to switch between different options for Krook collision operator
+    diffusion_coefficient_option::String # "reference_parameters" # "manual", 
+end
+
+Base.@kwdef struct krook_collisions_input
+    use_krook::Bool
+    # Ion-ion Coulomb collision rate at the reference density and temperature
+    nuii0::mk_float
+    # Electron-electron Coulomb collision rate at the reference density and temperature
+    nuee0::mk_float
+    # Electron-ion Coulomb collision rate at the reference density and temperature
+    nuei0::mk_float
+    # Setting to switch between different options for Krook collision operator
+    frequency_option::String # "reference_parameters" # "manual", 
+end
+
+Base.@kwdef struct fkpl_collisions_input
+    # option to check if fokker planck frequency should be > 0
+    use_fokker_planck::Bool
+    # ion-ion self collision frequency (for a species with Z = 1)
+    # nu_{ii} = (L/c_{ref}) * gamma_{ref} n_{ref} /(m_s)^2 (c_{ref})^3
+    # with gamma_ref = 2 pi e^4 ln \Lambda_{ii} / (4 pi \epsilon_0)^2
+    # and ln \Lambda_{ii} the Coulomb logarithm for ion-ion collisions
+    nuii::mk_float
+    # option to determine if self collisions are used (for physics test)
+    self_collisions::Bool
+    # option to determine if ad-hoc moment_kinetics-style conserving corrections are used
+    use_conserving_corrections::Bool
+    # option to determine if cross-collisions against fixed Maxwellians are used
+    slowing_down_test::Bool
+    # Setting to switch between different options for Fokker-Planck collision frequency input
+    frequency_option::String # "manual" # "reference_parameters"
+    # options for fixed Maxwellian species in slowing down test operator
+    # ion density - electron density determined from quasineutrality
+    sd_density::mk_float
+    # ion temperature - electron temperature assumed identical
+    sd_temp::mk_float
+    # ion charge number of fixed Maxwellian species
+    sd_q::mk_float
+    # ion mass with respect to reference
+    sd_mi::mk_float
+    # electron mass with respect to reference
+    sd_me::mk_float
+    # charge number of evolved ion species
+    # kept here because charge number different from 1
+    # is not supported for other physics features
+    Zi::mk_float
+end
+
+"""
+Collisions input struct to contain all the different collisions substructs and overall 
+collision input parameters.
+"""
+struct collisions_input
+    # ion-neutral charge exchange collision frequency
     charge_exchange::mk_float
+    # electron-neutral charge exchange collision frequency
+    charge_exchange_electron::mk_float
     # ionization collision frequency
     ionization::mk_float
-    # if constant_ionization_rate = true, use an ionization term that is constant in z
-    constant_ionization_rate::Bool
-    # Coulomb collision rate at the reference density and temperature
-    krook_collision_frequency_prefactor::mk_float
-    # Setting to switch between different options for Krook collision operator
-    krook_collisions_option::String
-    # ion-ion self collision frequency
-    # nu_{ss'} = gamma_{ss'} n_{ref} / 2 (m_s)^2 (c_{ref})^3
-    # with gamma_ss' = 2 pi (Z_s Z_s')^2 e^4 ln \Lambda_{ss'} / (4 pi \epsilon_0)^2
-    nuii::mk_float
+    # ionization collision frequency for electrons (probably should be same as for ions)
+    ionization_electron::mk_float
+    # ionization energy cost
+    ionization_energy::mk_float
+    # electron-ion collision frequency
+    nu_ei::mk_float
+    # struct of parameters for the Krook operator
+    krook::krook_collisions_input
+    # struct of parameters for the Fokker-Planck operator
+    fkpl::fkpl_collisions_input
+    # struct of parameters for the Maxwellian Diffusion operator
+    mxwl_diff::mxwl_diff_collisions_input
 end
 
 """
@@ -336,6 +524,14 @@ Base.@kwdef struct geometry_input
     pitch::mk_float = 1.0
     # DeltaB ( = (Bzed(z=L/2) - Bzed(0))/Bref if geometry_option == "1D-mirror")
     DeltaB::mk_float = 0.0
+    # constant for testing nonzero Er when nr = 1
+    Er_constant::mk_float
+    # constant for testing nonzero Ez when nz = 1
+    Ez_constant::mk_float
+    # constant for testing nonzero dBdz when nz = 1
+    dBdz_constant::mk_float
+    # constant for testing nonzero dBdr when nr = 1
+    dBdr_constant::mk_float
 end
 
 @enum binary_format_type hdf5 netcdf
@@ -350,6 +546,7 @@ Base.@kwdef struct io_input
     ascii_output::Bool
     binary_format::binary_format_type
     parallel_io::Bool
+    run_id::String
 end
 
 """
@@ -466,6 +663,8 @@ struct pp_input
 	animate_parallel_flow_vs_r_z::Bool
 	# if plot_parallel_pressure_vs_r0_z = true  plot last timestep parallel_pressure[z,ir0]
 	plot_parallel_pressure_vs_r0_z::Bool
+	# if plot_perpendicular_pressure_vs_r0_z = true  plot last timestep perpendicular_pressure[z,ir0]
+	plot_perpendicular_pressure_vs_r0_z::Bool
 	# if plot_wall_parallel_pressure_vs_r = true  plot last timestep parallel_pressure[z_wall,r]
 	plot_wall_parallel_pressure_vs_r::Bool
     # if plot_parallel_pressure_vs_r_z = true plot parallel_pressure vs r z at last timestep 
@@ -530,15 +729,17 @@ Utility method for converting a string to an Enum when getting from a Dict, base
 type of the default value
 """
 function get(d::Dict, key, default::Enum)
-    valstring = get(d, key, nothing)
-    if valstring == nothing
+    val_maybe_string = get(d, key, nothing)
+    if val_maybe_string == nothing
         return default
+    elseif isa(val_maybe_string, Enum)
+        return val_maybe_string
     # instances(typeof(default)) gets the possible values of the Enum. Then convert to
     # Symbol, then to String.
-    elseif valstring ∈ (split(s, ".")[end] for s ∈ String.(Symbol.(instances(typeof(default)))))
-        return eval(Symbol(valstring))
+    elseif val_maybe_string ∈ Tuple(split(s, ".")[end] for s ∈ string.(instances(typeof(default))))
+        return eval(Symbol(val_maybe_string))
     else
-        error("Expected a $(typeof(default)), but '$valstring' is not in "
+        error("Expected a $(typeof(default)), but '$val_maybe_string' is not in "
               * "$(instances(typeof(default)))")
     end
 end
@@ -612,12 +813,11 @@ function set_defaults_and_check_section!(options::AbstractDict, section_name;
     end
 
     # Set default values if a key was not set explicitly
-    explicit_keys = keys(section)
-    for (key_sym, value) ∈ kwargs
+    for (key_sym, default_value) ∈ kwargs
         key = String(key_sym)
-        if !(key ∈ explicit_keys)
-            section[key] = value
-        end
+        # Use `Base.get()` here to take advantage of our `Enum`-handling method of
+        # `Base.get()` defined above.
+        section[key] = get(section, key, default_value)
     end
 
     return section
@@ -630,6 +830,78 @@ Useful as NamedTuple is immutable, so option values cannot be accidentally chang
 """
 function Dict_to_NamedTuple(d)
     return NamedTuple(Symbol(k)=>v for (k,v) ∈ d)
+end
+
+"""
+Dict merge function for named keyword arguments 
+for case when input Dict is a mixed Dict of Dicts
+and non-Dict float/int/string entries, and the 
+keyword arguments are also a mix of Dicts and non-Dicts
+"""
+
+function merge_dict_with_kwargs!(dict_base; args...)
+    for (k,v) in args
+        k = String(k)
+        if k in keys(dict_base) && isa(v, AbstractDict)
+            v = merge(dict_base[k], v)
+        end
+        dict_base[k] = v
+    end
+    return nothing
+end
+
+"""
+Dict merge function for merging Dicts of Dicts
+In place merge, returns nothing 
+"""
+
+function merge_dict_of_dicts!(dict_base, dict_mod)
+    for (k,v) in dict_mod
+        k = String(k)
+        if k in keys(dict_base) && isa(v, AbstractDict)
+            v = merge(dict_base[k], v)
+        end
+        dict_base[k] = v
+    end
+    return nothing
+end
+
+"""
+Dict merge function for merging Dicts of Dicts
+Creates new dict, which is returned 
+"""
+
+function merge_dict_of_dicts(dict_base, dict_mod)
+    dict_new = deepcopy(dict_base)
+    for (k,v) in dict_mod
+        k = String(k)
+        if k in keys(dict_new) && isa(v, AbstractDict)
+            v = merge(dict_new[k], v)
+        end
+        dict_new[k] = v
+    end
+    return dict_new
+end
+
+"""
+    options_to_toml(io::IO [=stdout], data::AbstractDict; sorted=false, by=identity)
+
+Convert `moment_kinetics` 'options' (in the form of a `Dict`) to TOML format.
+
+This function is defined so that we can handle some extra types, for example `Enum`.
+
+For descriptions of the arguments, see `TOML.print`.
+"""
+function options_to_TOML(args...; kwargs...)
+    function handle_extra_types(x)
+        if isa(x, Enum)
+            return string(x)
+        else
+            error("Unhandled type $(typeof(x)) for x=$x")
+        end
+    end
+
+    return TOML.print(handle_extra_types, args...; kwargs...)
 end
 
 end

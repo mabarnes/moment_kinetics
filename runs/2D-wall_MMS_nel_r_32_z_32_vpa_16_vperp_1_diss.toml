@@ -7,10 +7,8 @@ evolve_moments_parallel_flow = false
 evolve_moments_parallel_pressure = false
 evolve_moments_conservation = false
 force_Er_zero_at_wall = false #true
-Er_constant = 0.0
 T_e = 1.0
 T_wall = 1.0
-rhostar = 1.0
 initial_density1 = 0.5
 initial_temperature1 = 1.0
 initial_density2 = 0.5
@@ -31,13 +29,6 @@ z_IC_temperature_amplitude2 = 0.0
 z_IC_temperature_phase2 = 0.0
 charge_exchange_frequency = 0.0
 ionization_frequency = 0.0
-nstep = 2000
-dt = 0.0005
-nwrite = 200
-nwrite_dfns = 200
-use_semi_lagrange = false
-n_rk_stages = 4
-split_operators = false
 z_ngrid = 5
 z_nelement = 32
 z_nelement_local = 32
@@ -77,6 +68,13 @@ vzeta_L = 12.0
 vzeta_bc = "periodic"
 vzeta_discretization = "chebyshev_pseudospectral"
 
+[timestepping]
+nstep = 2000 
+dt = 0.0005
+nwrite = 200
+nwrite_dfns = 200
+split_operators = false
+
 [manufactured_solns]
  use_for_advance=true
  use_for_init=true
@@ -86,7 +84,14 @@ vzeta_discretization = "chebyshev_pseudospectral"
  use_vpabar_in_mms_dfni=true
  alpha_switch=1.0
  type="default"
-[numerical_dissipation]
+
+[ion_numerical_dissipation]
 #vpa_dissipation_coefficient = 0.1
 #z_dissipation_coefficient = 0.1
 r_dissipation_coefficient = 0.1
+
+[geometry]
+option="constant-helical"
+pitch=0.5
+rhostar = 1.0
+Er_constant = 0.0

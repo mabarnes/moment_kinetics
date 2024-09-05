@@ -9,32 +9,32 @@ using Base.Filesystem: tempname
 using moment_kinetics.communication
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.file_io: io_has_parallel
-using moment_kinetics.input_structs: grid_input, advection_input, hdf5
+using moment_kinetics.input_structs: grid_input, advection_input, hdf5, merge_dict_with_kwargs!
 using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data,
                                  load_species_data, load_fields_data,
-                                 load_charged_particle_moments_data, load_pdf_data,
+                                 load_ion_moments_data, load_pdf_data,
                                  load_neutral_particle_moments_data,
                                  load_neutral_pdf_data, load_time_data, load_species_data
 using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
 using moment_kinetics.load_data: get_run_info_no_setup, close_run_info,
                                  postproc_load_variable
-using moment_kinetics.type_definitions: mk_float
+using moment_kinetics.type_definitions: mk_float, OptionsDict
 
 include("nonlinear_sound_wave_inputs_and_expected_data.jl")
 
 base_input = copy(test_input_chebyshev)
-base_input["nstep"] = 50
-base_input["nwrite"] = 50
-base_input["nwrite_dfns"] = 50
+base_input["timestepping"]["nstep"] = 50
+base_input["timestepping"]["nwrite"] = 50
+base_input["timestepping"]["nwrite_dfns"] = 50
 if global_size[] > 1 && global_size[] % 2 == 0
     # Test using distributed-memory
     base_input["z_nelement_local"] = base_input["z_nelement"] ÷ 2
 end
-base_input["output"] = Dict{String,Any}("parallel_io" => false)
+base_input["output"] = OptionsDict("parallel_io" => false)
 
 restart_test_input_chebyshev =
     merge(deepcopy(base_input),
-          Dict("run_name" => "restart_chebyshev_pseudospectral",
+          OptionsDict("run_name" => "restart_chebyshev_pseudospectral",
                "r_ngrid" => 3, "r_nelement" => 2,
                "r_discretization" => "chebyshev_pseudospectral",
                "z_ngrid" => 17, "z_nelement" => 2,
@@ -47,18 +47,18 @@ end
 
 restart_test_input_chebyshev_split_1_moment =
     merge(deepcopy(restart_test_input_chebyshev),
-          Dict("run_name" => "restart_chebyshev_pseudospectral_split_1_moment",
+          OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_1_moment",
                "evolve_moments_density" => true))
 
 restart_test_input_chebyshev_split_2_moments =
     merge(deepcopy(restart_test_input_chebyshev_split_1_moment),
-          Dict("run_name" => "restart_chebyshev_pseudospectral_split_2_moments",
+          OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_2_moments",
                "r_ngrid" => 1, "r_nelement" => 1,
                "evolve_moments_parallel_flow" => true))
 
 restart_test_input_chebyshev_split_3_moments =
     merge(deepcopy(restart_test_input_chebyshev_split_2_moments),
-          Dict("run_name" => "restart_chebyshev_pseudospectral_split_3_moments",
+          OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_3_moments",
                "evolve_moments_parallel_pressure" => true,
                "vpa_L" => 1.5*vpa_L, "vz_L" => 1.5*vpa_L))
 
@@ -66,9 +66,13 @@ restart_test_input_chebyshev_split_3_moments =
 Run a sound-wave test for a single set of parameters
 """
 # Note 'name' should not be shared by any two tests in this file
-function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
-    # by passing keyword arguments to run_test, kwargs becomes a Tuple of Pairs which can be used to
+function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
+    # by passing keyword arguments to run_test, args becomes a Tuple of Pairs which can be used to
     # update the default inputs
+
+    # Make a copy to make sure nothing modifies the input Dicts defined in this test
+    # script.
+    input = deepcopy(test_input)
 
     if tol_3V === nothing
         atol_3V = atol
@@ -78,11 +82,21 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
         rtol_3V = tol_3V
     end
 
-    parallel_io = test_input["output"]["parallel_io"]
+    parallel_io = input["output"]["parallel_io"]
     # Convert keyword arguments to a unique name
-    name = test_input["run_name"]
-    if length(kwargs) > 0
-        name = string(name, (string(String(k)[1], v) for (k, v) in kwargs)...)
+    function stringify_arg(key, value)
+        if isa(value, AbstractDict)
+            return string(string(key)[1], (stringify_arg(k, v) for (k, v) in value)...)
+        else
+            return string(string(key)[1], value)
+        end
+    end
+    name = input["run_name"]
+    if length(args) > 0
+        name = string(name, "_", (stringify_arg(k, v) for (k, v) in args)...)
+
+        # Remove trailing "_"
+        name = chop(name)
     end
     if parallel_io
         name *= "parallel-io"
@@ -91,12 +105,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
     # Provide some progress info
     println("    - testing ", message)
 
-    # Convert from Tuple of Pairs with symbol keys to Dict with String keys
-    modified_inputs = Dict(String(k) => v for (k, v) in kwargs)
-
-    # Update default inputs with values to be changed
-    input = merge(test_input, modified_inputs)
-
+    merge_dict_with_kwargs!(input; args...)
     input["run_name"] = name
 
     # Suppress console output while running
@@ -115,10 +124,10 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
     end
 
     phi = nothing
-    n_charged = nothing
-    upar_charged = nothing
-    ppar_charged = nothing
-    f_charged = nothing
+    n_ion = nothing
+    upar_ion = nothing
+    ppar_ion = nothing
+    f_ion = nothing
     n_neutral = nothing
     upar_neutral = nothing
     ppar_neutral = nothing
@@ -150,12 +159,12 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
             time = run_info.time
             n_ion_species = run_info.n_ion_species
             n_neutral_species = run_info.n_neutral_species
-            n_charged_zrst = postproc_load_variable(run_info, "density")
-            upar_charged_zrst = postproc_load_variable(run_info, "parallel_flow")
-            ppar_charged_zrst = postproc_load_variable(run_info, "parallel_pressure")
-            qpar_charged_zrst = postproc_load_variable(run_info, "parallel_heat_flux")
-            v_t_charged_zrst = postproc_load_variable(run_info, "thermal_speed")
-            f_charged_vpavperpzrst  = postproc_load_variable(run_info, "f")
+            n_ion_zrst = postproc_load_variable(run_info, "density")
+            upar_ion_zrst = postproc_load_variable(run_info, "parallel_flow")
+            ppar_ion_zrst = postproc_load_variable(run_info, "parallel_pressure")
+            qpar_ion_zrst = postproc_load_variable(run_info, "parallel_heat_flux")
+            v_t_ion_zrst = postproc_load_variable(run_info, "thermal_speed")
+            f_ion_vpavperpzrst  = postproc_load_variable(run_info, "f")
             n_neutral_zrst = postproc_load_variable(run_info, "density_neutral")
             upar_neutral_zrst = postproc_load_variable(run_info, "uz_neutral")
             ppar_neutral_zrst = postproc_load_variable(run_info, "pz_neutral")
@@ -176,12 +185,12 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
             rm(joinpath(realpath(input["base_directory"]), name); recursive=true)
 
             phi = phi_zrt[:,1,:]
-            n_charged = n_charged_zrst[:,1,:,:]
-            upar_charged = upar_charged_zrst[:,1,:,:]
-            ppar_charged = ppar_charged_zrst[:,1,:,:]
-            qpar_charged = qpar_charged_zrst[:,1,:,:]
-            v_t_charged = v_t_charged_zrst[:,1,:,:]
-            f_charged = f_charged_vpavperpzrst[:,1,:,1,:,:]
+            n_ion = n_ion_zrst[:,1,:,:]
+            upar_ion = upar_ion_zrst[:,1,:,:]
+            ppar_ion = ppar_ion_zrst[:,1,:,:]
+            qpar_ion = qpar_ion_zrst[:,1,:,:]
+            v_t_ion = v_t_ion_zrst[:,1,:,:]
+            f_ion = f_ion_vpavperpzrst[:,1,:,1,:,:]
             n_neutral = n_neutral_zrst[:,1,:,:]
             upar_neutral = upar_neutral_zrst[:,1,:,:]
             ppar_neutral = ppar_neutral_zrst[:,1,:,:]
@@ -192,7 +201,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
             # Unnormalize f
             if input["evolve_moments_density"]
                 for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
-                    f_charged[:,iz,is,it] .*= n_charged[iz,is,it]
+                    f_ion[:,iz,is,it] .*= n_ion[iz,is,it]
                 end
                 for it ∈ 1:length(time), isn ∈ 1:n_neutral_species, iz ∈ 1:z.n
                     f_neutral[:,iz,isn,it] .*= n_neutral[iz,isn,it]
@@ -200,7 +209,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
             end
             if input["evolve_moments_parallel_pressure"]
                 for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
-                    f_charged[:,iz,is,it] ./= v_t_charged[iz,is,it]
+                    f_ion[:,iz,is,it] ./= v_t_ion[iz,is,it]
                 end
                 for it ∈ 1:length(time), isn ∈ 1:n_neutral_species, iz ∈ 1:z.n
                     f_neutral[:,iz,isn,it] ./= v_t_neutral[iz,isn,it]
@@ -211,36 +220,36 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
         newgrid_phi = interpolate_to_grid_z(expected.z, phi[:, end], z, z_spectral)
         @test isapprox(expected.phi[:, end], newgrid_phi, rtol=rtol)
 
-        # Check charged particle moments and f
+        # Check ion particle moments and f
         ######################################
 
-        newgrid_n_charged = interpolate_to_grid_z(expected.z, n_charged[:, :, end], z, z_spectral)
-        @test isapprox(expected.n_charged[:, end], newgrid_n_charged[:,1], rtol=rtol)
+        newgrid_n_ion = interpolate_to_grid_z(expected.z, n_ion[:, :, end], z, z_spectral)
+        @test isapprox(expected.n_ion[:, end], newgrid_n_ion[:,1], rtol=rtol)
 
-        newgrid_upar_charged = interpolate_to_grid_z(expected.z, upar_charged[:, :, end], z, z_spectral)
-        @test isapprox(expected.upar_charged[:, end], newgrid_upar_charged[:,1], rtol=rtol, atol=atol_3V)
+        newgrid_upar_ion = interpolate_to_grid_z(expected.z, upar_ion[:, :, end], z, z_spectral)
+        @test isapprox(expected.upar_ion[:, end], newgrid_upar_ion[:,1], rtol=rtol, atol=atol_3V)
 
-        newgrid_ppar_charged = interpolate_to_grid_z(expected.z, ppar_charged[:, :, end], z, z_spectral)
-        @test isapprox(expected.ppar_charged[:, end], newgrid_ppar_charged[:,1], rtol=rtol)
+        newgrid_ppar_ion = interpolate_to_grid_z(expected.z, ppar_ion[:, :, end], z, z_spectral)
+        @test isapprox(expected.ppar_ion[:, end], newgrid_ppar_ion[:,1], rtol=rtol)
 
-        newgrid_vth_charged = @. sqrt(2.0*newgrid_ppar_charged/newgrid_n_charged)
-        newgrid_f_charged = interpolate_to_grid_z(expected.z, f_charged[:, :, :, end], z, z_spectral)
-        temp = newgrid_f_charged
-        newgrid_f_charged = fill(NaN, length(expected.vpa),
-                                 size(newgrid_f_charged, 2),
-                                 size(newgrid_f_charged, 3),
-                                 size(newgrid_f_charged, 4))
+        newgrid_vth_ion = @. sqrt(2.0*newgrid_ppar_ion/newgrid_n_ion)
+        newgrid_f_ion = interpolate_to_grid_z(expected.z, f_ion[:, :, :, end], z, z_spectral)
+        temp = newgrid_f_ion
+        newgrid_f_ion = fill(NaN, length(expected.vpa),
+                                 size(newgrid_f_ion, 2),
+                                 size(newgrid_f_ion, 3),
+                                 size(newgrid_f_ion, 4))
         for iz ∈ 1:length(expected.z)
             wpa = copy(expected.vpa)
             if input["evolve_moments_parallel_flow"]
-                wpa .-= newgrid_upar_charged[iz,1]
+                wpa .-= newgrid_upar_ion[iz,1]
             end
             if input["evolve_moments_parallel_pressure"]
-                wpa ./= newgrid_vth_charged[iz,1]
+                wpa ./= newgrid_vth_ion[iz,1]
             end
-            newgrid_f_charged[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vpa, vpa_spectral)
+            newgrid_f_ion[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vpa, vpa_spectral)
         end
-        @test isapprox(expected.f_charged[:, :, end], newgrid_f_charged[:,:,1], rtol=rtol_3V)
+        @test isapprox(expected.f_ion[:, :, end], newgrid_f_ion[:,:,1], rtol=rtol_3V)
 
         # Check neutral particle moments and f
         ######################################
@@ -281,23 +290,25 @@ end
 
 function runtests()
     function do_tests(label, rtol=1.0e-3, nstep=50, include_moment_kinetic=true;
-                      tol_3V=nothing, kwargs...)
+                      tol_3V=nothing, args...)
         # Only testing Chebyshev discretization because interpolation not yet implemented
         # for finite-difference
 
         parallel_io = base_input["output"]["parallel_io"]
 
-        base_input_full_f = merge(base_input, Dict("nstep" => nstep))
+        base_input_full_f = deepcopy(base_input)
+        base_input_full_f["timestepping"] = merge(base_input["timestepping"],
+                                                  OptionsDict("nstep" => nstep))
         base_input_evolve_density = merge(base_input_full_f,
-                                          Dict("evolve_moments_density" => true))
+                                          OptionsDict("evolve_moments_density" => true))
         base_input_evolve_upar = merge(base_input_evolve_density,
-                                       Dict("evolve_moments_parallel_flow" => true,
+                                       OptionsDict("evolve_moments_parallel_flow" => true,
                                             "vpa_L" => 1.5*vpa_L, "vz_L" => 1.5*vpa_L))
         base_input_evolve_ppar = merge(base_input_evolve_upar,
-                                       Dict("evolve_moments_parallel_pressure" => true,
+                                       OptionsDict("evolve_moments_parallel_pressure" => true,
                                             "vpa_L" => 1.5*vpa_L, "vz_L" => 1.5*vpa_L))
 
-        for (base, base_label) ∈ ((base_input, "full-f"),
+        for (base, base_label) ∈ ((base_input_full_f, "full-f"),
                                   (base_input_evolve_density, "split 1"),
                                   (base_input_evolve_upar, "split 2"),
                                   (base_input_evolve_ppar, "split 3"))
@@ -321,7 +332,7 @@ function runtests()
                 this_input = deepcopy(restart_test_input_chebyshev)
                 this_input["base_directory"] = test_output_directory
                 this_input["output"]["parallel_io"] = parallel_io
-                run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
+                run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
             end
             if include_moment_kinetic
                 message = "restart split 1 from $base_label$label"
@@ -329,21 +340,21 @@ function runtests()
                     this_input = deepcopy(restart_test_input_chebyshev_split_1_moment)
                     this_input["base_directory"] = test_output_directory
                     this_input["output"]["parallel_io"] = parallel_io
-                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
+                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
                 end
                 message = "restart split 2 from $base_label$label"
                 @testset "$message" begin
                     this_input = deepcopy(restart_test_input_chebyshev_split_2_moments)
                     this_input["base_directory"] = test_output_directory
                     this_input["output"]["parallel_io"] = parallel_io
-                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
+                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
                 end
                 message = "restart split 3 from $base_label$label"
                 @testset "$message" begin
                     this_input = deepcopy(restart_test_input_chebyshev_split_3_moments)
                     this_input["base_directory"] = test_output_directory
                     this_input["output"]["parallel_io"] = parallel_io
-                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
+                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
                 end
             end
 
@@ -362,11 +373,11 @@ function runtests()
         # Note: only do 2 steps in 2V/3V mode because it is so slow. Also, linear
         # interpolation used for ion-neutral coupling in 2V/3V case has low accuracy, so
         # use looser tolerance for various things.
-        @long do_tests(", 2V/3V", 1.0e-1, 98, false; tol_3V=0.3, nstep=2, r_ngrid=1,
-                       r_nelement=1, vperp_ngrid=17, vperp_nelement=4, vperp_L=vpa_L,
-                       vpa_ngrid=17, vpa_nelement=8, vzeta_ngrid=17, vzeta_nelement=4,
-                       vzeta_L=vpa_L, vr_ngrid=17, vr_nelement=4, vr_L=vpa_L, vz_ngrid=17,
-                       vz_nelement=8)
+        @long do_tests(", 2V/3V", 1.0e-1, 98, false; tol_3V=0.3,
+                       timestepping=OptionsDict("nstep" => 2), r_ngrid=1, r_nelement=1,
+                       vperp_ngrid=17, vperp_nelement=4, vperp_L=vpa_L, vpa_ngrid=17,
+                       vpa_nelement=8, vzeta_ngrid=17, vzeta_nelement=4, vzeta_L=vpa_L,
+                       vr_ngrid=17, vr_nelement=4, vr_L=vpa_L, vz_ngrid=17, vz_nelement=8)
 
         if io_has_parallel(Val(hdf5))
             orig_base_input = deepcopy(base_input)
@@ -380,10 +391,11 @@ function runtests()
             # interpolation used for ion-neutral coupling in 2V/3V case has low accuracy,
             # so use looser tolerance for various things.
             @long do_tests(", 2V/3V, parallel I/O", 2.0e-1, 98, false; tol_3V=0.3,
-                           nstep=2, r_ngrid=1, r_nelement=1, vperp_ngrid=17,
-                           vperp_nelement=4, vperp_L=vpa_L, vpa_ngrid=17, vpa_nelement=8,
-                           vzeta_ngrid=17, vzeta_nelement=4, vzeta_L=vpa_L, vr_ngrid=17,
-                           vr_nelement=4, vr_L=vpa_L, vz_ngrid=17, vz_nelement=8)
+                           timestepping=OptionsDict("nstep" => 2), r_ngrid=1,
+                           r_nelement=1, vperp_ngrid=17, vperp_nelement=4, vperp_L=vpa_L,
+                           vpa_ngrid=17, vpa_nelement=8, vzeta_ngrid=17, vzeta_nelement=4,
+                           vzeta_L=vpa_L, vr_ngrid=17, vr_nelement=4, vr_L=vpa_L,
+                           vz_ngrid=17, vz_nelement=8)
 
             global base_input = orig_base_input
         end

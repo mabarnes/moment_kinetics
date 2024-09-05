@@ -17,22 +17,23 @@ function energy_equation!(ppar, fvec, moments, collisions, dt, spectral, composi
     begin_s_r_z_region()
 
     @loop_s_r_z is ir iz begin
-        ppar[iz,ir,is] += dt*(-fvec.upar[iz,ir,is]*moments.charged.dppar_dz_upwind[iz,ir,is]
-                              - moments.charged.dqpar_dz[iz,ir,is]
-                              - 3.0*fvec.ppar[iz,ir,is]*moments.charged.dupar_dz[iz,ir,is])
+        ppar[iz,ir,is] += dt*(-fvec.upar[iz,ir,is]*moments.ion.dppar_dz_upwind[iz,ir,is]
+                              - moments.ion.dqpar_dz[iz,ir,is]
+                              - 3.0*fvec.ppar[iz,ir,is]*moments.ion.dupar_dz[iz,ir,is])
     end
 
+
     if ion_source_settings.active
-        source_amplitude = moments.charged.external_source_pressure_amplitude
+        source_amplitude = moments.ion.external_source_pressure_amplitude
         @loop_s_r_z is ir iz begin
             ppar[iz,ir,is] += dt * source_amplitude[iz,ir]
         end
     end
 
-    diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
+    diffusion_coefficient = num_diss_params.ion.moment_dissipation_coefficient
     if diffusion_coefficient > 0.0
         @loop_s_r_z is ir iz begin
-            ppar[iz,ir,is] += dt*diffusion_coefficient*moments.charged.d2ppar_dz2[iz,ir,is]
+            ppar[iz,ir,is] += dt*diffusion_coefficient*moments.ion.d2ppar_dz2[iz,ir,is]
         end
     end
 
@@ -81,7 +82,7 @@ function neutral_energy_equation!(pz, fvec, moments, collisions, dt, spectral,
         end
     end
 
-    diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
+    diffusion_coefficient = num_diss_params.neutral.moment_dissipation_coefficient
     if diffusion_coefficient > 0.0
         @loop_sn_r_z isn ir iz begin
             pz[iz,ir,isn] += dt*diffusion_coefficient*moments.neutral.d2pz_dz2[iz,ir,isn]

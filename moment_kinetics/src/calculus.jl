@@ -14,6 +14,8 @@ using ..communication: block_rank
 using ..communication: _block_synchronize
 using ..looping
 
+using LinearAlgebra
+
 """
     elementwise_derivative!(coord, f, adv_fac, spectral)
     elementwise_derivative!(coord, f, spectral)
@@ -26,17 +28,6 @@ calculates a derivative without upwinding information.
 Result is stored in coord.scratch_2d.
 """
 function elementwise_derivative! end
-
-"""
-    elementwise_second_derivative!(coord, f, spectral)
-
-Generic function for element-by-element second derivatives.
-
-Note: no upwinding versions of second deriatives.
-
-Result is stored in coord.scratch_2d.
-"""
-function elementwise_second_derivative! end
 
 """
     derivative!(df, f, coord, adv_fac, spectral)
@@ -73,7 +64,7 @@ function derivative!(df, f, coord, spectral::Union{null_spatial_dimension_info,
     return nothing
 end
 
-function second_derivative!(d2f, f, coord, spectral)
+function second_derivative!(d2f, f, coord, spectral; handle_periodic=true)
     # computes d^2f / d(coord)^2
     # For spectral element methods, calculate second derivative by applying first
     # derivative twice, with special treatment for element boundaries
@@ -140,6 +131,70 @@ function second_derivative!(d2f, f, coord, spectral)
     return nothing
 end
 
+function laplacian_derivative!(d2f, f, coord, spectral; handle_periodic=true)
+    # computes (1/coord) d / coord ( coord d f / d(coord)) for vperp coordinate
+    # For spectral element methods, calculate second derivative by applying first
+    # derivative twice, with special treatment for element boundaries
+
+    # First derivative
+    elementwise_derivative!(coord, f, spectral)
+    derivative_elements_to_full_grid!(coord.scratch3, coord.scratch_2d, coord)
+    if coord.name == "vperp"
+        # include the Jacobian
+        @. coord.scratch3 *= coord.grid
+    end
+    # MPI reconcile code here if used with z or r coords
+
+    # Save elementwise first derivative result
+    coord.scratch2_2d .= coord.scratch_2d
+
+    # Second derivative for element interiors
+    elementwise_derivative!(coord, coord.scratch3, spectral)
+    derivative_elements_to_full_grid!(d2f, coord.scratch_2d, coord)
+    if coord.name == "vperp"
+        # include the Jacobian
+        @. d2f /= coord.grid
+    end
+    # MPI reconcile code here if used with z or r coords
+
+    # Add contribution to penalise discontinuous first derivatives at element
+    # boundaries. For smooth functions this would do nothing so should not affect
+    # convergence of the second derivative. Aims to stabilise numerical instability when
+    # spike develops at an element boundary. The coefficient is an arbitrary choice, it
+    # should probably be large enough for stability but as small as possible.
+    #
+    # Arbitrary numerical coefficient
+    C = 1.0
+    function penalise_discontinuous_first_derivative!(d2f, imin, imax, df)
+        # Left element boundary
+        d2f[imin] += C * df[1]
+
+        # Right element boundary
+        d2f[imax] -= C * df[end]
+
+        return nothing
+    end
+    @views penalise_discontinuous_first_derivative!(d2f, 1, coord.imax[1],
+                                                    coord.scratch2_2d[:,1])
+    for ielement ∈ 2:coord.nelement_local
+        @views penalise_discontinuous_first_derivative!(d2f, coord.imin[ielement]-1,
+                                                        coord.imax[ielement],
+                                                        coord.scratch2_2d[:,ielement])
+    end
+
+    if coord.bc ∈ ("zero", "both_zero", "zero-no-regularity")
+        # For stability don't contribute to evolution at boundaries, in case these
+        # points are not set by a boundary condition.
+        # Full grid may be across processes and bc only applied to extreme ends of the
+        # domain.
+        if coord.irank == coord.nrank - 1
+            d2f[end] = 0.0
+        end
+    else
+        error("Unsupported bc '$(coord.bc)'")
+    end
+    return nothing
+end
 """
     mass_matrix_solve!(f, b, spectral::weak_discretization_info)
 
@@ -152,28 +207,30 @@ is an input.
 """
 function mass_matrix_solve! end
 
-"""
-Apply 'K-matrix' as part of a weak-form second derivative
-"""
-function elementwise_apply_Kmat! end
-
-function second_derivative!(d2f, f, coord, spectral::weak_discretization_info)
+function second_derivative!(d2f, f, coord, spectral::weak_discretization_info; handle_periodic=true)
     # obtain the RHS of numerical weak-form of the equation 
     # g = d^2 f / d coord^2, which is 
     # M * g = K * f, with M the mass matrix and K an appropriate stiffness matrix
     # by multiplying by basis functions and integrating by parts    
-    elementwise_apply_Kmat!(coord, f, spectral)
-    # map the RHS vector K * f from the elemental grid to the full grid;
-    # at element boundaries, use the average of K * f from neighboring elements.
-    derivative_elements_to_full_grid!(coord.scratch, coord.scratch_2d, coord)
-    # solve weak form matrix problem M * g = K * f to obtain g = d^2 f / d coord^2
-    mass_matrix_solve!(d2f, coord.scratch, spectral)
-end
+    mul!(coord.scratch3, spectral.K_matrix, f)
 
-"""
-Apply 'L-matrix' as part of a weak-form Laplacian derivative
-"""
-function elementwise_apply_Lmat! end
+    if handle_periodic && coord.bc == "periodic"
+        if coord.nrank > 1
+            error("second_derivative!() cannot handle periodic boundaries for a "
+                  * "distributed coordinate")
+        end
+
+        coord.scratch3[1] = 0.5 * (coord.scratch3[1] + coord.scratch3[end])
+        coord.scratch3[end] = coord.scratch3[1]
+    end
+
+    # solve weak form matrix problem M * g = K * f to obtain g = d^2 f / d coord^2
+    if coord.nrank > 1
+        error("mass_matrix_solve!() does not support a "
+              * "distributed coordinate")
+    end
+    mass_matrix_solve!(d2f, coord.scratch3, spectral)
+end
 
 function laplacian_derivative!(d2f, f, coord, spectral::weak_discretization_info)
     # for coord.name 'vperp' obtain the RHS of numerical weak-form of the equation 
@@ -181,12 +238,26 @@ function laplacian_derivative!(d2f, f, coord, spectral::weak_discretization_info
     # M * g = K * f, with M the mass matrix, and K an appropriate stiffness matrix,
     # by multiplying by basis functions and integrating by parts.
     # for all other coord.name, do exactly the same as second_derivative! above.
-    elementwise_apply_Lmat!(coord, f, spectral)
-    # map the RHS vector K * f from the elemental grid to the full grid;
-    # at element boundaries, use the average of K * f from neighboring elements.
-    derivative_elements_to_full_grid!(coord.scratch, coord.scratch_2d, coord)
+    mul!(coord.scratch3, spectral.L_matrix, f)
+
+    if coord.bc == "periodic" && coord.name == "vperp"
+        error("laplacian_derivative!() cannot handle periodic boundaries for vperp")
+    elseif coord.bc == "periodic"
+        if coord.nrank > 1
+            error("laplacian_derivative!() cannot handle periodic boundaries for a "
+                  * "distributed coordinate")
+        end
+
+        coord.scratch3[1] = 0.5 * (coord.scratch3[1] + coord.scratch3[end])
+        coord.scratch3[end] = coord.scratch3[1]
+    end
+
     # solve weak form matrix problem M * g = K * f to obtain g = d^2 f / d coord^2
-    mass_matrix_solve!(d2f, coord.scratch, spectral)
+    if coord.nrank > 1
+        error("mass_matrix_solve!() does not support a "
+              * "distributed coordinate")
+    end
+    mass_matrix_solve!(d2f, coord.scratch3, spectral)
 end
 
 """
@@ -347,42 +418,54 @@ in the main code
 
 function assign_endpoint!(df1d::AbstractArray{mk_float,Ndims},
  receive_buffer::AbstractArray{mk_float,Mdims},key::String,coord) where {Ndims,Mdims}
-	if key == "lower"
-		j = 1
-	elseif key == "upper"
-		j = coord.n
-	else
-		println("ERROR: invalid key in assign_endpoint!")
-	end
+    if key == "lower"
+            j = 1
+    elseif key == "upper"
+            j = coord.n
+    else
+            println("ERROR: invalid key in assign_endpoint!")
+    end
     # test against coord name -- make sure to use exact string delimiters e.g. "x" not 'x'
-	# test against Ndims (autodetermined) to choose which array slices to use in assigning endpoints
-	#println("DEBUG MESSAGE: coord.name: ",coord.name," Ndims: ",Ndims," key: ",key)
-	if coord.name == "z" && Ndims==2
-		df1d[j,:] .= receive_buffer[:]
-		#println("ASSIGNING DATA")
-        elseif coord.name == "z" && Ndims==3
-		df1d[j,:,:] .= receive_buffer[:,:]
-		#println("ASSIGNING DATA")
-	elseif coord.name == "z" && Ndims==5
-		df1d[:,:,j,:,:] .= receive_buffer[:,:,:,:]
-		#println("ASSIGNING DATA")
+    # test against Ndims (autodetermined) to choose which array slices to use in assigning endpoints
+    #println("DEBUG MESSAGE: coord.name: ",coord.name," Ndims: ",Ndims," key: ",key)
+    if coord.name == "z" && Ndims==1
+        df1d[j] = receive_buffer[]
+        #println("ASSIGNING DATA")
+    elseif coord.name == "z" && Ndims==2
+        df1d[j,:] .= receive_buffer[:]
+        #println("ASSIGNING DATA")
+    elseif coord.name == "z" && Ndims==3
+        df1d[j,:,:] .= receive_buffer[:,:]
+        #println("ASSIGNING DATA")
+    elseif coord.name == "z" && Ndims==4
+        df1d[:,:,j,:] .= receive_buffer[:,:,:]
+        #println("ASSIGNING DATA")
+    elseif coord.name == "z" && Ndims==5
+        df1d[:,:,j,:,:] .= receive_buffer[:,:,:,:]
+        #println("ASSIGNING DATA")
     elseif coord.name == "z" && Ndims==6
-		df1d[:,:,:,j,:,:] .= receive_buffer[:,:,:,:,:]
-		#println("ASSIGNING DATA")
-	elseif coord.name == "r" && Ndims==2
-		df1d[:,j] .= receive_buffer[:]
-		#println("ASSIGNING DATA")
-	elseif coord.name == "r" && Ndims==3
-		df1d[:,j,:] .= receive_buffer[:,:]
-		#println("ASSIGNING DATA")
-	elseif coord.name == "r" && Ndims==5
-		df1d[:,:,:,j,:] .= receive_buffer[:,:,:,:]
-		#println("ASSIGNING DATA")
-	elseif coord.name == "r" && Ndims==6
-		df1d[:,:,:,:,j,:] .= receive_buffer[:,:,:,:,:]
-		#println("ASSIGNING DATA")
-	else
-        println("ERROR: failure to assign endpoints in reconcile_element_boundaries_MPI! (centered): coord.name: ",coord.name," Ndims: ",Ndims," key: ",key)
+        df1d[:,:,:,j,:,:] .= receive_buffer[:,:,:,:,:]
+        #println("ASSIGNING DATA")
+    elseif coord.name == "r" && Ndims==1
+        df1d[j] = receive_buffer[]
+        #println("ASSIGNING DATA")
+    elseif coord.name == "r" && Ndims==2
+        df1d[:,j] .= receive_buffer[:]
+        #println("ASSIGNING DATA")
+    elseif coord.name == "r" && Ndims==3
+        df1d[:,j,:] .= receive_buffer[:,:]
+        #println("ASSIGNING DATA")
+    elseif coord.name == "r" && Ndims==4
+        df1d[:,:,:,j] .= receive_buffer[:,:,:]
+        #println("ASSIGNING DATA")
+    elseif coord.name == "r" && Ndims==5
+        df1d[:,:,:,j,:] .= receive_buffer[:,:,:,:]
+        #println("ASSIGNING DATA")
+    elseif coord.name == "r" && Ndims==6
+        df1d[:,:,:,:,j,:] .= receive_buffer[:,:,:,:,:]
+        #println("ASSIGNING DATA")
+    else
+        error("ERROR: failure to assign endpoints in reconcile_element_boundaries_MPI! (centered): coord.name: ",coord.name," Ndims: ",Ndims," key: ",key)
     end
 end
 

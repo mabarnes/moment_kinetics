@@ -3,6 +3,10 @@ name: Run tests
 
 on: [push, pull_request, workflow_dispatch]
 
+permissions:
+  actions: write
+  contents: read
+
 jobs:
   test:
     runs-on: ${{ matrix.os }}
@@ -14,10 +18,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: julia-actions/setup-julia@v1
+      - uses: julia-actions/setup-julia@latest
         with:
           version: '1.10'
-          arch: x64
+      - uses: julia-actions/cache@v1
       - uses: julia-actions/julia-buildpkg@v1
         with:
           project: 'moment_kinetics/'

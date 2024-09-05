@@ -18,23 +18,22 @@ jobs:
       - uses: mpi4py/setup-mpi@v1
         with:
           mpi: 'openmpi'
-      - uses: julia-actions/setup-julia@v1
+      - uses: julia-actions/setup-julia@latest
         with:
           version: '1.10'
           arch: x64
-      - uses: julia-actions/julia-buildpkg@v1
-        with:
-          project: 'moment_kinetics/'
+      - uses: julia-actions/cache@v1
       - name: Debug test
         run: |
-          cd moment_kinetics
-
           # Hard code the debug level so that we can run without using the
           # `--compiled-modules=no` flag, which breaks Symbolics.jl at the
           # moment.
-          sed -i -e "s/_debug_level = get_options.*/_debug_level = 2/" src/debugging.jl
+          sed -i -e "s/_debug_level = get_options.*/_debug_level = 2/" moment_kinetics/src/debugging.jl
 
-          julia --project -e 'using MPIPreferences; MPIPreferences.use_system_binary(); using Pkg; Pkg.precompile()'
+          touch Project.toml
+          julia --project -O3 --check-bounds=yes -e 'using Pkg; Pkg.add(["MPI", "MPIPreferences", "PackageCompiler", "Symbolics"]); using MPIPreferences; MPIPreferences.use_system_binary()'
+          julia --project -O3 --check-bounds=yes -e 'using Pkg; Pkg.develop(path="moment_kinetics/"); Pkg.precompile()'
+          julia --project -O3 --check-bounds=yes precompile.jl --debug 2
 
           # Need to use openmpi so that the following arguments work:
           # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
@@ -42,5 +41,5 @@ jobs:
           # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
           #   terrible performance when oversubscribing.
           ## Don't use --compiled-modules=no for now, as it currently breaks Symbolics.jl
-          #mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no debug_test/sound_wave_tests.jl --debug 2
-          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/runtests.jl --debug 2
+          #mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no moment_kinetics/debug_test/sound_wave_tests.jl --debug 2
+          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project -Jmoment_kinetics.so -O3 --check-bounds=yes moment_kinetics/debug_test/runtests.jl --debug 2

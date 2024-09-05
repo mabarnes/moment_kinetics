@@ -8,9 +8,10 @@ module file_io_netcdf
 
 import moment_kinetics.file_io: io_has_parallel, open_output_file_implementation,
                                 create_io_group, get_group, is_group, get_subgroup_keys,
-                                get_variable_keys, add_attribute!, write_single_value!,
-                                create_dynamic_variable!, append_to_dynamic_var
-import moment_kinetics.load_data: open_file_to_read, load_variable, load_slice
+                                get_variable_keys, add_attribute!, modify_attribute!,
+                                write_single_value!, create_dynamic_variable!,
+                                append_to_dynamic_var
+import moment_kinetics.load_data: open_file_to_read, get_attribute, load_variable, load_slice
 using moment_kinetics.coordinates: coordinate
 using moment_kinetics.input_structs: netcdf
 
@@ -21,9 +22,9 @@ function io_has_parallel(::Val{netcdf})
     return false
 end
 
-function open_output_file_implementation(::Val{netcdf}, prefix, parallel_io, io_comm,
+function open_output_file_implementation(::Val{netcdf}, prefix, io_input, io_comm,
                                          mode="c")
-    parallel_io && error("NetCDF interface does not support parallel I/O")
+    io_input.parallel_io && error("NetCDF interface does not support parallel I/O")
 
     # the netcdf file will be given by output_dir/run_name with .cdf appended
     filename = string(prefix, ".cdf")
@@ -32,7 +33,7 @@ function open_output_file_implementation(::Val{netcdf}, prefix, parallel_io, io_
     # create the new NetCDF file
     fid = NCDataset(filename, mode)
 
-    return fid, (filename, parallel_io, io_comm)
+    return fid, (filename, io_input, io_comm)
 end
 
 function create_io_group(parent::NCDataset, name; description=nothing)
@@ -74,6 +75,14 @@ function add_attribute!(file_or_group::NCDataset, name, value)
 end
 function add_attribute!(var::NCDatasets.CFVariable, name, value)
     var.attrib[name] = value
+end
+
+function modify_attribute!(file_or_group_or_var::Union{NCDataset,NCDatasets.CFVariable}, name, value)
+    file_or_group_or_var.attrib[name] = value
+end
+
+function get_attribute(file_or_group_or_var::Union{NCDataset,NCDatasets.CFVariable}, name)
+    return var.attrib[name]
 end
 
 function maybe_create_netcdf_dim(file_or_group::NCDataset, name, size)
@@ -162,11 +171,22 @@ end
 function create_dynamic_variable!(file_or_group::NCDataset, name, type,
                                   coords::coordinate...; parallel_io,
                                   n_ion_species=nothing, n_neutral_species=nothing,
-                                  description=nothing, units=nothing)
+                                  diagnostic_var_size=nothing, description=nothing,
+                                  units=nothing)
 
     if n_ion_species !== nothing && n_neutral_species !== nothing
         error("Variable should not contain both ion and neutral species dimensions. "
               * "Got n_ion_species=$n_ion_species and "
+              * "n_neutral_species=$n_neutral_species")
+    end
+    if diagnostic_var_size !== nothing && n_ion_species !== nothing
+        error("Diagnostic variable should not contain both ion species dimension. Got "
+              * "diagnostic_var_size=$diagnostic_var_size and "
+              * "n_ion_species=$n_ion_species")
+    end
+    if diagnostic_var_size !== nothing && n_neutral_species !== nothing
+        error("Diagnostic variable should not contain both neutral species dimension. "
+              * "Got diagnostic_var_size=$diagnostic_var_size and "
               * "n_neutral_species=$n_neutral_species")
     end
 
@@ -201,7 +221,16 @@ function create_dynamic_variable!(file_or_group::NCDataset, name, type,
     # create the variable so it can be expanded indefinitely (up to the largest unsigned
     # integer in size) in the time dimension
     coord_dims = Tuple(c.name for c ∈ coords)
-    if n_ion_species !== nothing
+    if diagnostic_var_size !== nothing
+        if isa(diagnostic_var_size, Number)
+            # Make diagnostic_var_size a Tuple
+            diagnostic_var_size = (diagnostic_var_size,)
+        end
+        for (i,dim_size) ∈ enumerate(diagnostic_var_size)
+            maybe_create_netcdf_dim(file_or_group, "$name$i", dim_size)
+        end
+        fixed_dims = Tuple("$name$i" for i ∈ 1:length(diagnostic_var_size))
+    elseif n_ion_species !== nothing
         fixed_dims = tuple(coord_dims..., "ion_species")
     elseif n_neutral_species !== nothing
         fixed_dims = tuple(coord_dims..., "neutral_species")
@@ -227,7 +256,12 @@ end
 function append_to_dynamic_var(io_var::NCDatasets.CFVariable,
                                data::Union{Number,AbstractArray{T,N}}, t_idx,
                                parallel_io::Bool,
-                               coords...) where {T,N}
+                               coords...; only_root=false) where {T,N}
+    if only_root && parallel_io && global_rank[] != 0
+        # Variable should only be written from root, and this process is not root for the
+        # output file
+        return nothing
+    end
 
     if isa(data, Number)
         io_var[t_idx] = data

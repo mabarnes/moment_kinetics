@@ -1,14 +1,14 @@
 using Pkg, TOML
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    prompt_for_hdf5 = true
+    prompt_for_lib_paths = true
     repo_dir = dirname(Pkg.project().path)
     project_dir = repo_dir
     local_preferences_filename = joinpath(repo_dir, "LocalPreferences.toml")
     local_preferences = TOML.parsefile(local_preferences_filename)
     mk_preferences = local_preferences["moment_kinetics"]
 else
-    prompt_for_hdf5 = false
+    prompt_for_lib_paths = false
 end
 
 machine = mk_preferences["machine"]
@@ -90,6 +90,55 @@ using MPIPreferences
 if "mpi_library_names" ∈ keys(machine_settings) || "mpiexec" ∈ keys(machine_settings)
     MPIPreferences.use_system_binary(library_names=machine_settings["mpi_library_names"],
                                      mpiexec=machine_settings["mpiexec"])
+elseif Sys.isapple()
+    # On macOS, MPIPreferences.use_system_binary() does not automatically find the MPI
+    # library when MPI was installed with homebrew, so prompt the user for the library
+    # path instead.
+    # ?? Could we attempt to auto-detect the MPI library before prompting the user??
+    if prompt_for_lib_paths
+        try
+            # See if MPIPreferences can auto-detect the system MPI library path
+            MPIPreferences.use_system_binary()
+        catch
+            println("Failed to auto-detect path of MPI library...")
+
+            local mpi_library_path
+
+            default_mpi_library_path = get(mk_preferences, "mpi_library_path", "")
+            mpi_library_path = get_input_with_path_completion(
+                "\nEnter the full path to your MPI library (e.g. something like "
+                * "'libmpi.dylib'): [$default_mpi_library_path]")
+            if mpi_library_path == ""
+                mpi_library_path = default_mpi_library_path
+            end
+
+            MPIPreferences.use_system_binary(library_names=mpi_library_path)
+
+            global mk_preferences, local_preferences
+
+            # Just got the value for the setting, now write it to LocalPreferences.toml,
+            # but first reload the preferences from the LocalPreferences.toml file so that
+            # we don't overwrite the values that MPIPreferences has set.
+            local_preferences = TOML.parsefile(local_preferences_filename)
+            mk_preferences = local_preferences["moment_kinetics"]
+            mk_preferences["mpi_library_path"] = mpi_library_path
+            open(local_preferences_filename, "w") do io
+                TOML.print(io, local_preferences, sorted=true)
+            end
+            # Re-read local_preferences file, so we can modify it again below, keeping the
+            # changes here
+            local_preferences = TOML.parsefile(local_preferences_filename)
+            mk_preferences = local_preferences["moment_kinetics"]
+        end
+    else
+        if "mpi_library_path" ∈ keys(mk_preferences)
+            mpi_library_path = mk_preferences["mpi_library_path"]
+            MPIPreferences.use_system_binary(library_names=mpi_library_path)
+        else
+            # Must have auto-detected MPI library before, so do the same here
+            MPIPreferences.use_system_binary()
+        end
+    end
 else
     # If settings for MPI library are not given explicitly, then auto-detection by
     # MPIPreferences.use_system_binary() should work.
@@ -122,7 +171,7 @@ elseif machine_settings["hdf5_library_setting"] == "prompt"
         hdf5_dir = local_hdf5_install_dir
         hdf5_lib = joinpath(local_hdf5_install_dir, "libhdf5.so")
         hdf5_lib_hl = joinpath(local_hdf5_install_dir, "libhdf5_hl.so")
-    elseif !prompt_for_hdf5
+    elseif !prompt_for_lib_paths
         hdf5_dir = mk_preferences["hdf5_dir"]
         if hdf5_dir != "default"
             hdf5_lib = joinpath(hdf5_dir, "libhdf5.so")

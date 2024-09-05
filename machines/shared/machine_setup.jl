@@ -262,8 +262,15 @@ function machine_setup_moment_kinetics(machine::String; no_force_exit::Bool=fals
             result = run(`grep "using Revise" $startup_path`, wait=false)
             if !success(result)
                 println("Adding `using Revise` to $startup_path")
+                # When initialising a new copy of the repo, if Revise is not installed yet
+                # having just `using Revise` in the startup.jl would cause an error, so
+                # guard it with a try/catch.
                 open(startup_path, "a") do io
-                    println(io, "\nusing Revise")
+                    println(io, "\ntry")
+                    println(io, "    using Revise")
+                    println(io, "catch")
+                    println(io, "    println(\"Warning: failed to load Revise\")")
+                    println(io, "end")
                 end
             end
         end

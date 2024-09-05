@@ -145,7 +145,7 @@ function get_local_range(sub_block_rank, sub_block_size, dim_size)
     # This calculation is not at all optimized, but is not going to take long, and is
     # only done in initialization, so it is more important to be simple and robust.
 
-    if dim_size == 0
+    if dim_size == 0 || sub_block_rank ≥ sub_block_size
         # No processor includes a grid point
         return 1:0
     end
@@ -269,6 +269,10 @@ function get_ranges_from_split(block_rank, effective_block_size, split, dim_size
     if block_rank ≥ effective_block_size
         # This process is not needed by this split
         return [1:0 for _ ∈ dim_sizes_list]
+    end
+    if effective_block_size < prod(split)
+        error("effective_block_size=$effective_block_size is smaller than "
+              * "prod(split)=", prod(split))
     end
 
     # Get rank of this process in each sub-block (with sub-block sizes given by split).
@@ -467,14 +471,19 @@ eval(quote
              anyv_subblock_size[] = anyv_split[end]
              number_of_anyv_blocks = prod(anyv_split[1:end-1])
              anyv_subblock_index = block_rank[] ÷ anyv_subblock_size[]
-             anyv_rank_within_subblock = block_rank[] % anyv_subblock_size[]
+             if anyv_subblock_index ≥ number_of_anyv_blocks
+                 anyv_subblock_index = nothing
+                 anyv_rank_within_subblock = -1
+             else
+                 anyv_rank_within_subblock = block_rank[] % anyv_subblock_size[]
+             end
 
              # Create communicator for the anyv subblock. OK to do this here as
              # communication.setup_distributed_memory_MPI() must have already been called
              # to set block_size[] and block_rank[]
              comm_anyv_subblock[] = MPI.Comm_split(comm_block[], anyv_subblock_index,
                                                    anyv_rank_within_subblock)
-             anyv_subblock_rank[] = MPI.Comm_rank(comm_anyv_subblock[])
+             anyv_subblock_rank[] = anyv_rank_within_subblock
              anyv_isubblock_index[] = anyv_subblock_index
              anyv_nsubblocks_per_block[] = number_of_anyv_blocks
              anyv_rank0 = (anyv_subblock_rank[] == 0)

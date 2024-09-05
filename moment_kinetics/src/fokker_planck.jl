@@ -33,6 +33,7 @@ export init_fokker_planck_collisions, fokkerplanck_arrays_struct
 export init_fokker_planck_collisions_weak_form
 export explicit_fokker_planck_collisions_weak_form!
 export explicit_fokker_planck_collisions!
+export explicit_fp_collisions_weak_form_Maxwellian_cross_species!
 export calculate_Maxwellian_Rosenbluth_coefficients
 export get_local_Cssp_coefficients!, init_fokker_planck_collisions
 # testing
@@ -50,6 +51,8 @@ using ..communication
 using ..velocity_moments: integrate_over_vspace
 using ..velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_qpar, get_pressure, get_rmom
 using ..looping
+using ..input_structs: fkpl_collisions_input, set_defaults_and_check_section!
+using ..reference_parameters: get_reference_collision_frequency_ii
 using ..fokker_planck_calculus: init_Rosenbluth_potential_integration_weights!
 using ..fokker_planck_calculus: init_Rosenbluth_potential_boundary_integration_weights!
 using ..fokker_planck_calculus: allocate_boundary_integration_weights
@@ -67,6 +70,80 @@ using ..fokker_planck_calculus: calculate_rosenbluth_potentials_via_elliptic_sol
 using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_fluxes, H_Maxwellian, dGdvperp_Maxwellian
 using ..fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian
 using ..fokker_planck_test: F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
+using ..reference_parameters: setup_reference_parameters
+
+"""
+Function for reading Fokker Planck collision operator input parameters. 
+Structure the namelist as follows.
+
+[fokker_planck_collisions]
+use_fokker_planck = true
+nuii = 1.0
+frequency_option = "manual"
+"""
+function setup_fkpl_collisions_input(toml_input::Dict)
+    reference_params = setup_reference_parameters(toml_input)
+    # get reference collision frequency (note factor of 1/2 due to definition choices)
+    nuii_fkpl_default = 0.5*get_reference_collision_frequency_ii(reference_params)
+    # read the input toml and specify a sensible default
+    input_section = set_defaults_and_check_section!(toml_input, "fokker_planck_collisions",
+       # begin default inputs (as kwargs)
+       use_fokker_planck = false,
+       nuii = -1.0,
+       frequency_option = "reference_parameters",
+       self_collisions = true,
+       use_conserving_corrections = true,
+       slowing_down_test = false,
+       sd_density = 1.0,
+       sd_temp = 0.01,
+       sd_q = 1.0,
+       sd_mi = 0.25,
+       sd_me = 0.25/1836.0,
+       Zi = 1.0)
+    # ensure that the collision frequency is consistent with the input option
+    frequency_option = input_section["frequency_option"]
+    if frequency_option == "reference_parameters"
+        input_section["nuii"] = nuii_fkpl_default
+    elseif frequency_option == "manual" 
+        # use the frequency from the input file
+        # do nothing
+    else
+        error("Invalid option [fokker_planck_collisions] "
+              * "frequency_option=$(frequency_option) passed")
+    end
+    # finally, ensure nuii < 0 if use_fokker_planck is false
+    # so that nuii > 0 is the only check required in the rest of the code
+    if !input_section["use_fokker_planck"]
+        input_section["nuii"] = -1.0
+    end
+    input = Dict(Symbol(k)=>v for (k,v) in input_section)
+    #println(input)
+    if input_section["slowing_down_test"]
+        # calculate nu_alphae and vc3 (critical speed of slowing down)
+        # as a diagnostic to aid timestep choice
+        # nu_alphae/nuref
+        Zalpha = input_section["Zi"]
+        Zi = input_section["sd_q"]
+        ni = input_section["sd_density"]
+        ne = Zi*ni+Zalpha # assume unit density for alphas in initial state
+        Te = input_section["sd_temp"]
+        me = input_section["sd_me"]
+        mi = input_section["sd_mi"]
+        nu_alphae = (8.0/(3.0*sqrt(pi)))*ne*sqrt(me)*(Te^(-1.5))*(Zalpha^(2.0))
+        vc3 = (3.0/4.0)*sqrt(pi)*(Zi^2)*(ni/ne)*(1.0/mi)*(1.0/sqrt(me))*(Te^(1.5))
+        nu_alphaalpha = Zalpha^4
+        nu_alphai = nu_alphae*vc3
+        if global_rank[] == 0
+            println("slowing_down_test = true")
+            println("nu_alphaalpha/nuref = $nu_alphaalpha")
+            println("nu_alphai/nuref = $nu_alphai")
+            println("nu_alphae/nuref = $nu_alphae")
+            println("vc3/cref^3 = $vc3")
+            println("critical speed vc/cref = ",vc3^(1.0/3.0))
+        end
+    end
+    return fkpl_collisions_input(; input...)
+end
 
 ########################################################
 # begin functions associated with the weak-form operator
@@ -159,6 +236,74 @@ end
 
 """
 Function for advancing with the explicit, weak-form, self-collision operator
+using the existing method for computing the Rosenbluth potentials, with
+the addition of cross-species collisions against fixed Maxwellian distribution functions
+"""
+function explicit_fp_collisions_weak_form_Maxwellian_cross_species!(pdf_out,pdf_in,dSdt,composition,collisions,dt,
+                                             fkpl_arrays::fokkerplanck_weakform_arrays_struct,
+                                             r, z, vperp, vpa, vperp_spectral, vpa_spectral;
+                                             diagnose_entropy_production=false)
+    # N.B. only self-collisions are currently supported
+    # This can be modified by adding a loop over s' below
+    n_ion_species = composition.n_ion_species
+    @boundscheck vpa.n == size(pdf_out,1) || throw(BoundsError(pdf_out))
+    @boundscheck vperp.n == size(pdf_out,2) || throw(BoundsError(pdf_out))
+    @boundscheck z.n == size(pdf_out,3) || throw(BoundsError(pdf_out))
+    @boundscheck r.n == size(pdf_out,4) || throw(BoundsError(pdf_out))
+    @boundscheck n_ion_species == size(pdf_out,5) || throw(BoundsError(pdf_out))
+    @boundscheck vpa.n == size(pdf_in,1) || throw(BoundsError(pdf_in))
+    @boundscheck vperp.n == size(pdf_in,2) || throw(BoundsError(pdf_in))
+    @boundscheck z.n == size(pdf_in,3) || throw(BoundsError(pdf_in))
+    @boundscheck r.n == size(pdf_in,4) || throw(BoundsError(pdf_in))
+    @boundscheck n_ion_species == size(pdf_in,5) || throw(BoundsError(pdf_in))
+    @boundscheck z.n == size(dSdt,1) || throw(BoundsError(dSdt))
+    @boundscheck r.n == size(dSdt,2) || throw(BoundsError(dSdt))
+    @boundscheck n_ion_species == size(dSdt,3) || throw(BoundsError(dSdt))
+    
+    use_conserving_corrections = collisions.fkpl.use_conserving_corrections
+    fkin = collisions.fkpl
+    # masses charge numbers and collision frequencies
+    mref = 1.0 # generalise if multiple ions evolved
+    Zs = fkin.Zi # generalise if multiple ions evolved
+    nuref = fkin.nuii # generalise if multiple ions evolved
+    msp = [fkin.sd_mi, fkin.sd_me]
+    Zsp = [fkin.sd_q, -1.0]
+    # assume here that ne = sum_i n_i and that initial condition
+    # for beam ions has unit density
+    ns = 1.0 # initial density of evolved ions (hardcode to be the same as initial conditions)
+    # get electron density from quasineutrality ne = sum_s Zs ns
+    densp = [fkin.sd_density, fkin.sd_q*fkin.sd_density+ns*Zs] 
+    uparsp = [0.0, 0.0]
+    vthsp = [sqrt(fkin.sd_temp/msp[1]), sqrt(fkin.sd_temp/msp[2])]
+    
+    # N.B. parallelisation using special 'anyv' region
+    begin_s_r_z_anyv_region()
+    @loop_s_r_z is ir iz begin
+        # computes sum over s' of  C[Fs,Fs'] with Fs' an assumed Maxwellian 
+        @views fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!(pdf_in[:,:,iz,ir,is],
+                                     nuref,mref,Zs,msp,Zsp,densp,uparsp,vthsp,
+                                     fkpl_arrays,vperp,vpa,vperp_spectral,vpa_spectral)
+        # enforce the boundary conditions on CC before it is used for timestepping
+        enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
+        # make sure that the cross-species terms conserve density
+        if use_conserving_corrections
+            density_conserving_correction!(fkpl_arrays.CC, pdf_in[:,:,iz,ir,is], vpa, vperp,
+                                fkpl_arrays.S_dummy)
+        end
+        # advance this part of s,r,z with the resulting sum_s' C[Fs,Fs']
+        begin_anyv_vperp_vpa_region()
+        CC = fkpl_arrays.CC
+        @loop_vperp_vpa ivperp ivpa begin
+            pdf_out[ivpa,ivperp,iz,ir,is] += dt*CC[ivpa,ivperp]
+        end
+        
+    end
+    return nothing
+end
+
+
+"""
+Function for advancing with the explicit, weak-form, self-collision operator
 """
 function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,dSdt,composition,collisions,dt,
                                              fkpl_arrays::fokkerplanck_weakform_arrays_struct,
@@ -184,7 +329,10 @@ function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,dSdt,compos
     
     # masses and collision frequencies
     ms, msp = 1.0, 1.0 # generalise!
-    nussp = collisions.nuii # generalise!
+    nuref = collisions.fkpl.nuii # generalise!
+    Zi = collisions.fkpl.Zi # generalise!
+    nussp = nuref*(Zi^4) # include charge number factor for self collisions
+    use_conserving_corrections = collisions.fkpl.use_conserving_corrections
     # N.B. parallelisation using special 'anyv' region
     begin_s_r_z_anyv_region()
     @loop_s_r_z is ir iz begin
@@ -195,9 +343,10 @@ function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,dSdt,compos
         # enforce the boundary conditions on CC before it is used for timestepping
         enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
         # make ad-hoc conserving corrections
-        conserving_corrections!(fkpl_arrays.CC, pdf_in[:,:,iz,ir,is], vpa, vperp,
+        if use_conserving_corrections
+            conserving_corrections!(fkpl_arrays.CC, pdf_in[:,:,iz,ir,is], vpa, vperp,
                                 fkpl_arrays.S_dummy)
-        
+        end
         # advance this part of s,r,z with the resulting C[Fs,Fs]
         begin_anyv_vperp_vpa_region()
         CC = fkpl_arrays.CC
@@ -225,12 +374,18 @@ Function for evaluating \$C_{ss'} = C_{ss'}[F_s,F_{s'}]\$
 
 The result is stored in the array `fkpl_arrays.CC`.
 
-The normalised collision frequency is defined by
+The normalised collision frequency for collisions between species s and s' is defined by
 ```math
-\\nu_{ss'} = \\frac{\\gamma_{ss'} n_\\mathrm{ref}}{2 m_s^2 c_\\mathrm{ref}^3}
+\\tilde{\\nu}_{ss'} = \\frac{L_{\\mathrm{ref}}}{c_{\\mathrm{ref}}}\\frac{\\gamma_{ss'} n_\\mathrm{ref}}{m_s^2 c_\\mathrm{ref}^3}
 ```
 with \$\\gamma_{ss'} = 2 \\pi (Z_s Z_{s'})^2 e^4 \\ln \\Lambda_{ss'} / (4 \\pi
 \\epsilon_0)^2\$.
+The input parameter to this code is 
+```math
+\\tilde{\\nu}_{ii} = \\frac{L_{\\mathrm{ref}}}{c_{\\mathrm{ref}}}\\frac{\\gamma_\\mathrm{ref} n_\\mathrm{ref}}{m_\\mathrm{ref}^2 c_\\mathrm{ref}^3}
+```
+with \$\\gamma_\\mathrm{ref} = 2 \\pi e^4 \\ln \\Lambda_{ii} / (4 \\pi
+\\epsilon_0)^2\$. This means that \$\\tilde{\\nu}_{ss'} = (Z_s Z_{s'})^2\\tilde{\\nu}_\\mathrm{ref}\$ and this conversion is handled explicitly in the code with the charge number input provided by the user.
 """
 function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp,
                                              fkpl_arrays::fokkerplanck_weakform_arrays_struct,
@@ -341,6 +496,98 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
     return nothing
 end
 
+"""
+Function for computing the collision operator
+```math
+\\sum_{s^\\prime} C[F_{s},F_{s^\\prime}]
+```
+when 
+```math
+F_{s^\\prime}
+```
+is an analytically specified Maxwellian distribution
+"""
+function fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!(ffs_in,
+                                             nuref::mk_float,ms::mk_float,Zs::mk_float,
+                                             msp::Array{mk_float,1},Zsp::Array{mk_float,1}, 
+                                             densp::Array{mk_float,1},
+                                             uparsp::Array{mk_float,1},vthsp::Array{mk_float,1},
+                                             fkpl_arrays::fokkerplanck_weakform_arrays_struct,
+                                             vperp, vpa, vperp_spectral, vpa_spectral)
+    @boundscheck vpa.n == size(ffs_in,1) || throw(BoundsError(ffs_in))
+    @boundscheck vperp.n == size(ffs_in,2) || throw(BoundsError(ffs_in))
+    
+    # extract the necessary precalculated and buffer arrays from fokkerplanck_arrays
+    rhsvpavperp = fkpl_arrays.rhsvpavperp
+    lu_obj_MM = fkpl_arrays.lu_obj_MM
+    YY_arrays = fkpl_arrays.YY_arrays    
+    
+    CC = fkpl_arrays.CC
+    GG = fkpl_arrays.GG
+    HH = fkpl_arrays.HH
+    dHdvpa = fkpl_arrays.dHdvpa
+    dHdvperp = fkpl_arrays.dHdvperp
+    dGdvperp = fkpl_arrays.dGdvperp
+    d2Gdvperp2 = fkpl_arrays.d2Gdvperp2
+    d2Gdvpa2 = fkpl_arrays.d2Gdvpa2
+    d2Gdvperpdvpa = fkpl_arrays.d2Gdvperpdvpa
+    FF = fkpl_arrays.FF
+    dFdvpa = fkpl_arrays.dFdvpa
+    dFdvperp = fkpl_arrays.dFdvperp
+    
+    # number of primed species
+    nsp = size(msp,1)
+    
+    begin_anyv_vperp_vpa_region()
+    # fist set dummy arrays for coefficients to zero
+    @loop_vperp_vpa ivperp ivpa begin
+        d2Gdvpa2[ivpa,ivperp] = 0.0
+        d2Gdvperp2[ivpa,ivperp] = 0.0
+        d2Gdvperpdvpa[ivpa,ivperp] = 0.0
+        dHdvpa[ivpa,ivperp] = 0.0
+        dHdvperp[ivpa,ivperp] = 0.0
+    end
+    # sum the contributions from the potentials, including order unity factors that differ between species
+    # making use of the Linearity of the operator in Fsp
+    # note that here we absorb ms/msp and Zsp^2 into the definition of the potentials, and we pass
+    # ms = msp = 1 to the collision operator assembly routine so that we can use a single array to include
+    # the contribution to the summed Rosenbluth potential from all the species
+    for isp in 1:nsp
+        dens = densp[isp]
+        upar = uparsp[isp]
+        vth = vthsp[isp]
+        ZZ = (Zsp[isp]*Zs)^2 # factor from gamma_ss'
+        @loop_vperp_vpa ivperp ivpa begin
+            d2Gdvpa2[ivpa,ivperp] += ZZ*d2Gdvpa2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            d2Gdvperp2[ivpa,ivperp] += ZZ*d2Gdvperp2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            d2Gdvperpdvpa[ivpa,ivperp] += ZZ*d2Gdvperpdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            dHdvpa[ivpa,ivperp] += ZZ*(ms/msp[isp])*dHdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            dHdvperp[ivpa,ivperp] += ZZ*(ms/msp[isp])*dHdvperp_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+        end
+    end
+    # Need to synchronize as these arrays may be read outside the locally-owned set of
+    # ivperp, ivpa indices in assemble_explicit_collision_operator_rhs_parallel!()
+    # assemble the RHS of the collision operator matrix eq
+
+    _anyv_subblock_synchronize()
+    assemble_explicit_collision_operator_rhs_parallel!(rhsvpavperp,ffs_in,
+      d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,
+      dHdvpa,dHdvperp,1.0,1.0,nuref,
+      vpa,vperp,YY_arrays)
+
+    # solve the collision operator matrix eq
+    begin_anyv_region()
+    @anyv_serial_region begin
+        # sc and rhsc are 1D views of the data in CC and rhsc, created so that we can use
+        # the 'matrix solve' functionality of ldiv!() from the LinearAlgebra package
+        sc = vec(CC)
+        rhsc = vec(rhsvpavperp)
+        # invert mass matrix and fill fc
+        ldiv!(sc, lu_obj_MM, rhsc)
+    end
+    return nothing
+end
+
 # solves A x = b for a matrix of the form
 # A00  0    A02
 # 0    A11  A12
@@ -425,7 +672,9 @@ function conserving_corrections!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
 
     # Broadcast x0, x1, x2 to all processes in the 'anyv' subblock
     param_vec = [x0, x1, x2, upar]
-    MPI.Bcast!(param_vec, 0, comm_anyv_subblock[])
+    if comm_anyv_subblock[] != MPI.COMM_NULL
+        MPI.Bcast!(param_vec, 0, comm_anyv_subblock[])
+    end
     (x0, x1, x2, upar) = param_vec
     
     # correct CC
@@ -433,6 +682,38 @@ function conserving_corrections!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
     @loop_vperp_vpa ivperp ivpa begin
         wpar = vpa.grid[ivpa] - upar
         CC[ivpa,ivperp] -= (x0 + x1*wpar + x2*(vperp.grid[ivperp]^2 + wpar^2) )*pdf_in[ivpa,ivperp]
+    end
+end
+
+function density_conserving_correction!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
+    begin_anyv_region()
+    x0 = 0.0
+    @anyv_serial_region begin
+        # In principle the integrations here could be shared among the processes in the
+        # 'anyv' subblock, but this block is not a significant part of the cost of the
+        # collision operator, so probably not worth the complication.
+
+        # compute density of the input pdf
+        dens =  get_density(pdf_in, vpa, vperp)
+        
+        # compute density of the numerical collision operator
+        dn = get_density(CC, vpa, vperp)
+        
+        # obtain the coefficient for the correction
+        x0 = dn/dens
+    end
+
+    # Broadcast x0 to all processes in the 'anyv' subblock
+    param_vec = [x0]
+    if comm_anyv_subblock[] != MPI.COMM_NULL
+        MPI.Bcast!(param_vec, 0, comm_anyv_subblock[])
+    end
+    x0 = param_vec[1]
+    
+    # correct CC
+    begin_anyv_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        CC[ivpa,ivperp] -= x0*pdf_in[ivpa,ivperp]
     end
 end
 

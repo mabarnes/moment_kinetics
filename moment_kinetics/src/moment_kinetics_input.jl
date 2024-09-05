@@ -6,23 +6,25 @@ export mk_input
 export performance_test
 #export advective_form
 export read_input_file
-export get_default_rhostar
 
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions: mk_float, mk_int, OptionsDict
 using ..array_allocation: allocate_float
 using ..communication
 using ..coordinates: define_coordinate
 using ..external_sources
 using ..file_io: io_has_parallel, input_option_error, open_ascii_output_file
-using ..krook_collisions: setup_krook_collisions
+using ..krook_collisions: setup_krook_collisions_input
+using ..maxwell_diffusion: setup_mxwl_diff_collisions_input
+using ..fokker_planck: setup_fkpl_collisions_input
 using ..finite_differences: fd_check_option
 using ..input_structs
 using ..numerical_dissipation: setup_numerical_dissipation
 using ..reference_parameters
 using ..geo: init_magnetic_geometry, setup_geometry_input
-
+using ..species_input: get_species_input
 using MPI
 using TOML
+using UUIDs
 
 """
 Read input from a TOML file
@@ -51,7 +53,11 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
 
     # Check for input options that used to exist, but do not any more. If these are
     # present, the user probably needs to update their input file.
-    removed_options_list = ("Bzed", "Bmag", "rhostar", "geometry_option", "pitch", "DeltaB")
+    removed_options_list = ("Bzed", "Bmag", "rhostar", "geometry_option", "pitch", "DeltaB",
+       "n_ion_species","n_neutral_species","recycling_fraction","gyrokinetic_ions","T_e","T_wall",
+       "z_IC_option1","z_IC_option2","vpa_IC_option1","vpa_IC_option2",
+       "boltzmann_electron_response","boltzmann_electron_response_with_simple_sheath",
+       "electron_physics","nstep","dt")
     for opt in removed_options_list
         if opt ∈ keys(scan_input)
             error("Option '$opt' is no longer used. Please update your input file. You "
@@ -59,28 +65,21 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
                   * "removed ones.")
         end
     end
-
-    # n_ion_species is the number of evolved ion species
-    # currently only n_ion_species = 1 is supported
-    n_ion_species = get(scan_input, "n_ion_species", 1)
-    # n_neutral_species is the number of evolved neutral species
-    # currently only n_neutral_species = 0,1 is supported
-    n_neutral_species = get(scan_input, "n_neutral_species", 1)
-    # * if electron_physics=boltzmann_electron_response, then the electron density is
-    #   fixed to be N_e*(eϕ/T_e)
-    # * if electron_physics=boltzmann_electron_response_with_simple_sheath, then the
-    #   electron density is fixed to be N_e*(eϕ/T_e) and N_e is calculated w.r.t a
-    #   reference value using J_||e + J_||i = 0 at z = 0
-    electron_physics = get(scan_input, "electron_physics", boltzmann_electron_response)
     
-    z, r, vpa, vperp, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions =
-        load_defaults(n_ion_species, n_neutral_species, electron_physics)
+    # read composition and species data
+    composition = get_species_input(scan_input)
+    n_ion_species = composition.n_ion_species
+    n_neutral_species = composition.n_neutral_species
+    
+    z, r, vpa, vperp, gyrophase, vz, vr, vzeta, drive, evolve_moments =
+        load_defaults()
 
     # this is the prefix for all output files associated with this run
     run_name = get(scan_input, "run_name", "wallBC")
     # this is the directory where the simulation data will be stored
     base_directory = get(scan_input, "base_directory", "runs")
     output_dir = joinpath(base_directory, run_name)
+
     # if evolve_moments.density = true, evolve density via continuity eqn
     # and g = f/n via modified drift kinetic equation
     evolve_moments.density = get(scan_input, "evolve_moments_density", false)
@@ -88,123 +87,196 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     evolve_moments.parallel_pressure = get(scan_input, "evolve_moments_parallel_pressure", false)
     evolve_moments.conservation = get(scan_input, "evolve_moments_conservation", false)
 
-    ####### specify any deviations from default inputs for evolved species #######
-    # set initial Tₑ = 1
-    composition.T_e = get(scan_input, "T_e", 1.0)
-    # set wall temperature T_wall = Tw/Te
-    composition.T_wall = get(scan_input, "T_wall", 1.0)
-    # set initial neutral temperature Tn/Tₑ = 1
-    # set initial nᵢ/Nₑ = 1.0
-    # set phi_wall at z = 0
-    composition.phi_wall = get(scan_input, "phi_wall", 0.0)
-    # if false use true Knudsen cosine for neutral wall bc
-    composition.use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
-    # constant to be used to test nonzero Er in wall boundary condition
-    composition.Er_constant = get(scan_input, "Er_constant", 0.0)
-    # The ion flux reaching the wall that is recycled as neutrals is reduced by
-    # `recycling_fraction` to account for ions absorbed by the wall.
-    composition.recycling_fraction = get(scan_input, "recycling_fraction", 1.0)
-    if !(0.0 <= composition.recycling_fraction <= 1.0)
-        error("recycling_fraction must be between 0 and 1. Got $recycling_fraction.")
-    end
-
     # Reference parameters that define the conversion between physical quantities and
     # normalised values used in the code.
     reference_params = setup_reference_parameters(scan_input)
-
+    
     ## set geometry_input
-    geometry_in = setup_geometry_input(scan_input, get_default_rhostar(reference_params))
+    geometry_in = setup_geometry_input(scan_input)
     
-    ispecies = 1
-    species.charged[1].z_IC.initialization_option = get(scan_input, "z_IC_option$ispecies", "gaussian")
-    species.charged[1].initial_density = get(scan_input, "initial_density$ispecies", 1.0)
-    species.charged[1].initial_temperature = get(scan_input, "initial_temperature$ispecies", 1.0)
-    species.charged[1].z_IC.width = get(scan_input, "z_IC_width$ispecies", 0.125)
-    species.charged[1].z_IC.wavenumber = get(scan_input, "z_IC_wavenumber$ispecies", 1)
-    species.charged[1].z_IC.density_amplitude = get(scan_input, "z_IC_density_amplitude$ispecies", 0.001)
-    species.charged[1].z_IC.density_phase = get(scan_input, "z_IC_density_phase$ispecies", 0.0)
-    species.charged[1].z_IC.upar_amplitude = get(scan_input, "z_IC_upar_amplitude$ispecies", 0.0)
-    species.charged[1].z_IC.upar_phase = get(scan_input, "z_IC_upar_phase$ispecies", 0.0)
-    species.charged[1].z_IC.temperature_amplitude = get(scan_input, "z_IC_temperature_amplitude$ispecies", 0.0)
-    species.charged[1].z_IC.temperature_phase = get(scan_input, "z_IC_temperature_phase$ispecies", 0.0)
-    species.charged[1].r_IC.initialization_option = get(scan_input, "r_IC_option$ispecies", "gaussian")
-    species.charged[1].r_IC.wavenumber = get(scan_input, "r_IC_wavenumber$ispecies", 1)
-    species.charged[1].r_IC.density_amplitude = get(scan_input, "r_IC_density_amplitude$ispecies", 0.0)
-    species.charged[1].r_IC.density_phase = get(scan_input, "r_IC_density_phase$ispecies", 0.0)
-    species.charged[1].r_IC.upar_amplitude = get(scan_input, "r_IC_upar_amplitude$ispecies", 0.0)
-    species.charged[1].r_IC.upar_phase = get(scan_input, "r_IC_upar_phase$ispecies", 0.0)
-    species.charged[1].r_IC.temperature_amplitude = get(scan_input, "r_IC_temperature_amplitude$ispecies", 0.0)
-    species.charged[1].r_IC.temperature_phase = get(scan_input, "r_IC_temperature_phase$ispecies", 0.0)
-    species.charged[1].vpa_IC.initialization_option = get(scan_input, "vpa_IC_option$ispecies", "gaussian")
-    species.charged[1].vpa_IC.density_amplitude = get(scan_input, "vpa_IC_density_amplitude$ispecies", 1.000)
-    species.charged[1].vpa_IC.width = get(scan_input, "vpa_IC_width$ispecies", 1.0)
-    species.charged[1].vpa_IC.density_phase = get(scan_input, "vpa_IC_density_phase$ispecies", 0.0)
-    species.charged[1].vpa_IC.upar_amplitude = get(scan_input, "vpa_IC_upar_amplitude$ispecies", 0.0)
-    species.charged[1].vpa_IC.upar_phase = get(scan_input, "vpa_IC_upar_phase$ispecies", 0.0)
-    species.charged[1].vpa_IC.temperature_amplitude = get(scan_input, "vpa_IC_temperature_amplitude$ispecies", 0.0)
-    species.charged[1].vpa_IC.temperature_phase = get(scan_input, "vpa_IC_temperature_phase$ispecies", 0.0)
-    ispecies += 1
-    if n_neutral_species > 0
-        species.neutral[1].z_IC.initialization_option = get(scan_input, "z_IC_option$ispecies", "gaussian")
-        species.neutral[1].initial_density = get(scan_input, "initial_density$ispecies", 1.0)
-        species.neutral[1].initial_temperature = get(scan_input, "initial_temperature$ispecies", 1.0)
-        species.neutral[1].z_IC.width = get(scan_input, "z_IC_width$ispecies", species.charged[1].z_IC.width)
-        species.neutral[1].z_IC.density_amplitude = get(scan_input, "z_IC_density_amplitude$ispecies", 0.001)
-        species.neutral[1].z_IC.density_phase = get(scan_input, "z_IC_density_phase$ispecies", 0.0)
-        species.neutral[1].z_IC.upar_amplitude = get(scan_input, "z_IC_upar_amplitude$ispecies", 0.0)
-        species.neutral[1].z_IC.upar_phase = get(scan_input, "z_IC_upar_phase$ispecies", 0.0)
-        species.neutral[1].z_IC.temperature_amplitude = get(scan_input, "z_IC_temperature_amplitude$ispecies", 0.0)
-        species.neutral[1].z_IC.temperature_phase = get(scan_input, "z_IC_temperature_phase$ispecies", 0.0)
-        species.neutral[1].r_IC.initialization_option = get(scan_input, "r_IC_option$ispecies", "gaussian")
-        species.neutral[1].r_IC.density_amplitude = get(scan_input, "r_IC_density_amplitude$ispecies", 0.001)
-        species.neutral[1].r_IC.density_phase = get(scan_input, "r_IC_density_phase$ispecies", 0.0)
-        species.neutral[1].r_IC.upar_amplitude = get(scan_input, "r_IC_upar_amplitude$ispecies", 0.0)
-        species.neutral[1].r_IC.upar_phase = get(scan_input, "r_IC_upar_phase$ispecies", 0.0)
-        species.neutral[1].r_IC.temperature_amplitude = get(scan_input, "r_IC_temperature_amplitude$ispecies", 0.0)
-        species.neutral[1].r_IC.temperature_phase = get(scan_input, "r_IC_temperature_phase$ispecies", 0.0)
-        species.neutral[1].vpa_IC.initialization_option = get(scan_input, "vpa_IC_option$ispecies", "gaussian")
-        species.neutral[1].vpa_IC.density_amplitude = get(scan_input, "vpa_IC_density_amplitude$ispecies", 1.000)
-        species.neutral[1].vpa_IC.width = get(scan_input, "vpa_IC_width$ispecies", species.charged[1].vpa_IC.width)
-        species.neutral[1].vpa_IC.density_phase = get(scan_input, "vpa_IC_density_phase$ispecies", 0.0)
-        species.neutral[1].vpa_IC.upar_amplitude = get(scan_input, "vpa_IC_upar_amplitude$ispecies", 0.0)
-        species.neutral[1].vpa_IC.upar_phase = get(scan_input, "vpa_IC_upar_phase$ispecies", 0.0)
-        species.neutral[1].vpa_IC.temperature_amplitude = get(scan_input, "vpa_IC_temperature_amplitude$ispecies", 0.0)
-        species.neutral[1].vpa_IC.temperature_phase = get(scan_input, "vpa_IC_temperature_phase$ispecies", 0.0)
-        ispecies += 1
-    end
-    #################### end specification of species inputs #####################
+    charge_exchange = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(composition.ion[1].initial_temperature))
+    charge_exchange_electron = get(scan_input, "electron_charge_exchange_frequency", 0.0)
+    ionization = get(scan_input, "ionization_frequency", charge_exchange)
+    ionization_electron = get(scan_input, "electron_ionization_frequency", ionization)
+    ionization_energy = get(scan_input, "ionization_energy", 0.0)
+    nu_ei = get(scan_input, "nu_ei", 0.0)
+    # set up krook collision inputs
+    krook_input = setup_krook_collisions_input(scan_input)
+    # set up Fokker-Planck collision inputs
+    fkpl_input = setup_fkpl_collisions_input(scan_input)
+    # set up maxwell diffusion collision inputs
+    mxwl_diff_input = setup_mxwl_diff_collisions_input(scan_input)
+    # write total collision struct using the structs above, as each setup function 
+    # for the collisions outputs itself a struct of the type of collision, which
+    # is a substruct of the overall collisions_input struct.
+    collisions = collisions_input(charge_exchange, charge_exchange_electron, ionization,
+                                  ionization_electron, ionization_energy, nu_ei,
+                                  krook_input, fkpl_input, mxwl_diff_input)
 
-    collisions.charge_exchange = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(species.charged[1].initial_temperature))
-    collisions.ionization = get(scan_input, "ionization_frequency", collisions.charge_exchange)
-    collisions.constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
-    collisions.krook_collisions_option = get(scan_input, "krook_collisions_option", "none")
-    nuii_krook_default = setup_krook_collisions(reference_params)
-    if collisions.krook_collisions_option == "reference_parameters"
-        collisions.krook_collision_frequency_prefactor = nuii_krook_default
-    elseif collisions.krook_collisions_option == "manual" # get the frequency from the input file
-        collisions.krook_collision_frequency_prefactor = get(scan_input, "nuii_krook", nuii_krook_default)
-    elseif collisions.krook_collisions_option == "none"
-        # By default, no krook collisions included
-        collisions.krook_collision_frequency_prefactor = -1.0
-    else
-        error("Invalid option "
-              * "krook_collisions_option=$(collisions.krook_collisions_option) passed")
-    end
-    # set the Fokker-Planck collision frequency
-    collisions.nuii = get(scan_input, "nuii", 0.0)
-    
     # parameters related to the time stepping
-    nstep = get(scan_input, "nstep", 5)
-    dt = get(scan_input, "dt", 0.00025/sqrt(species.charged[1].initial_temperature))
-    nwrite_moments = get(scan_input, "nwrite", 1)
-    nwrite_dfns = get(scan_input, "nwrite_dfns", nstep)
-    # options are n_rk_stages = 1, 2, 3 or 4 (corresponding to forward Euler,
-    # Heun's method, SSP RK3 and 4-stage SSP RK3)
-    n_rk_stages = get(scan_input, "n_rk_stages", 4)
-    split_operators = get(scan_input, "split_operators", false)
-    stopfile_name = joinpath(output_dir, "stop")
-    steady_state_residual = get(scan_input, "steady_state_residual", false)
-    converged_residual_value = get(scan_input, "converged_residual_value", -1.0)
+    timestepping_section = set_defaults_and_check_section!(
+        scan_input, "timestepping";
+        nstep=5,
+        dt=0.00025/sqrt(composition.ion[1].initial_temperature),
+        CFL_prefactor=-1.0,
+        nwrite=1,
+        nwrite_dfns=nothing,
+        type="SSPRK4",
+        split_operators=false,
+        stopfile_name=joinpath(output_dir, "stop"),
+        steady_state_residual=false,
+        converged_residual_value=-1.0,
+        rtol=1.0e-5,
+        atol=1.0e-12,
+        atol_upar=nothing,
+        step_update_prefactor=0.9,
+        max_increase_factor=1.05,
+        max_increase_factor_near_last_fail=Inf,
+        last_fail_proximity_factor=1.05,
+        minimum_dt=0.0,
+        maximum_dt=Inf,
+        implicit_braginskii_conduction=true,
+        implicit_electron_advance=true,
+        implicit_ion_advance=false,
+        implicit_vpa_advection=false,
+        implicit_electron_ppar=false,
+        write_after_fixed_step_count=false,
+        write_error_diagnostics=false,
+        write_steady_state_diagnostics=false,
+        high_precision_error_sum=false,
+       )
+    if timestepping_section["nwrite"] > timestepping_section["nstep"]
+        timestepping_section["nwrite"] = timestepping_section["nstep"]
+    end
+    if timestepping_section["nwrite_dfns"] === nothing
+        timestepping_section["nwrite_dfns"] = timestepping_section["nstep"]
+    elseif timestepping_section["nwrite_dfns"] > timestepping_section["nstep"]
+        timestepping_section["nwrite_dfns"] = timestepping_section["nstep"]
+    end
+    if timestepping_section["atol_upar"] === nothing
+        timestepping_section["atol_upar"] = 1.0e-2 * timestepping_section["rtol"]
+    end
+
+    # parameters related to electron time stepping
+    electron_timestepping_section = set_defaults_and_check_section!(
+        scan_input, "electron_timestepping";
+        nstep=50000,
+        dt=timestepping_section["dt"] * sqrt(composition.me_over_mi),
+        CFL_prefactor=timestepping_section["CFL_prefactor"],
+        nwrite=nothing,
+        nwrite_dfns=nothing,
+        type=timestepping_section["type"],
+        split_operators=false,
+        converged_residual_value=1.0e-3,
+        rtol=timestepping_section["rtol"],
+        atol=timestepping_section["atol"],
+        step_update_prefactor=timestepping_section["step_update_prefactor"],
+        max_increase_factor=timestepping_section["max_increase_factor"],
+        max_increase_factor_near_last_fail=timestepping_section["max_increase_factor_near_last_fail"],
+        last_fail_proximity_factor=timestepping_section["last_fail_proximity_factor"],
+        minimum_dt=timestepping_section["minimum_dt"] * sqrt(composition.me_over_mi),
+        maximum_dt=timestepping_section["maximum_dt"] * sqrt(composition.me_over_mi),
+        write_after_fixed_step_count=false,
+        write_error_diagnostics=false,
+        write_steady_state_diagnostics=false,
+        high_precision_error_sum=timestepping_section["high_precision_error_sum"],
+        initialization_residual_value=1.0,
+        no_restart=false,
+        debug_io=false,
+       )
+    if electron_timestepping_section["nwrite"] === nothing
+        electron_timestepping_section["nwrite"] = electron_timestepping_section["nstep"]
+    elseif electron_timestepping_section["nwrite"] > electron_timestepping_section["nstep"]
+        electron_timestepping_section["nwrite"] = electron_timestepping_section["nstep"]
+    end
+    if electron_timestepping_section["nwrite_dfns"] === nothing
+        electron_timestepping_section["nwrite_dfns"] = electron_timestepping_section["nstep"]
+    elseif electron_timestepping_section["nwrite_dfns"] > electron_timestepping_section["nstep"]
+        electron_timestepping_section["nwrite_dfns"] = electron_timestepping_section["nstep"]
+    end
+    # Make a copy because "stopfile_name" is not a separate input for the electrons, so we
+    # do not want to add a value to the `input_dict`. We also add a few dummy inputs that
+    # are not actually used for electrons.
+    electron_timestepping_section = copy(electron_timestepping_section)
+    electron_timestepping_section["stopfile_name"] = timestepping_section["stopfile_name"]
+    electron_timestepping_section["atol_upar"] = NaN
+    electron_timestepping_section["steady_state_residual"] = true
+    if !(0.0 < electron_timestepping_section["step_update_prefactor"] < 1.0)
+        error("[electron_timestepping] step_update_prefactor="
+              * "$(electron_timestepping_section["step_update_prefactor"]) must be between "
+              * "0.0 and 1.0.")
+    end
+    if electron_timestepping_section["max_increase_factor"] ≤ 1.0
+        error("[electron_timestepping] max_increase_factor="
+              * "$(electron_timestepping_section["max_increase_factor"]) must be greater than "
+              * "1.0.")
+    end
+    if electron_timestepping_section["max_increase_factor_near_last_fail"] ≤ 1.0
+        error("[electron_timestepping] max_increase_factor_near_last_fail="
+              * "$(electron_timestepping_section["max_increase_factor_near_last_fail"]) must "
+              * "be greater than 1.0.")
+    end
+    if !isinf(electron_timestepping_section["max_increase_factor_near_last_fail"]) &&
+        electron_timestepping_section["max_increase_factor_near_last_fail"] > electron_timestepping_section["max_increase_factor"]
+        error("[electron_timestepping] max_increase_factor_near_last_fail="
+              * "$(electron_timestepping_section["max_increase_factor_near_last_fail"]) should be "
+              * "less than max_increase_factor="
+              * "$(electron_timestepping_section["max_increase_factor"]).")
+    end
+    if electron_timestepping_section["last_fail_proximity_factor"] ≤ 1.0
+        error("[electron_timestepping] last_fail_proximity_factor="
+              * "$(electron_timestepping_section["last_fail_proximity_factor"]) must be "
+              * "greater than 1.0.")
+    end
+    if electron_timestepping_section["minimum_dt"] > electron_timestepping_section["maximum_dt"]
+        error("[electron_timestepping] minimum_dt="
+              * "$(electron_timestepping_section["minimum_dt"]) must be less than "
+              * "maximum_dt=$(electron_timestepping_section["maximum_dt"])")
+    end
+    if electron_timestepping_section["maximum_dt"] ≤ 0.0
+        error("[electron_timestepping] maximum_dt="
+              * "$(electron_timestepping_section["maximum_dt"]) must be positive")
+    end
+
+    # Make a copy of `timestepping_section` here as we do not want to add
+    # `electron_timestepping_section` to the `input_dict` because there is already an
+    # "electron_timestepping" section containing the input info - we only want to put
+    # `electron_timestepping_section` into the Dict that is used to make
+    # `timestepping_input`, so that it becomes part of `timestepping_input`.
+    timestepping_section = copy(timestepping_section)
+    timestepping_section["electron_t_input"] = electron_timestepping_section
+    if !(0.0 < timestepping_section["step_update_prefactor"] < 1.0)
+        error("step_update_prefactor=$(timestepping_section["step_update_prefactor"]) must "
+              * "be between 0.0 and 1.0.")
+    end
+    if timestepping_section["max_increase_factor"] ≤ 1.0
+        error("max_increase_factor=$(timestepping_section["max_increase_factor"]) must "
+              * "be greater than 1.0.")
+    end
+    if timestepping_section["max_increase_factor_near_last_fail"] ≤ 1.0
+        error("max_increase_factor_near_last_fail="
+              * "$(timestepping_section["max_increase_factor_near_last_fail"]) must be "
+              * "greater than 1.0.")
+    end
+    if !isinf(timestepping_section["max_increase_factor_near_last_fail"]) &&
+        timestepping_section["max_increase_factor_near_last_fail"] > timestepping_section["max_increase_factor"]
+        error("max_increase_factor_near_last_fail="
+              * "$(timestepping_section["max_increase_factor_near_last_fail"]) should be "
+              * "less than max_increase_factor="
+              * "$(timestepping_section["max_increase_factor"]).")
+    end
+    if timestepping_section["last_fail_proximity_factor"] ≤ 1.0
+        error("last_fail_proximity_factor="
+              * "$(timestepping_section["last_fail_proximity_factor"]) must be "
+              * "greater than 1.0.")
+    end
+    if timestepping_section["minimum_dt"] > timestepping_section["maximum_dt"]
+        error("minimum_dt=$(timestepping_section["minimum_dt"]) must be less than "
+              * "maximum_dt=$(timestepping_section["maximum_dt"])")
+    end
+    if timestepping_section["maximum_dt"] ≤ 0.0
+        error("maximum_dt=$(timestepping_section["maximum_dt"]) must be positive")
+    end
 
     use_for_init_is_default = !(("manufactured_solns" ∈ keys(scan_input)) &&
                                 ("use_for_init" ∈ keys(scan_input["manufactured_solns"])))
@@ -285,7 +357,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
 	# do not parallelise vpa with distributed-memory MPI
     vpa.nelement_local = vpa.nelement_global 
     # L is the box length in units of vthermal_species
-    vpa.L = get(scan_input, "vpa_L", 8.0*sqrt(species.charged[1].initial_temperature))
+    vpa.L = get(scan_input, "vpa_L", 8.0*sqrt(composition.ion[1].initial_temperature))
     # determine the boundary condition
     # only supported option at present is "zero" and "periodic"
     vpa.bc = get(scan_input, "vpa_bc", "periodic")
@@ -303,7 +375,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     # do not parallelise vperp with distributed-memory MPI
     vperp.nelement_local = vperp.nelement_global 
     # L is the box length in units of vthermal_species
-    vperp.L = get(scan_input, "vperp_L", 8.0*sqrt(species.charged[1].initial_temperature))
+    vperp.L = get(scan_input, "vperp_L", 8.0*sqrt(composition.ion[1].initial_temperature))
     # Note vperp.bc is set below, after numerical dissipation is initialized, so that it
     # can use the numerical dissipation settings to set its default value.
     #
@@ -311,7 +383,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     # supported options are "finite_difference_vperp" "chebyshev_pseudospectral"
     vperp.discretization = get(scan_input, "vperp_discretization", "chebyshev_pseudospectral")
     vperp.element_spacing_option = get(scan_input, "vperp_element_spacing_option", "uniform")
-    
+
     # overwrite some default parameters related to the gyrophase grid
     # ngrid is the number of grid points per element
     gyrophase.ngrid = get(scan_input, "gyrophase_ngrid", 17)
@@ -338,7 +410,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         # supported options are "chebyshev_pseudospectral" and "finite_difference"
         vz.discretization = get(scan_input, "vz_discretization", vpa.discretization)
         vz.element_spacing_option = get(scan_input, "vz_element_spacing_option", "uniform")
-    
+
         # overwrite some default parameters related to the vr grid
         # ngrid is the number of grid points per element
         vr.ngrid = get(scan_input, "vr_ngrid", 1)
@@ -347,7 +419,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         # do not parallelise vz with distributed-memory MPI
         vr.nelement_local = vr.nelement_global
         # L is the box length in units of vthermal_species
-        vr.L = get(scan_input, "vr_L", 8.0*sqrt(species.charged[1].initial_temperature))
+        vr.L = get(scan_input, "vr_L", 8.0*sqrt(composition.ion[1].initial_temperature))
         # determine the boundary condition
         # only supported option at present is "zero" and "periodic"
         vr.bc = get(scan_input, "vr_bc", "none")
@@ -364,7 +436,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         # do not parallelise vz with distributed-memory MPI
         vzeta.nelement_local = vzeta.nelement_global
         # L is the box length in units of vthermal_species
-        vzeta.L = get(scan_input, "vzeta_L", 8.0*sqrt(species.charged[1].initial_temperature))
+        vzeta.L = get(scan_input, "vzeta_L", 8.0*sqrt(composition.ion[1].initial_temperature))
         # determine the boundary condition
         # only supported option at present is "zero" and "periodic"
         vzeta.bc = get(scan_input, "vzeta_bc", "none")
@@ -376,13 +448,19 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
 
     is_1V = (vperp.ngrid == vperp.nelement_global == 1 && vzeta.ngrid ==
              vzeta.nelement_global == 1 && vr.ngrid == vr.nelement_global == 1)
-    num_diss_params = setup_numerical_dissipation(
-        get(scan_input, "numerical_dissipation", Dict{String,Any}()), is_1V)
+    
+    ion_num_diss_param_dict = get(scan_input, "ion_numerical_dissipation", OptionsDict())
+    electron_num_diss_param_dict = get(scan_input, "electron_numerical_dissipation", OptionsDict())
+    neutral_num_diss_param_dict = get(scan_input, "neutral_numerical_dissipation", OptionsDict())
+    num_diss_params = setup_numerical_dissipation(ion_num_diss_param_dict,
+                                                  electron_num_diss_param_dict,
+                                                  neutral_num_diss_param_dict, is_1V)
+
     # vperp.bc is set here (a bit out of place) so that we can use
-    # num_diss_params.vperp_dissipation_coefficient to set the default.
+    # num_diss_params.ion.vperp_dissipation_coefficient to set the default.
     vperp.bc = get(scan_input, "vperp_bc",
-                   (collisions.nuii > 0.0 ||
-                    num_diss_params.vperp_dissipation_coefficient > 0.0) ?
+                   ( collisions.fkpl.nuii > 0.0 ||
+                    num_diss_params.ion.vperp_dissipation_coefficient > 0.0) ?
                     "zero" : "none")
     
     #########################################################################
@@ -396,6 +474,13 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         irank_z = irank_r = 0
         nrank_z = nrank_r = 1
         comm_sub_z = comm_sub_r = MPI.COMM_NULL
+        r.nelement_local = r.nelement_global
+        z.nelement_local = z.nelement_global
+        vperp.nelement_local = vperp.nelement_global
+        vpa.nelement_local = vpa.nelement_global
+        vzeta.nelement_local = vzeta.nelement_global
+        vr.nelement_local = vr.nelement_global
+        vz.nelement_local = vz.nelement_global
     else
         irank_z, nrank_z, comm_sub_z, irank_r, nrank_r, comm_sub_r = setup_distributed_memory_MPI(z.nelement_global,z.nelement_local,r.nelement_global,r.nelement_local)
     end
@@ -406,9 +491,14 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     #irank_z = 0
     #nrank_z = 0
 
-    t_input = time_input(nstep, dt, nwrite_moments, nwrite_dfns, n_rk_stages,
-                         split_operators, steady_state_residual, converged_residual_value,
-                         manufactured_solns_input.use_for_advance, stopfile_name)
+    # Create output_dir if it does not exist.
+    if !ignore_MPI
+        if global_rank[] == 0
+            mkpath(output_dir)
+        end
+        _block_synchronize()
+    end
+
     # replace mutable structures with immutable ones to optimize performance
     # and avoid possible misunderstandings	
 	z_advection_immutable = advection_input(z.advection.option, z.advection.constant_speed,
@@ -446,97 +536,80 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     vzeta_immutable = grid_input("vzeta", vzeta.ngrid, vzeta.nelement_global, vzeta.nelement_local, 1, 0, vzeta.L,
         vzeta.discretization, vzeta.fd_option, vzeta.cheb_option, vzeta.bc, vzeta_advection_immutable, MPI.COMM_NULL, vzeta.element_spacing_option)
     
-    species_charged_immutable = Array{species_parameters,1}(undef,n_ion_species)
-    species_neutral_immutable = Array{species_parameters,1}(undef,n_neutral_species)
-    
-    for is ∈ 1:n_ion_species
-        species_type = "ion"
-        #    species_type = "electron"
-        z_IC = initial_condition_input(species.charged[is].z_IC.initialization_option,
-            species.charged[is].z_IC.width, species.charged[is].z_IC.wavenumber,
-            species.charged[is].z_IC.density_amplitude, species.charged[is].z_IC.density_phase,
-            species.charged[is].z_IC.upar_amplitude, species.charged[is].z_IC.upar_phase,
-            species.charged[is].z_IC.temperature_amplitude, species.charged[is].z_IC.temperature_phase,
-            species.charged[is].z_IC.monomial_degree)
-        r_IC = initial_condition_input(species.charged[is].r_IC.initialization_option,
-            species.charged[is].r_IC.width, species.charged[is].r_IC.wavenumber,
-            species.charged[is].r_IC.density_amplitude, species.charged[is].r_IC.density_phase,
-            species.charged[is].r_IC.upar_amplitude, species.charged[is].r_IC.upar_phase,
-            species.charged[is].r_IC.temperature_amplitude, species.charged[is].r_IC.temperature_phase,
-            species.charged[is].r_IC.monomial_degree)
-        vpa_IC = initial_condition_input(species.charged[is].vpa_IC.initialization_option,
-            species.charged[is].vpa_IC.width, species.charged[is].vpa_IC.wavenumber,
-            species.charged[is].vpa_IC.density_amplitude, species.charged[is].vpa_IC.density_phase,
-            species.charged[is].vpa_IC.upar_amplitude, species.charged[is].vpa_IC.upar_phase,
-            species.charged[is].vpa_IC.temperature_amplitude,
-            species.charged[is].vpa_IC.temperature_phase, species.charged[is].vpa_IC.monomial_degree)
-        species_charged_immutable[is] = species_parameters(species_type, species.charged[is].initial_temperature,
-            species.charged[is].initial_density, z_IC, r_IC, vpa_IC)
-    end
-    if n_neutral_species > 0
-        for is ∈ 1:n_neutral_species
-            species_type = "neutral"
-            z_IC = initial_condition_input(species.neutral[is].z_IC.initialization_option,
-                species.neutral[is].z_IC.width, species.neutral[is].z_IC.wavenumber,
-                species.neutral[is].z_IC.density_amplitude, species.neutral[is].z_IC.density_phase,
-                species.neutral[is].z_IC.upar_amplitude, species.neutral[is].z_IC.upar_phase,
-                species.neutral[is].z_IC.temperature_amplitude, species.neutral[is].z_IC.temperature_phase,
-                species.neutral[is].z_IC.monomial_degree)
-            r_IC = initial_condition_input(species.neutral[is].r_IC.initialization_option,
-                species.neutral[is].r_IC.width, species.neutral[is].r_IC.wavenumber,
-                species.neutral[is].r_IC.density_amplitude, species.neutral[is].r_IC.density_phase,
-                species.neutral[is].r_IC.upar_amplitude, species.neutral[is].r_IC.upar_phase,
-                species.neutral[is].r_IC.temperature_amplitude, species.neutral[is].r_IC.temperature_phase,
-                species.neutral[is].r_IC.monomial_degree)
-            vpa_IC = initial_condition_input(species.neutral[is].vpa_IC.initialization_option,
-                species.neutral[is].vpa_IC.width, species.neutral[is].vpa_IC.wavenumber,
-                species.neutral[is].vpa_IC.density_amplitude, species.neutral[is].vpa_IC.density_phase,
-                species.neutral[is].vpa_IC.upar_amplitude, species.neutral[is].vpa_IC.upar_phase,
-                species.neutral[is].vpa_IC.temperature_amplitude,
-                species.neutral[is].vpa_IC.temperature_phase, species.neutral[is].vpa_IC.monomial_degree)
-            species_neutral_immutable[is] = species_parameters(species_type, species.neutral[is].initial_temperature,
-                species.neutral[is].initial_density, z_IC, r_IC, vpa_IC)
-        end
-    end 
-    species_immutable = (charged = species_charged_immutable, neutral = species_neutral_immutable)
-    
     force_Er_zero = get(scan_input, "force_Er_zero_at_wall", false)
     drive_immutable = drive_input(drive.force_phi, drive.amplitude, drive.frequency, force_Er_zero)
 
     # inputs for file I/O
+    io_settings = set_defaults_and_check_section!(
+        scan_input, "output";
+        ascii_output=false,
+        binary_format=hdf5,
+        parallel_io=nothing,
+       )
+    if io_settings["parallel_io"] === nothing
+        io_settings["parallel_io"] = io_has_parallel(Val(io_settings["binary_format"]))
+    end
     # Make copy of the section to avoid modifying the passed-in Dict
-    io_settings = copy(get(scan_input, "output", Dict{String,Any}()))
-    io_settings["ascii_output"] = get(io_settings, "ascii_output", false)
-    io_settings["binary_format"] = get(io_settings, "binary_format", hdf5)
-    io_settings["parallel_io"] = get(io_settings, "parallel_io",
-                                     io_has_parallel(Val(io_settings["binary_format"])))
-    io_immutable = io_input(; output_dir=output_dir, run_name=run_name,
-                              Dict(Symbol(k)=>v for (k,v) in io_settings)...)
+    io_settings = copy(io_settings)
+    run_id = string(uuid4())
+    if !ignore_MPI
+        # Communicate run_id to all blocks
+        # Need to convert run_id to a Vector{Char} for MPI
+        run_id_chars = [run_id...]
+        MPI.Bcast!(run_id_chars, 0, comm_world)
+        run_id = string(run_id_chars...)
+    end
+    io_settings["run_id"] = run_id
+    io_settings["output_dir"] = output_dir
+    io_settings["run_name"] = run_name
+    io_settings["write_error_diagnostics"] = timestepping_section["write_error_diagnostics"]
+    io_settings["write_steady_state_diagnostics"] = timestepping_section["write_steady_state_diagnostics"]
+    io_settings["write_electron_error_diagnostics"] = timestepping_section["electron_t_input"]["write_error_diagnostics"]
+    io_settings["write_electron_steady_state_diagnostics"] = timestepping_section["electron_t_input"]["write_steady_state_diagnostics"]
+    io_immutable = Dict_to_NamedTuple(io_settings)
 
     # initialize z grid and write grid point locations to file
-    z, z_spectral = define_coordinate(z_immutable, scan_input, io_immutable.parallel_io)
+    if ignore_MPI
+        run_directory = nothing
+    else
+        run_directory = output_dir
+    end
+    z, z_spectral = define_coordinate(z_immutable, scan_input, io_immutable.parallel_io;
+                                      run_directory=run_directory, ignore_MPI=ignore_MPI)
     # initialize r grid and write grid point locations to file
-    r, r_spectral = define_coordinate(r_immutable, scan_input, io_immutable.parallel_io)
+    r, r_spectral = define_coordinate(r_immutable, scan_input, io_immutable.parallel_io;
+                                      run_directory=run_directory, ignore_MPI=ignore_MPI)
     # initialize vpa grid and write grid point locations to file
-    vpa, vpa_spectral = define_coordinate(vpa_immutable, scan_input, io_immutable.parallel_io)
+    vpa, vpa_spectral = define_coordinate(vpa_immutable, scan_input, io_immutable.parallel_io;
+                                          run_directory=run_directory,
+                                          ignore_MPI=ignore_MPI)
     # initialize vperp grid and write grid point locations to file
-    vperp, vperp_spectral = define_coordinate(vperp_immutable, scan_input, io_immutable.parallel_io)
+    vperp, vperp_spectral = define_coordinate(vperp_immutable, scan_input, io_immutable.parallel_io;
+                                              run_directory=run_directory,
+                                              ignore_MPI=ignore_MPI)
     # initialize gyrophase grid and write grid point locations to file
-    gyrophase, gyrophase_spectral = define_coordinate(gyrophase_immutable, scan_input, io_immutable.parallel_io)
+    gyrophase, gyrophase_spectral = define_coordinate(gyrophase_immutable,
+                                                      scan_input, io_immutable.parallel_io;
+                                                      run_directory=run_directory,
+                                                      ignore_MPI=ignore_MPI)
     # initialize vz grid and write grid point locations to file
-    vz, vz_spectral = define_coordinate(vz_immutable, scan_input, io_immutable.parallel_io)
+    vz, vz_spectral = define_coordinate(vz_immutable, scan_input, io_immutable.parallel_io;
+                                        run_directory=run_directory,
+                                        ignore_MPI=ignore_MPI)
     # initialize vr grid and write grid point locations to file
-    vr, vr_spectral = define_coordinate(vr_immutable, scan_input, io_immutable.parallel_io)
+    vr, vr_spectral = define_coordinate(vr_immutable, scan_input, io_immutable.parallel_io;
+                                        run_directory=run_directory,
+                                        ignore_MPI=ignore_MPI)
     # initialize vr grid and write grid point locations to file
-    vzeta, vzeta_spectral = define_coordinate(vzeta_immutable, scan_input, io_immutable.parallel_io)
+    vzeta, vzeta_spectral = define_coordinate(vzeta_immutable, scan_input, io_immutable.parallel_io;
+                                              run_directory=run_directory,
+                                              ignore_MPI=ignore_MPI)
 
-    external_source_settings = setup_external_sources!(scan_input, r, z)
+    external_source_settings = setup_external_sources!(scan_input, r, z,
+                                                       composition.electron_physics)
 
     if global_rank[] == 0 && save_inputs_to_txt
         # Make file to log some information about inputs into.
-        # check to see if output_dir exists in the current directory
-        # if not, create it
-        isdir(output_dir) || mkpath(output_dir)
         io = open_ascii_output_file(string(output_dir,"/",run_name), "input")
     else
         io = devnull
@@ -549,17 +622,20 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         error("Mirror terms not yet implemented for moment-kinetic modes")
     end
 
+    species_immutable = (ion = composition.ion, neutral = composition.neutral)
+    
     # check input (and initialized coordinate structs) to catch errors/unsupported options
-    check_input(io, output_dir, nstep, dt, r, z, vpa, vperp, composition,
-                species_immutable, evolve_moments, num_diss_params, save_inputs_to_txt,
-                collisions)
+    check_input(io, output_dir, timestepping_section["nstep"], timestepping_section["dt"], r, z,
+                vpa, vperp, composition, species_immutable, evolve_moments,
+                num_diss_params, save_inputs_to_txt, collisions)
 
     # return immutable structs for z, vpa, species and composition
-    all_inputs = (io_immutable, evolve_moments, t_input, z, z_spectral, r, r_spectral,
-                  vpa, vpa_spectral, vperp, vperp_spectral, gyrophase, gyrophase_spectral,
-                  vz, vz_spectral, vr, vr_spectral, vzeta, vzeta_spectral, composition,
-                  species_immutable, collisions, geometry, drive_immutable,
-                  external_source_settings, num_diss_params, manufactured_solns_input)
+    all_inputs = (io_immutable, evolve_moments, timestepping_section, z, z_spectral, r,
+                  r_spectral, vpa, vpa_spectral, vperp, vperp_spectral, gyrophase,
+                  gyrophase_spectral, vz, vz_spectral, vr, vr_spectral, vzeta,
+                  vzeta_spectral, composition, species_immutable, collisions, geometry,
+                  drive_immutable, external_source_settings, num_diss_params,
+                  manufactured_solns_input)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
     close(io)
@@ -569,7 +645,7 @@ end
 
 """
 """
-function load_defaults(n_ion_species, n_neutral_species, electron_physics)
+function load_defaults()
     ############## options related to the equations being solved ###############
     evolve_density = false
     evolve_parallel_flow = false
@@ -886,118 +962,6 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     vzeta = grid_input_mutable("vzeta", ngrid_vzeta, nelement_vzeta, nelement_vzeta, L_vzeta,
         discretization_option_vzeta, finite_difference_option_vzeta, cheb_option_vzeta, boundary_option_vzeta,
         advection_vzeta, element_spacing_option_vzeta)
-    #############################################################################
-    # define default values and create corresponding mutable structs holding
-    # information about the composition of the species and their initial conditions
-    if electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
-        n_species = n_ion_species + n_neutral_species
-    else
-        n_species = n_ion_speces + n_neutral_species + 1
-    end
-    use_test_neutral_wall_pdf = false
-    # electron temperature over reference temperature
-    T_e = 1.0
-    # temperature at the entrance to the wall in terms of the electron temperature
-    T_wall = 1.0
-    # wall potential at z = 0
-    phi_wall = 0.0
-    # constant to test nonzero Er
-    Er_constant = 0.0
-    # ratio of the neutral particle mass to the ion particle mass
-    mn_over_mi = 1.0
-    # ratio of the electron particle mass to the ion particle mass
-    me_over_mi = 1.0/1836.0
-    # The ion flux reaching the wall that is recycled as neutrals is reduced by
-    # `recycling_fraction` to account for ions absorbed by the wall.
-    recycling_fraction = 1.0
-    composition = species_composition(n_species, n_ion_species, n_neutral_species,
-        electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, Er_constant,
-        mn_over_mi, me_over_mi, recycling_fraction, allocate_float(n_species))
-    
-    species_charged = Array{species_parameters_mutable,1}(undef,n_ion_species)
-    species_neutral = Array{species_parameters_mutable,1}(undef,n_neutral_species)
-    
-    # initial temperature for each species defaults to Tₑ
-    initial_temperature = 1.0
-    # initial density for each species defaults to Nₑ
-    initial_density = 1.0
-    # initialization inputs for z part of distribution function
-    # supported options are "gaussian", "sinusoid" and "monomial"
-    z_initialization_option = "sinusoid"
-    # inputs for "gaussian" initial condition
-    # width of the Gaussian in z
-    z_width = 0.125
-    # inputs for "sinusoid" initial condition
-    # z_wavenumber should be an integer
-    z_wavenumber = 1
-    z_density_amplitude = 0.1
-    z_density_phase = 0.0
-    z_upar_amplitude = 0.0
-    z_upar_phase = 0.0
-    z_temperature_amplitude = 0.0
-    z_temperature_phase = 0.0
-    # inputs for "monomial" initial condition
-    z_monomial_degree = 2
-    z_initial_conditions = initial_condition_input_mutable(z_initialization_option,
-        z_width, z_wavenumber, z_density_amplitude, z_density_phase, z_upar_amplitude,
-        z_upar_phase, z_temperature_amplitude, z_temperature_phase, z_monomial_degree)
-    # initialization inputs for r part of distribution function
-    # supported options are "gaussian", "sinusoid" and "monomial"
-    r_initialization_option = "sinusoid"
-    # inputs for "gaussian" initial condition
-    # width of the Gaussian in r
-    r_width = 0.125
-    # inputs for "sinusoid" initial condition
-    # r_wavenumber should be an integer
-    r_wavenumber = 1
-    r_density_amplitude = 0.0
-    r_density_phase = 0.0
-    r_upar_amplitude = 0.0
-    r_upar_phase = 0.0
-    r_temperature_amplitude = 0.0
-    r_temperature_phase = 0.0
-    # inputs for "monomial" initial condition
-    r_monomial_degree = 2
-    r_initial_conditions = initial_condition_input_mutable(r_initialization_option,
-        r_width, r_wavenumber, r_density_amplitude, r_density_phase, r_upar_amplitude,
-        r_upar_phase, r_temperature_amplitude, r_temperature_phase, r_monomial_degree)
-    # initialization inputs for vpa part of distribution function
-    # supported options are "gaussian", "sinusoid" and "monomial"
-    # inputs for 'gaussian' initial condition
-    vpa_initialization_option = "gaussian"
-    # if initializing a Maxwellian, vpa_width = 1.0 for each species
-    # any temperature-dependence will be self-consistently treated using initial_temperature
-    vpa_width = 1.0
-    # inputs for "sinusoid" initial condition
-    vpa_wavenumber = 1
-    vpa_density_amplitude = 1.0
-    vpa_density_phase = 0.0
-    vpa_upar_amplitude = 0.0
-    vpa_upar_phase = 0.0
-    vpa_temperature_amplitude = 0.0
-    vpa_temperature_phase = 0.0
-    # inputs for "monomial" initial condition
-    vpa_monomial_degree = 2
-    vpa_initial_conditions = initial_condition_input_mutable(vpa_initialization_option,
-        vpa_width, vpa_wavenumber, vpa_density_amplitude, vpa_density_phase,
-        vpa_upar_amplitude, vpa_upar_phase, vpa_temperature_amplitude,
-        vpa_temperature_phase, vpa_monomial_degree)
-
-    # fill in entries in species struct corresponding to ion species
-    for is ∈ 1:n_ion_species
-        species_charged[is] = species_parameters_mutable("ion", initial_temperature, initial_density,
-            deepcopy(z_initial_conditions), deepcopy(r_initial_conditions),
-            deepcopy(vpa_initial_conditions))
-    end
-    # if there are neutrals, fill in corresponding entries in species struct
-    if n_neutral_species > 0
-        for is ∈ 1:n_neutral_species
-            species_neutral[is] = species_parameters_mutable("neutral", initial_temperature,
-                initial_density, deepcopy(z_initial_conditions),
-                deepcopy(r_initial_conditions), deepcopy(vpa_initial_conditions))
-        end
-    end
-    species = (charged = species_charged, neutral = species_neutral)
     
     # if drive_phi = true, include external electrostatic potential of form
     # phi(z,t=0)*drive_amplitude*sinpi(time*drive_frequency)
@@ -1005,17 +969,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     drive_amplitude = 1.0
     drive_frequency = 1.0
     drive = drive_input_mutable(drive_phi, drive_amplitude, drive_frequency)
-    # charge exchange collision frequency
-    charge_exchange = 0.0
-    # ionization collision frequency
-    ionization = 0.0
-    constant_ionization_rate = false
-    krook_collision_frequency_prefactor = -1.0
-    nuii = 0.0
-    collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate,
-                                  krook_collision_frequency_prefactor,"none", nuii)
-
-    return z, r, vpa, vperp, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions
+    
+    return z, r, vpa, vperp, gyrophase, vz, vr, vzeta, drive, evolve_moments
 end
 
 """
@@ -1039,9 +994,9 @@ function check_input(io, output_dir, nstep, dt, r, z, vpa, vperp, composition, s
         println(io, "this is not a supported option.  forcing evolve_moments.density = true.")
         evolve_moments.density = true
     end
-    if collisions.nuii > 0.0
+    if collisions.fkpl.nuii > 0.0
     # check that the grids support the collision operator
-        print(io, "The self-collision operator is switched on \n nuii = $collisions.nuii \n")
+        print(io, "The self-collision operator is switched on \n nuii = $collisions.fkpl.nuii \n")
         if !(vpa.discretization == "gausslegendre_pseudospectral") || !(vperp.discretization == "gausslegendre_pseudospectral")
             error("ERROR: you are using \n      vpa.discretization='"*vpa.discretization*
               "' \n      vperp.discretization='"*vperp.discretization*"' \n      with the ion self-collision operator \n"*
@@ -1091,6 +1046,8 @@ function check_coordinate_input(coord, coord_name, io)
         println(io,">$coord_name.bc = 'constant'.  enforcing constant incoming BC in $coord_name.")
     elseif coord.bc == "zero"
         println(io,">$coord_name.bc = 'zero'.  enforcing zero incoming BC in $coord_name. Enforcing zero at both boundaries if diffusion operator is present.")
+    elseif coord.bc == "zero-impose-regularity"
+        println(io,">$coord_name.bc = 'zero'.  enforcing zero incoming BC in $coord_name. Enforcing zero at both boundaries if diffusion operator is present. Enforce dF/dcoord = 0 at origin if coord = vperp.")
     elseif coord.bc == "zero_gradient"
         println(io,">$coord_name.bc = 'zero_gradient'.  enforcing zero gradients at both limits of $coord_name domain.")
     elseif coord.bc == "both_zero"
@@ -1109,9 +1066,9 @@ function check_coordinate_input(coord, coord_name, io)
                 coord.nelement_global, " elements across the $coord_name domain [",
                 0.0, ",", coord.L, "].")
 
-        if coord.bc != "zero" && coord.n_global > 1 && global_rank[] == 0
-            println("WARNING: regularity condition (df/dvperp=0 at vperp=0) not being "
-                    * "imposed. Collisions or vperp-diffusion will be unstable.")
+        if coord.bc == "zero-impose-regularity" && coord.n_global > 1 && global_rank[] == 0
+            println("WARNING: regularity condition (df/dvperp=0 at vperp=0) being "
+                    * "imposed explicitly.")
         end
     else
         println(io,">using ", coord.ngrid, " grid points per $coord_name element on ",
@@ -1195,15 +1152,6 @@ function check_input_initialization(composition, species, io)
         end
         println(io)
     end
-end
-
-"""
-    function get_default_rhostar(reference_params)
-
-Calculate the normalised ion gyroradius at reference parameters
-"""
-function get_default_rhostar(reference_params)
-    return reference_params.cref / reference_params.Omegaref / reference_params.Lref
 end
 
 end

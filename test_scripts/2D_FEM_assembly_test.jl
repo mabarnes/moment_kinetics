@@ -28,6 +28,7 @@ using moment_kinetics.fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperp2_Maxwel
 using moment_kinetics.fokker_planck_test: dHdvperp_Maxwellian, dHdvpa_Maxwellian
 using moment_kinetics.fokker_planck_test: Cssp_Maxwellian_inputs
 using moment_kinetics.fokker_planck_test: print_test_data, fkpl_error_data, allocate_error_data
+using moment_kinetics.fokker_planck_test: save_fkpl_error_data
 
 using moment_kinetics.fokker_planck_calculus: elliptic_solve!
 using moment_kinetics.fokker_planck_calculus: enforce_zero_bc!, allocate_rosenbluth_potential_boundary_data
@@ -112,14 +113,14 @@ end
         println("made inputs")
         println("vpa: ngrid: ",ngrid," nelement: ",nelement_local_vpa, " Lvpa: ",Lvpa)
         println("vperp: ngrid: ",ngrid," nelement: ",nelement_local_vperp, " Lvperp: ",Lvperp)
-        vpa, vpa_spectral = define_coordinate(vpa_input)
-        vperp, vperp_spectral = define_coordinate(vperp_input)
         
         # Set up MPI
         if standalone
             initialize_comms!()
         end
         setup_distributed_memory_MPI(1,1,1,1)
+        vpa, vpa_spectral = define_coordinate(vpa_input)
+        vperp, vperp_spectral = define_coordinate(vperp_input)
         looping.setup_loop_ranges!(block_rank[], block_size[];
                                        s=1, sn=1,
                                        r=1, z=1, vperp=vperp.n, vpa=vpa.n,
@@ -228,7 +229,6 @@ end
         ms = 1.0
         msp = 1.0
         nussp = 1.0
-        begin_serial_region()
         for ivperp in 1:vperp.n
             for ivpa in 1:vpa.n
                 Fs_M[ivpa,ivperp] = F_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
@@ -280,7 +280,8 @@ end
              algebraic_solve_for_d2Gdvperp2=false,calculate_GG=true,calculate_dGdvperp=true)
         # extract C[Fs,Fs'] result
         # and Rosenbluth potentials for testing
-        begin_vperp_vpa_region()
+        begin_s_r_z_anyv_region()
+        begin_anyv_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
             C_M_num[ivpa,ivperp] = fkpl_arrays.CC[ivpa,ivperp]
             G_M_num[ivpa,ivperp] = fkpl_arrays.GG[ivpa,ivperp]
@@ -382,6 +383,7 @@ end
     
     function run_assembly_test(; ngrid=5, nelement_list = [8],
         plot_scan=true,
+        save_HDF5 = true,
         plot_test_output = false,
         use_Maxwellian_Rosenbluth_coefficients=false,
         use_Maxwellian_field_particle_distribution=false,
@@ -581,6 +583,18 @@ end
             savefig(outfile)
             println(outfile)
             println([calculate_times, init_times, expected_t_2, expected_t_3])
+            
+        end
+        if global_rank[]==0 && save_HDF5
+            outdir = ""
+            ncore = global_size[]
+            save_fkpl_error_data(outdir,ncore,ngrid,nelement_list,
+                max_C_err, max_H_err, max_G_err, max_dHdvpa_err, max_dHdvperp_err,
+                max_d2Gdvperp2_err, max_d2Gdvpa2_err, max_d2Gdvperpdvpa_err, max_dGdvperp_err, 
+                L2_C_err, L2_H_err, L2_G_err, L2_dHdvpa_err, L2_dHdvperp_err, L2_d2Gdvperp2_err,
+                L2_d2Gdvpa2_err, L2_d2Gdvperpdvpa_err, L2_dGdvperp_err,
+                n_err, u_err, p_err, calculate_times, init_times, expected_t_2, expected_t_3,
+                expected, expected_integral)
         end
         finalize_comms!()
     return nothing

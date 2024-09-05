@@ -7,11 +7,16 @@ function io_has_parallel(::Val{hdf5})
     return HDF5.has_parallel()
 end
 
-function open_output_file_implementation(::Val{hdf5}, prefix, parallel_io, io_comm, mode="cw")
+function open_output_file_implementation(::Val{hdf5}, prefix, io_input, io_comm, mode="cw")
     # the hdf5 file will be given by output_dir/run_name with .h5 appended
     filename = string(prefix, ".h5")
+
+    if length(filename) > 255
+        error("Length of filename '$filename' is too long ($(length(filename)) "
+              * "characters), which will cause an error in HDF5.")
+    end
     # create the new HDF5 file
-    if parallel_io
+    if io_input.parallel_io
         # if a file with the requested name already exists, remove it
         if mode == "cw" && MPI.Comm_rank(io_comm) == 0 && isfile(filename)
             rm(filename)
@@ -27,7 +32,7 @@ function open_output_file_implementation(::Val{hdf5}, prefix, parallel_io, io_co
         fid = h5open(filename, mode)
     end
 
-    return fid, (filename, parallel_io, io_comm)
+    return fid, (filename, io_input, io_comm)
 end
 
 # HDF5.H5DataStore is the supertype for HDF5.File and HDF5.Group
@@ -47,6 +52,11 @@ function add_attribute!(file_or_group::HDF5.H5DataStore, name, value)
 end
 function add_attribute!(var::HDF5.Dataset, name, value)
     attributes(var)[name] = value
+end
+
+# HDF5.H5DataStore is the supertype for HDF5.File and HDF5.Group
+function modify_attribute!(file_or_group_or_var::Union{HDF5.H5DataStore,HDF5.Dataset}, name, value)
+    attrs(file_or_group_or_var)[name] = value
 end
 
 function get_group(file_or_group::HDF5.H5DataStore, name::String)
@@ -75,9 +85,9 @@ end
 # HDF5.H5DataStore is the supertype for HDF5.File and HDF5.Group
 function write_single_value!(file_or_group::HDF5.H5DataStore, name,
                              data::Union{Number, AbstractString, AbstractArray{T,N}},
-                             coords...; parallel_io, n_ion_species=nothing,
-                             n_neutral_species=nothing, description=nothing,
-                             units=nothing) where {T,N}
+                             coords::Union{coordinate,mk_int}...; parallel_io,
+                             n_ion_species=nothing, n_neutral_species=nothing,
+                             description=nothing, units=nothing) where {T,N}
     if isa(data, Union{Number, AbstractString})
         file_or_group[name] = data
         if description !== nothing
@@ -201,16 +211,33 @@ end
 function create_dynamic_variable!(file_or_group::HDF5.H5DataStore, name, type,
                                   coords::coordinate...; parallel_io,
                                   n_ion_species=nothing, n_neutral_species=nothing,
-                                  description=nothing, units=nothing)
+                                  diagnostic_var_size=nothing, description=nothing,
+                                  units=nothing)
 
     if n_ion_species !== nothing && n_neutral_species !== nothing
         error("Variable should not contain both ion and neutral species dimensions. "
               * "Got n_ion_species=$n_ion_species and "
               * "n_neutral_species=$n_neutral_species")
     end
+    if diagnostic_var_size !== nothing && n_ion_species !== nothing
+        error("Diagnostic variable should not contain both ion species dimension. Got "
+              * "diagnostic_var_size=$diagnostic_var_size and "
+              * "n_ion_species=$n_ion_species")
+    end
+    if diagnostic_var_size !== nothing && n_neutral_species !== nothing
+        error("Diagnostic variable should not contain both neutral species dimension. "
+              * "Got diagnostic_var_size=$diagnostic_var_size and "
+              * "n_neutral_species=$n_neutral_species")
+    end
 
     # Add the number of species to the spatial/velocity-space coordinates
-    if n_ion_species !== nothing
+    if diagnostic_var_size !== nothing
+        if isa(diagnostic_var_size, Number)
+            # Make diagnostic_var_size a Tuple
+            diagnostic_var_size = (diagnostic_var_size,)
+        end
+        fixed_coords = diagnostic_var_size
+    elseif n_ion_species !== nothing
         if n_ion_species < 0
             error("n_ion_species must be non-negative, got $n_ion_species")
         elseif n_ion_species == 0
@@ -266,13 +293,20 @@ end
 function append_to_dynamic_var(io_var::HDF5.Dataset,
                                data::Union{Number,AbstractArray{T,N}}, t_idx,
                                parallel_io::Bool,
-                               coords::Union{coordinate,Integer}...) where {T,N}
+                               coords::Union{coordinate,Integer}...;
+                               only_root=false) where {T,N}
     # Extend time dimension for this variable
     dims = size(io_var)
     dims_mod = (dims[1:end-1]..., t_idx)
     HDF5.set_extent_dims(io_var, dims_mod)
     local_ranges = Tuple(isa(c, coordinate) ? c.local_io_range : 1:c for c ∈ coords)
     global_ranges = Tuple(isa(c, coordinate) ? c.global_io_range : 1:c for c ∈ coords)
+
+    if only_root && parallel_io && global_rank[] != 0
+        # Variable should only be written from root, and this process is not root for the
+        # output file
+        return nothing
+    end
 
     if isa(data, Number)
         if !parallel_io || global_rank[] == 0

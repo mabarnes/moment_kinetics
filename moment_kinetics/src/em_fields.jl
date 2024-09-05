@@ -14,22 +14,32 @@ using ..moment_kinetics_structs: em_fields_struct
 using ..velocity_moments: update_density!
 #using ..calculus: derivative!
 using ..derivatives: derivative_r!, derivative_z!
+using ..electron_fluid_equations: calculate_Epar_from_electron_force_balance!
+using ..gyroaverages: gyro_operators, gyroaverage_field!
+
+using MPI
 
 """
 """
-function setup_em_fields(nz, nr, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
+function setup_em_fields(nvperp, nz, nr, n_ion_species, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
     phi = allocate_shared_float(nz,nr)
     phi0 = allocate_shared_float(nz,nr)
     Er = allocate_shared_float(nz,nr)
     Ez = allocate_shared_float(nz,nr)
-    return em_fields_struct(phi, phi0, Er, Ez, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
+    gphi = allocate_shared_float(nvperp,nz,nr,n_ion_species)
+    gEr = allocate_shared_float(nvperp,nz,nr,n_ion_species)
+    gEz = allocate_shared_float(nvperp,nz,nr,n_ion_species)
+    return em_fields_struct(phi, phi0, Er, Ez, gphi, gEr, gEz, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
 end
 
 """
 update_phi updates the electrostatic potential, phi
 """
-function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, scratch_dummy)
+function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments,
+                     geometry, z_spectral, r_spectral, scratch_dummy,
+                     gyroavs::gyro_operators)
     n_ion_species = composition.n_ion_species
+    # check bounds of fields and fvec arrays
     @boundscheck size(fields.phi,1) == z.n || throw(BoundsError(fields.phi))
     @boundscheck size(fields.phi,2) == r.n || throw(BoundsError(fields.phi))
     @boundscheck size(fields.phi0,1) == z.n || throw(BoundsError(fields.phi0))
@@ -47,9 +57,11 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, sc
     # when there is only one species.
     
     begin_serial_region()#(no_synchronize=true)
+
+    dens_e = fvec.electron_density
     # in serial as both s, r and z required locally
     if (composition.n_ion_species > 1 || true ||
-        composition.electron_physics == boltzmann_electron_response_with_simple_sheath)
+        composition.electron_physics ∈ (boltzmann_electron_response_with_simple_sheath))
         # If there is more than 1 ion species, the ranks that handle species 1 have to
         # read density for all the other species, so need to synchronize here.
         # If composition.electron_physics ==
@@ -63,19 +75,17 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, sc
                            # for each radial position in parallel if possible 
         
     # TODO: parallelise this...
-    @serial_region begin
-        ne = @view scratch_dummy.dummy_zrs[:,:,1]
-        jpar_i = @view scratch_dummy.buffer_rs_1[:,:,1]
-        N_e = @view scratch_dummy.buffer_rs_2[:,:,1]
-        ne .= 0.0
-        for is in 1:n_ion_species
-            @loop_r_z ir iz begin
-                 ne[iz,ir] += fvec.density[iz,ir,is]
-            end
-        end
-        if composition.electron_physics == boltzmann_electron_response
+    ne = @view scratch_dummy.dummy_zrs[:,:,1]
+    jpar_i = @view scratch_dummy.buffer_rs_1[:,:,1]
+    N_e = @view scratch_dummy.buffer_rs_2[:,:,1]
+    if composition.electron_physics == boltzmann_electron_response
+        begin_serial_region()
+        @serial_region begin
             N_e .= 1.0
-        elseif composition.electron_physics == boltzmann_electron_response_with_simple_sheath
+        end
+    elseif composition.electron_physics == boltzmann_electron_response_with_simple_sheath
+        begin_serial_region()
+        @serial_region begin
             # calculate Sum_{i} Z_i n_i u_i = J_||i at z = 0
             jpar_i .= 0.0
             for is in 1:n_ion_species
@@ -98,11 +108,18 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, sc
             end
             # See P.C. Stangeby, The Plasma Boundary of Magnetic Fusion Devices, IOP Publishing, Chpt 2, p75
         end
-        if composition.electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
-            @loop_r_z ir iz begin
-                 fields.phi[iz,ir] = composition.T_e * log(ne[iz,ir] / N_e[ir])
-            end
+    end
+    if composition.electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
+        @loop_r_z ir iz begin
+            fields.phi[iz,ir] = composition.T_e * log(dens_e[iz,ir] / N_e[ir])
         end
+    elseif composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons,
+                                           kinetic_electrons_with_temperature_equation)
+        calculate_Epar_from_electron_force_balance!(fields.Ez, dens_e, moments.electron.dppar_dz,
+            collisions.nu_ei, moments.electron.parallel_friction,
+            composition.n_neutral_species, collisions.charge_exchange_electron, composition.me_over_mi,
+            fvec.density_neutral, fvec.uz_neutral, fvec.electron_upar)
+        calculate_phi_from_Epar!(fields.phi, fields.Ez, r, z)
     end
     ## can calculate phi at z = L and hence phi_wall(z=L) using jpar_i at z =L if needed
     _block_synchronize()
@@ -122,22 +139,82 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, sc
         end
     else
         @loop_r_z ir iz begin
-            fields.Er[iz,ir] = composition.Er_constant
-            # Er_constant defaults to 0.0 in moment_kinetics_input.jl
+            fields.Er[iz,ir] = geometry.input.Er_constant
+            # Er_constant defaults to 0.0 in geo.jl
         end
     end
-    #Ez = - d phi / dz
-    if z.n > 1
-        derivative_z!(fields.Ez,-fields.phi,
-                scratch_dummy.buffer_r_1, scratch_dummy.buffer_r_2,
-                scratch_dummy.buffer_r_3, scratch_dummy.buffer_r_4,
-                z_spectral,z)
-    else
-        @serial_region begin
-            fields.Ez[:,:] .= 0.0
+    # if advancing electron fluid equations, solve for Ez directly from force balance
+    if composition.electron_physics ∉ (braginskii_fluid, kinetic_electrons,
+                                       kinetic_electrons_with_temperature_equation)
+        if z.n > 1
+            # Ez = - d phi / dz
+            @views derivative_z!(fields.Ez,-fields.phi,
+                    scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1],
+                    scratch_dummy.buffer_rs_3[:,1], scratch_dummy.buffer_rs_4[:,1],
+                    z_spectral,z)
         end
     end
 
+    # get gyroaveraged field arrays for distribution function advance
+    gkions = composition.gyrokinetic_ions
+    if gkions
+        gyroaverage_field!(fields.gphi,fields.phi,gyroavs,vperp,z,r,composition)
+        gyroaverage_field!(fields.gEz,fields.Ez,gyroavs,vperp,z,r,composition)
+        gyroaverage_field!(fields.gEr,fields.Er,gyroavs,vperp,z,r,composition)
+    else # use the drift-kinetic form of the fields in the kinetic equation
+        @loop_s_r_z_vperp is ir iz ivperp begin
+            fields.gphi[ivperp,iz,ir,is] = fields.phi[iz,ir]
+            fields.gEz[ivperp,iz,ir,is] = fields.Ez[iz,ir]
+            fields.gEr[ivperp,iz,ir,is] = fields.Er[iz,ir]
+        end
+    end
+
+    return nothing
+end
+
+function calculate_phi_from_Epar!(phi, Epar, r, z)
+    # simple calculation of phi from Epar for now. Assume phi is already set at the
+    # lower-ze boundary, e.g. by the kinetic electron boundary condition.
+    begin_serial_region()
+
+    dz = z.cell_width
+    @serial_region begin
+        # Need to broadcast the lower-z boundary value, because we only communicate
+        # delta_phi below, rather than passing the boundary values directly from block to
+        # block.
+        MPI.Bcast!(@view(phi[1,:]), z.comm; root=0)
+
+        if z.irank == z.nrank - 1
+            # Don't want to change the upper-z boundary value, so save it here so we can
+            # restore it at the end
+            @views @. r.scratch = phi[end,:]
+        end
+
+        @loop_r ir begin
+            for iz ∈ 2:z.n
+                phi[iz,ir] = phi[iz-1,ir] - dz[iz-1]*Epar[iz,ir]
+            end
+        end
+
+        # Add contributions to integral along z from processes at smaller z-values than
+        # this one.
+        this_delta_phi = r.scratch2 .= phi[end,:] .- phi[1,:]
+        for irank ∈ 0:z.nrank-2
+            MPI.Bcast!(this_delta_phi, z.comm; root=irank)
+            if z.irank > irank
+                @loop_r_z ir iz begin
+                    phi[iz,ir] += this_delta_phi[ir]
+                end
+            end
+        end
+
+        if z.irank == z.nrank - 1
+            # Restore the upper-z boundary value
+            @views @. phi[end,:] = r.scratch
+        end
+    end
+
+    return nothing
 end
 
 end

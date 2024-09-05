@@ -1,4 +1,5 @@
 using moment_kinetics
+using moment_kinetics.type_definitions: OptionsDict
 using makie_post_processing
 
 # Create a temporary directory for test output
@@ -6,10 +7,8 @@ test_output_directory = tempname()
 run_name = "precompilation"
 mkpath(test_output_directory)
 
-input_dict = Dict("nstep"=>1,
-                  "run_name"=>run_name,
+input_dict = Dict("run_name"=>run_name,
                   "base_directory" => test_output_directory,
-                  "dt" => 0.0,
                   "r_ngrid" => 5,
                   "r_nelement" => 1,
                   "r_bc" => "periodic",
@@ -42,7 +41,8 @@ input_dict = Dict("nstep"=>1,
                   "vz_nelement" => 1,
                   "vz_bc" => "periodic",
                   "vz_L" => 4.0,
-                  "vz_discretization" => "chebyshev_pseudospectral")
+                  "vz_discretization" => "chebyshev_pseudospectral",
+                  "timestepping" => OptionsDict("nstep" => 1, "dt" => 2.0e-11))
 
 run_moment_kinetics(input_dict)
 

@@ -1,43 +1,25 @@
 test_type = "restart_interpolation"
+using moment_kinetics.type_definitions: OptionsDict
 
 # default inputs for tests
-base_input = Dict(
+base_input = OptionsDict(
      "run_name" => "base",
-     "n_ion_species" => 2,
-     "n_neutral_species" => 2,
-     "boltzmann_electron_response" => true,
+     "composition" => OptionsDict("n_ion_species" => 2,
+                           "n_neutral_species" => 2,
+                           "electron_physics" => "boltzmann_electron_response",         
+                           "T_e" => 1.0),
      "base_directory" => test_output_directory,
      "evolve_moments_density" => false,
      "evolve_moments_parallel_flow" => false,
      "evolve_moments_parallel_pressure" => false,
      "evolve_moments_conservation" => true,
-     "T_e" => 1.0,
-     "initial_density1" => 0.5,
-     "initial_temperature1" => 1.0,
-     "initial_density2" => 0.5,
-     "initial_temperature2" => 1.0,
-     "z_IC_option1" => "sinusoid",
-     "z_IC_density_amplitude1" => 0.001,
-     "z_IC_density_phase1" => 0.0,
-     "z_IC_upar_amplitude1" => 0.0,
-     "z_IC_upar_phase1" => 0.0,
-     "z_IC_temperature_amplitude1" => 0.0,
-     "z_IC_temperature_phase1" => 0.0,
-     "z_IC_option2" => "sinusoid",
-     "z_IC_density_amplitude2" => 0.001,
-     "z_IC_density_phase2" => 0.0,
-     "z_IC_upar_amplitude2" => 0.0,
-     "z_IC_upar_phase2" => 0.0,
-     "z_IC_temperature_amplitude2" => 0.0,
-     "z_IC_temperature_phase2" => 0.0,
      "charge_exchange_frequency" => 2*π*0.1,
      "ionization_frequency" => 0.0,
-     "nstep" => 3,
-     "dt" => 0.0,
-     "nwrite" => 2,
-     "use_semi_lagrange" => false,
-     "n_rk_stages" => 2,
-     "split_operators" => false,
+     "timestepping" => OptionsDict("nstep" => 3,
+                                        "dt" => 0.0,
+                                        "nwrite" => 2,
+                                        "type" => "SSPRK2",
+                                        "split_operators" => false),
      "z_ngrid" => 3,
      "z_nelement" => 2,
      "z_bc" => "periodic",
@@ -60,28 +42,29 @@ base_input = Dict(
      "vzeta_nelement" => 1,
      "vr_ngrid" => 1,
      "vr_nelement" => 1,
-     "numerical_dissipation" => Dict{String,Any}("force_minimum_pdf_value" => 0.0))
+     "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0),
+     "neutral_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0))
 
 test_input =
     merge(base_input,
-          Dict("run_name" => "full-f",
+          OptionsDict("run_name" => "full-f",
                "z_nelement" => 3,
                "vpa_nelement" => 3,
                "vz_nelement" => 3))
 
 test_input_split1 =
     merge(test_input,
-          Dict("run_name" => "split1",
+          OptionsDict("run_name" => "split1",
                "evolve_moments_density" => true))
 
 test_input_split2 =
     merge(test_input_split1 ,
-          Dict("run_name" => "split2",
+          OptionsDict("run_name" => "split2",
                "evolve_moments_parallel_flow" => true))
 
 test_input_split3 =
     merge(test_input_split2,
-          Dict("run_name" => "split3",
+          OptionsDict("run_name" => "split3",
                "evolve_moments_parallel_pressure" => true))
 
 test_input_list = [

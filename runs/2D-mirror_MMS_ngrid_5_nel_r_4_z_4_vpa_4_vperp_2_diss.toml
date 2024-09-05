@@ -7,7 +7,6 @@ evolve_moments_parallel_flow = false
 evolve_moments_parallel_pressure = false
 evolve_moments_conservation = false
 force_Er_zero_at_wall = false #true
-Er_constant = 0.0
 T_e = 1.0
 T_wall = 1.0
 initial_density1 = 0.5
@@ -87,7 +86,7 @@ vzeta_discretization = "chebyshev_pseudospectral"
  use_vpabar_in_mms_dfni=true
  alpha_switch=1.0
  type="default"
-[numerical_dissipation]
+[ion_numerical_dissipation]
 vpa_dissipation_coefficient = 0.001
 vperp_dissipation_coefficient = 0.001
 #z_dissipation_coefficient = 0.1
@@ -99,3 +98,4 @@ DeltaB=0.5
 #option="constant-helical"
 pitch=0.5
 rhostar = 1.0
+Er_constant = 0.0

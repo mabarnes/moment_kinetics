@@ -10,10 +10,10 @@ using ..array_allocation: allocate_float
 using ..calculus: integral
 using ..communication
 using ..coordinates: coordinate
-using ..initial_conditions: vpagrid_to_dzdt
+using ..boundary_conditions: vpagrid_to_dzdt
 using ..interpolation: interpolate_to_grid_1d
 using ..load_data: open_readonly_output_file, get_nranks, load_pdf_data, load_rank_data
-using ..load_data: load_distributed_charged_pdf_slice
+using ..load_data: load_distributed_ion_pdf_slice
 using ..looping
 using ..type_definitions: mk_int
 using ..velocity_moments: integrate_over_vspace
@@ -140,12 +140,12 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, composition,
         end
     end
     if f_lower === nothing
-        f_lower = load_distributed_charged_pdf_slice(run_name, nblocks, t_range,
+        f_lower = load_distributed_ion_pdf_slice(run_name, nblocks, t_range,
                                                      composition.n_ion_species, r, z,
                                                      vperp, vpa; iz=1, ir=ir0)
     end
     if f_upper === nothing
-        f_upper = load_distributed_charged_pdf_slice(run_name, nblocks, t_range,
+        f_upper = load_distributed_ion_pdf_slice(run_name, nblocks, t_range,
                                                      composition.n_ion_species, r, z,
                                                      vperp, vpa; iz=z.n_global, ir=ir0)
     end
@@ -647,17 +647,22 @@ function steady_state_square_residuals(variable, variable_at_previous_time, dt;
 
             if only_max_abs
                 absolute_residual =
-                    _steady_state_absolute_residual(variable, variable_at_previous_time,
+                    _steady_state_absolute_residual(this_slice, this_slice_previous_time,
                                                     reshaped_dt)
                 # Need to wrap the maximum(...) in a call to vec(...) so that we return a
                 # Vector, not an N-dimensional array where the first (N-1) dimensions all
                 # have size 1.
-                local_max_absolute = max.(local_max_absolute,
-                                          vec(maximum(absolute_residual,
-                                                      dims=tuple((1:t_dim-1)...))))
+                this_dims = tuple((1:t_dim-3)...)
+                if this_dims === ()
+                    local_max_absolute = max.(local_max_absolute, [absolute_residual])
+                else
+                    local_max_absolute = max.(local_max_absolute,
+                                              vec(maximum(absolute_residual,
+                                                          dims=this_dims)))
+                end
             else
                 absolute_square_residual, relative_square_residual =
-                    _steady_state_square_residual(variable, variable_at_previous_time,
+                    _steady_state_square_residual(this_slice, this_slice_previous_time,
                                                   reshaped_dt, epsilon, variable_max)
                 # Need to wrap the sum(...) or maximum(...) in a call to vec(...) so that
                 # we return a Vector, not an N-dimensional array where the first (N-1)

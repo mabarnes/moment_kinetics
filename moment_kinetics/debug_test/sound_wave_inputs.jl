@@ -1,43 +1,25 @@
 test_type = "sound_wave"
+using moment_kinetics.type_definitions: OptionsDict
 
 # default inputs for tests
-test_input_finite_difference_1D1V = Dict(
+test_input_finite_difference_1D1V = OptionsDict(
      "run_name" => "finite_difference_1D1V",
-     "n_ion_species" => 2,
-     "n_neutral_species" => 2,
-     "boltzmann_electron_response" => true,
+     "composition" => OptionsDict("n_ion_species" => 2,
+                           "n_neutral_species" => 2,
+                           "electron_physics" => "boltzmann_electron_response",
+                           "T_e" => 1.0),
      "base_directory" => test_output_directory,
      "evolve_moments_density" => false,
      "evolve_moments_parallel_flow" => false,
      "evolve_moments_parallel_pressure" => false,
      "evolve_moments_conservation" => true,
-     "T_e" => 1.0,
-     "initial_density1" => 0.5,
-     "initial_temperature1" => 1.0,
-     "initial_density2" => 0.5,
-     "initial_temperature2" => 1.0,
-     "z_IC_option1" => "sinusoid",
-     "z_IC_density_amplitude1" => 0.001,
-     "z_IC_density_phase1" => 0.0,
-     "z_IC_upar_amplitude1" => 0.0,
-     "z_IC_upar_phase1" => 0.0,
-     "z_IC_temperature_amplitude1" => 0.0,
-     "z_IC_temperature_phase1" => 0.0,
-     "z_IC_option2" => "sinusoid",
-     "z_IC_density_amplitude2" => 0.001,
-     "z_IC_density_phase2" => 0.0,
-     "z_IC_upar_amplitude2" => 0.0,
-     "z_IC_upar_phase2" => 0.0,
-     "z_IC_temperature_amplitude2" => 0.0,
-     "z_IC_temperature_phase2" => 0.0,
      "charge_exchange_frequency" => 2*π*0.1,
      "ionization_frequency" => 0.0,
-     "nstep" => 3,
-     "dt" => 1.e-8,
-     "nwrite" => 2,
-     "use_semi_lagrange" => false,
-     "n_rk_stages" => 2,
-     "split_operators" => false,
+     "timestepping" => OptionsDict("nstep" => 3,
+                                        "dt" => 1.e-8,
+                                        "nwrite" => 2,
+                                        "type" => "SSPRK2",
+                                        "split_operators" => false),
      "z_ngrid" => 4,
      "z_nelement" => 1,
      "z_bc" => "periodic",
@@ -63,42 +45,42 @@ test_input_finite_difference_1D1V = Dict(
 
 test_input_finite_difference_1D1V_split_1_moment =
     merge(test_input_finite_difference_1D1V,
-          Dict("run_name" => "finite_difference_1D1V_split_1_moment",
+          OptionsDict("run_name" => "finite_difference_1D1V_split_1_moment",
                "evolve_moments_density" => true))
 
 test_input_finite_difference_1D1V_split_2_moments =
     merge(test_input_finite_difference_1D1V_split_1_moment,
-          Dict("run_name" => "finite_difference_1D1V_split_2_moments",
+          OptionsDict("run_name" => "finite_difference_1D1V_split_2_moments",
                "evolve_moments_parallel_flow" => true))
 
 test_input_finite_difference_1D1V_split_3_moments =
     merge(test_input_finite_difference_1D1V_split_2_moments,
-          Dict("run_name" => "finite_difference_1D1V_split_3_moments",
+          OptionsDict("run_name" => "finite_difference_1D1V_split_3_moments",
                "evolve_moments_parallel_pressure" => true))
 
 test_input_finite_difference_cx0_1D1V =
     merge(test_input_finite_difference_1D1V,
-          Dict("run_name" => "finite_difference_cx0_1D1V",
+          OptionsDict("run_name" => "finite_difference_cx0_1D1V",
                "charge_exchange_frequency" => 0.0))
 
 test_input_finite_difference_cx0_1D1V_split_1_moment =
     merge(test_input_finite_difference_cx0_1D1V,
-          Dict("run_name" => "finite_difference_cx0_1D1V_split_1_moment",
+          OptionsDict("run_name" => "finite_difference_cx0_1D1V_split_1_moment",
                "evolve_moments_density" => true))
 
 test_input_finite_difference_cx0_1D1V_split_2_moments =
     merge(test_input_finite_difference_cx0_1D1V_split_1_moment,
-          Dict("run_name" => "finite_difference_cx0_1D1V_split_2_moments",
+          OptionsDict("run_name" => "finite_difference_cx0_1D1V_split_2_moments",
                "evolve_moments_parallel_flow" => true))
 
 test_input_finite_difference_cx0_1D1V_split_3_moments =
     merge(test_input_finite_difference_cx0_1D1V_split_2_moments,
-          Dict("run_name" => "finite_difference_cx0_1D1V_split_3_moments",
+          OptionsDict("run_name" => "finite_difference_cx0_1D1V_split_3_moments",
                "evolve_moments_parallel_pressure" => true))
 
 test_input_finite_difference =
     merge(test_input_finite_difference_1D1V,
-          Dict("run_name" => "finite_difference",
+          OptionsDict("run_name" => "finite_difference",
                "r_ngrid" => 4,
                "r_nelement" => 1,
                "r_discretization" => "finite_difference",
@@ -117,41 +99,41 @@ test_input_finite_difference =
 
 test_input_finite_difference_split_1_moment =
     merge(test_input_finite_difference,
-          Dict("run_name" => "finite_difference_split_1_moment",
+          OptionsDict("run_name" => "finite_difference_split_1_moment",
                "evolve_moments_density" => true))
 
 test_input_finite_difference_split_2_moments =
     merge(test_input_finite_difference_split_1_moment,
-          Dict("run_name" => "finite_difference_split_2_moments",
+          OptionsDict("run_name" => "finite_difference_split_2_moments",
                "evolve_moments_parallel_flow" => true))
 
 test_input_finite_difference_split_3_moments =
     merge(test_input_finite_difference_split_2_moments,
-          Dict("run_name" => "finite_difference_split_3_moments",
+          OptionsDict("run_name" => "finite_difference_split_3_moments",
                "evolve_moments_parallel_pressure" => true))
 
 test_input_finite_difference_cx0 =
     merge(test_input_finite_difference,
-          Dict("run_name" => "finite_difference_cx0",
+          OptionsDict("run_name" => "finite_difference_cx0",
                "charge_exchange_frequency" => 0.0))
 
 test_input_finite_difference_cx0_split_1_moment =
     merge(test_input_finite_difference_cx0,
-          Dict("run_name" => "finite_difference_cx0_split_1_moment",
+          OptionsDict("run_name" => "finite_difference_cx0_split_1_moment",
                "evolve_moments_density" => true))
 
 test_input_finite_difference_cx0_split_2_moments =
     merge(test_input_finite_difference_cx0_split_1_moment,
-          Dict("run_name" => "finite_difference_cx0_split_2_moments",
+          OptionsDict("run_name" => "finite_difference_cx0_split_2_moments",
                "evolve_moments_parallel_flow" => true))
 
 test_input_finite_difference_cx0_split_3_moments =
     merge(test_input_finite_difference_cx0_split_2_moments,
-          Dict("run_name" => "finite_difference_cx0_split_3_moments",
+          OptionsDict("run_name" => "finite_difference_cx0_split_3_moments",
                "evolve_moments_parallel_pressure" => true))
 
 test_input_chebyshev = merge(test_input_finite_difference,
-                             Dict("run_name" => "chebyshev_pseudospectral",
+                             OptionsDict("run_name" => "chebyshev_pseudospectral",
                                   "r_discretization" => "chebyshev_pseudospectral",
                                   "r_ngrid" => 3,
                                   "r_nelement" => 1,
@@ -176,42 +158,42 @@ test_input_chebyshev = merge(test_input_finite_difference,
 
 test_input_chebyshev_split_1_moment =
     merge(test_input_chebyshev,
-          Dict("run_name" => "chebyshev_pseudospectral_split_1_moment",
+          OptionsDict("run_name" => "chebyshev_pseudospectral_split_1_moment",
                "evolve_moments_density" => true))
 
 test_input_chebyshev_split_2_moments =
     merge(test_input_chebyshev_split_1_moment,
-          Dict("run_name" => "chebyshev_pseudospectral_split_2_moments",
+          OptionsDict("run_name" => "chebyshev_pseudospectral_split_2_moments",
                "evolve_moments_parallel_flow" => true))
 
 test_input_chebyshev_split_3_moments =
     merge(test_input_chebyshev_split_2_moments,
-          Dict("run_name" => "chebyshev_pseudospectral_split_3_moments",
+          OptionsDict("run_name" => "chebyshev_pseudospectral_split_3_moments",
                "evolve_moments_parallel_pressure" => true))
 
 test_input_chebyshev_cx0 =
     merge(test_input_chebyshev,
-          Dict("run_name" => "chebyshev_pseudospectral_cx0",
+          OptionsDict("run_name" => "chebyshev_pseudospectral_cx0",
                "charge_exchange_frequency" => 0.0))
 
 test_input_chebyshev_cx0_split_1_moment =
     merge(test_input_chebyshev_cx0,
-          Dict("run_name" => "chebyshev_pseudospectral_cx0_split_1_moment",
+          OptionsDict("run_name" => "chebyshev_pseudospectral_cx0_split_1_moment",
                "evolve_moments_density" => true))
 
 test_input_chebyshev_cx0_split_2_moments =
     merge(test_input_chebyshev_cx0_split_1_moment,
-          Dict("run_name" => "chebyshev_pseudospectral_cx0_split_2_moments",
+          OptionsDict("run_name" => "chebyshev_pseudospectral_cx0_split_2_moments",
                "evolve_moments_parallel_flow" => true))
 
 test_input_chebyshev_cx0_split_3_moments =
     merge(test_input_chebyshev_cx0_split_2_moments,
-          Dict("run_name" => "chebyshev_pseudospectral_cx0_split_3_moments",
+          OptionsDict("run_name" => "chebyshev_pseudospectral_cx0_split_3_moments",
                "evolve_moments_parallel_pressure" => true))
 
 test_input_chebyshev_1D1V =
     merge(test_input_finite_difference_1D1V,
-          Dict("run_name" => "chebyshev_pseudospectral_1D1V",
+          OptionsDict("run_name" => "chebyshev_pseudospectral_1D1V",
                "z_discretization" => "chebyshev_pseudospectral",
                "z_ngrid" => 3,
                "z_nelement" => 2,
@@ -224,41 +206,41 @@ test_input_chebyshev_1D1V =
 
 test_input_chebyshev_1D1V_split_1_moment =
     merge(test_input_chebyshev_1D1V,
-          Dict("run_name" => "chebyshev_pseudospectral_1D1V_split_1_moment",
+          OptionsDict("run_name" => "chebyshev_pseudospectral_1D1V_split_1_moment",
                "evolve_moments_density" => true))
 
 test_input_chebyshev_1D1V_split_2_moments =
     merge(test_input_chebyshev_1D1V_split_1_moment,
-          Dict("run_name" => "chebyshev_pseudospectral_1D1V_split_2_moments",
+          OptionsDict("run_name" => "chebyshev_pseudospectral_1D1V_split_2_moments",
                "evolve_moments_parallel_flow" => true))
 
 test_input_chebyshev_1D1V_split_3_moments =
     merge(test_input_chebyshev_1D1V_split_2_moments,
-          Dict("run_name" => "chebyshev_pseudospectral_1D1V_split_3_moments",
+          OptionsDict("run_name" => "chebyshev_pseudospectral_1D1V_split_3_moments",
                "evolve_moments_parallel_pressure" => true, "runtime_plots" => true))
 
 test_input_chebyshev_cx0_1D1V =
     merge(test_input_chebyshev_1D1V,
-          Dict("run_name" => "chebyshev_pseudospectral_cx0_1D1V",
+          OptionsDict("run_name" => "chebyshev_pseudospectral_cx0_1D1V",
                "charge_exchange_frequency" => 0.0))
 
 test_input_chebyshev_cx0_1D1V_split_1_moment =
     merge(test_input_chebyshev_cx0_1D1V,
-          Dict("run_name" => "chebyshev_pseudospectral_cx0_1D1V_split_1_moment",
+          OptionsDict("run_name" => "chebyshev_pseudospectral_cx0_1D1V_split_1_moment",
                "evolve_moments_density" => true))
 
 test_input_chebyshev_cx0_1D1V_split_2_moments =
     merge(test_input_chebyshev_cx0_1D1V_split_1_moment,
-          Dict("run_name" => "chebyshev_pseudospectral_cx0_1D1V_split_2_moments",
+          OptionsDict("run_name" => "chebyshev_pseudospectral_cx0_1D1V_split_2_moments",
                "evolve_moments_parallel_flow" => true))
 
 test_input_chebyshev_cx0_1D1V_split_3_moments =
     merge(test_input_chebyshev_cx0_1D1V_split_2_moments,
-          Dict("run_name" => "chebyshev_pseudospectral_cx0_1D1V_split_3_moments",
+          OptionsDict("run_name" => "chebyshev_pseudospectral_cx0_1D1V_split_3_moments",
                "evolve_moments_parallel_pressure" => true))
 
 test_input_list = [
-     #test_input_finite_difference,
+     test_input_finite_difference,
      #test_input_finite_difference_split_1_moment,
      #test_input_finite_difference_split_2_moments,
      #test_input_finite_difference_split_3_moments,
@@ -269,7 +251,7 @@ test_input_list = [
      #test_input_finite_difference_1D1V,
      #test_input_finite_difference_1D1V_split_1_moment,
      #test_input_finite_difference_1D1V_split_2_moments,
-     #test_input_finite_difference_1D1V_split_3_moments,
+     test_input_finite_difference_1D1V_split_3_moments,
      #test_input_finite_difference_cx0_1D1V,
      #test_input_finite_difference_cx0_1D1V_split_1_moment,
      #test_input_finite_difference_cx0_1D1V_split_2_moments,
@@ -287,7 +269,7 @@ test_input_list = [
      test_input_chebyshev_1D1V_split_2_moments,
      test_input_chebyshev_1D1V_split_3_moments,
      test_input_chebyshev_cx0_1D1V,
-     test_input_chebyshev_cx0_1D1V_split_1_moment,
-     test_input_chebyshev_cx0_1D1V_split_2_moments,
+     #test_input_chebyshev_cx0_1D1V_split_1_moment,
+     #test_input_chebyshev_cx0_1D1V_split_2_moments,
      test_input_chebyshev_cx0_1D1V_split_3_moments,
     ]

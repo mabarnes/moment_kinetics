@@ -12,11 +12,13 @@ export chebyshev_info
 
 using LinearAlgebra: mul!
 using FFTW
+using MPI
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_complex
 using ..clenshaw_curtis: clenshawcurtisweights
 import ..calculus: elementwise_derivative!
-import ..interpolation: interpolate_to_grid_1d!
+using ..communication
+import ..interpolation: single_element_interpolate!
 using ..moment_kinetics_structs: discretization_info
 
 """
@@ -52,13 +54,76 @@ end
 create arrays needed for explicit Chebyshev pseudospectral treatment
 and create the plans for the forward and backward fast Fourier transforms
 """
-function setup_chebyshev_pseudospectral(coord)
-    lobatto = setup_chebyshev_pseudospectral_lobatto(coord)
-    radau = setup_chebyshev_pseudospectral_radau(coord)
+function setup_chebyshev_pseudospectral(coord, run_directory; ignore_MPI=false)
+    # First set up the FFTW plans on the (global) root process, then save the 'FFTW
+    # wisdom' and load it on all other processes, to ensure that we use the exact same
+    # FFT algorithms on all processes for consistency.
+    if run_directory === nothing
+        if global_size[] != 1 && !ignore_MPI
+            error("run_directory is required by setup_chebyshev_pseudospectral() when "
+                  * "running in parallel, in order to save FFTW wisdom.")
+        end
+        wisdom_filename = nothing
+    else
+        wisdom_filename = joinpath(run_directory, "fftw_wisdom.save")
+    end
+
+    # When using FFTW.WISDOM_ONLY, the flag should be combined with the flag that was
+    # originally used to generate the 'wisdom' otherwise if the original flag was 'lower
+    # effort' (i.e. was FFTW.ESTIMATE) then the default (FFTW.MEASURE) will be used
+    # instead. Note that we also need an FFTW flag in chebyshev_radau_weights(), so if
+    # this flag is changed, that one should be changed too (if it is used). The flag is
+    # not automatically pased through, because there is not a convenient way to pass a
+    # flag through to chebyshev_radau_weights().
+    base_flag = FFTW.MEASURE
+
+    function this_barrier()
+        if !ignore_MPI
+            # Normal case, all processors are creating the coordinate
+            MPI.Barrier(comm_world)
+        elseif run_directory !== nothing && comm_inter_block[] != MPI.COMM_NULL
+            # ignore_MPI=true was passed, but non-null communicator exists. This happens
+            # in calls from load_restart_coordinates(), which is only called on
+            # block_rank[]==0.
+            MPI.Barrier(comm_inter_block[])
+        else
+            # Should be serial (e.g. used in post-processing), so no Barrier
+        end
+    end
+
+    if global_rank[] != 0
+        # Wait for rank-0
+        this_barrier()
+        if wisdom_filename !== nothing
+            # Load wisdom
+            FFTW.import_wisdom(wisdom_filename)
+            # Flags can be combined with a bitwise-or operation `|`.
+            fftw_flags = base_flag | FFTW.WISDOM_ONLY
+        else
+            fftw_flags = base_flag
+        end
+    else
+        fftw_flags = base_flag
+    end
+
+    lobatto = setup_chebyshev_pseudospectral_lobatto(coord, fftw_flags)
+    radau = setup_chebyshev_pseudospectral_radau(coord, fftw_flags)
+
+    if global_rank[] == 0
+        if wisdom_filename !== nothing
+            FFTW.export_wisdom(wisdom_filename)
+        end
+        this_barrier()
+    end
+
+    # Ensure root does not start modifying 'wisdom file' while other processes are still
+    # reading it - root waits here for all other processes.
+    this_barrier()
+
     return chebyshev_info(lobatto,radau)
 end
 
-function setup_chebyshev_pseudospectral_lobatto(coord)
+function setup_chebyshev_pseudospectral_lobatto(coord, fftw_flags)
     # ngrid_fft is the number of grid points in the extended domain
     # in z = cos(theta).  this is necessary to turn a cosine transform on [0,π]
     # into a complex transform on [0,2π], which is more efficient in FFTW
@@ -69,8 +134,8 @@ function setup_chebyshev_pseudospectral_lobatto(coord)
     fcheby = allocate_float(coord.ngrid, coord.nelement_local)
     dcheby = allocate_float(coord.ngrid)
     # setup the plans for the forward and backward Fourier transforms
-    forward_transform = plan_fft!(fext, flags=FFTW.MEASURE)
-    backward_transform = plan_ifft!(fext, flags=FFTW.MEASURE)
+    forward_transform = plan_fft!(fext, flags=fftw_flags)
+    backward_transform = plan_ifft!(fext, flags=fftw_flags)
     # create array for differentiation matrix 
     Dmat = allocate_float(coord.ngrid, coord.ngrid)
     cheb_derivative_matrix_elementwise!(Dmat,coord.ngrid)
@@ -81,7 +146,7 @@ function setup_chebyshev_pseudospectral_lobatto(coord)
     return chebyshev_base_info(fext, fcheby, dcheby, forward_transform, backward_transform, Dmat, D0)
 end
 
-function setup_chebyshev_pseudospectral_radau(coord)
+function setup_chebyshev_pseudospectral_radau(coord, fftw_flags)
         # ngrid_fft is the number of grid points in the extended domain
         # in z = cos(theta).  this is necessary to turn a cosine transform on [0,π]
         # into a complex transform on [0,2π], which is more efficient in FFTW
@@ -92,8 +157,8 @@ function setup_chebyshev_pseudospectral_radau(coord)
         fcheby = allocate_float(coord.ngrid, coord.nelement_local)
         dcheby = allocate_float(coord.ngrid)
         # setup the plans for the forward and backward Fourier transforms
-        forward_transform = plan_fft!(fext, flags=FFTW.MEASURE)
-        backward_transform = plan_ifft!(fext, flags=FFTW.MEASURE)
+        forward_transform = plan_fft!(fext, flags=fftw_flags)
+        backward_transform = plan_ifft!(fext, flags=fftw_flags)
         # create array for differentiation matrix 
         Dmat = allocate_float(coord.ngrid, coord.ngrid)
         cheb_derivative_matrix_elementwise_radau_by_FFT!(Dmat, coord, fcheby, dcheby, fext, forward_transform)
@@ -400,88 +465,8 @@ function chebyshev_spectral_derivative!(df,f)
     end
 end
 
-"""
-Interpolation from a regular grid to a 1d grid with arbitrary spacing
-
-Arguments
----------
-result : Array{mk_float, 1}
-    Array to be overwritten with the result of the interpolation
-new_grid : Array{mk_float, 1}
-    Grid of points to interpolate `coord` to
-f : Array{mk_float}
-    Field to be interpolated
-coord : coordinate
-    `coordinate` struct giving the coordinate along which f varies
-chebyshev : chebyshev_info
-    struct containing information for Chebyshev transforms
-
-Note that this routine does not support Gauss-Chebyshev-Radau elements
-"""
-function interpolate_to_grid_1d!(result, newgrid, f, coord, chebyshev::chebyshev_info)
-    # define local variable nelement for convenience
-    nelement = coord.nelement_local
-    # check array bounds
-    @boundscheck nelement == size(chebyshev.lobatto.f,2) || throw(BoundsError(chebyshev.lobatto.f))
-
-    n_new = size(newgrid)[1]
-    # Find which points belong to which element.
-    # kstart[j] contains the index of the first point in newgrid that is within element
-    # j, and kstart[nelement+1] is n_new if the last point is within coord.grid, or the
-    # index of the first element outside coord.grid otherwise.
-    # Assumes points in newgrid are sorted.
-    # May not be the most efficient algorithm.
-    # Find start/end points for each element, storing their indices in kstart
-    kstart = Vector{mk_int}(undef, nelement+1)
-    # set the starting index by finding the start of coord.grid
-    kstart[1] = searchsortedfirst(newgrid, coord.grid[1])
-    # check to see if any of the newgrid points are to the left of the first grid point
-    for j ∈ 1:kstart[1]-1
-        # if the new grid location is outside the bounds of the original grid,
-        # extrapolate f with Gaussian-like decay beyond the domain
-        result[j] = f[1] * exp(-(coord.grid[1] - newgrid[j])^2)
-    end
-    @inbounds for j ∈ 1:nelement
-        # Search from kstart[j] to try to speed up the sort, but means result of
-        # searchsortedfirst() is offset by kstart[j]-1 from the beginning of newgrid.
-        kstart[j+1] = kstart[j] - 1 + @views searchsortedfirst(newgrid[kstart[j]:end], coord.grid[coord.imax[j]])
-    end
-
-    # First element includes both boundary points, while all others have only one (to
-    # avoid duplication), so calculate the first element outside the loop.
-    if kstart[1] < kstart[2]
-        imin = coord.imin[1]
-        imax = coord.imax[1]
-        kmin = kstart[1]
-        kmax = kstart[2] - 1
-        @views chebyshev_interpolate_single_element!(result[kmin:kmax],
-                                                     newgrid[kmin:kmax],
-                                                     f[imin:imax],
-                                                     imin, imax, coord, chebyshev.lobatto)
-    end
-    @inbounds for j ∈ 2:nelement
-        kmin = kstart[j]
-        kmax = kstart[j+1] - 1
-        if kmin <= kmax
-            imin = coord.imin[j] - 1
-            imax = coord.imax[j]
-            @views chebyshev_interpolate_single_element!(result[kmin:kmax],
-                                                         newgrid[kmin:kmax],
-                                                         f[imin:imax],
-                                                         imin, imax, coord, chebyshev.lobatto)
-        end
-    end
-
-    for k ∈ kstart[nelement+1]:n_new
-        result[k] = f[end] * exp(-(newgrid[k] - coord.grid[end])^2)
-    end
-
-    return nothing
-end
-
-"""
-"""
-function chebyshev_interpolate_single_element!(result, newgrid, f, imin, imax, coord, chebyshev::chebyshev_base_info)
+function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, coord,
+                                     chebyshev::chebyshev_base_info)
     # Temporary buffer to store Chebyshev coefficients
     cheby_f = chebyshev.df
 
@@ -602,7 +587,7 @@ function chebyshev_radau_weights(moments::Array{mk_float,1}, n)
     # create array for moments on extended [0,2π] domain in theta = ArcCos[z]
     fext = allocate_complex(nfft)
     # make fft plan
-    forward_transform = plan_fft!(fext, flags=FFTW.MEASURE)
+    forward_transform = plan_fft!(fext, flags=FFTW.ESTIMATE)
     # assign values of fext from moments 
     @inbounds begin
         for j ∈ 1:n
