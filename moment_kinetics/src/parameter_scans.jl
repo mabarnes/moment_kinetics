@@ -4,10 +4,10 @@ export get_scan_inputs, generate_scan_input_files
 
 using ..command_line_options: get_options
 using ..moment_kinetics_input: read_input_file
+using ..input_structs: options_to_TOML
 
 using Glob
 using OrderedCollections: OrderedDict
-using TOML
 
 """
     get_scan_inputs(scan_inputs::AbstractDict)
@@ -184,7 +184,7 @@ function generate_scan_input_files(scan_input::AbstractDict, dirname::AbstractSt
             # The run name will be created from the name of the input file, so do not need
             # to save "run_name" in the file.
             pop!(input, "run_name")
-            TOML.print(io, input)
+            options_to_TOML(io, input)
         end
     end
 

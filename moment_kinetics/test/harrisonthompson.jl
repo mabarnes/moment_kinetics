@@ -11,6 +11,8 @@ using SpecialFunctions: dawson
 using moment_kinetics.load_data: open_readonly_output_file
 using moment_kinetics.load_data: load_fields_data, load_time_data
 using moment_kinetics.load_data: load_species_data, load_coordinate_data
+using moment_kinetics.input_structs: merge_dict_with_kwargs!
+using moment_kinetics.type_definitions: OptionsDict
 
 ionization_frequency = 0.688
 
@@ -61,36 +63,36 @@ function findphi(z, R_ion)
 end
 
 # default inputs for tests
-test_input_finite_difference = Dict("n_ion_species" => 1,
-                                    "n_neutral_species" => 0,
-                                    "boltzmann_electron_response" => true,
+test_input_finite_difference = Dict("composition" => OptionsDict("n_ion_species" => 1,
+                                                                      "n_neutral_species" => 0,
+                                                                      "electron_physics" => "boltzmann_electron_response",
+                                                                      "T_e" => 1.0,
+                                                                      "T_wall" => 1.0),
+                                    "ion_species_1" => OptionsDict("initial_density" => 1.0,
+                                                                        "initial_temperature" => 1.0),
+                                    "z_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                                             "density_amplitude" => 0.0,
+                                                                             "density_phase" => 0.0,
+                                                                             "upar_amplitude" => 0.0,
+                                                                             "upar_phase" => 0.0,
+                                                                             "temperature_amplitude" => 0.0,
+                                                                             "temperature_phase" => 0.0),
+                                    "vpa_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                                             "density_amplitude" => 1.0,
+                                                                             "density_phase" => 0.0,
+                                                                             "upar_amplitude" => 0.0,
+                                                                             "upar_phase" => 0.0,
+                                                                             "temperature_amplitude" => 0.0,
+                                                                             "temperature_phase" => 0.0),
                                     "run_name" => "finite_difference",
                                     "evolve_moments_density" => false,
                                     "evolve_moments_parallel_flow" => false,
                                     "evolve_moments_parallel_pressure" => false,
                                     "evolve_moments_conservation" => false,
-                                    "T_e" => 1.0,
-                                    "T_wall" => 1.0,
-                                    "initial_density1" => 1.0,
-                                    "initial_temperature1" => 1.0,
-                                    "z_IC_option1" => "gaussian",
-                                    "z_IC_density_amplitude1" => 0.0,
-                                    "z_IC_density_phase1" => 0.0,
-                                    "z_IC_upar_amplitude1" => 0.0,
-                                    "z_IC_upar_phase1" => 0.0,
-                                    "z_IC_temperature_amplitude1" => 0.0,
-                                    "z_IC_temperature_phase1" => 0.0,
-                                    "vpa_IC_option1" => "gaussian",
-                                    "vpa_IC_density_amplitude1" => 1.0,
-                                    "vpa_IC_density_phase1" => 0.0,
-                                    "vpa_IC_upar_amplitude1" => 0.0,
-                                    "vpa_IC_upar_phase1" => 0.0,
-                                    "vpa_IC_temperature_amplitude1" => 0.0,
-                                    "vpa_IC_temperature_phase1" => 0.0,
                                     "charge_exchange_frequency" => 0.0,
                                     "ionization_frequency" => 0.0,
                                     "constant_ionization_rate" => true,
-                                    "timestepping" => Dict{String,Any}("nstep" => 9000,
+                                    "timestepping" => OptionsDict("nstep" => 9000,
                                                                        "dt" => 0.0005,
                                                                        "nwrite" => 9000,
                                                                        "split_operators" => false),
@@ -156,10 +158,10 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
 
     # Make a copy to make sure nothing modifies the input Dicts defined in this test
     # script.
-    test_input = deepcopy(test_input)
+    input = deepcopy(test_input)
 
     # Convert keyword arguments to a unique name
-    name = test_input["run_name"]
+    name = input["run_name"]
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
 
@@ -170,12 +172,8 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
     # Provide some progress info
     println("    - testing ", name)
 
-    # Convert dict from symbol keys to String keys
-    modified_inputs = Dict(String(k) => v for (k, v) in args)
-
     # Update default inputs with values to be changed
-    input = merge(test_input, modified_inputs)
-
+    merge_dict_with_kwargs!(input; args...)
     input["run_name"] = name
 
     # Suppress console output while running

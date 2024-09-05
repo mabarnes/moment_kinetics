@@ -10,59 +10,60 @@ using Base.Filesystem: tempname
 using MPI
 
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.input_structs: grid_input, advection_input
+using moment_kinetics.input_structs: grid_input, advection_input, merge_dict_with_kwargs!
 using moment_kinetics.interpolation: interpolate_to_grid_z
 using moment_kinetics.load_data: get_run_info_no_setup, close_run_info,
                                  postproc_load_variable
+using moment_kinetics.type_definitions: OptionsDict
 
 # default inputs for tests
-test_input = Dict("n_ion_species" => 1,
-                  "n_neutral_species" => 1,
-                  "boltzmann_electron_response" => true,
+test_input = Dict("composition" => OptionsDict("n_ion_species" => 1,
+                                                  "n_neutral_species" => 1,
+                                                  "electron_physics" => "boltzmann_electron_response",
+                                                  "T_e" => 0.2,
+                                                  "T_wall" => 0.1,
+                                                  "recycling_fraction" => 0.5),
+                "ion_species_1" => OptionsDict("initial_density" => 1.0,
+                                                    "initial_temperature" => 1.0),
+                "z_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                         "density_amplitude" => 0.0,
+                                                         "density_phase" => 0.0,
+                                                         "upar_amplitude" => 1.0,
+                                                         "upar_phase" => 0.0,
+                                                         "temperature_amplitude" => 0.0,
+                                                         "temperature_phase" => 0.0),
+                "vpa_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                         "density_amplitude" => 1.0,
+                                                         "density_phase" => 0.0,
+                                                         "upar_amplitude" => 0.0,
+                                                         "upar_phase" => 0.0,
+                                                         "temperature_amplitude" => 0.0,
+                                                         "temperature_phase" => 0.0),
+                "neutral_species_1" => OptionsDict("initial_density" => 1.0,
+                                                        "initial_temperature" => 1.0),
+                "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                             "density_amplitude" => 0.001,
+                                                             "density_phase" => 0.0,
+                                                             "upar_amplitude" => -1.0,
+                                                             "upar_phase" => 0.0,
+                                                             "temperature_amplitude" => 0.0,
+                                                             "temperature_phase" => 0.0),  
+                "vpa_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                             "density_amplitude" => 1.0,
+                                                             "density_phase" => 0.0,
+                                                             "upar_amplitude" => 0.0,
+                                                             "upar_phase" => 0.0,
+                                                             "temperature_amplitude" => 0.0,
+                                                             "temperature_phase" => 0.0),  
                   "run_name" => "full-f",
                   "evolve_moments_density" => false,
                   "evolve_moments_parallel_flow" => false,
                   "evolve_moments_parallel_pressure" => false,
                   "evolve_moments_conservation" => false,
-                  "recycling_fraction" => 0.5,
-                  "T_e" => 0.2,
-                  "T_wall" => 0.1,
-                  "initial_density1" => 1.0,
-                  "initial_temperature1" => 1.0,
-                  "z_IC_option1" => "gaussian",
-                  "z_IC_density_amplitude1" => 0.0,
-                  "z_IC_density_phase1" => 0.0,
-                  "z_IC_upar_amplitude1" => 1.0,
-                  "z_IC_upar_phase1" => 0.0,
-                  "z_IC_temperature_amplitude1" => 0.0,
-                  "z_IC_temperature_phase1" => 0.0,
-                  "vpa_IC_option1" => "gaussian",
-                  "vpa_IC_density_amplitude1" => 1.0,
-                  "vpa_IC_density_phase1" => 0.0,
-                  "vpa_IC_upar_amplitude1" => 0.0,
-                  "vpa_IC_upar_phase1" => 0.0,
-                  "vpa_IC_temperature_amplitude1" => 0.0,
-                  "vpa_IC_temperature_phase1" => 0.0,
-                  "initial_density2" => 1.0,
-                  "initial_temperature2" => 1.0,
-                  "z_IC_option2" => "gaussian",
-                  "z_IC_density_amplitude2" => 0.001,
-                  "z_IC_density_phase2" => 0.0,
-                  "z_IC_upar_amplitude2" => -1.0,
-                  "z_IC_upar_phase2" => 0.0,
-                  "z_IC_temperature_amplitude2" => 0.0,
-                  "z_IC_temperature_phase2" => 0.0,
-                  "vpa_IC_option2" => "gaussian",
-                  "vpa_IC_density_amplitude2" => 1.0,
-                  "vpa_IC_density_phase2" => 0.0,
-                  "vpa_IC_upar_amplitude2" => 0.0,
-                  "vpa_IC_upar_phase2" => 0.0,
-                  "vpa_IC_temperature_amplitude2" => 0.0,
-                  "vpa_IC_temperature_phase2" => 0.0,
                   "charge_exchange_frequency" => 0.75,
                   "ionization_frequency" => 0.5,
                   "constant_ionization_rate" => false,
-                  "timestepping" => Dict{String,Any}("nstep" => 1000,
+                  "timestepping" => OptionsDict("nstep" => 1000,
                                                      "dt" => 1.0e-4,
                                                      "nwrite" => 1000,
                                                      "split_operators" => false),
@@ -107,8 +108,8 @@ test_input_split3 = merge(test_input_split2,
                                "vpa_nelement" => 31,
                                "vz_nelement" => 31,
                                "evolve_moments_parallel_pressure" => true,
-                               "ion_numerical_dissipation" => Dict{String,Any}("force_minimum_pdf_value" => 0.0, "vpa_dissipation_coefficient" => 1e-2),
-                               "neutral_numerical_dissipation" => Dict{String,Any}("force_minimum_pdf_value" => 0.0, "vz_dissipation_coefficient" => 1e-2)))
+                               "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0, "vpa_dissipation_coefficient" => 1e-2),
+                               "neutral_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0, "vz_dissipation_coefficient" => 1e-2)))
 test_input_split3["timestepping"] = merge(test_input_split3["timestepping"],
                                            Dict("dt" => 1.0e-5,
                                                 "write_error_diagnostics" => true,
@@ -116,7 +117,7 @@ test_input_split3["timestepping"] = merge(test_input_split3["timestepping"],
 
 # default inputs for adaptive timestepping tests
 test_input_adaptive = merge(test_input,
-                            Dict{String,Any}("run_name" => "adaptive full-f",
+                            OptionsDict("run_name" => "adaptive full-f",
                                              "z_ngrid" => 5,
                                              "z_nelement" => 16,
                                              "vpa_ngrid" => 6,
@@ -130,7 +131,7 @@ test_input_adaptive = merge(test_input,
 # though the difference should be negligible compared to the
 # discretization error of the simulation).
 test_input_adaptive["timestepping"] = merge(test_input_adaptive["timestepping"],
-                                            Dict{String,Any}("type" => "Fekete4(3)",
+                                            OptionsDict("type" => "Fekete4(3)",
                                                              "nstep" => 5000,
                                                              "dt" => 1.0e-5,
                                                              "minimum_dt" => 1.0e-5,
@@ -147,18 +148,18 @@ test_input_adaptive_split2 = merge(test_input_adaptive_split1,
                                    Dict("run_name" => "adaptive split2",
                                         "evolve_moments_parallel_flow" => true))
 test_input_adaptive_split2["timestepping"] = merge(test_input_adaptive_split2["timestepping"],
-                                                   Dict{String,Any}("step_update_prefactor" => 0.4))
+                                                   OptionsDict("step_update_prefactor" => 0.4))
 test_input_adaptive_split3 = merge(test_input_adaptive_split2,
                                    Dict("run_name" => "adaptive split3",
                                         "evolve_moments_parallel_pressure" => true,
-                                        "numerical_dissipation" => Dict{String,Any}("force_minimum_pdf_value" => 0.0,
+                                        "numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
                                                                                     "vpa_dissipation_coefficient" => 1e-2)))
 # The initial conditions seem to make the split3 case hard to advance without any
 # failures. In a real simulation, would just set the minimum_dt higher to try to get
 # through this without crashing. For this test, want the timestep to adapt (not just sit
 # at minimum_dt), so just set a very small timestep.
 test_input_adaptive_split3["timestepping"] = merge(test_input_adaptive_split3["timestepping"],
-                                                   Dict{String,Any}("dt" => 1.0e-7,
+                                                   OptionsDict("dt" => 1.0e-7,
                                                                     "rtol" => 2.0e-4,
                                                                     "atol" => 2.0e-10,
                                                                     "minimum_dt" => 1.0e-7,
@@ -173,10 +174,10 @@ function run_test(test_input, expected_phi; rtol=4.e-14, atol=1.e-15, args...)
 
     # Make a copy to make sure nothing modifies the input Dicts defined in this test
     # script.
-    test_input = deepcopy(test_input)
+    input = deepcopy(test_input)
 
     # Convert keyword arguments to a unique name
-    name = test_input["run_name"]
+    name = input["run_name"]
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
 
@@ -187,12 +188,8 @@ function run_test(test_input, expected_phi; rtol=4.e-14, atol=1.e-15, args...)
     # Provide some progress info
     println("    - testing ", name)
 
-    # Convert dict from symbol keys to String keys
-    modified_inputs = Dict(String(k) => v for (k, v) in args)
-
     # Update default inputs with values to be changed
-    input = merge(test_input, modified_inputs)
-
+    merge_dict_with_kwargs!(input; args...)
     input["run_name"] = name
 
     # Suppress console output while running

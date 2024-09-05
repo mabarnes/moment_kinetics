@@ -59,14 +59,15 @@ using moment_kinetics.velocity_moments: integrate_over_vspace
 using moment_kinetics.manufactured_solns: manufactured_solutions,
                                           manufactured_electric_fields,
                                           manufactured_geometry
-using moment_kinetics.moment_kinetics_input: mk_input, get, get_default_rhostar
+using moment_kinetics.moment_kinetics_input: mk_input, get
 using moment_kinetics.input_structs: geometry_input, grid_input, species_composition
-using moment_kinetics.input_structs: electron_physics_type, boltzmann_electron_response,
+using moment_kinetics.input_structs: boltzmann_electron_response, #electron_physics_type,
                                      boltzmann_electron_response_with_simple_sheath
+using moment_kinetics.species_input: get_species_input
 using moment_kinetics.reference_parameters
 using moment_kinetics.geo: init_magnetic_geometry
 using .post_processing_input: pp
-using .shared_utils: calculate_and_write_frequencies, get_geometry, get_composition
+using .shared_utils: calculate_and_write_frequencies, get_geometry
 using TOML
 import Base: get
 
@@ -679,7 +680,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     geometry =
         get_tuple_of_return_values(get_geometry, scan_input, z, r)
     composition =
-        get_tuple_of_return_values(get_composition, scan_input)
+        get_tuple_of_return_values(get_species_input, scan_input)
 
     # initialise the post-processing input options
     nwrite_movie, itime_min, itime_max, nwrite_movie_pdfs, itime_min_pdfs, itime_max_pdfs,
