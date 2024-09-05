@@ -10,7 +10,7 @@ permissions:
 jobs:
   test-ubuntu:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 150
 
     steps:
       - uses: actions/checkout@v4
@@ -54,9 +54,9 @@ jobs:
           version: '1.10'
       - uses: julia-actions/cache@v1
       - run: |
-          MPILIBPATH=$(find /opt/homebrew/Cellar/open-mpi/ -name libmpi.dylib)
+          export MPILIBPATH=$(find /opt/homebrew/Cellar/open-mpi/ -name libmpi.dylib)
           touch Project.toml
-          julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["MPI", "MPIPreferences"]); using MPIPreferences; MPIPreferences.use_system_binary(library_names="/opt/homebrew/Cellar/open-mpi/5.0.3/lib/libmpi.dylib")'
+          julia --project -O3 --check-bounds=no -e "import Pkg; Pkg.add([\"MPI\", \"MPIPreferences\"]); using MPIPreferences; MPIPreferences.use_system_binary(library_names=\"$MPILIBPATH\")"
           julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["NCDatasets", "Random", "SpecialFunctions", "Test"]); Pkg.develop(path="moment_kinetics/")'
           julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.precompile()'
           # Need to use openmpi so that the following arguments work:

@@ -5,6 +5,7 @@ include("setup.jl")
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.calculus: derivative!, second_derivative!, integral
+using moment_kinetics.calculus: laplacian_derivative!
 
 using MPI
 using Random
@@ -904,7 +905,7 @@ function runtests()
                 # create the coordinate struct 'x' and info for derivatives, etc.
                 # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
                 # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; ignore_MPI=true, init_YY=false)
+                x, spectral = define_coordinate(input; ignore_MPI=true, collision_operator_dim=false)
 
                 offset = randn(rng)
                 f = @. sinpi(2.0 * x.grid / L) + offset
@@ -1023,7 +1024,7 @@ function runtests()
                 # create the coordinate struct 'x' and info for derivatives, etc.
                 # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
                 # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; ignore_MPI=true, init_YY=false)
+                x, spectral = define_coordinate(input; ignore_MPI=true, collision_operator_dim=false)
 
                 offset = randn(rng)
                 f = @. sinpi(2.0 * x.grid / L) + offset
@@ -1069,7 +1070,7 @@ function runtests()
                 # create the coordinate struct 'x' and info for derivatives, etc.
                 # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
                 # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; ignore_MPI=true, init_YY=false)
+                x, spectral = define_coordinate(input; ignore_MPI=true, collision_operator_dim=false)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
@@ -1122,7 +1123,7 @@ function runtests()
                 # create the coordinate struct 'x' and info for derivatives, etc.
                 # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
                 # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; ignore_MPI=true, init_YY=false)
+                x, spectral = define_coordinate(input; ignore_MPI=true, collision_operator_dim=false)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
@@ -1355,6 +1356,101 @@ function runtests()
             end
         end
         
+        @testset "Chebyshev pseudospectral cylindrical laplacian derivatives (4 argument), zero" verbose=false begin
+            @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
+                    (
+                     (4, 7, 2.e-1),
+                     (4, 8, 2.e-1),
+                     (4, 9, 4.e-2),
+                     (4, 10, 4.e-2),
+                     (4, 11, 5.e-3),
+                     (4, 12, 5.e-3),
+                     (4, 13, 5.e-3),
+                     (4, 14, 5.e-3),
+                     (4, 15, 5.e-3),
+                     (4, 16, 5.e-3),
+                     (4, 17, 5.e-3),
+                     (4, 18, 5.e-3),
+                     (4, 19, 5.e-3),
+                     (4, 20, 5.e-3),
+                     (4, 21, 5.e-3),
+                     (4, 22, 5.e-3),
+                     (4, 23, 5.e-3),
+                     (4, 24, 4.e-3),
+                     (4, 25, 4.e-3),
+                     (4, 26, 4.e-3),
+                     (4, 27, 4.e-3),
+                     (4, 28, 4.e-3),
+                     (4, 29, 4.e-3),
+                     (4, 30, 4.e-3),
+                     (4, 31, 4.e-3),
+                     (4, 32, 4.e-3),
+                     (4, 33, 4.e-3),
+
+                     (5, 7, 2.e-1),
+                     (5, 8, 8.e-2),
+                     (5, 9, 5.e-2),
+                     (5, 10, 8.e-3),
+                     (5, 11, 8.e-3),
+                     (5, 12, 8.e-3),
+                     (5, 13, 8.e-3),
+                     (5, 14, 8.e-3),
+                     (5, 15, 8.e-3),
+                     (5, 16, 2.e-3),
+                     (5, 17, 2.e-3),
+                     (5, 18, 2.e-3),
+                     (5, 19, 2.e-3),
+                     (5, 20, 2.e-3),
+                     (5, 21, 2.e-3),
+                     (5, 22, 2.e-3),
+                     (5, 23, 2.e-3),
+                     (5, 24, 2.e-3),
+                     (5, 25, 2.e-3),
+                     (5, 26, 2.e-3),
+                     (5, 27, 2.e-3),
+                     (5, 28, 2.e-3),
+                     (5, 29, 2.e-3),
+                     (5, 30, 2.e-3),
+                     (5, 31, 2.e-3),
+                     (5, 32, 2.e-3),
+                     (5, 33, 2.e-3),
+                    ), cheb_option in ("FFT","matrix")
+
+                # define inputs needed for the test
+                L = 6.0
+                bc = "zero"
+                # fd_option and adv_input not actually used so given values unimportant
+                fd_option = ""
+                adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                # create the 'input' struct containing input info needed to create a
+                # coordinate
+                nelement_local = nelement
+				nrank_per_block = 0 # dummy value
+				irank = 0 # dummy value
+				comm = MPI.COMM_NULL # dummy value
+                element_spacing_option = "uniform"
+				input = grid_input("vperp", ngrid, nelement,
+                    nelement_local, nrank_per_block, irank, L,
+                    "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
+                    element_spacing_option)
+                # create the coordinate struct 'x' and info for derivatives, etc.
+                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
+                # errors due to communicators not being fully set up.
+                x, spectral = define_coordinate(input; ignore_MPI=true)
+
+                f = @. exp(-x.grid^2)
+                expected_d2f = @. 4.0*(x.grid^2 - 1.0)*exp(-x.grid^2)
+                # create array for the derivative d2f/dx2
+                d2f = similar(f)
+
+                # differentiate f
+                laplacian_derivative!(d2f, f, x, spectral)
+
+                @test isapprox(d2f, expected_d2f, rtol=rtol, atol=1.e-10,
+                               norm=maxabs_norm)
+            end
+        end
+        
         @testset "GaussLegendre pseudospectral second derivatives (4 argument), periodic" verbose=false begin
             @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
                     (
@@ -1448,7 +1544,7 @@ function runtests()
                 # create the coordinate struct 'x' and info for derivatives, etc.
                 # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
                 # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; ignore_MPI=true, init_YY=false)
+                x, spectral = define_coordinate(input; ignore_MPI=true, collision_operator_dim=false)
 
                 offset = randn(rng)
                 f = @. sinpi(2.0 * x.grid / L) + offset
@@ -1459,6 +1555,111 @@ function runtests()
 
                 # differentiate f
                 second_derivative!(d2f, f, x, spectral)
+
+                @test isapprox(d2f, expected_d2f, rtol=rtol, atol=1.e-10,
+                               norm=maxabs_norm)
+            end
+        end
+        
+    @testset "GaussLegendre pseudospectral cylindrical laplacian derivatives (4 argument), zero" verbose=false begin
+            @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
+                    (
+                     (1, 8, 5.e-2),
+                     (1, 9, 1.e-1),
+                     (1, 10, 2.e-1),
+                     (1, 11, 5.e-2),
+                     (1, 12, 5.e-2),
+                     (1, 13, 5.e-2),
+                     (1, 14, 5.e-2),
+                     (1, 15, 5.e-3),
+                     (1, 16, 5.e-2),
+                     (1, 17, 5.e-3),
+                     
+                     (2, 6, 8.e-2),
+                     (2, 7, 8.e-2),
+                     (2, 8, 5.e-2),
+                     (2, 9, 5.e-2),
+                     (2, 10, 5.e-2),
+                     (2, 11, 5.e-3),
+                     (2, 12, 5.e-3),
+                     (2, 13, 5.e-4),
+                     (2, 14, 5.e-4),
+                     (2, 15, 5.e-4),
+                     (2, 16, 5.e-4),
+                     (2, 17, 5.e-4),
+                     
+                     (3, 6, 5.e-2),
+                     (3, 7, 5.e-3),
+                     (3, 8, 5.e-2),
+                     (3, 9, 5.e-4),
+                     (3, 10, 5.e-3),
+                     (3, 11, 5.e-4),
+                     (3, 12, 5.e-5),
+                     (3, 13, 5.e-5),
+                     (3, 14, 5.e-6),
+                     (3, 15, 5.e-6),
+                     (3, 16, 5.e-6),
+                     (3, 17, 5.e-8),
+                     
+                     (4, 5, 5.e-2),
+                     (4, 6, 2.e-2),
+                     (4, 7, 2.e-2),
+                     (4, 8, 2.e-3),
+                     (4, 9, 1.e-3),
+                     (4, 10, 1.e-4),
+                     (4, 11, 8.e-5),
+                     (4, 12, 8.e-6),
+                     (4, 13, 8.e-6),
+                     (4, 14, 8.e-7),
+                     (4, 15, 8.e-7),
+                     (4, 16, 8.e-8),
+                     (4, 17, 8.e-8),
+                     
+                     (5, 5, 4.e-2),
+                     (5, 6, 8.e-3),
+                     (5, 7, 5.e-3),
+                     (5, 8, 5.e-4),
+                     (5, 9, 8.e-5),
+                     (5, 10, 5.e-6),
+                     (5, 11, 8.e-6),
+                     (5, 12, 4.e-7),
+                     (5, 13, 2.e-7),
+                     (5, 14, 2.e-7),
+                     (5, 15, 8.e-7),
+                     (5, 16, 8.e-10),
+                     (5, 17, 8.e-10),
+                     )
+
+                # define inputs needed for the test
+                L = 6.0
+                bc = "zero"
+                # fd_option and adv_input not actually used so given values unimportant
+                fd_option = ""
+                adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                cheb_option = ""
+                # create the 'input' struct containing input info needed to create a
+                # coordinate
+                nelement_local = nelement
+				nrank_per_block = 0 # dummy value
+				irank = 0 # dummy value
+				comm = MPI.COMM_NULL # dummy value
+                element_spacing_option = "uniform"
+				input = grid_input("vperp", ngrid, nelement,
+                    nelement_local, nrank_per_block, irank, L,
+                    "gausslegendre_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
+                    element_spacing_option)
+                # create the coordinate struct 'x' and info for derivatives, etc.
+                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
+                # errors due to communicators not being fully set up.
+                x, spectral = define_coordinate(input; ignore_MPI=true, collision_operator_dim=false)
+
+                f = @. exp(-x.grid^2)
+                expected_d2f = @. 4.0*(x.grid^2 - 1.0)*exp(-x.grid^2)
+                # create array for the derivative d2f/dx2
+                d2f = similar(f)
+
+                # differentiate f
+                laplacian_derivative!(d2f, f, x, spectral)
 
                 @test isapprox(d2f, expected_d2f, rtol=rtol, atol=1.e-10,
                                norm=maxabs_norm)

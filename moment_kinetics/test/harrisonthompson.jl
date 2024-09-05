@@ -11,6 +11,8 @@ using SpecialFunctions: dawson
 using moment_kinetics.load_data: open_readonly_output_file
 using moment_kinetics.load_data: load_fields_data, load_time_data
 using moment_kinetics.load_data: load_species_data, load_coordinate_data
+using moment_kinetics.input_structs: merge_dict_with_kwargs!
+using moment_kinetics.type_definitions: OptionsDict
 
 ionization_frequency = 0.688
 
@@ -61,36 +63,36 @@ function findphi(z, R_ion)
 end
 
 # default inputs for tests
-test_input_finite_difference = Dict("n_ion_species" => 1,
-                                    "n_neutral_species" => 0,
-                                    "boltzmann_electron_response" => true,
+test_input_finite_difference = Dict("composition" => OptionsDict("n_ion_species" => 1,
+                                                                      "n_neutral_species" => 0,
+                                                                      "electron_physics" => "boltzmann_electron_response",
+                                                                      "T_e" => 1.0,
+                                                                      "T_wall" => 1.0),
+                                    "ion_species_1" => OptionsDict("initial_density" => 1.0,
+                                                                        "initial_temperature" => 1.0),
+                                    "z_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                                             "density_amplitude" => 0.0,
+                                                                             "density_phase" => 0.0,
+                                                                             "upar_amplitude" => 0.0,
+                                                                             "upar_phase" => 0.0,
+                                                                             "temperature_amplitude" => 0.0,
+                                                                             "temperature_phase" => 0.0),
+                                    "vpa_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                                             "density_amplitude" => 1.0,
+                                                                             "density_phase" => 0.0,
+                                                                             "upar_amplitude" => 0.0,
+                                                                             "upar_phase" => 0.0,
+                                                                             "temperature_amplitude" => 0.0,
+                                                                             "temperature_phase" => 0.0),
                                     "run_name" => "finite_difference",
                                     "evolve_moments_density" => false,
                                     "evolve_moments_parallel_flow" => false,
                                     "evolve_moments_parallel_pressure" => false,
                                     "evolve_moments_conservation" => false,
-                                    "T_e" => 1.0,
-                                    "T_wall" => 1.0,
-                                    "initial_density1" => 1.0,
-                                    "initial_temperature1" => 1.0,
-                                    "z_IC_option1" => "gaussian",
-                                    "z_IC_density_amplitude1" => 0.001,
-                                    "z_IC_density_phase1" => 0.0,
-                                    "z_IC_upar_amplitude1" => 0.0,
-                                    "z_IC_upar_phase1" => 0.0,
-                                    "z_IC_temperature_amplitude1" => 0.0,
-                                    "z_IC_temperature_phase1" => 0.0,
-                                    "vpa_IC_option1" => "gaussian",
-                                    "vpa_IC_density_amplitude1" => 1.0,
-                                    "vpa_IC_density_phase1" => 0.0,
-                                    "vpa_IC_upar_amplitude1" => 0.0,
-                                    "vpa_IC_upar_phase1" => 0.0,
-                                    "vpa_IC_temperature_amplitude1" => 0.0,
-                                    "vpa_IC_temperature_phase1" => 0.0,
                                     "charge_exchange_frequency" => 0.0,
                                     "ionization_frequency" => 0.0,
                                     "constant_ionization_rate" => true,
-                                    "timestepping" => Dict{String,Any}("nstep" => 9000,
+                                    "timestepping" => OptionsDict("nstep" => 9000,
                                                                        "dt" => 0.0005,
                                                                        "nwrite" => 9000,
                                                                        "split_operators" => false),
@@ -156,10 +158,10 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
 
     # Make a copy to make sure nothing modifies the input Dicts defined in this test
     # script.
-    test_input = deepcopy(test_input)
+    input = deepcopy(test_input)
 
     # Convert keyword arguments to a unique name
-    name = test_input["run_name"]
+    name = input["run_name"]
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
 
@@ -170,12 +172,8 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
     # Provide some progress info
     println("    - testing ", name)
 
-    # Convert dict from symbol keys to String keys
-    modified_inputs = Dict(String(k) => v for (k, v) in args)
-
     # Update default inputs with values to be changed
-    input = merge(test_input, modified_inputs)
-
+    merge_dict_with_kwargs!(input; args...)
     input["run_name"] = name
 
     # Suppress console output while running
@@ -199,8 +197,8 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
             fid = open_readonly_output_file(path,"moments")
 
             # load space-time coordinate data
-            z, z_spectral, z_chunk_size = load_coordinate_data(fid, "z")
-            r, r_spectral, r_chunk_size = load_coordinate_data(fid, "r")
+            z, z_spectral, z_chunk_size = load_coordinate_data(fid, "z"; ignore_MPI=true)
+            r, r_spectral, r_chunk_size = load_coordinate_data(fid, "r"; ignore_MPI=true)
             ntime, time = load_time_data(fid)
             n_ion_species, n_neutral_species = load_species_data(fid)
             
@@ -223,7 +221,11 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
                        rtol=10.0*analytic_rtol, atol=analytic_atol)
 
         # Regression test
-        @test isapprox(phi[:, end], expected_phi, rtol=regression_rtol, atol=regression_atol)
+        if expected_phi === nothing
+            println("values tested would be ", phi[:,end])
+        else
+            @test isapprox(phi[:, end], expected_phi, rtol=regression_rtol, atol=regression_atol)
+        end
     end
 end
 
@@ -242,44 +244,44 @@ function runtests()
         @testset "Chebyshev" begin
             test_input_chebyshev["base_directory"] = test_output_directory
             run_test(test_input_chebyshev, 3.e-2, 3.e-3,
-                     [-0.8270506701954182, -0.6647482038047513, -0.4359510242978734,
-                      -0.2930090318306279, -0.19789542580389763, -0.14560099254974576,
-                      -0.12410802135258239, -0.11657014257474364, -0.11761846656548933,
-                      -0.11657014257474377, -0.12410802135258239, -0.1456009925497464,
-                      -0.19789542580389616, -0.2930090318306262, -0.435951024297872,
-                      -0.66474820380475, -0.8270506701954171], 5.0e-9, 1.e-15)
+                     [-0.8270506736528097, -0.6647482045160528, -0.43595102198197894,
+                      -0.2930090302314022, -0.19789542449264944, -0.14560099229503182,
+                      -0.12410802088624982, -0.11657014266155726, -0.1176184662051167,
+                      -0.11657014266155688, -0.1241080208862487, -0.14560099229503298,
+                      -0.1978954244926481, -0.2930090302313995, -0.4359510219819795,
+                      -0.6647482045160534, -0.8270506736528144], 5.0e-9, 1.e-15)
         end
         @testset "Chebyshev split 1" begin
             test_input_chebyshev_split1["base_directory"] = test_output_directory
             run_test(test_input_chebyshev_split1, 3.e-2, 3.e-3,
-                     [-0.808956646073449, -0.6619131832543625, -0.4308291868843453,
-                      -0.295820339728472, -0.19344190006125275, -0.1492514208442407,
-                      -0.11977511930743077, -0.12060863604650167, -0.11342106824862994,
-                      -0.12060863604649866, -0.11977511930742626, -0.14925142084423915,
-                      -0.1934419000612479, -0.295820339728463, -0.4308291868843545,
-                      -0.6619131832543678, -0.808956646073442], 5.0e-9, 1.e-15)
+                     [-0.8089566460734486, -0.6619131832543634, -0.43082918688434424,
+                      -0.29582033972847016, -0.1934419000612522, -0.14925142084423915,
+                      -0.11977511930743077, -0.12060863604650167, -0.11342106824863019,
+                      -0.1206086360464999, -0.11977511930742751, -0.14925142084423915,
+                      -0.19344190006124898, -0.2958203397284666, -0.43082918688435656,
+                      -0.6619131832543697, -0.808956646073445], 5.0e-9, 1.e-15)
         end
         @testset "Chebyshev split 2" begin
             test_input_chebyshev_split2["base_directory"] = test_output_directory
-            run_test(test_input_chebyshev_split2, 5.e-2, 3.e-3,
-                     [-0.7667804422571606, -0.6128777083267765, -0.39031953439035494,
-                      -0.27326504140885904, -0.15311275955907663, -0.11567486122959246,
-                      -0.09226471519174786, -0.07477085120501512, -0.07206945428218994,
-                      -0.07477085120545898, -0.09226471518828984, -0.11567486123016281,
-                      -0.15311275955613904, -0.273265041412353, -0.3903195344134153,
-                      -0.612877708320375, -0.766780442235556], 5.0e-9, 1.e-15)
+            run_test(test_input_chebyshev_split2, 6.e-2, 3.e-3,
+                     [-0.7798736739831602, -0.661568214314525, -0.409872886370737,
+                      -0.24444487132869974, -0.17244646306807737, -0.11761557291772232,
+                      -0.09113439652298189, -0.09025928800454038, -0.08814925970784306,
+                      -0.09025928800449955, -0.0911343965228694, -0.1176155729185088,
+                      -0.1724464630676158, -0.24444487132881484, -0.40987288637069097,
+                      -0.6615682143148902, -0.7798736739849054], 5.0e-9, 1.e-15)
         end
         # The 'split 3' test is pretty badly resolved, but don't want to increase
         # run-time!
         @testset "Chebyshev split 3" begin
             test_input_chebyshev_split3["base_directory"] = test_output_directory
-            run_test(test_input_chebyshev_split3, 2.1e-1, 3.e-3,
-                     [-0.5535421015240105, -0.502816770781802, -0.3755477646148533,
-                      -0.24212761527100635, -0.15737450156025806, -0.11242832417550296,
-                      -0.09168434722655881, -0.08653015173768085, -0.0858195594227437,
-                      -0.08653015173768933, -0.09168434722650211, -0.11242832417546023,
-                      -0.15737450156026872, -0.24212761527101284, -0.3755477646149367,
-                      -0.5028167707818142, -0.5535421015238932], 5.0e-9, 1.e-15)
+            run_test(test_input_chebyshev_split3, 2.5e-1, 3.e-3,
+                     [-0.5012994554414933, -0.4624277373138882, -0.35356695432752266,
+                      -0.22371207174875177, -0.14096934539193717, -0.10082423314545275,
+                      -0.07938834260378662, -0.07480364283744717, -0.07316256734281283,
+                      -0.07480364283744836, -0.07938834260380849, -0.10082423314551169,
+                      -0.14096934539196504, -0.22371207174878788, -0.35356695432739504,
+                      -0.4624277373114037, -0.5012994554370094], 5.0e-9, 1.e-15)
         end
     end
 

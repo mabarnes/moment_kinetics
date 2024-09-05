@@ -27,8 +27,9 @@ using LinearAlgebra: mul!, lu, LU
 using SparseArrays: sparse, AbstractSparseArray
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
-import ..calculus: elementwise_derivative!, elementwise_apply_Kmat!,
-                   elementwise_apply_Lmat!, mass_matrix_solve!
+import ..calculus: elementwise_derivative!, mass_matrix_solve!
+import ..interpolation: single_element_interpolate!
+using ..lagrange_polynomials: lagrange_poly_optimised
 using ..moment_kinetics_structs: weak_discretization_info
 
 
@@ -81,42 +82,48 @@ struct gausslegendre_base_info
     Y31::Array{mk_float,3}
 end
 
-struct gausslegendre_info <: weak_discretization_info
+struct gausslegendre_info{TSparse, TLU} <: weak_discretization_info
     lobatto::gausslegendre_base_info
     radau::gausslegendre_base_info
     # global (1D) mass matrix
     mass_matrix::Array{mk_float,2}
     # global (1D) weak derivative matrix
     #S_matrix::Array{mk_float,2}
-    S_matrix::AbstractSparseArray{mk_float,Ti,2} where Ti
+    S_matrix::TSparse
     # global (1D) weak second derivative matrix
-    K_matrix::Array{mk_float,2}
+    K_matrix::TSparse
     # global (1D) weak Laplacian derivative matrix
-    L_matrix::Array{mk_float,2}
+    L_matrix::TSparse
     # global (1D) LU object
-    mass_matrix_lu::T where T
+    mass_matrix_lu::TLU
     # dummy matrix for local operators
     Qmat::Array{mk_float,2}
 end
 
-function setup_gausslegendre_pseudospectral(coord;init_YY=true)
-    lobatto = setup_gausslegendre_pseudospectral_lobatto(coord,init_YY=init_YY)
-    radau = setup_gausslegendre_pseudospectral_radau(coord,init_YY=init_YY)
+function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true, dirichlet_bc=false)
+    lobatto = setup_gausslegendre_pseudospectral_lobatto(coord,collision_operator_dim=collision_operator_dim)
+    radau = setup_gausslegendre_pseudospectral_radau(coord,collision_operator_dim=collision_operator_dim)
+
+    if collision_operator_dim
+        S_matrix = allocate_float(coord.n,coord.n)
+        setup_global_weak_form_matrix!(S_matrix, lobatto, radau, coord, "S")
+    else
+        S_matrix = allocate_float(0, 0)
+    end
     mass_matrix = allocate_float(coord.n,coord.n)
-    S_matrix = allocate_float(coord.n,coord.n)
     K_matrix = allocate_float(coord.n,coord.n)
     L_matrix = allocate_float(coord.n,coord.n)
-    
-    setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M")
-    setup_global_weak_form_matrix!(S_matrix, lobatto, radau, coord, "S")
-    setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms")
-    setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms")
+
+    setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M"; dirichlet_bc=dirichlet_bc)
+    setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms"; dirichlet_bc=dirichlet_bc)
+    setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms"; dirichlet_bc=dirichlet_bc)
     mass_matrix_lu = lu(sparse(mass_matrix))
     Qmat = allocate_float(coord.ngrid,coord.ngrid)
-    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),K_matrix,L_matrix,mass_matrix_lu,Qmat)
+
+    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),sparse(K_matrix),sparse(L_matrix),mass_matrix_lu,Qmat)
 end
 
-function setup_gausslegendre_pseudospectral_lobatto(coord;init_YY=true)
+function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_dim=true)
     x, w = gausslobatto(coord.ngrid)
     Dmat = allocate_float(coord.ngrid, coord.ngrid)
     gausslobattolegendre_differentiation_matrix!(Dmat,x,coord.ngrid)
@@ -125,37 +132,38 @@ function setup_gausslegendre_pseudospectral_lobatto(coord;init_YY=true)
     GaussLegendre_weak_product_matrix!(M0,coord.ngrid,x,w,"M0")
     M1 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(M1,coord.ngrid,x,w,"M1")
-    M2 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(M2,coord.ngrid,x,w,"M2")
-    S0 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(S0,coord.ngrid,x,w,"S0")
-    S1 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(S1,coord.ngrid,x,w,"S1")
     K0 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(K0,coord.ngrid,x,w,"K0")
     K1 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(K1,coord.ngrid,x,w,"K1")
-    K2 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(K2,coord.ngrid,x,w,"K2")
     P0 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(P0,coord.ngrid,x,w,"P0")
-    P1 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(P1,coord.ngrid,x,w,"P1")
-    P2 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(P2,coord.ngrid,x,w,"P2")
     D0 = allocate_float(coord.ngrid)
     #@. D0 = Dmat[1,:] # values at lower extreme of element
     GaussLegendre_derivative_vector!(D0,-1.0,coord.ngrid,x,w)
     
-    Y00 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y01 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y10 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y11 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y20 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y21 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y30 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y31 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    if init_YY
+    if collision_operator_dim
+        M2 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(M2,coord.ngrid,x,w,"M2")
+        S0 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(S0,coord.ngrid,x,w,"S0")
+        S1 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(S1,coord.ngrid,x,w,"S1")
+        K2 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(K2,coord.ngrid,x,w,"K2")
+        P1 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(P1,coord.ngrid,x,w,"P1")
+        P2 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(P2,coord.ngrid,x,w,"P2")
+
+        Y00 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y01 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y10 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y11 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y20 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y21 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y30 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y31 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
         GaussLegendre_weak_product_matrix!(Y00,coord.ngrid,x,w,"Y00")
         GaussLegendre_weak_product_matrix!(Y01,coord.ngrid,x,w,"Y01")
         GaussLegendre_weak_product_matrix!(Y10,coord.ngrid,x,w,"Y10")
@@ -164,12 +172,28 @@ function setup_gausslegendre_pseudospectral_lobatto(coord;init_YY=true)
         GaussLegendre_weak_product_matrix!(Y21,coord.ngrid,x,w,"Y21")
         GaussLegendre_weak_product_matrix!(Y30,coord.ngrid,x,w,"Y30")
         GaussLegendre_weak_product_matrix!(Y31,coord.ngrid,x,w,"Y31")
+    else
+        M2 = allocate_float(0, 0)
+        S0 = allocate_float(0, 0)
+        S1 = allocate_float(0, 0)
+        K2 = allocate_float(0, 0)
+        P1 = allocate_float(0, 0)
+        P2 = allocate_float(0, 0)
+
+        Y00 = allocate_float(0, 0, 0)
+        Y01 = allocate_float(0, 0, 0)
+        Y10 = allocate_float(0, 0, 0)
+        Y11 = allocate_float(0, 0, 0)
+        Y20 = allocate_float(0, 0, 0)
+        Y21 = allocate_float(0, 0, 0)
+        Y30 = allocate_float(0, 0, 0)
+        Y31 = allocate_float(0, 0, 0)
     end
     return gausslegendre_base_info(Dmat,M0,M1,M2,S0,S1,
             K0,K1,K2,P0,P1,P2,D0,Y00,Y01,Y10,Y11,Y20,Y21,Y30,Y31)
 end
 
-function setup_gausslegendre_pseudospectral_radau(coord;init_YY=true)
+function setup_gausslegendre_pseudospectral_radau(coord; collision_operator_dim=true)
     # Gauss-Radau points on [-1,1)
     x, w = gaussradau(coord.ngrid)
     # Gauss-Radau points on (-1,1] 
@@ -182,35 +206,36 @@ function setup_gausslegendre_pseudospectral_radau(coord;init_YY=true)
     GaussLegendre_weak_product_matrix!(M0,coord.ngrid,xreverse,wreverse,"M0",radau=true)
     M1 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(M1,coord.ngrid,xreverse,wreverse,"M1",radau=true)
-    M2 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(M2,coord.ngrid,xreverse,wreverse,"M2",radau=true)
-    S0 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(S0,coord.ngrid,xreverse,wreverse,"S0",radau=true)
-    S1 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(S1,coord.ngrid,xreverse,wreverse,"S1",radau=true)
     K0 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(K0,coord.ngrid,xreverse,wreverse,"K0",radau=true)
     K1 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(K1,coord.ngrid,xreverse,wreverse,"K1",radau=true)
-    K2 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(K2,coord.ngrid,xreverse,wreverse,"K2",radau=true)
     P0 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(P0,coord.ngrid,xreverse,wreverse,"P0",radau=true)
-    P1 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(P1,coord.ngrid,xreverse,wreverse,"P1",radau=true)
-    P2 = allocate_float(coord.ngrid, coord.ngrid)
-    GaussLegendre_weak_product_matrix!(P2,coord.ngrid,xreverse,wreverse,"P2",radau=true)
     D0 = allocate_float(coord.ngrid)
     GaussLegendre_derivative_vector!(D0,-1.0,coord.ngrid,xreverse,wreverse,radau=true)
-    Y00 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y01 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y10 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y11 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y20 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y21 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y30 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    Y31 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-    if init_YY 
+    if collision_operator_dim
+        M2 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(M2,coord.ngrid,xreverse,wreverse,"M2",radau=true)
+        S0 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(S0,coord.ngrid,xreverse,wreverse,"S0",radau=true)
+        S1 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(S1,coord.ngrid,xreverse,wreverse,"S1",radau=true)
+        K2 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(K2,coord.ngrid,xreverse,wreverse,"K2",radau=true)
+        P1 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(P1,coord.ngrid,xreverse,wreverse,"P1",radau=true)
+        P2 = allocate_float(coord.ngrid, coord.ngrid)
+        GaussLegendre_weak_product_matrix!(P2,coord.ngrid,xreverse,wreverse,"P2",radau=true)
+
+        Y00 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y01 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y10 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y11 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y20 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y21 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y30 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+        Y31 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
         GaussLegendre_weak_product_matrix!(Y00,coord.ngrid,xreverse,wreverse,"Y00",radau=true)
         GaussLegendre_weak_product_matrix!(Y01,coord.ngrid,xreverse,wreverse,"Y01",radau=true)
         GaussLegendre_weak_product_matrix!(Y10,coord.ngrid,xreverse,wreverse,"Y10",radau=true)
@@ -219,6 +244,22 @@ function setup_gausslegendre_pseudospectral_radau(coord;init_YY=true)
         GaussLegendre_weak_product_matrix!(Y21,coord.ngrid,xreverse,wreverse,"Y21",radau=true)
         GaussLegendre_weak_product_matrix!(Y30,coord.ngrid,xreverse,wreverse,"Y30",radau=true)
         GaussLegendre_weak_product_matrix!(Y31,coord.ngrid,xreverse,wreverse,"Y31",radau=true)
+    else
+        M2 = allocate_float(0, 0)
+        S0 = allocate_float(0, 0)
+        S1 = allocate_float(0, 0)
+        K2 = allocate_float(0, 0)
+        P1 = allocate_float(0, 0)
+        P2 = allocate_float(0, 0)
+
+        Y00 = allocate_float(0, 0, 0)
+        Y01 = allocate_float(0, 0, 0)
+        Y10 = allocate_float(0, 0, 0)
+        Y11 = allocate_float(0, 0, 0)
+        Y20 = allocate_float(0, 0, 0)
+        Y21 = allocate_float(0, 0, 0)
+        Y30 = allocate_float(0, 0, 0)
+        Y31 = allocate_float(0, 0, 0)
     end
     return gausslegendre_base_info(Dmat,M0,M1,M2,S0,S1,
             K0,K1,K2,P0,P1,P2,D0,Y00,Y01,Y10,Y11,Y20,Y21,Y30,Y31)
@@ -237,7 +278,7 @@ function elementwise_derivative!(coord, ff, gausslegendre::gausslegendre_info)
     imin = coord.imin[j]-k
     # imax is the maximum index on the full grid for this (jth) element
     imax = coord.imax[j]        
-    if coord.name == "vperp" && coord.irank == 0 # differentiate this element with the Radau scheme
+    if coord.radau_first_element && coord.irank == 0 # differentiate this element with the Radau scheme
         @views mul!(df[:,j],gausslegendre.radau.Dmat[:,:],ff[imin:imax])
     else #differentiate using the Lobatto scheme
         @views mul!(df[:,j],gausslegendre.lobatto.Dmat[:,:],ff[imin:imax])
@@ -267,81 +308,26 @@ function elementwise_derivative!(coord, ff, adv_fac, spectral::gausslegendre_inf
     return elementwise_derivative!(coord, ff, spectral)
 end
 
-function elementwise_apply_Kmat!(coord, ff, gausslegendre::gausslegendre_info)
-    df = coord.scratch_2d
-    # define local variable nelement for convenience
-    nelement = coord.nelement_local
-    # check array bounds
-    @boundscheck nelement == size(df,2) && coord.ngrid == size(df,1) || throw(BoundsError(df))
-    
-    # variable k will be used to avoid double counting of overlapping point
-    k = 0
-    j = 1 # the first element
-    imin = coord.imin[j]-k
-    # imax is the maximum index on the full grid for this (jth) element
-    imax = coord.imax[j]        
-    get_KK_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord,explicit_BC_terms=true)
-    #println(gausslegendre.Qmat)
-    @views mul!(df[:,j],gausslegendre.Qmat[:,:],ff[imin:imax])
-    zero_gradient_bc_lower_boundary = false#true
-    if coord.name == "vperp" && zero_gradient_bc_lower_boundary
-       # set the 1st point of the RHS vector to zero 
-       # consistent with use with the mass matrix with D f = 0 boundary conditions
-       df[1,j] = 0.0
-    end
-    # calculate the derivative on each element
-    @inbounds for j ∈ 2:nelement
-        k = 1 
-        imin = coord.imin[j]-k
-        # imax is the maximum index on the full grid for this (jth) element
-        imax = coord.imax[j]
-        #@views mul!(df[:,j],gausslegendre.lobatto.Kmat[:,:],ff[imin:imax])
-        get_KK_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord,explicit_BC_terms=true)
-        #println(gausslegendre.Qmat)
-        @views mul!(df[:,j],gausslegendre.Qmat[:,:],ff[imin:imax])
-    end
-    #for j in 1:nelement
-    #    println(df[:,j])
-    #end
-    return nothing
-end
+function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, coord,
+                                     gausslegendre::gausslegendre_base_info)
+    n_new = length(newgrid)
 
-function elementwise_apply_Lmat!(coord, ff, gausslegendre::gausslegendre_info)
-    df = coord.scratch_2d
-    # define local variable nelement for convenience
-    nelement = coord.nelement_local
-    # check array bounds
-    @boundscheck nelement == size(df,2) && coord.ngrid == size(df,1) || throw(BoundsError(df))
-    
-    # variable k will be used to avoid double counting of overlapping point
-    k = 0
-    j = 1 # the first element
-    imin = coord.imin[j]-k
-    # imax is the maximum index on the full grid for this (jth) element
-    imax = coord.imax[j]        
-    get_LL_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord,explicit_BC_terms=true)
-    #println(gausslegendre.Qmat)
-    @views mul!(df[:,j],gausslegendre.Qmat[:,:],ff[imin:imax])
-    zero_gradient_bc_lower_boundary = false#true
-    if coord.name == "vperp" && zero_gradient_bc_lower_boundary
-       # set the 1st point of the RHS vector to zero 
-       # consistent with use with the mass matrix with D f = 0 boundary conditions
-       df[1,j] = 0.0
+    i = 1
+    other_nodes = @view coord.other_nodes[:,i,ielement]
+    one_over_denominator = coord.one_over_denominator[i,ielement]
+    this_f = f[i]
+    for j ∈ 1:n_new
+        result[j] = this_f * lagrange_poly_optimised(other_nodes, one_over_denominator, newgrid[j])
     end
-    # calculate the derivative on each element
-    @inbounds for j ∈ 2:nelement
-        k = 1 
-        imin = coord.imin[j]-k
-        # imax is the maximum index on the full grid for this (jth) element
-        imax = coord.imax[j]
-        #@views mul!(df[:,j],gausslegendre.lobatto.Kmat[:,:],ff[imin:imax])
-        get_LL_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord,explicit_BC_terms=true)
-        #println(gausslegendre.Qmat)
-        @views mul!(df[:,j],gausslegendre.Qmat[:,:],ff[imin:imax])
+    for i ∈ 2:coord.ngrid
+        other_nodes = @view coord.other_nodes[:,i,ielement]
+        one_over_denominator = coord.one_over_denominator[i,ielement]
+        this_f = f[i]
+        for j ∈ 1:n_new
+            result[j] += this_f * lagrange_poly_optimised(other_nodes, one_over_denominator, newgrid[j])
+        end
     end
-    #for j in 1:nelement
-    #    println(df[:,j])
-    #end
+
     return nothing
 end
 
@@ -828,8 +814,7 @@ end
 """
 A function that assigns the local weak-form matrices to 
 a global array QQ_global for later solving weak form of required
-1D equation. This function only supports fully local grids 
-that have coord.nelement_local = coord.nelement_global.
+1D equation.
 
 The 'option' variable is a flag for 
 choosing the type of matrix to be constructed. 
@@ -850,7 +835,7 @@ where M is the mass matrix and K is the stiffness matrix.
 function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
                                lobatto::gausslegendre_base_info,
                                radau::gausslegendre_base_info, 
-                               coord,option)
+                               coord,option; dirichlet_bc=false)
     QQ_j = allocate_float(coord.ngrid,coord.ngrid)
     QQ_jp1 = allocate_float(coord.ngrid,coord.ngrid)
     
@@ -864,11 +849,16 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
     # N.B. QQ varies with ielement for vperp, but not vpa
     # a radau element is used for the vperp grid (see get_QQ_local!())
     get_QQ_local!(QQ_j,j,lobatto,radau,coord,option)
-    QQ_global[imin[j],imin[j]:imax[j]] .+= QQ_j[1,:]
+    if coord.bc == "periodic" && coord.nrank == 1
+        QQ_global[imax[end], imin[j]:imax[j]] .+= QQ_j[1,:] ./ 2.0
+        QQ_global[imin[j],imin[j]:imax[j]] .+= QQ_j[1,:] ./ 2.0
+    else
+        QQ_global[imin[j],imin[j]:imax[j]] .+= QQ_j[1,:]
+    end
     for k in 2:imax[j]-imin[j] 
         QQ_global[k,imin[j]:imax[j]] .+= QQ_j[k,:]
     end
-    if coord.nelement_local > 1
+    if coord.nelement_local > 1 || (coord.bc == "periodic" && coord.nrank == 1)
         QQ_global[imax[j],imin[j]:imax[j]] .+= QQ_j[ngrid,:]./2.0
     else
         QQ_global[imax[j],imin[j]:imax[j]] .+= QQ_j[ngrid,:]
@@ -883,9 +873,30 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
         end
         # upper boundary assembly on element 
         if j == coord.nelement_local
-            QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]
+            if coord.bc == "periodic" && coord.nrank == 1
+                QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:] / 2.0
+                QQ_global[imin[1],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:] / 2.0
+            else
+                QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]
+            end
         else 
             QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]./2.0
+        end
+    end
+
+    if dirichlet_bc
+        # Make matrix diagonal for first/last grid points so it does not change the values
+        # there
+        if !(coord.name == "vperp") 
+            # modify lower endpoint if not a radial/cylindrical coordinate
+            if coord.irank == 0
+                QQ_global[1,:] .= 0.0
+                QQ_global[1,1] = 1.0
+            end
+        end
+        if coord.irank == coord.nrank - 1
+            QQ_global[end,:] .= 0.0
+            QQ_global[end,end] = 1.0
         end
     end
         
@@ -987,30 +998,32 @@ function get_KK_local!(QQ,ielement,
             if ielement > 1 || coord.irank > 0 # lobatto points
                 @. QQ =  (shift_factor/scale_factor)*lobatto.K0 + lobatto.K1 - lobatto.P0
                 # boundary terms from integration by parts
-                if explicit_BC_terms && ielement == 1
+                if explicit_BC_terms && ielement == 1 && coord.irank == 0
                     imin = coord.imin[ielement] - 1
                     @. QQ[1,:] -= coord.grid[imin]*lobatto.Dmat[1,:]/scale_factor
                 end
-                if explicit_BC_terms && ielement == nelement
+                if explicit_BC_terms && ielement == nelement && coord.irank == coord.nrank - 1
                     imax = coord.imax[ielement]
                     @. QQ[coord.ngrid,:] += coord.grid[imax]*lobatto.Dmat[coord.ngrid,:]/scale_factor  
                 end
             else # radau points 
                 @. QQ =  (shift_factor/scale_factor)*radau.K0 + radau.K1 - radau.P0
                 # boundary terms from integration by parts
-                if explicit_BC_terms && ielement == nelement  
+                if explicit_BC_terms && ielement == nelement && coord.irank == coord.nrank - 1 
                     imax = coord.imax[ielement]
                     @. QQ[coord.ngrid,:] += coord.grid[imax]*radau.Dmat[coord.ngrid,:]/scale_factor
                 end
             end
         else # assume integrals of form int^infty_-infty (.) d vpa
             @. QQ = lobatto.K0/scale_factor
-            # boundary terms from integration by parts
-            if explicit_BC_terms && ielement == 1
-                @. QQ[1,:] -= lobatto.Dmat[1,:]/scale_factor
-            end
-            if explicit_BC_terms && ielement == nelement
-                @. QQ[coord.ngrid,:] += lobatto.Dmat[coord.ngrid,:]/scale_factor
+            if coord.bc !== "periodic"
+                # boundary terms from integration by parts
+                if explicit_BC_terms && ielement == 1 && coord.irank == 0
+                    @. QQ[1,:] -= lobatto.Dmat[1,:]/scale_factor
+                end
+                if explicit_BC_terms && ielement == nelement && coord.irank == coord.nrank - 1
+                    @. QQ[coord.ngrid,:] += lobatto.Dmat[coord.ngrid,:]/scale_factor
+                end
             end
         end
         return nothing
@@ -1055,18 +1068,18 @@ function get_LL_local!(QQ,ielement,
             if ielement > 1 || coord.irank > 0 # lobatto points
                 @. QQ =  (shift_factor/scale_factor)*lobatto.K0 + lobatto.K1
                 # boundary terms from integration by parts
-                if explicit_BC_terms && ielement == 1
+                if explicit_BC_terms && ielement == 1 && coord.irank == 0
                     imin = coord.imin[ielement] - 1
                     @. QQ[1,:] -= coord.grid[imin]*lobatto.Dmat[1,:]/scale_factor
                 end
-                if explicit_BC_terms && ielement == nelement
+                if explicit_BC_terms && ielement == nelement && coord.irank == coord.nrank - 1
                     imax = coord.imax[ielement]
                     @. QQ[coord.ngrid,:] += coord.grid[imax]*lobatto.Dmat[coord.ngrid,:]/scale_factor
                 end
             else # radau points 
                 @. QQ =  (shift_factor/scale_factor)*radau.K0 + radau.K1
                 # boundary terms from integration by parts
-                if explicit_BC_terms && ielement == nelement
+                if explicit_BC_terms && ielement == nelement && coord.irank == coord.nrank - 1
                     imax = coord.imax[ielement]
                     @. QQ[coord.ngrid,:] += coord.grid[imax]*radau.Dmat[coord.ngrid,:]/scale_factor
                 end
@@ -1074,10 +1087,10 @@ function get_LL_local!(QQ,ielement,
         else # d^2 (.) d vpa^2 -- assume integrals of form int^infty_-infty (.) d vpa
             @. QQ = lobatto.K0/scale_factor
             # boundary terms from integration by parts
-            if explicit_BC_terms && ielement == 1
+            if explicit_BC_terms && ielement == 1 && coord.irank == 0
                 @. QQ[1,:] -= lobatto.Dmat[1,:]/scale_factor
             end
-            if explicit_BC_terms && ielement == nelement
+            if explicit_BC_terms && ielement == nelement && coord.irank == coord.nrank - 1
                 @. QQ[coord.ngrid,:] += lobatto.Dmat[coord.ngrid,:]/scale_factor
             end
         end

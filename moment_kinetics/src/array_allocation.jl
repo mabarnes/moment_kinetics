@@ -9,6 +9,8 @@ using ..communication
 using ..debugging
 @debug_initialize_NaN using ..communication: block_rank, _block_synchronize
 
+using MPI
+
 """
 allocate array with dimensions given by dims and entries of type Bool
 """
@@ -55,14 +57,27 @@ function allocate_shared_float(dims...; comm=nothing)
     array = allocate_shared(mk_float, dims; comm=comm)
     @debug_initialize_NaN begin
         # Initialize as NaN to try and catch use of uninitialized values
-        if block_rank[] == 0
+        if comm === nothing
+            comm_rank = block_rank[]
+            this_comm = comm_block[]
+        elseif comm == MPI.COMM_NULL
+            comm_rank = -1
+            this_comm = nothing
+        else
+            # Get MPI.Comm_rank when comm is not nothing
+            comm_rank = MPI.Comm_rank(comm)
+            this_comm = comm
+        end
+        if comm_rank == 0
             array .= NaN
             @debug_track_initialized begin
                 # Track initialization as if the array was not initialized to NaN
                 array.is_initialized .= false
             end
         end
-        _block_synchronize()
+        if this_comm !== nothing
+            MPI.Barrier(this_comm)
+        end
     end
     return array
 end
@@ -85,14 +100,27 @@ function allocate_shared_complex(dims...; comm=nothing)
     array = allocate_shared(Complex{mk_float}, dims; comm=comm)
     @debug_initialize_NaN begin
         # Initialize as NaN to try and catch use of uninitialized values
-        if block_rank[] == 0
+        if comm === nothing
+            comm_rank = block_rank[]
+            this_comm = comm_block[]
+        elseif comm == MPI.COMM_NULL
+            comm_rank = -1
+            this_comm = nothing
+        else
+            # Get MPI.Comm_rank when comm is not nothing
+            comm_rank = MPI.Comm_rank(comm)
+            this_comm = comm
+        end
+        if comm_rank == 0
             array .= NaN
             @debug_track_initialized begin
                 # Track initialization as if the array was not initialized to NaN
                 array.is_initialized .= false
             end
         end
-        _block_synchronize()
+        if this_comm !== nothing
+            MPI.Barrier(this_comm)
+        end
     end
     return array
 end

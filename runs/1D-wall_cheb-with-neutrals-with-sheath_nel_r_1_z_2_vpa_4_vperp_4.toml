@@ -1,0 +1,80 @@
+n_ion_species = 1
+n_neutral_species = 1
+#electron_physics = "boltzmann_electron_response"
+electron_physics = "boltzmann_electron_response_with_simple_sheath"
+evolve_moments_density = false
+evolve_moments_parallel_flow = false
+evolve_moments_parallel_pressure = false
+evolve_moments_conservation = false
+T_e = 1.0
+T_wall = 1.0
+initial_density1 = 0.5
+initial_temperature1 = 1.0
+initial_density2 = 0.5
+initial_temperature2 = 1.0
+z_IC_option1 = "sinusoid"
+z_IC_density_amplitude1 = 0.001
+z_IC_density_phase1 = 0.0
+z_IC_upar_amplitude1 = 0.0
+z_IC_upar_phase1 = 0.0
+z_IC_temperature_amplitude1 = 0.0
+z_IC_temperature_phase1 = 0.0
+z_IC_option2 = "sinusoid"
+z_IC_density_amplitude2 = 0.001
+z_IC_density_phase2 = 0.0
+z_IC_upar_amplitude2 = 0.0
+z_IC_upar_phase2 = 0.0
+z_IC_temperature_amplitude2 = 0.0
+z_IC_temperature_phase2 = 0.0
+charge_exchange_frequency = 0.0
+ionization_frequency = 0.0
+z_ngrid = 6
+z_nelement = 2
+z_bc = "wall"
+z_discretization = "chebyshev_pseudospectral"
+r_ngrid = 1
+r_nelement = 1
+r_bc = "periodic"
+r_discretization = "chebyshev_pseudospectral"
+vpa_ngrid = 6
+vpa_nelement = 4
+vpa_L = 12.0
+vpa_bc = "periodic"
+vpa_discretization = "chebyshev_pseudospectral"
+vperp_ngrid = 6
+vperp_nelement = 4
+vperp_L = 6.0
+#vperp_discretization = "finite_difference"
+vperp_discretization = "chebyshev_pseudospectral"
+
+vz_ngrid = 6
+vz_nelement = 4
+vz_L = 12.0
+vz_bc = "periodic"
+vz_discretization = "chebyshev_pseudospectral"
+
+vr_ngrid = 6
+vr_nelement = 4
+vr_L = 12.0
+vr_bc = "periodic"
+vr_discretization = "chebyshev_pseudospectral"
+
+vzeta_ngrid = 6
+vzeta_nelement = 4
+vzeta_L = 12.0
+vzeta_bc = "periodic"
+vzeta_discretization = "chebyshev_pseudospectral"
+
+[timestepping]
+nstep = 200
+dt = 0.001
+nwrite = 50
+split_operators = false
+
+[manufactured_solns]
+use_for_advance = true
+
+[geometry]
+option="constant-helical"
+pitch=1.0
+rhostar = 0.0

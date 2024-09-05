@@ -8,11 +8,11 @@ module geo
 export init_magnetic_geometry
 export setup_geometry_input
 
-using ..input_structs: geometry_input
+using ..input_structs: geometry_input, set_defaults_and_check_section!
 using ..file_io: input_option_error
 using ..array_allocation: allocate_float
 using ..type_definitions: mk_float, mk_int
-
+using ..reference_parameters: setup_reference_parameters
 
 """
 struct containing the geometric data necessary for 
@@ -61,6 +61,15 @@ gbdriftz::Array{mk_float,2}
 end
 
 """
+    function get_default_rhostar(reference_params)
+
+Calculate the normalised ion gyroradius at reference parameters
+"""
+function get_default_rhostar(reference_params)
+    return reference_params.cref / reference_params.Omegaref / reference_params.Lref
+end
+
+"""
 function to read the geometry input data from the TOML file
 
 the TOML namelist should be structured like
@@ -72,12 +81,30 @@ DeltaB = 0.0
 option = ""
 
 """
-function setup_geometry_input(toml_input::Dict, reference_rhostar)
-    input_section = get(toml_input, "geometry", Dict{String,Any}())
-    if !("rhostar" ∈ keys(input_section))
-        # Set default rhostar with reference value
-        input_section["rhostar"] = get(input_section, "rhostar", reference_rhostar)
-    end
+function setup_geometry_input(toml_input::Dict)
+
+    reference_params = setup_reference_parameters(toml_input)
+    reference_rhostar = get_default_rhostar(reference_params)
+    # read the input toml and specify a sensible default
+    input_section = set_defaults_and_check_section!(toml_input, "geometry",
+        # begin default inputs (as kwargs)
+        # rhostar ion (ref)
+        rhostar = reference_rhostar, #used to premultiply ExB drift terms
+        # magnetic geometry option
+        option = "constant-helical",# "1D-mirror"
+        # pitch ( = Bzed/Bmag if geometry_option == "constant-helical")
+        pitch = 1.0,
+        # DeltaB ( = (Bzed(z=L/2) - Bzed(0))/Bref if geometry_option == "1D-mirror")
+        DeltaB = 0.0,
+        # constant for testing nonzero Er when nr = 1
+        Er_constant = 0.0,
+        # constant for testing nonzero Ez when nz = 1
+        Ez_constant = 0.0,
+        # constant for testing nonzero dBdz when nz = 1
+        dBdz_constant = 0.0,
+        # constant for testing nonzero dBdr when nr = 1
+        dBdr_constant = 0.0)
+    
     input = Dict(Symbol(k)=>v for (k,v) in input_section)
     #println(input)
     return geometry_input(; input...)
@@ -185,6 +212,31 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
                 cvdriftz[iz,ir] = -(bzeta[iz,ir]/Bmag[iz,ir])*(bzeta[iz,ir]^2)/rr
                 gbdriftr[iz,ir] = 0.0
                 gbdriftz[iz,ir] = cvdriftz[iz,ir]
+            end
+        end
+    elseif option == "0D-Spitzer-test"
+     # a 0D configuration with certain geometrical factors
+     # set to be constants to enable testing of velocity
+     # space operators such as mirror or vperp advection terms
+     pitch = geometry_input_data.pitch
+     dBdz_constant = geometry_input_data.dBdz_constant
+     dBdr_constant = geometry_input_data.dBdr_constant
+     B0 = 1.0 # chose reference field strength to be Bzeta at r = 1
+     for ir in 1:nr
+            for iz in 1:nz
+                Bmag[iz,ir] = B0
+                bzed[iz,ir] = pitch
+                bzeta[iz,ir] = sqrt(1 - pitch^2)
+                Bzed[iz,ir] = bzed[iz,ir]*Bmag[iz,ir]
+                Bzeta[iz,ir] = bzeta[iz,ir]*Bmag[iz,ir]
+                dBdz[iz,ir] = dBdz_constant
+                dBdr[iz,ir] = dBdr_constant
+                jacobian[iz,ir] = 1.0
+                
+                cvdriftr[iz,ir] = 0.0
+                cvdriftz[iz,ir] = 0.0
+                gbdriftr[iz,ir] = 0.0
+                gbdriftz[iz,ir] = 0.0
             end
         end
     else 

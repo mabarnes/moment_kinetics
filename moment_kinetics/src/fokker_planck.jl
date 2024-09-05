@@ -70,6 +70,7 @@ using ..fokker_planck_calculus: calculate_rosenbluth_potentials_via_elliptic_sol
 using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_fluxes, H_Maxwellian, dGdvperp_Maxwellian
 using ..fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian
 using ..fokker_planck_test: F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
+using ..reference_parameters: setup_reference_parameters
 
 """
 Function for reading Fokker Planck collision operator input parameters. 
@@ -80,7 +81,8 @@ use_fokker_planck = true
 nuii = 1.0
 frequency_option = "manual"
 """
-function setup_fkpl_collisions_input(toml_input::Dict, reference_params)
+function setup_fkpl_collisions_input(toml_input::Dict)
+    reference_params = setup_reference_parameters(toml_input)
     # get reference collision frequency (note factor of 1/2 due to definition choices)
     nuii_fkpl_default = 0.5*get_reference_collision_frequency_ii(reference_params)
     # read the input toml and specify a sensible default
@@ -90,6 +92,7 @@ function setup_fkpl_collisions_input(toml_input::Dict, reference_params)
        nuii = -1.0,
        frequency_option = "reference_parameters",
        self_collisions = true,
+       use_conserving_corrections = true,
        slowing_down_test = false,
        sd_density = 1.0,
        sd_temp = 0.01,
@@ -257,6 +260,7 @@ function explicit_fp_collisions_weak_form_Maxwellian_cross_species!(pdf_out,pdf_
     @boundscheck r.n == size(dSdt,2) || throw(BoundsError(dSdt))
     @boundscheck n_ion_species == size(dSdt,3) || throw(BoundsError(dSdt))
     
+    use_conserving_corrections = collisions.fkpl.use_conserving_corrections
     fkin = collisions.fkpl
     # masses charge numbers and collision frequencies
     mref = 1.0 # generalise if multiple ions evolved
@@ -282,8 +286,10 @@ function explicit_fp_collisions_weak_form_Maxwellian_cross_species!(pdf_out,pdf_
         # enforce the boundary conditions on CC before it is used for timestepping
         enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
         # make sure that the cross-species terms conserve density
-        density_conserving_correction!(fkpl_arrays.CC, pdf_in[:,:,iz,ir,is], vpa, vperp,
+        if use_conserving_corrections
+            density_conserving_correction!(fkpl_arrays.CC, pdf_in[:,:,iz,ir,is], vpa, vperp,
                                 fkpl_arrays.S_dummy)
+        end
         # advance this part of s,r,z with the resulting sum_s' C[Fs,Fs']
         begin_anyv_vperp_vpa_region()
         CC = fkpl_arrays.CC
@@ -326,6 +332,7 @@ function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,dSdt,compos
     nuref = collisions.fkpl.nuii # generalise!
     Zi = collisions.fkpl.Zi # generalise!
     nussp = nuref*(Zi^4) # include charge number factor for self collisions
+    use_conserving_corrections = collisions.fkpl.use_conserving_corrections
     # N.B. parallelisation using special 'anyv' region
     begin_s_r_z_anyv_region()
     @loop_s_r_z is ir iz begin
@@ -336,9 +343,10 @@ function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,dSdt,compos
         # enforce the boundary conditions on CC before it is used for timestepping
         enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
         # make ad-hoc conserving corrections
-        conserving_corrections!(fkpl_arrays.CC, pdf_in[:,:,iz,ir,is], vpa, vperp,
+        if use_conserving_corrections
+            conserving_corrections!(fkpl_arrays.CC, pdf_in[:,:,iz,ir,is], vpa, vperp,
                                 fkpl_arrays.S_dummy)
-        
+        end
         # advance this part of s,r,z with the resulting C[Fs,Fs]
         begin_anyv_vperp_vpa_region()
         CC = fkpl_arrays.CC
@@ -664,7 +672,9 @@ function conserving_corrections!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
 
     # Broadcast x0, x1, x2 to all processes in the 'anyv' subblock
     param_vec = [x0, x1, x2, upar]
-    MPI.Bcast!(param_vec, 0, comm_anyv_subblock[])
+    if comm_anyv_subblock[] != MPI.COMM_NULL
+        MPI.Bcast!(param_vec, 0, comm_anyv_subblock[])
+    end
     (x0, x1, x2, upar) = param_vec
     
     # correct CC
@@ -695,7 +705,9 @@ function density_conserving_correction!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
 
     # Broadcast x0 to all processes in the 'anyv' subblock
     param_vec = [x0]
-    MPI.Bcast!(param_vec, 0, comm_anyv_subblock[])
+    if comm_anyv_subblock[] != MPI.COMM_NULL
+        MPI.Bcast!(param_vec, 0, comm_anyv_subblock[])
+    end
     x0 = param_vec[1]
     
     # correct CC

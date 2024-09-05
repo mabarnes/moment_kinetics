@@ -393,3 +393,55 @@ so, it skips many cases. To run more comprehensive tests, you can activate the
 To get more output on what tests were successful, an option `--verbose` (or
 `-v`) can be passed in a similar way to `--long` (if any tests fail, the output
 is printed by default).
+
+## Manufactured Solutions Tests
+In addition to the test suite in the `test/` subdirectory, the `moment_kinetics` project
+utilises the method of manufactured solutions to test more complicated models in 1D1V, 
+and 2D2V or 2D3V (for neutral particles). To run these tests we run a normal `moment_kinetics`
+simulation, making use of the manufacted solutions test TOML options. We describe how to use 
+the existing tests below. To set up `moment_kinetics` to use the manufactured solutions features,
+ take the following steps:
+* Install `moment_kinetics` using the setup instructions above ([Setup](https://github.com/mabarnes/moment_kinetics/tree/mms_bugfixes_and_docs#setup)), 
+  using the `plots_post_processing` project and make sure that the `Symbolics` package is installed, e.g., if following
+  the manual setup instructions ([Manual setup](https://mabarnes.github.io/moment_kinetics/dev/manual_setup/)), these commands would be
+    ```
+    $ julia -O3 --project
+    julia> ]
+    develop ./moment_kinetics
+    develop ./plots_post_processing/plots_post_processing
+    add Symbolics
+    ```
+    if you will run the tests with MPI, make sure that MPI is also installed at this step.
+* Select an input file representing the desired test. For example, we can pick from the list 
+  [MMS input TOML list](https://mabarnes.github.io/moment_kinetics/dev/manufactured_solution_test_examples/).
+* Run the input file using the usual command.
+    ```
+    julia> using moment_kinetics
+    julia> run_moment_kinetics("runs/your_MMS_test_input.toml")
+    ```
+* Use the post processing module to test the error norms for the simulation of interest.
+    ```
+    julia> using plots_post_processing
+    julia> analyze_and_plot_data("runs/your_MMS_test_input")
+    ```
+  This will print out a series of numbers to the terminal which represent the error norms
+  for each field and distribution function compared to the exact analytical solution, at 
+  each time step in the simulation. This error data can be computed for different resolutions.
+
+* Finally, to partially automate this last step when a resolution scan is performed, we provide
+  functions for generating plots of the error data versus resolutions in the file `plot_MMS_sequence.jl`
+  in the `plots_post_processing` project. This can be accessed by using the `run_MMS_test.jl` 
+  script from the command line
+  ```
+  $ julia -O3 --project run_MMS_test.kl
+  ```
+  or by using the underlying functions in the REPL
+  ```
+  import plots_post_processing
+  using plots_post_processing.plot_MMS_sequence
+  run_mms_test()
+  ```
+  Note that currently the lists of files used as input for the plotting functions
+  are hardcoded for the purposes of self-documenting the tests -- these lists could be made
+  input parameters to improve these scripts.
+    

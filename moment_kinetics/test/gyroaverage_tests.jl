@@ -10,13 +10,14 @@ using SpecialFunctions: besselj0
 import moment_kinetics
 using moment_kinetics.input_structs
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.geo: init_magnetic_geometry
+using moment_kinetics.geo: init_magnetic_geometry, setup_geometry_input
 using moment_kinetics.communication
 using moment_kinetics.looping
 using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
 using moment_kinetics.gyroaverages: gyroaverage_pdf!
 using moment_kinetics.gyroaverages: gyroaverage_field!, init_gyro_operators
-using moment_kinetics.type_definitions: mk_float, mk_int
+using moment_kinetics.type_definitions: mk_float, mk_int, OptionsDict
+using moment_kinetics.species_input: get_species_input
 
 print_test_results = false
 
@@ -135,18 +136,16 @@ function gyroaverage_test(absolute_error; rhostar=0.1, pitch=0.5, ngrid=5, kr=2,
                 nrank, irank, gyrophase_L, gyrophase_discretization, fd_option, cheb_option, "periodic", adv_input,comm,element_spacing_option)
         
         # create the coordinate structs
-        r, r_spectral = define_coordinate(r_input; init_YY=false, run_directory=test_output_directory)
-        z, z_spectral = define_coordinate(z_input; init_YY=false, run_directory=test_output_directory)
-        vperp, vperp_spectral = define_coordinate(vperp_input; init_YY=false, run_directory=test_output_directory)
-        vpa, vpa_spectral = define_coordinate(vpa_input; init_YY=false, run_directory=test_output_directory)
-        gyrophase, gyrophase_spectral = define_coordinate(gyrophase_input; init_YY=false, run_directory=test_output_directory)
+        r, r_spectral = define_coordinate(r_input; collision_operator_dim=false, run_directory=test_output_directory)
+        z, z_spectral = define_coordinate(z_input; collision_operator_dim=false, run_directory=test_output_directory)
+        vperp, vperp_spectral = define_coordinate(vperp_input; collision_operator_dim=false, run_directory=test_output_directory)
+        vpa, vpa_spectral = define_coordinate(vpa_input; collision_operator_dim=false, run_directory=test_output_directory)
+        gyrophase, gyrophase_spectral = define_coordinate(gyrophase_input; collision_operator_dim=false, run_directory=test_output_directory)
         
         # create test geometry
-        #rhostar = 0.1 #rhostar of ions for ExB drift
         option = "constant-helical"
-        #pitch = 1.0
-        DeltaB = 1.0
-        geometry_in = geometry_input(rhostar,option,pitch,DeltaB)
+        inputdict = Dict("geometry" => Dict("option" => option, "rhostar" => rhostar, "pitch" => pitch))
+        geometry_in = setup_geometry_input(inputdict)
         geometry = init_magnetic_geometry(geometry_in,z,r)
         
         # create test composition
@@ -231,30 +230,9 @@ function gyroaverage_test(absolute_error; rhostar=0.1, pitch=0.5, ngrid=5, kr=2,
 end
 
 function create_test_composition()
-    electron_physics = boltzmann_electron_response
-    n_ion_species = 1
-    n_neutral_species = 0
-    n_species = n_ion_species + n_neutral_species
-    use_test_neutral_wall_pdf = false
-    # electron temperature over reference temperature
-    T_e = 1.0
-    # temperature at the entrance to the wall in terms of the electron temperature
-    T_wall = 1.0
-    # wall potential at z = 0
-    phi_wall = 0.0
-    # constant to test nonzero Er
-    Er_constant = 0.0
-    # ratio of the neutral particle mass to the ion particle mass
-    mn_over_mi = 1.0
-    # ratio of the electron particle mass to the ion particle mass
-    me_over_mi = 1.0/1836.0
-    # The ion flux reaching the wall that is recycled as neutrals is reduced by
-    # `recycling_fraction` to account for ions absorbed by the wall.
-    recycling_fraction = 1.0
-    gyrokinetic_ions = true
-    return composition = species_composition(n_species, n_ion_species, n_neutral_species,
-            electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, Er_constant,
-            mn_over_mi, me_over_mi, recycling_fraction, gyrokinetic_ions, allocate_float(n_species))
+    input_dict = OptionsDict("composition" => OptionsDict("n_ion_species" => 1, "n_neutral_species" => 0, "gyrokinetic_ions" => true ) )
+    #println(input_dict)
+    return get_species_input(input_dict)
 end
 
 function fill_test_arrays!(phi,gphi,vperp,z,r,geometry,composition,kz,kr,phasez,phaser)

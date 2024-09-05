@@ -42,15 +42,15 @@ const plot_Tpar_vs_z_t = false
 # if plot_qpar_vs_z_t = true, create heatmap of species parallel heat flux vs z and time
 const plot_qpar_vs_z_t = false
 # if animate_dens_vs_z = true, create animation of species density(z) at different time slices
-const animate_dens_vs_z =  false #ttrue
+const animate_dens_vs_z =  true #ttrue
 # if animate_upar_vs_z = true, create animation of species parallel flow(z) at different time slices
-const animate_upar_vs_z = false
+const animate_upar_vs_z = true
 # if animate_ppar_vs_z = true, create animation of species parallel pressure(z) at different time slices
 const animate_ppar_vs_z = false
 # if animate_Tpar_vs_z = true, create animation of species parallel pressure(z) at different time slices
 const animate_Tpar_vs_z = false
 # if animate_vth_vs_z = true, create animation of species thermal_velocity(z) at different time slices
-const animate_vth_vs_z = false
+const animate_vth_vs_z = true
 # if animate_qpar_vs_z = true, create animation of species parallel heat flux(z) at different time slices
 const animate_qpar_vs_z = false
 # if plot_f_unnormalized_vs_vpa_z = true, create heatmap of f_unnorm(v_parallel_unnorm,z) at
@@ -102,6 +102,7 @@ const plot_wall_density_vs_r = true # plot last timestep density[z_wall,r]
 const plot_density_vs_r_z = true
 const animate_density_vs_r_z = true
 const plot_parallel_flow_vs_r0_z = true # plot last timestep parallel_flow[z,ir0]
+const plot_perpendicular_flow_vs_r0_z = true # plot last timestep perpendicular_flow[z,ir0]
 const plot_wall_parallel_flow_vs_r = true # plot last timestep parallel_flow[z_wall,r]
 const plot_parallel_flow_vs_r_z = true
 const animate_parallel_flow_vs_r_z = true
@@ -171,7 +172,8 @@ pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t, animate_ph
     animate_Er_vs_r_z, animate_Ez_vs_r_z, animate_phi_vs_r_z, plot_phi_vs_r0_z,
     plot_Ez_vs_r0_z, plot_wall_Ez_vs_r, plot_Er_vs_r0_z, plot_wall_Er_vs_r,
     plot_density_vs_r0_z, plot_wall_density_vs_r, plot_density_vs_r_z,
-    animate_density_vs_r_z, plot_parallel_flow_vs_r0_z, plot_wall_parallel_flow_vs_r,
+    animate_density_vs_r_z, plot_parallel_flow_vs_r0_z, plot_perpendicular_flow_vs_r0_z, 
+    plot_wall_parallel_flow_vs_r,
     plot_parallel_flow_vs_r_z, animate_parallel_flow_vs_r_z,
     plot_parallel_pressure_vs_r0_z, plot_wall_parallel_pressure_vs_r,
     plot_parallel_pressure_vs_r_z, animate_parallel_pressure_vs_r_z,

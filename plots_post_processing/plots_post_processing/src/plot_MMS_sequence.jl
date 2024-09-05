@@ -17,7 +17,7 @@ using ..post_processing_input: pp
 using ..plots_post_processing: compare_ion_pdf_symbolic_test, compare_fields_symbolic_test
 using ..plots_post_processing: compare_moments_symbolic_test, compare_neutral_pdf_symbolic_test
 using ..plots_post_processing: allocate_global_zr_neutral_moments, allocate_global_zr_ion_moments
-using ..plots_post_processing: allocate_global_zr_fields, get_composition
+using ..plots_post_processing: allocate_global_zr_fields
 using ..plots_post_processing: get_coords_nelement, get_coords_ngrid
 using moment_kinetics.array_allocation: allocate_float
 using moment_kinetics.type_definitions: mk_float, mk_int
@@ -29,9 +29,10 @@ using moment_kinetics.load_data: load_block_data, load_coordinate_data, load_inp
 using moment_kinetics.load_data: read_distributed_zr_data!, construct_global_zr_coords
 using moment_kinetics.velocity_moments: integrate_over_vspace
 using moment_kinetics.manufactured_solns: manufactured_solutions, manufactured_electric_fields
-using moment_kinetics.moment_kinetics_input: mk_input, read_input_file, get_default_rhostar
+using moment_kinetics.moment_kinetics_input: mk_input, read_input_file
 using moment_kinetics.input_structs: geometry_input
 using moment_kinetics.reference_parameters
+using moment_kinetics.species_input: get_species_input
 
 import Base: get
 
@@ -240,14 +241,8 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         else 
             Lr_in = 1.0
         end
-        composition = get_composition(scan_input)
-
-        reference_params = setup_reference_parameters(scan_input)
-        option = get(scan_input, "geometry_option", "constant-helical") #"1D-mirror"
-        pitch = get(scan_input, "pitch", 1.0)
-        rhostar = get(scan_input, "rhostar", get_default_rhostar(reference_params))
-        DeltaB = get(scan_input, "DeltaB", 1.0)
-        geo_in = geometry_input(rhostar,option,pitch,DeltaB)
+        composition = get_species_input(scan_input)
+        geo_in = setup_geometry_input(scan_input)
 
         manufactured_solns_list = manufactured_solutions(manufactured_solns_input,Lr_in,z.L,r_bc,z_bc,geo_in,composition,species,r.n,vperp.n) 
         dfni_func = manufactured_solns_list.dfni_func
@@ -255,7 +250,7 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         dfnn_func = manufactured_solns_list.dfnn_func
         densn_func = manufactured_solns_list.densn_func
         
-        manufactured_E_fields = manufactured_electric_fields(Lr_in,z.L,r_bc,z_bc,composition,r.n,manufactured_solns_input,species)
+        manufactured_E_fields = manufactured_electric_fields(Lr_in,z.L,r_bc,z_bc,composition,geo_in,r.n,manufactured_solns_input,species)
         Er_func = manufactured_E_fields.Er_func
         Ez_func = manufactured_E_fields.Ez_func
         phi_func = manufactured_E_fields.phi_func

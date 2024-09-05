@@ -8,9 +8,10 @@ module file_io_netcdf
 
 import moment_kinetics.file_io: io_has_parallel, open_output_file_implementation,
                                 create_io_group, get_group, is_group, get_subgroup_keys,
-                                get_variable_keys, add_attribute!, write_single_value!,
-                                create_dynamic_variable!, append_to_dynamic_var
-import moment_kinetics.load_data: open_file_to_read, load_variable, load_slice
+                                get_variable_keys, add_attribute!, modify_attribute!,
+                                write_single_value!, create_dynamic_variable!,
+                                append_to_dynamic_var
+import moment_kinetics.load_data: open_file_to_read, get_attribute, load_variable, load_slice
 using moment_kinetics.coordinates: coordinate
 using moment_kinetics.input_structs: netcdf
 
@@ -21,9 +22,9 @@ function io_has_parallel(::Val{netcdf})
     return false
 end
 
-function open_output_file_implementation(::Val{netcdf}, prefix, parallel_io, io_comm,
+function open_output_file_implementation(::Val{netcdf}, prefix, io_input, io_comm,
                                          mode="c")
-    parallel_io && error("NetCDF interface does not support parallel I/O")
+    io_input.parallel_io && error("NetCDF interface does not support parallel I/O")
 
     # the netcdf file will be given by output_dir/run_name with .cdf appended
     filename = string(prefix, ".cdf")
@@ -32,7 +33,7 @@ function open_output_file_implementation(::Val{netcdf}, prefix, parallel_io, io_
     # create the new NetCDF file
     fid = NCDataset(filename, mode)
 
-    return fid, (filename, parallel_io, io_comm)
+    return fid, (filename, io_input, io_comm)
 end
 
 function create_io_group(parent::NCDataset, name; description=nothing)
@@ -74,6 +75,14 @@ function add_attribute!(file_or_group::NCDataset, name, value)
 end
 function add_attribute!(var::NCDatasets.CFVariable, name, value)
     var.attrib[name] = value
+end
+
+function modify_attribute!(file_or_group_or_var::Union{NCDataset,NCDatasets.CFVariable}, name, value)
+    file_or_group_or_var.attrib[name] = value
+end
+
+function get_attribute(file_or_group_or_var::Union{NCDataset,NCDatasets.CFVariable}, name)
+    return var.attrib[name]
 end
 
 function maybe_create_netcdf_dim(file_or_group::NCDataset, name, size)

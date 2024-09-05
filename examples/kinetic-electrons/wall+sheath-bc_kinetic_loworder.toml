@@ -1,0 +1,114 @@
+steady_state_residual = true
+converged_residual_value = 1.0e-3
+evolve_moments_density = false
+evolve_moments_parallel_flow = false
+evolve_moments_parallel_pressure = false
+evolve_moments_conservation = false
+charge_exchange_frequency = 2.0
+electron_charge_exchange_frequency = 0.0
+nu_ei = 0.0
+ionization_frequency = 2.0
+#electron_ionization_frequency = 2.0
+#ionization_energy = 1.0
+constant_ionization_rate = false
+r_ngrid = 1
+r_nelement = 1
+z_ngrid = 5
+#z_nelement = 32
+z_nelement = 64
+#z_nelement = 128
+z_bc = "wall"
+z_discretization = "chebyshev_pseudospectral"
+z_spacing_option = "sqrt"
+vpa_ngrid = 5
+#vpa_nelement = 40
+vpa_nelement = 80
+vpa_L = 12.0 #8.0
+vpa_bc = "zero"
+vpa_discretization = "chebyshev_pseudospectral"
+#vpa_discretization = "gausslegendre_pseudospectral"
+vz_ngrid = 5
+vz_nelement = 80
+vz_L = 12.0
+vz_bc = "zero"
+vz_discretization = "chebyshev_pseudospectral"
+
+[composition]
+n_ion_species = 1
+n_neutral_species = 1
+electron_physics = "kinetic_electrons"
+T_e = 1.0
+T_wall = 1.0
+
+[ion_species_1]
+initial_density = 1.0
+initial_temperature = 1.0
+
+[z_IC_ion_species_1]
+initialization_option = "gaussian"
+density_amplitude = 0.001
+density_phase = 0.0
+upar_amplitude = 1.0
+upar_phase = 0.0
+temperature_amplitude = 0.0
+temperature_phase = 0.0
+
+[vpa_IC_ion_species_1]
+initialization_option = "gaussian"
+density_amplitude = 1.0
+density_phase = 0.0
+upar_amplitude = 0.0
+upar_phase = 0.0
+temperature_amplitude = 0.0
+temperature_phase = 0.0
+
+[neutral_species_1]
+initial_density = 1.0
+initial_temperature = 1.0
+
+[z_IC_neutral_species_1]
+initialization_option = "gaussian"
+density_amplitude = 0.001
+density_phase = 0.0
+upar_amplitude = 0.0
+upar_phase = 0.0
+temperature_amplitude = 0.0
+temperature_phase = 0.0
+
+[vpa_IC_neutral_species_1]
+initialization_option = "gaussian"
+density_amplitude = 1.0
+density_phase = 0.0
+upar_amplitude = 0.0
+upar_phase = 0.0
+temperature_amplitude = 0.0
+temperature_phase = 0.0
+
+[output]
+#ascii_output = true
+
+[electron_numerical_dissipation]
+#moment_dissipation_coefficient = 0.0001
+#moment_dissipation_coefficient = 1.0
+#vpa_dissipation_coefficient = 0.002
+#vpa_dissipation_coefficient = 0.2
+vpa_dissipation_coefficient = 2.0
+#vpa_dissipation_coefficient = 20.0
+
+[timestepping]
+nstep = 40000
+#nstep = 1
+dt = 5.0e-5
+nwrite = 200
+nwrite_dfns = 10000
+type = "SSPRK4"
+
+[electron_timestepping]
+nstep = 5000000
+#nstep = 1
+dt = 2.0e-8
+nwrite = 1000
+nwrite_dfns = 1000
+#type = "SSPRK4"
+type = "Fekete4(3)"
+minimum_dt = 1.0e-8

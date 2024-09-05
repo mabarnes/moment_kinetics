@@ -7,7 +7,7 @@ function io_has_parallel(::Val{hdf5})
     return HDF5.has_parallel()
 end
 
-function open_output_file_implementation(::Val{hdf5}, prefix, parallel_io, io_comm, mode="cw")
+function open_output_file_implementation(::Val{hdf5}, prefix, io_input, io_comm, mode="cw")
     # the hdf5 file will be given by output_dir/run_name with .h5 appended
     filename = string(prefix, ".h5")
 
@@ -16,7 +16,7 @@ function open_output_file_implementation(::Val{hdf5}, prefix, parallel_io, io_co
               * "characters), which will cause an error in HDF5.")
     end
     # create the new HDF5 file
-    if parallel_io
+    if io_input.parallel_io
         # if a file with the requested name already exists, remove it
         if mode == "cw" && MPI.Comm_rank(io_comm) == 0 && isfile(filename)
             rm(filename)
@@ -32,7 +32,7 @@ function open_output_file_implementation(::Val{hdf5}, prefix, parallel_io, io_co
         fid = h5open(filename, mode)
     end
 
-    return fid, (filename, parallel_io, io_comm)
+    return fid, (filename, io_input, io_comm)
 end
 
 # HDF5.H5DataStore is the supertype for HDF5.File and HDF5.Group
@@ -52,6 +52,11 @@ function add_attribute!(file_or_group::HDF5.H5DataStore, name, value)
 end
 function add_attribute!(var::HDF5.Dataset, name, value)
     attributes(var)[name] = value
+end
+
+# HDF5.H5DataStore is the supertype for HDF5.File and HDF5.Group
+function modify_attribute!(file_or_group_or_var::Union{HDF5.H5DataStore,HDF5.Dataset}, name, value)
+    attrs(file_or_group_or_var)[name] = value
 end
 
 function get_group(file_or_group::HDF5.H5DataStore, name::String)

@@ -19,7 +19,6 @@ using ..type_definitions: mk_float, mk_int
 using LibGit2
 using MPI
 using Pkg
-using TOML
 
 @debug_shared_array using ..communication: DebugMPISharedArray
 
@@ -42,6 +41,7 @@ struct ascii_ios{T <: Union{IOStream,Nothing}}
     # corresponds to the ascii file to which velocity space moments of the
     # distribution function such as density and pressure are written
     moments_ion::T
+    moments_electron::T
     moments_neutral::T
     # corresponds to the ascii file to which electromagnetic fields
     # such as the electrostatic potential are written
@@ -52,10 +52,12 @@ end
 structure containing the data/metadata needed for binary file i/o
 moments & fields only
 """
-struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower,
+struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
                        Tchodura_upper, Texti1, Texti2, Texti3, Texti4,
-                       Texti5, Textn1, Textn2, Textn3, Textn4, Textn5, Tconstri, Tconstrn,
-                       Tint, Tfailcause}
+                       Texti5, Textn1, Textn2, Textn3, Textn4, Textn5, Texte1, Texte2,
+                       Texte3, Texte4, Tconstri, Tconstrn, Tconstre, Tint, Tfailcause,
+                       Telectrontime, Telectronint, Telectronfailcause, Tnldiagnostics,
+                       Tinput}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the time variable
@@ -68,12 +70,28 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower,
     Ez::Tphi
     # handle for the ion species density
     density::Tmomi
+    # low-order approximation, used to diagnose timestepping error
+    density_loworder::Union{Tmomi,Nothing}
+    # start of the last timestep before output, used to measure steady state residual
+    density_start_last_timestep::Union{Tmomi,Nothing}
     # handle for the ion species parallel flow
     parallel_flow::Tmomi
+    # low-order approximation, used to diagnose timestepping error
+    parallel_flow_loworder::Union{Tmomi,Nothing}
+    # start of the last timestep before output, used to measure steady state residual
+    parallel_flow_start_last_timestep::Union{Tmomi,Nothing}
     # handle for the ion species parallel pressure
     parallel_pressure::Tmomi
+    # low-order approximation, used to diagnose timestepping error
+    parallel_pressure_loworder::Union{Tmomi,Nothing}
+    # start of the last timestep before output, used to measure steady state residual
+    parallel_pressure_start_last_timestep::Union{Tmomi,Nothing}
     # handle for the ion species perpendicular pressure
     perpendicular_pressure::Tmomi
+    # low-order approximation, used to diagnose timestepping error
+    perpendicular_pressure_loworder::Union{Tmomi,Nothing}
+    # start of the last timestep before output, used to measure steady state residual
+    perpendicular_pressure_start_last_timestep::Union{Tmomi,Nothing}
     # handle for the ion species parallel heat flux
     parallel_heat_flux::Tmomi
     # handle for the ion species thermal speed
@@ -84,10 +102,45 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower,
     chodura_integral_lower::Tchodura_lower
     # handle for chodura diagnostic (upper)
     chodura_integral_upper::Tchodura_upper
+    # handle for the electron species density
+    electron_density::Tmome
+    # low-order approximation, used to diagnose timestepping error
+    electron_density_loworder::Union{Tmome,Nothing}
+    # start of the last timestep before output, used to measure steady state residual
+    electron_density_start_last_timestep::Union{Tmome,Nothing}
+    # handle for the electron species parallel flow
+    electron_parallel_flow::Tmome
+    # low-order approximation, used to diagnose timestepping error
+    electron_parallel_flow_loworder::Union{Tmome,Nothing}
+    # start of the last timestep before output, used to measure steady state residual
+    electron_parallel_flow_start_last_timestep::Union{Tmome,Nothing}
+    # handle for the electron species parallel pressure
+    electron_parallel_pressure::Tmome
+    # low-order approximation, used to diagnose timestepping error
+    electron_parallel_pressure_loworder::Union{Tmome,Nothing}
+    # start of the last timestep before output, used to measure steady state residual
+    electron_parallel_pressure_start_last_timestep::Union{Tmome,Nothing}
+    # handle for the electron species parallel heat flux
+    electron_parallel_heat_flux::Tmome
+    # handle for the electron species thermal speed
+    electron_thermal_speed::Tmome
+
     # handle for the neutral species density
     density_neutral::Tmomn
+    # low-order approximation, used to diagnose timestepping error
+    density_neutral_loworder::Union{Tmomn,Nothing}
+    # start of the last timestep before output, used to measure steady state residual
+    density_neutral_start_last_timestep::Union{Tmomn,Nothing}
     uz_neutral::Tmomn
+    # low-order approximation, used to diagnose timestepping error
+    uz_neutral_loworder::Union{Tmomn,Nothing}
+    # start of the last timestep before output, used to measure steady state residual
+    uz_neutral_start_last_timestep::Union{Tmomn,Nothing}
     pz_neutral::Tmomn
+    # low-order approximation, used to diagnose timestepping error
+    pz_neutral_loworder::Union{Tmomn,Nothing}
+    # start of the last timestep before output, used to measure steady state residual
+    pz_neutral_start_last_timestep::Union{Tmomn,Nothing}
     qz_neutral::Tmomn
     thermal_speed_neutral::Tmomn
 
@@ -102,6 +155,10 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower,
     external_source_neutral_momentum_amplitude::Textn3
     external_source_neutral_pressure_amplitude::Textn4
     external_source_neutral_controller_integral::Textn5
+    external_source_electron_amplitude::Texte1
+    external_source_electron_density_amplitude::Texte2
+    external_source_electron_momentum_amplitude::Texte3
+    external_source_electron_pressure_amplitude::Texte4
 
     # handles for constraint coefficients
     ion_constraints_A_coefficient::Tconstri
@@ -110,6 +167,9 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower,
     neutral_constraints_A_coefficient::Tconstrn
     neutral_constraints_B_coefficient::Tconstrn
     neutral_constraints_C_coefficient::Tconstrn
+    electron_constraints_A_coefficient::Tconstre
+    electron_constraints_B_coefficient::Tconstre
+    electron_constraints_C_coefficient::Tconstre
 
     # cumulative wall clock time taken by the run
     time_for_run::Ttime
@@ -117,6 +177,8 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower,
     step_counter::Tint
     # current timestep size
     dt::Ttime
+    # size of last timestep before output, used for some diagnostics
+    previous_dt::Ttime
     # cumulative number of timestep failures
     failure_counter::Tint
     # cumulative count of which variable caused a timstep failure
@@ -126,28 +188,132 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower,
     # Last successful timestep before most recent timestep failure, used by adaptve
     # timestepping algorithm
     dt_before_last_fail::Ttime
+    # cumulative number of electron pseudo-timesteps taken
+    electron_step_counter::Telectronint
+    # cumulative electron pseudo-time
+    electron_cumulative_pseudotime::Telectrontime
+    # current electron pseudo-timestep size
+    electron_dt::Telectrontime
+    # size of last electron pseudo-timestep before the output was written
+    electron_previous_dt::Telectrontime
+    # cumulative number of electron pseudo-timestep failures
+    electron_failure_counter::Telectronint
+    # cumulative count of which variable caused a electron pseudo-timstep failure
+    electron_failure_caused_by::Telectronfailcause
+    # cumulative count of which factors limited the electron pseudo-timestep at each step
+    electron_limit_caused_by::Telectronfailcause
+    # Last successful timestep before most recent electron pseudo-timestep failure, used
+    # by adaptive timestepping algorithm
+    electron_dt_before_last_fail::Telectrontime
+    # Variables recording diagnostic information about non-linear solvers (used for
+    # implicit parts of timestep). These are stored in nested NamedTuples so that we can
+    # write diagnostics generically for as many nonlinear solvers as are created.
+    nl_solver_diagnostics::Tnldiagnostics
 
-    # Use parallel I/O?
-    parallel_io::Bool
+    # Settings for I/O
+    io_input::Tinput
  end
 
 """
 structure containing the data/metadata needed for binary file i/o
 distribution function data only
 """
-struct io_dfns_info{Tfile, Tfi, Tfn, Tmoments}
+struct io_dfns_info{Tfile, Tfi, Tfe, Tfn, Tmoments, Tinput}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the ion species distribution function variable
     f::Tfi
+    # low-order approximation to ion species distribution function, used to diagnose timestepping error
+    f_loworder::Union{Tfi,Nothing}
+    # ion species distribution function at the start of the last timestep before output, used to measure steady state residual
+    f_start_last_timestep::Union{Tfi,Nothing}
+    # handle for the electron distribution function variable
+    f_electron::Tfe
+    # low-order approximation to electron distribution function, used to diagnose timestepping error
+    f_electron_loworder::Union{Tfe,Nothing}
+    # electron distribution function at the start of the last timestep before output, used to measure steady state residual
+    f_electron_start_last_timestep::Union{Tfe,Nothing}
     # handle for the neutral species distribution function variable
     f_neutral::Tfn
+    # low-order approximation to neutral species distribution function, used to diagnose timestepping error
+    f_neutral_loworder::Union{Tfn,Nothing}
+    # neutral species distribution function at the start of the last timestep before output, used to measure steady state residual
+    f_neutral_start_last_timestep::Union{Tfn,Nothing}
 
-    # Use parallel I/O?
-    parallel_io::Bool
+    # Settings for I/O
+    io_input::Tinput
 
     # Handles for moment variables
     io_moments::Tmoments
+end
+
+"""
+structure containing the data/metadata needed for binary file i/o
+for electron initialization
+"""
+struct io_initial_electron_info{Tfile, Tfe, Tmom, Texte1, Texte2, Texte3, Texte4,
+                                Tconstr, Telectrontime, Telectronint, Telectronfailcause,
+                                Tinput}
+    # file identifier for the binary file to which data is written
+    fid::Tfile
+    time::Telectrontime
+    # handle for the electron distribution function variable
+    f_electron::Tfe
+    # low-order approximation, used to diagnose timestepping error
+    f_electron_loworder::Union{Tfe,Nothing}
+    # start of the last timestep before output, used to measure steady state residual
+    f_electron_start_last_timestep::Union{Tfe,Nothing}
+    # handle for the electron density variable
+    electron_density::Union{Tmom,Nothing}
+    # low-order approximation, used to diagnose timestepping error
+    electron_density_loworder::Union{Tmom,Nothing}
+    # start of the last timestep before output, used to measure steady state residual
+    electron_density_start_last_timestep::Union{Tmom,Nothing}
+    # handle for the electron parallel flow variable
+    electron_parallel_flow::Union{Tmom,Nothing}
+    # low-order approximation, used to diagnose timestepping error
+    electron_parallel_flow_loworder::Union{Tmom,Nothing}
+    # start of the last timestep before output, used to measure steady state residual
+    electron_parallel_flow_start_last_timestep::Union{Tmom,Nothing}
+    # handle for the electron parallel pressure variable
+    electron_parallel_pressure::Tmom
+    # low-order approximation, used to diagnose timestepping error
+    electron_parallel_pressure_loworder::Union{Tmom,Nothing}
+    # start of the last timestep before output, used to measure steady state residual
+    electron_parallel_pressure_start_last_timestep::Union{Tmom,Nothing}
+    # handle for the electron parallel heat flux variable
+    electron_parallel_heat_flux::Tmom
+    # handle for the electron thermal speed variable
+    electron_thermal_speed::Tmom
+    # handles for external source terms
+    external_source_electron_amplitude::Texte1
+    external_source_electron_density_amplitude::Texte2
+    external_source_electron_momentum_amplitude::Texte3
+    external_source_electron_pressure_amplitude::Texte4
+    # handles for constraint coefficients
+    electron_constraints_A_coefficient::Tconstr
+    electron_constraints_B_coefficient::Tconstr
+    electron_constraints_C_coefficient::Tconstr
+    # cumulative number of electron pseudo-timesteps taken
+    electron_step_counter::Telectronint
+    # cumulative electron pseudo-time
+    electron_cumulative_pseudotime::Telectrontime
+    # current electron pseudo-timestep size
+    electron_dt::Telectrontime
+    # size of last electron pseudo-timestep before the output was written
+    electron_previous_dt::Telectrontime
+    # cumulative number of electron pseudo-timestep failures
+    electron_failure_counter::Telectronint
+    # cumulative count of which variable caused a electron pseudo-timstep failure
+    electron_failure_caused_by::Telectronfailcause
+    # cumulative count of which factors limited the electron pseudo-timestep at each step
+    electron_limit_caused_by::Telectronfailcause
+    # Last successful timestep before most recent electron pseudo-timestep failure, used
+    # by adaptve timestepping algorithm
+    electron_dt_before_last_fail::Telectrontime
+
+    # Settings for I/O
+    io_input::Tinput
 end
 
 """
@@ -194,7 +360,7 @@ open the necessary output files
 function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vperp, z, r,
                        composition, collisions, evolve_density, evolve_upar, evolve_ppar,
                        external_source_settings, input_dict, restart_time_index,
-                       previous_runs_info, time_for_setup)
+                       previous_runs_info, time_for_setup, t_params, nl_solver_params)
     begin_serial_region()
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -207,34 +373,210 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
         if io_input.ascii_output
             ff_io = open_ascii_output_file(out_prefix, "f_vs_t")
             mom_ion_io = open_ascii_output_file(out_prefix, "moments_ion_vs_t")
+            mom_eon_io = open_ascii_output_file(out_prefix, "moments_electron_vs_t")
             mom_ntrl_io = open_ascii_output_file(out_prefix, "moments_neutral_vs_t")
             fields_io = open_ascii_output_file(out_prefix, "fields_vs_t")
-            ascii = ascii_ios(ff_io, mom_ion_io, mom_ntrl_io, fields_io)
+            ascii = ascii_ios(ff_io, mom_ion_io, mom_eon_io, mom_ntrl_io, fields_io)
         else
-            ascii = ascii_ios(nothing, nothing, nothing, nothing)
+            ascii = ascii_ios(nothing, nothing, nothing, nothing, nothing)
         end
 
         run_id = io_input.run_id
 
-        io_moments = setup_moments_io(out_prefix, io_input.binary_format, vz, vr, vzeta,
-                                      vpa, vperp, r, z, composition, collisions,
-                                      evolve_density, evolve_upar, evolve_ppar,
-                                      external_source_settings, input_dict,
-                                      io_input.parallel_io, comm_inter_block[], run_id,
+        io_moments = setup_moments_io(out_prefix, io_input, vz, vr, vzeta, vpa, vperp, r,
+                                      z, composition, collisions, evolve_density,
+                                      evolve_upar, evolve_ppar, external_source_settings,
+                                      input_dict, comm_inter_block[], run_id,
                                       restart_time_index, previous_runs_info,
-                                      time_for_setup)
-        io_dfns = setup_dfns_io(out_prefix, io_input.binary_format,
-                                boundary_distributions, r, z, vperp, vpa, vzeta, vr, vz,
-                                composition, collisions, evolve_density, evolve_upar,
-                                evolve_ppar, external_source_settings, input_dict,
-                                io_input.parallel_io, comm_inter_block[], run_id,
-                                restart_time_index, previous_runs_info, time_for_setup)
+                                      time_for_setup, t_params, nl_solver_params)
+        io_dfns = setup_dfns_io(out_prefix, io_input, boundary_distributions, r, z, vperp,
+                                vpa, vzeta, vr, vz, composition, collisions,
+                                evolve_density, evolve_upar, evolve_ppar,
+                                external_source_settings, input_dict, comm_inter_block[],
+                                run_id, restart_time_index, previous_runs_info,
+                                time_for_setup, t_params, nl_solver_params)
 
         return ascii, io_moments, io_dfns
     end
     # For other processes in the block, return (nothing, nothing, nothing)
     return nothing, nothing, nothing
 end
+
+"""
+open output file to save the initial electron pressure and distribution function
+"""
+function setup_electron_io(io_input, vpa, vperp, z, r, composition, collisions,
+                           evolve_density, evolve_upar, evolve_ppar,
+                           external_source_settings, t_params, input_dict,
+                           restart_time_index, previous_runs_info, prefix_label)
+    begin_serial_region()
+    @serial_region begin
+        # Only read/write from first process in each 'block'
+
+        # check to see if output_dir exists in the current directory
+        # if not, create it
+        isdir(io_input.output_dir) || mkdir(io_input.output_dir)
+        out_prefix = joinpath(io_input.output_dir, io_input.run_name)
+
+        run_id = io_input.run_id
+        parallel_io = io_input.parallel_io
+        io_comm = comm_inter_block[]
+
+        electrons_prefix = string(out_prefix, ".$prefix_label")
+        if !parallel_io
+            electrons_prefix *= ".$(iblock_index[])"
+        end
+        fid, file_info = open_output_file(electrons_prefix, io_input, io_comm)
+
+        # write a header to the output file
+        add_attribute!(fid, "file_info",
+                       "Output initial electron state from the moment_kinetics code")
+        add_attribute!(fid, "pdf_electron_converged", false)
+
+        # write some overview information to the output file
+        write_overview!(fid, composition, collisions, parallel_io, evolve_density,
+                        evolve_upar, evolve_ppar, -1.0)
+
+        # write provenance tracking information to the output file
+        write_provenance_tracking_info!(fid, parallel_io, run_id, restart_time_index,
+                                        input_dict, previous_runs_info)
+
+        # write the input settings
+        write_input!(fid, input_dict, parallel_io)
+
+        ### define coordinate dimensions ###
+        define_io_coordinates!(fid, nothing, nothing, nothing, vpa, vperp, z, r,
+                               parallel_io)
+
+        ### create variables for time-dependent quantities ###
+        dynamic = create_io_group(fid, "dynamic_data", description="time evolving variables")
+        io_pseudotime = create_dynamic_variable!(dynamic, "time", mk_float; parallel_io=parallel_io,
+                                                 description="pseudotime used for electron initialization")
+        io_f_electron = create_dynamic_variable!(dynamic, "f_electron", mk_float, vpa,
+                                                 vperp, z, r;
+                                                 parallel_io=parallel_io,
+                                                 description="electron distribution function")
+        if io_input.write_electron_error_diagnostics
+            io_f_electron_loworder =
+                create_dynamic_variable!(dynamic, "f_electron_loworder", mk_float,
+                                         vpa, vperp, z, r;
+                                         n_ion_species=composition.n_ion_species,
+                                         parallel_io=parallel_io,
+                                         description="low-order approximation to electron distribution function, used to diagnose timestepping error")
+        else
+            io_f_electron_loworder = nothing
+        end
+        if io_input.write_electron_steady_state_diagnostics
+            io_f_electron_start_last_timestep =
+                create_dynamic_variable!(dynamic, "f_electron_start_last_timestep",
+                                         mk_float, vpa, vperp, z, r;
+                                         n_ion_species=composition.n_ion_species,
+                                         parallel_io=parallel_io,
+                                         description="electron distribution function at the start of the last electron pseudo-timestep before output, used to measure steady state residual")
+        else
+            io_f_electron_start_last_timestep = nothing
+        end
+
+        io_electron_density, io_electron_density_loworder,
+        io_electron_density_start_last_timestep, io_electron_upar,
+        io_electron_upar_loworder, io_electron_upar_start_last_timestep, io_electron_ppar,
+        io_electron_ppar_loworder, io_electron_ppar_start_last_timestep, io_electron_qpar,
+        io_electron_vth, external_source_electron_amplitude,
+        external_source_electron_density_amplitude,
+        external_source_electron_momentum_amplitude,
+        external_source_electron_pressure_amplitude,
+        electron_constraints_A_coefficient, electron_constraints_B_coefficient,
+        electron_constraints_C_coefficient, io_electron_step_counter, io_electron_dt,
+        io_electron_previous_dt, io_electron_failure_counter,
+        io_electron_failure_caused_by, io_electron_limit_caused_by,
+        io_electron_dt_before_last_fail =
+            define_dynamic_electron_moment_variables!(fid, r, z, parallel_io,
+                                                      external_source_settings,
+                                                      evolve_density, evolve_upar,
+                                                      evolve_ppar, kinetic_electrons,
+                                                      t_params,
+                                                      io_input.write_electron_error_diagnostics,
+                                                      io_input.write_electron_steady_state_diagnostics;
+                                                      electron_only_io=true)
+
+        close(fid)
+
+        return file_info
+    end
+    # For other processes in the block, return nothing
+    return nothing
+end
+
+"""
+Get the `file_info` for an existing electron I/O file
+"""
+function get_electron_io_info(io_input, prefix_label)
+    out_prefix = joinpath(io_input.output_dir, io_input.run_name)
+    electrons_prefix = string(out_prefix, ".$prefix_label")
+    if io_input.binary_format == hdf5
+        filename = string(electrons_prefix, ".h5")
+    elseif io_input.binary_format == netcdf
+        filename = string(electrons_prefix, ".cdf")
+    else
+        error("Unrecognized binary_format=$(io_input.binary_format)")
+    end
+
+    return (filename, io_input, comm_inter_block[])
+end
+
+"""
+Reopen an existing initial electron output file to append more data
+"""
+function reopen_initial_electron_io(file_info)
+    @serial_region begin
+        filename, io_input, io_comm = file_info
+        fid = reopen_output_file(filename, io_input, io_comm)
+        dyn = get_group(fid, "dynamic_data")
+
+        variable_list = get_variable_keys(dyn)
+        function getvar(name)
+            if name ∈ variable_list
+                return dyn[name]
+            else
+                return nothing
+            end
+        end
+        return io_initial_electron_info(fid, getvar("time"), getvar("f_electron"),
+                                        getvar("f_electron_loworder"),
+                                        getvar("f_electron_start_last_timestep"),
+                                        getvar("electron_density"),
+                                        getvar("electron_density_loworder"),
+                                        getvar("electron_density_start_last_timestep"),
+                                        getvar("electron_parallel_flow"),
+                                        getvar("electron_parallel_flow_loworder"),
+                                        getvar("electron_parallel_flow_start_last_timestep"),
+                                        getvar("electron_parallel_pressure"),
+                                        getvar("electron_parallel_pressure_loworder"),
+                                        getvar("electron_parallel_pressure_start_last_timestep"),
+                                        getvar("electron_parallel_heat_flux"),
+                                        getvar("electron_thermal_speed"),
+                                        getvar("external_source_electron_amplitude"),
+                                        getvar("external_source_electron_density_amplitude"),
+                                        getvar("external_source_electron_momentum_amplitude"),
+                                        getvar("external_source_electron_pressure_amplitude"),
+                                        getvar("electron_constraints_A_coefficient"),
+                                        getvar("electron_constraints_B_coefficient"),
+                                        getvar("electron_constraints_C_coefficient"),
+                                        getvar("electron_step_counter"),
+                                        getvar("electron_cumulative_pseudotime"),
+                                        getvar("electron_dt"),
+                                        getvar("electron_previous_dt"),
+                                        getvar("electron_failure_counter"),
+                                        getvar("electron_failure_caused_by"),
+                                        getvar("electron_limit_caused_by"),
+                                        getvar("electron_dt_before_last_fail"),
+                                        io_input)
+    end
+
+    # For processes other than the root process of each shared-memory group...
+    return nothing
+end
+
 
 """
 Get a (sub-)group from a file or group
@@ -263,6 +605,11 @@ Write a single variable to a file or group. If a description or units are passed
 attributes of the variable.
 """
 function write_single_value! end
+
+# Convert Enum values to String to be written to file
+function write_single_value!(file_or_group, name, data::Enum; kwargs...)
+    return write_single_value!(file_or_group, name, string(data); kwargs...)
+end
 
 """
 write some overview information for the simulation to the binary file
@@ -330,7 +677,7 @@ function write_provenance_tracking_info!(fid, parallel_io, run_id, restart_time_
         # Convert input_dict into a TOML-formatted string so that we can store it in a
         # single variable.
         io_buffer = IOBuffer()
-        TOML.print(io_buffer, input_dict)
+        options_to_TOML(io_buffer, input_dict)
         input_string = String(take!(io_buffer))
         write_single_value!(provenance_tracking, "input", input_string,
                             parallel_io=parallel_io,
@@ -642,10 +989,12 @@ function create_dynamic_variable! end
 define dynamic (time-evolving) moment variables for writing to the hdf5 file
 """
 function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
-                                          r::coordinate, z::coordinate, parallel_io,
+                                          r::coordinate, z::coordinate, io_input,
                                           external_source_settings, evolve_density,
-                                          evolve_upar, evolve_ppar)
+                                          evolve_upar, evolve_ppar, electron_physics,
+                                          t_params, nl_solver_params)
     @serial_region begin
+        parallel_io = io_input.parallel_io
         dynamic = create_io_group(fid, "dynamic_data", description="time evolving variables")
 
         io_time = create_dynamic_variable!(dynamic, "time", mk_float; parallel_io=parallel_io,
@@ -654,19 +1003,46 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
         io_phi, io_Er, io_Ez =
             define_dynamic_em_field_variables!(fid, r, z, parallel_io)
 
-        io_density, io_upar, io_ppar, io_pperp, io_qpar, io_vth, io_dSdt,
-        external_source_amplitude, external_source_density_amplitude,
-        external_source_momentum_amplitude, external_source_pressure_amplitude,
-        external_source_controller_integral, io_chodura_lower, io_chodura_upper,
-        ion_constraints_A_coefficient, ion_constraints_B_coefficient,
-        ion_constraints_C_coefficient =
+        io_density, io_density_loworder, io_density_start_last_timestep, io_upar,
+        io_upar_loworder, io_upar_start_last_timestep, io_ppar, io_ppar_loworder,
+        io_ppar_start_last_timestep, io_pperp, io_pperp_loworder,
+        io_pperp_start_last_timestep, io_qpar, io_vth, io_dSdt, external_source_amplitude,
+        external_source_density_amplitude, external_source_momentum_amplitude,
+        external_source_pressure_amplitude, external_source_controller_integral,
+        io_chodura_lower, io_chodura_upper, ion_constraints_A_coefficient,
+        ion_constraints_B_coefficient, ion_constraints_C_coefficient =
             define_dynamic_ion_moment_variables!(fid, n_ion_species, r, z, parallel_io,
                                                  external_source_settings, evolve_density,
-                                                 evolve_upar, evolve_ppar)
+                                                 evolve_upar, evolve_ppar,
+                                                 io_input.write_error_diagnostics,
+                                                 io_input.write_steady_state_diagnostics)
 
-        io_density_neutral, io_uz_neutral, io_pz_neutral, io_qz_neutral,
-        io_thermal_speed_neutral, external_source_neutral_amplitude,
-        external_source_neutral_density_amplitude,
+        io_electron_density, io_electron_density_loworder,
+        io_electron_density_start_last_timestep, io_electron_upar,
+        io_electron_upar_loworder, io_electron_upar_start_last_timestep, io_electron_ppar,
+        io_electron_ppar_loworder, io_electron_ppar_start_last_timestep, io_electron_qpar,
+        io_electron_vth, external_source_electron_amplitude,
+        external_source_electron_density_amplitude,
+        external_source_electron_momentum_amplitude,
+        external_source_electron_pressure_amplitude,
+        electron_constraints_A_coefficient, electron_constraints_B_coefficient,
+        electron_constraints_C_coefficient, io_electron_step_counter,
+        io_electron_cumulative_pseudotime, io_electron_dt, io_electron_previous_dt,
+        io_electron_failure_counter, io_electron_failure_caused_by,
+        io_electron_limit_caused_by, io_electron_dt_before_last_fail =
+            define_dynamic_electron_moment_variables!(fid, r, z, parallel_io,
+                                                      external_source_settings,
+                                                      evolve_density, evolve_upar,
+                                                      evolve_ppar, electron_physics,
+                                                      t_params.electron,
+                                                      io_input.write_error_diagnostics,
+                                                      io_input.write_steady_state_diagnostics)
+
+        io_density_neutral, io_density_neutral_loworder,
+        io_density_neutral_start_last_timestep, io_uz_neutral, io_uz_neutral_loworder,
+        io_uz_neutral_start_last_timestep, io_pz_neutral, io_pz_neutral_loworder,
+        io_pz_neutral_start_last_timestep, io_qz_neutral, io_thermal_speed_neutral,
+        external_source_neutral_amplitude, external_source_neutral_density_amplitude,
         external_source_neutral_momentum_amplitude,
         external_source_neutral_pressure_amplitude,
         external_source_neutral_controller_integral, neutral_constraints_A_coefficient,
@@ -675,7 +1051,9 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                                      parallel_io,
                                                      external_source_settings,
                                                      evolve_density, evolve_upar,
-                                                     evolve_ppar)
+                                                     evolve_ppar,
+                                                     io_input.write_error_diagnostics,
+                                                     io_input.write_steady_state_diagnostics)
 
         io_time_for_run = create_dynamic_variable!(
             dynamic, "time_for_run", mk_float; parallel_io=parallel_io,
@@ -690,23 +1068,21 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
             dynamic, "dt", mk_float; parallel_io=parallel_io,
             description="current timestep size")
 
+        io_previous_dt = create_dynamic_variable!(
+            dynamic, "previous_dt", mk_float; parallel_io=parallel_io,
+            description="size of the last timestep before the output")
+
         io_failure_counter = create_dynamic_variable!(
             dynamic, "failure_counter", mk_int; parallel_io=parallel_io,
             description="cumulative number of timestep failures for the run")
 
-        n_failure_vars = 1 + evolve_density + evolve_upar + evolve_ppar
-        if n_neutral_species > 0
-            n_failure_vars *= 2
-        end
+        n_failure_vars = length(t_params.failure_caused_by)
         io_failure_caused_by = create_dynamic_variable!(
             dynamic, "failure_caused_by", mk_int; diagnostic_var_size=n_failure_vars,
             parallel_io=parallel_io,
             description="cumulative count of how many times each variable caused a "
                         * "timestep failure for the run")
-        n_limit_vars = 5 + 2
-        if n_neutral_species > 0
-            n_limit_vars += 2
-        end
+        n_limit_vars = length(t_params.limit_caused_by)
         io_limit_caused_by = create_dynamic_variable!(
             dynamic, "limit_caused_by", mk_int; diagnostic_var_size=n_limit_vars,
             parallel_io=parallel_io,
@@ -718,10 +1094,41 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
             description="Last successful timestep before most recent timestep failure, "
                         * "used by adaptve timestepping algorithm")
 
-        return io_moments_info(fid, io_time, io_phi, io_Er, io_Ez, io_density, io_upar,
-                               io_ppar, io_pperp, io_qpar, io_vth, io_dSdt, io_chodura_lower, io_chodura_upper,
-                               io_density_neutral, io_uz_neutral,
-                               io_pz_neutral, io_qz_neutral, io_thermal_speed_neutral,
+        io_nl_solver_diagnostics = NamedTuple(
+            term=>(n_solves=create_dynamic_variable!(
+                                dynamic, "$(term)_n_solves", mk_int; parallel_io=parallel_io,
+                                description="Number of nonlinear solves for $term"),
+                   nonlinear_iterations=create_dynamic_variable!(
+                                            dynamic, "$(term)_nonlinear_iterations", mk_int;
+                                            parallel_io=parallel_io,
+                                            description="Number of nonlinear iterations for $term"),
+                   linear_iterations=create_dynamic_variable!(
+                                         dynamic, "$(term)_linear_iterations", mk_int;
+                                         parallel_io=parallel_io,
+                                         description="Number of linear iterations for $term"),
+                  )
+            for (term, params) ∈ pairs(nl_solver_params) if params !== nothing)
+
+        return io_moments_info(fid, io_time, io_phi, io_Er, io_Ez, io_density,
+                               io_density_loworder, io_density_start_last_timestep,
+                               io_upar, io_upar_loworder, io_upar_start_last_timestep,
+                               io_ppar, io_ppar_loworder, io_ppar_start_last_timestep,
+                               io_pperp, io_pperp_loworder, io_pperp_start_last_timestep,
+                               io_qpar, io_vth, io_dSdt, io_chodura_lower,
+                               io_chodura_upper,
+                               io_electron_density, io_electron_density_loworder,
+                               io_electron_density_start_last_timestep, io_electron_upar,
+                               io_electron_upar_loworder,
+                               io_electron_upar_start_last_timestep, io_electron_ppar,
+                               io_electron_ppar_loworder,
+                               io_electron_ppar_start_last_timestep, io_electron_qpar,
+                               io_electron_vth,
+                               io_density_neutral, io_density_neutral_loworder,
+                               io_density_neutral_start_last_timestep, io_uz_neutral,
+                               io_uz_neutral_loworder, io_uz_neutral_start_last_timestep,
+                               io_pz_neutral, io_pz_neutral_loworder,
+                               io_pz_neutral_start_last_timestep, io_qz_neutral,
+                               io_thermal_speed_neutral,
                                external_source_amplitude,
                                external_source_density_amplitude,
                                external_source_momentum_amplitude,
@@ -732,15 +1139,28 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                external_source_neutral_momentum_amplitude,
                                external_source_neutral_pressure_amplitude,
                                external_source_neutral_controller_integral,
+                               external_source_electron_amplitude,
+                               external_source_electron_density_amplitude,
+                               external_source_electron_momentum_amplitude,
+                               external_source_electron_pressure_amplitude,
                                ion_constraints_A_coefficient,
                                ion_constraints_B_coefficient,
                                ion_constraints_C_coefficient,
                                neutral_constraints_A_coefficient,
                                neutral_constraints_B_coefficient,
                                neutral_constraints_C_coefficient,
-                               io_time_for_run, io_step_counter, io_dt,
+                               electron_constraints_A_coefficient,
+                               electron_constraints_B_coefficient,
+                               electron_constraints_C_coefficient,
+                               io_time_for_run, io_step_counter, io_dt, io_previous_dt,
                                io_failure_counter, io_failure_caused_by,
-                               io_limit_caused_by, io_dt_before_last_fail, parallel_io)
+                               io_limit_caused_by, io_dt_before_last_fail,
+                               io_electron_step_counter,
+                               io_electron_cumulative_pseudotime, io_electron_dt,
+                               io_electron_previous_dt, io_electron_failure_counter,
+                               io_electron_failure_caused_by, io_electron_limit_caused_by,
+                               io_electron_dt_before_last_fail, io_nl_solver_diagnostics,
+                               io_input)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -780,7 +1200,7 @@ define dynamic (time-evolving) ion moment variables for writing to the hdf5 file
 """
 function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
         z::coordinate, parallel_io, external_source_settings, evolve_density, evolve_upar,
-        evolve_ppar)
+        evolve_ppar, write_error_diagnostics, write_steady_state_diagnostics)
 
     dynamic = get_group(fid, "dynamic_data")
 
@@ -790,6 +1210,24 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
                                           parallel_io=parallel_io,
                                           description="ion species density",
                                           units="n_ref")
+    if write_error_diagnostics
+        io_density_loworder =
+            create_dynamic_variable!(dynamic, "density_loworder", mk_float, z, r;
+                                     n_ion_species=n_ion_species, parallel_io=parallel_io,
+                                     description="low-order approximation to ion species density, used to diagnose timestepping error",
+                                     units="n_ref")
+    else
+        io_density_loworder = nothing
+    end
+    if write_steady_state_diagnostics
+        io_density_start_last_timestep =
+            create_dynamic_variable!(dynamic, "density_start_last_timestep", mk_float, z, r;
+                                     n_ion_species=n_ion_species, parallel_io=parallel_io,
+                                     description="ion species density at the start of the last timestep before output, used to measure steady state residual",
+                                     units="n_ref")
+    else
+        io_density_start_last_timestep = nothing
+    end
 
     # io_upar is the handle for the ion parallel flow density
     io_upar = create_dynamic_variable!(dynamic, "parallel_flow", mk_float, z, r;
@@ -797,6 +1235,25 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
                                        parallel_io=parallel_io,
                                        description="ion species parallel flow",
                                        units="c_ref = sqrt(2*T_ref/mi)")
+    if write_error_diagnostics
+        io_upar_loworder =
+            create_dynamic_variable!(dynamic, "parallel_flow_loworder", mk_float, z, r;
+                                     n_ion_species=n_ion_species, parallel_io=parallel_io,
+                                     description="low-order approximation to ion species parallel flow, used to diagnose timestepping error",
+                                     units="c_ref = sqrt(2*T_ref/mi)")
+    else
+        io_upar_loworder = nothing
+    end
+    if write_steady_state_diagnostics
+        io_upar_start_last_timestep =
+            create_dynamic_variable!(dynamic, "parallel_flow_start_last_timestep",
+                                     mk_float, z, r; n_ion_species=n_ion_species,
+                                     parallel_io=parallel_io,
+                                     description="ion species parallel flow at the start of the last timestep before output, used to measure steady state residual",
+                                     units="c_ref = sqrt(2*T_ref/mi)")
+    else
+        io_upar_start_last_timestep = nothing
+    end
 
     # io_ppar is the handle for the ion parallel pressure
     io_ppar = create_dynamic_variable!(dynamic, "parallel_pressure", mk_float, z, r;
@@ -804,6 +1261,25 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
                                        parallel_io=parallel_io,
                                        description="ion species parallel pressure",
                                        units="n_ref*T_ref")
+    if write_error_diagnostics
+        io_ppar_loworder =
+            create_dynamic_variable!(dynamic, "parallel_pressure_loworder", mk_float, z, r;
+                                     n_ion_species=n_ion_species, parallel_io=parallel_io,
+                                     description="low-order approximation to ion species parallel pressure, used to diagnose timestepping error",
+                                     units="n_ref*T_ref")
+    else
+        io_ppar_loworder = nothing
+    end
+    if write_steady_state_diagnostics
+        io_ppar_start_last_timestep =
+            create_dynamic_variable!(dynamic, "parallel_pressure_start_last_timestep",
+                                     mk_float, z, r; n_ion_species=n_ion_species,
+                                     parallel_io=parallel_io,
+                                     description="ion species parallel pressure at the start of the last timestep before output, used to measure steady state residual",
+                                     units="n_ref*T_ref")
+    else
+        io_ppar_start_last_timestep = nothing
+    end
 
     # io_pperp is the handle for the ion parallel pressure
     io_pperp = create_dynamic_variable!(dynamic, "perpendicular_pressure", mk_float, z, r;
@@ -811,6 +1287,25 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
                                         parallel_io=parallel_io,
                                         description="ion species perpendicular pressure",
                                         units="n_ref*T_ref")
+    if write_error_diagnostics
+        io_pperp_loworder =
+            create_dynamic_variable!(dynamic, "perpendicular_pressure_loworder", mk_float, z,
+                                     r; n_ion_species=n_ion_species, parallel_io=parallel_io,
+                                     description="low-order approximation to ion species perpendicular pressure, used to diagnose timestepping error",
+                                     units="n_ref*T_ref")
+    else
+        io_pperp_loworder = nothing
+    end
+    if write_steady_state_diagnostics
+        io_pperp_start_last_timestep =
+            create_dynamic_variable!(dynamic, "perpendicular_pressure_start_last_timestep",
+                                     mk_float, z, r; n_ion_species=n_ion_species,
+                                     parallel_io=parallel_io,
+                                     description="ion species perpendicular pressure at the start of the last timestep before output, used to measure steady state residual",
+                                     units="n_ref*T_ref")
+    else
+        io_pperp_start_last_timestep = nothing
+    end
 
     # io_qpar is the handle for the ion parallel heat flux
     io_qpar = create_dynamic_variable!(dynamic, "parallel_heat_flux", mk_float, z, r;
@@ -930,7 +1425,10 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
            ion_constraints_C_coefficient = nothing
     end
 
-    return io_density, io_upar, io_ppar, io_pperp, io_qpar, io_vth, io_dSdt,
+    return io_density, io_density_loworder, io_density_start_last_timestep, io_upar,
+           io_upar_loworder, io_upar_start_last_timestep, io_ppar, io_ppar_loworder,
+           io_ppar_start_last_timestep, io_pperp, io_pperp_loworder,
+           io_pperp_start_last_timestep, io_qpar, io_vth, io_dSdt,
            external_source_amplitude, external_source_density_amplitude,
            external_source_momentum_amplitude, external_source_pressure_amplitude,
            external_source_controller_integral, io_chodura_lower, io_chodura_upper,
@@ -939,11 +1437,219 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
 end
 
 """
+define dynamic (time-evolving) electron moment variables for writing to the hdf5 file
+"""
+function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordinate,
+        parallel_io, external_source_settings, evolve_density, evolve_upar, evolve_ppar,
+        electron_physics, t_params, write_error_diagnostics,
+        write_steady_state_diagnostics; electron_only_io=false)
+
+    dynamic = get_group(fid, "dynamic_data")
+
+    if !electron_only_io
+        # io_density is the handle for the ion particle density
+        io_electron_density = create_dynamic_variable!(dynamic, "electron_density", mk_float, z, r;
+                                              parallel_io=parallel_io,
+                                              description="electron species density",
+                                              units="n_ref")
+        if write_error_diagnostics
+            io_electron_density_loworder =
+                create_dynamic_variable!(dynamic, "electron_density_loworder", mk_float, z, r;
+                                         parallel_io=parallel_io,
+                                         description="low-order approximation to electron species density, used to diagnose timestepping error",
+                                         units="n_ref")
+        else
+            io_electron_density_loworder = nothing
+        end
+        if write_steady_state_diagnostics
+            io_electron_density_start_last_timestep =
+                create_dynamic_variable!(dynamic, "electron_density_start_last_timestep",
+                                         mk_float, z, r; parallel_io=parallel_io,
+                                         description="electron species density at the start of the last timestep before output, used to measure steady state residual",
+                                         units="n_ref")
+        else
+            io_electron_density_start_last_timestep = nothing
+        end
+
+        # io_electron_upar is the handle for the electron parallel flow density
+        io_electron_upar = create_dynamic_variable!(dynamic, "electron_parallel_flow", mk_float, z, r;
+                                           parallel_io=parallel_io,
+                                           description="electron species parallel flow",
+                                           units="c_ref = sqrt(2*T_ref/mi)")
+        if write_error_diagnostics
+            io_electron_upar_loworder =
+                create_dynamic_variable!(dynamic, "electron_parallel_flow_loworder", mk_float, z,
+                                         r; parallel_io=parallel_io,
+                                         description="low-order approximation to electron species parallel flow, used to diagnose timestepping error",
+                                         units="c_ref = sqrt(2*T_ref/mi)")
+        else
+            io_electron_upar_loworder = nothing
+        end
+        if write_steady_state_diagnostics
+            io_electron_upar_start_last_timestep =
+                create_dynamic_variable!(dynamic, "electron_parallel_flow_start_last_timestep",
+                                         mk_float, z, r; parallel_io=parallel_io,
+                                         description="electron species parallel flow at the start of the last timestep before output, used to measure steady state residual",
+                                         units="c_ref = sqrt(2*T_ref/mi)")
+        else
+            io_electron_upar_start_last_timestep = nothing
+        end
+    else
+        io_electron_density = nothing
+        io_electron_density_loworder = nothing
+        io_electron_density_start_last_timestep = nothing
+        io_electron_upar = nothing
+        io_electron_upar_loworder = nothing
+        io_electron_upar_start_last_timestep = nothing
+    end
+
+    # io_electron_ppar is the handle for the electron parallel pressure
+    io_electron_ppar = create_dynamic_variable!(dynamic, "electron_parallel_pressure", mk_float, z, r;
+                                       parallel_io=parallel_io,
+                                       description="electron species parallel pressure",
+                                       units="n_ref*T_ref")
+    if write_error_diagnostics
+        io_electron_ppar_loworder =
+            create_dynamic_variable!(dynamic, "electron_parallel_pressure_loworder", mk_float,
+                                     z, r; parallel_io=parallel_io,
+                                     description="low-order approximation to electron species parallel pressure, used to diagnose timestepping error",
+                                     units="n_ref*T_ref")
+    else
+        io_electron_ppar_loworder = nothing
+    end
+    if write_steady_state_diagnostics
+        io_electron_ppar_start_last_timestep =
+            create_dynamic_variable!(dynamic,
+                                     "electron_parallel_pressure_start_last_timestep",
+                                     mk_float, z, r; parallel_io=parallel_io,
+                                     description="electron species parallel pressure at the start of the last timestep before output, used to measure steady state residual",
+                                     units="n_ref*T_ref")
+    else
+        io_electron_ppar_start_last_timestep = nothing
+    end
+
+    # io_electron_qpar is the handle for the electron parallel heat flux
+    io_electron_qpar = create_dynamic_variable!(dynamic, "electron_parallel_heat_flux", mk_float, z, r;
+                                       parallel_io=parallel_io,
+                                       description="electron species parallel heat flux",
+                                       units="n_ref*T_ref*c_ref")
+
+    # io_electron_vth is the handle for the electron thermal speed
+    io_electron_vth = create_dynamic_variable!(dynamic, "electron_thermal_speed", mk_float, z, r;
+                                      parallel_io=parallel_io,
+                                      description="electron species thermal speed",
+                                      units="c_ref")
+
+    electron_source_settings = external_source_settings.electron
+    if electron_source_settings.active
+        external_source_electron_amplitude = create_dynamic_variable!(
+            dynamic, "external_source_electron_amplitude", mk_float, z, r;
+            parallel_io=parallel_io, description="Amplitude of the external source for electrons",
+            units="n_ref/c_ref^3*c_ref/L_ref")
+        external_source_electron_density_amplitude = create_dynamic_variable!(
+            dynamic, "external_source_electron_density_amplitude", mk_float, z, r;
+            parallel_io=parallel_io, description="Amplitude of the external density source for electrons",
+            units="n_ref*c_ref/L_ref")
+        external_source_electron_momentum_amplitude = create_dynamic_variable!(
+            dynamic, "external_source_electron_momentum_amplitude", mk_float, z, r;
+            parallel_io=parallel_io, description="Amplitude of the external momentum source for electrons",
+            units="m_ref*n_ref*c_ref*c_ref/L_ref")
+        external_source_electron_pressure_amplitude = create_dynamic_variable!(
+            dynamic, "external_source_electron_pressure_amplitude", mk_float, z, r;
+            parallel_io=parallel_io, description="Amplitude of the external pressure source for electrons",
+            units="m_ref*n_ref*c_ref^2*c_ref/L_ref")
+    else
+        external_source_electron_amplitude = nothing
+        external_source_electron_density_amplitude = nothing
+        external_source_electron_momentum_amplitude = nothing
+        external_source_electron_pressure_amplitude = nothing
+    end
+
+    electron_constraints_A_coefficient =
+        create_dynamic_variable!(dynamic, "electron_constraints_A_coefficient", mk_float, z, r;
+                               parallel_io=parallel_io,
+                               description="'A' coefficient enforcing density constraint for electrons")
+    electron_constraints_B_coefficient =
+        create_dynamic_variable!(dynamic, "electron_constraints_B_coefficient", mk_float, z, r;
+                               parallel_io=parallel_io,
+                               description="'B' coefficient enforcing flow constraint for electrons")
+    electron_constraints_C_coefficient =
+        create_dynamic_variable!(dynamic, "electron_constraints_C_coefficient", mk_float, z, r;
+                               parallel_io=parallel_io,
+                               description="'C' coefficient enforcing pressure constraint for electrons")
+
+    if electron_physics ∈ (kinetic_electrons, kinetic_electrons_with_temperature_equation)
+        io_electron_step_counter = create_dynamic_variable!(
+            dynamic, "electron_step_counter", mk_int; parallel_io=parallel_io,
+            description="cumulative number of electron pseudo-timesteps for the run")
+
+        io_electron_cumulative_pseudotime = create_dynamic_variable!(
+            dynamic, "electron_cumulative_pseudotime", mk_float; parallel_io=parallel_io,
+            description="cumulative electron pseudo-time")
+
+        io_electron_dt = create_dynamic_variable!(
+            dynamic, "electron_dt", mk_float; parallel_io=parallel_io,
+            description="current electron pseudo-timestep size")
+
+        io_electron_previous_dt = create_dynamic_variable!(
+            dynamic, "electron_previous_dt", mk_float; parallel_io=parallel_io,
+            description="size of last electron pseudo-timestep before output was written")
+
+        io_electron_failure_counter = create_dynamic_variable!(
+            dynamic, "electron_failure_counter", mk_int; parallel_io=parallel_io,
+            description="cumulative number of electron pseudo-timestep failures for the run")
+
+        n_failure_vars = length(t_params.failure_caused_by)
+        io_electron_failure_caused_by = create_dynamic_variable!(
+            dynamic, "electron_failure_caused_by", mk_int;
+            diagnostic_var_size=n_failure_vars, parallel_io=parallel_io,
+            description="cumulative count of how many times each variable caused an "
+                        * "electron pseudo-timestep failure for the run")
+
+        n_limit_vars = length(t_params.limit_caused_by)
+        io_electron_limit_caused_by = create_dynamic_variable!(
+            dynamic, "electron_limit_caused_by", mk_int; diagnostic_var_size=n_limit_vars,
+            parallel_io=parallel_io,
+            description="cumulative count of how many times each factor limited the "
+                        * "electron pseudo-timestep for the run")
+
+        io_electron_dt_before_last_fail = create_dynamic_variable!(
+            dynamic, "electron_dt_before_last_fail", mk_float; parallel_io=parallel_io,
+            description="Last successful electron pseudo-timestep before most recent "
+                        * "electron pseudo-timestep failure, used by adaptve "
+                        * "timestepping algorithm")
+    else
+        io_electron_step_counter = nothing
+        io_electron_cumulative_pseudotime = nothing
+        io_electron_dt = nothing
+        io_electron_previous_dt = nothing
+        io_electron_failure_counter = nothing
+        io_electron_failure_caused_by = nothing
+        io_electron_limit_caused_by = nothing
+        io_electron_dt_before_last_fail = nothing
+    end
+
+    return io_electron_density, io_electron_density_loworder,
+           io_electron_density_start_last_timestep, io_electron_upar,
+           io_electron_upar_loworder, io_electron_upar_start_last_timestep,
+           io_electron_ppar, io_electron_ppar_loworder,
+           io_electron_ppar_start_last_timestep, io_electron_qpar, io_electron_vth,
+           external_source_electron_amplitude, external_source_electron_density_amplitude,
+           external_source_electron_momentum_amplitude,
+           external_source_electron_pressure_amplitude,
+           electron_constraints_A_coefficient, electron_constraints_B_coefficient,
+           electron_constraints_C_coefficient, io_electron_step_counter,
+           io_electron_cumulative_pseudotime, io_electron_dt, io_electron_previous_dt,
+           io_electron_failure_counter, io_electron_failure_caused_by,
+           io_electron_limit_caused_by, io_electron_dt_before_last_fail
+end
+
+"""
 define dynamic (time-evolving) neutral moment variables for writing to the hdf5 file
 """
 function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coordinate,
         z::coordinate, parallel_io, external_source_settings, evolve_density, evolve_upar,
-        evolve_ppar)
+        evolve_ppar, write_error_diagnostics, write_steady_state_diagnostics)
 
     dynamic = get_group(fid, "dynamic_data")
 
@@ -953,6 +1659,26 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
                                                   parallel_io=parallel_io,
                                                   description="neutral species density",
                                                   units="n_ref")
+    if write_error_diagnostics
+        io_density_neutral_loworder =
+            create_dynamic_variable!(dynamic, "density_neutral_loworder", mk_float, z, r;
+                                     n_neutral_species=n_neutral_species,
+                                     parallel_io=parallel_io,
+                                     description="low-order approximation to neutral species density, used to diagnose timestepping error",
+                                     units="n_ref")
+    else
+        io_density_neutral_loworder = nothing
+    end
+    if write_steady_state_diagnostics
+        io_density_neutral_start_last_timestep =
+            create_dynamic_variable!(dynamic, "density_neutral_start_last_timestep", mk_float, z, r;
+                                     n_neutral_species=n_neutral_species,
+                                     parallel_io=parallel_io,
+                                     description="neutral species density at the start of the last timestep before output, used to measure steady state residual",
+                                     units="n_ref")
+    else
+        io_density_neutral_start_last_timestep = nothing
+    end
 
     # io_uz_neutral is the handle for the neutral z momentum density
     io_uz_neutral = create_dynamic_variable!(dynamic, "uz_neutral", mk_float, z, r;
@@ -960,6 +1686,26 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
                                              parallel_io=parallel_io,
                                              description="neutral species mean z velocity",
                                              units="c_ref = sqrt(2*T_ref/mi)")
+    if write_error_diagnostics
+        io_uz_neutral_loworder =
+            create_dynamic_variable!(dynamic, "uz_neutral_loworder", mk_float, z, r;
+                                     n_neutral_species=n_neutral_species,
+                                     parallel_io=parallel_io,
+                                     description="low-order approximation to neutral species mean z velocity, used to diagnose timestepping error",
+                                     units="c_ref = sqrt(2*T_ref/mi)")
+    else
+        io_uz_neutral_loworder = nothing
+    end
+    if write_steady_state_diagnostics
+        io_uz_neutral_start_last_timestep =
+            create_dynamic_variable!(dynamic, "uz_neutral_start_last_timestep", mk_float, z, r;
+                                     n_neutral_species=n_neutral_species,
+                                     parallel_io=parallel_io,
+                                     description="neutral species mean z velocity at the start of the last timestep before output, used to measure steady state residual",
+                                     units="c_ref = sqrt(2*T_ref/mi)")
+    else
+        io_uz_neutral_start_last_timestep = nothing
+    end
 
     # io_pz_neutral is the handle for the neutral species zz pressure
     io_pz_neutral = create_dynamic_variable!(dynamic, "pz_neutral", mk_float, z, r;
@@ -967,6 +1713,26 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
                                              parallel_io=parallel_io,
                                              description="neutral species mean zz pressure",
                                              units="n_ref*T_ref")
+    if write_error_diagnostics
+        io_pz_neutral_loworder =
+            create_dynamic_variable!(dynamic, "pz_neutral_loworder", mk_float, z, r;
+                                     n_neutral_species=n_neutral_species,
+                                     parallel_io=parallel_io,
+                                     description="low-order approximation to neutral species mean zz pressure, used to diagnose timestepping error",
+                                     units="n_ref*T_ref")
+    else
+        io_pz_neutral_loworder = nothing
+    end
+    if write_steady_state_diagnostics
+        io_pz_neutral_start_last_timestep =
+            create_dynamic_variable!(dynamic, "pz_neutral_start_last_timestep", mk_float, z, r;
+                                     n_neutral_species=n_neutral_species,
+                                     parallel_io=parallel_io,
+                                     description="neutral species mean zz pressure at the start of the last timestep before output, used to measure steady state residual",
+                                     units="n_ref*T_ref")
+    else
+        io_pz_neutral_start_last_timestep = nothing
+    end
 
     # io_qz_neutral is the handle for the neutral z heat flux
     io_qz_neutral = create_dynamic_variable!(dynamic, "qz_neutral", mk_float, z, r;
@@ -1058,9 +1824,11 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
            neutral_constraints_C_coefficient = nothing
     end
 
-    return io_density_neutral, io_uz_neutral, io_pz_neutral, io_qz_neutral,
-           io_thermal_speed_neutral, external_source_neutral_amplitude,
-           external_source_neutral_density_amplitude,
+    return io_density_neutral, io_density_neutral_loworder,
+           io_density_neutral_start_last_timestep, io_uz_neutral, io_uz_neutral_loworder,
+           io_uz_neutral_start_last_timestep, io_pz_neutral, io_pz_neutral_loworder,
+           io_pz_neutral_start_last_timestep, io_qz_neutral, io_thermal_speed_neutral,
+           external_source_neutral_amplitude, external_source_neutral_density_amplitude,
            external_source_neutral_momentum_amplitude,
            external_source_neutral_pressure_amplitude,
            external_source_neutral_controller_integral, neutral_constraints_A_coefficient,
@@ -1072,16 +1840,20 @@ define dynamic (time-evolving) distribution function variables for writing to th
 file
 """
 function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz, composition,
-                                       parallel_io, external_source_settings,
-                                       evolve_density, evolve_upar, evolve_ppar)
+                                       io_input, external_source_settings,
+                                       evolve_density, evolve_upar, evolve_ppar, t_params,
+                                       nl_solver_params)
 
     @serial_region begin
+        parallel_io = io_input.parallel_io
         io_moments = define_dynamic_moment_variables!(fid, composition.n_ion_species,
                                                       composition.n_neutral_species, r, z,
-                                                      parallel_io,
+                                                      io_input,
                                                       external_source_settings,
                                                       evolve_density, evolve_upar,
-                                                      evolve_ppar)
+                                                      evolve_ppar,
+                                                      composition.electron_physics, t_params,
+                                                      nl_solver_params)
 
         dynamic = get_group(fid, "dynamic_data")
 
@@ -1090,14 +1862,88 @@ function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz, com
                                         n_ion_species=composition.n_ion_species,
                                         parallel_io=parallel_io,
                                         description="ion species distribution function")
+        if io_input.write_error_diagnostics
+            io_f_loworder = create_dynamic_variable!(dynamic, "f_loworder", mk_float, vpa,
+                                                     vperp, z, r;
+                                                     n_ion_species=composition.n_ion_species,
+                                                     parallel_io=parallel_io,
+                                                     description="low-order approximation to ion species distribution function, used to diagnose timestepping error")
+        else
+            io_f_loworder = nothing
+        end
+        if io_input.write_steady_state_diagnostics
+            io_f_start_last_timestep =
+                create_dynamic_variable!(dynamic, "f_start_last_timestep", mk_float, vpa,
+                                         vperp, z, r;
+                                         n_ion_species=composition.n_ion_species,
+                                         parallel_io=parallel_io,
+                                         description="ion species distribution function at the start of the last timestep before output, used to measure steady state residual")
+        else
+            io_f_start_last_timestep = nothing
+        end
+
+        if composition.electron_physics ∈ (kinetic_electrons,
+                                           kinetic_electrons_with_temperature_equation)
+            # io_f_electron is the handle for the electron pdf
+            io_f_electron = create_dynamic_variable!(dynamic, "f_electron", mk_float, vpa,
+                                                     vperp, z, r;
+                                                     parallel_io=parallel_io,
+                                                     description="electron distribution function")
+            if io_input.write_error_diagnostics
+                io_f_electron_loworder =
+                    create_dynamic_variable!(dynamic, "f_electron_loworder", mk_float,
+                                             vpa, vperp, z, r;
+                                             parallel_io=parallel_io,
+                                             description="low-order approximation to electron distribution function, used to diagnose timestepping error")
+            else
+                io_f_electron_loworder = nothing
+            end
+            if io_input.write_steady_state_diagnostics
+                io_f_electron_start_last_timestep =
+                    create_dynamic_variable!(dynamic, "f_electron_start_last_timestep",
+                                             mk_float, vpa, vperp, z, r;
+                                             parallel_io=parallel_io,
+                                             description="electron distribution function at the start of the last electron pseudo-timestep before output, used to measure steady state residual")
+            else
+                io_f_electron_start_last_timestep = nothing
+            end
+        else
+            io_f_electron = nothing
+            io_f_electron_loworder = nothing
+            io_f_electron_start_last_timestep = nothing
+        end
 
         # io_f_neutral is the handle for the neutral pdf
         io_f_neutral = create_dynamic_variable!(dynamic, "f_neutral", mk_float, vz, vr, vzeta, z, r;
                                                 n_neutral_species=composition.n_neutral_species,
                                                 parallel_io=parallel_io,
                                                 description="neutral species distribution function")
+        if io_input.write_error_diagnostics
+            io_f_neutral_loworder =
+                create_dynamic_variable!(dynamic, "f_neutral_loworder", mk_float, vz, vr,
+                                         vzeta, z, r;
+                                         n_ion_species=composition.n_ion_species,
+                                         parallel_io=parallel_io,
+                                         description="low-order approximation to neutral species distribution function, used to diagnose timestepping error")
+        else
+            io_f_neutral_loworder = nothing
+        end
+        if io_input.write_steady_state_diagnostics
+            io_f_neutral_start_last_timestep =
+                create_dynamic_variable!(dynamic, "f_neutral_start_last_timestep",
+                                         mk_float, vz, vr, vzeta, z, r;
+                                         n_ion_species=composition.n_ion_species,
+                                         parallel_io=parallel_io,
+                                         description="neutral species distribution function at the start of the last timestep before output, used to measure steady state residual")
+        else
+            io_f_neutral_start_last_timestep = nothing
+        end
 
-        return io_dfns_info(fid, io_f, io_f_neutral, parallel_io, io_moments)
+        return io_dfns_info(fid, io_f, io_f_loworder, io_f_start_last_timestep,
+                            io_f_electron, io_f_electron_loworder,
+                            io_f_electron_start_last_timestep, io_f_neutral,
+                            io_f_neutral_loworder, io_f_neutral_start_last_timestep,
+                            parallel_io, io_moments)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -1110,6 +1956,11 @@ Add an attribute to a file, group or variable
 function add_attribute! end
 
 """
+Modify an attribute to a file, group or variable
+"""
+function modify_attribute! end
+
+"""
 Low-level function to open a binary output file
 
 Each implementation (HDF5, NetCDF, etc.) defines a method of this function to open a file
@@ -1120,25 +1971,25 @@ function open_output_file_implementation end
 """
 Open an output file, selecting the backend based on io_option
 """
-function open_output_file(prefix, binary_format, parallel_io, io_comm)
-    check_io_implementation(binary_format)
+function open_output_file(prefix, io_input, io_comm)
+    check_io_implementation(io_input.binary_format)
 
-    return open_output_file_implementation(Val(binary_format), prefix, parallel_io,
+    return open_output_file_implementation(Val(io_input.binary_format), prefix, io_input,
                                            io_comm)
 end
 
 """
 Re-open an existing output file, selecting the backend based on io_option
 """
-function reopen_output_file(filename, parallel_io, io_comm)
+function reopen_output_file(filename, io_input, io_comm)
     prefix, format_string = splitext(filename)
     if format_string == ".h5"
         check_io_implementation(hdf5)
-        return open_output_file_implementation(Val(hdf5), prefix, parallel_io, io_comm,
+        return open_output_file_implementation(Val(hdf5), prefix, io_input, io_comm,
                                                "r+")[1]
     elseif format_string == ".cdf"
         check_io_implementation(netcdf)
-        return open_output_file_implementation(Val(netcdf), prefix, parallel_io, io_comm,
+        return open_output_file_implementation(Val(netcdf), prefix, io_input, io_comm,
                                                "a")[1]
     else
         error("Unsupported I/O format $binary_format")
@@ -1148,17 +1999,18 @@ end
 """
 setup file i/o for moment variables
 """
-function setup_moments_io(prefix, binary_format, vz, vr, vzeta, vpa, vperp, r, z,
+function setup_moments_io(prefix, io_input, vz, vr, vzeta, vpa, vperp, r, z,
                           composition, collisions, evolve_density, evolve_upar,
-                          evolve_ppar, external_source_settings, input_dict, parallel_io,
+                          evolve_ppar, external_source_settings, input_dict,
                           io_comm, run_id, restart_time_index, previous_runs_info,
-                          time_for_setup)
+                          time_for_setup, t_params, nl_solver_params)
     @serial_region begin
         moments_prefix = string(prefix, ".moments")
+        parallel_io = io_input.parallel_io
         if !parallel_io
             moments_prefix *= ".$(iblock_index[])"
         end
-        fid, file_info = open_output_file(moments_prefix, binary_format, parallel_io, io_comm)
+        fid, file_info = open_output_file(moments_prefix, io_input, io_comm)
 
         # write a header to the output file
         add_attribute!(fid, "file_info", "Output moments data from the moment_kinetics code")
@@ -1181,8 +2033,8 @@ function setup_moments_io(prefix, binary_format, vz, vr, vzeta, vpa, vperp, r, z
         ### in a struct for later access ###
         io_moments = define_dynamic_moment_variables!(
             fid, composition.n_ion_species, composition.n_neutral_species, r, z,
-            parallel_io, external_source_settings, evolve_density, evolve_upar,
-            evolve_ppar)
+            io_input, external_source_settings, evolve_density, evolve_upar,
+            evolve_ppar, composition.electron_physics, t_params, nl_solver_params)
 
         close(fid)
 
@@ -1198,27 +2050,63 @@ Reopen an existing moments output file to append more data
 """
 function reopen_moments_io(file_info)
     @serial_region begin
-        filename, parallel_io, io_comm = file_info
-        fid = reopen_output_file(filename, parallel_io, io_comm)
+        filename, io_input, io_comm = file_info
+        fid = reopen_output_file(filename, io_input, io_comm)
         dyn = get_group(fid, "dynamic_data")
 
         variable_list = get_variable_keys(dyn)
         function getvar(name)
             if name ∈ variable_list
                 return dyn[name]
+            elseif name == "nl_solver_diagnostics"
+                nl_names = (name for name ∈ variable_list
+                            if occursin("_nonlinear_iterations", name))
+                nl_prefixes = (split(name, "_nonlinear_iterations")[1]
+                               for name ∈ nl_names)
+                return NamedTuple(Symbol(term)=>(n_solves=dyn["$(term)_n_solves"],
+                                                 nonlinear_iterations=dyn["$(term)_nonlinear_iterations"],
+                                                 linear_iterations=dyn["$(term)_linear_iterations"])
+                                  for term ∈ nl_prefixes)
             else
                 return nothing
             end
         end
         return io_moments_info(fid, getvar("time"), getvar("phi"), getvar("Er"),
-                               getvar("Ez"), getvar("density"), getvar("parallel_flow"),
-                               getvar("parallel_pressure"), getvar("perpendicular_pressure"),
+                               getvar("Ez"), getvar("density"),
+                               getvar("density_loworder"),
+                               getvar("density_start_last_timestep"),
+                               getvar("parallel_flow"), getvar("parallel_flow_loworder"),
+                               getvar("parallel_flow_start_last_timestep"),
+                               getvar("parallel_pressure"),
+                               getvar("parallel_pressure_loworder"),
+                               getvar("parallel_pressure_start_last_timestep"),
+                               getvar("perpendicular_pressure"),
+                               getvar("perpendicular_pressure_loworder"),
+                               getvar("perpendicular_pressure_start_last_timestep"),
                                getvar("parallel_heat_flux"),
                                getvar("thermal_speed"), getvar("entropy_production"),
                                getvar("chodura_integral_lower"),
-                               getvar("chodura_integral_upper"), getvar("density_neutral"),
-                               getvar("uz_neutral"), getvar("pz_neutral"),
-                               getvar("qz_neutral"), getvar("thermal_speed_neutral"),
+                               getvar("chodura_integral_upper"),
+                               getvar("electron_density"),
+                               getvar("electron_density_loworder"),
+                               getvar("electron_density_start_last_timestep"),
+                               getvar("electron_parallel_flow"),
+                               getvar("electron_parallel_flow_loworder"),
+                               getvar("electron_parallel_flow_start_last_timestep"),
+                               getvar("electron_parallel_pressure"),
+                               getvar("electron_parallel_pressure_loworder"),
+                               getvar("electron_parallel_pressure_start_last_timestep"),
+                               getvar("electron_parallel_heat_flux"),
+                               getvar("electron_thermal_speed"),
+                               getvar("density_neutral"),
+                               getvar("density_neutral_loworder"),
+                               getvar("density_neutral_start_last_timestep"),
+                               getvar("uz_neutral"), getvar("uz_neutral_loworder"),
+                               getvar("uz_neutral_start_last_timestep"),
+                               getvar("pz_neutral"), getvar("pz_neutral_loworder"),
+                               getvar("pz_neutral_start_last_timestep"),
+                               getvar("qz_neutral"),
+                               getvar("thermal_speed_neutral"),
                                getvar("external_source_amplitude"),
                                getvar("external_source_density_amplitude"),
                                getvar("external_source_momentum_amplitude"),
@@ -1229,16 +2117,30 @@ function reopen_moments_io(file_info)
                                getvar("external_source_neutral_momentum_amplitude"),
                                getvar("external_source_neutral_pressure_amplitude"),
                                getvar("external_source_neutral_controller_integral"),
+                               getvar("external_source_electron_amplitude"),
+                               getvar("external_source_electron_density_amplitude"),
+                               getvar("external_source_electron_momentum_amplitude"),
+                               getvar("external_source_electron_pressure_amplitude"),
                                getvar("ion_constraints_A_coefficient"),
                                getvar("ion_constraints_B_coefficient"),
                                getvar("ion_constraints_C_coefficient"),
                                getvar("neutral_constraints_A_coefficient"),
                                getvar("neutral_constraints_B_coefficient"),
                                getvar("neutral_constraints_C_coefficient"),
+                               getvar("electron_constraints_A_coefficient"),
+                               getvar("electron_constraints_B_coefficient"),
+                               getvar("electron_constraints_C_coefficient"),
                                getvar("time_for_run"), getvar("step_counter"),
-                               getvar("dt"), getvar("failure_counter"),
+                               getvar("dt"), getvar("previous_dt"), getvar("failure_counter"),
                                getvar("failure_caused_by"), getvar("limit_caused_by"),
-                               getvar("dt_before_last_fail"), parallel_io)
+                               getvar("dt_before_last_fail"),getvar("electron_step_counter"),
+                               getvar("electron_cumulative_pseudotime"),
+                               getvar("electron_dt"), getvar("electron_previous_dt"),
+                               getvar("electron_failure_counter"),
+                               getvar("electron_failure_caused_by"),
+                               getvar("electron_limit_caused_by"),
+                               getvar("electron_dt_before_last_fail"),
+                               getvar("nl_solver_diagnostics"), io_input)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -1248,18 +2150,19 @@ end
 """
 setup file i/o for distribution function variables
 """
-function setup_dfns_io(prefix, binary_format, boundary_distributions, r, z, vperp, vpa,
-                       vzeta, vr, vz, composition, collisions, evolve_density,
-                       evolve_upar, evolve_ppar, external_source_settings, input_dict,
-                       parallel_io, io_comm, run_id, restart_time_index,
-                       previous_runs_info, time_for_setup)
+function setup_dfns_io(prefix, io_input, boundary_distributions, r, z, vperp, vpa, vzeta,
+                       vr, vz, composition, collisions, evolve_density, evolve_upar,
+                       evolve_ppar, external_source_settings, input_dict, io_comm, run_id,
+                       restart_time_index, previous_runs_info, time_for_setup, t_params,
+                       nl_solver_params)
 
     @serial_region begin
         dfns_prefix = string(prefix, ".dfns")
+        parallel_io = io_input.parallel_io
         if !parallel_io
             dfns_prefix *= ".$(iblock_index[])"
         end
-        fid, file_info = open_output_file(dfns_prefix, binary_format, parallel_io, io_comm)
+        fid, file_info = open_output_file(dfns_prefix, io_input, io_comm)
 
         # write a header to the output file
         add_attribute!(fid, "file_info",
@@ -1287,8 +2190,9 @@ function setup_dfns_io(prefix, binary_format, boundary_distributions, r, z, vper
         ### create variables for time-dependent quantities and store them ###
         ### in a struct for later access ###
         io_dfns = define_dynamic_dfn_variables!(
-            fid, r, z, vperp, vpa, vzeta, vr, vz, composition, parallel_io,
-            external_source_settings, evolve_density, evolve_upar, evolve_ppar)
+            fid, r, z, vperp, vpa, vzeta, vr, vz, composition, io_input,
+            external_source_settings, evolve_density, evolve_upar, evolve_ppar, t_params,
+            nl_solver_params)
 
         close(fid)
 
@@ -1304,26 +2208,63 @@ Reopen an existing distribution-functions output file to append more data
 """
 function reopen_dfns_io(file_info)
     @serial_region begin
-        filename, parallel_io, io_comm = file_info
-        fid = reopen_output_file(filename, parallel_io, io_comm)
+        filename, io_input, io_comm = file_info
+        fid = reopen_output_file(filename, io_input, io_comm)
         dyn = get_group(fid, "dynamic_data")
 
         variable_list = get_variable_keys(dyn)
         function getvar(name)
             if name ∈ variable_list
                 return dyn[name]
+            elseif name == "nl_solver_diagnostics"
+                nl_names = (name for name ∈ variable_list
+                            if occursin("_nonlinear_iterations", name))
+                nl_prefixes = (split(name, "_nonlinear_iterations")[1]
+                               for name ∈ nl_names)
+                return NamedTuple(Symbol(term)=>(n_solves=dyn["$(term)_n_solves"],
+                                                 nonlinear_iterations=dyn["$(term)_nonlinear_iterations"],
+                                                 linear_iterations=dyn["$(term)_linear_iterations"])
+                                  for term ∈ nl_prefixes)
             else
                 return nothing
             end
         end
         io_moments = io_moments_info(fid, getvar("time"), getvar("phi"), getvar("Er"),
                                      getvar("Ez"), getvar("density"),
-                                     getvar("parallel_flow"), getvar("parallel_pressure"),
+                                     getvar("density_loworder"),
+                                     getvar("density_start_last_timestep"),
+                                     getvar("parallel_flow"),
+                                     getvar("parallel_flow_loworder"),
+                                     getvar("parallel_flow_start_last_timestep"),
+                                     getvar("parallel_pressure"),
+                                     getvar("parallel_pressure_loworder"),
+                                     getvar("parallel_pressure_start_last_timestep"),
                                      getvar("perpendicular_pressure"),
-                                     getvar("parallel_heat_flux"), getvar("thermal_speed"),
-                                     getvar("entropy_production"), getvar("chodura_integral_lower"),
-                                     getvar("chodura_integral_upper"), getvar("density_neutral"),
-                                     getvar("uz_neutral"), getvar("pz_neutral"),
+                                     getvar("perpendicular_pressure_loworder"),
+                                     getvar("perpendicular_pressure_start_last_timestep"),
+                                     getvar("parallel_heat_flux"),
+                                     getvar("thermal_speed"),
+                                     getvar("entropy_production"),
+                                     getvar("chodura_integral_lower"),
+                                     getvar("chodura_integral_upper"),
+                                     getvar("electron_density"),
+                                     getvar("electron_density_loworder"),
+                                     getvar("electron_density_start_last_timestep"),
+                                     getvar("electron_parallel_flow"),
+                                     getvar("electron_parallel_flow_loworder"),
+                                     getvar("electron_parallel_flow_start_last_timestep"),
+                                     getvar("electron_parallel_pressure"),
+                                     getvar("electron_parallel_pressure_loworder"),
+                                     getvar("electron_parallel_pressure_start_last_timestep"),
+                                     getvar("electron_parallel_heat_flux"),
+                                     getvar("electron_thermal_speed"),
+                                     getvar("density_neutral"),
+                                     getvar("density_neutral_loworder"),
+                                     getvar("density_neutral_start_last_timestep"),
+                                     getvar("uz_neutral"), getvar("uz_neutral_loworder"),
+                                     getvar("uz_neutral_start_last_timestep"),
+                                     getvar("pz_neutral"),getvar("pz_neutral_loworder"),
+                                     getvar("pz_neutral_start_last_timestep"),
                                      getvar("qz_neutral"),
                                      getvar("thermal_speed_neutral"),
                                      getvar("external_source_amplitude"),
@@ -1336,20 +2277,41 @@ function reopen_dfns_io(file_info)
                                      getvar("external_source_neutral_momentum_amplitude"),
                                      getvar("external_source_neutral_pressure_amplitude"),
                                      getvar("external_source_neutral_controller_integral"),
+                                     getvar("external_source_electron_amplitude"),
+                                     getvar("external_source_electron_density_amplitude"),
+                                     getvar("external_source_electron_momentum_amplitude"),
+                                     getvar("external_source_electron_pressure_amplitude"),
                                      getvar("ion_constraints_A_coefficient"),
                                      getvar("ion_constraints_B_coefficient"),
                                      getvar("ion_constraints_C_coefficient"),
                                      getvar("neutral_constraints_A_coefficient"),
                                      getvar("neutral_constraints_B_coefficient"),
                                      getvar("neutral_constraints_C_coefficient"),
+                                     getvar("electron_constraints_A_coefficient"),
+                                     getvar("electron_constraints_B_coefficient"),
+                                     getvar("electron_constraints_C_coefficient"),
                                      getvar("time_for_run"), getvar("step_counter"),
-                                     getvar("dt"), getvar("failure_counter"),
+                                     getvar("dt"), getvar("previous_dt"),
+                                     getvar("failure_counter"),
                                      getvar("failure_caused_by"),
                                      getvar("limit_caused_by"),
-                                     getvar("dt_before_last_fail"), parallel_io)
+                                     getvar("dt_before_last_fail"),
+                                     getvar("electron_step_counter"),
+                                     getvar("electron_cumulative_pseudotime"),
+                                     getvar("electron_dt"),
+                                     getvar("electron_previous_dt"),
+                                     getvar("electron_failure_counter"),
+                                     getvar("electron_failure_caused_by"),
+                                     getvar("electron_limit_caused_by"),
+                                     getvar("electron_dt_before_last_fail"),
+                                     getvar("nl_solver_diagnostics"), io_input)
 
-        return io_dfns_info(fid, getvar("f"), getvar("f_neutral"), parallel_io,
-                            io_moments)
+        return io_dfns_info(fid, getvar("f"), getvar("f_loworder"),
+                            getvar("f_start_last_timestep"), getvar("f_electron"),
+                            getvar("f_electron_loworder"),
+                            getvar("f_electron_start_last_timestep"), getvar("f_neutral"),
+                            getvar("f_neutral_loworder"),
+                            getvar("f_neutral_start_last_timestep"), io_input, io_moments)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -1371,6 +2333,11 @@ each file is only written by one process).
 """
 function append_to_dynamic_var end
 
+function append_to_dynamic_var(data::Nothing, args...; kwargs...)
+    # Variable was not created to save, so nothing to do.
+    return nothing
+end
+
 @debug_shared_array begin
     function append_to_dynamic_var(data::DebugMPISharedArray, args...; kwargs...)
         return append_to_dynamic_var(data.data, args...; kwargs...)
@@ -1378,11 +2345,14 @@ function append_to_dynamic_var end
 end
 
 """
-write time-dependent moments data for ions and neutrals to the binary output file
+write time-dependent moments data for ions, electrons and neutrals to the binary output
+file
 """
-function write_all_moments_data_to_binary(moments, fields, t, n_ion_species,
+function write_all_moments_data_to_binary(scratch, moments, fields, n_ion_species,
                                           n_neutral_species, io_or_file_info_moments,
-                                          t_idx, time_for_run, t_params, r, z)
+                                          t_idx, time_for_run, t_params, nl_solver_params,
+                                          r, z)
+
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -1394,22 +2364,26 @@ function write_all_moments_data_to_binary(moments, fields, t, n_ion_species,
             closefile = true
         end
 
-        parallel_io = io_moments.parallel_io
+        parallel_io = io_moments.io_input.parallel_io
 
         # add the time for this time slice to the hdf5 file
-        append_to_dynamic_var(io_moments.time, t, t_idx, parallel_io)
+        append_to_dynamic_var(io_moments.time, t_params.t[], t_idx, parallel_io)
 
         write_em_fields_data_to_binary(fields, io_moments, t_idx, r, z)
 
-        write_ion_moments_data_to_binary(moments, n_ion_species, io_moments,
-                                         t_idx, r, z)
+        write_ion_moments_data_to_binary(scratch, moments, n_ion_species, t_params,
+                                         io_moments, t_idx, r, z)
 
-        write_neutral_moments_data_to_binary(moments, n_neutral_species,
-                                             io_moments, t_idx, r, z)
+        write_electron_moments_data_to_binary(scratch, moments, t_params,
+                                              t_params.electron, io_moments, t_idx, r, z)
+
+        write_neutral_moments_data_to_binary(scratch, moments, n_neutral_species,
+                                             t_params, io_moments, t_idx, r, z)
 
         append_to_dynamic_var(io_moments.time_for_run, time_for_run, t_idx, parallel_io)
         append_to_dynamic_var(io_moments.step_counter, t_params.step_counter[], t_idx, parallel_io)
         append_to_dynamic_var(io_moments.dt, t_params.dt_before_output[], t_idx, parallel_io)
+        append_to_dynamic_var(io_moments.previous_dt, t_params.previous_dt[], t_idx, parallel_io)
         append_to_dynamic_var(io_moments.failure_counter, t_params.failure_counter[], t_idx, parallel_io)
         append_to_dynamic_var(io_moments.failure_caused_by, t_params.failure_caused_by,
                               t_idx, parallel_io, length(t_params.failure_caused_by);
@@ -1419,6 +2393,17 @@ function write_all_moments_data_to_binary(moments, fields, t, n_ion_species,
                               only_root=true)
         append_to_dynamic_var(io_moments.dt_before_last_fail,
                               t_params.dt_before_last_fail[], t_idx, parallel_io)
+        for (k,v) ∈ pairs(nl_solver_params)
+            if v === nothing
+                continue
+            end
+            append_to_dynamic_var(io_moments.nl_solver_diagnostics[k].n_solves,
+                                  v.n_solves[], t_idx, parallel_io)
+            append_to_dynamic_var(io_moments.nl_solver_diagnostics[k].nonlinear_iterations,
+                                  v.nonlinear_iterations[], t_idx, parallel_io)
+            append_to_dynamic_var(io_moments.nl_solver_diagnostics[k].linear_iterations,
+                                  v.linear_iterations[], t_idx, parallel_io)
+        end
 
         closefile && close(io_moments.fid)
     end
@@ -1431,12 +2416,11 @@ write time-dependent EM fields data to the binary output file
 
 Note: should only be called from within a function that (re-)opens the output file.
 """
-function write_em_fields_data_to_binary(fields, io_moments::io_moments_info, t_idx,
-                                        r, z)
+function write_em_fields_data_to_binary(fields, io_moments::io_moments_info, t_idx, r, z)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        parallel_io = io_moments.parallel_io
+        parallel_io = io_moments.io_input.parallel_io
 
         # add the electrostatic potential and electric field components at this time slice to the hdf5 file
         append_to_dynamic_var(io_moments.phi, fields.phi, t_idx, parallel_io, z, r)
@@ -1452,22 +2436,53 @@ write time-dependent moments data for ions to the binary output file
 
 Note: should only be called from within a function that (re-)opens the output file.
 """
-function write_ion_moments_data_to_binary(moments, n_ion_species,
+function write_ion_moments_data_to_binary(scratch, moments, n_ion_species, t_params,
                                           io_moments::io_moments_info, t_idx, r, z)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        parallel_io = io_moments.parallel_io
+        parallel_io = io_moments.io_input.parallel_io
 
         # add the density data at this time slice to the output file
-        append_to_dynamic_var(io_moments.density, moments.ion.dens, t_idx,
+        append_to_dynamic_var(io_moments.density, scratch[t_params.n_rk_stages+1].density,
+                              t_idx, parallel_io, z, r, n_ion_species)
+        # If options were not set to select the following outputs, then the io variables
+        # will be `nothing` and nothing will be written.
+        append_to_dynamic_var(io_moments.density_loworder, scratch[2].density, t_idx,
                               parallel_io, z, r, n_ion_species)
-        append_to_dynamic_var(io_moments.parallel_flow, moments.ion.upar, t_idx,
+        append_to_dynamic_var(io_moments.density_start_last_timestep, scratch[1].density,
+                              t_idx, parallel_io, z, r, n_ion_species)
+
+        append_to_dynamic_var(io_moments.parallel_flow,
+                              scratch[t_params.n_rk_stages+1].upar, t_idx, parallel_io, z,
+                              r, n_ion_species)
+        # If options were not set to select the following outputs, then the io variables
+        # will be `nothing` and nothing will be written.
+        append_to_dynamic_var(io_moments.parallel_flow_loworder, scratch[2].upar, t_idx,
                               parallel_io, z, r, n_ion_species)
-        append_to_dynamic_var(io_moments.parallel_pressure, moments.ion.ppar, t_idx,
-                              parallel_io, z, r, n_ion_species)
-        append_to_dynamic_var(io_moments.perpendicular_pressure, moments.ion.pperp, t_idx,
-                              parallel_io, z, r, n_ion_species)
+        append_to_dynamic_var(io_moments.parallel_flow_start_last_timestep,
+                              scratch[1].upar, t_idx, parallel_io, z, r, n_ion_species)
+
+        append_to_dynamic_var(io_moments.parallel_pressure,
+                              scratch[t_params.n_rk_stages+1].ppar, t_idx, parallel_io, z,
+                              r, n_ion_species)
+        # If options were not set to select the following outputs, then the io variables
+        # will be `nothing` and nothing will be written.
+        append_to_dynamic_var(io_moments.parallel_pressure_loworder, scratch[2].ppar,
+                              t_idx, parallel_io, z, r, n_ion_species)
+        append_to_dynamic_var(io_moments.parallel_pressure_start_last_timestep,
+                              scratch[1].ppar, t_idx, parallel_io, z, r, n_ion_species)
+
+        append_to_dynamic_var(io_moments.perpendicular_pressure,
+                              scratch[t_params.n_rk_stages+1].pperp, t_idx, parallel_io,
+                              z, r, n_ion_species)
+        # If options were not set to select the following outputs, then the io variables
+        # will be `nothing` and nothing will be written.
+        append_to_dynamic_var(io_moments.perpendicular_pressure_loworder,
+                              scratch[2].pperp, t_idx, parallel_io, z, r, n_ion_species)
+        append_to_dynamic_var(io_moments.perpendicular_pressure_start_last_timestep,
+                              scratch[1].pperp, t_idx, parallel_io, z, r, n_ion_species)
+
         append_to_dynamic_var(io_moments.parallel_heat_flux, moments.ion.qpar, t_idx,
                               parallel_io, z, r, n_ion_species)
         append_to_dynamic_var(io_moments.thermal_speed, moments.ion.vth, t_idx,
@@ -1540,12 +2555,119 @@ function write_ion_moments_data_to_binary(moments, n_ion_species,
 end
 
 """
+write time-dependent moments data for electrons to the binary output file
+
+Note: should only be called from within a function that (re-)opens the output file.
+"""
+function write_electron_moments_data_to_binary(scratch, moments, t_params, electron_t_params,
+                                               io_moments::Union{io_moments_info,io_initial_electron_info},
+                                               t_idx, r, z)
+    @serial_region begin
+        # Only read/write from first process in each 'block'
+
+        parallel_io = io_moments.io_input.parallel_io
+
+        if io_moments.electron_density !== nothing
+            append_to_dynamic_var(io_moments.electron_density,
+                                  scratch[t_params.n_rk_stages+1].electron_density, t_idx,
+                                  parallel_io, z, r)
+            # If options were not set to select the following outputs, then the io variables
+            # will be `nothing` and nothing will be written.
+            append_to_dynamic_var(io_moments.electron_density_loworder,
+                                  scratch[2].electron_density, t_idx, parallel_io, z, r)
+            append_to_dynamic_var(io_moments.electron_density_start_last_timestep,
+                                  scratch[1].electron_density, t_idx, parallel_io, z, r)
+        end
+
+        if io_moments.electron_parallel_flow !== nothing
+            append_to_dynamic_var(io_moments.electron_parallel_flow,
+                                  scratch[t_params.n_rk_stages+1].electron_upar, t_idx,
+                                  parallel_io, z, r)
+            # If options were not set to select the following outputs, then the io variables
+            # will be `nothing` and nothing will be written.
+            append_to_dynamic_var(io_moments.electron_parallel_flow_loworder,
+                                  scratch[2].electron_upar, t_idx, parallel_io, z, r)
+            append_to_dynamic_var(io_moments.electron_parallel_flow_start_last_timestep,
+                                  scratch[1].electron_upar, t_idx, parallel_io, z, r)
+        end
+
+        append_to_dynamic_var(io_moments.electron_parallel_pressure,
+                              scratch[t_params.n_rk_stages+1].electron_ppar, t_idx,
+                              parallel_io, z, r)
+        # If options were not set to select the following outputs, then the io variables
+        # will be `nothing` and nothing will be written.
+        append_to_dynamic_var(io_moments.electron_parallel_pressure_loworder,
+                              scratch[2].electron_ppar, t_idx, parallel_io, z, r)
+        append_to_dynamic_var(io_moments.electron_parallel_pressure_start_last_timestep,
+                              scratch[1].electron_ppar, t_idx, parallel_io, z, r)
+
+        append_to_dynamic_var(io_moments.electron_parallel_heat_flux,
+                              moments.electron.qpar, t_idx, parallel_io, z, r)
+        append_to_dynamic_var(io_moments.electron_thermal_speed, moments.electron.vth,
+                              t_idx, parallel_io, z, r)
+        if io_moments.external_source_electron_amplitude !== nothing
+            append_to_dynamic_var(io_moments.external_source_electron_amplitude,
+                                  moments.electron.external_source_amplitude, t_idx,
+                                  parallel_io, z, r)
+            append_to_dynamic_var(io_moments.external_source_electron_density_amplitude,
+                                  moments.electron.external_source_density_amplitude,
+                                  t_idx, parallel_io, z, r)
+            append_to_dynamic_var(io_moments.external_source_electron_momentum_amplitude,
+                                  moments.electron.external_source_momentum_amplitude,
+                                  t_idx, parallel_io, z, r)
+            append_to_dynamic_var(io_moments.external_source_electron_pressure_amplitude,
+                                  moments.electron.external_source_pressure_amplitude,
+                                  t_idx, parallel_io, z, r)
+        end
+        append_to_dynamic_var(io_moments.electron_constraints_A_coefficient,
+                              moments.electron.constraints_A_coefficient, t_idx,
+                              parallel_io, z, r)
+        append_to_dynamic_var(io_moments.electron_constraints_B_coefficient,
+                              moments.electron.constraints_B_coefficient, t_idx,
+                              parallel_io, z, r)
+        append_to_dynamic_var(io_moments.electron_constraints_C_coefficient,
+                              moments.electron.constraints_C_coefficient, t_idx,
+                              parallel_io, z, r)
+
+        if electron_t_params !== nothing
+            # Save timestepping info
+            append_to_dynamic_var(io_moments.electron_step_counter,
+                                  electron_t_params.step_counter[], t_idx, parallel_io)
+            append_to_dynamic_var(io_moments.electron_cumulative_pseudotime,
+                                  electron_t_params.t[], t_idx,
+                                  parallel_io)
+            append_to_dynamic_var(io_moments.electron_dt,
+                                  electron_t_params.dt_before_output[], t_idx,
+                                  parallel_io)
+            append_to_dynamic_var(io_moments.electron_previous_dt,
+                                  electron_t_params.previous_dt[], t_idx, parallel_io)
+            append_to_dynamic_var(io_moments.electron_failure_counter,
+                                  electron_t_params.failure_counter[], t_idx, parallel_io)
+            append_to_dynamic_var(io_moments.electron_failure_caused_by,
+                                  electron_t_params.failure_caused_by, t_idx, parallel_io,
+                                  length(electron_t_params.failure_caused_by);
+                                  only_root=true)
+            append_to_dynamic_var(io_moments.electron_limit_caused_by,
+                                  electron_t_params.limit_caused_by, t_idx, parallel_io,
+                                  length(electron_t_params.limit_caused_by);
+                                  only_root=true)
+            append_to_dynamic_var(io_moments.electron_dt_before_last_fail,
+                                  electron_t_params.dt_before_last_fail[], t_idx,
+                                  parallel_io)
+        end
+    end
+
+    return nothing
+end
+
+"""
 write time-dependent moments data for neutrals to the binary output file
 
 Note: should only be called from within a function that (re-)opens the output file.
 """
-function write_neutral_moments_data_to_binary(moments, n_neutral_species,
-                                              io_moments::io_moments_info, t_idx, r, z)
+function write_neutral_moments_data_to_binary(scratch, moments, n_neutral_species,
+                                              t_params, io_moments::io_moments_info,
+                                              t_idx, r, z)
     if n_neutral_species ≤ 0
         return nothing
     end
@@ -1553,19 +2675,48 @@ function write_neutral_moments_data_to_binary(moments, n_neutral_species,
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        parallel_io = io_moments.parallel_io
+        parallel_io = io_moments.io_input.parallel_io
 
-        append_to_dynamic_var(io_moments.density_neutral, moments.neutral.dens, t_idx,
+        append_to_dynamic_var(io_moments.density_neutral,
+                              scratch[t_params.n_rk_stages+1].density_neutral, t_idx,
                               parallel_io, z, r, n_neutral_species)
-        append_to_dynamic_var(io_moments.uz_neutral, moments.neutral.uz, t_idx,
+        # If options were not set to select the following outputs, then the io variables
+        # will be `nothing` and nothing will be written.
+        append_to_dynamic_var(io_moments.density_neutral_loworder,
+                              scratch[2].density_neutral, t_idx, parallel_io, z, r,
+                              n_neutral_species)
+        append_to_dynamic_var(io_moments.density_neutral_start_last_timestep,
+                              scratch[1].density_neutral, t_idx, parallel_io, z, r,
+                              n_neutral_species)
+
+        append_to_dynamic_var(io_moments.uz_neutral,
+                              scratch[t_params.n_rk_stages+1].uz_neutral, t_idx,
                               parallel_io, z, r, n_neutral_species)
-        append_to_dynamic_var(io_moments.pz_neutral, moments.neutral.pz, t_idx,
+        # If options were not set to select the following outputs, then the io variables
+        # will be `nothing` and nothing will be written.
+        append_to_dynamic_var(io_moments.uz_neutral_loworder,
+                              scratch[2].uz_neutral, t_idx, parallel_io, z, r,
+                              n_neutral_species)
+        append_to_dynamic_var(io_moments.uz_neutral_start_last_timestep,
+                              scratch[1].uz_neutral, t_idx, parallel_io, z, r,
+                              n_neutral_species)
+
+        append_to_dynamic_var(io_moments.pz_neutral,
+                              scratch[t_params.n_rk_stages+1].pz_neutral, t_idx,
                               parallel_io, z, r, n_neutral_species)
+        # If options were not set to select the following outputs, then the io variables
+        # will be `nothing` and nothing will be written.
+        append_to_dynamic_var(io_moments.pz_neutral_loworder,
+                              scratch[2].pz_neutral, t_idx, parallel_io, z, r,
+                              n_neutral_species)
+        append_to_dynamic_var(io_moments.pz_neutral_start_last_timestep,
+                              scratch[1].pz_neutral, t_idx, parallel_io, z, r,
+                              n_neutral_species)
+
         append_to_dynamic_var(io_moments.qz_neutral, moments.neutral.qz, t_idx,
                               parallel_io, z, r, n_neutral_species)
         append_to_dynamic_var(io_moments.thermal_speed_neutral, moments.neutral.vth,
                               t_idx, parallel_io, z, r, n_neutral_species)
-
         if io_moments.external_source_neutral_amplitude !== nothing
             append_to_dynamic_var(io_moments.external_source_neutral_amplitude,
                                   moments.neutral.external_source_amplitude, t_idx,
@@ -1614,13 +2765,14 @@ function write_neutral_moments_data_to_binary(moments, n_neutral_species,
 end
 
 """
-write time-dependent distribution function data for ions and neutrals to the
+write time-dependent distribution function data for ions, electrons and neutrals to the
 binary output file
 """
-function write_all_dfns_data_to_binary(pdf, moments, fields, t, n_ion_species,
-                                       n_neutral_species, io_or_file_info_dfns, t_idx,
-                                       time_for_run, t_params, r, z, vperp, vpa, vzeta, vr,
-                                       vz)
+function write_all_dfns_data_to_binary(scratch, scratch_electron, moments, fields,
+                                       n_ion_species, n_neutral_species,
+                                       io_or_file_info_dfns, t_idx, time_for_run,
+                                       t_params, nl_solver_params, r, z, vperp, vpa,
+                                       vzeta, vr, vz)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -1634,14 +2786,18 @@ function write_all_dfns_data_to_binary(pdf, moments, fields, t, n_ion_species,
 
         # Write the moments for this time slice to the output file.
         # This also updates the time.
-        write_all_moments_data_to_binary(moments, fields, t, n_ion_species,
+        write_all_moments_data_to_binary(scratch, moments, fields, n_ion_species,
                                          n_neutral_species, io_dfns.io_moments, t_idx,
-                                         time_for_run, t_params, r, z)
+                                         time_for_run, t_params, nl_solver_params, r, z)
 
         # add the distribution function data at this time slice to the output file
-        write_ion_dfns_data_to_binary(pdf.ion.norm, n_ion_species, io_dfns, t_idx, r, z,
-                                      vperp, vpa)
-        write_neutral_dfns_data_to_binary(pdf.neutral.norm, n_neutral_species, io_dfns,
+        write_ion_dfns_data_to_binary(scratch, t_params, n_ion_species, io_dfns, t_idx, r,
+                                      z, vperp, vpa)
+        if scratch_electron !== nothing
+            write_electron_dfns_data_to_binary(scratch_electron, t_params, io_dfns, t_idx,
+                                               r, z, vperp, vpa)
+        end
+        write_neutral_dfns_data_to_binary(scratch, t_params, n_neutral_species, io_dfns,
                                           t_idx, r, z, vzeta, vr, vz)
 
         closefile && close(io_dfns.fid)
@@ -1654,15 +2810,57 @@ write time-dependent distribution function data for ions to the binary output fi
 
 Note: should only be called from within a function that (re-)opens the output file.
 """
-function write_ion_dfns_data_to_binary(ff, n_ion_species, io_dfns::io_dfns_info,
-                                       t_idx, r, z, vperp, vpa)
+function write_ion_dfns_data_to_binary(scratch, t_params, n_ion_species,
+                                       io_dfns::io_dfns_info, t_idx, r, z, vperp, vpa)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        parallel_io = io_dfns.parallel_io
+        parallel_io = io_dfns.io_input.parallel_io
 
-        append_to_dynamic_var(io_dfns.f, ff, t_idx, parallel_io, vpa, vperp, z, r,
-                              n_ion_species)
+        append_to_dynamic_var(io_dfns.f, scratch[t_params.n_rk_stages+1].pdf, t_idx,
+                              parallel_io, vpa, vperp, z, r, n_ion_species)
+        # If options were not set to select the following outputs, then the io variables
+        # will be `nothing` and nothing will be written.
+        append_to_dynamic_var(io_dfns.f_loworder, scratch[2].pdf, t_idx,
+                              parallel_io, vpa, vperp, z, r, n_ion_species)
+        append_to_dynamic_var(io_dfns.f_start_last_timestep, scratch[1].pdf, t_idx,
+                              parallel_io, vpa, vperp, z, r, n_ion_species)
+    end
+    return nothing
+end
+
+"""
+write time-dependent distribution function data for electrons to the binary output file
+
+Note: should only be called from within a function that (re-)opens the output file.
+"""
+function write_electron_dfns_data_to_binary(scratch_electron, t_params,
+                                            io_dfns::Union{io_dfns_info,io_initial_electron_info},
+                                            t_idx, r, z, vperp, vpa)
+    @serial_region begin
+        # Only read/write from first process in each 'block'
+
+        parallel_io = io_dfns.io_input.parallel_io
+
+        if io_dfns.f_electron !== nothing
+            if t_params.electron === nothing
+                # t_params is the t_params for electron timestepping
+                n_rk_stages = t_params.n_rk_stages
+            else
+                n_rk_stages = t_params.electron.n_rk_stages
+            end
+            append_to_dynamic_var(io_dfns.f_electron,
+                                  scratch_electron[n_rk_stages+1].pdf_electron,
+                                  t_idx, parallel_io, vpa, vperp, z, r)
+            # If options were not set to select the following outputs, then the io
+            # variables will be `nothing` and nothing will be written.
+            append_to_dynamic_var(io_dfns.f_electron_loworder,
+                                  scratch_electron[2].pdf_electron,
+                                  t_idx, parallel_io, vpa, vperp, z, r)
+            append_to_dynamic_var(io_dfns.f_electron_start_last_timestep,
+                                  scratch_electron[1].pdf_electron,
+                                  t_idx, parallel_io, vpa, vperp, z, r)
+        end
     end
     return nothing
 end
@@ -1672,19 +2870,74 @@ write time-dependent distribution function data for neutrals to the binary outpu
 
 Note: should only be called from within a function that (re-)opens the output file.
 """
-function write_neutral_dfns_data_to_binary(ff_neutral, n_neutral_species,
+function write_neutral_dfns_data_to_binary(scratch, t_params, n_neutral_species,
                                            io_dfns::io_dfns_info, t_idx, r, z, vzeta, vr,
                                            vz)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        parallel_io = io_dfns.parallel_io
+        parallel_io = io_dfns.io_input.parallel_io
 
         if n_neutral_species > 0
-            append_to_dynamic_var(io_dfns.f_neutral, ff_neutral, t_idx, parallel_io, vz,
-                                  vr, vzeta, z, r, n_neutral_species)
+            append_to_dynamic_var(io_dfns.f_neutral,
+                                  scratch[t_params.n_rk_stages+1].pdf_neutral, t_idx,
+                                  parallel_io, vz, vr, vzeta, z, r, n_neutral_species)
+            # If options were not set to select the following outputs, then the io
+            # variables will be `nothing` and nothing will be written.
+            append_to_dynamic_var(io_dfns.f_neutral_loworder, scratch[2].pdf_neutral,
+                                  t_idx, parallel_io, vz, vr, vzeta, z, r,
+                                  n_neutral_species)
+            append_to_dynamic_var(io_dfns.f_neutral_start_last_timestep,
+                                  scratch[1].pdf_neutral, t_idx, parallel_io, vz, vr,
+                                  vzeta, z, r, n_neutral_species)
         end
     end
+    return nothing
+end
+
+"""
+    write_electron_state(scratch_electron, moments, t_params, io_initial_electron,
+                         t_idx, r, z, vperp, vpa; pdf_electron_converged=false)
+
+Write the electron state to an output file.
+"""
+function write_electron_state(scratch_electron, moments, t_params,
+                              io_or_file_info_initial_electron, t_idx, r, z, vperp, vpa;
+                              pdf_electron_converged=false)
+
+    @serial_region begin
+        # Only read/write from first process in each 'block'
+
+        if isa(io_or_file_info_initial_electron, io_dfns_info)
+            io_initial_electron = io_or_file_info_initial_electron
+            closefile = false
+        else
+            io_initial_electron = reopen_initial_electron_io(io_or_file_info_initial_electron)
+            closefile = true
+        end
+
+        parallel_io = io_initial_electron.io_input.parallel_io
+
+        # add the pseudo-time for this time slice to the hdf5 file
+        append_to_dynamic_var(io_initial_electron.time,
+                              t_params.t[], t_idx, parallel_io)
+        append_to_dynamic_var(io_initial_electron.electron_cumulative_pseudotime,
+                              t_params.t[], t_idx, parallel_io)
+
+        write_electron_dfns_data_to_binary(scratch_electron, t_params,
+                                           io_initial_electron, t_idx, r, z, vperp, vpa)
+
+        write_electron_moments_data_to_binary(scratch_electron, moments, t_params,
+                                              t_params, io_initial_electron, t_idx, r, z)
+
+        if pdf_electron_converged
+            modify_attribute!(io_initial_electron.fid, "pdf_electron_converged",
+                              pdf_electron_converged)
+        end
+
+        closefile && close(io_initial_electron.fid)
+    end
+
     return nothing
 end
 
@@ -1717,6 +2970,24 @@ function finish_file_io(ascii_io::Union{ascii_ios,Nothing},
     return nothing
 end
 
+"""
+close output files for electron initialization
+"""
+function finish_electron_io(
+        binary_initial_electron::Union{io_initial_electron_info,Tuple,Nothing,Bool})
+
+    @serial_region begin
+        # Only read/write from first process in each 'block'
+
+        if (binary_initial_electron !== nothing && !isa(binary_initial_electron, Tuple)
+            && !isa(binary_initial_electron, Bool))
+
+            close(binary_initial_electron.fid)
+        end
+    end
+    return nothing
+end
+
 # Include the non-optional implementations of binary I/O functions
 include("file_io_hdf5.jl")
 
@@ -1734,6 +3005,7 @@ function write_data_to_ascii(pdf, moments, fields, vpa, vperp, z, r, t, n_ion_sp
 
         write_f_ascii(pdf, z, vpa, t, ascii_io.ff)
         write_moments_ion_ascii(moments.ion, z, r, t, n_ion_species, ascii_io.moments_ion)
+        write_moments_electron_ascii(moments.electron, z, r, t, ascii_io.moments_electron)
         if n_neutral_species > 0
             write_moments_neutral_ascii(moments.neutral, z, r, t, n_neutral_species, ascii_io.moments_neutral)
         end
@@ -1792,6 +3064,27 @@ function write_moments_ion_ascii(mom, z, r, t, n_species, ascii_io)
 end
 
 """
+write moments of the ion species distribution function f at this time slice
+"""
+function write_moments_electron_ascii(mom, z, r, t, ascii_io)
+    @serial_region begin
+        # Only read/write from first process in each 'block'
+    
+        @inbounds begin
+            for ir ∈ 1:r.n
+                for iz ∈ 1:z.n
+                    println(ascii_io,"t: ", t, "   r: ", r.grid[ir], "   z: ", z.grid[iz],
+                            "  dens: ", mom.dens[iz,ir], "   upar: ", mom.upar[iz,ir],
+                            "   ppar: ", mom.ppar[iz,ir], "   qpar: ", mom.qpar[iz,ir])
+                end
+            end
+        end
+        println(ascii_io,"")
+    end
+    return nothing
+end
+
+"""
 write moments of the neutral species distribution function f_neutral at this time slice
 """
 function write_moments_neutral_ascii(mom, z, r, t, n_species, ascii_io)
@@ -1804,7 +3097,8 @@ function write_moments_neutral_ascii(mom, z, r, t, n_species, ascii_io)
                     for iz ∈ 1:z.n
                         println(ascii_io,"t: ", t, "   species: ", is, "   r: ", r.grid[ir], "   z: ", z.grid[iz],
                             "  dens: ", mom.dens[iz,ir,is], "   uz: ", mom.uz[iz,ir,is],
-                            "   ur: ", mom.ur[iz,ir,is], "   uzeta: ", mom.uzeta[iz,ir,is])
+                            "   ur: ", mom.ur[iz,ir,is], "   uzeta: ", mom.uzeta[iz,ir,is],
+                            "   pz: ", mom.pz[iz,ir,is])
                     end
                 end
             end
@@ -1901,7 +3195,7 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
                     #qr_neutral=nothing, qzeta_neutral=nothing,
                     vth_neutral=nothing,
                     phi=nothing, Er=nothing, Ez=nothing,
-                    istage=0, label="")
+                    istage=0, label="", t_params=nothing, nl_solver_params=())
     global debug_output_file
 
     # Only read/write from first process in each 'block'
@@ -1930,14 +3224,16 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
             ### in a struct for later access ###
             io_moments = define_dynamic_moment_variables!(fid, composition.n_ion_species,
                                                           composition.n_neutral_species,
-                                                          r, z, false,
+                                                          r, z, nothing,
                                                           external_source_settings,
                                                           evolve_density, evolve_upar,
-                                                          evolve_ppar)
+                                                          evolve_ppar,
+                                                          composition.electron_physics, t_params,
+                                                          nl_solver_params)
             io_dfns = define_dynamic_dfn_variables!(
                 fid, r, z, vperp, vpa, vzeta, vr, vz, composition.n_ion_species,
-                composition.n_neutral_species, false, external_source_settings,
-                evolve_density, evolve_upar, evolve_ppar)
+                composition.n_neutral_species, nothing, external_source_settings,
+                evolve_density, evolve_upar, evolve_ppar, t_params, nl_solver_params)
 
             # create the "istage" variable, used to identify the rk stage where
             # `debug_dump()` was called
