@@ -12,7 +12,7 @@ export mk_to_toml
 export species_parameters, species_parameters_mutable
 export species_composition
 export drive_input, drive_input_mutable
-export ion_source_profile, electron_source_profile, neutral_source_profile
+export ion_source_data, electron_source_data, neutral_source_data
 export collisions_input, krook_collisions_input, fkpl_collisions_input
 export io_input
 export pp_input
@@ -393,8 +393,8 @@ Since the ion source must be the same as the electron source in all respects (ap
 from possibly a different electron temperature or source strength), the electron
 vector of source profile structs will be a kind of mirror of the ion vector of structs. 
 """
-Base.@kwdef struct ion_source_profile
-    # struct containing source profile data for ions
+Base.@kwdef struct ion_source_data
+    # struct containing source data for ions
     # is the source active or not
     active::Bool
     # An overall multiplier for the strength (i.e. 0.0 would turn off the source)
@@ -454,10 +454,10 @@ Base.@kwdef struct ion_source_profile
     # in the event that the code is running with mk_int = Int32 but the rank is set to 0::Int64
 end
 
-Base.@kwdef struct electron_source_profile
+Base.@kwdef struct electron_source_data
     # most of the electron parameters must be the same as for ions, so only 
     # source strength (in the case of an ion energy source) and source Temperature
-    # can be different. The other four are set by the ion source profile.
+    # can be different. The other four are set by the ion source data.
     source_strength::mk_float
     source_T::mk_float
     active::Bool
@@ -466,8 +466,8 @@ Base.@kwdef struct electron_source_profile
     source_type::String
 end
 
-Base.@kwdef struct neutral_source_profile
-    # struct containing source profile data for neutrals
+Base.@kwdef struct neutral_source_data
+    # struct containing source data for neutrals
     # is the source active or not
     active::Bool
     # An overall multiplier for the strength (i.e. 0.0 would turn off the source)
