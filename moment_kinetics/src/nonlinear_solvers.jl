@@ -59,6 +59,7 @@ struct nl_solver_info{TH,TV,Tlig,Tprecon}
     global_nonlinear_iterations::Ref{mk_int}
     global_linear_iterations::Ref{mk_int}
     solves_since_precon_update::Ref{mk_int}
+    precon_dt::Ref{mk_float}
     serial_solve::Bool
     max_nonlinear_iterations_this_step::Ref{mk_int}
     max_linear_iterations_this_step::Ref{mk_int}
@@ -164,7 +165,7 @@ function setup_nonlinear_solve(input_dict, coords, outer_coords=(); default_rtol
                           linear_restart, nl_solver_input.linear_max_restarts, H, V,
                           linear_initial_guess, Ref(0), Ref(0), Ref(0), Ref(0), Ref(0),
                           Ref(0), Ref(nl_solver_input.preconditioner_update_interval),
-                          serial_solve, Ref(0), Ref(0), preconditioner_type,
+                          Ref(0.0), serial_solve, Ref(0), Ref(0), preconditioner_type,
                           nl_solver_input.preconditioner_update_interval, preconditioners)
 end
 

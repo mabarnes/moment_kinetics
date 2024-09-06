@@ -1022,8 +1022,17 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                 left_preconditioner = identity
                 right_preconditioner = split_precon!
             elseif nl_solver_params.preconditioner_type == "electron_lu"
+
+                if t_params.dt[] > 1.5 * nl_solver_params.precon_dt[] ||
+                        t_params.dt[] < 2.0/3.0 * nl_solver_params.precon_dt[]
+
+                    # dt has changed significantly, so update the preconditioner
+                    nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
+                end
+
                 if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
                     nl_solver_params.solves_since_precon_update[] = 0
+                    nl_solver_params.precon_dt[] = t_params.dt[]
 
                     orig_lu, precon_matrix, input_buffer, output_buffer, adv_fac_lower,
                         adv_fac_upper = nl_solver_params.preconditioners[ir]
