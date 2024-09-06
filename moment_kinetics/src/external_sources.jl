@@ -147,7 +147,8 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
         else
             error("Unrecognised ion source_type=$(input["source_type"])."
                   * "Possible values are: Maxwellian, density_profile_control, "
-                  * "density_midpoint_control")
+                  * "density_midpoint_control, energy, alphas, alphas-with-losses, "
+                  * "beam, beam-with-losses")
         end
         println(input)
         return ion_source_profile(; Dict(Symbol(k)=>v for (k,v) ∈ input)..., r_amplitude,
@@ -303,7 +304,8 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
         else
             error("Unrecognised neutral source_type=$(input["source_type"])."
                   * "Possible values are: Maxwellian, density_profile_control, "
-                  * "density_midpoint_control, recycling (for neutrals only)")
+                  * "density_midpoint_control, energy, alphas, alphas-with-losses, "
+                  * "beam, beam-with-losses, recycling (for neutrals only)")
         end
 
         return neutral_source_profile(; Dict(Symbol(k)=>v for (k,v) ∈ input)..., r_amplitude,
