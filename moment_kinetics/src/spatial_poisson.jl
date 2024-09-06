@@ -126,11 +126,23 @@ function init_spatial_poisson(radial::coordinate, polar::coordinate, radial_spec
 end
 
 """
-function to find the solution to 
+Function to find the solution to 
+
 nabla^2 phi = rho in cylindrical polar coordinates
+nabla^2 phi = (1/r)d/dr(r dphi/dr) + (1/r^2)d^2 phi/dpolar^2
+
+The arguments are 
+ 
  phi(r,polar) = the function solved for
  rho(r,polar) = the source evaluated at the nodal points
  poisson_arrays = precomputed arrays
+ radial = coordinate
+ polar = coordinate
+ polar_spectral = fourier_info 
+
+The function uses a 1D Fourier transform to convert the 2D Poisson's
+equation into M 1D ODEs, which are solved using 1D elemental weak-form matrices.
+The Fourier transform reconstructs the solution.
 """
 # for now just support npolar = 1
 # by skipping the FFT
