@@ -28,6 +28,29 @@ julia> run_moment_kinetics("input.toml")
 It might be convenient to add `using Revise` to your `startup.jl` file (`~/julia/config/startup.jl`) so it's always loaded.
 
 
+## Array types
+
+Most arrays in `moment_kinetics` are declared using a custom array type
+`MPISharedArray`. Most of the time this type is just an alias for `Array`, and
+so it needs the same template parameters (see [Julia's Array
+documentation](https://docs.julialang.org/en/v1/manual/arrays/)) - the data
+type and the number of dimensions, e.g. `MPISharedArray{mk_float,3}`. Although
+these arrays use shared memory, Julia does not know about this. We use
+`MPI.Win_allocate_shared()` to allocate the shared memory, then wrap it in an
+`Array` in [`moment_kinetics.communication.allocate_shared`](@ref).
+
+The reason for using the alias, is that when the shared-memory debugging mode
+is activated, we instead create arrays using a type `DebugMPISharedArray`,
+which allows us to track some debugging information along with the array, see
+[Shared memory debugging](@ref), and make `MPISharedArray` an alias for
+`DebugMPISharedArray` instead. The reason for the alias is that if we declared
+our structs with just `Array` type, then when debugging is activated we would
+not be able to store `DebugMPISharedArray` instances in those structs, and if
+we declared the structs with `AbstractArray`, they would not be concretely
+typed, which could impact performance by creating code that is not 'type
+stable' (i.e. all concrete types are known at compile time).
+
+
 ## Parallelization
 
 The code is parallelized at the moment using MPI and shared-memory arrays. Arrays representing the pdf, moments, etc. are shared between all processes. Using shared memory means, for example, we can take derivatives along one dimension while parallelising the other for any dimension without having to communicate to re-distribute the arrays. Using shared memory instead of (in future as well as) distributed memory parallelism has the advantage that it is easier to split up the points within each element between processors, giving a finer-grained parallelism which should let the code use larger numbers of processors efficiently.
