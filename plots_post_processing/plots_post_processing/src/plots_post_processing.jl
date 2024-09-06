@@ -38,7 +38,7 @@ using moment_kinetics.quadrature: composite_simpson_weights
 using moment_kinetics.array_allocation: allocate_float
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.file_io: open_ascii_output_file
-using moment_kinetics.type_definitions: mk_float, mk_int
+using moment_kinetics.type_definitions: mk_float, mk_int, OptionsDict
 using moment_kinetics.load_data: open_readonly_output_file, get_group, load_input,
                                  load_time_data, construct_global_zr_coords
 using moment_kinetics.load_data: get_nranks
@@ -239,27 +239,34 @@ function allocate_global_zr_neutral_moments(nz_global,nr_global,n_neutral_specie
     return neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed
 end
 
+function _get_nested(scan_input, section, option, default)
+    if section ∉ keys(scan_input)
+        return default
+    end
+    return get(scan_input[section], option, default)
+end
+
 function get_coords_nelement(scan_input)
     # use 1 as default because these values should be set in input .toml
-    z_nelement = get(scan_input, "z_nelement", 1)
-    r_nelement = get(scan_input, "r_nelement", 1)
-    vpa_nelement = get(scan_input, "vpa_nelement", 1)
-    vperp_nelement = get(scan_input, "vperp_nelement", 1)
-    vz_nelement = get(scan_input, "vz_nelement", 1)
-    vr_nelement = get(scan_input, "vr_nelement", 1)
-    vzeta_nelement = get(scan_input, "vzeta_nelement", 1)
+    z_nelement = _get_nested(scan_input, "z", "nelement", 1)
+    r_nelement = _get_nested(scan_input, "r", "nelement", 1)
+    vpa_nelement = _get_nested(scan_input, "vpa", "nelement", 1)
+    vperp_nelement = _get_nested(scan_input, "vperp", "nelement", 1)
+    vz_nelement = _get_nested(scan_input, "vz", "nelement", 1)
+    vr_nelement = _get_nested(scan_input, "vr", "nelement", 1)
+    vzeta_nelement = _get_nested(scan_input, "vzeta", "nelement", 1)
     return z_nelement, r_nelement, vpa_nelement, vperp_nelement, vz_nelement, vr_nelement, vzeta_nelement
 end
 
 function get_coords_ngrid(scan_input)
     # use 1 as default because these values should be set in input .toml
-    z_ngrid = get(scan_input, "z_ngrid", 1)
-    r_ngrid = get(scan_input, "r_ngrid", 1)
-    vpa_ngrid = get(scan_input, "vpa_ngrid", 1)
-    vperp_ngrid = get(scan_input, "vperp_ngrid", 1)
-    vz_ngrid = get(scan_input, "vz_ngrid", 1)
-    vr_ngrid = get(scan_input, "vr_ngrid", 1)
-    vzeta_ngrid = get(scan_input, "vzeta_ngrid", 1)
+    z_ngrid = _get_nested(scan_input, "z", "ngrid", 1)
+    r_ngrid = _get_nested(scan_input, "r", "ngrid", 1)
+    vpa_ngrid = _get_nested(scan_input, "vpa", "ngrid", 1)
+    vperp_ngrid = _get_nested(scan_input, "vperp", "ngrid", 1)
+    vz_ngrid = _get_nested(scan_input, "vz", "ngrid", 1)
+    vr_ngrid = _get_nested(scan_input, "vr", "ngrid", 1)
+    vzeta_ngrid = _get_nested(scan_input, "vzeta", "ngrid", 1)
     return z_ngrid, r_ngrid, vpa_ngrid, vperp_ngrid, vz_ngrid, vr_ngrid, vzeta_ngrid
 end
 

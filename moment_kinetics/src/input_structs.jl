@@ -5,8 +5,7 @@ module input_structs
 export advance_info
 export evolve_moments_options
 export time_info
-export advection_input, advection_input_mutable
-export grid_input, grid_input_mutable
+export advection_input
 export initial_condition_input, initial_condition_input_mutable
 export spatial_initial_condition_input, velocity_initial_condition_input
 export ion_species_parameters, neutral_species_parameters, species_parameters_mutable
@@ -144,19 +143,6 @@ end
 
 """
 """
-mutable struct advection_input_mutable
-    # advection speed option
-    option::String
-    # constant advection speed to use with the "constant" advection option
-    constant_speed::mk_float
-    # for option = "oscillating", advection speed is of form
-    # speed = constant_speed*(1 + oscillation_amplitude*sinpi(frequency*t))
-    frequency::mk_float
-    oscillation_amplitude::mk_float
-end
-
-"""
-"""
 struct advection_input
     # advection speed option
     option::String
@@ -183,66 +169,6 @@ export boltzmann_electron_response_with_simple_sheath
 export braginskii_fluid
 export kinetic_electrons
 export kinetic_electrons_with_temperature_equation
-
-"""
-"""
-mutable struct grid_input_mutable
-    # name of the variable associated with this coordinate
-    name::String
-    # number of grid points per element
-    ngrid::mk_int
-    # number of elements in global grid across ranks 
-    nelement_global::mk_int
-    # number of elements in local grid on this rank 
-    nelement_local::mk_int
-	# box length
-    L::mk_float
-    # discretization option
-    discretization::String
-    # finite difference option (only used if discretization is "finite_difference")
-    fd_option::String
-    # cheb option (only used if discretization is "chebyshev_pseudospectral")
-    cheb_option::String
-    # boundary option
-    bc::String
-    # mutable struct containing advection speed options
-    advection::advection_input_mutable
-    # string option determining boundary spacing
-    element_spacing_option::String
-end
-
-"""
-"""
-struct grid_input
-    # name of the variable associated with this coordinate
-    name::String
-    # number of grid points per element
-    ngrid::mk_int
-    # number of elements globally
-    nelement_global::mk_int
-    # number of elements locally
-    nelement_local::mk_int
-    # number of ranks involved in the calculation
-    nrank::mk_int
-    # rank of this process
-    irank::mk_int
-    # box length
-    L::mk_float
-    # discretization option
-    discretization::String
-    # finite difference option (only used if discretization is "finite_difference")
-    fd_option::String
-    # cheb option (only used if discretization is "chebyshev_pseudospectral")
-    cheb_option::String
-    # boundary option
-    bc::String
-    # struct containing advection speed options
-    advection::advection_input
-    # MPI communicator
-    comm::MPI.Comm
-    # string option determining boundary spacing
-    element_spacing_option::String
-end
 
 """
 """
