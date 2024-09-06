@@ -5,23 +5,31 @@ evolve_moments_density = true
 evolve_moments_parallel_flow = false
 evolve_moments_parallel_pressure = false
 evolve_moments_conservation = true
-r_ngrid = 1
-r_nelement = 1
-z_ngrid = 9
-z_nelement = 32
-#z_nelement_local = 4
-z_bc = "wall"
-z_discretization = "chebyshev_pseudospectral"
-vpa_ngrid = 10
-vpa_nelement = 63
-vpa_L = 18.0
-vpa_bc = "zero"
-vpa_discretization = "chebyshev_pseudospectral"
-vz_ngrid = 10
-vz_nelement = 63
-vz_L = 18.0
-vz_bc = "zero"
-vz_discretization = "chebyshev_pseudospectral"
+
+[r]
+ngrid = 1
+nelement = 1
+
+[z]
+ngrid = 9
+nelement = 32
+#nelement_local = 4
+bc = "wall"
+discretization = "chebyshev_pseudospectral"
+
+[vpa]
+ngrid = 10
+nelement = 63
+L = 18.0
+bc = "zero"
+discretization = "chebyshev_pseudospectral"
+
+[vz]
+ngrid = 10
+nelement = 63
+L = 18.0
+bc = "zero"
+discretization = "chebyshev_pseudospectral"
 
 [composition]
 n_ion_species = 1

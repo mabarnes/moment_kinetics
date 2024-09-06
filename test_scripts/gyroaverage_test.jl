@@ -8,14 +8,15 @@ using Measures
 using SpecialFunctions: besselj0
 
 import moment_kinetics
-using moment_kinetics.input_structs
 using moment_kinetics.coordinates: define_coordinate
+using moment_kinetics.input_structs
 using moment_kinetics.geo: init_magnetic_geometry
 using moment_kinetics.communication
 using moment_kinetics.looping
 using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
 using moment_kinetics.gyroaverages: gyroaverage_pdf!
 using moment_kinetics.gyroaverages: gyroaverage_field!, init_gyro_operators
+using moment_kinetics.species_input: get_species_input
 using moment_kinetics.type_definitions: mk_float, mk_int
 
 function print_matrix(matrix,name::String,n::mk_int,m::mk_int)
@@ -71,41 +72,62 @@ function gyroaverage_test(;rhostar=0.1, pitch=0.5, ngrid=5, kr=2, kz=2, phaser=0
         gyrophase_discretization = "finite_difference"
         gyrophase_L = 2.0*pi
         
-        # fd_option and adv_input not actually used so given values unimportant
         fd_option = "fourth_order_centered"
         cheb_option = "matrix"
-        adv_input = advection_input("default", 1.0, 0.0, 0.0)
-        nrank = 1
-        irank = 0#1
-        comm = MPI.COMM_NULL
         element_spacing_option = "uniform"
         # create the 'input' struct containing input info needed to create a
         # coordinate
         
-        r_input = grid_input("r", r_ngrid, r_nelement_global, r_nelement_local, 
-                nrank, irank, r_L, discretization, fd_option, cheb_option, r_bc, adv_input,comm,element_spacing_option)
-        z_input = grid_input("z", z_ngrid, z_nelement_global, z_nelement_local, 
-                nrank, irank, z_L, discretization, fd_option, cheb_option, z_bc, adv_input,comm,element_spacing_option)
-        vperp_input = grid_input("vperp", vperp_ngrid, vperp_nelement_global, vperp_nelement_local, 
-                nrank, irank, vperp_L, discretization, fd_option, cheb_option, vperp_bc, adv_input,comm,element_spacing_option)
-        vpa_input = grid_input("vpa", vpa_ngrid, vpa_nelement_global, vpa_nelement_local, 
-                nrank, irank, vpa_L, discretization, fd_option, cheb_option, vpa_bc, adv_input,comm,element_spacing_option)
-        gyrophase_input = grid_input("gyrophase", gyrophase_ngrid, gyrophase_nelement_global, gyrophase_nelement_local, 
-                nrank, irank, gyrophase_L, gyrophase_discretization, fd_option, cheb_option, "periodic", adv_input,comm,element_spacing_option)
+        coords_input = OptionsDict(
+            "r"=>OptionsDict("ngrid"=>r_ngrid, "nelement"=>r_nelement_global,
+                             "nelement_local"=>r_nelement_local, "L"=>r_L,
+                             "discretization"=>discretization,
+                             "finite_difference_option"=>fd_option,
+                             "cheb_option"=>cheb_option, "bc"=>r_bc,
+                             "element_spacing_option"=>element_spacing_option),
+            "z"=>OptionsDict("ngrid"=>z_ngrid, "nelement"=>z_nelement_global,
+                             "nelement_local"=>z_nelement_local, "L"=>z_L,
+                             "discretization"=>discretization,
+                             "finite_difference_option"=>fd_option,
+                             "cheb_option"=>cheb_option, "bc"=>z_bc,
+                             "element_spacing_option"=>element_spacing_option),
+            "vperp"=>OptionsDict("ngrid"=>vperp_ngrid, "nelement"=>vperp_nelement_global,
+                                 "nelement_local"=>vperp_nelement_local, "L"=>vperp_L,
+                                 "discretization"=>discretization,
+                                 "finite_difference_option"=>fd_option,
+                                 "cheb_option"=>cheb_option, "bc"=>vperp_bc,
+                                 "element_spacing_option"=>element_spacing_option),
+            "vpa"=>OptionsDict("ngrid"=>vpa_ngrid, "nelement"=>vpa_nelement_global,
+                               "nelement_local"=>vpa_nelement_local, "L"=>vpa_L,
+                               "discretization"=>discretization,
+                               "finite_difference_option"=>fd_option,
+                               "cheb_option"=>cheb_option, "bc"=>vpa_bc,
+                               "element_spacing_option"=>element_spacing_option),
+            "gyrophase"=>OptionsDict("ngrid"=>gyrophase_ngrid,
+                                     "nelement"=>gyrophase_nelement_global,
+                                     "nelement_local"=>gyrophase_nelement_local,
+                                     "L"=>gyrophase_L, "discretization"=>discretization,
+                                     "finite_difference_option"=>fd_option,
+                                     "cheb_option"=>cheb_option, "bc"=>"periodic",
+                                     "element_spacing_option"=>element_spacing_option),
+        )
         
         # create the coordinate structs
-        r, r_spectral = define_coordinate(r_input,init_YY=false)
-        z, z_spectral = define_coordinate(z_input,init_YY=false)
-        vperp, vperp_spectral = define_coordinate(vperp_input,init_YY=false)
-        vpa, vpa_spectral = define_coordinate(vpa_input,init_YY=false)
-        gyrophase, gyrophase_spectral = define_coordinate(gyrophase_input,init_YY=false)
+        r, r_spectral = define_coordinate(coords_input, "r"; collision_operator_dim=false)
+        z, z_spectral = define_coordinate(coords_input, "z"; collision_operator_dim=false)
+        vperp, vperp_spectral = define_coordinate(coords_input, "vperp";
+                                                  collision_operator_dim=false)
+        vpa, vpa_spectral = define_coordinate(coords_input, "vpa";
+                                              collision_operator_dim=false)
+        gyrophase, gyrophase_spectral = define_coordinate(coords_input, "gyrophase";
+                                                          collision_operator_dim=false)
         
         # create test geometry
         #rhostar = 0.1 #rhostar of ions for ExB drift
         option = "constant-helical"
         #pitch = 1.0
         DeltaB = 1.0
-        geometry_in = geometry_input(rhostar,option,pitch,DeltaB)
+        geometry_in = geometry_input(rhostar,option,pitch,DeltaB,0.0,0.0,0.0,0.0)
         geometry = init_magnetic_geometry(geometry_in,z,r)
         
         # create test composition
@@ -132,7 +154,7 @@ function gyroaverage_test(;rhostar=0.1, pitch=0.5, ngrid=5, kr=2, kz=2, phaser=0
         end
         
         # gyroaverage phi
-        gyroaverage_field!(gphi,phi,gyro,vperp,z,r)
+        gyroaverage_field!(gphi,phi,gyro,vperp,z,r,composition)
         
         # compute errors
         begin_serial_region()
@@ -214,9 +236,13 @@ function create_test_composition()
     # `recycling_fraction` to account for ions absorbed by the wall.
     recycling_fraction = 1.0
     gyrokinetic_ions = true
-    return composition = species_composition(n_species, n_ion_species, n_neutral_species,
-            electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, Er_constant,
-            mn_over_mi, me_over_mi, recycling_fraction, gyrokinetic_ions, allocate_float(n_species))
+    species_opts = OptionsDict("n_ion_species" => n_ion_species,
+                               "n_neutral_species" => n_neutral_species, "T_e" => T_e,
+                               "T_wall" => T_wall, "phi_wall" => phi_wall,
+                               "mn_over_mi" => mn_over_mi, "me_over_mi" => me_over_mi,
+                               "recycling_fraction" => recycling_fraction,
+                               "gyrokinetic_ions" => gyrokinetic_ions)
+    return get_species_input(OptionsDict("composition" => species_opts))
 end
 
 function fill_test_arrays!(phi,gphi,vperp,z,r,geometry,kz,kr,phasez,phaser)

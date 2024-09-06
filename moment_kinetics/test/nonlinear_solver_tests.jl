@@ -9,7 +9,7 @@ using moment_kinetics.input_structs: advection_input
 using moment_kinetics.looping
 using moment_kinetics.looping: setup_loop_ranges!
 using moment_kinetics.nonlinear_solvers
-using moment_kinetics.type_definitions: mk_float, mk_int, OptionsDict
+using moment_kinetics.type_definitions: mk_float, mk_int
 
 using MPI
 

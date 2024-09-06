@@ -6,22 +6,30 @@ evolve_moments_conservation = true
 charge_exchange_frequency = 0.5
 ionization_frequency = 0.75
 constant_ionization_rate = false
-r_ngrid = 1
-r_nelement = 1
-z_ngrid = 9
-z_nelement = 32
-z_bc = "wall"
-z_discretization = "chebyshev_pseudospectral"
-vpa_ngrid = 9
-vpa_nelement = 64
-vpa_L = 18.0
-vpa_bc = "both_zero"
-vpa_discretization = "chebyshev_pseudospectral"
-vz_ngrid = 9
-vz_nelement = 64
-vz_L = 18.0
-vz_bc = "both_zero"
-vz_discretization = "chebyshev_pseudospectral"
+
+[r]
+ngrid = 1
+nelement = 1
+
+[z]
+ngrid = 9
+nelement = 32
+bc = "wall"
+discretization = "chebyshev_pseudospectral"
+
+[vpa]
+ngrid = 9
+nelement = 64
+L = 18.0
+bc = "both_zero"
+discretization = "chebyshev_pseudospectral"
+
+[vz]
+ngrid = 9
+nelement = 64
+L = 18.0
+bc = "both_zero"
+discretization = "chebyshev_pseudospectral"
 
 [composition]
 n_ion_species = 1
@@ -65,7 +73,7 @@ upar_phase = 0.0
 temperature_amplitude = 0.0
 temperature_phase = 0.0
 
-[vpa_IC_neutral_species_1]
+[vz_IC_neutral_species_1]
 initialization_option = "gaussian"
 density_amplitude = 1.0
 density_phase = 0.0

@@ -9,28 +9,36 @@ ionization_frequency = 2.0
 electron_ionization_frequency = 2.0
 ionization_energy = 1.0
 constant_ionization_rate = false
-r_ngrid = 1
-r_nelement = 1
-z_ngrid = 9
-#z_nelement = 16
-z_nelement = 32
-#z_nelement = 64
-z_bc = "wall"
-z_discretization = "chebyshev_pseudospectral"
-z_spacing_option = "sqrt"
-vpa_ngrid = 17
-#vpa_nelement = 10
-vpa_nelement = 20
-vpa_L = 12.0 #8.0
-vpa_bc = "zero"
-vpa_discretization = "chebyshev_pseudospectral"
-#vpa_discretization = "gausslegendre_pseudospectral"
-vz_ngrid = 17
-#vz_nelement = 10
-vz_nelement = 20
-vz_L = 8.0
-vz_bc = "zero"
-vz_discretization = "chebyshev_pseudospectral"
+
+[r]
+ngrid = 1
+nelement = 1
+
+[z]
+ngrid = 9
+#nelement = 16
+nelement = 32
+#nelement = 64
+bc = "wall"
+discretization = "chebyshev_pseudospectral"
+element_spacing_option = "sqrt"
+
+[vpa]
+ngrid = 17
+#nelement = 10
+nelement = 20
+L = 12.0 #8.0
+bc = "zero"
+discretization = "chebyshev_pseudospectral"
+#discretization = "gausslegendre_pseudospectral"
+
+[vz]
+ngrid = 17
+#nelement = 10
+nelement = 20
+L = 8.0
+bc = "zero"
+discretization = "chebyshev_pseudospectral"
 
 [composition]
 n_ion_species = 1
@@ -74,7 +82,7 @@ upar_phase = 0.0
 temperature_amplitude = 0.0
 temperature_phase = 0.0
 
-[vpa_IC_neutral_species_1]
+[vz_IC_neutral_species_1]
 initialization_option = "gaussian"
 density_amplitude = 1.0
 density_phase = 0.0

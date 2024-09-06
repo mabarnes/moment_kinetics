@@ -7,9 +7,8 @@ include("setup.jl")
 using Base.Filesystem: tempname
 
 using moment_kinetics.communication
-using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.file_io: io_has_parallel
-using moment_kinetics.input_structs: grid_input, advection_input, hdf5
+using moment_kinetics.input_structs: hdf5
 using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data,
                                  load_species_data, load_fields_data,
                                  load_ion_moments_data, load_pdf_data,
@@ -18,7 +17,7 @@ using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data
 using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
 using moment_kinetics.load_data: get_run_info_no_setup, close_run_info,
                                  postproc_load_variable
-using moment_kinetics.type_definitions: mk_float, OptionsDict
+using moment_kinetics.type_definitions: mk_float
 using moment_kinetics.utils: merge_dict_with_kwargs!
 
 include("nonlinear_sound_wave_inputs_and_expected_data.jl")
@@ -29,39 +28,43 @@ base_input["timestepping"]["nwrite"] = 50
 base_input["timestepping"]["nwrite_dfns"] = 50
 if global_size[] > 1 && global_size[] % 2 == 0
     # Test using distributed-memory
-    base_input["z_nelement_local"] = base_input["z_nelement"] ÷ 2
+    base_input["z"]["nelement_local"] = base_input["z"]["nelement"] ÷ 2
 end
 base_input["output"] = OptionsDict("parallel_io" => false)
 
 restart_test_input_chebyshev =
-    merge(deepcopy(base_input),
-          OptionsDict("run_name" => "restart_chebyshev_pseudospectral",
-               "r_ngrid" => 3, "r_nelement" => 2,
-               "r_discretization" => "chebyshev_pseudospectral",
-               "z_ngrid" => 17, "z_nelement" => 2,
-               "vpa_ngrid" => 9, "vpa_nelement" => 32,
-               "vz_ngrid" => 9, "vz_nelement" => 32))
+recursive_merge(deepcopy(base_input),
+                OptionsDict("run_name" => "restart_chebyshev_pseudospectral",
+                            "r" => OptionsDict("ngrid" => 3, "nelement" => 2,
+                                               "discretization" => "chebyshev_pseudospectral"),
+                            "z" => OptionsDict("ngrid" => 17, "nelement" => 2),
+                            "vpa" => OptionsDict("ngrid" => 9, "nelement" => 32),
+                            "vz" => OptionsDict("ngrid" => 9, "nelement" => 32)),
+               )
 if global_size[] > 1 && global_size[] % 2 == 0
     # Test using distributed-memory
-    restart_test_input_chebyshev["z_nelement_local"] = restart_test_input_chebyshev["z_nelement"] ÷ 2
+    restart_test_input_chebyshev["z"]["nelement_local"] = restart_test_input_chebyshev["z"]["nelement"] ÷ 2
 end
 
 restart_test_input_chebyshev_split_1_moment =
-    merge(deepcopy(restart_test_input_chebyshev),
-          OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_1_moment",
-               "evolve_moments_density" => true))
+    recursive_merge(deepcopy(restart_test_input_chebyshev),
+                    OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_1_moment",
+                                "evolve_moments_density" => true),
+                   )
 
 restart_test_input_chebyshev_split_2_moments =
-    merge(deepcopy(restart_test_input_chebyshev_split_1_moment),
-          OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_2_moments",
-               "r_ngrid" => 1, "r_nelement" => 1,
-               "evolve_moments_parallel_flow" => true))
+    recursive_merge(deepcopy(restart_test_input_chebyshev_split_1_moment),
+                    OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_2_moments",
+                                "r" => OptionsDict("ngrid" => 1, "nelement" => 1),
+                                "evolve_moments_parallel_flow" => true),
+                   )
 
 restart_test_input_chebyshev_split_3_moments =
-    merge(deepcopy(restart_test_input_chebyshev_split_2_moments),
-          OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_3_moments",
-               "evolve_moments_parallel_pressure" => true,
-               "vpa_L" => 1.5*vpa_L, "vz_L" => 1.5*vpa_L))
+    recursive_merge(deepcopy(restart_test_input_chebyshev_split_2_moments),
+                    OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_3_moments",
+                                "evolve_moments_parallel_pressure" => true,
+                                "vpa" => OptionsDict("L" => 1.5*vpa_L), "vz" => OptionsDict("L" => 1.5*vpa_L)),
+                   )
 
 """
 Run a sound-wave test for a single set of parameters
@@ -89,15 +92,20 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
         if isa(value, AbstractDict)
             return string(string(key)[1], (stringify_arg(k, v) for (k, v) in value)...)
         else
-            return string(string(key)[1], value)
+            if isa(value, AbstractString)
+                return string(string(key)[1], value[1])
+            else
+                return string(string(key)[1], value)
+            end
         end
     end
     name = input["run_name"]
     if length(args) > 0
         name = string(name, "_", (stringify_arg(k, v) for (k, v) in args)...)
-
-        # Remove trailing "_"
-        name = chop(name)
+    end
+    # Make sure name is not too long
+    if length(name) > 90
+        name = name[1:90]
     end
     if parallel_io
         name *= "parallel-io"
@@ -298,16 +306,22 @@ function runtests()
         parallel_io = base_input["output"]["parallel_io"]
 
         base_input_full_f = deepcopy(base_input)
-        base_input_full_f["timestepping"] = merge(base_input["timestepping"],
-                                                  OptionsDict("nstep" => nstep))
-        base_input_evolve_density = merge(base_input_full_f,
-                                          OptionsDict("evolve_moments_density" => true))
-        base_input_evolve_upar = merge(base_input_evolve_density,
-                                       OptionsDict("evolve_moments_parallel_flow" => true,
-                                            "vpa_L" => 1.5*vpa_L, "vz_L" => 1.5*vpa_L))
-        base_input_evolve_ppar = merge(base_input_evolve_upar,
-                                       OptionsDict("evolve_moments_parallel_pressure" => true,
-                                            "vpa_L" => 1.5*vpa_L, "vz_L" => 1.5*vpa_L))
+        base_input_full_f["timestepping"] = recursive_merge(base_input["timestepping"],
+                                                            OptionsDict("nstep" => nstep),
+                                                           )
+        base_input_evolve_density = recursive_merge(base_input_full_f,
+                                                    OptionsDict("evolve_moments_density" => true),
+                                                   )
+        base_input_evolve_upar = recursive_merge(base_input_evolve_density,
+                                                 OptionsDict("evolve_moments_parallel_flow" => true,
+                                                             "vpa" => OptionsDict("L" => 1.5*vpa_L),
+                                                             "vz" => OptionsDict("L" => 1.5*vpa_L)),
+                                                )
+        base_input_evolve_ppar = recursive_merge(base_input_evolve_upar,
+                                                 OptionsDict("evolve_moments_parallel_pressure" => true,
+                                                             "vpa" => OptionsDict("L" => 1.5*vpa_L),
+                                                             "vz" => OptionsDict("L" => 1.5*vpa_L)),
+                                                )
 
         for (base, base_label) ∈ ((base_input_full_f, "full-f"),
                                   (base_input_evolve_density, "split 1"),
@@ -375,10 +389,14 @@ function runtests()
         # interpolation used for ion-neutral coupling in 2V/3V case has low accuracy, so
         # use looser tolerance for various things.
         @long do_tests(", 2V/3V", 1.0e-1, 98, false; tol_3V=0.3,
-                       timestepping=OptionsDict("nstep" => 2), r_ngrid=1, r_nelement=1,
-                       vperp_ngrid=17, vperp_nelement=4, vperp_L=vpa_L, vpa_ngrid=17,
-                       vpa_nelement=8, vzeta_ngrid=17, vzeta_nelement=4, vzeta_L=vpa_L,
-                       vr_ngrid=17, vr_nelement=4, vr_L=vpa_L, vz_ngrid=17, vz_nelement=8)
+                       timestepping=OptionsDict("nstep" => 2),
+                       r=OptionsDict("ngrid" => 1, "nelement" => 1),
+                       vperp=OptionsDict("ngrid" => 17, "nelement" => 4, "L" => vpa_L, "ngrid" => 17),
+                       vpa=OptionsDict("nelement" => 8),
+                       vzeta=OptionsDict("ngrid" => 17, "nelement" => 4, "L" => vpa_L),
+                       vr=OptionsDict("ngrid" => 17, "nelement" => 4, "L" => vpa_L),
+                       vz=OptionsDict("ngrid" => 17, "nelement" => 8),
+                      )
 
         if io_has_parallel(Val(hdf5))
             orig_base_input = deepcopy(base_input)
@@ -392,11 +410,14 @@ function runtests()
             # interpolation used for ion-neutral coupling in 2V/3V case has low accuracy,
             # so use looser tolerance for various things.
             @long do_tests(", 2V/3V, parallel I/O", 2.0e-1, 98, false; tol_3V=0.3,
-                           timestepping=OptionsDict("nstep" => 2), r_ngrid=1,
-                           r_nelement=1, vperp_ngrid=17, vperp_nelement=4, vperp_L=vpa_L,
-                           vpa_ngrid=17, vpa_nelement=8, vzeta_ngrid=17, vzeta_nelement=4,
-                           vzeta_L=vpa_L, vr_ngrid=17, vr_nelement=4, vr_L=vpa_L,
-                           vz_ngrid=17, vz_nelement=8)
+                           timestepping=OptionsDict("nstep" => 2),
+                           r=OptionsDict("ngrid" => 1, "nelement" => 1),
+                           vperp=OptionsDict("ngrid" => 17, "nelement" => 4, "L" => vpa_L, "ngrid" => 17),
+                           vpa=OptionsDict("nelement" => 8),
+                           vzeta=OptionsDict("ngrid" => 17, "nelement" => 4, "L" => vpa_L),
+                           vr=OptionsDict("ngrid" => 17, "nelement" => 4, "L" => vpa_L),
+                           vz=OptionsDict("ngrid" => 17, "nelement" => 8),
+                          )
 
             global base_input = orig_base_input
         end

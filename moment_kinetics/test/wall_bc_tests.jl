@@ -9,122 +9,124 @@ using Base.Filesystem: tempname
 using MPI
 
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.input_structs: grid_input, 
 using moment_kinetics.interpolation: interpolate_to_grid_z
 using moment_kinetics.load_data: open_readonly_output_file
 using moment_kinetics.load_data: load_fields_data,
                                  load_pdf_data, load_time_data,
                                  load_species_data
-using moment_kinetics.type_definitions: OptionsDict
 using moment_kinetics.utils: merge_dict_with_kwargs!
 
 # default inputs for tests
-test_input_finite_difference = Dict("composition" => OptionsDict("n_ion_species" => 1,
-                                                                      "n_neutral_species" => 1,
-                                                                      "electron_physics" => "boltzmann_electron_response",
-                                                                      "T_e" => 1.0,
-                                                                      "T_wall" => 1.0),
-                                    "ion_species_1" => OptionsDict("initial_density" => 1.0,
-                                                                        "initial_temperature" => 1.0),
-                                    "z_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
-                                                                             "density_amplitude" => 0.0,
-                                                                             "density_phase" => 0.0,
-                                                                             "upar_amplitude" => 0.0,
-                                                                             "upar_phase" => 0.0,
-                                                                             "temperature_amplitude" => 0.0,
-                                                                             "temperature_phase" => 0.0),
-                                    "vpa_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
-                                                                             "density_amplitude" => 1.0,
-                                                                             "density_phase" => 0.0,
-                                                                             "upar_amplitude" => 0.0,
-                                                                             "upar_phase" => 0.0,
-                                                                             "temperature_amplitude" => 0.0,
-                                                                             "temperature_phase" => 0.0),
-                                    "neutral_species_1" => OptionsDict("initial_density" => 1.0,
-                                                                            "initial_temperature" => 1.0),
-                                    "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
-                                                                                 "density_amplitude" => 0.001,
-                                                                                 "density_phase" => 0.0,
-                                                                                 "upar_amplitude" => 0.0,
-                                                                                 "upar_phase" => 0.0,
-                                                                                 "temperature_amplitude" => 0.0,
-                                                                                 "temperature_phase" => 0.0),  
-                                    "vpa_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
+test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
+                                                                        "n_neutral_species" => 1,
+                                                                        "electron_physics" => "boltzmann_electron_response",
+                                                                        "T_e" => 1.0,
+                                                                        "T_wall" => 1.0),
+                                           "ion_species_1" => OptionsDict("initial_density" => 1.0,
+                                                                          "initial_temperature" => 1.0),
+                                           "z_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                                               "density_amplitude" => 0.0,
+                                                                               "density_phase" => 0.0,
+                                                                               "upar_amplitude" => 0.0,
+                                                                               "upar_phase" => 0.0,
+                                                                               "temperature_amplitude" => 0.0,
+                                                                               "temperature_phase" => 0.0),
+                                           "vpa_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
                                                                                  "density_amplitude" => 1.0,
                                                                                  "density_phase" => 0.0,
                                                                                  "upar_amplitude" => 0.0,
                                                                                  "upar_phase" => 0.0,
                                                                                  "temperature_amplitude" => 0.0,
-                                                                                 "temperature_phase" => 0.0),  
-                                    "run_name" => "finite_difference",
-                                    "evolve_moments_density" => false,
-                                    "evolve_moments_parallel_flow" => false,
-                                    "evolve_moments_parallel_pressure" => false,
-                                    "evolve_moments_conservation" => false,
-                                    "charge_exchange_frequency" => 2.0,
-                                    "ionization_frequency" => 2.0,
-                                    "constant_ionization_rate" => false,
-                                    "timestepping" => OptionsDict("nstep" => 10000,
-                                                                       "dt" => 1.0e-5,
-                                                                       "nwrite" => 100,
-                                                                       "split_operators" => false),
-                                    "r_ngrid" => 1,
-                                    "r_nelement" => 1,
-                                    "r_bc" => "periodic",
-                                    "r_discretization" => "finite_difference",
-                                    "z_ngrid" => 200,
-                                    "z_nelement" => 1,
-                                    "z_bc" => "wall",
-                                    "z_discretization" => "finite_difference",
-                                    "z_element_spacing_option" => "uniform",
-                                    "vpa_ngrid" => 400,
-                                    "vpa_nelement" => 1,
-                                    "vpa_L" => 8.0,
-                                    "vpa_bc" => "periodic",
-                                    "vpa_discretization" => "finite_difference",
-                                    "vz_ngrid" => 400,
-                                    "vz_nelement" => 1,
-                                    "vz_L" => 8.0,
-                                    "vz_bc" => "periodic",
-                                    "vz_discretization" => "finite_difference")
+                                                                                 "temperature_phase" => 0.0),
+                                           "neutral_species_1" => OptionsDict("initial_density" => 1.0,
+                                                                              "initial_temperature" => 1.0),
+                                           "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                                                   "density_amplitude" => 0.001,
+                                                                                   "density_phase" => 0.0,
+                                                                                   "upar_amplitude" => 0.0,
+                                                                                   "upar_phase" => 0.0,
+                                                                                   "temperature_amplitude" => 0.0,
+                                                                                   "temperature_phase" => 0.0),  
+                                           "vz_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                                                    "density_amplitude" => 1.0,
+                                                                                    "density_phase" => 0.0,
+                                                                                    "upar_amplitude" => 0.0,
+                                                                                    "upar_phase" => 0.0,
+                                                                                    "temperature_amplitude" => 0.0,
+                                                                                    "temperature_phase" => 0.0),
+                                           "run_name" => "finite_difference",
+                                           "evolve_moments_density" => false,
+                                           "evolve_moments_parallel_flow" => false,
+                                           "evolve_moments_parallel_pressure" => false,
+                                           "evolve_moments_conservation" => false,
+                                           "charge_exchange_frequency" => 2.0,
+                                           "ionization_frequency" => 2.0,
+                                           "constant_ionization_rate" => false,
+                                           "timestepping" => OptionsDict("nstep" => 10000,
+                                                                         "dt" => 1.0e-5,
+                                                                         "nwrite" => 100,
+                                                                         "split_operators" => false),
+                                           "r" => OptionsDict("ngrid" => 1,
+                                                              "nelement" => 1,
+                                                              "bc" => "periodic",
+                                                              "discretization" => "finite_difference"),
+                                           "z" => OptionsDict("ngrid" => 200,
+                                                              "nelement" => 1,
+                                                              "bc" => "wall",
+                                                              "discretization" => "finite_difference",
+                                                              "element_spacing_option" => "uniform"),
+                                           "vpa" => OptionsDict("ngrid" => 400,
+                                                                "nelement" => 1,
+                                                                "L" => 8.0,
+                                                                "bc" => "periodic",
+                                                                "discretization" => "finite_difference"),
+                                           "vz" => OptionsDict("ngrid" => 400,
+                                                               "nelement" => 1,
+                                                               "L" => 8.0,
+                                                               "bc" => "periodic",
+                                                               "discretization" => "finite_difference"),
+                                          )
 
-test_input_chebyshev = merge(test_input_finite_difference,
-                             Dict("run_name" => "chebyshev_pseudospectral",
-                                  "z_discretization" => "chebyshev_pseudospectral",
-                                  "z_ngrid" => 9,
-                                  "z_nelement" => 2,
-                                  "z_element_spacing_option" => "uniform",
-                                  "vpa_discretization" => "chebyshev_pseudospectral",
-                                  "vpa_ngrid" => 17,
-                                  "vpa_nelement" => 10,
-                                  "vz_discretization" => "chebyshev_pseudospectral",
-                                  "vz_ngrid" => 17,
-                                  "vz_nelement" => 10))
+test_input_chebyshev = recursive_merge(test_input_finite_difference,
+                                       OptionsDict("run_name" => "chebyshev_pseudospectral",
+                                                   "z" => OptionsDict("discretization" => "chebyshev_pseudospectral",
+                                                                      "ngrid" => 9,
+                                                                      "nelement" => 2,
+                                                                      "element_spacing_option" => "uniform"),
+                                                   "vpa" => OptionsDict("discretization" => "chebyshev_pseudospectral",
+                                                                        "ngrid" => 17,
+                                                                        "nelement" => 10),
+                                                   "vz" => OptionsDict("discretization" => "chebyshev_pseudospectral",
+                                                                       "ngrid" => 17,
+                                                                       "nelement" => 10),
+                                                  ))
                                   
-test_input_chebyshev_sqrt_grid_odd = merge(test_input_finite_difference,
-                             Dict("run_name" => "chebyshev_pseudospectral",
-                                  "z_discretization" => "chebyshev_pseudospectral",
-                                  "z_ngrid" => 9,
-                                  "z_nelement" => 5, # minimum nontrival nelement (odd)
-                                  "z_element_spacing_option" => "sqrt",
-                                  "vpa_discretization" => "chebyshev_pseudospectral",
-                                  "vpa_ngrid" => 17,
-                                  "vpa_nelement" => 10,
-                                  "vz_discretization" => "chebyshev_pseudospectral",
-                                  "vz_ngrid" => 17,
-                                  "vz_nelement" => 10))
-test_input_chebyshev_sqrt_grid_even = merge(test_input_finite_difference,
-                             Dict("run_name" => "chebyshev_pseudospectral",
-                                  "z_discretization" => "chebyshev_pseudospectral",
-                                  "z_ngrid" => 9,
-                                  "z_nelement" => 6, # minimum nontrival nelement (even)
-                                  "z_element_spacing_option" => "sqrt",
-                                  "vpa_discretization" => "chebyshev_pseudospectral",
-                                  "vpa_ngrid" => 17,
-                                  "vpa_nelement" => 10,
-                                  "vz_discretization" => "chebyshev_pseudospectral",
-                                  "vz_ngrid" => 17,
-                                  "vz_nelement" => 10))
+test_input_chebyshev_sqrt_grid_odd = recursive_merge(test_input_finite_difference,
+                                                     OptionsDict("run_name" => "chebyshev_pseudospectral",
+                                                                 "z" => OptionsDict("discretization" => "chebyshev_pseudospectral",
+                                                                                    "ngrid" => 9,
+                                                                                    "nelement" => 5, # minimum nontrival nelement (odd)
+                                                                                    "element_spacing_option" => "sqrt"),
+                                                                 "vpa" => OptionsDict("discretization" => "chebyshev_pseudospectral",
+                                                                                      "ngrid" => 17,
+                                                                                      "nelement" => 10),
+                                                                 "vz" => OptionsDict("discretization" => "chebyshev_pseudospectral",
+                                                                                     "ngrid" => 17,
+                                                                                     "nelement" => 10),
+                                                                ))
+test_input_chebyshev_sqrt_grid_even = recursive_merge(test_input_finite_difference,
+                                                      OptionsDict("run_name" => "chebyshev_pseudospectral",
+                                                                  "z" => OptionsDict("discretization" => "chebyshev_pseudospectral",
+                                                                                     "ngrid" => 9,
+                                                                                     "nelement" => 6, # minimum nontrival nelement (even)
+                                                                                     "element_spacing_option" => "sqrt"),
+                                                                  "vpa" => OptionsDict("discretization" => "chebyshev_pseudospectral",
+                                                                                       "ngrid" => 17,
+                                                                                       "nelement" => 10),
+                                                                  "vz" => OptionsDict("discretization" => "chebyshev_pseudospectral",
+                                                                                      "ngrid" => 17,
+                                                                                      "nelement" => 10),
+                                                                 ))
 
 # Reference output interpolated onto a common set of points for comparing
 # different discretizations, taken from a Chebyshev run with z_grid=9,
@@ -147,7 +149,7 @@ function run_test(test_input, expected_phi, tolerance; args...)
     input = deepcopy(test_input)
 
     # Convert keyword arguments to a unique name
-    name = input["run_name"] * ", with element spacing: " * input["z_element_spacing_option"]
+    name = input["run_name"] * ", with element spacing: " * input["z"]["element_spacing_option"]
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
 
@@ -203,23 +205,10 @@ function run_test(test_input, expected_phi, tolerance; args...)
         end
 
         # Create coordinates
-        #
-        # create the 'input' struct containing input info needed to create a coordinate
-        # adv_input not actually used in this test so given values unimportant
-        adv_input = advection_input("default", 1.0, 0.0, 0.0)
-        cheb_option = "FFT"
-		nrank_per_block = 0 # dummy value
-		irank = 0 # dummy value
-		comm = MPI.COMM_NULL # dummy value
-        element_spacing_option = "uniform"
-        input = grid_input("coord", test_input["z_ngrid"], test_input["z_nelement"], 
-                           test_input["z_nelement"], nrank_per_block, irank, 1.0,
-                           test_input["z_discretization"], "", cheb_option, test_input["z_bc"],
-                           adv_input, comm, test_input["z_element_spacing_option"])
-        z, z_spectral = define_coordinate(input; ignore_MPI=true)
+        z, z_spectral = define_coordinate(test_input, "z"; ignore_MPI=true)
 
         # Cross comparison of all discretizations to same benchmark
-        if test_input["z_element_spacing_option"] == "uniform" 
+        if test_input["z"]["element_spacing_option"] == "uniform"
             # Only support this test for uniform element spacing.
             # phi is better resolved by "sqrt" spacing grid, so disagrees with benchmark data from
             # simulation with uniform element spacing.

@@ -13,7 +13,6 @@ using moment_kinetics.load_data: load_fields_data, load_time_data
 using moment_kinetics.load_data: load_species_data, load_coordinate_data
 using moment_kinetics.analysis: analyze_fields_data
 using moment_kinetics.analysis: fit_delta_phi_mode
-using moment_kinetics.type_definitions: OptionsDict
 using moment_kinetics.utils: merge_dict_with_kwargs!
 
 const analytical_rtol = 3.e-2
@@ -26,107 +25,113 @@ const binary_format = (force_optional_dependencies || io_has_implementation(netc
                       "netcdf" : "hdf5"
 
 # default inputs for tests
-test_input_finite_difference = Dict("composition" => OptionsDict("n_ion_species" => 1,
-                                                                      "n_neutral_species" => 1,
-                                                                      "electron_physics" => "boltzmann_electron_response",
-                                                                      "T_e" => 1.0),
-                                    "ion_species_1" => OptionsDict("initial_density" => 0.5,
-                                                                        "initial_temperature" => 1.0),
-                                    "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
-                                                                             "density_amplitude" => 0.001,
-                                                                             "density_phase" => 0.0,
-                                                                             "upar_amplitude" => 0.0,
-                                                                             "upar_phase" => 0.0,
-                                                                             "temperature_amplitude" => 0.0,
-                                                                             "temperature_phase" => 0.0),
-                                    "neutral_species_1" => OptionsDict("initial_density" => 0.5,
-                                                                            "initial_temperature" => 1.0),
-                                    "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "sinusoid",
-                                                                                 "density_amplitude" => 0.001,
-                                                                                 "density_phase" => 0.0,
-                                                                                 "upar_amplitude" => 0.0,
-                                                                                 "upar_phase" => 0.0,
-                                                                                 "temperature_amplitude" => 0.0,
-                                                                                 "temperature_phase" => 0.0),                                                                        
-                                    "run_name" => "finite_difference",
-                                    "evolve_moments_density" => false,
-                                    "evolve_moments_parallel_flow" => false,
-                                    "evolve_moments_parallel_pressure" => false,
-                                    "evolve_moments_conservation" => true,
-                                    "charge_exchange_frequency" => 2*π*0.1,
-                                    "ionization_frequency" => 0.0,
-                                    "timestepping" => OptionsDict("nstep" => 1500,
-                                                                       "dt" => 0.002,
-                                                                       "nwrite" => 20,
-                                                                       "split_operators" => false),
-                                    "r_ngrid" => 1,
-                                    "r_nelement" => 1,
-                                    "r_bc" => "periodic",
-                                    "r_discretization" => "finite_difference",
-                                    "z_ngrid" => 100,
-                                    "z_nelement" => 1,
-                                    "z_bc" => "periodic",
-                                    "z_discretization" => "finite_difference",
-                                    "vperp_ngrid" => 1,
-                                    "vperp_nelement" => 1,
-                                    "vperp_L" => 1.0,
-                                    "vperp_discretization" => "finite_difference",
-                                    "vpa_ngrid" => 180,
-                                    "vpa_nelement" => 1,
-                                    "vpa_L" => 8.0,
-                                    "vpa_bc" => "periodic",
-                                    "vpa_discretization" => "finite_difference",
-                                    "vz_ngrid" => 180,
-                                    "vz_nelement" => 1,
-                                    "vz_L" => 8.0,
-                                    "vz_bc" => "periodic",
-                                    "vz_discretization" => "finite_difference",
-                                    "output" => OptionsDict("binary_format" => binary_format)
-                                   )
+test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
+                                                                        "n_neutral_species" => 1,
+                                                                        "electron_physics" => "boltzmann_electron_response",
+                                                                        "T_e" => 1.0),
+                                           "ion_species_1" => OptionsDict("initial_density" => 0.5,
+                                                                          "initial_temperature" => 1.0),
+                                           "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
+                                                                               "density_amplitude" => 0.001,
+                                                                               "density_phase" => 0.0,
+                                                                               "upar_amplitude" => 0.0,
+                                                                               "upar_phase" => 0.0,
+                                                                               "temperature_amplitude" => 0.0,
+                                                                               "temperature_phase" => 0.0),
+                                           "neutral_species_1" => OptionsDict("initial_density" => 0.5,
+                                                                              "initial_temperature" => 1.0),
+                                           "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "sinusoid",
+                                                                                   "density_amplitude" => 0.001,
+                                                                                   "density_phase" => 0.0,
+                                                                                   "upar_amplitude" => 0.0,
+                                                                                   "upar_phase" => 0.0,
+                                                                                   "temperature_amplitude" => 0.0,
+                                                                                   "temperature_phase" => 0.0),                                                                        
+                                           "run_name" => "finite_difference",
+                                           "evolve_moments_density" => false,
+                                           "evolve_moments_parallel_flow" => false,
+                                           "evolve_moments_parallel_pressure" => false,
+                                           "evolve_moments_conservation" => true,
+                                           "charge_exchange_frequency" => 2*π*0.1,
+                                           "ionization_frequency" => 0.0,
+                                           "timestepping" => OptionsDict("nstep" => 1500,
+                                                                         "dt" => 0.002,
+                                                                         "nwrite" => 20,
+                                                                         "split_operators" => false),
+                                           "r" => OptionsDict("ngrid" => 1,
+                                                              "nelement" => 1,
+                                                              "bc" => "periodic",
+                                                              "discretization" => "finite_difference"),
+                                           "z" => OptionsDict("ngrid" => 100,
+                                                              "nelement" => 1,
+                                                              "bc" => "periodic",
+                                                              "discretization" => "finite_difference"),
+                                           "vperp" => OptionsDict("ngrid" => 1,
+                                                                  "nelement" => 1,
+                                                                  "L" => 1.0,
+                                                                  "discretization" => "finite_difference"),
+                                           "vpa" => OptionsDict("ngrid" => 180,
+                                                                "nelement" => 1,
+                                                                "L" => 8.0,
+                                                                "bc" => "periodic",
+                                                                "discretization" => "finite_difference"),
+                                           "vz" => OptionsDict("ngrid" => 180,
+                                                               "nelement" => 1,
+                                                               "L" => 8.0,
+                                                               "bc" => "periodic",
+                                                               "discretization" => "finite_difference"),
+                                           "output" => OptionsDict("binary_format" => binary_format),
+                                          )
 
 test_input_finite_difference_split_1_moment =
-    merge(test_input_finite_difference,
-          Dict("run_name" => "finite_difference_split_1_moment",
-               "evolve_moments_density" => true))
+    recursive_merge(test_input_finite_difference,
+                    OptionsDict("run_name" => "finite_difference_split_1_moment",
+                                "evolve_moments_density" => true)
+                   )
 
 test_input_finite_difference_split_2_moments =
-    merge(test_input_finite_difference_split_1_moment,
-          Dict("run_name" => "finite_difference_split_2_moments",
-               "evolve_moments_parallel_flow" => true, "vpa_ngrid" => 270, "vpa_L" =>
-               12.0, "vz_ngrid" => 270, "vz_L" => 12.0))
+    recursive_merge(test_input_finite_difference_split_1_moment,
+                    OptionsDict("run_name" => "finite_difference_split_2_moments",
+                                "evolve_moments_parallel_flow" => true,
+                                "vpa" => OptionsDict("ngrid" => 270, "L" => 12.0),
+                                "vz" => OptionsDict("ngrid" => 270, "L" => 12.0))
+                   )
 
 test_input_finite_difference_split_3_moments =
-    merge(test_input_finite_difference_split_2_moments,
-          Dict("run_name" => "finite_difference_split_3_moments",
-               "evolve_moments_parallel_pressure" => true, "vpa_ngrid" => 270, "vpa_L" =>
-               12.0, "vz_ngrid" => 270, "vz_L" => 12.0))
+    recursive_merge(test_input_finite_difference_split_2_moments,
+                    OptionsDict("run_name" => "finite_difference_split_3_moments",
+                                "evolve_moments_parallel_pressure" => true,
+                                "vpa" => OptionsDict("ngrid" => 270, "L" => 12.0),
+                                "vz" => OptionsDict("ngrid" => 270, "L" => 12.0))
+                   )
 
-test_input_chebyshev = merge(test_input_finite_difference,
-                             Dict("run_name" => "chebyshev_pseudospectral",
-                                  "z_discretization" => "chebyshev_pseudospectral",
-                                  "z_ngrid" => 9,
-                                  "z_nelement" => 2,
-                                  "vpa_discretization" => "chebyshev_pseudospectral",
-                                  "vpa_ngrid" => 17,
-                                  "vpa_nelement" => 8,
-                                  "vz_discretization" => "chebyshev_pseudospectral",
-                                  "vz_ngrid" => 17,
-                                  "vz_nelement" => 8))
+test_input_chebyshev = recursive_merge(test_input_finite_difference,
+                                       OptionsDict("run_name" => "chebyshev_pseudospectral",
+                                                   "z" => OptionsDict("discretization" => "chebyshev_pseudospectral",
+                                                                      "ngrid" => 9,
+                                                                      "nelement" => 2),
+                                                   "vpa" => OptionsDict("discretization" => "chebyshev_pseudospectral",
+                                                                        "ngrid" => 17,
+                                                                        "nelement" => 8),
+                                                   "vz" => OptionsDict("discretization" => "chebyshev_pseudospectral",
+                                                                       "ngrid" => 17,
+                                                                       "nelement" => 8),
+                                                  ))
 
 test_input_chebyshev_split_1_moment =
-    merge(test_input_chebyshev,
-          Dict("run_name" => "chebyshev_pseudospectral_split_1_moment",
-               "evolve_moments_density" => true))
+    recursive_merge(test_input_chebyshev,
+                    OptionsDict("run_name" => "chebyshev_pseudospectral_split_1_moment",
+                                "evolve_moments_density" => true))
 
 test_input_chebyshev_split_2_moments =
-    merge(test_input_chebyshev_split_1_moment,
-          Dict("run_name" => "chebyshev_pseudospectral_split_2_moments",
-               "evolve_moments_parallel_flow" => true))
+    recursive_merge(test_input_chebyshev_split_1_moment,
+                    OptionsDict("run_name" => "chebyshev_pseudospectral_split_2_moments",
+                                "evolve_moments_parallel_flow" => true))
 
 test_input_chebyshev_split_3_moments =
-    merge(test_input_chebyshev_split_2_moments,
-          Dict("run_name" => "chebyshev_pseudospectral_split_3_moments",
-               "evolve_moments_parallel_pressure" => true))
+    recursive_merge(test_input_chebyshev_split_2_moments,
+                    OptionsDict("run_name" => "chebyshev_pseudospectral_split_3_moments",
+                                "evolve_moments_parallel_pressure" => true))
 
 
 """
@@ -427,7 +432,7 @@ function run_test_set_finite_difference_split_2_moments()
              [-0.34706673733456106, -0.3470627566790802, -0.3470579059173919,
               -0.347052193699157, -0.34704563020982493, -0.3470382271523149], 30;
              composition = OptionsDict("T_e" => 0.5),
-             timestepping = OptionsDict("nstep" => 1300), z_ngrid=150,
+             timestepping = OptionsDict("nstep" => 1300), z = OptionsDict("ngrid" => 150),
              charge_exchange_frequency=2*π*0.0)
     run_test(test_input_finite_difference_split_2_moments, 2*π*0.0, -2*π*0.2727,
              [-0.34705779901310196, -0.34704885164065513, -0.3470379898466833,

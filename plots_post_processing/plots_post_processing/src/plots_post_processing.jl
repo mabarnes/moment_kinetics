@@ -36,7 +36,6 @@ using moment_kinetics: check_so_newer_than_code
 using moment_kinetics.communication
 using moment_kinetics.quadrature: composite_simpson_weights
 using moment_kinetics.array_allocation: allocate_float
-using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.file_io: open_ascii_output_file
 using moment_kinetics.type_definitions: mk_float, mk_int, OptionsDict
 using moment_kinetics.load_data: open_readonly_output_file, get_group, load_input,

@@ -16,7 +16,7 @@ using moment_kinetics.looping
 using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
 using moment_kinetics.gyroaverages: gyroaverage_pdf!
 using moment_kinetics.gyroaverages: gyroaverage_field!, init_gyro_operators
-using moment_kinetics.type_definitions: mk_float, mk_int, OptionsDict
+using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.species_input: get_species_input
 
 print_test_results = false
@@ -107,14 +107,9 @@ function gyroaverage_test(absolute_error; rhostar=0.1, pitch=0.5, ngrid=5, kr=2,
         gyrophase_nelement_global = gyrophase_nelement_local # total number of elements 
         gyrophase_discretization = "finite_difference"
         gyrophase_L = 2.0*pi
+        gyrophase_bc = "periodic"
         
-        # fd_option and adv_input not actually used so given values unimportant
-        fd_option = "fourth_order_centered"
         cheb_option = "matrix"
-        adv_input = advection_input("default", 1.0, 0.0, 0.0)
-        nrank = 1
-        irank = 0#1
-        comm = MPI.COMM_NULL
         element_spacing_option = "uniform"
         # create the 'input' struct containing input info needed to create a
         # coordinate
@@ -124,23 +119,50 @@ function gyroaverage_test(absolute_error; rhostar=0.1, pitch=0.5, ngrid=5, kr=2,
         setup_distributed_memory_MPI(1,1,1,1)
         irank_z, nrank_z, comm_sub_z, irank_r, nrank_r, comm_sub_r = setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelement_global,r_nelement_local)
         
-        r_input = grid_input("r", r_ngrid, r_nelement_global, r_nelement_local, 
-                nrank_r, irank_r, r_L, discretization, fd_option, cheb_option, r_bc, adv_input,comm_sub_r,element_spacing_option)
-        z_input = grid_input("z", z_ngrid, z_nelement_global, z_nelement_local, 
-                nrank_z, irank_z, z_L, discretization, fd_option, cheb_option, z_bc, adv_input,comm_sub_z,element_spacing_option)
-        vperp_input = grid_input("vperp", vperp_ngrid, vperp_nelement_global, vperp_nelement_local, 
-                nrank, irank, vperp_L, discretization, fd_option, cheb_option, vperp_bc, adv_input,comm,element_spacing_option)
-        vpa_input = grid_input("vpa", vpa_ngrid, vpa_nelement_global, vpa_nelement_local, 
-                nrank, irank, vpa_L, discretization, fd_option, cheb_option, vpa_bc, adv_input,comm,element_spacing_option)
-        gyrophase_input = grid_input("gyrophase", gyrophase_ngrid, gyrophase_nelement_global, gyrophase_nelement_local, 
-                nrank, irank, gyrophase_L, gyrophase_discretization, fd_option, cheb_option, "periodic", adv_input,comm,element_spacing_option)
+        coords_input = OptionsDict(
+            "r"=>OptionsDict("ngrid"=>r_ngrid, "nelement"=>r_nelement_global,
+                             "nelement_local"=>r_nelement_local, "L"=>r_L,
+                             "discretization"=>discretization, "cheb_option"=>cheb_option,
+                             "bc"=>r_bc,
+                             "element_spacing_option"=>element_spacing_option),
+            "z"=>OptionsDict("ngrid"=>z_ngrid, "nelement"=>z_nelement_global,
+                             "nelement_local"=>z_nelement_local, "L"=>z_L,
+                             "discretization"=>discretization, "cheb_option"=>cheb_option,
+                             "bc"=>z_bc, "element_spacing_option"=>element_spacing_option),
+            "vperp"=>OptionsDict("ngrid"=>vperp_ngrid, "nelement"=>vperp_nelement_global,
+                                 "nelement_local"=>vperp_nelement_local, "L"=>vperp_L,
+                                 "discretization"=>discretization,
+                                 "cheb_option"=>cheb_option, "bc"=>vperp_bc,
+                                 "element_spacing_option"=>element_spacing_option),
+            "vpa"=>OptionsDict("ngrid"=>vpa_ngrid, "nelement"=>vpa_nelement_global,
+                               "nelement_local"=>vpa_nelement_local, "L"=>vpa_L,
+                               "discretization"=>discretization,
+                               "cheb_option"=>cheb_option, "bc"=>vpa_bc,
+                               "element_spacing_option"=>element_spacing_option),
+            "gyrophase"=>OptionsDict("ngrid"=>gyrophase_ngrid,
+                                     "nelement"=>gyrophase_nelement_global,
+                                     "nelement_local"=>gyrophase_nelement_local,
+                                     "L"=>gyrophase_L, "discretization"=>discretization,
+                                     "cheb_option"=>cheb_option, "bc"=>gyrophase_bc,
+                                     "element_spacing_option"=>element_spacing_option),
+        )
         
         # create the coordinate structs
-        r, r_spectral = define_coordinate(r_input; collision_operator_dim=false, run_directory=test_output_directory)
-        z, z_spectral = define_coordinate(z_input; collision_operator_dim=false, run_directory=test_output_directory)
-        vperp, vperp_spectral = define_coordinate(vperp_input; collision_operator_dim=false, run_directory=test_output_directory)
-        vpa, vpa_spectral = define_coordinate(vpa_input; collision_operator_dim=false, run_directory=test_output_directory)
-        gyrophase, gyrophase_spectral = define_coordinate(gyrophase_input; collision_operator_dim=false, run_directory=test_output_directory)
+        r, r_spectral = define_coordinate(coords_input, "r"; collision_operator_dim=false,
+                                          run_directory=test_output_directory,
+                                          irank=irank_r, nrank=nrank_r, comm=comm_sub_r)
+        z, z_spectral = define_coordinate(coords_input, "z"; collision_operator_dim=false,
+                                          run_directory=test_output_directory,
+                                          irank=irank_z, nrank=nrank_z, comm=comm_sub_z)
+        vperp, vperp_spectral = define_coordinate(coords_input, "vperp";
+                                                  collision_operator_dim=false,
+                                                  run_directory=test_output_directory)
+        vpa, vpa_spectral = define_coordinate(coords_input, "vpa";
+                                              collision_operator_dim=false,
+                                              run_directory=test_output_directory)
+        gyrophase, gyrophase_spectral = define_coordinate(coords_input, "gyrophase";
+                                                          collision_operator_dim=false,
+                                                          run_directory=test_output_directory)
         
         # create test geometry
         option = "constant-helical"

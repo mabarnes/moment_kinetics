@@ -11,7 +11,6 @@ using SpecialFunctions: dawson
 using moment_kinetics.load_data: open_readonly_output_file
 using moment_kinetics.load_data: load_fields_data, load_time_data
 using moment_kinetics.load_data: load_species_data, load_coordinate_data
-using moment_kinetics.type_definitions: OptionsDict
 using moment_kinetics.utils: merge_dict_with_kwargs!
 
 ionization_frequency = 0.688
@@ -96,56 +95,60 @@ test_input_finite_difference = Dict("composition" => OptionsDict("n_ion_species"
                                                                        "dt" => 0.0005,
                                                                        "nwrite" => 9000,
                                                                        "split_operators" => false),
-                                    "r_ngrid" => 1,
-                                    "r_nelement" => 1,
-                                    "r_bc" => "periodic",
-                                    "r_discretization" => "finite_difference",
-                                    "z_ngrid" => 100,
-                                    "z_nelement" => 1,
-                                    "z_bc" => "wall",
-                                    "z_discretization" => "finite_difference",
-                                    "vpa_ngrid" => 200,
-                                    "vpa_nelement" => 1,
-                                    "vpa_L" => 8.0,
-                                    "vpa_bc" => "zero",
-                                    "vpa_discretization" => "finite_difference",
-                                    "vz_ngrid" => 200,
-                                    "vz_nelement" => 1,
-                                    "vz_L" => 8.0,
-                                    "vz_bc" => "zero",
-                                    "vz_discretization" => "finite_difference",
-                                    "ion_source" => Dict("active" => true,
-                                                         "source_strength" => ionization_frequency,
-                                                         "source_T" => 0.25,
-                                                         "z_profile" => "constant",
-                                                         "r_profile" => "constant"),
+                                    "r" => OptionsDict("ngrid" => 1,
+                                                       "nelement" => 1,
+                                                       "bc" => "periodic",
+                                                       "discretization" => "finite_difference"),
+                                    "z" => OptionsDict("ngrid" => 100,
+                                                       "nelement" => 1,
+                                                       "bc" => "wall",
+                                                       "discretization" => "finite_difference"),
+                                    "vpa" => OptionsDict("ngrid" => 200,
+                                                         "nelement" => 1,
+                                                         "L" => 8.0,
+                                                         "bc" => "zero",
+                                                         "discretization" => "finite_difference"),
+                                    "vz" => OptionsDict("ngrid" => 200,
+                                                        "nelement" => 1,
+                                                        "L" => 8.0,
+                                                        "bc" => "zero",
+                                                        "discretization" => "finite_difference"),
+                                    "ion_source" => OptionsDict("active" => true,
+                                                                "source_strength" => ionization_frequency,
+                                                                "source_T" => 0.25,
+                                                                "z_profile" => "constant",
+                                                                "r_profile" => "constant"),
                                    )
 
-test_input_chebyshev = merge(test_input_finite_difference,
-                             Dict("run_name" => "chebyshev_pseudospectral",
-                                  "z_discretization" => "chebyshev_pseudospectral",
-                                  "z_ngrid" => 9,
-                                  "z_nelement" => 2,
-                                  "vpa_discretization" => "chebyshev_pseudospectral",
-                                  "vpa_ngrid" => 17,
-                                  "vpa_nelement" => 10,
-                                  "vz_discretization" => "chebyshev_pseudospectral",
-                                  "vz_ngrid" => 17,
-                                  "vz_nelement" => 10))
+test_input_chebyshev = recursive_merge(test_input_finite_difference,
+                                       OptionsDict("run_name" => "chebyshev_pseudospectral",
+                                                   "z" => OptionsDict("discretization" => "chebyshev_pseudospectral",
+                                                                       "ngrid" => 9,
+                                                                       "nelement" => 2),
+                                                   "vpa" => OptionsDict("discretization" => "chebyshev_pseudospectral",
+                                                                        "ngrid" => 17,
+                                                                        "nelement" => 10),
+                                                   "vz" => OptionsDict("discretization" => "chebyshev_pseudospectral",
+                                                                       "ngrid" => 17,
+                                                                       "nelement" => 10),
+                                                  ))
 
-test_input_chebyshev_split1 = merge(test_input_chebyshev,
-                                    Dict("run_name" => "chebyshev_pseudospectral_split1",
-                                         "evolve_moments_density" => true,
-                                         "evolve_moments_conservation" => true))
+test_input_chebyshev_split1 = recursive_merge(test_input_chebyshev,
+                                              OptionsDict("run_name" => "chebyshev_pseudospectral_split1",
+                                                          "evolve_moments_density" => true,
+                                                          "evolve_moments_conservation" => true,
+                                                         ))
 
-test_input_chebyshev_split2 = merge(test_input_chebyshev_split1,
-                                    Dict("run_name" => "chebyshev_pseudospectral_split2",
-                                         "evolve_moments_parallel_flow" => true,
-                                         "ion_numerical_dissipation" => Dict("force_minimum_pdf_value" => 0.0)))
+test_input_chebyshev_split2 = recursive_merge(test_input_chebyshev_split1,
+                                              OptionsDict("run_name" => "chebyshev_pseudospectral_split2",
+                                                          "evolve_moments_parallel_flow" => true,
+                                                          "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0),
+                                                         ))
 
-test_input_chebyshev_split3 = merge(test_input_chebyshev_split2,
-                                    Dict("run_name" => "chebyshev_pseudospectral_split3",
-                                         "evolve_moments_parallel_pressure" => true))
+test_input_chebyshev_split3 = recursive_merge(test_input_chebyshev_split2,
+                                              OptionsDict("run_name" => "chebyshev_pseudospectral_split3",
+                                                          "evolve_moments_parallel_pressure" => true,
+                                                         ))
 
 """
 Run a test for a single set of parameters

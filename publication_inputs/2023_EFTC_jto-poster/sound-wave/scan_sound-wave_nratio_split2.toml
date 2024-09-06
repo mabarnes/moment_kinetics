@@ -27,22 +27,30 @@ z_IC_temperature_amplitude2 = 0.0
 z_IC_temperature_phase2 = 0.0
 charge_exchange_frequency = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0, 4.2, 4.4, 4.6, 4.8, 5.0, 5.2, 5.4, 5.6, 5.8, 6.0, 6.2]
 ionization_frequency = 0.0
-r_ngrid = 1
-r_nelement = 1
-z_ngrid = 17
-z_nelement = 2
-z_bc = "periodic"
-z_discretization = "chebyshev_pseudospectral"
-vpa_ngrid = 17
-vpa_nelement = 8
-vpa_L = 8.0
-vpa_bc = "periodic"
-vpa_discretization = "chebyshev_pseudospectral"
-vz_ngrid = 17
-vz_nelement = 8
-vz_L = 8.0
-vz_bc = "periodic"
-vz_discretization = "chebyshev_pseudospectral"
+
+[r]
+ngrid = 1
+nelement = 1
+
+[z]
+ngrid = 17
+nelement = 2
+bc = "periodic"
+discretization = "chebyshev_pseudospectral"
+
+[vpa]
+pa_ngrid = 17
+pa_nelement = 8
+pa_L = 8.0
+pa_bc = "periodic"
+pa_discretization = "chebyshev_pseudospectral"
+
+[vz]
+ngrid = 17
+nelement = 8
+L = 8.0
+bc = "periodic"
+discretization = "chebyshev_pseudospectral"
 
 [timestepping]
 nstep = 2500

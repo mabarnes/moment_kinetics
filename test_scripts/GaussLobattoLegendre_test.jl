@@ -11,10 +11,10 @@ using Measures
 
 import moment_kinetics
 using moment_kinetics.gauss_legendre
-using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.calculus: derivative!, second_derivative!, laplacian_derivative!
 using moment_kinetics.calculus: mass_matrix_solve!
+using moment_kinetics.type_definitions: OptionsDict
 
 
     function print_matrix(matrix,name,n,m)
@@ -48,12 +48,6 @@ using moment_kinetics.calculus: mass_matrix_solve!
         bc = "zero" 
         discretization = "gausslegendre_pseudospectral"
         # fd_option and adv_input not actually used so given values unimportant
-        fd_option = "fourth_order_centered"
-        cheb_option = "matrix"
-        adv_input = advection_input("default", 1.0, 0.0, 0.0)
-        nrank = 1
-        irank = 0#1
-        comm = MPI.COMM_NULL
         element_spacing_option = "uniform"
         # create the 'input' struct containing input info needed to create a
         # coordinate
@@ -66,11 +60,14 @@ using moment_kinetics.calculus: mass_matrix_solve!
             else 
                 y_L = 2*L_in
             end
-            y_input = grid_input(y_name, y_ngrid, y_nelement_global, y_nelement_local, 
-                nrank, irank, y_L, discretization, fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
-            
-            # create the coordinate structs
-            y, y_spectral = define_coordinate(y_input,init_YY=false)
+            input = OptionsDict(y_name => OptionsDict("ngrid"=>y_ngrid, "nelement"=>y_nelement_global,
+                                                      "nelement_local"=>y_nelement_local, "L"=>y_L,
+                                                      "discretization"=>discretization,
+                                                      "element_spacing_option"=>element_spacing_option))
+            # create the coordinate struct 'x'
+            # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
+            # errors due to communicators not being fully set up.
+            y, y_spectral = define_coordinate(input, y_name; collision_operator_dim=true, ignore_MPI=true)
             #print_matrix(Mmat,"Mmat",y.n,y.n)
             #print_matrix(y_spectral.radau.M0,"local radau mass matrix M0",y.ngrid,y.ngrid)
             #print_matrix(y_spectral.radau.M1,"local radau mass matrix M1",y.ngrid,y.ngrid)

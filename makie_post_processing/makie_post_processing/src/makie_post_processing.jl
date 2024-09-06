@@ -29,7 +29,6 @@ using moment_kinetics.analysis: analyze_fields_data, check_Chodura_condition,
                                 get_unnormalised_f_1d, vpagrid_to_dzdt_2d,
                                 get_unnormalised_f_2d
 using moment_kinetics.array_allocation: allocate_float
-using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs
 using moment_kinetics.looping: all_dimensions, ion_dimensions, neutral_dimensions
 using moment_kinetics.manufactured_solns: manufactured_solutions,

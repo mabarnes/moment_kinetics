@@ -4,13 +4,11 @@ include("setup.jl")
 using Base.Filesystem: tempname
 using MPI
 
-using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data,
                                  load_species_data, load_fields_data,
                                  load_ion_moments_data, load_pdf_data,
                                  load_time_data, load_species_data
-using moment_kinetics.type_definitions: mk_float, OptionsDict
+using moment_kinetics.type_definitions: mk_float
 using moment_kinetics.utils: merge_dict_with_kwargs!
 
 const analytical_rtol = 3.e-2
@@ -224,51 +222,53 @@ for k in 1:ntind
 end
 """
 # default inputs for tests
-test_input_gauss_legendre = Dict("run_name" => "gausslegendre_pseudospectral",
-                              "base_directory" => test_output_directory,
-                              "composition" => OptionsDict("n_ion_species" => 1,
-                                                                "n_neutral_species" => 0,
-                                                                "electron_physics" => "boltzmann_electron_response",
-                                                                "T_e" => 1.0),
-                             "ion_species_1" => OptionsDict("initial_density" => 0.5,
-                                                                 "initial_temperature" => 1.0),
-                             "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
-                                                                      "density_amplitude" => 0.0,
-                                                                      "density_phase" => 0.0,
-                                                                      "upar_amplitude" => 0.0,
-                                                                      "upar_phase" => 0.0,
-                                                                      "temperature_amplitude" => 0.0,
-                                                                      "temperature_phase" => 0.0),
-                              "vpa_ngrid" => 3,
-                              "vpa_L" => 6.0,
-                              "vpa_nelement" => 6,
-                              "vpa_bc" => "zero",
-                              "vpa_discretization" => "gausslegendre_pseudospectral",
-                              "vperp_ngrid" => 3,
-                              "vperp_nelement" => 3,
-                              "vperp_L" => 3.0,
-                              "vperp_discretization" => "gausslegendre_pseudospectral",
-                              "ionization_frequency" => 0.0,
-                              "charge_exchange_frequency" => 0.0,
-                              "fokker_planck_collisions" => OptionsDict("use_fokker_planck" => true, "nuii" => 1.0, "frequency_option" => "manual"),
-                              "evolve_moments_parallel_pressure" => false,
-                              "evolve_moments_conservation" => false,
-                              "evolve_moments_parallel_flow" => false,
-                              "z_discretization" => "chebyshev_pseudospectral",                              
-                              "evolve_moments_density" => false,
-                              "z_ngrid" => 1,
-                              "z_nelement_local" => 1,  
-                              "z_nelement" => 1,
-                              "z_bc" => "wall",
-                              "r_discretization" => "chebyshev_pseudospectral",
-                              "r_ngrid" => 1, 
-                              "r_nelement" => 1,
-                              "r_nelement_local" => 1,
-                              "r_bc" => "periodic",   
-                              "timestepping" => OptionsDict("dt" => 0.01,
-                                                                 "nstep" => 5000,
-                                                                 "nwrite" => 5000,
-                                                                 "nwrite_dfns" => 5000 ))
+test_input_gauss_legendre = OptionsDict("run_name" => "gausslegendre_pseudospectral",
+                                        "base_directory" => test_output_directory,
+                                        "composition" => OptionsDict("n_ion_species" => 1,
+                                                                     "n_neutral_species" => 0,
+                                                                     "electron_physics" => "boltzmann_electron_response",
+                                                                     "T_e" => 1.0),
+                                        "ion_species_1" => OptionsDict("initial_density" => 0.5,
+                                                                       "initial_temperature" => 1.0),
+                                        "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
+                                                                            "density_amplitude" => 0.0,
+                                                                            "density_phase" => 0.0,
+                                                                            "upar_amplitude" => 0.0,
+                                                                            "upar_phase" => 0.0,
+                                                                            "temperature_amplitude" => 0.0,
+                                                                            "temperature_phase" => 0.0),
+
+                                        "vpa" => OptionsDict("ngrid" => 3,
+                                                             "L" => 6.0,
+                                                             "nelement" => 6,
+                                                             "bc" => "zero",
+                                                             "discretization" => "gausslegendre_pseudospectral"),
+                                        "vperp" => OptionsDict("ngrid" => 3,
+                                                               "nelement" => 3,
+                                                               "L" => 3.0,
+                                                               "discretization" => "gausslegendre_pseudospectral"),
+                                        "ionization_frequency" => 0.0,
+                                        "charge_exchange_frequency" => 0.0,
+                                        "fokker_planck_collisions" => OptionsDict("use_fokker_planck" => true, "nuii" => 1.0, "frequency_option" => "manual"),
+                                        "evolve_moments_parallel_pressure" => false,
+                                        "evolve_moments_conservation" => false,
+                                        "evolve_moments_parallel_flow" => false,
+                                        "evolve_moments_density" => false,
+                                        "z" => OptionsDict("discretization" => "chebyshev_pseudospectral",
+                                                           "ngrid" => 1,
+                                                           "nelement_local" => 1,
+                                                           "nelement" => 1,
+                                                           "bc" => "wall"),
+                                        "r" => OptionsDict("discretization" => "chebyshev_pseudospectral",
+                                                           "ngrid" => 1,
+                                                           "nelement" => 1,
+                                                           "nelement_local" => 1,
+                                                           "bc" => "periodic"),
+                                        "timestepping" => OptionsDict("dt" => 0.01,
+                                                                      "nstep" => 5000,
+                                                                      "nwrite" => 5000,
+                                                                      "nwrite_dfns" => 5000),
+                                       )
 
 
 """
@@ -288,12 +288,16 @@ function run_test(test_input, expected, rtol, atol, upar_rtol=nothing; args...)
     end
 
     # Convert keyword arguments to a unique name
+    function stringify_arg(key, value)
+        if isa(value, AbstractDict)
+            return string(string(key)[1], (stringify_arg(k, v) for (k, v) in value)...)
+        else
+            return string(string(key)[1], value)
+        end
+    end
     name = input["run_name"]
     if length(args) > 0
-        name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
-
-        # Remove trailing "_"
-        name = chop(name)
+        name = string(name, "_", (stringify_arg(k, v) for (k, v) in args)...)
     end
 
     # Provide some progress info
@@ -423,22 +427,21 @@ function runtests()
             vperp_bc = "zero-impose-regularity"
             run_test(test_input_gauss_legendre,
              expected_zero_impose_regularity, 1.0e-14, 1.0e-14;
-             vperp_bc=vperp_bc)
+             vperp=OptionsDict("bc" => vperp_bc))
         end
         @testset "Gauss Legendre no enforced regularity condition at vperp = 0" begin
             run_name = "gausslegendre_pseudospectral_no_regularity"
             vperp_bc = "zero"
             run_test(test_input_gauss_legendre,
             expected_zero,
-             1.0e-14, 1.0e-14; vperp_bc=vperp_bc)
+             1.0e-14, 1.0e-14; vperp=OptionsDict("bc" => vperp_bc))
         end
         @testset "Gauss Legendre no (explicitly) enforced boundary conditions" begin
             run_name = "gausslegendre_pseudospectral_none_bc"
             vperp_bc = "none"
             vpa_bc = "none"
-            run_test(test_input_gauss_legendre,
-            expected_none_bc,
-             1.0e-14, 1.0e-14; vperp_bc=vperp_bc, vpa_bc=vpa_bc)
+            run_test(test_input_gauss_legendre, expected_none_bc, 1.0e-14, 1.0e-14;
+                     vperp=OptionsDict("bc" => vperp_bc), vpa=OptionsDict("bc" => vpa_bc))
         end
     end
 end
