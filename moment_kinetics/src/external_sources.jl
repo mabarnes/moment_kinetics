@@ -149,14 +149,11 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
                   * "Possible values are: Maxwellian, density_profile_control, "
                   * "density_midpoint_control")
         end
-
-        return (; (Symbol(k)=>v for (k,v) ∈ input)..., r_amplitude=r_amplitude,
+        println(input)
+        return ion_source_profile(; Dict(Symbol(k)=>v for (k,v) ∈ input)..., r_amplitude,
                 z_amplitude=z_amplitude, PI_density_target=PI_density_target,
-                PI_controller_amplitude=PI_controller_amplitude,
-                controller_source_profile=controller_source_profile,
-                PI_density_target_ir=PI_density_target_ir,
-                PI_density_target_iz=PI_density_target_iz,
-                PI_density_target_rank=PI_density_target_rank)
+                PI_controller_amplitude, controller_source_profile,
+                PI_density_target_ir, PI_density_target_iz, PI_density_target_rank)
     end
 
     function get_settings_neutrals()
@@ -177,7 +174,7 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
                      z_profile="constant",
                      z_width=1.0,
                      z_relative_minimum=0.0,
-                     source_type="recycling", # "energy", "alphas", "alphas-with-losses", "beam", "beam-with-losses"
+                     source_type="Maxwellian", # "energy", "alphas", "alphas-with-losses", "beam", "beam-with-losses"
                      PI_density_controller_P=0.0,
                      PI_density_controller_I=0.0,
                      PI_density_target_amplitude=1.0,
@@ -187,15 +184,76 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
                      PI_density_target_z_profile="constant",
                      PI_density_target_z_width=1.0,
                      PI_density_target_z_relative_minimum=0.0,
-                     recycling_controller_fraction=0.5,
+                     recycling_controller_fraction=0.0,
                     )
 
         r_amplitude = get_source_profile(input["r_profile"], input["r_width"],
                                          input["r_relative_minimum"], r)
         z_amplitude = get_source_profile(input["z_profile"], input["z_width"],
                                          input["z_relative_minimum"], z)
+        if input["source_type"] == "density_profile_control"
+            PI_density_target_amplitude = input["PI_density_target_amplitude"]
+            PI_density_target_r_factor =
+                get_source_profile(input["PI_density_target_r_profile"],
+                    input["PI_density_target_r_width"],
+                    input["PI_density_target_r_relative_minimum"], r)
+            PI_density_target_z_factor =
+                get_source_profile(input["PI_density_target_z_profile"],
+                    input["PI_density_target_z_width"],
+                    input["PI_density_target_z_relative_minimum"], z)
+            PI_density_target = allocate_shared_float(z.n,r.n)
+            @serial_region begin
+                for ir ∈ 1:r.n, iz ∈ 1:z.n
+                    PI_density_target[iz,ir] =
+                        PI_density_target_amplitude * PI_density_target_r_factor[ir] *
+                        PI_density_target_z_factor[iz]
+                end
+            end
+            PI_controller_amplitude = nothing
+            controller_source_profile = nothing
+            PI_density_target_ir = nothing
+            PI_density_target_iz = nothing
+            PI_density_target_rank = nothing
+        elseif input["source_type"] == "density_midpoint_control"
+            PI_density_target = input["PI_density_target_amplitude"]
 
-        if input["source_type"] == "recycling"
+            if comm_block[] != MPI.COMM_NULL
+                PI_controller_amplitude = allocate_shared_float(1)
+                controller_source_profile = allocate_shared_float(z.n, r.n)
+            else
+                PI_controller_amplitude = allocate_float(1)
+                controller_source_profile = allocate_float(z.n, r.n)
+            end
+            for ir ∈ 1:r.n, iz ∈ 1:z.n
+                controller_source_profile[iz,ir] = r_amplitude[ir] * z_amplitude[iz]
+            end
+
+            # Find the indices, and process rank of the point at r=0, z=0.
+            # The result of findfirst() will be `nothing` if the point was not found.
+            PI_density_target_ir = findfirst(x->abs(x)<1.e-14, r.grid)
+            PI_density_target_iz = findfirst(x->abs(x)<1.e-14, z.grid)
+            if block_rank[] == 0
+                # Only need to do communications from the root process of each
+                # shared-memory block
+                if PI_density_target_ir !== nothing && PI_density_target_iz !== nothing
+                    PI_density_target_rank = iblock_index[]
+                else
+                    PI_density_target_rank = 0
+                end
+                if comm_inter_block[] != MPI.COMM_NULL
+                    PI_density_target_rank = MPI.Allreduce(PI_density_target_rank, +,
+                                                           comm_inter_block[])
+                end
+                if PI_density_target_rank == 0 && iblock_index[] == 0 &&
+                        (PI_density_target_ir === nothing ||
+                         PI_density_target_iz === nothing)
+                    error("No grid point with r=0 and z=0 was found for the "
+                          * "'density_midpoint' controller.")
+                end
+            else
+                PI_density_target_rank = nothing
+            end
+        elseif input["source_type"] == "recycling"
             recycling = input["recycling_controller_fraction"]
             if recycling ≤ 0.0
                 # Don't allow 0.0 as this is the default value, but makes no sense to have
@@ -229,16 +287,31 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
                 end
                 controller_source_profile ./= controller_source_integral
             end
+
+            PI_density_target = nothing
+            PI_controller_amplitude = nothing
+            PI_density_target_ir = nothing
+            PI_density_target_iz = nothing
+            PI_density_target_rank = nothing
+        elseif input["source_type"] ∈ ("Maxwellian", "energy", "alphas", "alphas-with-losses", "beam", "beam-with-losses")
+            PI_density_target = nothing
+            PI_controller_amplitude = nothing
+            controller_source_profile = nothing
+            PI_density_target_ir = nothing
+            PI_density_target_iz = nothing
+            PI_density_target_rank = nothing
         else
             error("Unrecognised neutral source_type=$(input["source_type"])."
-                  * "Possible values are: recycling ")
+                  * "Possible values are: Maxwellian, density_profile_control, "
+                  * "density_midpoint_control, recycling (for neutrals only)")
         end
 
-        return (; (Symbol(k)=>v for (k,v) ∈ input)..., 
-                r_amplitude=r_amplitude, z_amplitude=z_amplitude, 
-                controller_source_profile=controller_source_profile)
+        return neutral_source_profile(; Dict(Symbol(k)=>v for (k,v) ∈ input)..., r_amplitude,
+                z_amplitude=z_amplitude, PI_density_target=PI_density_target,
+                PI_controller_amplitude, controller_source_profile,
+                PI_density_target_ir, PI_density_target_iz, PI_density_target_rank)
     end
-    function get_electron_settings(ion_settings)
+    function get_settings_electrons(ion_settings)
         # Note most settings for the electron source are copied from the ion source,
         # because we require that the particle sources are the same for ions and
         # electrons. `source_T` can be set independently, and when using
@@ -259,21 +332,22 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
             end
             input["source_strength"] = ion_settings.source_strength
         end
-        return (; (Symbol(k)=>v for (k,v) ∈ input)..., active=ion_settings.active,
-                r_amplitude=ion_settings.r_amplitude,
-                z_amplitude=ion_settings.z_amplitude,
-                source_type=ion_settings.source_type)
+        return electron_source_profile(input["source_strength"], input["source_T"],
+                                       ion_settings.active, ion_settings.r_amplitude, 
+                                       ion_settings.z_amplitude, ion_settings.source_type)
     end
 
     ion_settings = get_settings_ions()
     if electron_physics ∈ (braginskii_fluid, kinetic_electrons,
                            kinetic_electrons_with_temperature_equation)
-        electron_settings = get_electron_settings(ion_settings)
+        electron_settings = get_settings_electrons(ion_settings)
     else
-        electron_settings = (active=false,)
+        electron_settings = electron_source_profile(ion_settings.source_strength,
+                                    ion_settings.source_T, false, ion_settings.r_amplitude,
+                                    ion_settings.z_amplitude, ion_settings.source_type)
     end
     neutral_settings = get_settings_neutrals()
-
+    
     return (ion=ion_settings, electron=electron_settings, neutral=neutral_settings)
 end
 

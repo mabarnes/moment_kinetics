@@ -12,6 +12,7 @@ export mk_to_toml
 export species_parameters, species_parameters_mutable
 export species_composition
 export drive_input, drive_input_mutable
+export ion_source_profile, electron_source_profile, neutral_source_profile
 export collisions_input, krook_collisions_input, fkpl_collisions_input
 export io_input
 export pp_input
@@ -383,6 +384,148 @@ struct drive_input
     force_Er_zero_at_wall::Bool 
 end
 
+"""
+Source profile structs for ions and electrons which allows them to have any number 
+of different sources (from wall perhaps, superposition of core sources, etc.). These
+sources are then contained in a vector of structs.
+
+Since the ion source must be the same as the electron source in all respects (apart
+from possibly a different electron temperature or source strength), the electron
+vector of source profile structs will be a kind of mirror of the ion vector of structs. 
+"""
+Base.@kwdef struct ion_source_profile
+    # struct containing source profile data for ions
+    # is the source active or not
+    active::Bool
+    # An overall multiplier for the strength (i.e. 0.0 would turn off the source)
+    source_strength::mk_float
+    # For use with "energy" option, Krook source (...)
+    source_n::mk_float
+    # Temperature of source (variation along z can be introduced later)
+    source_T::mk_float
+    # birth speed for "alphas" option
+    source_v0::mk_float
+    # birth vpa for "beam" option
+    source_vpa0::mk_float
+    # birth vperp for "beam" option
+    source_vperp0::mk_float
+    # strength of sink in "alphas-with-losses" & "beam-with-losses" option
+    sink_strength::mk_float
+    # thermal speed for sink in "alphas-with-losses" & "beam-with-losses" option
+    sink_vth::mk_float
+    # profile for source in r ('constant' or 'gaussian' or 'parabolic' etc.) 
+    r_profile::String
+    # width of source in r (doesn't apply to constant profile)
+    r_width::mk_float
+    # relative minimum of source in r, acts as the baseline
+    r_relative_minimum::mk_float
+    # profile for source in z ('constant' or 'gaussian' or 'parabolic' etc.)
+    z_profile::String
+    # width of source in z (doesn't apply to constant profile)
+    z_width::mk_float
+    # relative minimum of source in z, acts as the baseline (so you can elevate
+    # your gaussian source above 0, for example)
+    z_relative_minimum::mk_float
+    # velocity profile for the source, Maxwellian would be default, can have beams too 
+    source_type::String #"Maxwellian" "energy", "alphas", "alphas-with-losses", "beam", "beam-with-losses"
+    # proportional integral controllers - for when you want to find a source profile that matches
+    # a target density 
+    PI_density_controller_P::mk_float
+    PI_density_controller_I::mk_float
+    PI_density_target_amplitude::mk_float
+    PI_density_target_r_profile::String
+    PI_density_target_r_width::mk_float
+    PI_density_target_r_relative_minimum::mk_float
+    PI_density_target_z_profile::String
+    PI_density_target_z_width::mk_float
+    PI_density_target_z_relative_minimum::mk_float
+    recycling_controller_fraction::mk_float
+    # r_amplitude through the r coordinate (in 1D this can just be set to 1.0)
+    r_amplitude::Vector{mk_float}
+    # z_amplitude through the z coordinate, which will have your gaussian profile,
+    # constant profile, parabolic, etc..
+    z_amplitude::Vector{mk_float}
+    PI_density_target::Union{mk_float, Nothing, MPISharedArray{mk_float,2}}
+    PI_controller_amplitude::Union{Nothing, MPISharedArray{mk_float,1}}
+    controller_source_profile::Union{Nothing, MPISharedArray{mk_float,2}, Array{mk_float, 2}}
+    PI_density_target_ir::Union{mk_int, Nothing}
+    PI_density_target_iz::Union{mk_int, Nothing}
+    PI_density_target_rank::Union{mk_int, Nothing} #possibly this should have Int64 as well, 
+    # in the event that the code is running with mk_int = Int32 but the rank is set to 0::Int64
+end
+
+Base.@kwdef struct electron_source_profile
+    # most of the electron parameters must be the same as for ions, so only 
+    # source strength (in the case of an ion energy source) and source Temperature
+    # can be different. The other four are set by the ion source profile.
+    source_strength::mk_float
+    source_T::mk_float
+    active::Bool
+    r_amplitude::Vector{mk_float}
+    z_amplitude::Vector{mk_float}
+    source_type::String
+end
+
+Base.@kwdef struct neutral_source_profile
+    # struct containing source profile data for neutrals
+    # is the source active or not
+    active::Bool
+    # An overall multiplier for the strength (i.e. 0.0 would turn off the source)
+    source_strength::mk_float
+    # For use with "energy" option, Krook source (...)
+    source_n::mk_float
+    # Temperature of source (variation along z can be introduced later)
+    source_T::mk_float
+    # birth speed for "alphas" option
+    source_v0::mk_float
+    # birth vpa for "beam" option
+    source_vpa0::mk_float
+    # birth vperp for "beam" option
+    source_vperp0::mk_float
+    # strength of sink in "alphas-with-losses" & "beam-with-losses" option
+    sink_strength::mk_float
+    # thermal speed for sink in "alphas-with-losses" & "beam-with-losses" option
+    sink_vth::mk_float
+    # profile for source in r ('constant' or 'gaussian' or 'parabolic' etc.) 
+    r_profile::String
+    # width of source in r (doesn't apply to constant profile)
+    r_width::mk_float
+    # relative minimum of source in r, acts as the baseline
+    r_relative_minimum::mk_float
+    # profile for source in z ('constant' or 'gaussian' or 'parabolic' etc.)
+    z_profile::String
+    # width of source in z (doesn't apply to constant profile)
+    z_width::mk_float
+    # relative minimum of source in z, acts as the baseline (so you can elevate
+    # your gaussian source above 0, for example)
+    z_relative_minimum::mk_float
+    # velocity profile for the source, Maxwellian would be default, can have beams too 
+    source_type::String #"Maxwellian" "energy", "alphas", "alphas-with-losses", "beam", "beam-with-losses"
+    # proportional integral controllers - for when you want to find a source profile that matches
+    # a target density 
+    PI_density_controller_P::mk_float
+    PI_density_controller_I::mk_float
+    PI_density_target_amplitude::mk_float
+    PI_density_target_r_profile::String
+    PI_density_target_r_width::mk_float
+    PI_density_target_r_relative_minimum::mk_float
+    PI_density_target_z_profile::String
+    PI_density_target_z_width::mk_float
+    PI_density_target_z_relative_minimum::mk_float
+    recycling_controller_fraction::mk_float
+    # r_amplitude through the r coordinate (in 1D this can just be set to 1.0)
+    r_amplitude::Vector{mk_float}
+    # z_amplitude through the z coordinate, which will have your gaussian profile,
+    # constant profile, parabolic, etc..
+    z_amplitude::Vector{mk_float}
+    PI_density_target::Union{mk_float, Nothing, MPISharedArray{mk_float,2}}
+    PI_controller_amplitude::Union{Nothing, MPISharedArray{mk_float,1}}
+    controller_source_profile::Union{Nothing, MPISharedArray{mk_float,2}, Array{mk_float, 2}}
+    PI_density_target_ir::Union{mk_int, Nothing}
+    PI_density_target_iz::Union{mk_int, Nothing}
+    PI_density_target_rank::Union{mk_int, Nothing} #possibly this should have Int64 as well, 
+    # in the event that the code is running with mk_int = Int32 but the rank is set to 0::Int64
+end
 """
 Structs set up for the collision operators so far in use. These will each
 be contained in the main collisions_input struct below, as substructs. 
