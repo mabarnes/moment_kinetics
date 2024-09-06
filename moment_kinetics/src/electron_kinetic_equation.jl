@@ -1160,7 +1160,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                            moments.electron.upar[:,ir], z, vperp, vpa, vperp_spectral,
                            vpa_spectral, vpa_advect, moments,
                            num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                           composition.me_over_mi)
+                           composition.me_over_mi; bc_constraints=false)
 
                 if evolve_ppar
                     this_dens = moments.electron.dens
@@ -1874,7 +1874,7 @@ end
 function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vperp, vpa,
                                                      vperp_spectral, vpa_spectral,
                                                      vpa_adv, moments, vpa_diffusion,
-                                                     me_over_mi)
+                                                     me_over_mi; bc_constraints=true)
 
     newton_tol = 1.0e-13
 
@@ -1937,22 +1937,29 @@ function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vp
     function get_residual_and_coefficients_for_bc(a1, a1prime, a2, a2prime, b1, b1prime,
                                                   c1, c1prime, c2, c2prime, d1, d1prime,
                                                   e1, e1prime, e2, e2prime, u_over_vt)
-        alpha = a1 + 2.0 * a2
-        alphaprime = a1prime + 2.0 * a2prime
-        beta = c1 + 2.0 * c2
-        betaprime = c1prime + 2.0 * c2prime
-        gamma = u_over_vt^2 * alpha - 2.0 * u_over_vt * b1 + beta
-        gammaprime = u_over_vt^2 * alphaprime - 2.0 * u_over_vt * b1prime + betaprime
-        delta = u_over_vt^2 * beta - 2.0 * u_over_vt * d1 + e1 + 2.0 * e2
-        deltaprime = u_over_vt^2 * betaprime - 2.0 * u_over_vt * d1prime + e1prime + 2.0 * e2prime
+        if bc_constraints
+            alpha = a1 + 2.0 * a2
+            alphaprime = a1prime + 2.0 * a2prime
+            beta = c1 + 2.0 * c2
+            betaprime = c1prime + 2.0 * c2prime
+            gamma = u_over_vt^2 * alpha - 2.0 * u_over_vt * b1 + beta
+            gammaprime = u_over_vt^2 * alphaprime - 2.0 * u_over_vt * b1prime + betaprime
+            delta = u_over_vt^2 * beta - 2.0 * u_over_vt * d1 + e1 + 2.0 * e2
+            deltaprime = u_over_vt^2 * betaprime - 2.0 * u_over_vt * d1prime + e1prime + 2.0 * e2prime
 
-        A = (0.5 * beta - delta) / (beta * gamma - alpha * delta)
-        Aprime = (0.5 * betaprime - deltaprime
-                  - (0.5 * beta - delta) * (gamma * betaprime + beta * gammaprime - delta * alphaprime - alpha * deltaprime)
-                    / (beta * gamma - alpha * delta)
-                 ) / (beta * gamma - alpha * delta)
-        C = (1.0 - alpha * A) / beta
-        Cprime = -(A * alphaprime + alpha * Aprime) / beta - (1.0 - alpha * A) * betaprime / beta^2
+            A = (0.5 * beta - delta) / (beta * gamma - alpha * delta)
+            Aprime = (0.5 * betaprime - deltaprime
+                      - (0.5 * beta - delta) * (gamma * betaprime + beta * gammaprime - delta * alphaprime - alpha * deltaprime)
+                      / (beta * gamma - alpha * delta)
+                     ) / (beta * gamma - alpha * delta)
+            C = (1.0 - alpha * A) / beta
+            Cprime = -(A * alphaprime + alpha * Aprime) / beta - (1.0 - alpha * A) * betaprime / beta^2
+        else
+            A = 1.0
+            Aprime = 0.0
+            C = 0.0
+            Cprime = 0.0
+        end
 
         epsilon = A * b1 + C * d1 - u_over_vt
         epsilonprime = b1 * Aprime + A * b1prime + d1 * Cprime + C * d1prime
