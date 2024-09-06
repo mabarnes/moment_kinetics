@@ -3243,7 +3243,7 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
         trygif(anim, outfile, fps=5)
     elseif pp.animate_phi_vs_r_z && nr == 1 && nz > 1 # make a gif animation of ϕ(z) at different times
         anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-            @views plot(z, phi[:,1,i], xlabel="z", ylabel=L"\widetilde{\phi}", ylims = (phimin,phimax))
+            @views plot(z, phi[:,1,i], xlabel="z", ylabel=L"\widetilde{\phi}", ylims = (phimin,phimax),label ="")
         end
         outfile = string(run_name, "_phi_vs_z.gif")
         trygif(anim, outfile, fps=5)
@@ -3268,13 +3268,13 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
         outfile = string(run_name, "_Ez"*description*"_vs_r_z.gif")
         trygif(anim, outfile, fps=5)
         anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-            @views plot(r, Ez[1,:,i], xlabel="r", ylabel=L"\widetilde{E}_z", ylims = (Ezmin,Ezmax))
+            @views plot(r, Ez[1,:,i], xlabel="r", ylabel=L"\widetilde{E}_z", ylims = (Ezmin,Ezmax), label="")
         end
         outfile = string(run_name, "_Ez(zwall-)_vs_r.gif")
         trygif(anim, outfile, fps=5)
     elseif pp.animate_Ez_vs_r_z && nr == 1 && nz > 1
         anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-            @views plot(z, Ez[:,1,i], xlabel="z", ylabel=L"\widetilde{E}_z", ylims = (Ezmin,Ezmax))
+            @views plot(z, Ez[:,1,i], xlabel="z", ylabel=L"\widetilde{E}_z", ylims = (Ezmin,Ezmax), label="")
         end
         outfile = string(run_name, "_Ez_vs_z.gif")
         trygif(anim, outfile, fps=5)
@@ -3291,7 +3291,7 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
         outfile = string(run_name, "_Er"*description*"(r,z_wall-)_vs_r.pdf")
         trysavefig(outfile)
         anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-            @views plot(r, Er[1,:,i], xlabel="r", ylabel=L"\widetilde{E}_r", ylims = (Ermin,Ermax))
+            @views plot(r, Er[1,:,i], xlabel="r", ylabel=L"\widetilde{E}_r", ylims = (Ermin,Ermax), label="")
         end
         outfile = string(run_name, "_Er(zwall-)_vs_r.gif")
         trygif(anim, outfile, fps=5)
@@ -3320,7 +3320,7 @@ function plot_ion_moments_2D(density, parallel_flow, parallel_pressure,
 		description = "_ion_spec"*string(is)*"_"
 		# the density
 		densitymin = minimum(density[:,:,is,:])
-		densitymax = maximum(density)
+		densitymax = maximum(density[:,:,is,:])
 		if pp.plot_density_vs_r0_z && nz > 1 # plot last timestep density[z,ir0]
 			@views plot(z, density[:,ir0,is,end], xlabel=L"z/L_z", ylabel=L"n_i")
 			outfile = string(run_name, "_density"*description*"(r0,z)_vs_z.pdf")
@@ -3338,7 +3338,13 @@ function plot_ion_moments_2D(density, parallel_flow, parallel_pressure,
 			end
 			outfile = string(run_name, "_density"*description*"_vs_r_z.gif")
 			trygif(anim, outfile, fps=5)
-		end
+		elseif pp.animate_density_vs_r_z && nr == 1 && nz > 1
+                    anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                       @views plot(z, density[:,1,is,i], xlabel="z", ylabel=L"n_i", ylims = (densitymin,densitymax),label ="")
+                    end
+                    outfile = string(run_name, "_density"*description*"_vs_z.gif")
+                    trygif(anim, outfile, fps=5)
+                end
 		if pp.plot_density_vs_r_z && nr > 1 && nz > 1
 			@views heatmap(r, z, density[:,:,is,end], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
 			windowsize = (360,240), margin = 15pt)
@@ -3355,7 +3361,7 @@ function plot_ion_moments_2D(density, parallel_flow, parallel_pressure,
         end
 		# the parallel flow
 		parallel_flowmin = minimum(parallel_flow[:,:,is,:])
-		parallel_flowmax = maximum(parallel_flow)
+		parallel_flowmax = maximum(parallel_flow[:,:,is,:])
 		if pp.plot_parallel_flow_vs_r0_z && nz > 1 # plot last timestep parallel_flow[z,ir0]
 			@views plot(z, parallel_flow[:,ir0,is,end], xlabel=L"z/L_z", ylabel=L"u_{i\|\|}")
 			outfile = string(run_name, "_parallel_flow"*description*"(r0,z)_vs_z.pdf")
@@ -3373,6 +3379,12 @@ function plot_ion_moments_2D(density, parallel_flow, parallel_pressure,
 			end
 			outfile = string(run_name, "_parallel_flow"*description*"_vs_r_z.gif")
 			trygif(anim, outfile, fps=5)
+		elseif pp.animate_parallel_flow_vs_r_z && nr == 1 && nz > 1
+                    anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                       @views plot(z, parallel_flow[:,1,is,i], xlabel="z", ylabel=L"u_{i\|\|}", ylims = (parallel_flowmin,parallel_flowmax),label ="")
+                    end
+                    outfile = string(run_name, "_parallel_flow"*description*"_vs_z.gif")
+                    trygif(anim, outfile, fps=5)
 		end
 		if pp.plot_parallel_flow_vs_r_z && nr > 1 && nz > 1
 			@views heatmap(r, z, parallel_flow[:,:,is,end], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
@@ -3500,6 +3512,14 @@ function plot_ion_moments_2D(density, parallel_flow, parallel_pressure,
                        label = [L"p_{i\|\|}" L"p_{i\perp}" L"p_{i}"], foreground_color_legend = nothing, background_color_legend = nothing)
            outfile = string(run_name, "_all_pressures"*description*"(r0,z)_vs_z.pdf")
            trysavefig(outfile)
+           pmin = min(minimum(parallel_pressure[:,ir0,is,:]),minimum(perpendicular_pressure[:,ir0,is,:]),minimum(total_pressure[:,ir0,is,:]))
+           pmax = max(maximum(parallel_pressure[:,ir0,is,:]),maximum(perpendicular_pressure[:,ir0,is,:]),maximum(total_pressure[:,ir0,is,:]))
+           anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+              @views plot([z,z,z], [parallel_pressure[:,ir0,is,i],perpendicular_pressure[:,ir0,is,i],total_pressure[:,ir0,is,i]], xlabel=L"z/L_z", ylabel="",
+                       label = [L"p_{i\|\|}" L"p_{i\perp}" L"p_{i}"], foreground_color_legend = nothing, background_color_legend = nothing, ylims = (pmin,pmax))
+           end
+           outfile = string(run_name, "_all_pressures"*description*"(r0,z)_vs_z.gif")
+           trygif(anim, outfile, fps=5)
         end
         # the thermal speed
         if pp.plot_vth0_vs_t
