@@ -850,7 +850,6 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
     # a radau element is used for the vperp grid (see get_QQ_local!())
     get_QQ_local!(QQ_j,j,lobatto,radau,coord,option)
     if coord.bc == "periodic" && coord.nrank == 1
-        QQ_global[imax[end], imin[j]:imax[j]] .+= QQ_j[1,:] ./ 2.0
         QQ_global[imin[j],imin[j]:imax[j]] .+= QQ_j[1,:] ./ 2.0
     else
         QQ_global[imin[j],imin[j]:imax[j]] .+= QQ_j[1,:]
@@ -858,8 +857,14 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
     for k in 2:imax[j]-imin[j] 
         QQ_global[k,imin[j]:imax[j]] .+= QQ_j[k,:]
     end
-    if coord.nelement_local > 1 || (coord.bc == "periodic" && coord.nrank == 1)
+    if coord.nelement_local > 1
         QQ_global[imax[j],imin[j]:imax[j]] .+= QQ_j[ngrid,:]./2.0
+    elseif coord.bc == "periodic" && coord.nrank == 1
+        QQ_global[imin[1],imin[j]:imax[j]] .+= QQ_j[ngrid,:]./2.0
+        # Enforce continuity at the periodic boundary
+        QQ_global[imax[j],imin[j]:imax[j]] .= 0.0
+        QQ_global[imax[j],1] = 1.0
+        QQ_global[imax[j],end] = -1.0
     else
         QQ_global[imax[j],imin[j]:imax[j]] .+= QQ_j[ngrid,:]
     end
@@ -874,8 +879,11 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
         # upper boundary assembly on element 
         if j == coord.nelement_local
             if coord.bc == "periodic" && coord.nrank == 1
-                QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:] / 2.0
                 QQ_global[imin[1],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:] / 2.0
+                # Enforce continuity at the periodic boundary
+                QQ_global[imax[j],imin[j]-1:imax[j]] .= 0.0
+                QQ_global[imax[j],1] = 1.0
+                QQ_global[imax[j],end] = -1.0
             else
                 QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]
             end
@@ -1016,7 +1024,7 @@ function get_KK_local!(QQ,ielement,
             end
         else # assume integrals of form int^infty_-infty (.) d vpa
             @. QQ = lobatto.K0/scale_factor
-            if coord.bc !== "periodic"
+            if coord.bc != "periodic"
                 # boundary terms from integration by parts
                 if explicit_BC_terms && ielement == 1 && coord.irank == 0
                     @. QQ[1,:] -= lobatto.Dmat[1,:]/scale_factor
@@ -1086,12 +1094,14 @@ function get_LL_local!(QQ,ielement,
             end
         else # d^2 (.) d vpa^2 -- assume integrals of form int^infty_-infty (.) d vpa
             @. QQ = lobatto.K0/scale_factor
-            # boundary terms from integration by parts
-            if explicit_BC_terms && ielement == 1 && coord.irank == 0
-                @. QQ[1,:] -= lobatto.Dmat[1,:]/scale_factor
-            end
-            if explicit_BC_terms && ielement == nelement && coord.irank == coord.nrank - 1
-                @. QQ[coord.ngrid,:] += lobatto.Dmat[coord.ngrid,:]/scale_factor
+            if coord.bc != "periodic"
+                # boundary terms from integration by parts
+                if explicit_BC_terms && ielement == 1 && coord.irank == 0
+                    @. QQ[1,:] -= lobatto.Dmat[1,:]/scale_factor
+                end
+                if explicit_BC_terms && ielement == nelement && coord.irank == coord.nrank - 1
+                    @. QQ[coord.ngrid,:] += lobatto.Dmat[coord.ngrid,:]/scale_factor
+                end
             end
         end
         return nothing
