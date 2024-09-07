@@ -31,8 +31,9 @@ It might be convenient to add `using Revise` to your `startup.jl` file (`~/julia
 ## Array types
 
 Most arrays in `moment_kinetics` are declared using a custom array type
-`MPISharedArray`. Most of the time this type is just an alias for `Array`, and
-so it needs the same template parameters (see [Julia's Array
+[`moment_kinetics.communication.MPISharedArray`](@ref). Most of the time this
+type is just an alias for `Array`, and so it needs the same template parameters
+(see [Julia's Array
 documentation](https://docs.julialang.org/en/v1/manual/arrays/)) - the data
 type and the number of dimensions, e.g. `MPISharedArray{mk_float,3}`. Although
 these arrays use shared memory, Julia does not know about this. We use
