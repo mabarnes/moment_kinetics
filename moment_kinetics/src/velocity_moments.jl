@@ -138,7 +138,7 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
 
     entropy_production = allocate_shared_float(nz, nr, n_species)
 
-    if ion_source_settings.active
+    if any(x -> x.active, ion_source_settings)
         external_source_amplitude = allocate_shared_float(nz, nr)
         if evolve_density
             external_source_density_amplitude = allocate_shared_float(nz, nr)
@@ -363,7 +363,7 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
         dvth_dz = nothing
     end
 
-    if neutral_source_settings.active
+    if any(x -> x.active, neutral_source_settings)
         external_source_amplitude = allocate_shared_float(nz, nr)
         if evolve_density
             external_source_density_amplitude = allocate_shared_float(nz, nr)
