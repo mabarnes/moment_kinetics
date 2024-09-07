@@ -13,7 +13,7 @@ nelement = 1
 [z]
 ngrid = 9
 nelement = 32
-nelement_local = 16
+#nelement_local = 16
 bc = "wall"
 discretization = "chebyshev_pseudospectral"
 element_spacing_option = "sqrt"
