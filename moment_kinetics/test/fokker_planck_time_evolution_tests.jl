@@ -5,12 +5,13 @@ using Base.Filesystem: tempname
 using MPI
 
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.input_structs: grid_input, advection_input, merge_dict_with_kwargs!
+using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data,
                                  load_species_data, load_fields_data,
                                  load_ion_moments_data, load_pdf_data,
                                  load_time_data, load_species_data
 using moment_kinetics.type_definitions: mk_float, OptionsDict
+using moment_kinetics.utils: merge_dict_with_kwargs!
 
 const analytical_rtol = 3.e-2
 const regression_rtol = 2.e-8

@@ -10,11 +10,12 @@ using Base.Filesystem: tempname
 using MPI
 
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.input_structs: grid_input, advection_input, merge_dict_with_kwargs!
+using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.interpolation: interpolate_to_grid_z
 using moment_kinetics.load_data: get_run_info_no_setup, close_run_info,
                                  postproc_load_variable
 using moment_kinetics.type_definitions: OptionsDict
+using moment_kinetics.utils: merge_dict_with_kwargs!
 
 # default inputs for tests
 test_input = Dict("composition" => OptionsDict("n_ion_species" => 1,

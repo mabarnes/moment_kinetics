@@ -17,7 +17,6 @@ export pp_input
 export geometry_input
 export set_defaults_and_check_top_level!, set_defaults_and_check_section!,
        options_to_TOML, Dict_to_NamedTuple
-export merge_dict_with_kwargs!, merge_dict_of_dicts!, merge_dict_of_dicts
 
 using ..communication
 using ..type_definitions: mk_float, mk_int
@@ -756,57 +755,6 @@ Useful as NamedTuple is immutable, so option values cannot be accidentally chang
 """
 function Dict_to_NamedTuple(d)
     return NamedTuple(Symbol(k)=>v for (k,v) ∈ d)
-end
-
-"""
-Dict merge function for named keyword arguments 
-for case when input Dict is a mixed Dict of Dicts
-and non-Dict float/int/string entries, and the 
-keyword arguments are also a mix of Dicts and non-Dicts
-"""
-
-function merge_dict_with_kwargs!(dict_base; args...)
-    for (k,v) in args
-        k = String(k)
-        if k in keys(dict_base) && isa(v, AbstractDict)
-            v = merge(dict_base[k], v)
-        end
-        dict_base[k] = v
-    end
-    return nothing
-end
-
-"""
-Dict merge function for merging Dicts of Dicts
-In place merge, returns nothing 
-"""
-
-function merge_dict_of_dicts!(dict_base, dict_mod)
-    for (k,v) in dict_mod
-        k = String(k)
-        if k in keys(dict_base) && isa(v, AbstractDict)
-            v = merge(dict_base[k], v)
-        end
-        dict_base[k] = v
-    end
-    return nothing
-end
-
-"""
-Dict merge function for merging Dicts of Dicts
-Creates new dict, which is returned 
-"""
-
-function merge_dict_of_dicts(dict_base, dict_mod)
-    dict_new = deepcopy(dict_base)
-    for (k,v) in dict_mod
-        k = String(k)
-        if k in keys(dict_new) && isa(v, AbstractDict)
-            v = merge(dict_new[k], v)
-        end
-        dict_new[k] = v
-    end
-    return dict_new
 end
 
 """

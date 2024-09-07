@@ -1,6 +1,6 @@
 test_type = "Wall boundary conditions"
 using moment_kinetics.type_definitions: OptionsDict
-using moment_kinetics.input_structs: merge_dict_of_dicts
+using moment_kinetics.util: recursive_merge
 
 # default inputs for tests
 test_input_finite_difference_1D1V = OptionsDict(
@@ -46,7 +46,7 @@ test_input_finite_difference_1D1V = OptionsDict(
     "vr_ngrid" => 1,
     "vr_nelement" => 1)
 
-test_input_finite_difference_simple_sheath_1D1V = merge_dict_of_dicts(
+test_input_finite_difference_simple_sheath_1D1V = recursive_merge(
     test_input_finite_difference_1D1V,
     OptionsDict("run_name" => "finite_difference_simple_sheath_1D1V",
                 "composition" => OptionsDict("electron_physics" => "boltzmann_electron_response_with_simple_sheath"))) 
@@ -70,7 +70,7 @@ test_input_finite_difference = merge(
          "vzeta_nelement" => 1,
          "vzeta_discretization" => "finite_difference"))
 
-test_input_finite_difference_simple_sheath = merge_dict_of_dicts(
+test_input_finite_difference_simple_sheath = recursive_merge(
     test_input_finite_difference,
     OptionsDict("run_name" => "finite_difference_simple_sheath",
          "composition" => OptionsDict("electron_physics" => "boltzmann_electron_response_with_simple_sheath")))
@@ -101,7 +101,7 @@ test_input_chebyshev_split3_1D1V = merge(test_input_chebyshev_split2_1D1V,
                                           "evolve_moments_parallel_pressure" => true))
 
 
-test_input_chebyshev_simple_sheath_1D1V = merge_dict_of_dicts(
+test_input_chebyshev_simple_sheath_1D1V = recursive_merge(
     test_input_chebyshev_1D1V,
     OptionsDict("run_name" => "chebyshev_pseudospectral_simple_sheath_1D1V",
          "composition" => OptionsDict("electron_physics" => "boltzmann_electron_response_with_simple_sheath")))
@@ -125,7 +125,7 @@ test_input_chebyshev = merge(
          "vzeta_ngrid" => 3,
          "vzeta_nelement" => 1))
 
-test_input_chebyshev_simple_sheath = merge_dict_of_dicts(
+test_input_chebyshev_simple_sheath = recursive_merge(
     test_input_chebyshev,
     OptionsDict("run_name" => "chebyshev_pseudospectral_simple_sheath",
          "composition" => OptionsDict("electron_physics" => "boltzmann_electron_response_with_simple_sheath")))

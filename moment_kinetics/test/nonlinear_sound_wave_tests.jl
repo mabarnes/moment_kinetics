@@ -5,11 +5,12 @@ include("setup.jl")
 using Base.Filesystem: tempname
 
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.input_structs: grid_input, advection_input, merge_dict_with_kwargs!
+using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
 using moment_kinetics.load_data: get_run_info_no_setup, close_run_info,
                                  postproc_load_variable
 using moment_kinetics.type_definitions: mk_float, OptionsDict
+using moment_kinetics.utils: merge_dict_with_kwargs!
 
 const analytical_rtol = 3.e-2
 const regression_rtol = 2.e-8

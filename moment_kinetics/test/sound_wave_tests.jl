@@ -6,7 +6,7 @@ using Base.Filesystem: tempname
 #using Plots: plot, plot!, gui
 
 using moment_kinetics.array_allocation: allocate_float
-using moment_kinetics.input_structs: netcdf, merge_dict_with_kwargs!
+using moment_kinetics.input_structs: netcdf
 using moment_kinetics.file_io: io_has_implementation
 using moment_kinetics.load_data: open_readonly_output_file
 using moment_kinetics.load_data: load_fields_data, load_time_data
@@ -14,6 +14,7 @@ using moment_kinetics.load_data: load_species_data, load_coordinate_data
 using moment_kinetics.analysis: analyze_fields_data
 using moment_kinetics.analysis: fit_delta_phi_mode
 using moment_kinetics.type_definitions: OptionsDict
+using moment_kinetics.utils: merge_dict_with_kwargs!
 
 const analytical_rtol = 3.e-2
 const regression_rtol = 1.e-14

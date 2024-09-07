@@ -4,7 +4,7 @@ Utility functions
 module utils
 
 export get_unnormalized_parameters, print_unnormalized_parameters, to_seconds, to_minutes,
-       to_hours, recursive_merge
+       to_hours, recursive_merge, merge_dict_with_kwargs!
 
 using ..communication
 using ..constants
@@ -312,6 +312,23 @@ function recursive_merge(a, b::AbstractDict)
 end
 function recursive_merge(a, b)
     return b
+end
+
+"""
+Dict merge function for named keyword arguments
+for case when input Dict is a mixed Dict of Dicts
+and non-Dict float/int/string entries, and the
+keyword arguments are also a mix of Dicts and non-Dicts
+"""
+function merge_dict_with_kwargs!(dict_base; args...)
+    for (k,v) in args
+        k = String(k)
+        if k in keys(dict_base) && isa(v, AbstractDict)
+            v = recursive_merge(dict_base[k], v)
+        end
+        dict_base[k] = v
+    end
+    return nothing
 end
 
 # Utility functions for timestepping
