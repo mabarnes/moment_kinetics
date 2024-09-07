@@ -4,7 +4,7 @@ Utility functions
 module utils
 
 export get_unnormalized_parameters, print_unnormalized_parameters, to_seconds, to_minutes,
-       to_hours
+       to_hours, recursive_merge
 
 using ..communication
 using ..constants
@@ -292,6 +292,26 @@ function enum_from_string(enum_type, name)
         end
     end
     return nothing
+end
+
+"""
+    recursive_merge(a, b)
+
+Merge two AbstractDicts `a` and `b`. Any elements that are AbstractDicts are also merged
+(rather than just replacing with the entry in `b`).
+"""
+function recursive_merge end
+function recursive_merge(a::AbstractDict, b::AbstractDict)
+    return mergewith(recursive_merge, a, b)
+end
+function recursive_merge(a::AbstractDict, b)
+    error("Cannot merge a Dict with a non-Dict, got $a and $b")
+end
+function recursive_merge(a, b::AbstractDict)
+    error("Cannot merge a Dict with a non-Dict, got $a and $b")
+end
+function recursive_merge(a, b)
+    return b
 end
 
 # Utility functions for timestepping
