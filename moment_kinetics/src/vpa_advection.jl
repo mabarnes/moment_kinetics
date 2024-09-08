@@ -433,24 +433,26 @@ function update_speed_n_u_p_evolution!(advect, fvec, moments, vpa, z, r, composi
             end
         end
     end
-    if ion_source_settings.active
-        source_density_amplitude = moments.ion.external_source_density_amplitude
-        source_momentum_amplitude = moments.ion.external_source_momentum_amplitude
-        source_pressure_amplitude = moments.ion.external_source_pressure_amplitude
-        density = fvec.density
-        upar = fvec.upar
-        ppar = fvec.ppar
-        vth = moments.ion.vth
-        vpa_grid = vpa.grid
-        @loop_s_r_z is ir iz begin
-            term1 = source_density_amplitude[iz,ir] * upar[iz,ir,is]/(density[iz,ir,is]*vth[iz,ir,is])
-            term2_over_vpa =
-                -0.5 * (source_pressure_amplitude[iz,ir] +
-                        2.0 * upar[iz,ir,is] * source_momentum_amplitude[iz,ir]) /
-                       ppar[iz,ir,is] +
-                0.5 * source_density_amplitude[iz,ir] / density[iz,ir,is]
-            @loop_vperp_vpa ivperp ivpa begin
-                advect[is].speed[ivpa,ivperp,iz,ir] += term1 + vpa_grid[ivpa] * term2_over_vpa
+    for index ∈ eachindex(ion_source_settings.ion)
+        if ion_source_settings[index].active
+            @views source_density_amplitude = moments.ion.external_source_density_amplitude[:, :, index]
+            @views source_momentum_amplitude = moments.ion.external_source_momentum_amplitude[:, :, index]
+            @views source_pressure_amplitude = moments.ion.external_source_pressure_amplitude[:, :, index]
+            density = fvec.density
+            upar = fvec.upar
+            ppar = fvec.ppar
+            vth = moments.ion.vth
+            vpa_grid = vpa.grid
+            @loop_s_r_z is ir iz begin
+                term1 = source_density_amplitude[iz,ir] * upar[iz,ir,is]/(density[iz,ir,is]*vth[iz,ir,is])
+                term2_over_vpa =
+                    -0.5 * (source_pressure_amplitude[iz,ir] +
+                            2.0 * upar[iz,ir,is] * source_momentum_amplitude[iz,ir]) /
+                        ppar[iz,ir,is] +
+                    0.5 * source_density_amplitude[iz,ir] / density[iz,ir,is]
+                @loop_vperp_vpa ivperp ivpa begin
+                    advect[is].speed[ivpa,ivperp,iz,ir] += term1 + vpa_grid[ivpa] * term2_over_vpa
+                end
             end
         end
     end
@@ -494,7 +496,7 @@ function update_speed_n_p_evolution!(advect, fields, fvec, moments, vpa, z, r,
             end
         end
     end
-    if ion_source_settings.active
+    if any(x -> x.active, ion_source_settings)
         error("External source not implemented for evolving n and ppar case")
     end
 end
@@ -538,18 +540,20 @@ function update_speed_n_u_evolution!(advect, fvec, moments, vpa, z, r, compositi
             end
         end
     end
-    if ion_source_settings.active
-        source_density_amplitude = moments.ion.external_source_density_amplitude
-        source_strength = ion_source_settings.source_strength
-        r_amplitude = ion_source_settings.r_amplitude
-        z_amplitude = ion_source_settings.z_amplitude
-        density = fvec.density
-        upar = fvec.upar
-        vth = moments.ion.vth
-        @loop_s_r_z is ir iz begin
-            term = source_density_amplitude[iz,ir] * upar[iz,ir,is] / density[iz,ir,is]
-            @loop_vperp_vpa ivperp ivpa begin
-                advect[is].speed[ivpa,ivperp,iz,ir] += term
+    for index ∈ eachindex(ion_source_settings.ion)
+        if ion_source_settings[index].active
+            @views source_density_amplitude = moments.ion.external_source_density_amplitude[:, :, index]
+            source_strength = ion_source_settings[index].source_strength
+            r_amplitude = ion_source_settings[index].r_amplitude
+            z_amplitude = ion_source_settings[index].z_amplitude
+            density = fvec.density
+            upar = fvec.upar
+            vth = moments.ion.vth
+            @loop_s_r_z is ir iz begin
+                term = source_density_amplitude[iz,ir] * upar[iz,ir,is] / density[iz,ir,is]
+                @loop_vperp_vpa ivperp ivpa begin
+                    advect[is].speed[ivpa,ivperp,iz,ir] += term
+                end
             end
         end
     end

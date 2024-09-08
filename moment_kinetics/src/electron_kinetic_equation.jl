@@ -2273,16 +2273,18 @@ function add_contribution_from_pdf_term!(pdf_out, pdf_in, ppar, dens, upar, mome
         end
     end
 
-    if electron_source_settings.active
-        source_density_amplitude = moments.electron.external_source_density_amplitude
-        source_momentum_amplitude = moments.electron.external_source_momentum_amplitude
-        source_pressure_amplitude = moments.electron.external_source_pressure_amplitude
-        @loop_r_z ir iz begin
-            term = dt * (1.5 * source_density_amplitude[iz,ir] / dens[iz,ir] -
-                         (0.5 * source_pressure_amplitude[iz,ir] +
-                          source_momentum_amplitude[iz,ir]) / ppar[iz,ir])
-            @loop_vperp_vpa ivperp ivpa begin
-                pdf_out[ivpa,ivperp,iz,ir] -= term * pdf_in[ivpa,ivperp,iz,ir]
+    for index ∈ eachindex(electron_source_settings)
+        if electron_source_settings[index].active
+            @views source_density_amplitude = moments.electron.external_source_density_amplitude[:, :, index]
+            @views source_momentum_amplitude = moments.electron.external_source_momentum_amplitude[:, :, index]
+            @views source_pressure_amplitude = moments.electron.external_source_pressure_amplitude[:, :, index]
+            @loop_r_z ir iz begin
+                term = dt * (1.5 * source_density_amplitude[iz,ir] / dens[iz,ir] -
+                            (0.5 * source_pressure_amplitude[iz,ir] +
+                            source_momentum_amplitude[iz,ir]) / ppar[iz,ir])
+                @loop_vperp_vpa ivperp ivpa begin
+                    pdf_out[ivpa,ivperp,iz,ir] -= term * pdf_in[ivpa,ivperp,iz,ir]
+                end
             end
         end
     end
