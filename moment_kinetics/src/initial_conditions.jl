@@ -85,7 +85,7 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
 
     moments = moments_struct(ion, electron, neutral, evolve_moments.density,
                              particle_number_conserved,
-                             evolve_moments.conservation,
+                             evolve_moments.moments_conservation,
                              evolve_moments.parallel_flow,
                              evolve_moments.parallel_pressure)
 

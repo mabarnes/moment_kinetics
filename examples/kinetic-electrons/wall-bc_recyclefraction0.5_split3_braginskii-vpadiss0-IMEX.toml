@@ -1,12 +1,14 @@
 #runtime_plots = true
-evolve_moments_density = true
-evolve_moments_parallel_flow = true
-evolve_moments_parallel_pressure = true
-evolve_moments_conservation = true
 charge_exchange_frequency = 0.75
 ionization_frequency = 0.5
 constant_ionization_rate = false
 nu_ei = 1000.0
+
+[evolve_moments]
+density = true
+parallel_flow = true
+parallel_pressure = true
+moments_conservation = true
 
 [r]
 ngrid = 1

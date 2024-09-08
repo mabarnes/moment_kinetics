@@ -4,10 +4,6 @@ converged_residual_value = 1.0e-3
 n_ion_species = 1
 n_neutral_species = 1
 boltzmann_electron_response = true
-evolve_moments_density = true
-evolve_moments_parallel_flow = true
-evolve_moments_parallel_pressure = true
-evolve_moments_conservation = true
 recycling_fraction = 0.5
 krook_collisions_option = "reference_parameters"
 T_e = 0.2 # 1.0
@@ -47,6 +43,12 @@ vpa_IC_temperature_phase2 = 0.0
 charge_exchange_frequency = 0.75
 ionization_frequency = 0.5
 constant_ionization_rate = false
+
+[evolve_moments]
+density = true
+parallel_flow = true
+parallel_pressure = true
+moments_conservation = true
 
 [r]
 ngrid = 1

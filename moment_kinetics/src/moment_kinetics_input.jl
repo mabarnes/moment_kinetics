@@ -67,13 +67,17 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
                                         "finite_difference_option",
                                         "element_spacing_option", "bc")
                             )...,
-                            "force_Er_zero_at_wall",
+                            "force_Er_zero_at_wall", "evolve_moments_density",
+                            "evolve_moments_parallel_flow",
+                            "evolve_moments_parallel_pressure",
+                            "evolve_moments_conservation",
                            )
     for opt in removed_options_list
         if opt ∈ keys(scan_input)
-            error("Option '$opt' is no longer used. Please update your input file. You "
-                  * "may need to set some new options to replicate the effect of the "
-                  * "removed ones.")
+            error("Option '$opt' is no longer used. Please update your input file. The "
+                  * "option may have been moved into an input file section. You may need "
+                  * "to set some new options to replicate the effect of the removed ones."
+                 )
         end
     end
     
@@ -82,8 +86,6 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
     
-    evolve_moments = load_defaults()
-
     # this is the prefix for all output files associated with this run
     run_name = get(scan_input, "run_name", "wallBC")
     # this is the directory where the simulation data will be stored
@@ -92,10 +94,14 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
 
     # if evolve_moments.density = true, evolve density via continuity eqn
     # and g = f/n via modified drift kinetic equation
-    evolve_moments.density = get(scan_input, "evolve_moments_density", false)
-    evolve_moments.parallel_flow = get(scan_input, "evolve_moments_parallel_flow", false)
-    evolve_moments.parallel_pressure = get(scan_input, "evolve_moments_parallel_pressure", false)
-    evolve_moments.conservation = get(scan_input, "evolve_moments_conservation", false)
+    evolve_moments_settings = set_defaults_and_check_section!(
+        scan_input, "evolve_moments";
+        density=false,
+        parallel_flow=false,
+        parallel_pressure=false,
+        moments_conservation=false,
+       )
+    evolve_moments = Dict_to_NamedTuple(evolve_moments_settings)
 
     # Reference parameters that define the conversion between physical quantities and
     # normalised values used in the code.
@@ -480,21 +486,6 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
 end
 
 """
-"""
-function load_defaults()
-    ############## options related to the equations being solved ###############
-    evolve_density = false
-    evolve_parallel_flow = false
-    evolve_parallel_pressure = false
-    conservation = true
-    #advective_form = false
-    evolve_moments = evolve_moments_options(evolve_density, evolve_parallel_flow, evolve_parallel_pressure, conservation)#advective_form)
-    #################### parameters related to the z grid ######################
-    
-    return evolve_moments
-end
-
-"""
 check various input options to ensure they are all valid/consistent
 """
 function check_input(io, output_dir, nstep, dt, r, z, vpa, vperp, composition, species,
@@ -511,9 +502,8 @@ function check_input(io, output_dir, nstep, dt, r, z, vpa, vperp, composition, s
     check_coordinate_input(vperp, "vperp", io)
     # if the parallel flow is evolved separately, then the density must also be evolved separately
     if evolve_moments.parallel_flow && !evolve_moments.density
-        print(io,">evolve_moments.parallel_flow = true, but evolve_moments.density = false.")
-        println(io, "this is not a supported option.  forcing evolve_moments.density = true.")
-        evolve_moments.density = true
+        error("evolve_moments.parallel_flow = true, but evolve_moments.density = false."
+              * "this is not a supported option.")
     end
     if collisions.fkpl.nuii > 0.0
     # check that the grids support the collision operator

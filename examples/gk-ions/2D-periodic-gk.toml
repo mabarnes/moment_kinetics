@@ -1,10 +1,12 @@
-evolve_moments_density = false
-evolve_moments_parallel_flow = false
-evolve_moments_parallel_pressure = false
-evolve_moments_conservation = false
 charge_exchange_frequency = 0.0
 ionization_frequency = 0.05
 constant_ionization_rate = true
+
+[evolve_moments]
+density = false
+parallel_flow = false
+parallel_pressure = false
+moments_conservation = false
 
 [r]
 ngrid = 5

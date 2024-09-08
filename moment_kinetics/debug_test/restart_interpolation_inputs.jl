@@ -10,10 +10,10 @@ base_input = OptionsDict(
                                   "electron_physics" => "boltzmann_electron_response",
                                   "T_e" => 1.0),
      "base_directory" => test_output_directory,
-     "evolve_moments_density" => false,
-     "evolve_moments_parallel_flow" => false,
-     "evolve_moments_parallel_pressure" => false,
-     "evolve_moments_conservation" => true,
+     "evolve_moments" => OptionsDict("density" => false,
+                                     "parallel_flow" => false,
+                                     "parallel_pressure" => false,
+                                     "moments_conservation" => true),
      "charge_exchange_frequency" => 2*π*0.1,
      "ionization_frequency" => 0.0,
      "timestepping" => OptionsDict("nstep" => 3,
@@ -54,19 +54,19 @@ test_input =
                                 "vz" => OptionsDict("nelement" => 3)))
 
 test_input_split1 =
-    merge(test_input,
-          OptionsDict("run_name" => "split1",
-                      "evolve_moments_density" => true))
+    recursive_merge(test_input,
+                    OptionsDict("run_name" => "split1",
+                                "evolve_moments" => OptionsDict("density" => true)))
 
-test_input_split2 =
-    merge(test_input_split1 ,
-          OptionsDict("run_name" => "split2",
-                      "evolve_moments_parallel_flow" => true))
+    test_input_split2 =
+    recursive_merge(test_input_split1 ,
+                    OptionsDict("run_name" => "split2",
+                                "evolve_moments" => OptionsDict("parallel_flow" => true)))
 
-test_input_split3 =
-    merge(test_input_split2,
-          OptionsDict("run_name" => "split3",
-                      "evolve_moments_parallel_pressure" => true))
+    test_input_split3 =
+    recursive_merge(test_input_split2,
+                    OptionsDict("run_name" => "split3",
+                                "evolve_moments" => OptionsDict("parallel_pressure" => true)))
 
 test_input_list = [
      test_input,

@@ -108,10 +108,10 @@ test_input_full_f = OptionsDict("composition" => OptionsDict("n_ion_species" => 
                                                                         "temperature_amplitude" => 0.5,
                                                                         "temperature_phase" => 0.0),  
                                 "run_name" => "full_f",
-                                "evolve_moments_density" => false,
-                                "evolve_moments_parallel_flow" => false,
-                                "evolve_moments_parallel_pressure" => false,
-                                "evolve_moments_conservation" => true,
+                                "evolve_moments" => OptionsDict("density" => false,
+                                                                "parallel_flow" => false,
+                                                                "parallel_pressure" => false,
+                                                                "moments_conservation" => true),
                                 "krook_collisions" => OptionsDict("use_krook" => true,"frequency_option" => "reference_parameters"),
                                 "charge_exchange_frequency" => 2*π*0.1,
                                 "ionization_frequency" => 0.0,
@@ -142,18 +142,18 @@ test_input_full_f = OptionsDict("composition" => OptionsDict("n_ion_species" => 
 
 test_input_split_1_moment =
     recursive_merge(test_input_full_f,
-          OptionsDict("run_name" => "split_1_moment",
-               "evolve_moments_density" => true))
+                    OptionsDict("run_name" => "split_1_moment",
+                                "evolve_moments" => OptionsDict("density" => true)))
 
 test_input_split_2_moments =
     recursive_merge(test_input_split_1_moment,
-          OptionsDict("run_name" => "split_2_moments",
-               "evolve_moments_parallel_flow" => true))
+                    OptionsDict("run_name" => "split_2_moments",
+                                "evolve_moments" => OptionsDict("parallel_flow" => true)))
 
 test_input_split_3_moments =
     recursive_merge(test_input_split_2_moments,
                     OptionsDict("run_name" => "split_3_moments",
-                                "evolve_moments_parallel_pressure" => true,
+                                "evolve_moments" => OptionsDict("parallel_pressure" => true),
                                 "vpa" => OptionsDict("L" => 12.0),
                                 "vz" => OptionsDict("L" => 12.0),
                                ))
@@ -256,7 +256,7 @@ function run_test(test_input, rtol, atol; args...)
             f_neutral = f_neutral_vzvrvzetazrst[:,1,1,:,1,:,:]
 
             # Unnormalize f
-            if input["evolve_moments_density"]
+            if input["evolve_moments"]["density"]
                 for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
                     f_ion[:,iz,is,it] .*= n_ion[iz,is,it]
                 end
@@ -264,7 +264,7 @@ function run_test(test_input, rtol, atol; args...)
                     f_neutral[:,iz,isn,it] .*= n_neutral[iz,isn,it]
                 end
             end
-            if input["evolve_moments_parallel_pressure"]
+            if input["evolve_moments"]["parallel_pressure"]
                 for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
                     f_ion[:,iz,is,it] ./= v_t_ion[iz,is,it]
                 end
@@ -358,10 +358,10 @@ function run_test(test_input, rtol, atol; args...)
                                          size(newgrid_f_ion, 4))
                 for iz ∈ 1:length(expected.z)
                     wpa = copy(expected.vpa)
-                    if input["evolve_moments_parallel_flow"]
+                    if input["evolve_moments"]["parallel_flow"]
                         wpa .-= newgrid_upar_ion[iz,1]
                     end
-                    if input["evolve_moments_parallel_pressure"]
+                    if input["evolve_moments"]["parallel_pressure"]
                         wpa ./= newgrid_vth_ion[iz,1]
                     end
                     newgrid_f_ion[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vpa, vpa_spectral)
@@ -389,10 +389,10 @@ function run_test(test_input, rtol, atol; args...)
                                          size(newgrid_f_neutral, 4))
                 for iz ∈ 1:length(expected.z)
                     wpa = copy(expected.vpa)
-                    if input["evolve_moments_parallel_flow"]
+                    if input["evolve_moments"]["parallel_flow"]
                         wpa .-= newgrid_upar_neutral[iz,1]
                     end
-                    if input["evolve_moments_parallel_pressure"]
+                    if input["evolve_moments"]["parallel_pressure"]
                         wpa ./= newgrid_vth_neutral[iz,1]
                     end
                     newgrid_f_neutral[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vpa, vpa_spectral)

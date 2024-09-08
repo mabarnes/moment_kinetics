@@ -12,10 +12,10 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                                                         "initial_temperature" => 1.0),
                          "run_name" => "full-f",
                          "base_directory" => test_output_directory,
-                         "evolve_moments_density" => false,
-                         "evolve_moments_parallel_flow" => false,
-                         "evolve_moments_parallel_pressure" => false,
-                         "evolve_moments_conservation" => false,
+                         "evolve_moments" => OptionsDict("density" => false,
+                                                         "parallel_flow" => false,
+                                                         "parallel_pressure" => false,
+                                                         "moments_conservation" => false),
                          "krook_collisions" => OptionsDict("use_krook" => true),
                          "z_IC_ion_species_1" => OptionsDict("density_amplitude" => 0.001,
                                                              "density_phase" => 0.0,
@@ -82,25 +82,25 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                                                      "source_T" => 2.0))
 
 
-test_input_split1 = merge(test_input,
-                          OptionsDict("run_name" => "split1",
-                               "evolve_moments_density" => true,
-                               "evolve_moments_conservation" => true))
-test_input_split2 = merge(test_input_split1,
-                          OptionsDict("run_name" => "split2",
-                               "evolve_moments_parallel_flow" => true))
-test_input_split2["timestepping"] = merge(test_input_split2["timestepping"],
-                                          OptionsDict("step_update_prefactor" => 0.4))
+test_input_split1 = recursive_merge(test_input,
+                                    OptionsDict("run_name" => "split1",
+                                                "evolve_moments" => OptionsDict("density" => true,
+                                                                                "moments_conservation" => true)))
+test_input_split2 = recursive_merge(test_input_split1,
+                                    OptionsDict("run_name" => "split2",
+                                                "evolve_moments" => OptionsDict("parallel_flow" => true)))
+test_input_split2["timestepping"] = recursive_merge(test_input_split2["timestepping"],
+                                                    OptionsDict("step_update_prefactor" => 0.4))
 test_input_split3 = recursive_merge(test_input_split2,
                                     OptionsDict("run_name" => "split3",
-                                                "evolve_moments_parallel_pressure" => true,
+                                                "evolve_moments" => OptionsDict("parallel_pressure" => true),
                                                 "vpa" => OptionsDict("nelement" => 8),
                                                 "vz" => OptionsDict("nelement" => 8),
                                                 "numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
                                                                                        "vpa_dissipation_coefficient" => 1e-2)))
-test_input_split3["timestepping"] = merge(test_input_split3["timestepping"],
-                                          OptionsDict("dt" => 1.0e-9,
-                                                      "minimum_dt" => 1.0e-9))
+test_input_split3["timestepping"] = recursive_merge(test_input_split3["timestepping"],
+                                                    OptionsDict("dt" => 1.0e-9,
+                                                                "minimum_dt" => 1.0e-9))
 
 
 test_input_list = [

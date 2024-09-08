@@ -3,7 +3,6 @@
 module input_structs
 
 export advance_info
-export evolve_moments_options
 export time_info
 export advection_input
 export initial_condition_input, initial_condition_input_mutable
@@ -22,16 +21,6 @@ using ..type_definitions: mk_float, mk_int
 
 using MPI
 using TOML
-
-"""
-"""
-mutable struct evolve_moments_options
-    density::Bool
-    parallel_flow::Bool
-    parallel_pressure::Bool
-    conservation::Bool
-    #advective_form::Bool
-end
 
 """
 `t_error_sum` is included so that a type which might be mk_float or Float128 can be set by

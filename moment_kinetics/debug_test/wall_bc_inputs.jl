@@ -11,10 +11,10 @@ test_input_finite_difference_1D1V = OptionsDict(
                           "T_e" => 1.0,
                           "T_wall" => 1.0),
     "base_directory" => test_output_directory,
-    "evolve_moments_density" => false,
-    "evolve_moments_parallel_flow" => false,
-    "evolve_moments_parallel_pressure" => false,
-    "evolve_moments_conservation" => true,
+    "evolve_moments" => OptionsDict("density" => false,
+                                    "parallel_flow" => false,
+                                    "parallel_pressure" => false,
+                                    "moments_conservation" => true),
     "charge_exchange_frequency" => 2.0,
     "ionization_frequency" => 2.0,
     "constant_ionization_rate" => false,
@@ -91,17 +91,17 @@ test_input_chebyshev_1D1V = recursive_merge(
                                     "nelement" => 2),
                ))
 
-test_input_chebyshev_split1_1D1V = merge(test_input_chebyshev_1D1V,
-                                         OptionsDict("run_name" => "chebyshev_pseudospectral_split1_1D1V",
-                                                     "evolve_moments_density" => true))
+test_input_chebyshev_split1_1D1V = recursive_merge(test_input_chebyshev_1D1V,
+                                                   OptionsDict("run_name" => "chebyshev_pseudospectral_split1_1D1V",
+                                                               "evolve_moments" => OptionsDict("density" => true)))
 
-test_input_chebyshev_split2_1D1V = merge(test_input_chebyshev_split1_1D1V,
-                                         OptionsDict("run_name" => "chebyshev_pseudospectral_split2_1D1V",
-                                                     "evolve_moments_parallel_flow" => true))
+test_input_chebyshev_split2_1D1V = recursive_merge(test_input_chebyshev_split1_1D1V,
+                                                   OptionsDict("run_name" => "chebyshev_pseudospectral_split2_1D1V",
+                                                               "evolve_moments" => OptionsDict("parallel_flow" => true)))
 
-test_input_chebyshev_split3_1D1V = merge(test_input_chebyshev_split2_1D1V,
-                                         OptionsDict("run_name" => "chebyshev_pseudospectral_split3_1D1V",
-                                                     "evolve_moments_parallel_pressure" => true))
+test_input_chebyshev_split3_1D1V = recursive_merge(test_input_chebyshev_split2_1D1V,
+                                                   OptionsDict("run_name" => "chebyshev_pseudospectral_split3_1D1V",
+                                                               "evolve_moments" => OptionsDict("parallel_pressure" => true)))
 
 
 test_input_chebyshev_simple_sheath_1D1V = recursive_merge(

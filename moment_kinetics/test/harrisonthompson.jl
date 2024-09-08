@@ -84,10 +84,10 @@ test_input_finite_difference = Dict("composition" => OptionsDict("n_ion_species"
                                                                              "temperature_amplitude" => 0.0,
                                                                              "temperature_phase" => 0.0),
                                     "run_name" => "finite_difference",
-                                    "evolve_moments_density" => false,
-                                    "evolve_moments_parallel_flow" => false,
-                                    "evolve_moments_parallel_pressure" => false,
-                                    "evolve_moments_conservation" => false,
+                                    "evolve_moments" => OptionsDict("density" => false,
+                                                                    "parallel_flow" => false,
+                                                                    "parallel_pressure" => false,
+                                                                    "moments_conservation" => false),
                                     "charge_exchange_frequency" => 0.0,
                                     "ionization_frequency" => 0.0,
                                     "constant_ionization_rate" => true,
@@ -135,19 +135,19 @@ test_input_chebyshev = recursive_merge(test_input_finite_difference,
 
 test_input_chebyshev_split1 = recursive_merge(test_input_chebyshev,
                                               OptionsDict("run_name" => "chebyshev_pseudospectral_split1",
-                                                          "evolve_moments_density" => true,
-                                                          "evolve_moments_conservation" => true,
+                                                          "evolve_moments" => OptionsDict("density" => true,
+                                                                                          "moments_conservation" => true),
                                                          ))
 
 test_input_chebyshev_split2 = recursive_merge(test_input_chebyshev_split1,
                                               OptionsDict("run_name" => "chebyshev_pseudospectral_split2",
-                                                          "evolve_moments_parallel_flow" => true,
+                                                          "evolve_moments" => OptionsDict("parallel_flow" => true),
                                                           "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0),
                                                          ))
 
 test_input_chebyshev_split3 = recursive_merge(test_input_chebyshev_split2,
                                               OptionsDict("run_name" => "chebyshev_pseudospectral_split3",
-                                                          "evolve_moments_parallel_pressure" => true,
+                                                          "evolve_moments" => OptionsDict("parallel_pressure" => true),
                                                          ))
 
 """

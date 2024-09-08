@@ -48,10 +48,10 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                                                    "temperature_amplitude" => 0.0,
                                                                                    "temperature_phase" => 0.0),                                                                        
                                            "run_name" => "finite_difference",
-                                           "evolve_moments_density" => false,
-                                           "evolve_moments_parallel_flow" => false,
-                                           "evolve_moments_parallel_pressure" => false,
-                                           "evolve_moments_conservation" => true,
+                                           "evolve_moments" => OptionsDict("density" => false,
+                                                                           "parallel_flow" => false,
+                                                                           "parallel_pressure" => false,
+                                                                           "moments_conservation" => true),
                                            "charge_exchange_frequency" => 2*π*0.1,
                                            "ionization_frequency" => 0.0,
                                            "timestepping" => OptionsDict("nstep" => 1500,
@@ -86,13 +86,13 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
 test_input_finite_difference_split_1_moment =
     recursive_merge(test_input_finite_difference,
                     OptionsDict("run_name" => "finite_difference_split_1_moment",
-                                "evolve_moments_density" => true)
+                                "evolve_moments" => OptionsDict("density" => true))
                    )
 
 test_input_finite_difference_split_2_moments =
     recursive_merge(test_input_finite_difference_split_1_moment,
                     OptionsDict("run_name" => "finite_difference_split_2_moments",
-                                "evolve_moments_parallel_flow" => true,
+                                "evolve_moments" => OptionsDict("parallel_flow" => true),
                                 "vpa" => OptionsDict("ngrid" => 270, "L" => 12.0),
                                 "vz" => OptionsDict("ngrid" => 270, "L" => 12.0))
                    )
@@ -100,7 +100,7 @@ test_input_finite_difference_split_2_moments =
 test_input_finite_difference_split_3_moments =
     recursive_merge(test_input_finite_difference_split_2_moments,
                     OptionsDict("run_name" => "finite_difference_split_3_moments",
-                                "evolve_moments_parallel_pressure" => true,
+                                "evolve_moments" => OptionsDict("parallel_pressure" => true),
                                 "vpa" => OptionsDict("ngrid" => 270, "L" => 12.0),
                                 "vz" => OptionsDict("ngrid" => 270, "L" => 12.0))
                    )
@@ -121,17 +121,17 @@ test_input_chebyshev = recursive_merge(test_input_finite_difference,
 test_input_chebyshev_split_1_moment =
     recursive_merge(test_input_chebyshev,
                     OptionsDict("run_name" => "chebyshev_pseudospectral_split_1_moment",
-                                "evolve_moments_density" => true))
+                                "evolve_moments" => OptionsDict("density" => true)))
 
 test_input_chebyshev_split_2_moments =
     recursive_merge(test_input_chebyshev_split_1_moment,
                     OptionsDict("run_name" => "chebyshev_pseudospectral_split_2_moments",
-                                "evolve_moments_parallel_flow" => true))
+                                "evolve_moments" => OptionsDict("parallel_flow" => true)))
 
 test_input_chebyshev_split_3_moments =
     recursive_merge(test_input_chebyshev_split_2_moments,
                     OptionsDict("run_name" => "chebyshev_pseudospectral_split_3_moments",
-                                "evolve_moments_parallel_pressure" => true))
+                                "evolve_moments" => OptionsDict("parallel_pressure" => true)))
 
 
 """

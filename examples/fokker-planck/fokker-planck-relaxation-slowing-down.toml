@@ -1,11 +1,13 @@
 # cheap input file for a 0D2V relaxation to a collisional Maxwellian distribution with self-ion collisions.
-evolve_moments_density = false
-evolve_moments_parallel_flow = false
-evolve_moments_parallel_pressure = false
-evolve_moments_conservation = false
 charge_exchange_frequency = 0.0
 ionization_frequency = 0.0
 constant_ionization_rate = false
+
+[evolve_moments]
+density = false
+parallel_flow = false
+parallel_pressure = false
+moments_conservation = false
 
 [z]
 ngrid = 1

@@ -4,10 +4,10 @@ test_type = "MMS"
 # default inputs for tests
 test_input = OptionsDict(
     "manufactured_solns" => OptionsDict("use_for_advance"=>true),
-    "evolve_moments_density" => false,
-    "evolve_moments_parallel_flow" => false,
-    "evolve_moments_parallel_pressure" => false,
-    "evolve_moments_conservation" => false,
+    "evolve_moments" => OptionsDict("density" => false,
+                                    "parallel_flow" => false,
+                                    "parallel_pressure" => false,
+                                    "moments_conservation" => false),
     "composition" => OptionsDict("n_ion_species" => 1,
                           "n_neutral_species" => 1,
                           "electron_physics" => "boltzmann_electron_response",

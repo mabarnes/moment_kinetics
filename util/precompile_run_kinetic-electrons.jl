@@ -11,9 +11,9 @@ mkpath(test_output_directory)
 
 input = OptionsDict("run_name" => "precompilation",
                     "base_directory" => test_output_directory,
-                    "evolve_moments_density" => true,
-                    "evolve_moments_parallel_flow" => true,
-                    "evolve_moments_parallel_pressure" => true,
+                    "evolve_moments" => OptionsDict("density" => true,
+                                                    "parallel_flow" => true,
+                                                    "parallel_pressure" => true),
                     "composition" => OptionsDict("electron_physics" => "kinetic_electrons"),
                     "r" => OptionsDict("ngrid" => 1,
                                        "nelement" => 1,

@@ -2,10 +2,6 @@
 n_ion_species = 1
 n_neutral_species = 1
 boltzmann_electron_response = true
-evolve_moments_density = true
-evolve_moments_parallel_flow = false
-evolve_moments_parallel_pressure = false
-evolve_moments_conservation = true
 T_e = 1.0
 initial_density1 = 1.0
 initial_temperature1 = 2.0
@@ -29,6 +25,12 @@ z_IC_temperature_amplitude2 = 0.0
 z_IC_temperature_phase2 = 0.0
 charge_exchange_frequency = [0.0, 0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3.0, 3.3, 3.6, 3.9, 4.2, 4.5, 4.8, 5.1, 5.4, 5.7, 6.0, 6.3, 6.6, 6.9, 7.2, 7.5, 7.8, 8.1, 8.4, 8.7]
 ionization_frequency = 0.0
+
+[evolve_moments]
+density = true
+parallel_flow = false
+parallel_pressure = false
+moments_conservation = true
 
 [r]
 ngrid = 1

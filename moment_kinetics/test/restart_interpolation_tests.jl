@@ -49,20 +49,20 @@ end
 restart_test_input_chebyshev_split_1_moment =
     recursive_merge(deepcopy(restart_test_input_chebyshev),
                     OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_1_moment",
-                                "evolve_moments_density" => true),
+                                "evolve_moments" => OptionsDict("density" => true)),
                    )
 
 restart_test_input_chebyshev_split_2_moments =
     recursive_merge(deepcopy(restart_test_input_chebyshev_split_1_moment),
                     OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_2_moments",
                                 "r" => OptionsDict("ngrid" => 1, "nelement" => 1),
-                                "evolve_moments_parallel_flow" => true),
+                                "evolve_moments" => OptionsDict("parallel_flow" => true)),
                    )
 
 restart_test_input_chebyshev_split_3_moments =
     recursive_merge(deepcopy(restart_test_input_chebyshev_split_2_moments),
                     OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_3_moments",
-                                "evolve_moments_parallel_pressure" => true,
+                                "evolve_moments" => OptionsDict("parallel_pressure" => true),
                                 "vpa" => OptionsDict("L" => 1.5*vpa_L), "vz" => OptionsDict("L" => 1.5*vpa_L)),
                    )
 
@@ -208,7 +208,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
             f_neutral = f_neutral_vzvrvzetazrst[:,:,1,:,:]
 
             # Unnormalize f
-            if input["evolve_moments_density"]
+            if input["evolve_moments"]["density"]
                 for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
                     f_ion[:,iz,is,it] .*= n_ion[iz,is,it]
                 end
@@ -216,7 +216,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
                     f_neutral[:,iz,isn,it] .*= n_neutral[iz,isn,it]
                 end
             end
-            if input["evolve_moments_parallel_pressure"]
+            if input["evolve_moments"]["parallel_pressure"]
                 for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
                     f_ion[:,iz,is,it] ./= v_t_ion[iz,is,it]
                 end
@@ -250,10 +250,10 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
                                  size(newgrid_f_ion, 4))
         for iz ∈ 1:length(expected.z)
             wpa = copy(expected.vpa)
-            if input["evolve_moments_parallel_flow"]
+            if input["evolve_moments"]["parallel_flow"]
                 wpa .-= newgrid_upar_ion[iz,1]
             end
-            if input["evolve_moments_parallel_pressure"]
+            if input["evolve_moments"]["parallel_pressure"]
                 wpa ./= newgrid_vth_ion[iz,1]
             end
             newgrid_f_ion[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vpa, vpa_spectral)
@@ -284,10 +284,10 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
                                  size(newgrid_f_neutral, 4))
         for iz ∈ 1:length(expected.z)
             wpa = copy(expected.vpa)
-            if input["evolve_moments_parallel_flow"]
+            if input["evolve_moments"]["parallel_flow"]
                 wpa .-= newgrid_upar_neutral[iz,1]
             end
-            if input["evolve_moments_parallel_pressure"]
+            if input["evolve_moments"]["parallel_pressure"]
                 wpa ./= newgrid_vth_neutral[iz,1]
             end
             newgrid_f_neutral[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vz, vz_spectral)
@@ -310,15 +310,15 @@ function runtests()
                                                             OptionsDict("nstep" => nstep),
                                                            )
         base_input_evolve_density = recursive_merge(base_input_full_f,
-                                                    OptionsDict("evolve_moments_density" => true),
+                                                    OptionsDict("evolve_moments" => OptionsDict("density" => true)),
                                                    )
         base_input_evolve_upar = recursive_merge(base_input_evolve_density,
-                                                 OptionsDict("evolve_moments_parallel_flow" => true,
+                                                 OptionsDict("evolve_moments" => OptionsDict("parallel_flow" => true),
                                                              "vpa" => OptionsDict("L" => 1.5*vpa_L),
                                                              "vz" => OptionsDict("L" => 1.5*vpa_L)),
                                                 )
         base_input_evolve_ppar = recursive_merge(base_input_evolve_upar,
-                                                 OptionsDict("evolve_moments_parallel_pressure" => true,
+                                                 OptionsDict("evolve_moments" => OptionsDict("parallel_pressure" => true),
                                                              "vpa" => OptionsDict("L" => 1.5*vpa_L),
                                                              "vz" => OptionsDict("L" => 1.5*vpa_L)),
                                                 )

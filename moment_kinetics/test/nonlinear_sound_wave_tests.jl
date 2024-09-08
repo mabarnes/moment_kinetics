@@ -124,7 +124,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
             f_neutral = f_neutral_vzvrvzetazrst[:,1,1,:,1,:,:]
 
             # Unnormalize f
-            if input["evolve_moments_density"]
+            if input["evolve_moments"]["density"]
                 for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
                     f_ion[:,iz,is,it] .*= n_ion[iz,is,it]
                 end
@@ -132,7 +132,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
                     f_neutral[:,iz,isn,it] .*= n_neutral[iz,isn,it]
                 end
             end
-            if input["evolve_moments_parallel_pressure"]
+            if input["evolve_moments"]["parallel_pressure"]
                 for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
                     f_ion[:,iz,is,it] ./= v_t_ion[iz,is,it]
                 end
@@ -226,10 +226,10 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
                                      size(newgrid_f_ion, 4))
                 for iz ∈ 1:length(expected.z)
                     wpa = copy(expected.vpa)
-                    if input["evolve_moments_parallel_flow"]
+                    if input["evolve_moments"]["parallel_flow"]
                         wpa .-= newgrid_upar_ion[iz,1]
                     end
-                    if input["evolve_moments_parallel_pressure"]
+                    if input["evolve_moments"]["parallel_pressure"]
                         wpa ./= newgrid_vth_ion[iz,1]
                     end
                     newgrid_f_ion[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vpa, vpa_spectral)
@@ -257,10 +257,10 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
                                          size(newgrid_f_neutral, 4))
                 for iz ∈ 1:length(expected.z)
                     wpa = copy(expected.vpa)
-                    if input["evolve_moments_parallel_flow"]
+                    if input["evolve_moments"]["parallel_flow"]
                         wpa .-= newgrid_upar_neutral[iz,1]
                     end
-                    if input["evolve_moments_parallel_pressure"]
+                    if input["evolve_moments"]["parallel_pressure"]
                         wpa ./= newgrid_vth_neutral[iz,1]
                     end
                     newgrid_f_neutral[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vpa, vpa_spectral)

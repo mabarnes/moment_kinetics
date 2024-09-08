@@ -56,15 +56,16 @@ wall_bc_cheb_input = recursive_merge(cheb_input, OptionsDict("z" => OptionsDict(
 inputs_list = Vector{OptionsDict}(undef, 0)
 for input ∈ [base_input, cheb_input, wall_bc_input, wall_bc_cheb_input]
     push!(inputs_list, input)
-    x = recursive_merge(input, OptionsDict("evolve_moments_density" => true, "ionization_frequency" => 0.0,
+    x = recursive_merge(input, OptionsDict("evolve_moments" => OptionsDict("density" => true),
+                                           "ionization_frequency" => 0.0,
                                            "r" => OptionsDict("ngrid" => 1, "nelement" => 1),
                                            "vperp" => OptionsDict("ngrid" => 1, "nelement" => 1),
                                            "vzeta" => OptionsDict("ngrid" => 1, "nelement" => 1),
                                            "vr" => OptionsDict("ngrid" => 1, "nelement" => 1)))
     push!(inputs_list, x)
-    x = merge(x, OptionsDict("evolve_moments_parallel_flow" => true))
+    x = recursive_merge(x, OptionsDict("evolve_moments" => OptionsDict("parallel_flow" => true)))
     push!(inputs_list, x)
-    x = merge(x, OptionsDict("evolve_moments_parallel_pressure" => true))
+    x = recursive_merge(x, OptionsDict("evolve_moments" => OptionsDict("parallel_pressure" => true)))
     push!(inputs_list, x)
 end
 
@@ -85,9 +86,9 @@ collisions_input2 = recursive_merge(wall_bc_cheb_input, OptionsDict("composition
 geo_input1 = recursive_merge(wall_bc_cheb_input, OptionsDict("composition" => OptionsDict("n_neutral_species" => 0),
                                                              "geometry" => OptionsDict("option" => "1D-mirror", "DeltaB" => 0.5, "pitch" => 0.5, "rhostar" => 1.0)))
 
-kinetic_electron_input = recursive_merge(cheb_input, OptionsDict("evolve_moments_density" => true,
-                                                                 "evolve_moments_parallel_flow" => true,
-                                                                 "evolve_moments_parallel_pressure" => true,
+kinetic_electron_input = recursive_merge(cheb_input, OptionsDict("evolve_moments" => OptionsDict("density" => true,
+                                                                                                 "parallel_flow" => true,
+                                                                                                 "parallel_pressure" => true),
                                                                  "r" => OptionsDict("ngrid" => 1,
                                                                                     "nelement" => 1),
                                                                  "vperp" => OptionsDict("ngrid" => 1,

@@ -1,13 +1,15 @@
 steady_state_residual = true
 converged_residual_value = 1.0e-3
 #runtime_plots = true
-evolve_moments_density = true
-evolve_moments_parallel_flow = true
-evolve_moments_parallel_pressure = false
-evolve_moments_conservation = true
 charge_exchange_frequency = 0.75
 ionization_frequency = 0.5
 constant_ionization_rate = false
+
+[evolve_moments]
+density = true
+parallel_flow = true
+parallel_pressure = false
+moments_conservation = true
 
 [r]
 ngrid = 1

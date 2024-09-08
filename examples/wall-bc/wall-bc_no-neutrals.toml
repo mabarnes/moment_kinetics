@@ -1,10 +1,12 @@
 steady_state_residual = true
 converged_residual_value = 1.0e-3
 runtime_plots = true
-evolve_moments_density = false
-evolve_moments_parallel_flow = false
-evolve_moments_parallel_pressure = false
-evolve_moments_conservation = true
+
+[evolve_moments]
+density = false
+parallel_flow = false
+parallel_pressure = false
+moments_conservation = true
 
 [r]
 ngrid = 1
