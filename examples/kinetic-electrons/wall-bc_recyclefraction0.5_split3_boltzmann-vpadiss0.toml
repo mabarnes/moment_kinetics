@@ -74,7 +74,7 @@ nwrite_dfns = 100000
 steady_state_residual = true
 converged_residual_value = 1.0e-3
 
-[ion_source]
+[ion_source_1]
 active = true
 z_profile = "gaussian"
 z_width = 0.125
