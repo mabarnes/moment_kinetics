@@ -322,7 +322,7 @@ function plot_sim_output!(ax_omega, ax_gamma, sims, ni, nn, Th, Te; kwargs...)
     omega = zeros(length(sims))
     gamma = zeros(length(sims))
     for (i, s) ∈ enumerate(sims)
-        Ri[i] = s["charge_exchange_frequency"]
+        Ri[i] = s["reactions"]["charge_exchange_frequency"]
         omega[i], gamma[i] = get_sim_omega_gamma(s)
     end
 
