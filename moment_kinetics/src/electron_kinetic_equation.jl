@@ -1819,12 +1819,11 @@ function electron_kinetic_equation_euler_update!(fvec_out, fvec_in, moments, z, 
                                    vperp, vpa, dt)
     end
 
-    if external_source_settings.electron.active
-        external_electron_source!(fvec_out.pdf_electron, fvec_in.pdf_electron,
-                                  moments.electron.dens, moments.electron.upar, moments,
-                                  composition, external_source_settings.electron, vperp,
-                                  vpa, dt)
-    end
+    total_external_electron_sources!(fvec_out.pdf_electron, fvec_in.pdf_electron,
+                                moments.electron.dens, moments.electron.upar, moments,
+                                composition, external_source_settings.electron, vperp,
+                                vpa, dt)
+
 
     if evolve_ppar
         electron_energy_equation!(fvec_out.electron_ppar, fvec_in.electron_ppar,
