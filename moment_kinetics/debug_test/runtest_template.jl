@@ -12,7 +12,7 @@ Run a test for a single set of parameters
 # Note 'name' should not be shared by any two tests in this file
 function run_test(test_input, debug_loop_type, debug_loop_parallel_dims; restart=false)
 
-    name = test_input["run_name"]
+    name = test_input["output"]["run_name"]
 
     @testset "$name" begin
         # Provide some progress info

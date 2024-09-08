@@ -83,7 +83,7 @@ test_input_finite_difference = Dict("composition" => OptionsDict("n_ion_species"
                                                                              "upar_phase" => 0.0,
                                                                              "temperature_amplitude" => 0.0,
                                                                              "temperature_phase" => 0.0),
-                                    "run_name" => "finite_difference",
+                                    "output" => OptionsDict("run_name" => "finite_difference"),
                                     "evolve_moments" => OptionsDict("density" => false,
                                                                     "parallel_flow" => false,
                                                                     "parallel_pressure" => false,
@@ -120,7 +120,7 @@ test_input_finite_difference = Dict("composition" => OptionsDict("n_ion_species"
                                    )
 
 test_input_chebyshev = recursive_merge(test_input_finite_difference,
-                                       OptionsDict("run_name" => "chebyshev_pseudospectral",
+                                       OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral"),
                                                    "z" => OptionsDict("discretization" => "chebyshev_pseudospectral",
                                                                        "ngrid" => 9,
                                                                        "nelement" => 2),
@@ -133,19 +133,19 @@ test_input_chebyshev = recursive_merge(test_input_finite_difference,
                                                   ))
 
 test_input_chebyshev_split1 = recursive_merge(test_input_chebyshev,
-                                              OptionsDict("run_name" => "chebyshev_pseudospectral_split1",
+                                              OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split1"),
                                                           "evolve_moments" => OptionsDict("density" => true,
                                                                                           "moments_conservation" => true),
                                                          ))
 
 test_input_chebyshev_split2 = recursive_merge(test_input_chebyshev_split1,
-                                              OptionsDict("run_name" => "chebyshev_pseudospectral_split2",
+                                              OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split2"),
                                                           "evolve_moments" => OptionsDict("parallel_flow" => true),
                                                           "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0),
                                                          ))
 
 test_input_chebyshev_split3 = recursive_merge(test_input_chebyshev_split2,
-                                              OptionsDict("run_name" => "chebyshev_pseudospectral_split3",
+                                              OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split3"),
                                                           "evolve_moments" => OptionsDict("parallel_pressure" => true),
                                                          ))
 
@@ -163,7 +163,7 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
     input = deepcopy(test_input)
 
     # Convert keyword arguments to a unique name
-    name = input["run_name"]
+    name = input["output"]["run_name"]
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
 
@@ -176,7 +176,7 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
 
     # Update default inputs with values to be changed
     merge_dict_with_kwargs!(input; args...)
-    input["run_name"] = name
+    input["output"]["run_name"] = name
 
     # Suppress console output while running
     phi = nothing
@@ -193,7 +193,7 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
             # Load and analyse output
             #########################
 
-            path = joinpath(realpath(input["base_directory"]), name, name)
+            path = joinpath(realpath(input["output"]["base_directory"]), name, name)
 
             # open the netcdf file and give it the handle 'fid'
             fid = open_readonly_output_file(path,"moments")
@@ -239,12 +239,12 @@ function runtests()
         println("Harrison-Thompson wall boundary condition tests")
 
         @testset_skip "FD version forms discontinuity in vpa at z=±L/2" "finite difference" begin
-            test_input_finite_difference["base_directory"] = test_output_directory
+            test_input_finite_difference["output"]["base_directory"] = test_output_directory
             run_test(test_input_finite_difference, 1.e-3, 1.e-4, zeros(100), 1.e-14, 1.e-15)
         end
 
         @testset "Chebyshev" begin
-            test_input_chebyshev["base_directory"] = test_output_directory
+            test_input_chebyshev["output"]["base_directory"] = test_output_directory
             run_test(test_input_chebyshev, 3.e-2, 3.e-3,
                      [-0.8270506736528097, -0.6647482045160528, -0.43595102198197894,
                       -0.2930090302314022, -0.19789542449264944, -0.14560099229503182,
@@ -254,7 +254,7 @@ function runtests()
                       -0.6647482045160534, -0.8270506736528144], 5.0e-9, 1.e-15)
         end
         @testset "Chebyshev split 1" begin
-            test_input_chebyshev_split1["base_directory"] = test_output_directory
+            test_input_chebyshev_split1["output"]["base_directory"] = test_output_directory
             run_test(test_input_chebyshev_split1, 3.e-2, 3.e-3,
                      [-0.8089566460734486, -0.6619131832543634, -0.43082918688434424,
                       -0.29582033972847016, -0.1934419000612522, -0.14925142084423915,
@@ -264,7 +264,7 @@ function runtests()
                       -0.6619131832543697, -0.808956646073445], 5.0e-9, 1.e-15)
         end
         @testset "Chebyshev split 2" begin
-            test_input_chebyshev_split2["base_directory"] = test_output_directory
+            test_input_chebyshev_split2["output"]["base_directory"] = test_output_directory
             run_test(test_input_chebyshev_split2, 6.e-2, 3.e-3,
                      [-0.7798736739831602, -0.661568214314525, -0.409872886370737,
                       -0.24444487132869974, -0.17244646306807737, -0.11761557291772232,
@@ -276,7 +276,7 @@ function runtests()
         # The 'split 3' test is pretty badly resolved, but don't want to increase
         # run-time!
         @testset "Chebyshev split 3" begin
-            test_input_chebyshev_split3["base_directory"] = test_output_directory
+            test_input_chebyshev_split3["output"]["base_directory"] = test_output_directory
             run_test(test_input_chebyshev_split3, 2.5e-1, 3.e-3,
                      [-0.5012994554414933, -0.4624277373138882, -0.35356695432752266,
                       -0.22371207174875177, -0.14096934539193717, -0.10082423314545275,

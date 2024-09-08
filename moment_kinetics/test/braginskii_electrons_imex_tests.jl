@@ -18,7 +18,7 @@ test_input = OptionsDict( "composition" => OptionsDict("n_ion_species" => 1,
                                                   "n_neutral_species" => 1,
                                                   "electron_physics" => "braginskii_fluid",
                                                   "T_e" => 0.2),
-                  "run_name" => "braginskii-electrons-imex",
+                  "output" => OptionsDict("run_name" => "braginskii-electrons-imex"),
                   "evolve_moments" => OptionsDict("density" => true,
                                                   "parallel_flow" => true,
                                                   "parallel_pressure" => true,
@@ -109,7 +109,7 @@ function run_test(test_input, expected_p, expected_q, expected_vt; rtol=1.e-6,
     input = deepcopy(test_input)
 
     # Convert keyword arguments to a unique name
-    name = input["run_name"]
+    name = input["output"]["run_name"]
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
 
@@ -122,7 +122,7 @@ function run_test(test_input, expected_p, expected_q, expected_vt; rtol=1.e-6,
 
     # Update default inputs with values to be changed
     merge_dict_with_kwargs!(input; args...)
-    input["run_name"] = name
+    input["output"]["run_name"] = name
 
     # Suppress console output while running
     p = undef
@@ -138,7 +138,7 @@ function run_test(test_input, expected_p, expected_q, expected_vt; rtol=1.e-6,
             # Load and analyse output
             #########################
 
-            path = joinpath(realpath(input["base_directory"]), name)
+            path = joinpath(realpath(input["output"]["base_directory"]), name)
 
             # open the output file
             run_info = get_run_info_no_setup(path)
@@ -282,15 +282,15 @@ function runtests()
             end
         else
             @testset "Split 3" begin
-                test_input["base_directory"] = test_output_directory
+                test_input["output"]["base_directory"] = test_output_directory
                 run_test(test_input, expected_p, expected_q, expected_vt)
             end
             @long @testset "Check other timestep - $type" for
                     type ∈ ("KennedyCarpenterARK437",)
 
                 timestep_check_input = deepcopy(test_input)
-                timestep_check_input["base_directory"] = test_output_directory
-                timestep_check_input["run_name"] = type
+                timestep_check_input["output"]["base_directory"] = test_output_directory
+                timestep_check_input["output"]["run_name"] = type
                 timestep_check_input["timestepping"]["type"] = type
                 run_test(timestep_check_input, expected_p, expected_q, expected_vt,
                          rtol=2.e-4, atol=1.e-10)

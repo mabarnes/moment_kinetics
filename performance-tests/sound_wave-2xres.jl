@@ -19,8 +19,8 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                                         "n_neutral_species" => 1,
                                                                         "boltzmann_electron_response" => true,
                                                                         "T_e" => 1.0),
-                                           "run_name" => "finite_difference",
-                                           "base_directory" => test_output_directory,
+                                           "output" => OptionsDict("run_name" => "finite_difference",
+                                                                   "base_directory" => test_output_directory),
                                            "evolve_moments" => OptionsDict("density" => false,
                                                                            "parallel_flow" => false,
                                                                            "parallel_pressure" => false,
@@ -71,21 +71,21 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
 
 test_input_finite_difference_split_1_moment =
     merge(test_input_finite_difference,
-          OptionsDict("run_name" => "finite_difference_split_1_moment",
+          OptionsDict("output" => OptionsDict("run_name" => "finite_difference_split_1_moment"),
                       "evolve_moments_density" => true))
 
 test_input_finite_difference_split_2_moments =
     merge(test_input_finite_difference_split_1_moment,
-          OptionsDict("run_name" => "finite_difference_split_2_moments",
+          OptionsDict("output" => OptionsDict("run_name" => "finite_difference_split_2_moments"),
                       "evolve_moments_parallel_flow" => true))
 
 test_input_finite_difference_split_3_moments =
     merge(test_input_finite_difference_split_2_moments,
-          OptionsDict("run_name" => "finite_difference_split_3_moments",
+          OptionsDict("output" => OptionsDict("run_name" => "finite_difference_split_3_moments"),
                       "evolve_moments_parallel_pressure" => true))
 
 test_input_chebyshev = recursive_merge(test_input_finite_difference,
-                                       OptionsDict("run_name" => "chebyshev_pseudospectral",
+                                       OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral"),
                                                    "z" => OptionsDict("discretization" => "chebyshev_pseudospectral",
                                                                       "ngrid" => 9,
                                                                       "nelement" => 20),
@@ -99,17 +99,17 @@ test_input_chebyshev = recursive_merge(test_input_finite_difference,
 
 test_input_chebyshev_split_1_moment =
     merge(test_input_chebyshev,
-          OptionsDict("run_name" => "chebyshev_pseudospectral_split_1_moment",
+          OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split_1_moment"),
                       "evolve_moments_density" => true))
 
 test_input_chebyshev_split_2_moments =
     merge(test_input_chebyshev_split_1_moment,
-          OptionsDict("run_name" => "chebyshev_pseudospectral_split_2_moments",
+          OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split_2_moments"),
                       "evolve_moments_parallel_flow" => true))
 
 test_input_chebyshev_split_3_moments =
     merge(test_input_chebyshev_split_2_moments,
-          OptionsDict("run_name" => "chebyshev_pseudospectral_split_3_moments",
+          OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split_3_moments"),
                       "evolve_moments_parallel_pressure" => true))
 
 inputs_list = (test_input_finite_difference,

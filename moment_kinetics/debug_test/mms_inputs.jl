@@ -13,7 +13,7 @@ test_input = OptionsDict(
                           "electron_physics" => "boltzmann_electron_response",
                           "T_e" => 1.0,
                           "T_wall" => 1.0),    
-    "run_name" => "MMS-2D-wall_cheb-with-neutrals",
+    "output" => OptionsDict("run_name" => "MMS-2D-wall_cheb-with-neutrals"),
     "recations" => OptionsDict("charge_exchange_frequency" => 0.0,
                                "ionization_frequency" => 0.0),
     "timestepping" => OptionsDict("nstep" => 3,

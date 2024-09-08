@@ -107,7 +107,7 @@ test_input_full_f = OptionsDict("composition" => OptionsDict("n_ion_species" => 
                                                                         "upar_phase" => 0.0,
                                                                         "temperature_amplitude" => 0.5,
                                                                         "temperature_phase" => 0.0),  
-                                "run_name" => "full_f",
+                                "output" => OptionsDict("run_name" => "full_f"),
                                 "evolve_moments" => OptionsDict("density" => false,
                                                                 "parallel_flow" => false,
                                                                 "parallel_pressure" => false,
@@ -142,17 +142,17 @@ test_input_full_f = OptionsDict("composition" => OptionsDict("n_ion_species" => 
 
 test_input_split_1_moment =
     recursive_merge(test_input_full_f,
-                    OptionsDict("run_name" => "split_1_moment",
+                    OptionsDict("output" => OptionsDict("run_name" => "split_1_moment"),
                                 "evolve_moments" => OptionsDict("density" => true)))
 
 test_input_split_2_moments =
     recursive_merge(test_input_split_1_moment,
-                    OptionsDict("run_name" => "split_2_moments",
+                    OptionsDict("output" => OptionsDict("run_name" => "split_2_moments"),
                                 "evolve_moments" => OptionsDict("parallel_flow" => true)))
 
 test_input_split_3_moments =
     recursive_merge(test_input_split_2_moments,
-                    OptionsDict("run_name" => "split_3_moments",
+                    OptionsDict("output" => OptionsDict("run_name" => "split_3_moments"),
                                 "evolve_moments" => OptionsDict("parallel_pressure" => true),
                                 "vpa" => OptionsDict("L" => 12.0),
                                 "vz" => OptionsDict("L" => 12.0),
@@ -172,7 +172,7 @@ function run_test(test_input, rtol, atol; args...)
     input = deepcopy(test_input)
 
     # Convert keyword arguments to a unique name
-    name = input["run_name"]
+    name = input["output"]["run_name"]
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
 
@@ -185,7 +185,7 @@ function run_test(test_input, rtol, atol; args...)
 
     # Update default inputs with values to be changed
     merge_dict_with_kwargs!(input; args...)
-    input["run_name"] = name
+    input["output"]["run_name"] = name
 
     # Suppress console output while running
     quietoutput() do
@@ -211,7 +211,7 @@ function run_test(test_input, rtol, atol; args...)
             # Load and analyse output
             #########################
 
-            path = joinpath(realpath(input["base_directory"]), name, name)
+            path = joinpath(realpath(input["output"]["base_directory"]), name, name)
 
             # open the netcdf file containing moments data and give it the handle 'fid'
             fid = open_readonly_output_file(path, "moments")
@@ -419,19 +419,19 @@ function runtests()
 
         # Benchmark data is taken from this run (full-f with no splitting)
         @testset "full-f" begin
-            test_input_full_f["base_directory"] = test_output_directory
+            test_input_full_f["output"]["base_directory"] = test_output_directory
             run_test(test_input_full_f, 1.e-10, 3.e-16)
         end
         @testset "split 1" begin
-            test_input_split_1_moment["base_directory"] = test_output_directory
+            test_input_split_1_moment["output"]["base_directory"] = test_output_directory
             run_test(test_input_split_1_moment, 1.e-3, 1.e-15)
         end
         @testset "split 2" begin
-            test_input_split_2_moments["base_directory"] = test_output_directory
+            test_input_split_2_moments["output"]["base_directory"] = test_output_directory
             run_test(test_input_split_2_moments, 1.e-3, 1.e-15)
         end
         @testset "split 3" begin
-            test_input_split_3_moments["base_directory"] = test_output_directory
+            test_input_split_3_moments["output"]["base_directory"] = test_output_directory
             run_test(test_input_split_3_moments, 1.e-3, 1.e-15)
         end
     end

@@ -13,8 +13,8 @@ using moment_kinetics.utils: recursive_merge
 test_output_directory = tempname()
 mkpath(test_output_directory)
 
-base_input = OptionsDict("run_name"=>"precompilation",
-                         "base_directory" => test_output_directory,
+base_input = OptionsDict("output" => OptionsDict("run_name"=>"precompilation",
+                                                 "base_directory" => test_output_directory),
                          "z" => OptionsDict("ngrid" => 5,
                                             "nelement" => 1,
                                             "bc" => "periodic",

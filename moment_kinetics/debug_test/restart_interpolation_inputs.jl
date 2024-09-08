@@ -4,12 +4,12 @@ using moment_kinetics.utils: recursive_merge
 
 # default inputs for tests
 base_input = OptionsDict(
-     "run_name" => "base",
+     "output" => OptionsDict("run_name" => "base",
+                             "base_directory" => test_output_directory),
      "composition" => OptionsDict("n_ion_species" => 2,
                                   "n_neutral_species" => 2,
                                   "electron_physics" => "boltzmann_electron_response",
                                   "T_e" => 1.0),
-     "base_directory" => test_output_directory,
      "evolve_moments" => OptionsDict("density" => false,
                                      "parallel_flow" => false,
                                      "parallel_pressure" => false,
@@ -48,24 +48,24 @@ base_input = OptionsDict(
 
 test_input =
     recursive_merge(base_input,
-                    OptionsDict("run_name" => "full-f",
+                    OptionsDict("output" => OptionsDict("run_name" => "full-f"),
                                 "z" => OptionsDict("nelement" => 3),
                                 "vpa" => OptionsDict("nelement" => 3),
                                 "vz" => OptionsDict("nelement" => 3)))
 
 test_input_split1 =
     recursive_merge(test_input,
-                    OptionsDict("run_name" => "split1",
+                    OptionsDict("output" => OptionsDict("run_name" => "split1"),
                                 "evolve_moments" => OptionsDict("density" => true)))
 
     test_input_split2 =
     recursive_merge(test_input_split1 ,
-                    OptionsDict("run_name" => "split2",
+                    OptionsDict("output" => OptionsDict("run_name" => "split2"),
                                 "evolve_moments" => OptionsDict("parallel_flow" => true)))
 
     test_input_split3 =
     recursive_merge(test_input_split2,
-                    OptionsDict("run_name" => "split3",
+                    OptionsDict("output" => OptionsDict("run_name" => "split3"),
                                 "evolve_moments" => OptionsDict("parallel_pressure" => true)))
 
 test_input_list = [

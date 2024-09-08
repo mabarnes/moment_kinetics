@@ -7,8 +7,8 @@ test_output_directory = tempname()
 run_name = "precompilation"
 mkpath(test_output_directory)
 
-input_dict = OptionsDict("run_name"=>run_name,
-                         "base_directory" => test_output_directory,
+input_dict = OptionsDict("output" => OptionsDict("run_name"=>run_name,
+                                                 "base_directory" => test_output_directory),
                          "r" => OptionsDict("ngrid" => 5,
                                             "nelement" => 1,
                                             "bc" => "periodic",

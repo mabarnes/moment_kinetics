@@ -104,7 +104,7 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                                                    "upar_phase" => 0.0,
                                                                                    "temperature_amplitude" => 0.5,
                                                                                    "temperature_phase" => 0.0),    
-                                           "run_name" => "finite_difference",
+                                           "output" => OptionsDict("run_name" => "finite_difference"),
                                            "evolve_moments" => OptionsDict("density" => false,
                                                                            "parallel_flow" => false,
                                                                            "parallel_pressure" => false,
@@ -138,34 +138,34 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
 
 test_input_finite_difference_split_1_moment =
     recursive_merge(test_input_finite_difference,
-          OptionsDict("run_name" => "finite_difference_split_1_moment",
-                      "evolve_moments" => OptionsDict("density" => true)))
+                    OptionsDict("output" => OptionsDict("run_name" => "finite_difference_split_1_moment"),
+                                "evolve_moments" => OptionsDict("density" => true)))
 
 test_input_finite_difference_split_2_moments =
     recursive_merge(test_input_finite_difference_split_1_moment,
-          OptionsDict("run_name" => "finite_difference_split_2_moments",
-                      "evolve_moments" => OptionsDict("parallel_flow" => true)))
+                    OptionsDict("output" => OptionsDict("run_name" => "finite_difference_split_2_moments"),
+                                "evolve_moments" => OptionsDict("parallel_flow" => true)))
 
 test_input_finite_difference_split_3_moments =
     recursive_merge(test_input_finite_difference_split_2_moments,
-          OptionsDict("run_name" => "finite_difference_split_3_moments",
-                      "evolve_moments" => OptionsDict("parallel_pressure" => true),
-                      "vpa" => OptionsDict("L" => 12.0),
-                      "vz" => OptionsDict("L" => 12.0),
-                     ))
+                    OptionsDict("output" => OptionsDict("run_name" => "finite_difference_split_3_moments"),
+                                "evolve_moments" => OptionsDict("parallel_pressure" => true),
+                                "vpa" => OptionsDict("L" => 12.0),
+                                "vz" => OptionsDict("L" => 12.0),
+                               ))
 
 test_input_chebyshev = recursive_merge(test_input_finite_difference,
-                             OptionsDict("run_name" => "chebyshev_pseudospectral",
-                                         "z" => OptionsDict("discretization" => "chebyshev_pseudospectral",
-                                                            "ngrid" => 9,
-                                                            "nelement" => 4),
-                                         "vpa" => OptionsDict("discretization" => "chebyshev_pseudospectral",
-                                                              "ngrid" => 17,
-                                                              "nelement" => 8),
-                                         "vz" => OptionsDict("discretization" => "chebyshev_pseudospectral",
-                                                             "ngrid" => 17,
-                                                             "nelement" => 8)),
-                            )
+                                       OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral"),
+                                                   "z" => OptionsDict("discretization" => "chebyshev_pseudospectral",
+                                                                      "ngrid" => 9,
+                                                                      "nelement" => 4),
+                                                   "vpa" => OptionsDict("discretization" => "chebyshev_pseudospectral",
+                                                                        "ngrid" => 17,
+                                                                        "nelement" => 8),
+                                                   "vz" => OptionsDict("discretization" => "chebyshev_pseudospectral",
+                                                                       "ngrid" => 17,
+                                                                       "nelement" => 8)),
+                                      )
 
 if global_size[] > 2 && global_size[] % 2 == 0
     # Test using distributed-memory
@@ -174,18 +174,18 @@ end
 
 test_input_chebyshev_split_1_moment =
     recursive_merge(test_input_chebyshev,
-          OptionsDict("run_name" => "chebyshev_pseudospectral_split_1_moment",
-                      "evolve_moments" => OptionsDict("density" => true)))
+                    OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split_1_moment"),
+                                "evolve_moments" => OptionsDict("density" => true)))
 
 test_input_chebyshev_split_2_moments =
     recursive_merge(test_input_chebyshev_split_1_moment,
-          OptionsDict("run_name" => "chebyshev_pseudospectral_split_2_moments",
-                      "evolve_moments" => OptionsDict("parallel_flow" => true)))
+                    OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split_2_moments"),
+                                "evolve_moments" => OptionsDict("parallel_flow" => true)))
 
 test_input_chebyshev_split_3_moments =
     recursive_merge(test_input_chebyshev_split_2_moments,
-          OptionsDict("run_name" => "chebyshev_pseudospectral_split_3_moments",
-                      "evolve_moments" => OptionsDict("parallel_pressure" => true),
-                      "vpa" => OptionsDict("L" => 12.0),
-                      "vz" => OptionsDict("L" => 12.0),
-                     ))
+                    OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split_3_moments"),
+                                "evolve_moments" => OptionsDict("parallel_pressure" => true),
+                                "vpa" => OptionsDict("L" => 12.0),
+                                "vz" => OptionsDict("L" => 12.0),
+                               ))

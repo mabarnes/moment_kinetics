@@ -4,13 +4,13 @@ using moment_kinetics.utils: recursive_merge
 
 # default inputs for tests
 test_input_finite_difference_1D1V = OptionsDict(
-    "run_name" => "finite_difference_1D1V",
+    "output" => OptionsDict("run_name" => "finite_difference_1D1V",
+                            "base_directory" => test_output_directory),
     "composition" => OptionsDict("n_ion_species" => 2,
                           "n_neutral_species" => 2,
                           "electron_physics" => "boltzmann_electron_response",                      
                           "T_e" => 1.0,
                           "T_wall" => 1.0),
-    "base_directory" => test_output_directory,
     "evolve_moments" => OptionsDict("density" => false,
                                     "parallel_flow" => false,
                                     "parallel_pressure" => false,
@@ -48,12 +48,12 @@ test_input_finite_difference_1D1V = OptionsDict(
 
 test_input_finite_difference_simple_sheath_1D1V = recursive_merge(
     test_input_finite_difference_1D1V,
-    OptionsDict("run_name" => "finite_difference_simple_sheath_1D1V",
+    OptionsDict("output" => OptionsDict("run_name" => "finite_difference_simple_sheath_1D1V"),
                 "composition" => OptionsDict("electron_physics" => "boltzmann_electron_response_with_simple_sheath"))) 
 
 test_input_finite_difference = recursive_merge(
     test_input_finite_difference_1D1V,
-    OptionsDict("run_name" => "finite_difference",
+    OptionsDict("output" => OptionsDict("run_name" => "finite_difference"),
                 "r" => OptionsDict("ngrid" => 4,
                                    "nelement" => 1,
                                    "discretization" => "finite_difference"),
@@ -73,12 +73,12 @@ test_input_finite_difference = recursive_merge(
 
 test_input_finite_difference_simple_sheath = recursive_merge(
     test_input_finite_difference,
-    OptionsDict("run_name" => "finite_difference_simple_sheath",
+    OptionsDict("output" => OptionsDict("run_name" => "finite_difference_simple_sheath"),
          "composition" => OptionsDict("electron_physics" => "boltzmann_electron_response_with_simple_sheath")))
 
 test_input_chebyshev_1D1V = recursive_merge(
     test_input_finite_difference_1D1V,
-    OptionsDict("run_name" => "chebyshev_pseudospectral_1D1V",
+    OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_1D1V"),
                 "z" => OptionsDict("discretization" => "chebyshev_pseudospectral",
                                    "ngrid" => 3,
                                    "nelement" => 2),
@@ -91,26 +91,26 @@ test_input_chebyshev_1D1V = recursive_merge(
                ))
 
 test_input_chebyshev_split1_1D1V = recursive_merge(test_input_chebyshev_1D1V,
-                                                   OptionsDict("run_name" => "chebyshev_pseudospectral_split1_1D1V",
+                                                   OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split1_1D1V"),
                                                                "evolve_moments" => OptionsDict("density" => true)))
 
 test_input_chebyshev_split2_1D1V = recursive_merge(test_input_chebyshev_split1_1D1V,
-                                                   OptionsDict("run_name" => "chebyshev_pseudospectral_split2_1D1V",
+                                                   OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split2_1D1V"),
                                                                "evolve_moments" => OptionsDict("parallel_flow" => true)))
 
 test_input_chebyshev_split3_1D1V = recursive_merge(test_input_chebyshev_split2_1D1V,
-                                                   OptionsDict("run_name" => "chebyshev_pseudospectral_split3_1D1V",
+                                                   OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split3_1D1V"),
                                                                "evolve_moments" => OptionsDict("parallel_pressure" => true)))
 
 
 test_input_chebyshev_simple_sheath_1D1V = recursive_merge(
     test_input_chebyshev_1D1V,
-    OptionsDict("run_name" => "chebyshev_pseudospectral_simple_sheath_1D1V",
+    OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_simple_sheath_1D1V"),
                 "composition" => OptionsDict("electron_physics" => "boltzmann_electron_response_with_simple_sheath")))
 
 test_input_chebyshev = recursive_merge(
     test_input_chebyshev_1D1V,
-    OptionsDict("run_name" => "chebyshev_pseudospectral",
+    OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral"),
                 "r" => OptionsDict("discretization" => "chebyshev_pseudospectral",
                                    "ngrid" => 3,
                                    "nelement" => 1),
@@ -130,7 +130,7 @@ test_input_chebyshev = recursive_merge(
 
 test_input_chebyshev_simple_sheath = recursive_merge(
     test_input_chebyshev,
-    OptionsDict("run_name" => "chebyshev_pseudospectral_simple_sheath",
+    OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_simple_sheath"),
          "composition" => OptionsDict("electron_physics" => "boltzmann_electron_response_with_simple_sheath")))
 
 test_input_list = [

@@ -53,7 +53,7 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                                                                   "upar_phase" => 0.0,
                                                                   "temperature_amplitude" => 0.0,
                                                                   "temperature_phase" => 0.0),
-                         "run_name" => "full-f",
+                         "output" => OptionsDict("run_name" => "full-f"),
                          "evolve_moments" => OptionsDict("density" => false,
                                                          "parallel_flow" => false,
                                                          "parallel_pressure" => false,
@@ -96,14 +96,14 @@ if global_size[] > 2 && global_size[] % 2 == 0
 end
 
 test_input_split1 = recursive_merge(test_input,
-                                    OptionsDict("run_name" => "split1",
+                                    OptionsDict("output" => OptionsDict("run_name" => "split1"),
                                                 "evolve_moments" => OptionsDict("density" => true,
                                                                                 "moments_conservation" => true)))
 test_input_split2 = recursive_merge(test_input_split1,
-                                    OptionsDict("run_name" => "split2",
+                                    OptionsDict("output" => OptionsDict("run_name" => "split2"),
                                                 "evolve_moments" => OptionsDict("parallel_flow" => true)))
 test_input_split3 = recursive_merge(test_input_split2,
-                                    OptionsDict("run_name" => "split3",
+                                    OptionsDict("output" => OptionsDict("run_name" => "split3"),
                                                 "z" => OptionsDict("nelement" => 16),
                                                 "vpa" => OptionsDict("nelement" => 31),
                                                 "vz" => OptionsDict("nelement" => 31),
@@ -117,7 +117,7 @@ test_input_split3["timestepping"] = recursive_merge(test_input_split3["timestepp
 
 # default inputs for adaptive timestepping tests
 test_input_adaptive = recursive_merge(test_input,
-                                      OptionsDict("run_name" => "adaptive full-f",
+                                      OptionsDict("output" => OptionsDict("run_name" => "adaptive full-f"),
                                                   "z" => OptionsDict("ngrid" => 5,
                                                                      "nelement" => 16),
                                                   "vpa" => OptionsDict("ngrid" => 6,
@@ -143,16 +143,16 @@ test_input_adaptive["timestepping"] = recursive_merge(test_input_adaptive["times
                                                      )
 
 test_input_adaptive_split1 = recursive_merge(test_input_adaptive,
-                                             OptionsDict("run_name" => "adaptive split1",
+                                             OptionsDict("output" => OptionsDict("run_name" => "adaptive split1"),
                                                          "evolve_moments" => OptionsDict("density" => true,
                                                                                          "moments_conservation" => true)))
 test_input_adaptive_split2 = recursive_merge(test_input_adaptive_split1,
-                                             OptionsDict("run_name" => "adaptive split2",
+                                             OptionsDict("output" => OptionsDict("run_name" => "adaptive split2"),
                                                          "evolve_moments" => OptionsDict("parallel_flow" => true)))
 test_input_adaptive_split2["timestepping"] = recursive_merge(test_input_adaptive_split2["timestepping"],
                                                              OptionsDict("step_update_prefactor" => 0.4))
 test_input_adaptive_split3 = recursive_merge(test_input_adaptive_split2,
-                                             OptionsDict("run_name" => "adaptive split3",
+                                             OptionsDict("output" => OptionsDict("run_name" => "adaptive split3"),
                                                          "evolve_moments" => OptionsDict("parallel_pressure" => true),
                                                          "numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
                                                                                                 "vpa_dissipation_coefficient" => 1e-2)))
@@ -179,7 +179,7 @@ function run_test(test_input, expected_phi; rtol=4.e-14, atol=1.e-15, args...)
     input = deepcopy(test_input)
 
     # Convert keyword arguments to a unique name
-    name = input["run_name"]
+    name = input["output"]["run_name"]
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
 
@@ -192,7 +192,7 @@ function run_test(test_input, expected_phi; rtol=4.e-14, atol=1.e-15, args...)
 
     # Update default inputs with values to be changed
     merge_dict_with_kwargs!(input; args...)
-    input["run_name"] = name
+    input["output"]["run_name"] = name
 
     # Suppress console output while running
     phi = undef
@@ -206,7 +206,7 @@ function run_test(test_input, expected_phi; rtol=4.e-14, atol=1.e-15, args...)
             # Load and analyse output
             #########################
 
-            path = joinpath(realpath(input["base_directory"]), name)
+            path = joinpath(realpath(input["output"]["base_directory"]), name)
 
             # open the output file(s)
             run_info = get_run_info_no_setup(path)
@@ -239,7 +239,7 @@ function runtests()
         println("Recycling fraction tests")
 
         @long @testset "Full-f" begin
-            test_input["base_directory"] = test_output_directory
+            test_input["output"]["base_directory"] = test_output_directory
             run_test(test_input,
                      [-0.0546579889285807, -0.019016549127873168, -0.0014860800466385304,
                       0.0009959205072609873, 0.0018297472055798175, 0.001071042733974246,
@@ -251,7 +251,7 @@ function runtests()
                       -0.04842263416979855])
         end
         @long @testset "Split 1" begin
-            test_input_split1["base_directory"] = test_output_directory
+            test_input_split1["output"]["base_directory"] = test_output_directory
             run_test(test_input_split1,
                      [-0.054564400690150644, -0.01880050885497155, -0.0013804889155909434,
                       0.0009426267362423344, 0.0018708794999890794, 0.0010048035580616115,
@@ -263,7 +263,7 @@ function runtests()
                       -0.04820698953610652])
         end
         @long @testset "Split 2" begin
-            test_input_split2["base_directory"] = test_output_directory
+            test_input_split2["output"]["base_directory"] = test_output_directory
             run_test(test_input_split2,
                      [-0.055351930552923125, -0.0200209368236471, -0.0010274232338285407,
                       0.0011445828881595096, 0.001990016623266284, 0.0011847791295251302,
@@ -275,7 +275,7 @@ function runtests()
                       -0.04714624635817171])
         end
         @long @testset "Split 3" begin
-            test_input_split3["base_directory"] = test_output_directory
+            test_input_split3["output"]["base_directory"] = test_output_directory
             run_test(test_input_split3,
                      [-0.036195418620494954, -0.030489030308458488, -0.028975057418733397,
                       -0.02856021807109163, -0.025513413807863268, -0.0219696963676536,
@@ -306,12 +306,12 @@ function runtests()
                                  -0.00942148866222427, -0.011607485576226423,
                                  -0.020871221194795328, -0.03762871759968933]
         @testset "Adaptive timestep - full-f" begin
-            test_input_adaptive["base_directory"] = test_output_directory
+            test_input_adaptive["output"]["base_directory"] = test_output_directory
             run_test(test_input_adaptive,
                      fullf_expected_output, rtol=6.0e-4, atol=2.0e-12)
         end
         @testset "Adaptive timestep - split 1" begin
-            test_input_adaptive_split1["base_directory"] = test_output_directory
+            test_input_adaptive_split1["output"]["base_directory"] = test_output_directory
             run_test(test_input_adaptive_split1,
                      [-0.04375862714017892, -0.022363510973059945, -0.012739964397542611,
                       -0.010806509398868007, -0.007052551067569563,
@@ -324,7 +324,7 @@ function runtests()
                      atol=2.0e-12)
         end
         @testset "Adaptive timestep - split 2" begin
-            test_input_adaptive_split2["base_directory"] = test_output_directory
+            test_input_adaptive_split2["output"]["base_directory"] = test_output_directory
             run_test(test_input_adaptive_split2,
                      [-0.0440004026002034, -0.022740771274011903, -0.012908307424861458,
                       -0.010957840207013755, -0.007098397545728348,
@@ -337,7 +337,7 @@ function runtests()
                       -0.03785398593006839], rtol=6.0e-4, atol=2.0e-12)
         end
         @testset "Adaptive timestep - split 3" begin
-            test_input_adaptive_split3["base_directory"] = test_output_directory
+            test_input_adaptive_split3["output"]["base_directory"] = test_output_directory
             run_test(test_input_adaptive_split3,
                      [-0.034623352735472034, -0.03200541773193755, -0.02714032291656093,
                       -0.020924986472905527, -0.01015057042512689, 0.0027893133203071574,
@@ -354,8 +354,8 @@ function runtests()
                         "SSPRK2", "SSPRK1")
 
             timestep_check_input = deepcopy(test_input_adaptive)
-            timestep_check_input["base_directory"] = test_output_directory
-            timestep_check_input["run_name"] = type
+            timestep_check_input["output"]["base_directory"] = test_output_directory
+            timestep_check_input["output"]["run_name"] = type
             timestep_check_input["timestepping"]["type"] = type
             run_test(timestep_check_input,
                      fullf_expected_output, rtol=8.e-4, atol=1.e-10)

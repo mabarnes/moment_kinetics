@@ -9,8 +9,8 @@ using moment_kinetics.type_definitions: OptionsDict
 test_output_directory = tempname()
 mkpath(test_output_directory)
 
-input = OptionsDict("run_name" => "precompilation",
-                    "base_directory" => test_output_directory,
+input = OptionsDict("output" => OptionsDict("run_name" => "precompilation",
+                                            "base_directory" => test_output_directory),
                     "evolve_moments" => OptionsDict("density" => true,
                                                     "parallel_flow" => true,
                                                     "parallel_pressure" => true),

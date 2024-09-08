@@ -3,7 +3,7 @@ test_type = "Fokker-Planck collisions"
 
 # default input for test
 test_input_full_f = OptionsDict(
-     "run_name" => "full_f",
+     "output" => OptionsDict("run_name" => "full_f"),
      "timestepping" => OptionsDict("dt" => 0.0,
                                         "nstep" => 3,
                                         "nwrite" => 2,

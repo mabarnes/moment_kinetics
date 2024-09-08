@@ -32,7 +32,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
     end
 
     # Convert keyword arguments to a unique name
-    name = input["run_name"]
+    name = input["output"]["run_name"]
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
 
@@ -45,7 +45,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
 
     # Update default inputs with values to be changed
     merge_dict_with_kwargs!(input; args...)
-    input["run_name"] = name
+    input["output"]["run_name"] = name
 
     # Suppress console output while running
     quietoutput() do
@@ -71,7 +71,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
             # Load and analyse output
             #########################
 
-            path = joinpath(realpath(input["base_directory"]), name)
+            path = joinpath(realpath(input["output"]["base_directory"]), name)
 
             # open the output file(s)
             run_info = get_run_info_no_setup(path; dfns=true)
@@ -287,38 +287,38 @@ function runtests()
 
         # finite difference
         @testset "FD base" begin
-            test_input_finite_difference["base_directory"] = test_output_directory
+            test_input_finite_difference["output"]["base_directory"] = test_output_directory
             run_test(test_input_finite_difference, 1.e-3, 1.e-11, 2.e-3)
         end
         @testset "FD split 1" begin
-            test_input_finite_difference_split_1_moment["base_directory"] = test_output_directory
+            test_input_finite_difference_split_1_moment["output"]["base_directory"] = test_output_directory
             run_test(test_input_finite_difference_split_1_moment, 1.e-3, 1.e-11)
         end
         @testset "FD split 2" begin
-            test_input_finite_difference_split_2_moments["base_directory"] = test_output_directory
+            test_input_finite_difference_split_2_moments["output"]["base_directory"] = test_output_directory
             run_test(test_input_finite_difference_split_2_moments, 1.e-3, 1.e-11)
         end
         @testset "FD split 3" begin
-            test_input_finite_difference_split_3_moments["base_directory"] = test_output_directory
+            test_input_finite_difference_split_3_moments["output"]["base_directory"] = test_output_directory
             run_test(test_input_finite_difference_split_3_moments, 1.e-3, 1.e-11)
         end
 
         # Chebyshev pseudospectral
         # Benchmark data is taken from this run (Chebyshev with no splitting)
         @testset "Chebyshev base" begin
-            test_input_chebyshev["base_directory"] = test_output_directory
+            test_input_chebyshev["output"]["base_directory"] = test_output_directory
             run_test(test_input_chebyshev, 1.e-10, 3.e-16)
         end
         @testset "Chebyshev split 1" begin
-            test_input_chebyshev_split_1_moment["base_directory"] = test_output_directory
+            test_input_chebyshev_split_1_moment["output"]["base_directory"] = test_output_directory
             run_test(test_input_chebyshev_split_1_moment, 1.e-3, 1.e-15)
         end
         @testset "Chebyshev split 2" begin
-            test_input_chebyshev_split_2_moments["base_directory"] = test_output_directory
+            test_input_chebyshev_split_2_moments["output"]["base_directory"] = test_output_directory
             run_test(test_input_chebyshev_split_2_moments, 1.e-3, 1.e-15)
         end
         @testset "Chebyshev split 3" begin
-            test_input_chebyshev_split_3_moments["base_directory"] = test_output_directory
+            test_input_chebyshev_split_3_moments["output"]["base_directory"] = test_output_directory
             run_test(test_input_chebyshev_split_3_moments, 1.e-3, 1.e-15)
         end
     end

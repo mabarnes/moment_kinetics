@@ -54,7 +54,7 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                                                     "upar_phase" => 0.0,
                                                                                     "temperature_amplitude" => 0.0,
                                                                                     "temperature_phase" => 0.0),
-                                           "run_name" => "finite_difference",
+                                           "output" => OptionsDict("run_name" => "finite_difference"),
                                            "evolve_moments" => OptionsDict("density" => false,
                                                                            "parallel_flow" => false,
                                                                            "parallel_pressure" => false,
@@ -87,7 +87,7 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                           )
 
 test_input_chebyshev = recursive_merge(test_input_finite_difference,
-                                       OptionsDict("run_name" => "chebyshev_pseudospectral",
+                                       OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral"),
                                                    "z" => OptionsDict("discretization" => "chebyshev_pseudospectral",
                                                                       "ngrid" => 9,
                                                                       "nelement" => 2,
@@ -101,7 +101,7 @@ test_input_chebyshev = recursive_merge(test_input_finite_difference,
                                                   ))
                                   
 test_input_chebyshev_sqrt_grid_odd = recursive_merge(test_input_finite_difference,
-                                                     OptionsDict("run_name" => "chebyshev_pseudospectral",
+                                                     OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral"),
                                                                  "z" => OptionsDict("discretization" => "chebyshev_pseudospectral",
                                                                                     "ngrid" => 9,
                                                                                     "nelement" => 5, # minimum nontrival nelement (odd)
@@ -114,7 +114,7 @@ test_input_chebyshev_sqrt_grid_odd = recursive_merge(test_input_finite_differenc
                                                                                      "nelement" => 10),
                                                                 ))
 test_input_chebyshev_sqrt_grid_even = recursive_merge(test_input_finite_difference,
-                                                      OptionsDict("run_name" => "chebyshev_pseudospectral",
+                                                      OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral"),
                                                                   "z" => OptionsDict("discretization" => "chebyshev_pseudospectral",
                                                                                      "ngrid" => 9,
                                                                                      "nelement" => 6, # minimum nontrival nelement (even)
@@ -148,7 +148,7 @@ function run_test(test_input, expected_phi, tolerance; args...)
     input = deepcopy(test_input)
 
     # Convert keyword arguments to a unique name
-    name = input["run_name"] * ", with element spacing: " * input["z"]["element_spacing_option"]
+    name = input["output"]["run_name"] * ", with element spacing: " * input["z"]["element_spacing_option"]
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
 
@@ -161,7 +161,7 @@ function run_test(test_input, expected_phi, tolerance; args...)
 
     # Update default inputs with values to be changed
     merge_dict_with_kwargs!(input; args...)
-    input["run_name"] = name
+    input["output"]["run_name"] = name
 
     # Suppress console output while running
     phi = undef
@@ -175,7 +175,7 @@ function run_test(test_input, expected_phi, tolerance; args...)
             # Load and analyse output
             #########################
 
-            path = joinpath(realpath(input["base_directory"]), name, name)
+            path = joinpath(realpath(input["output"]["base_directory"]), name, name)
 
             # open the netcdf file and give it the handle 'fid'
             fid = open_readonly_output_file(path,"moments")
@@ -225,12 +225,12 @@ function runtests()
         println("Wall boundary condition tests")
 
         @testset_skip "FD test case does not conserve density" "finite difference" begin
-            test_input_finite_difference["base_directory"] = test_output_directory
+            test_input_finite_difference["output"]["base_directory"] = test_output_directory
             run_test(test_input_finite_difference, nothing, 2.e-3)
         end
 
         @testset "Chebyshev uniform" begin
-            test_input_chebyshev["base_directory"] = test_output_directory
+            test_input_chebyshev["output"]["base_directory"] = test_output_directory
             run_test(test_input_chebyshev,
                      [-1.168944495073113, -0.747950464799219, -0.6947560093910274,
                       -0.6917252594440765, -0.7180152693147238, -0.9980114030684668],
@@ -238,7 +238,7 @@ function runtests()
         end
         
         @testset "Chebyshev sqrt grid odd" begin
-            test_input_chebyshev_sqrt_grid_odd["base_directory"] = test_output_directory
+            test_input_chebyshev_sqrt_grid_odd["output"]["base_directory"] = test_output_directory
             run_test(test_input_chebyshev_sqrt_grid_odd,
                      [-1.2047298844053338, -0.9431378244038217, -0.8084332486925859,
                       -0.7812620574297168, -0.7233303715713063, -0.700387877851292,
@@ -248,7 +248,7 @@ function runtests()
                      2.e-3)
         end
         @testset "Chebyshev sqrt grid even" begin
-            test_input_chebyshev_sqrt_grid_even["base_directory"] = test_output_directory
+            test_input_chebyshev_sqrt_grid_even["output"]["base_directory"] = test_output_directory
             run_test(test_input_chebyshev_sqrt_grid_even,
                      [-1.213617044609117, -1.0054529856551995, -0.8714447622540997,
                       -0.836017704148175, -0.7552111126205924, -0.7264644278204795,

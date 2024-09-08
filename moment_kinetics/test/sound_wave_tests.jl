@@ -47,7 +47,8 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                                                    "upar_phase" => 0.0,
                                                                                    "temperature_amplitude" => 0.0,
                                                                                    "temperature_phase" => 0.0),                                                                        
-                                           "run_name" => "finite_difference",
+                                           "output" => OptionsDict("run_name" => "finite_difference",
+                                                                   "binary_format" => binary_format),
                                            "evolve_moments" => OptionsDict("density" => false,
                                                                            "parallel_flow" => false,
                                                                            "parallel_pressure" => false,
@@ -80,18 +81,17 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                                "L" => 8.0,
                                                                "bc" => "periodic",
                                                                "discretization" => "finite_difference"),
-                                           "output" => OptionsDict("binary_format" => binary_format),
                                           )
 
 test_input_finite_difference_split_1_moment =
     recursive_merge(test_input_finite_difference,
-                    OptionsDict("run_name" => "finite_difference_split_1_moment",
+                    OptionsDict("output" => OptionsDict("run_name" => "finite_difference_split_1_moment"),
                                 "evolve_moments" => OptionsDict("density" => true))
                    )
 
 test_input_finite_difference_split_2_moments =
     recursive_merge(test_input_finite_difference_split_1_moment,
-                    OptionsDict("run_name" => "finite_difference_split_2_moments",
+                    OptionsDict("output" => OptionsDict("run_name" => "finite_difference_split_2_moments"),
                                 "evolve_moments" => OptionsDict("parallel_flow" => true),
                                 "vpa" => OptionsDict("ngrid" => 270, "L" => 12.0),
                                 "vz" => OptionsDict("ngrid" => 270, "L" => 12.0))
@@ -99,14 +99,14 @@ test_input_finite_difference_split_2_moments =
 
 test_input_finite_difference_split_3_moments =
     recursive_merge(test_input_finite_difference_split_2_moments,
-                    OptionsDict("run_name" => "finite_difference_split_3_moments",
+                    OptionsDict("output" => OptionsDict("run_name" => "finite_difference_split_3_moments"),
                                 "evolve_moments" => OptionsDict("parallel_pressure" => true),
                                 "vpa" => OptionsDict("ngrid" => 270, "L" => 12.0),
                                 "vz" => OptionsDict("ngrid" => 270, "L" => 12.0))
                    )
 
 test_input_chebyshev = recursive_merge(test_input_finite_difference,
-                                       OptionsDict("run_name" => "chebyshev_pseudospectral",
+                                       OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral"),
                                                    "z" => OptionsDict("discretization" => "chebyshev_pseudospectral",
                                                                       "ngrid" => 9,
                                                                       "nelement" => 2),
@@ -120,17 +120,17 @@ test_input_chebyshev = recursive_merge(test_input_finite_difference,
 
 test_input_chebyshev_split_1_moment =
     recursive_merge(test_input_chebyshev,
-                    OptionsDict("run_name" => "chebyshev_pseudospectral_split_1_moment",
+                    OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split_1_moment"),
                                 "evolve_moments" => OptionsDict("density" => true)))
 
 test_input_chebyshev_split_2_moments =
     recursive_merge(test_input_chebyshev_split_1_moment,
-                    OptionsDict("run_name" => "chebyshev_pseudospectral_split_2_moments",
+                    OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split_2_moments"),
                                 "evolve_moments" => OptionsDict("parallel_flow" => true)))
 
 test_input_chebyshev_split_3_moments =
     recursive_merge(test_input_chebyshev_split_2_moments,
-                    OptionsDict("run_name" => "chebyshev_pseudospectral_split_3_moments",
+                    OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split_3_moments"),
                                 "evolve_moments" => OptionsDict("parallel_pressure" => true)))
 
 
@@ -155,7 +155,7 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
             return string(string(key)[1], value)
         end
     end
-    name = input["run_name"]
+    name = input["output"]["run_name"]
     shortname = name
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
@@ -170,7 +170,7 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
 
     # Update default inputs with values to be changed
     merge_dict_with_kwargs!(input; args...)
-    input["run_name"] = shortname
+    input["output"]["run_name"] = shortname
 
     # Suppress console output while running
     phi_fit = undef
@@ -186,7 +186,7 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
             # Load and analyse output
             #########################
 
-            path = joinpath(realpath(input["base_directory"]), shortname, shortname)
+            path = joinpath(realpath(input["output"]["base_directory"]), shortname, shortname)
 
             # open the netcdf file and give it the handle 'fid'
             fid = open_readonly_output_file(path,"moments")
@@ -793,30 +793,30 @@ function runtests()
         println("sound wave tests")
 
         @testset "finite difference" begin
-            test_input_finite_difference["base_directory"] = test_output_directory
+            test_input_finite_difference["output"]["base_directory"] = test_output_directory
             run_test_set_finite_difference()
 
-            test_input_finite_difference_split_1_moment["base_directory"] = test_output_directory
+            test_input_finite_difference_split_1_moment["output"]["base_directory"] = test_output_directory
             @long run_test_set_finite_difference_split_1_moment()
 
-            test_input_finite_difference_split_2_moments["base_directory"] = test_output_directory
+            test_input_finite_difference_split_2_moments["output"]["base_directory"] = test_output_directory
             @long run_test_set_finite_difference_split_2_moments()
 
-            test_input_finite_difference_split_3_moments["base_directory"] = test_output_directory
+            test_input_finite_difference_split_3_moments["output"]["base_directory"] = test_output_directory
             run_test_set_finite_difference_split_3_moments()
         end
 
         @testset "Chebyshev" begin
-            test_input_chebyshev["base_directory"] = test_output_directory
+            test_input_chebyshev["output"]["base_directory"] = test_output_directory
             run_test_set_chebyshev()
 
-            test_input_chebyshev_split_1_moment["base_directory"] = test_output_directory
+            test_input_chebyshev_split_1_moment["output"]["base_directory"] = test_output_directory
             run_test_set_chebyshev_split_1_moment()
 
-            test_input_chebyshev_split_2_moments["base_directory"] = test_output_directory
+            test_input_chebyshev_split_2_moments["output"]["base_directory"] = test_output_directory
             run_test_set_chebyshev_split_2_moments()
 
-            test_input_chebyshev_split_3_moments["base_directory"] = test_output_directory
+            test_input_chebyshev_split_3_moments["output"]["base_directory"] = test_output_directory
             run_test_set_chebyshev_split_3_moments()
         end
     end

@@ -10,8 +10,8 @@ using moment_kinetics.type_definitions: OptionsDict
 test_output_directory = tempname()
 mkpath(test_output_directory)
 
-base_input = OptionsDict("run_name" => "precompilation",
-                         "base_directory" => test_output_directory,
+base_input = OptionsDict("output" => OptionsDict("run_name" => "precompilation",
+                                                 "base_directory" => test_output_directory),
                          "r" => OptionsDict("ngrid" => 5,
                                             "nelement" => 3,
                                             "bc" => "periodic",

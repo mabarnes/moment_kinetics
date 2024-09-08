@@ -3,7 +3,7 @@ test_type = "gyroaverage"
 
 # default inputs for tests
 test_input = OptionsDict(
-    "run_name" => "gyroaverage",
+    "output" => OptionsDict("run_name" => "gyroaverage"),
     "composition" => OptionsDict("n_ion_species" => 1,
                           "n_neutral_species" => 0,
                           "gyrokinetic_ions" => true,

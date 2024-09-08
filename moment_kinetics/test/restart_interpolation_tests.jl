@@ -30,11 +30,11 @@ if global_size[] > 1 && global_size[] % 2 == 0
     # Test using distributed-memory
     base_input["z"]["nelement_local"] = base_input["z"]["nelement"] ÷ 2
 end
-base_input["output"] = OptionsDict("parallel_io" => false)
+base_input["output"]["parallel_io"] = false
 
 restart_test_input_chebyshev =
 recursive_merge(deepcopy(base_input),
-                OptionsDict("run_name" => "restart_chebyshev_pseudospectral",
+                OptionsDict("output" => OptionsDict("run_name" => "restart_chebyshev_pseudospectral"),
                             "r" => OptionsDict("ngrid" => 3, "nelement" => 2,
                                                "discretization" => "chebyshev_pseudospectral"),
                             "z" => OptionsDict("ngrid" => 17, "nelement" => 2),
@@ -48,20 +48,20 @@ end
 
 restart_test_input_chebyshev_split_1_moment =
     recursive_merge(deepcopy(restart_test_input_chebyshev),
-                    OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_1_moment",
+                    OptionsDict("output" => OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_1_moment"),
                                 "evolve_moments" => OptionsDict("density" => true)),
                    )
 
 restart_test_input_chebyshev_split_2_moments =
     recursive_merge(deepcopy(restart_test_input_chebyshev_split_1_moment),
-                    OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_2_moments",
+                    OptionsDict("output" => OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_2_moments"),
                                 "r" => OptionsDict("ngrid" => 1, "nelement" => 1),
                                 "evolve_moments" => OptionsDict("parallel_flow" => true)),
                    )
 
 restart_test_input_chebyshev_split_3_moments =
     recursive_merge(deepcopy(restart_test_input_chebyshev_split_2_moments),
-                    OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_3_moments",
+                    OptionsDict("output" => OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_3_moments"),
                                 "evolve_moments" => OptionsDict("parallel_pressure" => true),
                                 "vpa" => OptionsDict("L" => 1.5*vpa_L), "vz" => OptionsDict("L" => 1.5*vpa_L)),
                    )
@@ -99,7 +99,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
             end
         end
     end
-    name = input["run_name"]
+    name = input["output"]["run_name"]
     if length(args) > 0
         name = string(name, "_", (stringify_arg(k, v) for (k, v) in args)...)
     end
@@ -115,19 +115,19 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
     println("    - testing ", message)
 
     merge_dict_with_kwargs!(input; args...)
-    input["run_name"] = name
+    input["output"]["run_name"] = name
 
     # Suppress console output while running
     quietoutput() do
         # run simulation
         if parallel_io
-            restart_filename = joinpath(base["base_directory"],
-                                        base["run_name"],
-                                        base["run_name"] * ".dfns.h5")
+            restart_filename = joinpath(base["output"]["base_directory"],
+                                        base["output"]["run_name"],
+                                        base["output"]["run_name"] * ".dfns.h5")
         else
-            restart_filename = joinpath(base["base_directory"],
-                                        base["run_name"],
-                                        base["run_name"] * ".dfns.0.h5")
+            restart_filename = joinpath(base["output"]["base_directory"],
+                                        base["output"]["run_name"],
+                                        base["output"]["run_name"] * ".dfns.0.h5")
         end
         run_moment_kinetics(input; restart=restart_filename)
     end
@@ -152,7 +152,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
             #########################
 
             # Read the output data
-            path = joinpath(realpath(input["base_directory"]), name)
+            path = joinpath(realpath(input["output"]["base_directory"]), name)
 
             run_info = get_run_info_no_setup((path, -1); dfns=true)
             z = run_info.z
@@ -191,7 +191,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
             close_run_info(run_info)
 
             # Delete output because output files for 3V tests can be large
-            rm(joinpath(realpath(input["base_directory"]), name); recursive=true)
+            rm(joinpath(realpath(input["output"]["base_directory"]), name); recursive=true)
 
             phi = phi_zrt[:,1,:]
             n_ion = n_ion_zrst[:,1,:,:]
@@ -329,7 +329,7 @@ function runtests()
                                   (base_input_evolve_ppar, "split 3"))
 
             test_output_directory = get_MPI_tempdir()
-            base["base_directory"] = test_output_directory
+            base["output"]["base_directory"] = test_output_directory
 
             # Base run, from which tests are restarted
             # Suppress console output while running
@@ -345,7 +345,7 @@ function runtests()
                 # simulation) don't test upar. upar and uz end up with large 'errors'
                 # (~50%), and it is not clear why, but ignore this so test can pass.
                 this_input = deepcopy(restart_test_input_chebyshev)
-                this_input["base_directory"] = test_output_directory
+                this_input["output"]["base_directory"] = test_output_directory
                 this_input["output"]["parallel_io"] = parallel_io
                 run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
             end
@@ -353,21 +353,21 @@ function runtests()
                 message = "restart split 1 from $base_label$label"
                 @testset "$message" begin
                     this_input = deepcopy(restart_test_input_chebyshev_split_1_moment)
-                    this_input["base_directory"] = test_output_directory
+                    this_input["output"]["base_directory"] = test_output_directory
                     this_input["output"]["parallel_io"] = parallel_io
                     run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
                 end
                 message = "restart split 2 from $base_label$label"
                 @testset "$message" begin
                     this_input = deepcopy(restart_test_input_chebyshev_split_2_moments)
-                    this_input["base_directory"] = test_output_directory
+                    this_input["output"]["base_directory"] = test_output_directory
                     this_input["output"]["parallel_io"] = parallel_io
                     run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
                 end
                 message = "restart split 3 from $base_label$label"
                 @testset "$message" begin
                     this_input = deepcopy(restart_test_input_chebyshev_split_3_moments)
-                    this_input["base_directory"] = test_output_directory
+                    this_input["output"]["base_directory"] = test_output_directory
                     this_input["output"]["parallel_io"] = parallel_io
                     run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
                 end
@@ -402,7 +402,7 @@ function runtests()
             orig_base_input = deepcopy(base_input)
             # Also test not using parallel_io
             base_input["output"]["parallel_io"] = true
-            base_input["run_name"] *= "_parallel_io"
+            base_input["output"]["run_name"] *= "_parallel_io"
 
             do_tests(", parallel I/O")
 

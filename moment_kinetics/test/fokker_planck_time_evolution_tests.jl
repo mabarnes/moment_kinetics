@@ -222,8 +222,8 @@ for k in 1:ntind
 end
 """
 # default inputs for tests
-test_input_gauss_legendre = OptionsDict("run_name" => "gausslegendre_pseudospectral",
-                                        "base_directory" => test_output_directory,
+test_input_gauss_legendre = OptionsDict("output" => OptionsDict("run_name" => "gausslegendre_pseudospectral",
+                                                                "base_directory" => test_output_directory),
                                         "composition" => OptionsDict("n_ion_species" => 1,
                                                                      "n_neutral_species" => 0,
                                                                      "electron_physics" => "boltzmann_electron_response",
@@ -295,7 +295,7 @@ function run_test(test_input, expected, rtol, atol, upar_rtol=nothing; args...)
             return string(string(key)[1], value)
         end
     end
-    name = input["run_name"]
+    name = input["output"]["run_name"]
     if length(args) > 0
         name = string(name, "_", (stringify_arg(k, v) for (k, v) in args)...)
     end
@@ -305,7 +305,7 @@ function run_test(test_input, expected, rtol, atol, upar_rtol=nothing; args...)
 
     # Update default inputs with values to be changed
     merge_dict_with_kwargs!(input; args...)
-    input["run_name"] = name
+    input["output"]["run_name"] = name
     # Suppress console output while running
     quietoutput() do
         # run simulation
@@ -331,7 +331,7 @@ function run_test(test_input, expected, rtol, atol, upar_rtol=nothing; args...)
             # Load and analyse output
             #########################
 
-            path = joinpath(realpath(input["base_directory"]), name, name)
+            path = joinpath(realpath(input["output"]["base_directory"]), name, name)
 
             # open the netcdf file containing moments data and give it the handle 'fid'
             fid = open_readonly_output_file(path, "moments")

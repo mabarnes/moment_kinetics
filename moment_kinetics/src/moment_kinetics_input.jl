@@ -33,8 +33,11 @@ function read_input_file(input_filename::String)
     input = TOML.parsefile(input_filename)
 
     # Use input_filename (without the extension) as default for "run_name"
-    if !("run_name" in keys(input))
-        input["run_name"] = splitdir(splitext(input_filename)[1])[end]
+    if !("output" ∈ keys(input) && "run_name" in keys(input["output"]))
+        if !("output" ∈ keys(input))
+            input["output"] = OptionsDict()
+        end
+        input["output"]["run_name"] = splitdir(splitext(input_filename)[1])[end]
     end
 
     return input
@@ -73,6 +76,7 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
                             "evolve_moments_conservation", "charge_exchange_frequency",
                             "electron_charge_exchange_frequency", "ionization_frequency",
                             "electron_ionization_frequency", "ionization_energy", "nu_ei",
+                            "run_name", "base_directory",
                            )
     for opt in removed_options_list
         if opt ∈ keys(scan_input)
@@ -88,11 +92,23 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
     
-    # this is the prefix for all output files associated with this run
-    run_name = get(scan_input, "run_name", "wallBC")
+    # Start processing inputs for file I/O. This is done early because we need to work
+    # out what `output_dir` should be. The setup is completed later, after some other
+    # sections have been read.
+    io_settings = set_defaults_and_check_section!(
+        scan_input, "output";
+        run_name="",
+        base_directory="runs",
+        ascii_output=false,
+        binary_format=hdf5,
+        parallel_io=nothing,
+       )
+    if io_settings["run_name"] == ""
+        error("When passing a Dict directly for input, it is required to set `run_name` "
+              * "in the `[output]` section")
+    end
     # this is the directory where the simulation data will be stored
-    base_directory = get(scan_input, "base_directory", "runs")
-    output_dir = joinpath(base_directory, run_name)
+    output_dir = joinpath(io_settings["base_directory"], io_settings["run_name"])
 
     # if evolve_moments.density = true, evolve density via continuity eqn
     # and g = f/n via modified drift kinetic equation
@@ -373,13 +389,7 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
        )
     em_input = Dict_to_NamedTuple(em_fields_settings)
 
-    # inputs for file I/O
-    io_settings = set_defaults_and_check_section!(
-        scan_input, "output";
-        ascii_output=false,
-        binary_format=hdf5,
-        parallel_io=nothing,
-       )
+    # Complete setup of io_settings
     if io_settings["parallel_io"] === nothing
         io_settings["parallel_io"] = io_has_parallel(Val(io_settings["binary_format"]))
     end
@@ -395,7 +405,6 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     end
     io_settings["run_id"] = run_id
     io_settings["output_dir"] = output_dir
-    io_settings["run_name"] = run_name
     io_settings["write_error_diagnostics"] = timestepping_section["write_error_diagnostics"]
     io_settings["write_steady_state_diagnostics"] = timestepping_section["write_steady_state_diagnostics"]
     io_settings["write_electron_error_diagnostics"] = timestepping_section["electron_t_input"]["write_error_diagnostics"]
@@ -453,7 +462,7 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
 
     if global_rank[] == 0 && save_inputs_to_txt
         # Make file to log some information about inputs into.
-        io = open_ascii_output_file(string(output_dir,"/",run_name), "input")
+        io = open_ascii_output_file(string(output_dir,"/",io_settings["run_name"]), "input")
     else
         io = devnull
     end

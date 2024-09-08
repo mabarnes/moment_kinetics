@@ -54,7 +54,7 @@ function get_unnormalized_parameters(input::Dict)
     mi = reference_params.mref * Unitful.kg
 
     parameters = OrderedDict{String,Any}()
-    parameters["run_name"] = run_name
+    parameters["run_name"] = io_input.run_name
 
     parameters["Nnorm"] = Nnorm
     parameters["Tnorm"] = Tnorm
