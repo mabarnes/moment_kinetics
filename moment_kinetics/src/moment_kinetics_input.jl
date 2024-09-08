@@ -67,6 +67,7 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
                                         "finite_difference_option",
                                         "element_spacing_option", "bc")
                             )...,
+                            "force_Er_zero_at_wall",
                            )
     for opt in removed_options_list
         if opt ∈ keys(scan_input)
@@ -81,7 +82,7 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
     
-    drive, evolve_moments = load_defaults()
+    evolve_moments = load_defaults()
 
     # this is the prefix for all output files associated with this run
     run_name = get(scan_input, "run_name", "wallBC")
@@ -351,8 +352,11 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         _block_synchronize()
     end
 
-    force_Er_zero = get(scan_input, "force_Er_zero_at_wall", false)
-    drive_immutable = drive_input(drive.force_phi, drive.amplitude, drive.frequency, force_Er_zero)
+    em_fields_settings = set_defaults_and_check_section!(
+        scan_input, "em_fields";
+        force_Er_zero_at_wall=false,
+       )
+    em_input = Dict_to_NamedTuple(em_fields_settings)
 
     # inputs for file I/O
     io_settings = set_defaults_and_check_section!(
@@ -466,7 +470,7 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
                   r_spectral, vpa, vpa_spectral, vperp, vperp_spectral, gyrophase,
                   gyrophase_spectral, vz, vz_spectral, vr, vr_spectral, vzeta,
                   vzeta_spectral, composition, species_immutable, collisions, geometry,
-                  drive_immutable, external_source_settings, num_diss_params,
+                  em_input, external_source_settings, num_diss_params,
                   manufactured_solns_input)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
@@ -487,14 +491,7 @@ function load_defaults()
     evolve_moments = evolve_moments_options(evolve_density, evolve_parallel_flow, evolve_parallel_pressure, conservation)#advective_form)
     #################### parameters related to the z grid ######################
     
-    # if drive_phi = true, include external electrostatic potential of form
-    # phi(z,t=0)*drive_amplitude*sinpi(time*drive_frequency)
-    drive_phi = false
-    drive_amplitude = 1.0
-    drive_frequency = 1.0
-    drive = drive_input_mutable(drive_phi, drive_amplitude, drive_frequency)
-    
-    return drive, evolve_moments
+    return evolve_moments
 end
 
 """

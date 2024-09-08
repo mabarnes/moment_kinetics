@@ -10,7 +10,6 @@ export initial_condition_input, initial_condition_input_mutable
 export spatial_initial_condition_input, velocity_initial_condition_input
 export ion_species_parameters, neutral_species_parameters, species_parameters_mutable
 export species_composition
-export drive_input, drive_input_mutable
 export collisions_input, krook_collisions_input, fkpl_collisions_input
 export io_input
 export pp_input
@@ -328,30 +327,6 @@ Base.@kwdef struct species_composition
     ion::Vector{ion_species_parameters}
     # array of structs of parameters for each neutral species
     neutral::Vector{neutral_species_parameters}
-end
-
-"""
-"""
-mutable struct drive_input_mutable
-    # if drive.phi = true, include external electrostatic potential
-    force_phi::Bool
-    # if external field included, it is of the form
-    # phi(z,t=0)*amplitude*sinpi(t*frequency)
-    amplitude::mk_float
-    frequency::mk_float
-end
-
-"""
-"""
-struct drive_input
-    # if drive.phi = true, include external electrostatic potential
-    force_phi::Bool
-    # if external field included, it is of the form
-    # phi(z,t=0)*amplitude*sinpi(t*frequency)
-    amplitude::mk_float
-    frequency::mk_float
-    # if true, forces Er = 0.0 at wall plates 
-    force_Er_zero_at_wall::Bool 
 end
 
 """

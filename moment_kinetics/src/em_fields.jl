@@ -21,7 +21,7 @@ using MPI
 
 """
 """
-function setup_em_fields(nvperp, nz, nr, n_ion_species, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
+function setup_em_fields(nvperp, nz, nr, n_ion_species, em_input)
     phi = allocate_shared_float(nz,nr)
     phi0 = allocate_shared_float(nz,nr)
     Er = allocate_shared_float(nz,nr)
@@ -29,7 +29,8 @@ function setup_em_fields(nvperp, nz, nr, n_ion_species, force_phi, drive_amplitu
     gphi = allocate_shared_float(nvperp,nz,nr,n_ion_species)
     gEr = allocate_shared_float(nvperp,nz,nr,n_ion_species)
     gEz = allocate_shared_float(nvperp,nz,nr,n_ion_species)
-    return em_fields_struct(phi, phi0, Er, Ez, gphi, gEr, gEz, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
+    return em_fields_struct(phi, phi0, Er, Ez, gphi, gEr, gEz,
+                            em_input.force_Er_zero_at_wall)
 end
 
 """

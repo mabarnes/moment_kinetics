@@ -232,7 +232,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
         vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
         vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
-        drive_input, external_source_settings, num_diss_params,
+        em_input, external_source_settings, num_diss_params,
         manufactured_solns_input = input
 
     # Create loop range variables for shared-memory-parallel loops
@@ -258,8 +258,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and the electromagnetic fields
     fields = setup_em_fields(vperp.n, z.n, r.n, composition.n_ion_species,
-                             drive_input.force_phi, drive_input.amplitude,
-                             drive_input.frequency, drive_input.force_Er_zero_at_wall)
+                             em_input)
 
     # Allocate arrays and create the pdf and moments structs
     pdf, moments, boundary_distributions =
