@@ -84,14 +84,6 @@ end
 
 function setup_numerical_dissipation(ion_input::Dict, electron_input::Dict, 
                                      neutral_input::Dict, is_1V)
-    if is_1V && "vpa_dissipation_coefficient" ∈ keys(ion_input)
-        # Set default for vz_dissipation_coefficient the same as
-        # ion_vpa_dissipation_coefficient for 1V case
-        neutral_input["vz_dissipation_coefficient"] =
-            get(neutral_input, "vz_dissipation_coefficient",
-                ion_input["vpa_dissipation_coefficient"])
-    end
-
     ion_input_dict = Dict(Symbol(k)=>v for (k,v) in ion_input)
     ion_params = ion_num_diss_params(; ion_input_dict...)
     electron_input_dict = Dict(Symbol(k)=>v for (k,v) in electron_input)
