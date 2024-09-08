@@ -1,7 +1,7 @@
 # cheap input file for a 0D2V relaxation to a collisional Maxwellian distribution with self-ion collisions.
+[reactions]
 charge_exchange_frequency = 0.0
 ionization_frequency = 0.0
-constant_ionization_rate = false
 
 [evolve_moments]
 density = false

@@ -48,15 +48,17 @@ function force_balance!(pflx, density_out, fvec, moments, fields, collisions, dt
     # if neutrals present account for charge exchange and/or ionization collisions
     if composition.n_neutral_species > 0
         # account for collisional friction between ions and neutrals
-        if abs(collisions.charge_exchange) > 0.0
+        charge_exchange = collisions.reactions.charge_exchange_frequency
+        ionization = collisions.reactions.ionization_frequency
+        if abs(charge_exchange) > 0.0
             @loop_s_r_z is ir iz begin
-                pflx[iz,ir,is] += dt*collisions.charge_exchange*density[iz,ir,is]*fvec.density_neutral[iz,ir,is]*(fvec.uz_neutral[iz,ir,is]-upar[iz,ir,is])
+                pflx[iz,ir,is] += dt*charge_exchange*density[iz,ir,is]*fvec.density_neutral[iz,ir,is]*(fvec.uz_neutral[iz,ir,is]-upar[iz,ir,is])
             end
         end
         # account for ionization collisions
-        if abs(collisions.ionization) > 0.0
+        if abs(ionization) > 0.0
             @loop_s_r_z is ir iz begin
-                pflx[iz,ir,is] += dt*collisions.ionization*density[iz,ir,is]*fvec.density_neutral[iz,ir,is]*fvec.uz_neutral[iz,ir,is]
+                pflx[iz,ir,is] += dt*ionization*density[iz,ir,is]*fvec.density_neutral[iz,ir,is]*fvec.uz_neutral[iz,ir,is]
             end
         end
     end
@@ -102,15 +104,17 @@ function neutral_force_balance!(pflx, density_out, fvec, moments, fields, collis
     # if neutrals present account for charge exchange and/or ionization collisions
     if composition.n_neutral_species > 0
         # account for collisional friction between ions and neutrals
-        if abs(collisions.charge_exchange) > 0.0
+        charge_exchange = collisions.reactions.charge_exchange_frequency
+        ionization = collisions.reactions.ionization_frequency
+        if abs(charge_exchange) > 0.0
             @loop_sn_r_z isn ir iz begin
-                pflx[iz,ir,isn] += dt*collisions.charge_exchange*density[iz,ir,isn]*fvec.density[iz,ir,isn]*(fvec.upar[iz,ir,isn]-uz[iz,ir,isn])
+                pflx[iz,ir,isn] += dt*charge_exchange*density[iz,ir,isn]*fvec.density[iz,ir,isn]*(fvec.upar[iz,ir,isn]-uz[iz,ir,isn])
             end
         end
         # account for ionization collisions
-        if abs(collisions.ionization) > 0.0
+        if abs(ionization) > 0.0
             @loop_sn_r_z isn ir iz begin
-                pflx[iz,ir,isn] -= dt*collisions.ionization*fvec.density[iz,ir,isn]*density[iz,ir,isn]*uz[iz,ir,isn]
+                pflx[iz,ir,isn] -= dt*ionization*fvec.density[iz,ir,isn]*density[iz,ir,isn]*uz[iz,ir,isn]
             end
         end
     end

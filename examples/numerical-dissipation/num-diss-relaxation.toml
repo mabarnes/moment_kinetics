@@ -1,7 +1,10 @@
 # cheap input file for a 0D2V relaxation with numerical diffusion terms d^2 F / dvpa^2 and d^2 F / vperp^2.
+[reactions]
 charge_exchange_frequency = 0.0
 ionization_frequency = 0.0
-constant_ionization_rate = false
+
+[fokker_planck_collisions]
+use_fokker_planck = true
 nuii = 0.0
 
 [evolve_moments]

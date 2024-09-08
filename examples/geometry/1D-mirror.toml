@@ -1,6 +1,7 @@
-charge_exchange_frequency = 0.5
-ionization_frequency = 0.05
-constant_ionization_rate = true
+[ion_source]
+z_profile = "constant"
+source_strength = 0.05
+source_T = 0.25
 
 [evolve_moments]
 density = false

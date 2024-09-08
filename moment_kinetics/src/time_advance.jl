@@ -795,7 +795,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     # calculate the electron-ion parallel friction force
     calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, moments.electron.dens,
         moments.electron.upar, moments.ion.upar, moments.electron.dT_dz,
-        composition.me_over_mi, collisions.nu_ei, composition.electron_physics)
+        composition.me_over_mi, collisions.electron_fluid.nu_ei,
+        composition.electron_physics)
     # initialize the electrostatic potential
     begin_serial_region()
     update_phi!(fields, scratch[1], vperp, z, r, composition, collisions, moments,
@@ -1025,7 +1026,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
             scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
         # calculate the electron parallel heat flux
         calculate_electron_qpar!(moments.electron, pdf.electron, moments.electron.ppar,
-            moments.electron.upar, moments.ion.upar, collisions.nu_ei,
+            moments.electron.upar, moments.ion.upar, collisions.electron_fluid.nu_ei,
             composition.me_over_mi, composition.electron_physics, vpa)
         if composition.electron_physics == braginskii_fluid
             electron_fluid_qpar_boundary_condition!(
@@ -1062,7 +1063,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     # calculate the electron-ion parallel friction force
     calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, moments.electron.dens,
         moments.electron.upar, moments.ion.upar, moments.electron.dT_dz,
-        composition.me_over_mi, collisions.nu_ei, composition.electron_physics)
+        composition.me_over_mi, collisions.electron_fluid.nu_ei,
+        composition.electron_physics)
 
     calculate_ion_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, 
                                       ion_mom_diss_coeff)
@@ -1157,7 +1159,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
             end
             # if charge exchange collision frequency non-zero,
             # account for charge exchange collisions
-            if abs(collisions.charge_exchange) > 0.0
+            if abs(collisions.reactions.charge_exchange_frequency) > 0.0
                 if vperp.n == 1 && vr.n == 1 && vzeta.n == 1
                     advance_ion_cx_1V = !t_params.implicit_ion_advance
                     advance_neutral_cx_1V = true
@@ -1172,7 +1174,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
             end
             # if ionization collision frequency non-zero,
             # account for ionization collisions
-            if abs(collisions.ionization) > 0.0
+            if abs(collisions.reactions.ionization_frequency) > 0.0
                 if vperp.n == 1 && vr.n == 1 && vzeta.n == 1
                     advance_ion_ionization_1V = !t_params.implicit_ion_advance
                     advance_neutral_ionization_1V = true
@@ -1346,7 +1348,7 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
         advance_vperp_advection = vperp.n > 1 && z.n > 1
         advance_z_advection = z.n > 1
         advance_r_advection = r.n > 1
-        if abs(collisions.charge_exchange) > 0.0
+        if abs(collisions.reactions.charge_exchange_frequency) > 0.0
             if vperp.n == 1 && vr.n == 1 && vzeta.n == 1
                 advance_ion_cx_1V = true
             elseif vperp.n > 1 && vr.n > 1 && vzeta.n > 1
@@ -1357,7 +1359,7 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
                       * "vpa.n=$(vpa.n), vz.n=$(vz.n)")
             end
         end
-        if abs(collisions.ionization) > 0.0
+        if abs(collisions.reactions.ionization_frequency) > 0.0
             if vperp.n == 1 && vr.n == 1 && vzeta.n == 1
                 advance_ion_ionization_1V = true
             elseif vperp.n > 1 && vr.n > 1 && vzeta.n > 1
@@ -2074,7 +2076,7 @@ function time_advance_split_operators!(pdf, scratch, scratch_implicit, scratch_e
         advance.z_advection = false
         # account for charge exchange collisions between ions and neutrals
         if composition.n_neutral_species > 0
-            if collisions.charge_exchange > 0.0
+            if collisions.reactions.charge_exchange_frequency > 0.0
                 advance.ion_cx_collisions = true
                 time_advance_no_splitting!(pdf, scratch, scratch_implicit,
                     scratch_electron, t_params, vpa, z, vpa_spectral, z_spectral,
@@ -2090,7 +2092,7 @@ function time_advance_split_operators!(pdf, scratch, scratch_implicit, scratch_e
                     advance_implicit, istep)
                 advance.neutral_cx_collisions = false
             end
-            if collisions.ionization > 0.0
+            if collisions.reactions.ionization_frequency > 0.0
                 advance.ion_ionization_collisions = true
                 time_advance_no_splitting!(pdf, scratch, scratch_implicit,
                     scratch_electron, t_params, z, vpa, z_spectral, vpa_spectral,
@@ -2192,7 +2194,7 @@ function time_advance_split_operators!(pdf, scratch, scratch_implicit, scratch_e
         end
         # account for charge exchange collisions between ions and neutrals
         if composition.n_neutral_species > 0
-            if collisions.ionization > 0.0
+            if collisions.reactions.ionization_frequency > 0.0
                 advance.neutral_ionization = true
                 time_advance_no_splitting!(pdf, scratch, scratch_implicit,
                     scratch_electron, t_params, z, vpa, z_spectral, vpa_spectral,
@@ -2208,7 +2210,7 @@ function time_advance_split_operators!(pdf, scratch, scratch_implicit, scratch_e
                     advance_implicit, istep)
                 advance.ion_ionization = false
             end
-            if collisions.charge_exchange > 0.0
+            if collisions.reactions.charge_exchange_frequency > 0.0
                 advance.neutral_cx_collisions = true
                 time_advance_no_splitting!(pdf, scratch, scratch_implicit,
                     scratch_electron, t_params, vpa, z, vpa_spectral, z_spectral,
@@ -2420,7 +2422,8 @@ function apply_all_bcs_constraints_update_moments!(
     calculate_electron_parallel_friction_force!(
         moments.electron.parallel_friction, this_scratch.electron_density,
         this_scratch.electron_upar, this_scratch.upar, moments.electron.dT_dz,
-        composition.me_over_mi, collisions.nu_ei, composition.electron_physics)
+        composition.me_over_mi, collisions.electron_fluid.nu_ei,
+        composition.electron_physics)
 
     # update the electrostatic potential phi
     update_phi!(fields, this_scratch, vperp, z, r, composition, collisions, moments,
@@ -3298,22 +3301,22 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     # account for charge exchange collisions between ions and neutrals
     if advance.ion_cx_collisions_1V
         ion_charge_exchange_collisions_1V!(fvec_out.pdf, fvec_in, moments, composition,
-                                           vpa, vz, collisions.charge_exchange,
+                                           vpa, vz, collisions.reactions.charge_exchange_frequency,
                                            vpa_spectral, vz_spectral, dt)
     elseif advance.ion_cx_collisions
         ion_charge_exchange_collisions_3V!(fvec_out.pdf, pdf.ion.buffer, fvec_in,
                                            composition, vz, vr, vzeta, vpa, vperp, z, r,
-                                           collisions.charge_exchange, dt)
+                                           collisions.reactions.charge_exchange_frequency, dt)
     end
     if advance.neutral_cx_collisions_1V
         neutral_charge_exchange_collisions_1V!(fvec_out.pdf_neutral, fvec_in, moments,
                                                composition, vpa, vz,
-                                               collisions.charge_exchange, vpa_spectral,
+                                               collisions.reactions.charge_exchange_frequency, vpa_spectral,
                                                vz_spectral, dt)
     elseif advance.neutral_cx_collisions
         neutral_charge_exchange_collisions_3V!(fvec_out.pdf_neutral, pdf.neutral.buffer,
                                                fvec_in, composition, vz, vr, vzeta, vpa,
-                                               vperp, z, r, collisions.charge_exchange,
+                                               vperp, z, r, collisions.reactions.charge_exchange_frequency,
                                                dt)
     end
     # account for ionization collisions between ions and neutrals
@@ -3406,7 +3409,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     end
     if advance.continuity
         continuity_equation!(fvec_out.density, fvec_in, moments, composition, dt,
-                             z_spectral, collisions.ionization,
+                             z_spectral, collisions.reactions.ionization_frequency,
                              external_source_settings.ion, num_diss_params)
     end
     if advance.force_balance
@@ -3428,7 +3431,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     end
     if advance.neutral_continuity
         neutral_continuity_equation!(fvec_out.density_neutral, fvec_in, moments,
-                                     composition, dt, z_spectral, collisions.ionization,
+                                     composition, dt, z_spectral,
+                                     collisions.reactions.ionization_frequency,
                                      external_source_settings.neutral, num_diss_params)
     end
     if advance.neutral_force_balance

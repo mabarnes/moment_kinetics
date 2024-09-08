@@ -70,7 +70,9 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
                             "force_Er_zero_at_wall", "evolve_moments_density",
                             "evolve_moments_parallel_flow",
                             "evolve_moments_parallel_pressure",
-                            "evolve_moments_conservation",
+                            "evolve_moments_conservation", "charge_exchange_frequency",
+                            "electron_charge_exchange_frequency", "ionization_frequency",
+                            "electron_ionization_frequency", "ionization_energy", "nu_ei",
                            )
     for opt in removed_options_list
         if opt ∈ keys(scan_input)
@@ -110,12 +112,20 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     ## set geometry_input
     geometry_in = setup_geometry_input(scan_input)
     
-    charge_exchange = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(composition.ion[1].initial_temperature))
-    charge_exchange_electron = get(scan_input, "electron_charge_exchange_frequency", 0.0)
-    ionization = get(scan_input, "ionization_frequency", charge_exchange)
-    ionization_electron = get(scan_input, "electron_ionization_frequency", ionization)
-    ionization_energy = get(scan_input, "ionization_energy", 0.0)
-    nu_ei = get(scan_input, "nu_ei", 0.0)
+    reactions_settings = set_defaults_and_check_section!(
+        scan_input, "reactions";
+        charge_exchange_frequency=2.0*sqrt(composition.ion[1].initial_temperature),
+        electron_charge_exchange_frequency=0.0,
+        ionization_frequency=2.0*sqrt(composition.ion[1].initial_temperature),
+        electron_ionization_frequency=0.0,
+        ionization_energy=0.0,
+       )
+    reactions_input = Dict_to_NamedTuple(reactions_settings)
+    electron_fluid_collisions_settings = set_defaults_and_check_section!(
+        scan_input, "electron_fluid_collisions";
+        nu_ei=0.0,
+       )
+    electron_fluid_collisions_input = Dict_to_NamedTuple(electron_fluid_collisions_settings)
     # set up krook collision inputs
     krook_input = setup_krook_collisions_input(scan_input)
     # set up Fokker-Planck collision inputs
@@ -125,8 +135,7 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     # write total collision struct using the structs above, as each setup function 
     # for the collisions outputs itself a struct of the type of collision, which
     # is a substruct of the overall collisions_input struct.
-    collisions = collisions_input(charge_exchange, charge_exchange_electron, ionization,
-                                  ionization_electron, ionization_energy, nu_ei,
+    collisions = collisions_input(reactions_input, electron_fluid_collisions_input,
                                   krook_input, fkpl_input, mxwl_diff_input)
 
     # parameters related to the time stepping

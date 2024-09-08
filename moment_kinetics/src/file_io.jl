@@ -630,10 +630,10 @@ function write_overview!(fid, composition, collisions, parallel_io, evolve_densi
         write_single_value!(overview, "T_e", composition.T_e, parallel_io=parallel_io,
                             description="fixed electron temperature")
         write_single_value!(overview, "charge_exchange_frequency",
-                            collisions.charge_exchange, parallel_io=parallel_io,
+                            collisions.reactions.charge_exchange_frequency, parallel_io=parallel_io,
                             description="quantity related to the charge exchange frequency")
-        write_single_value!(overview, "ionization_frequency", collisions.ionization,
-                            parallel_io=parallel_io,
+        write_single_value!(overview, "ionization_frequency",
+                            collisions.reactions.ionization_frequency, parallel_io=parallel_io,
                             description="quantity related to the ionization frequency")
         write_single_value!(overview, "evolve_density", evolve_density,
                             parallel_io=parallel_io,

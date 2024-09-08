@@ -1,12 +1,12 @@
-steady_state_residual = true
-converged_residual_value = 1.0e-3
+[reactions]
 charge_exchange_frequency = 2.0
 electron_charge_exchange_frequency = 0.0
-nu_ei = 0.0
 ionization_frequency = 2.0
 #electron_ionization_frequency = 2.0
 #ionization_energy = 1.0
-constant_ionization_rate = false
+
+[electron_fluid_collisions]
+nu_ei = 0.0
 
 [evolve_moments]
 density = false
@@ -112,6 +112,8 @@ dt = 5.0e-5
 nwrite = 200
 nwrite_dfns = 10000
 type = "SSPRK4"
+steady_state_residual = true
+converged_residual_value = 1.0e-3
 
 [electron_timestepping]
 nstep = 5000000

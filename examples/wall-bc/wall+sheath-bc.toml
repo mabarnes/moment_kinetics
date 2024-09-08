@@ -1,6 +1,6 @@
+[reactions]
 charge_exchange_frequency = 2.0
 ionization_frequency = 2.0
-constant_ionization_rate = false
 
 [evolve_moments]
 density = false

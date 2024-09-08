@@ -13,8 +13,8 @@ test_input_finite_difference_1D1V = OptionsDict("run_name" => "finite_difference
                                                                                 "parallel_flow" => false,
                                                                                 "parallel_pressure" => false,
                                                                                 "moments_conservation" => true),
-                                                "charge_exchange_frequency" => 2*π*0.1,
-                                                "ionization_frequency" => 0.0,
+                                                "reactions" => OptionsDict("charge_exchange_frequency" => 2*π*0.1,
+                                                                           "ionization_frequency" => 0.0),
                                                 "timestepping" => OptionsDict("nstep" => 3,
                                                                               "dt" => 1.e-8,
                                                                               "nwrite" => 2,
@@ -62,7 +62,7 @@ recursive_merge(test_input_finite_difference_1D1V_split_2_moments,
 test_input_finite_difference_cx0_1D1V =
 recursive_merge(test_input_finite_difference_1D1V,
                 OptionsDict("run_name" => "finite_difference_cx0_1D1V",
-                            "charge_exchange_frequency" => 0.0))
+                            "reactions" => OptionsDict("charge_exchange_frequency" => 0.0)))
 
 test_input_finite_difference_cx0_1D1V_split_1_moment =
 recursive_merge(test_input_finite_difference_cx0_1D1V,
@@ -117,7 +117,7 @@ recursive_merge(test_input_finite_difference_split_2_moments,
 test_input_finite_difference_cx0 =
 recursive_merge(test_input_finite_difference,
                 OptionsDict("run_name" => "finite_difference_cx0",
-                            "charge_exchange_frequency" => 0.0))
+                            "reactions" => OptionsDict("charge_exchange_frequency" => 0.0)))
 
 test_input_finite_difference_cx0_split_1_moment =
 recursive_merge(test_input_finite_difference_cx0,
@@ -177,7 +177,7 @@ recursive_merge(test_input_chebyshev_split_2_moments,
 test_input_chebyshev_cx0 =
 recursive_merge(test_input_chebyshev,
                 OptionsDict("run_name" => "chebyshev_pseudospectral_cx0",
-                            "charge_exchange_frequency" => 0.0))
+                            "reactions" => OptionsDict("charge_exchange_frequency" => 0.0)))
 
 test_input_chebyshev_cx0_split_1_moment =
 recursive_merge(test_input_chebyshev_cx0,
@@ -227,7 +227,7 @@ recursive_merge(test_input_chebyshev_1D1V_split_2_moments,
 test_input_chebyshev_cx0_1D1V =
 recursive_merge(test_input_chebyshev_1D1V,
                 OptionsDict("run_name" => "chebyshev_pseudospectral_cx0_1D1V",
-                            "charge_exchange_frequency" => 0.0))
+                            "reactions" => OptionsDict("charge_exchange_frequency" => 0.0)))
 
 test_input_chebyshev_cx0_1D1V_split_1_moment =
 recursive_merge(test_input_chebyshev_cx0_1D1V,

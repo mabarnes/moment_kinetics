@@ -33,7 +33,7 @@ inputs_list = Vector{OptionsDict}(undef, 0)
 for input ∈ [base_input, cheb_input, wall_bc_input, wall_bc_cheb_input]
     push!(inputs_list, input)
     x = recursive_merge(input, OptionsDict("evolve_moments" => OptionsDict("density" => true),
-                                           "ionization_frequency" => 0.0))
+                                           "reactions" => OptionsDict("ionization_frequency" => 0.0)))
     push!(inputs_list, x)
     x = recursive_merge(x, OptionsDict("evolve_moments" => OptionsDict("parallel_flow" => true)))
     push!(inputs_list, x)

@@ -1,7 +1,6 @@
-#runtime_plots = true
+[reactions]
 charge_exchange_frequency = 0.75
 ionization_frequency = 0.5
-constant_ionization_rate = false
 
 [evolve_moments]
 density = true

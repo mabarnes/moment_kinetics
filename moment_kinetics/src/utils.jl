@@ -72,10 +72,10 @@ function get_unnormalized_parameters(input::Dict)
     parameters["T_e"] = Tnorm * composition.T_e
     parameters["T_wall"] = Tnorm * composition.T_wall
 
-    parameters["CX_rate_coefficient"] = collisions.charge_exchange / Nnorm / timenorm
-    parameters["ionization_rate_coefficient"] = collisions.ionization / Nnorm / timenorm
+    parameters["CX_rate_coefficient"] = collisions.reactions.charge_exchange_frequency / Nnorm / timenorm
+    parameters["ionization_rate_coefficient"] = collisions.reactions.ionization_frequency / Nnorm / timenorm
     parameters["coulomb_collision_frequency0"] =
-        collisions.coulomb_collision_frequency_prefactor / timenorm
+        collisions.krook.nu_ii0 / timenorm
 
     return parameters
 end

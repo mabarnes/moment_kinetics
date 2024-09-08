@@ -1,9 +1,6 @@
-steady_state_residual = true
-converged_residual_value = 1.0e-3
-#runtime_plots = true
+[reactions]
 charge_exchange_frequency = 0.75
 ionization_frequency = 0.5
-constant_ionization_rate = false
 
 [evolve_moments]
 density = true
@@ -95,6 +92,8 @@ dt = 3.0e-5
 nwrite = 10000
 nwrite_dfns = 10000
 split_operators = false
+steady_state_residual = true
+converged_residual_value = 1.0e-3
 
 [ion_source]
 active = true

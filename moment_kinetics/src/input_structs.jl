@@ -381,19 +381,11 @@ end
 Collisions input struct to contain all the different collisions substructs and overall 
 collision input parameters.
 """
-struct collisions_input
-    # ion-neutral charge exchange collision frequency
-    charge_exchange::mk_float
-    # electron-neutral charge exchange collision frequency
-    charge_exchange_electron::mk_float
-    # ionization collision frequency
-    ionization::mk_float
-    # ionization collision frequency for electrons (probably should be same as for ions)
-    ionization_electron::mk_float
-    # ionization energy cost
-    ionization_energy::mk_float
-    # electron-ion collision frequency
-    nu_ei::mk_float
+struct collisions_input{Treactions,Telectronfluid}
+    # atomic reaction parameters
+    reactions::Treactions
+    # electron fluid collision parameters
+    electron_fluid::Telectronfluid
     # struct of parameters for the Krook operator
     krook::krook_collisions_input
     # struct of parameters for the Fokker-Planck operator
