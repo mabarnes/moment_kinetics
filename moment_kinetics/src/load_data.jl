@@ -4336,28 +4336,30 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         dppar_dz = get_z_derivative(run_info, "parallel_pressure")
         dvth_dz = get_z_derivative(run_info, "thermal_speed")
         dqpar_dz = get_z_derivative(run_info, "parallel_heat_flux")
-        if run_info.external_source_settings.ion.active
+        if any(x -> x.active, run_info.external_source_settings.ion)
+            n_sources = length(run_info.external_source_settings.ion)
             external_source_amplitude = get_variable(run_info, "external_source_amplitude")
             if run_info.evolve_density
                 external_source_density_amplitude = get_variable(run_info, "external_source_density_amplitude")
             else
-                external_source_density_amplitude = zeros(0,0,run_info.nt)
+                external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
             end
             if run_info.evolve_upar
                 external_source_momentum_amplitude = get_variable(run_info, "external_source_momentum_amplitude")
             else
-                external_source_momentum_amplitude = zeros(0,0,run_info.nt)
+                external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
             end
             if run_info.evolve_ppar
                 external_source_pressure_amplitude = get_variable(run_info, "external_source_pressure_amplitude")
             else
-                external_source_pressure_amplitude = zeros(0,0,run_info.nt)
+                external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
             end
         else
-            external_source_amplitude = zeros(0,0,run_info.nt)
-            external_source_density_amplitude = zeros(0,0,run_info.nt)
-            external_source_momentum_amplitude = zeros(0,0,run_info.nt)
-            external_source_pressure_amplitude = zeros(0,0,run_info.nt)
+            n_sources = 0
+            external_source_amplitude = zeros(0,0,n_sources,run_info.nt)
+            external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
+            external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
+            external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
         end
 
         nz, nr, nspecies, nt = size(vth)
@@ -4389,10 +4391,10 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                                    dvth_dz=dvth_dz[:,:,:,it],
                                    dqpar_dz=dqpar_dz[:,:,:,it],
                                    vth=vth[:,:,:,it],
-                                   external_source_amplitude=external_source_amplitude[:,:,it],
-                                   external_source_density_amplitude=external_source_density_amplitude[:,:,it],
-                                   external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,it],
-                                   external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,it]),
+                                   external_source_amplitude=external_source_amplitude[:,:,n_sources,it],
+                                   external_source_density_amplitude=external_source_density_amplitude[:,:,n_sources,it],
+                                   external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,n_sources,it],
+                                   external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,n_sources,it]),
                              evolve_density=run_info.evolve_density,
                              evolve_upar=run_info.evolve_upar,
                              evolve_ppar=run_info.evolve_ppar)
@@ -4475,16 +4477,18 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         dppar_dz = get_z_derivative(run_info, "electron_parallel_pressure")
         dvth_dz = get_z_derivative(run_info, "electron_thermal_speed")
         dqpar_dz = get_z_derivative(run_info, "electron_parallel_heat_flux")
-        if run_info.external_source_settings.electron.active
+        if any(x -> x.active, run_info.external_source_settings.electron)
+            n_sources = length(run_info.external_source_settings.electron)
             external_source_amplitude = get_variable(run_info, "external_source_electron_amplitude")
             external_source_density_amplitude = get_variable(run_info, "external_source_electron_density_amplitude")
             external_source_momentum_amplitude = get_variable(run_info, "external_source_electron_momentum_amplitude")
             external_source_pressure_amplitude = get_variable(run_info, "external_source_electron_pressure_amplitude")
         else
-            external_source_amplitude = zeros(0,0,run_info.nt)
-            external_source_density_amplitude = zeros(0,0,run_info.nt)
-            external_source_momentum_amplitude = zeros(0,0,run_info.nt)
-            external_source_pressure_amplitude = zeros(0,0,run_info.nt)
+            n_sources = 0
+            external_source_amplitude = zeros(0,0,n_sources,run_info.nt)
+            external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
+            external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
+            external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
         end
 
         nz, nr, nt = size(vth)
@@ -4508,10 +4512,10 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                                  dppar_dz=dppar_dz[:,:,it],
                                  dqpar_dz=dqpar_dz[:,:,it],
                                  dvth_dz=dvth_dz[:,:,it],
-                                 external_source_amplitude=external_source_amplitude[:,:,it],
-                                 external_source_density_amplitude=external_source_density_amplitude[:,:,it],
-                                 external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,it],
-                                 external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,it]),)
+                                 external_source_amplitude=external_source_amplitude[:,:,n_sources,it],
+                                 external_source_density_amplitude=external_source_density_amplitude[:,:,n_sources,it],
+                                 external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,n_sources,it],
+                                 external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,n_sources,it]),)
             @views update_electron_speed_vpa!(advect, density[:,:,it], upar[:,:,it],
                                               ppar[:,:,it], moments, run_info.vpa.grid,
                                               run_info.external_source_settings.electron)
@@ -4593,28 +4597,30 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         dpz_dz = get_z_derivative(run_info, "pz_neutral")
         dvth_dz = get_z_derivative(run_info, "thermal_speed_neutral")
         dqz_dz = get_z_derivative(run_info, "qz_neutral")
-        if run_info.external_source_settings.neutral.active
+        if any(x -> x.active, run_info.external_source_settings.neutral)
+            n_sources = length(run_info.external_source_settings.neutral)
             external_source_amplitude = get_variable(run_info, "external_source_neutral_amplitude")
             if run_info.evolve_density
                 external_source_density_amplitude = get_variable(run_info, "external_source_neutral_density_amplitude")
             else
-                external_source_density_amplitude = zeros(0,0,run_info.nt)
+                external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
             end
             if run_info.evolve_upar
                 external_source_momentum_amplitude = get_variable(run_info, "external_source_neutral_momentum_amplitude")
             else
-                external_source_momentum_amplitude = zeros(0,0,run_info.nt)
+                external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
             end
             if run_info.evolve_ppar
                 external_source_pressure_amplitude = get_variable(run_info, "external_source_neutral_pressure_amplitude")
             else
-                external_source_pressure_amplitude = zeros(0,0,run_info.nt)
+                external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
             end
         else
-            external_source_amplitude = zeros(0,0,run_info.nt)
-            external_source_density_amplitude = zeros(0,0,run_info.nt)
-            external_source_momentum_amplitude = zeros(0,0,run_info.nt)
-            external_source_pressure_amplitude = zeros(0,0,run_info.nt)
+            n_sources = 0
+            external_source_amplitude = zeros(0,0,n_sources,run_info.nt)
+            external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
+            external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
+            external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
         end
 
         nz, nr, nspecies, nt = size(vth)
@@ -4644,10 +4650,10 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                                        dvth_dz=dvth_dz[:,:,:,it],
                                        dqz_dz=dqz_dz[:,:,:,it],
                                        vth=vth[:,:,:,it],
-                                       external_source_amplitude=external_source_amplitude[:,:,it],
-                                       external_source_density_amplitude=external_source_density_amplitude[:,:,it],
-                                       external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,it],
-                                       external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,it]),
+                                       external_source_amplitude=external_source_amplitude[:,:,n_sources,it],
+                                       external_source_density_amplitude=external_source_density_amplitude[:,:,n_sources,it],
+                                       external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,n_sources,it],
+                                       external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,n_sources,it]),
                              evolve_density=run_info.evolve_density,
                              evolve_upar=run_info.evolve_upar,
                              evolve_ppar=run_info.evolve_ppar)
