@@ -433,7 +433,7 @@ function update_speed_n_u_p_evolution!(advect, fvec, moments, vpa, z, r, composi
             end
         end
     end
-    for index ∈ eachindex(ion_source_settings.ion)
+    for index ∈ eachindex(ion_source_settings)
         if ion_source_settings[index].active
             @views source_density_amplitude = moments.ion.external_source_density_amplitude[:, :, index]
             @views source_momentum_amplitude = moments.ion.external_source_momentum_amplitude[:, :, index]
@@ -540,7 +540,7 @@ function update_speed_n_u_evolution!(advect, fvec, moments, vpa, z, r, compositi
             end
         end
     end
-    for index ∈ eachindex(ion_source_settings.ion)
+    for index ∈ eachindex(ion_source_settings)
         if ion_source_settings[index].active
             @views source_density_amplitude = moments.ion.external_source_density_amplitude[:, :, index]
             source_strength = ion_source_settings[index].source_strength

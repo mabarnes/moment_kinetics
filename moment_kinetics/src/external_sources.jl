@@ -364,7 +364,7 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
     else
         # this is not very efficient because we're copying the same electron_settings 
         # for each ion source
-        push!(electron_sources, get_settings_electrons(inactive_ion_source))
+        push!(electron_sources, get_settings_electrons(get_settings_ions(1, false)))
     end
 
     # put all neutral sources into neutral_source_data struct vector
