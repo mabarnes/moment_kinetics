@@ -87,8 +87,12 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                                                      "source_strength" => 2.0,
                                                      "source_T" => 2.0),
                          "krook_collisions" => OptionsDict("use_krook" => true),
-                         "numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
-                                                                "vpa_dissipation_coefficient" => 1e-2))
+                         "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
+                                                                    "vpa_dissipation_coefficient" => 1e-2),
+                         "electron_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
+                                                                         "vpa_dissipation_coefficient" => 1e-2),
+                         "neutral_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
+                                                                        "vz_dissipation_coefficient" => 1e-2))
 
 
 test_input_list = [

@@ -95,8 +95,10 @@ test_input_split3 = recursive_merge(test_input_split2,
                                                 "evolve_moments" => OptionsDict("parallel_pressure" => true),
                                                 "vpa" => OptionsDict("nelement" => 8),
                                                 "vz" => OptionsDict("nelement" => 8),
-                                                "numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
-                                                                                       "vpa_dissipation_coefficient" => 1e-2)))
+                                                "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
+                                                                                           "vpa_dissipation_coefficient" => 1e-2),
+                                                "neutral_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
+                                                                                               "vz_dissipation_coefficient" => 1e-2)))
 test_input_split3["timestepping"] = recursive_merge(test_input_split3["timestepping"],
                                                     OptionsDict("dt" => 1.0e-9,
                                                                 "minimum_dt" => 1.0e-9))

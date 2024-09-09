@@ -71,5 +71,4 @@ nstep = 3000
 dt = 1.0e-3
 nwrite = 20
 #nwrite_dfns = 20 #80
-n_rk_stages = 4
 split_operators = false

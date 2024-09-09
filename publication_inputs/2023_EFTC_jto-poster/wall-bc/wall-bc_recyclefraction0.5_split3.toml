@@ -96,7 +96,6 @@ nstep = 1000000
 dt = 1.0e-5
 nwrite = 10000
 nwrite_dfns = 10000
-n_rk_stages = 4
 split_operators = false
 steady_state_residual = true
 converged_residual_value = 1.0e-3

@@ -65,7 +65,7 @@ temperature_phase = 0.0
 initial_density = 1.0
 initial_temperature = 1.0
 
-[z_IC_eutral_species_1]
+[z_IC_neutral_species_1]
 initialization_option = "gaussian"
 density_amplitude = 0.001
 density_phase = 0.0
@@ -74,7 +74,7 @@ upar_phase = 0.0
 temperature_amplitude = 0.0
 temperature_phase = 0.0
 
-[vpa_IC_eutral_species_1]
+[vz_IC_neutral_species_1]
 initialization_option = "gaussian"
 density_amplitude = 1.0
 density_phase = 0.0

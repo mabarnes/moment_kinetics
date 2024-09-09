@@ -70,5 +70,4 @@ discretization = "chebyshev_pseudospectral"
 nstep = 2500
 dt = 2.0e-3
 nwrite = 20
-n_rk_stages = 4
 split_operators = false

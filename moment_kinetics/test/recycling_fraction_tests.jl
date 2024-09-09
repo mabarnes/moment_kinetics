@@ -154,8 +154,10 @@ test_input_adaptive_split2["timestepping"] = recursive_merge(test_input_adaptive
 test_input_adaptive_split3 = recursive_merge(test_input_adaptive_split2,
                                              OptionsDict("output" => OptionsDict("run_name" => "adaptive split3"),
                                                          "evolve_moments" => OptionsDict("parallel_pressure" => true),
-                                                         "numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
-                                                                                                "vpa_dissipation_coefficient" => 1e-2)))
+                                                         "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
+                                                                                                "vpa_dissipation_coefficient" => 1e-2),
+                                                         "neutral_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
+                                                                                                        "vz_dissipation_coefficient" => 1e-2)))
 # The initial conditions seem to make the split3 case hard to advance without any
 # failures. In a real simulation, would just set the minimum_dt higher to try to get
 # through this without crashing. For this test, want the timestep to adapt (not just sit

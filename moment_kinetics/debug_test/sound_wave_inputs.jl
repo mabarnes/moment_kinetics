@@ -221,8 +221,7 @@ recursive_merge(test_input_chebyshev_1D1V_split_1_moment,
 test_input_chebyshev_1D1V_split_3_moments =
 recursive_merge(test_input_chebyshev_1D1V_split_2_moments,
                 OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_1D1V_split_3_moments"),
-                            "evolve_moments" => OptionsDict("parallel_pressure" => true),
-                            "runtime_plots" => true))
+                            "evolve_moments" => OptionsDict("parallel_pressure" => true)))
 
 test_input_chebyshev_cx0_1D1V =
 recursive_merge(test_input_chebyshev_1D1V,
