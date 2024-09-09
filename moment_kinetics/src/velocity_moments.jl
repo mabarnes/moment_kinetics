@@ -156,9 +156,9 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
         else
             external_source_pressure_amplitude = allocate_shared_float(1, 1, n_sources)
         end
-        if ion_source_settings.PI_density_controller_I != 0.0 &&
-                ion_source_settings.source_type ∈ ("density_profile_control", "density_midpoint_control")
-            if ion_source_settings.source_type == "density_profile_control"
+        if any(x -> x.PI_density_controller_I != 0.0 && x.source_type ∈ 
+                    ("density_profile_control", "density_midpoint_control"), ion_source_settings)
+            if any(x -> x.source_type == "density_profile_control", ion_source_settings)
                 external_source_controller_integral = allocate_shared_float(nz, nr, n_sources)
             else
                 external_source_controller_integral = allocate_shared_float(1, 1, n_sources)
@@ -382,9 +382,9 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
         else
             external_source_pressure_amplitude = allocate_shared_float(1, 1, n_sources)
         end
-        if neutral_source_settings.PI_density_controller_I != 0.0 &&
-                neutral_source_settings.source_type ∈ ("density_profile_control", "density_midpoint_control")
-            if neutral_source_settings.source_type == "density_profile_control"
+        if any(x -> x.PI_density_controller_I != 0.0 && x.source_type ∈ 
+                    ("density_profile_control", "density_midpoint_control"), neutral_source_settings)
+            if any(x -> x.source_type == "density_profile_control", neutral_source_settings)
                 external_source_controller_integral = allocate_shared_float(nz, nr, n_sources)
             else
                 external_source_controller_integral = allocate_shared_float(1, 1, n_sources)
