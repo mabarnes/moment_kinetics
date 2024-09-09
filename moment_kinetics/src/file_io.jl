@@ -1333,14 +1333,13 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
 
     ion_source_settings = external_source_settings.ion
     if any(x -> x.active, ion_source_settings)
-        n = length(ion_source_settings)
         external_source_amplitude = create_dynamic_variable!(
-            dynamic, "external_source_amplitude", mk_float, z, r, n;
+            dynamic, "external_source_amplitude", mk_float, z, r;
             parallel_io=parallel_io, description="Amplitude of the external source for ions",
             units="n_ref/c_ref^3*c_ref/L_ref")
         if evolve_density
             external_source_density_amplitude = create_dynamic_variable!(
-                dynamic, "external_source_density_amplitude", mk_float, z, r, n;
+                dynamic, "external_source_density_amplitude", mk_float, z, r;
                 parallel_io=parallel_io, description="Amplitude of the external density source for ions",
                 units="n_ref*c_ref/L_ref")
         else
@@ -1348,7 +1347,7 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
         end
         if evolve_upar
             external_source_momentum_amplitude = create_dynamic_variable!(
-                dynamic, "external_source_momentum_amplitude", mk_float, z, r, n;
+                dynamic, "external_source_momentum_amplitude", mk_float, z, r;
                 parallel_io=parallel_io, description="Amplitude of the external momentum source for ions",
                 units="m_ref*n_ref*c_ref*c_ref/L_ref")
         else
@@ -1356,17 +1355,17 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
         end
         if evolve_ppar
             external_source_pressure_amplitude = create_dynamic_variable!(
-                dynamic, "external_source_pressure_amplitude", mk_float, z, r, n;
+                dynamic, "external_source_pressure_amplitude", mk_float, z, r;
                 parallel_io=parallel_io, description="Amplitude of the external pressure source for ions",
                 units="m_ref*n_ref*c_ref^2*c_ref/L_ref")
         else
             external_source_pressure_amplitude = nothing
         end
-        if ion_source_settings.PI_density_controller_I != 0.0 &&
-                ion_source_settings.source_type ∈ ("density_profile_control", "density_midpoint_control")
-            if ion_source_settings.source_type == "density_profile_control"
+        if any(x -> x.PI_density_controller_I != 0.0 && x.source_type ∈ 
+                    ("density_profile_control", "density_midpoint_control"), ion_source_settings)
+            if any(x -> x.source_type == "density_profile_control", ion_source_settings)
                 external_source_controller_integral = create_dynamic_variable!(
-                    dynamic, "external_source_controller_integral", mk_float, z, r, n;
+                    dynamic, "external_source_controller_integral", mk_float, z, r;
                     parallel_io=parallel_io,
                     description="Integral term for the PID controller of the external source for ions")
             else
@@ -1546,21 +1545,20 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
 
     electron_source_settings = external_source_settings.electron
     if any(x -> x.active, electron_source_settings)
-        n = length(electron_source_settings)
         external_source_electron_amplitude = create_dynamic_variable!(
-            dynamic, "external_source_electron_amplitude", mk_float, z, r, n;
+            dynamic, "external_source_electron_amplitude", mk_float, z, r;
             parallel_io=parallel_io, description="Amplitude of the external source for electrons",
             units="n_ref/c_ref^3*c_ref/L_ref")
         external_source_electron_density_amplitude = create_dynamic_variable!(
-            dynamic, "external_source_electron_density_amplitude", mk_float, z, r, n;
+            dynamic, "external_source_electron_density_amplitude", mk_float, z, r;
             parallel_io=parallel_io, description="Amplitude of the external density source for electrons",
             units="n_ref*c_ref/L_ref")
         external_source_electron_momentum_amplitude = create_dynamic_variable!(
-            dynamic, "external_source_electron_momentum_amplitude", mk_float, z, r, n;
+            dynamic, "external_source_electron_momentum_amplitude", mk_float, z, r;
             parallel_io=parallel_io, description="Amplitude of the external momentum source for electrons",
             units="m_ref*n_ref*c_ref*c_ref/L_ref")
         external_source_electron_pressure_amplitude = create_dynamic_variable!(
-            dynamic, "external_source_electron_pressure_amplitude", mk_float, z, r, n;
+            dynamic, "external_source_electron_pressure_amplitude", mk_float, z, r;
             parallel_io=parallel_io, description="Amplitude of the external pressure source for electrons",
             units="m_ref*n_ref*c_ref^2*c_ref/L_ref")
     else
@@ -1755,14 +1753,13 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
 
     neutral_source_settings = external_source_settings.neutral
     if n_neutral_species > 0 && any(x -> x.active, neutral_source_settings)
-        n = length(neutral_source_settings)
         external_source_neutral_amplitude = create_dynamic_variable!(
-            dynamic, "external_source_neutral_amplitude", mk_float, z, r, n;
+            dynamic, "external_source_neutral_amplitude", mk_float, z, r;
             parallel_io=parallel_io, description="Amplitude of the external source for neutrals",
             units="n_ref/c_ref^3*c_ref/L_ref")
         if evolve_density
             external_source_neutral_density_amplitude = create_dynamic_variable!(
-                dynamic, "external_source_neutral_density_amplitude", mk_float, z, r, n;
+                dynamic, "external_source_neutral_density_amplitude", mk_float, z, r;
                 parallel_io=parallel_io, description="Amplitude of the external density source for neutrals",
                 units="n_ref*c_ref/L_ref")
         else
@@ -1770,7 +1767,7 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
         end
         if evolve_upar
             external_source_neutral_momentum_amplitude = create_dynamic_variable!(
-                dynamic, "external_source_neutral_momentum_amplitude", mk_float, z, r, n;
+                dynamic, "external_source_neutral_momentum_amplitude", mk_float, z, r;
                 parallel_io=parallel_io, description="Amplitude of the external momentum source for neutrals",
                 units="m_ref*n_ref*c_ref*c_ref/L_ref")
         else
@@ -1778,17 +1775,17 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
         end
         if evolve_ppar
             external_source_neutral_pressure_amplitude = create_dynamic_variable!(
-                dynamic, "external_source_neutral_pressure_amplitude", mk_float, z, r, n;
+                dynamic, "external_source_neutral_pressure_amplitude", mk_float, z, r;
                 parallel_io=parallel_io, description="Amplitude of the external pressure source for neutrals",
                 units="m_ref*n_ref*c_ref^2*c_ref/L_ref")
         else
             external_source_neutral_pressure_amplitude = nothing
         end
-        if neutral_source_settings.PI_density_controller_I != 0.0 &&
-                neutral_source_settings.source_type ∈ ("density_profile_control", "density_midpoint_control")
-            if neutral_source_settings.source_type == "density_profile_control"
+        if any(x -> x.PI_density_controller_I != 0.0 && x.source_type ∈ 
+                    ("density_profile_control", "density_midpoint_control"), neutral_source_settings)
+            if any(x -> x.source_type == "density_profile_control", neutral_source_settings)
                 external_source_neutral_controller_integral = create_dynamic_variable!(
-                    dynamic, "external_source_neutral_controller_integral", mk_float, z, r, n;
+                    dynamic, "external_source_neutral_controller_integral", mk_float, z, r;
                     parallel_io=parallel_io,
                     description="Integral term for the PID controller of the external source for neutrals")
             else
@@ -2515,21 +2512,21 @@ function write_ion_moments_data_to_binary(scratch, moments, n_ion_species, t_par
         end
         if io_moments.external_source_amplitude !== nothing
             append_to_dynamic_var(io_moments.external_source_amplitude,
-                                  moments.ion.external_source_amplitude, t_idx,
+                                  moments.ion.external_source_amplitude[:, :, 1], t_idx,
                                   parallel_io, z, r)
             if moments.evolve_density
                 append_to_dynamic_var(io_moments.external_source_density_amplitude,
-                                      moments.ion.external_source_density_amplitude,
+                                      moments.ion.external_source_density_amplitude[:, :, 1],
                                       t_idx, parallel_io, z, r)
             end
             if moments.evolve_upar
                 append_to_dynamic_var(io_moments.external_source_momentum_amplitude,
-                                      moments.ion.external_source_momentum_amplitude,
+                                      moments.ion.external_source_momentum_amplitude[:, :, 1],
                                       t_idx, parallel_io, z, r)
             end
             if moments.evolve_ppar
                 append_to_dynamic_var(io_moments.external_source_pressure_amplitude,
-                                      moments.ion.external_source_pressure_amplitude,
+                                      moments.ion.external_source_pressure_amplitude[:, :, 1],
                                       t_idx, parallel_io, z, r)
             end
         end
@@ -2613,16 +2610,16 @@ function write_electron_moments_data_to_binary(scratch, moments, t_params, elect
                               t_idx, parallel_io, z, r)
         if io_moments.external_source_electron_amplitude !== nothing
             append_to_dynamic_var(io_moments.external_source_electron_amplitude,
-                                  moments.electron.external_source_amplitude, t_idx,
+                                  moments.electron.external_source_amplitude[:, :, 1], t_idx,
                                   parallel_io, z, r)
             append_to_dynamic_var(io_moments.external_source_electron_density_amplitude,
-                                  moments.electron.external_source_density_amplitude,
+                                  moments.electron.external_source_density_amplitude[:, :, 1],
                                   t_idx, parallel_io, z, r)
             append_to_dynamic_var(io_moments.external_source_electron_momentum_amplitude,
-                                  moments.electron.external_source_momentum_amplitude,
+                                  moments.electron.external_source_momentum_amplitude[:, :, 1],
                                   t_idx, parallel_io, z, r)
             append_to_dynamic_var(io_moments.external_source_electron_pressure_amplitude,
-                                  moments.electron.external_source_pressure_amplitude,
+                                  moments.electron.external_source_pressure_amplitude[:, :, 1],
                                   t_idx, parallel_io, z, r)
         end
         append_to_dynamic_var(io_moments.electron_constraints_A_coefficient,
@@ -2725,21 +2722,21 @@ function write_neutral_moments_data_to_binary(scratch, moments, n_neutral_specie
                               t_idx, parallel_io, z, r, n_neutral_species)
         if io_moments.external_source_neutral_amplitude !== nothing
             append_to_dynamic_var(io_moments.external_source_neutral_amplitude,
-                                  moments.neutral.external_source_amplitude, t_idx,
+                                  moments.neutral.external_source_amplitude[:, :, 1], t_idx,
                                   parallel_io, z, r)
             if moments.evolve_density
                 append_to_dynamic_var(io_moments.external_source_neutral_density_amplitude,
-                                      moments.neutral.external_source_density_amplitude,
+                                      moments.neutral.external_source_density_amplitude[:, :, 1],
                                       t_idx, parallel_io, z, r)
             end
             if moments.evolve_upar
                 append_to_dynamic_var(io_moments.external_source_neutral_momentum_amplitude,
-                                      moments.neutral.external_source_momentum_amplitude,
+                                      moments.neutral.external_source_momentum_amplitude[:, :, 1],
                                       t_idx, parallel_io, z, r)
             end
             if moments.evolve_ppar
                 append_to_dynamic_var(io_moments.external_source_neutral_pressure_amplitude,
-                                      moments.neutral.external_source_pressure_amplitude,
+                                      moments.neutral.external_source_pressure_amplitude[:, :, 1],
                                       t_idx, parallel_io, z, r)
             end
         end
