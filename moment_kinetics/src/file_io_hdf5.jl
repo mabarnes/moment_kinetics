@@ -11,7 +11,10 @@ function open_output_file_implementation(::Val{hdf5}, prefix, io_input, io_comm,
     # the hdf5 file will be given by output_dir/run_name with .h5 appended
     filename = string(prefix, ".h5")
 
-    if length(filename) > 255
+    # JTO thought the maximum filename length should be 255 according to HDF5.jl, but can
+    # no longer find the HDF5.jl check for length. However on one test a filename of
+    # length 245 caused a crash, while 243 was OK, so limit to 243.
+    if length(filename) > 243
         error("Length of filename '$filename' is too long ($(length(filename)) "
               * "characters), which will cause an error in HDF5.")
     end
