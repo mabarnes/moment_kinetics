@@ -817,6 +817,9 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         animate_steady_state_residual=false,
        )
 
+    # We allow top-level options in the post-processing input file
+    check_sections!(this_input_dict; check_no_top_level_options=false)
+
     return nothing
 end
 

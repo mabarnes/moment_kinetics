@@ -81,9 +81,10 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     for opt in removed_options_list
         if opt ∈ keys(scan_input)
             error("Option '$opt' is no longer used. Please update your input file. The "
-                  * "option may have been moved into an input file section. You may need "
-                  * "to set some new options to replicate the effect of the removed ones."
-                 )
+                  * "option may have been moved into an input file section - there are "
+                  * "no longer any top-level options (i.e. ones not in a section). You "
+                  * "may need to set some new options to replicate the effect of the "
+                  * "removed ones.")
         end
     end
     
@@ -460,13 +461,6 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
 
     num_diss_params = setup_numerical_dissipation(scan_input)
 
-    if global_rank[] == 0 && save_inputs_to_txt
-        # Make file to log some information about inputs into.
-        io = open_ascii_output_file(string(output_dir,"/",io_settings["run_name"]), "input")
-    else
-        io = devnull
-    end
-    
     geometry = init_magnetic_geometry(geometry_in,z,r)
     if any(geometry.dBdz .!= 0.0) &&
             (evolve_moments.density || evolve_moments.parallel_flow ||
@@ -475,6 +469,22 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     end
 
     species_immutable = (ion = composition.ion, neutral = composition.neutral)
+
+    # Ideally `check_sections!(scan_input) would be called here to check that no
+    # unexpected sections or top-level options were passed (helps to catch typos in input
+    # files). However, it needs to be called after calls to `setup_nonlinear_solve()`
+    # because the inputs for nonlinear solvers are only read there, but before electron
+    # setup, because `input_dict` needs to be written to the output files, and it cannot
+    # be with the `_section_check_store` variable still contained in it (which is used and
+    # removed by `check_sections!()`) - it therefore has to be called in the middle of
+    # `setup_time_advance!()`.
+
+    if global_rank[] == 0 && save_inputs_to_txt
+        # Make file to log some information about inputs into.
+        io = open_ascii_output_file(string(output_dir,"/",io_settings["run_name"]), "input")
+    else
+        io = devnull
+    end
     
     # check input (and initialized coordinate structs) to catch errors/unsupported options
     check_input(io, output_dir, timestepping_section["nstep"], timestepping_section["dt"], r, z,

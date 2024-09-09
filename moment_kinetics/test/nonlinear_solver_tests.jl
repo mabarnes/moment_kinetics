@@ -113,11 +113,12 @@ function linear_test()
         end
 
         nl_solver_params = setup_nonlinear_solve(
+            true,
             OptionsDict("nonlinear_solver" =>
-                             OptionsDict("rtol" => 0.0,
-                                              "atol" => atol,
-                                              "linear_restart" => restart,
-                                              "linear_max_restarts" => max_restarts)),
+                        OptionsDict("rtol" => 0.0,
+                                    "atol" => atol,
+                                    "linear_restart" => restart,
+                                    "linear_max_restarts" => max_restarts)),
             coords; serial_solve=serial_solve)
 
         newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, v, w, nl_solver_params;
@@ -245,12 +246,13 @@ function nonlinear_test()
         end
 
         nl_solver_params = setup_nonlinear_solve(
+            true,
             OptionsDict("nonlinear_solver" =>
-                             OptionsDict("rtol" => 0.0,
-                                              "atol" => atol,
-                                              "linear_restart" => restart,
-                                              "linear_max_restarts" => max_restarts,
-                                              "nonlinear_max_iterations" => 100)),
+                        OptionsDict("rtol" => 0.0,
+                                    "atol" => atol,
+                                    "linear_restart" => restart,
+                                    "linear_max_restarts" => max_restarts,
+                                    "nonlinear_max_iterations" => 100)),
             coords; serial_solve=serial_solve)
 
         newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, v, w, nl_solver_params;

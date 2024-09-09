@@ -14,7 +14,7 @@ export io_input
 export pp_input
 export geometry_input
 export set_defaults_and_check_top_level!, set_defaults_and_check_section!,
-       options_to_TOML, Dict_to_NamedTuple
+       check_sections!, options_to_TOML, Dict_to_NamedTuple
 
 using ..communication
 using ..type_definitions: mk_float, mk_int
@@ -660,6 +660,8 @@ function set_defaults_and_check_top_level!(options::AbstractDict; kwargs...)
     return options
 end
 
+const _section_check_store_name = "_section_check_store"
+
 """
 Set the defaults for options in a section, and check that there are not any unexpected
 options (i.e. options that have no default).
@@ -701,7 +703,50 @@ function set_defaults_and_check_section!(options::AbstractDict, section_name;
         section[key] = get(section, key, default_value)
     end
 
+    # Record the defined section_name in a temporary, private subsection of `options`, so
+    # we can use it to check the existing sections later.
+    if !(_section_check_store_name ∈ keys(options))
+        # If section is not present, create it
+        options[_section_check_store_name] = String[]
+    end
+    push!(options[_section_check_store_name], section_name)
+
     return section
+end
+
+"""
+    check_sections!(options::AbstractDict)
+
+Check that there are no unexpected sections in `options`. The 'expected sections' are the
+ones that were defined with [`set_defaults_and_check_section!`](@ref).
+"""
+function check_sections!(options::AbstractDict; check_no_top_level_options=true)
+
+    expected_section_names = pop!(options, _section_check_store_name)
+
+    unexpected_section_names = String[]
+    unexpected_top_level_options = String[]
+    for (k,v) ∈ pairs(options)
+        if isa(v, AbstractDict)
+            if k ∉ expected_section_names
+                push!(unexpected_section_names, k)
+            end
+        elseif check_no_top_level_options
+            push!(unexpected_top_level_options, k)
+        end
+    end
+
+    if length(unexpected_section_names) > 0 && length(unexpected_top_level_options) > 0
+        error("Input had unexpected sections $unexpected_section_names, and unexpected "
+              * "options in the top level $unexpected_top_level_options")
+    elseif length(unexpected_section_names) > 0
+        error("Input had unexpected sections $unexpected_section_names.")
+    elseif length(unexpected_top_level_options) > 0
+        error("Input had unexpected options in the top level "
+              * "$unexpected_top_level_options")
+    end
+
+    return nothing
 end
 
 """

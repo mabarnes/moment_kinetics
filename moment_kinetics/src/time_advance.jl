@@ -655,52 +655,34 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
 
     # Set up parameters for Jacobian-free Newton-Krylov solver used for implicit part of
     # timesteps.
-    if t_params.implicit_braginskii_conduction
-        # Should really have options to set solver tolerance, etc.
-        electron_conduction_nl_solve_parameters = setup_nonlinear_solve(input_dict, (z=z,);
-                                                                        default_rtol=t_params.rtol / 10.0,
-                                                                        default_atol=t_params.atol / 10.0)
-    else
-       electron_conduction_nl_solve_parameters = nothing
-    end
-    if t_params.implicit_electron_advance
-        nl_solver_electron_advance_params =
-            setup_nonlinear_solve(input_dict,
-                                  (r=r, z=z, vperp=vperp, vpa=vpa),
-                                  ();
-                                  default_rtol=t_params.rtol / 10.0,
-                                  default_atol=t_params.atol / 10.0,
-                                  electron_ppar_pdf_solve=true,
-                                  preconditioner_type="lu")
-    else
-        nl_solver_electron_advance_params = nothing
-    end
-    if t_params.implicit_ion_advance
-        # Implicit solve for vpa_advection term should be done in serial, as it will be
-        # called within a parallelised s_r_z_vperp loop.
-        nl_solver_ion_advance_params =
-            setup_nonlinear_solve(input_dict,
-                                  (s=composition.n_ion_species, r=r, z=z, vperp=vperp,
-                                   vpa=vpa),
-                                  ();
-                                  default_rtol=t_params.rtol / 10.0,
-                                  default_atol=t_params.atol / 10.0,
-                                  preconditioner_type="lu")
-    else
-        nl_solver_ion_advance_params = nothing
-    end
-    if t_params.implicit_vpa_advection
-        # Implicit solve for vpa_advection term should be done in serial, as it will be
-        # called within a parallelised s_r_z_vperp loop.
-        nl_solver_vpa_advection_params =
-            setup_nonlinear_solve(input_dict, (vpa=vpa,),
-                                  (composition.n_ion_species, r, z, vperp);
-                                  default_rtol=t_params.rtol / 10.0,
-                                  default_atol=t_params.atol / 10.0,
-                                  serial_solve=true, preconditioner_type="lu")
-    else
-        nl_solver_vpa_advection_params = nothing
-    end
+    electron_conduction_nl_solve_parameters = setup_nonlinear_solve(t_params.implicit_braginskii_conduction,
+                                                                    input_dict, (z=z,);
+                                                                    default_rtol=t_params.rtol / 10.0,
+                                                                    default_atol=t_params.atol / 10.0)
+    nl_solver_electron_advance_params =
+        setup_nonlinear_solve(t_params.implicit_electron_advance, input_dict,
+                              (r=r, z=z, vperp=vperp, vpa=vpa),
+                              ();
+                              default_rtol=t_params.rtol / 10.0,
+                              default_atol=t_params.atol / 10.0,
+                              electron_ppar_pdf_solve=true,
+                              preconditioner_type="lu")
+    nl_solver_ion_advance_params =
+        setup_nonlinear_solve(t_params.implicit_ion_advance, input_dict,
+                              (s=composition.n_ion_species, r=r, z=z, vperp=vperp,
+                               vpa=vpa),
+                              ();
+                              default_rtol=t_params.rtol / 10.0,
+                              default_atol=t_params.atol / 10.0,
+                              preconditioner_type="lu")
+    # Implicit solve for vpa_advection term should be done in serial, as it will be called
+    # within a parallelised s_r_z_vperp loop.
+    nl_solver_vpa_advection_params =
+        setup_nonlinear_solve(t_params.implicit_vpa_advection, input_dict, (vpa=vpa,),
+                              (composition.n_ion_species, r, z, vperp);
+                              default_rtol=t_params.rtol / 10.0,
+                              default_atol=t_params.atol / 10.0,
+                              serial_solve=true, preconditioner_type="lu")
     if nl_solver_ion_advance_params !== nothing &&
             nl_solver_vpa_advection_params !== nothing
         error("Cannot use implicit_ion_advance and implicit_vpa_advection at the same "
@@ -714,6 +696,14 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                         electron_advance=nl_solver_electron_advance_params,
                         ion_advance=nl_solver_ion_advance_params,
                         vpa_advection=nl_solver_vpa_advection_params,)
+
+    # Check that no unexpected sections or top-level options were passed (helps to catch
+    # typos in input files). Needs to be called after calls to `setup_nonlinear_solve()`
+    # because the inputs for nonlinear solvers are only read there, but before electron
+    # setup, because `input_dict` needs to be written to the output files, and it cannot
+    # be with the `_section_check_store` variable still contained in it (which is used and
+    # removed by `check_sections!()`).
+    check_sections!(input_dict)
 
     begin_serial_region()
 
