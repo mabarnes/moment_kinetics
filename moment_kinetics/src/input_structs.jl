@@ -5,9 +5,9 @@ module input_structs
 export advance_info
 export time_info
 export advection_input
-export initial_condition_input, initial_condition_input_mutable
+export initial_condition_input
 export spatial_initial_condition_input, velocity_initial_condition_input
-export ion_species_parameters, neutral_species_parameters, species_parameters_mutable
+export ion_species_parameters, neutral_species_parameters
 export species_composition
 export collisions_input, krook_collisions_input, fkpl_collisions_input
 export io_input
@@ -159,25 +159,6 @@ export kinetic_electrons_with_temperature_equation
 
 """
 """
-mutable struct initial_condition_input_mutable
-    # initialization inputs for one coordinate of a separable distribution function
-    initialization_option::String
-    # inputs for "gaussian" initial condition
-    width::mk_float
-    # inputs for "sinusoid" initial condition
-    wavenumber::mk_int
-    density_amplitude::mk_float
-    density_phase::mk_float
-    upar_amplitude::mk_float
-    upar_phase::mk_float
-    temperature_amplitude::mk_float
-    temperature_phase::mk_float
-    # inputs for "monomial" initial condition
-    monomial_degree::mk_int
-end
-
-"""
-"""
 Base.@kwdef struct spatial_initial_condition_input
     # initialization inputs for one coordinate of a separable distribution function
     initialization_option::String
@@ -217,23 +198,6 @@ Base.@kwdef struct velocity_initial_condition_input
     vth0::mk_float
     vpa0::mk_float
     vperp0::mk_float
-end
-
-"""
-"""
-mutable struct species_parameters_mutable
-    # type is the type of species; options are 'ion' or 'neutral'
-    type::String
-    # array containing the initial line-averaged temperature for this species
-    initial_temperature::mk_float
-    # array containing the initial line-averaged density for this species
-    initial_density::mk_float
-    # struct containing the initial condition info in z for this species
-    z_IC::initial_condition_input_mutable
-    # struct containing the initial condition info in r for this species
-    r_IC::initial_condition_input_mutable
-    # struct containing the initial condition info in vpa for this species
-    vpa_IC::initial_condition_input_mutable
 end
 
 """
