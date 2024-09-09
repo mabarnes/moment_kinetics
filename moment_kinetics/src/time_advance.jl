@@ -325,7 +325,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
 
         # Makes no sense to use write_error_diagnostics because non-adaptive schemes have
         # no error estimate
-        input_dict["write_error_diagnostics"] = false
+        input_dict["timestepping"]["write_error_diagnostics"] = false
     end
 
     if adaptive && t_input["write_error_diagnostics"] && !t_input["write_after_fixed_step_count"]
