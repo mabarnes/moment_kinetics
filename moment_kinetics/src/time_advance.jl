@@ -1896,9 +1896,9 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
                     print(Dates.format(now(), dateformat"H:MM:SS"))
                 end
             end
-            write_data_to_ascii(pdf, moments, fields, vpa, vperp, z, r, t_params.t[],
-                                composition.n_ion_species, composition.n_neutral_species,
-                                ascii_io)
+            write_data_to_ascii(pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r,
+                                t_params.t[], composition.n_ion_species,
+                                composition.n_neutral_species, ascii_io)
             write_all_moments_data_to_binary(scratch, moments, fields,
                                              composition.n_ion_species,
                                              composition.n_neutral_species, io_moments,

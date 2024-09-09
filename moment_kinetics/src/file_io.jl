@@ -2994,21 +2994,32 @@ include("file_io_hdf5.jl")
 
 """
 """
-function write_data_to_ascii(pdf, moments, fields, vpa, vperp, z, r, t, n_ion_species,
-                             n_neutral_species, ascii_io::Union{ascii_ios,Nothing})
+function write_data_to_ascii(pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r, t,
+                             n_ion_species, n_neutral_species,
+                             ascii_io::Union{ascii_ios,Nothing})
     if ascii_io === nothing || ascii_io.moments_ion === nothing
         # ascii I/O is disabled
         return nothing
     end
 
+    if r.n > 1 || vperp.n > 1 || vzeta.n > 1 || vr.n > 1
+        error("Ascii I/O is only implemented for 1D1V case")
+    end
+    if vz.n != vpa.n
+        error("ASCII I/O is only implemented when vz.n($(vz.n))==vpa.n($(vpa.n))")
+    end
+    if n_neutral_species != n_ion_species
+        error("ASCII I/O is only implemented when n_neutral_species($(n_neutral_species))==n_ion_species($(n_ion_species))")
+    end
+
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        write_f_ascii(pdf, z, vpa, t, ascii_io.ff)
+        @views write_f_ascii(pdf, z, vpa, t, ascii_io.ff)
         write_moments_ion_ascii(moments.ion, z, r, t, n_ion_species, ascii_io.moments_ion)
         write_moments_electron_ascii(moments.electron, z, r, t, ascii_io.moments_electron)
         if n_neutral_species > 0
-            write_moments_neutral_ascii(moments.neutral, z, r, t, n_neutral_species, ascii_io.moments_neutral)
+            @views write_moments_neutral_ascii(moments.neutral, z, r, t, n_neutral_species, ascii_io.moments_neutral)
         end
         write_fields_ascii(fields, z, r, t, ascii_io.fields)
     end
@@ -3025,11 +3036,11 @@ function write_f_ascii(f, z, vpa, t, ascii_io)
         @inbounds begin
             #n_species = size(f,3)
             #for is ∈ 1:n_species
-                for j ∈ 1:vpa.n
-                    for i ∈ 1:z.n
+                for i ∈ 1:z.n
+                    for j ∈ 1:vpa.n
                         println(ascii_io,"t: ", t, "   z: ", z.grid[i],
-                            "  vpa: ", vpa.grid[j], "   fion: ", f.ion.norm[i,j,1], 
-                            "   fneutral: ", f.neutral.norm[i,j,1])
+                            "  vpa: ", vpa.grid[j], "   fion: ", f.ion.norm[j,1,i,1,1],
+                            "   fneutral: ", f.neutral.norm[j,1,1,i,1,1])
                     end
                     println(ascii_io)
                 end

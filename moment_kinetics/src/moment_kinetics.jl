@@ -361,8 +361,8 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         restart_time_index, previous_runs_info, time_for_setup, t_params,
         nl_solver_params)
     # write initial data to ascii files
-    write_data_to_ascii(pdf, moments, fields, vpa, vperp, z, r, t_params.t[],
-        composition.n_ion_species, composition.n_neutral_species, ascii_io)
+    write_data_to_ascii(pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r,
+        t_params.t[], composition.n_ion_species, composition.n_neutral_species, ascii_io)
     # write initial data to binary files
 
     t_params.moments_output_counter[] += 1

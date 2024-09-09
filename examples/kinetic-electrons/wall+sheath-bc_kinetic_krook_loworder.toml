@@ -37,8 +37,8 @@ discretization = "chebyshev_pseudospectral"
 #discretization = "gausslegendre_pseudospectral"
 
 [vz]
-ngrid = 17
-nelement = 10
+ngrid = 5
+nelement = 80
 L = 8.0
 bc = "zero"
 discretization = "chebyshev_pseudospectral"
