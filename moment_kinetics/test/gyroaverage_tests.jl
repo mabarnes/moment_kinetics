@@ -166,7 +166,7 @@ function gyroaverage_test(absolute_error; rhostar=0.1, pitch=0.5, ngrid=5, kr=2,
         
         # create test geometry
         option = "constant-helical"
-        inputdict = Dict("geometry" => Dict("option" => option, "rhostar" => rhostar, "pitch" => pitch))
+        inputdict = OptionsDict("geometry" => OptionsDict("option" => option, "rhostar" => rhostar, "pitch" => pitch))
         geometry_in = setup_geometry_input(inputdict)
         geometry = init_magnetic_geometry(geometry_in,z,r)
         
