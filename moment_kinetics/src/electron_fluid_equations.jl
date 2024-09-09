@@ -52,7 +52,7 @@ end
 """
 use charge conservation equation to solve for the electron parallel flow density:
     d/dz(sum_i n_i upar_i - n_e upar_e) = 0
-    ==> [sum_i n_i upar_i](z) - [sum_i n_i upar_i](zbound) = [n_e upar_e](z) - [n_e upar_e](zbound)
+    ==> {sum_i n_i upar_i}(z) - {sum_i n_i upar_i}(zbound) = {n_e upar_e}(z) - {n_e upar_e}(zbound)
 inputs: 
     upar_e = should contain updated electron parallel flow at boundaries in zed
     updated = flag indicating whether the electron parallel flow is already updated

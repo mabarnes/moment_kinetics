@@ -1035,7 +1035,7 @@ external source amplitude.
 
 As the electron density source must be equal to the ion density source in order not to
 inject charge into the simulation, the electron source (at least in some modes of
-operation) depends on the ion source, so [`external_ion_source_controller`](@ref) must be
+operation) depends on the ion source, so [`external_ion_source_controller!`](@ref) must be
 called before this function is called so that `moments.ion.external_source_amplitude` is
 up to date.
 """
