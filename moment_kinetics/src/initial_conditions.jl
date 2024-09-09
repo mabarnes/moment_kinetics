@@ -684,7 +684,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
         end
         if code_time > 0.0
             tind = searchsortedfirst(t_params.electron.moments_output_times, code_time)
-            n_truncated = length(t_params.electron.moments_output_times) - tind
+            n_truncated = max(length(t_params.electron.moments_output_times) - tind, 0)
             truncated_times = t_params.electron.moments_output_times[tind+1:end]
             resize!(t_params.electron.moments_output_times, n_truncated)
             t_params.electron.moments_output_times .= truncated_times
