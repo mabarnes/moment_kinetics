@@ -350,9 +350,7 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
 
     # If there are no ion sources, add an inactive ion source to the vector
     if counter == 1
-        inactive_ion_source = get_settings_ions(1, false)
-        push!(ion_sources, inactive_ion_source)
-        counter += 1
+        push!(ion_sources, get_settings_ions(1, false))
     end
 
     # put all electron sources into electron_source_data struct vector, where 
@@ -360,11 +358,9 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
     electron_sources = electron_source_data[]
     if electron_physics ∈ (braginskii_fluid, kinetic_electrons,
                            kinetic_electrons_with_temperature_equation)
-        electron_sources .= get_settings_electrons.(ion_sources)
+        electron_sources = [get_settings_electrons(ion_sources[i]) for i ∈ 1:counter]
     else
-        # this is not very efficient because we're copying the same electron_settings 
-        # for each ion source
-        push!(electron_sources, get_settings_electrons(get_settings_ions(1, false)))
+        electron_sources = [get_settings_electrons(get_settings_ions(1, false)) for i ∈ 1:counter]
     end
 
     # put all neutral sources into neutral_source_data struct vector
@@ -408,6 +404,10 @@ function get_source_profile(profile_type, width, relative_minimum, coord)
             end
         end
         return profile
+    elseif profile_type == "wall_exp_decay"
+        x = coord.grid
+        return @. (1.0 - relative_minimum) * exp(-(x-x[1]) / width) + relative_minimum +
+                  (1.0 - relative_minimum) * exp(-(x[end]-x) / width) + relative_minimum
     else
         error("Unrecognised source profile type '$profile_type'.")
     end
@@ -572,7 +572,7 @@ function initialize_external_source_amplitude!(moments, external_source_settings
         neutral_source_settings = external_source_settings.neutral
         for index ∈ eachindex(neutral_source_settings)
             if neutral_source_settings[index].active
-                if neutral_source.source_type == "energy"
+                if neutral_source_settings[index].source_type == "energy"
                     @loop_r_z ir iz begin
                         moments.neutral.external_source_amplitude[iz,ir,index] =
                             neutral_source_settings[index].source_strength *
@@ -1087,7 +1087,7 @@ function external_neutral_source!(pdf, fvec, moments, neutral_source, index, vze
     end
 
 
-    if neutral_source_settings.source_type == "energy"
+    if neutral_source.source_type == "energy"
         # Take particles out of pdf so source does not change density
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
             pdf[iveta,ivr,ivz,iz,ir,isn] -= dt * source_amplitude[iz,ir] *
