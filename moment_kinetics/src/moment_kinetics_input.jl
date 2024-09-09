@@ -52,7 +52,7 @@ false for other situations (e.g. when post-processing).
 `ignore_MPI` should be false when actually running a simulation, but defaults to true for
 other situations (e.g. when post-processing).
 """
-function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI=true)
+function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI=true)
 
     # Check for input options that used to exist, but do not any more. If these are
     # present, the user probably needs to update their input file.
@@ -79,7 +79,7 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
                             "run_name", "base_directory",
                            )
     for opt in removed_options_list
-        if opt ∈ keys(scan_input)
+        if opt ∈ keys(input_dict)
             error("Option '$opt' is no longer used. Please update your input file. The "
                   * "option may have been moved into an input file section - there are "
                   * "no longer any top-level options (i.e. ones not in a section). You "
@@ -89,7 +89,7 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     end
     
     # read composition and species data
-    composition = get_species_input(scan_input)
+    composition = get_species_input(input_dict)
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
     
@@ -97,7 +97,7 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     # out what `output_dir` should be. The setup is completed later, after some other
     # sections have been read.
     io_settings = set_defaults_and_check_section!(
-        scan_input, "output";
+        input_dict, "output";
         run_name="",
         base_directory="runs",
         ascii_output=false,
@@ -114,7 +114,7 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     # if evolve_moments.density = true, evolve density via continuity eqn
     # and g = f/n via modified drift kinetic equation
     evolve_moments_settings = set_defaults_and_check_section!(
-        scan_input, "evolve_moments";
+        input_dict, "evolve_moments";
         density=false,
         parallel_flow=false,
         parallel_pressure=false,
@@ -124,13 +124,13 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
 
     # Reference parameters that define the conversion between physical quantities and
     # normalised values used in the code.
-    reference_params = setup_reference_parameters(scan_input)
+    reference_params = setup_reference_parameters(input_dict)
     
     ## set geometry_input
-    geometry_in = setup_geometry_input(scan_input)
+    geometry_in = setup_geometry_input(input_dict)
     
     reactions_settings = set_defaults_and_check_section!(
-        scan_input, "reactions";
+        input_dict, "reactions";
         charge_exchange_frequency=2.0*sqrt(composition.ion[1].initial_temperature),
         electron_charge_exchange_frequency=0.0,
         ionization_frequency=2.0*sqrt(composition.ion[1].initial_temperature),
@@ -139,16 +139,16 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
        )
     reactions_input = Dict_to_NamedTuple(reactions_settings)
     electron_fluid_collisions_settings = set_defaults_and_check_section!(
-        scan_input, "electron_fluid_collisions";
+        input_dict, "electron_fluid_collisions";
         nu_ei=0.0,
        )
     electron_fluid_collisions_input = Dict_to_NamedTuple(electron_fluid_collisions_settings)
     # set up krook collision inputs
-    krook_input = setup_krook_collisions_input(scan_input)
+    krook_input = setup_krook_collisions_input(input_dict)
     # set up Fokker-Planck collision inputs
-    fkpl_input = setup_fkpl_collisions_input(scan_input)
+    fkpl_input = setup_fkpl_collisions_input(input_dict)
     # set up maxwell diffusion collision inputs
-    mxwl_diff_input = setup_mxwl_diff_collisions_input(scan_input)
+    mxwl_diff_input = setup_mxwl_diff_collisions_input(input_dict)
     # write total collision struct using the structs above, as each setup function 
     # for the collisions outputs itself a struct of the type of collision, which
     # is a substruct of the overall collisions_input struct.
@@ -157,7 +157,7 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
 
     # parameters related to the time stepping
     timestepping_section = set_defaults_and_check_section!(
-        scan_input, "timestepping";
+        input_dict, "timestepping";
         nstep=5,
         dt=0.00025/sqrt(composition.ion[1].initial_temperature),
         CFL_prefactor=-1.0,
@@ -201,7 +201,7 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
 
     # parameters related to electron time stepping
     electron_timestepping_section = set_defaults_and_check_section!(
-        scan_input, "electron_timestepping";
+        input_dict, "electron_timestepping";
         nstep=50000,
         dt=timestepping_section["dt"] * sqrt(composition.me_over_mi),
         CFL_prefactor=timestepping_section["CFL_prefactor"],
@@ -320,10 +320,10 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         error("maximum_dt=$(timestepping_section["maximum_dt"]) must be positive")
     end
 
-    use_for_init_is_default = !(("manufactured_solns" ∈ keys(scan_input)) &&
-                                ("use_for_init" ∈ keys(scan_input["manufactured_solns"])))
+    use_for_init_is_default = !(("manufactured_solns" ∈ keys(input_dict)) &&
+                                ("use_for_init" ∈ keys(input_dict["manufactured_solns"])))
     manufactured_solns_section = set_defaults_and_check_section!(
-        scan_input, "manufactured_solns";
+        input_dict, "manufactured_solns";
         use_for_advance=false,
         use_for_init=false,
         # constant to be used to control Ez divergence in MMS tests
@@ -362,8 +362,8 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     # set up distributed-memory MPI information for z and r coords
     # need grid and MPI information to determine these values 
     # MRH just put dummy values now 
-    r_coord_input = get_coordinate_input(scan_input, "r"; ignore_MPI=ignore_MPI)
-    z_coord_input = get_coordinate_input(scan_input, "z"; ignore_MPI=ignore_MPI)
+    r_coord_input = get_coordinate_input(input_dict, "r"; ignore_MPI=ignore_MPI)
+    z_coord_input = get_coordinate_input(input_dict, "z"; ignore_MPI=ignore_MPI)
     if ignore_MPI
         irank_z = irank_r = 0
         nrank_z = nrank_r = 1
@@ -385,7 +385,7 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     end
 
     em_fields_settings = set_defaults_and_check_section!(
-        scan_input, "em_fields";
+        input_dict, "em_fields";
         force_Er_zero_at_wall=false,
        )
     em_input = Dict_to_NamedTuple(em_fields_settings)
@@ -426,40 +426,40 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
                                       run_directory=run_directory, ignore_MPI=ignore_MPI,
                                       irank=irank_r, nrank=nrank_r, comm=comm_sub_r)
     # initialize vpa grid and write grid point locations to file
-    vpa, vpa_spectral = define_coordinate(scan_input, "vpa";
+    vpa, vpa_spectral = define_coordinate(input_dict, "vpa";
                                           parallel_io=io_immutable.parallel_io,
                                           run_directory=run_directory,
                                           ignore_MPI=ignore_MPI)
     # initialize vperp grid and write grid point locations to file
-    vperp, vperp_spectral = define_coordinate(scan_input, "vperp";
+    vperp, vperp_spectral = define_coordinate(input_dict, "vperp";
                                               parallel_io=io_immutable.parallel_io,
                                               run_directory=run_directory,
                                               ignore_MPI=ignore_MPI)
     # initialize gyrophase grid and write grid point locations to file
-    gyrophase, gyrophase_spectral = define_coordinate(scan_input, "gyrophase";
+    gyrophase, gyrophase_spectral = define_coordinate(input_dict, "gyrophase";
                                                       parallel_io=io_immutable.parallel_io,
                                                       run_directory=run_directory,
                                                       ignore_MPI=ignore_MPI)
     # initialize vz grid and write grid point locations to file
-    vz, vz_spectral = define_coordinate(scan_input, "vz";
+    vz, vz_spectral = define_coordinate(input_dict, "vz";
                                         parallel_io=io_immutable.parallel_io,
                                         run_directory=run_directory,
                                         ignore_MPI=ignore_MPI)
     # initialize vr grid and write grid point locations to file
-    vr, vr_spectral = define_coordinate(scan_input, "vr";
+    vr, vr_spectral = define_coordinate(input_dict, "vr";
                                         parallel_io=io_immutable.parallel_io,
                                         run_directory=run_directory,
                                         ignore_MPI=ignore_MPI)
     # initialize vr grid and write grid point locations to file
-    vzeta, vzeta_spectral = define_coordinate(scan_input, "vzeta";
+    vzeta, vzeta_spectral = define_coordinate(input_dict, "vzeta";
                                               parallel_io=io_immutable.parallel_io,
                                               run_directory=run_directory,
                                               ignore_MPI=ignore_MPI)
 
-    external_source_settings = setup_external_sources!(scan_input, r, z,
+    external_source_settings = setup_external_sources!(input_dict, r, z,
                                                        composition.electron_physics)
 
-    num_diss_params = setup_numerical_dissipation(scan_input)
+    num_diss_params = setup_numerical_dissipation(input_dict)
 
     geometry = init_magnetic_geometry(geometry_in,z,r)
     if any(geometry.dBdz .!= 0.0) &&
@@ -470,7 +470,7 @@ function mk_input(scan_input=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
 
     species_immutable = (ion = composition.ion, neutral = composition.neutral)
 
-    # Ideally `check_sections!(scan_input) would be called here to check that no
+    # Ideally `check_sections!(input_dict) would be called here to check that no
     # unexpected sections or top-level options were passed (helps to catch typos in input
     # files). However, it needs to be called after calls to `setup_nonlinear_solve()`
     # because the inputs for nonlinear solvers are only read there, but before electron
