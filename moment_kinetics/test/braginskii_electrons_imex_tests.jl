@@ -10,57 +10,58 @@ using Base.Filesystem: tempname
 using MPI
 
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.input_structs: grid_input, advection_input
+using moment_kinetics.input_structs: grid_input, advection_input, merge_dict_with_kwargs!
 using moment_kinetics.interpolation: interpolate_to_grid_z
 using moment_kinetics.load_data: get_run_info_no_setup, close_run_info, get_variable
+using moment_kinetics.type_definitions: OptionsDict
 
 # default inputs for tests
-test_input = Dict("n_ion_species" => 1,
-                  "n_neutral_species" => 1,
-                  "electron_physics" => "braginskii_fluid",
+test_input = OptionsDict( "composition" => OptionsDict("n_ion_species" => 1,
+                                                  "n_neutral_species" => 1,
+                                                  "electron_physics" => "braginskii_fluid",
+                                                  "T_e" => 0.2),
                   "run_name" => "braginskii-electrons-imex",
                   "evolve_moments_density" => true,
                   "evolve_moments_parallel_flow" => true,
                   "evolve_moments_parallel_pressure" => true,
                   "evolve_moments_conservation" => true,
-                  "T_e" => 0.2,
+                  "ion_species_1" => OptionsDict("initial_density" => 1.0,
+                                                      "initial_temperature" => 1.0),
+                  "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
+                                                           "density_amplitude" => 0.1,
+                                                           "density_phase" => 0.0,
+                                                           "upar_amplitude" => 1.0,
+                                                           "upar_phase" => 0.0,
+                                                           "temperature_amplitude" => 0.1,
+                                                           "temperature_phase" => 1.0),
+                  "vpa_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                             "density_amplitude" => 1.0,
+                                                             "density_phase" => 0.0,
+                                                             "upar_amplitude" => 0.0,
+                                                             "upar_phase" => 0.0,
+                                                             "temperature_amplitude" => 0.0,
+                                                             "temperature_phase" => 0.0),
+                  "neutral_species_1" => OptionsDict("initial_density" => 1.0,
+                                                          "initial_temperature" => 1.0),
+                  "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "sinusoid",
+                                                               "density_amplitude" => 0.001,
+                                                               "density_phase" => 0.0,
+                                                               "upar_amplitude" => 0.0,
+                                                               "upar_phase" => 0.0,
+                                                               "temperature_amplitude" => 0.0,
+                                                               "temperature_phase" => 0.0),
+                  "vpa_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                                  "density_amplitude" => 1.0,
+                                                                  "density_phase" => 0.0,
+                                                                  "upar_amplitude" => 0.0,
+                                                                  "upar_phase" => 0.0,
+                                                                  "temperature_amplitude" => 0.0,
+                                                                  "temperature_phase" => 0.0),
                   "nu_ei" => 1.0e3,
-                  "initial_density1" => 1.0,
-                  "initial_temperature1" => 1.0,
-                  "z_IC_option1" => "sinusoid",
-                  "z_IC_density_amplitude1" => 0.1,
-                  "z_IC_density_phase1" => 0.0,
-                  "z_IC_upar_amplitude1" => 1.0,
-                  "z_IC_upar_phase1" => 0.0,
-                  "z_IC_temperature_amplitude1" => 0.1,
-                  "z_IC_temperature_phase1" => 1.0,
-                  "vpa_IC_option1" => "gaussian",
-                  "vpa_IC_density_amplitude1" => 1.0,
-                  "vpa_IC_density_phase1" => 0.0,
-                  "vpa_IC_upar_amplitude1" => 0.0,
-                  "vpa_IC_upar_phase1" => 0.0,
-                  "vpa_IC_temperature_amplitude1" => 0.0,
-                  "vpa_IC_temperature_phase1" => 0.0,
-                  "initial_density2" => 1.0,
-                  "initial_temperature2" => 1.0,
-                  "z_IC_option2" => "sinusoid",
-                  "z_IC_density_amplitude2" => 0.001,
-                  "z_IC_density_phase2" => 0.0,
-                  "z_IC_upar_amplitude2" => 0.0,
-                  "z_IC_upar_phase2" => 0.0,
-                  "z_IC_temperature_amplitude2" => 0.0,
-                  "z_IC_temperature_phase2" => 0.0,
-                  "vpa_IC_option2" => "gaussian",
-                  "vpa_IC_density_amplitude2" => 1.0,
-                  "vpa_IC_density_phase2" => 0.0,
-                  "vpa_IC_upar_amplitude2" => 0.0,
-                  "vpa_IC_upar_phase2" => 0.0,
-                  "vpa_IC_temperature_amplitude2" => 0.0,
-                  "vpa_IC_temperature_phase2" => 0.0,
                   "charge_exchange_frequency" => 0.75,
                   "ionization_frequency" => 0.5,
                   "constant_ionization_rate" => false,
-                  "timestepping" => Dict{String,Any}("type" => "KennedyCarpenterARK324",
+                  "timestepping" => OptionsDict("type" => "KennedyCarpenterARK324",
                                                      "implicit_ion_advance" => false,
                                                      "implicit_vpa_advection" => false,
                                                      "nstep" => 10000,
@@ -69,7 +70,7 @@ test_input = Dict("n_ion_species" => 1,
                                                      "rtol" => 1.0e-7,
                                                      "nwrite" => 10000,
                                                      "high_precision_error_sum" => true),
-                  "nonlinear_solver" => Dict{String,Any}("nonlinear_max_iterations" => 100),
+                  "nonlinear_solver" => OptionsDict("nonlinear_max_iterations" => 100),
                   "r_ngrid" => 1,
                   "r_nelement" => 1,
                   "z_ngrid" => 17,
@@ -86,9 +87,9 @@ test_input = Dict("n_ion_species" => 1,
                   "vz_L" => 12.0,
                   "vz_bc" => "zero",
                   "vz_discretization" => "chebyshev_pseudospectral",
-                  "ion_numerical_dissipation" => Dict{String,Any}("force_minimum_pdf_value" => 0.0,
+                  "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
                                                                   "vpa_dissipation_coefficient" => 1e0),
-                  "neutral_numerical_dissipation" => Dict{String,Any}("force_minimum_pdf_value" => 0.0,
+                  "neutral_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
                                                                       "vz_dissipation_coefficient" => 1e-1))
 
 if global_size[] > 2 && global_size[] % 2 == 0
@@ -106,10 +107,10 @@ function run_test(test_input, expected_p, expected_q, expected_vt; rtol=1.e-6,
 
     # Make a copy to make sure nothing modifies the input Dicts defined in this test
     # script.
-    test_input = deepcopy(test_input)
+    input = deepcopy(test_input)
 
     # Convert keyword arguments to a unique name
-    name = test_input["run_name"]
+    name = input["run_name"]
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
 
@@ -120,12 +121,8 @@ function run_test(test_input, expected_p, expected_q, expected_vt; rtol=1.e-6,
     # Provide some progress info
     println("    - testing ", name)
 
-    # Convert dict from symbol keys to String keys
-    modified_inputs = Dict(String(k) => v for (k, v) in args)
-
     # Update default inputs with values to be changed
-    input = merge(test_input, modified_inputs)
-
+    merge_dict_with_kwargs!(input; args...)
     input["run_name"] = name
 
     # Suppress console output while running

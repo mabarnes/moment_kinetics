@@ -10,6 +10,7 @@ using ..input_structs: krook_collisions_input, set_defaults_and_check_section!
 using ..reference_parameters: get_reference_collision_frequency_ii,
                               get_reference_collision_frequency_ee,
                               get_reference_collision_frequency_ei
+using ..reference_parameters: setup_reference_parameters
 
 
 """
@@ -21,7 +22,8 @@ use_krook = true
 nuii0 = 1.0
 frequency_option = "manual"
 """
-function setup_krook_collisions_input(toml_input::Dict, reference_params)
+function setup_krook_collisions_input(toml_input::Dict)
+    reference_params = setup_reference_parameters(toml_input)
     # get reference collision frequency
     nuii_krook_default = get_reference_collision_frequency_ii(reference_params)
     nuee_krook_default = get_reference_collision_frequency_ee(reference_params)
