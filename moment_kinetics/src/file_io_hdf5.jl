@@ -85,8 +85,7 @@ end
 # HDF5.H5DataStore is the supertype for HDF5.File and HDF5.Group
 function write_single_value!(file_or_group::HDF5.H5DataStore, name,
                              data::Union{Number, AbstractString, AbstractArray{T,N}},
-                             coords::Union{coordinate,mk_int}...; parallel_io,
-                             n_ion_species=nothing, n_neutral_species=nothing,
+                             coords::Union{coordinate,mk_int,NamedTuple}...; parallel_io,
                              description=nothing, units=nothing) where {T,N}
     if isa(data, Union{Number, AbstractString})
         file_or_group[name] = data
@@ -99,32 +98,18 @@ function write_single_value!(file_or_group::HDF5.H5DataStore, name,
         return nothing
     end
 
-    if n_ion_species !== nothing && n_neutral_species != nothing
-        error("Cannot have both ion-species and neutral species dimensions." *
-              "Got n_ion_species=$n_ion_species, n_neutral_species=$n_neutral_species")
+    if any(isa(c, mk_int) ? c < 0 : c.n < 0 for c ∈ coords)
+        error("Got a negative `n` in $coords")
+    end
+    if any(isa(c, mk_int) ? c == 0 : c.n == 0 for c ∈ coords)
+        # No data to write
+        return nothing
     end
 
-    if n_ion_species !== nothing
-        if n_ion_species < 0
-            error("n_ion_species must be non-negative, got $n_ion_species")
-        elseif n_ion_species == 0
-            # No data to write
-            return nothing
-        end
-        coords = tuple(coords..., n_ion_species)
-    elseif n_neutral_species !== nothing
-        if n_neutral_species < 0
-            error("n_neutral_species must be non-negative, got $n_neutral_species")
-        elseif n_neutral_species == 0
-            # No data to write
-            return nothing
-        end
-        coords = tuple(coords..., n_neutral_species)
-    end
     dim_sizes, chunk_sizes = hdf5_get_fixed_dim_sizes(coords, parallel_io)
     io_var = create_dataset(file_or_group, name, T, dim_sizes, chunk=chunk_sizes)
-    local_ranges = Tuple(isa(c, mk_int) ? (1:c) : c.local_io_range for c ∈ coords)
-    global_ranges = Tuple(isa(c, mk_int) ? (1:c) : c.global_io_range for c ∈ coords)
+    local_ranges = Tuple(isa(c, mk_int) ? (1:c) : isa(c, coordinate) ? c.local_io_range : c.n for c ∈ coords)
+    global_ranges = Tuple(isa(c, mk_int) ? (1:c) : isa(c, coordinate) ? c.global_io_range : c.n for c ∈ coords)
 
     if N == 1
         io_var[global_ranges[1]] = @view data[local_ranges[1]]
@@ -176,7 +161,7 @@ of species).
 """
 function hdf5_get_fixed_dim_sizes(coords, parallel_io)
     if parallel_io
-        dim_sizes = Tuple(isa(c, mk_int) ? c : c.n_global for c in coords)
+        dim_sizes = Tuple(isa(c, mk_int) ? c : (isa(c, coordinate) ? c.n_global : c.n) for c in coords)
     else
         dim_sizes = Tuple(isa(c, mk_int) ? c : c.n for c in coords)
     end
@@ -209,65 +194,24 @@ function hdf5_get_dynamic_dim_sizes(fixed_coords, parallel_io)
 end
 
 function create_dynamic_variable!(file_or_group::HDF5.H5DataStore, name, type,
-                                  coords::coordinate...; parallel_io,
-                                  n_ion_species=nothing, n_neutral_species=nothing,
-                                  diagnostic_var_size=nothing, description=nothing,
-                                  units=nothing)
+                                  coords::Union{coordinate,NamedTuple}...; parallel_io,
+                                  description=nothing, units=nothing)
 
-    if n_ion_species !== nothing && n_neutral_species !== nothing
-        error("Variable should not contain both ion and neutral species dimensions. "
-              * "Got n_ion_species=$n_ion_species and "
-              * "n_neutral_species=$n_neutral_species")
+    if any(isa(c, mk_int) ? c < 0 : c.n < 0 for c ∈ coords)
+        error("Got a negative `n` in $coords")
     end
-    if diagnostic_var_size !== nothing && n_ion_species !== nothing
-        error("Diagnostic variable should not contain both ion species dimension. Got "
-              * "diagnostic_var_size=$diagnostic_var_size and "
-              * "n_ion_species=$n_ion_species")
-    end
-    if diagnostic_var_size !== nothing && n_neutral_species !== nothing
-        error("Diagnostic variable should not contain both neutral species dimension. "
-              * "Got diagnostic_var_size=$diagnostic_var_size and "
-              * "n_neutral_species=$n_neutral_species")
+    if any(isa(c, mk_int) ? c == 0 : c.n == 0 for c ∈ coords)
+        # No data to write
+        return nothing
     end
 
-    # Add the number of species to the spatial/velocity-space coordinates
-    if diagnostic_var_size !== nothing
-        if isa(diagnostic_var_size, Number)
-            # Make diagnostic_var_size a Tuple
-            diagnostic_var_size = (diagnostic_var_size,)
-        end
-        fixed_coords = diagnostic_var_size
-    elseif n_ion_species !== nothing
-        if n_ion_species < 0
-            error("n_ion_species must be non-negative, got $n_ion_species")
-        elseif n_ion_species == 0
-            # No data to write
-            return nothing
-        end
-        fixed_coords = tuple(coords..., n_ion_species)
-    elseif n_neutral_species !== nothing
-        if n_neutral_species < 0
-            error("n_neutral_species must be non-negative, got $n_neutral_species")
-        elseif n_neutral_species == 0
-            # No data to write
-            return nothing
-        end
-        fixed_coords = tuple(coords..., n_neutral_species)
-    else
-        fixed_coords = coords
-    end
     initial_dim_sizes, max_dim_sizes, chunk_size =
-        hdf5_get_dynamic_dim_sizes(fixed_coords, parallel_io)
+        hdf5_get_dynamic_dim_sizes(coords, parallel_io)
     var = create_dataset(file_or_group, name, type, (initial_dim_sizes, max_dim_sizes),
                          chunk=chunk_size)
 
     # Add attribute listing the dimensions belonging to this variable
     dim_names = Tuple(c.name for c ∈ coords)
-    if n_ion_species !== nothing
-        dim_names = tuple(dim_names..., "ion_species")
-    elseif n_neutral_species !== nothing
-        dim_names = tuple(dim_names..., "neutral_species")
-    end
     add_attribute!(var, "dims", join(dim_names, ","))
 
     if description !== nothing
