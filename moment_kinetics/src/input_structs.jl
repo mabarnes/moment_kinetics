@@ -161,43 +161,43 @@ export kinetic_electrons_with_temperature_equation
 """
 Base.@kwdef struct spatial_initial_condition_input
     # initialization inputs for one coordinate of a separable distribution function
-    initialization_option::String
+    initialization_option::String = "gaussian"
     # inputs for "gaussian" initial condition
-    width::mk_float
+    width::mk_float = 0.125
     # inputs for "sinusoid" initial condition
-    wavenumber::mk_int
-    density_amplitude::mk_float
-    density_phase::mk_float
-    upar_amplitude::mk_float
-    upar_phase::mk_float
-    temperature_amplitude::mk_float
-    temperature_phase::mk_float
+    wavenumber::mk_int = 1
+    density_amplitude::mk_float = 0.001
+    density_phase::mk_float = 0.0
+    upar_amplitude::mk_float = 0.0
+    upar_phase::mk_float = 0.0
+    temperature_amplitude::mk_float = 0.0
+    temperature_phase::mk_float = 0.0
     # inputs for "monomial" initial condition
-    monomial_degree::mk_int
+    monomial_degree::mk_int = 2
 end
 
 """
 """
 Base.@kwdef struct velocity_initial_condition_input
     # initialization inputs for one coordinate of a separable distribution function
-    initialization_option::String
+    initialization_option::String = "gaussian"
     # inputs for "gaussian" initial condition
-    width::mk_float
+    width::mk_float = 1.0
     # inputs for "sinusoid" initial condition
-    wavenumber::mk_int
-    density_amplitude::mk_float
-    density_phase::mk_float
-    upar_amplitude::mk_float
-    upar_phase::mk_float
-    temperature_amplitude::mk_float
-    temperature_phase::mk_float
+    wavenumber::mk_int = 1
+    density_amplitude::mk_float = 1.0
+    density_phase::mk_float = 0.0
+    upar_amplitude::mk_float = 0.0
+    upar_phase::mk_float = 0.0
+    temperature_amplitude::mk_float = 0.0
+    temperature_phase::mk_float = 0.0
     # inputs for "monomial" initial condition
-    monomial_degree::mk_int
+    monomial_degree::mk_int = 2
     # inputs for "isotropic-beam", "directed-beam" initial conditions
-    v0::mk_float
-    vth0::mk_float
-    vpa0::mk_float
-    vperp0::mk_float
+    v0::mk_float = 1.0
+    vth0::mk_float = 1.0
+    vpa0::mk_float = 1.0
+    vperp0::mk_float = 1.0
 end
 
 """
@@ -236,8 +236,8 @@ Base.@kwdef struct neutral_species_parameters
     z_IC::spatial_initial_condition_input
     # struct containing the initial condition info in r for this species
     r_IC::spatial_initial_condition_input
-    # struct containing the initial condition info in vpa for this species
-    vpa_IC::velocity_initial_condition_input
+    # struct containing the initial condition info in vz for this species
+    vz_IC::velocity_initial_condition_input
 end
 
 """
@@ -381,18 +381,6 @@ end
 
 @enum binary_format_type hdf5 netcdf
 export binary_format_type, hdf5, netcdf
-
-"""
-Settings and input for setting up file I/O
-"""
-Base.@kwdef struct io_input
-    output_dir::String
-    run_name::String
-    ascii_output::Bool
-    binary_format::binary_format_type
-    parallel_io::Bool
-    run_id::String
-end
 
 """
 """

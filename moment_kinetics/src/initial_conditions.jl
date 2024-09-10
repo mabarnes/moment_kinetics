@@ -1294,7 +1294,7 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
 
     #if spec.vz_IC.initialization_option == "gaussian"
     # For now, continue to use 'vpa' initialization options for neutral species
-    if spec.vpa_IC.initialization_option == "gaussian"
+    if spec.vz_IC.initialization_option == "gaussian"
         # initial condition is a Gaussian in the peculiar velocity
         if z.bc != "wall"
             for iz ∈ 1:z.n
@@ -1518,20 +1518,20 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
             end
         end
     #elseif spec.vz_IC.initialization_option == "vzgaussian"
-    elseif spec.vpa_IC.initialization_option == "vzgaussian"
+    elseif spec.vz_IC.initialization_option == "vzgaussian"
         @loop_z_vzeta_vr iz ivzeta ivr begin
             @. pdf[:,ivr,ivzeta,iz] = vz.grid^2*exp(-vz.scratch^2 - vr[ivr]^2 -
                                                     vzeta[ivzeta]^2) / vth[iz]
         end
     #elseif spec.vz_IC.initialization_option == "sinusoid"
-    elseif spec.vpa_IC.initialization_option == "sinusoid"
+    elseif spec.vz_IC.initialization_option == "sinusoid"
         # initial condition is sinusoid in vz
         @loop_z_vzeta_vr iz ivzeta ivr begin
             @. pdf[:,ivr,ivzeta,iz] =
                 spec.vz_IC.amplitude*cospi(2.0*spec.vz_IC.wavenumber*vz.grid/vz.L)
         end
     #elseif spec.vz_IC.initialization_option == "monomial"
-    elseif spec.vpa_IC.initialization_option == "monomial"
+    elseif spec.vz_IC.initialization_option == "monomial"
         # linear variation in vz, with offset so that
         # function passes through zero at upwind boundary
         @loop_z_vzeta_vr iz ivzeta ivr begin
