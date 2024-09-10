@@ -624,17 +624,8 @@ function set_defaults_and_check_top_level!(options::AbstractDict; kwargs...)
     return options
 end
 
-const _section_check_store_name = "_section_check_store"
+function _get_section_and_check_option_names(options, section_name, section_keys)
 
-"""
-Set the defaults for options in a section, and check that there are not any unexpected
-options (i.e. options that have no default).
-
-Modifies the options[section_name]::Dict by adding defaults for any values that are not
-already present.
-"""
-function set_defaults_and_check_section!(options::AbstractDict, section_name;
-                                         kwargs...)
     DictType = typeof(options)
 
     if !(section_name ∈ keys(options))
@@ -651,13 +642,46 @@ function set_defaults_and_check_section!(options::AbstractDict, section_name;
 
     # Check for any unexpected values in the section - all options that are set should be
     # present in the kwargs of this function call
-    section_keys_symbols = keys(kwargs)
-    section_keys = (String(k) for k ∈ section_keys_symbols)
+    unexpected_options = String[]
     for (key, value) in section
         if !(key ∈ section_keys)
-            error("Unexpected option '$key=$value' in section '$section_name'")
+            push!(unexpected_options, key)
         end
     end
+    if length(unexpected_options) > 0
+        error("Unexpected options $(join(("$k=$(section[k])" for k ∈ unexpected_options), ", ", ", and ")) in section '$section_name'")
+    end
+
+    return section
+end
+
+function _store_section_name_for_check!(options, section_name)
+    # Record the defined section_name in a temporary, private subsection of `options`, so
+    # we can use it to check the existing sections later.
+    if !(_section_check_store_name ∈ keys(options))
+        # If section is not present, create it
+        options[_section_check_store_name] = String[]
+    end
+    push!(options[_section_check_store_name], section_name)
+
+    return nothing
+end
+
+const _section_check_store_name = "_section_check_store"
+
+"""
+Set the defaults for options in a section, and check that there are not any unexpected
+options (i.e. options that have no default).
+
+Modifies the options[section_name]::Dict by adding defaults for any values that are not
+already present.
+"""
+function set_defaults_and_check_section!(options::AbstractDict, section_name;
+                                         kwargs...)
+
+    section_keys_symbols = keys(kwargs)
+    section_keys = (String(k) for k ∈ section_keys_symbols)
+    section = _get_section_and_check_option_names(options, section_name, section_keys)
 
     # Set default values if a key was not set explicitly
     for (key_sym, default_value) ∈ kwargs
@@ -667,15 +691,46 @@ function set_defaults_and_check_section!(options::AbstractDict, section_name;
         section[key] = get(section, key, default_value)
     end
 
-    # Record the defined section_name in a temporary, private subsection of `options`, so
-    # we can use it to check the existing sections later.
-    if !(_section_check_store_name ∈ keys(options))
-        # If section is not present, create it
-        options[_section_check_store_name] = String[]
-    end
-    push!(options[_section_check_store_name], section_name)
+    _store_section_name_for_check!(options, section_name)
 
     return section
+end
+
+"""
+    set_defaults_and_check_section!(options::AbstractDict, struct_type::Type,
+                                    name::Union{String,Nothing}=nothing)
+
+Alternative form to be used when the options should be stored in a struct of type
+`struct_type` rather than a `NamedTuple`. `struct_type` must be defined using `@kwdef`.
+
+The returned instance of `struct_type` is immutable, so if you need to modify the settings
+- e.g. to apply some logic to set defaults depending on other settings/parameters - then
+you should use the 'standard' version of [`set_defaults_and_check_section!`](@ref) that
+returns a `Dict` that can be modified, and then use that `Dict` to initialise the
+`struct_type`.
+
+The name of the section in the options that will be read defaults to the name of
+`struct_type`, but can be set using the `section_name` argument.
+
+Returns an instance of `struct_type`.
+"""
+function set_defaults_and_check_section!(options::AbstractDict, struct_type::Type,
+                                         section_name::Union{String,Nothing}=nothing)
+
+    if section_name === nothing
+        section_name = String(nameof(struct_type))
+    end
+    section_keys = (String(key) for key ∈ fieldnames(struct_type))
+    section = _get_section_and_check_option_names(options, section_name, section_keys)
+
+    # Pass the settings in `section` as kwargs to the constructor for `struct_type`.
+    # `struct_type` is an `@kwdef` struct, so this constructor takes care of the default
+    # values.
+    settings_instance = struct_type(; (Symbol(k) => v for (k,v) ∈ pairs(section))...)
+
+    _store_section_name_for_check!(options, section_name)
+
+    return settings_instance
 end
 
 """
