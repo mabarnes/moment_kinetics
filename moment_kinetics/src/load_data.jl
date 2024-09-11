@@ -66,10 +66,20 @@ const neutral_moment_variables = ("density_neutral", "uz_neutral", "pz_neutral",
                                   "thermal_speed_neutral", "temperature_neutral",
                                   "qz_neutral", "total_energy_neutral",
                                   "total_energy_flux_neutral")
+const ion_source_variables = ("external_source_amplitude", "external_source_density_amplitude",
+                                "external_source_momentum_amplitude", "external_source_pressure_amplitude",
+                                "external_source_controller_integral")
+const neutral_source_variables = ("external_source_neutral_amplitude", "external_source_neutral_density_amplitude",
+                                "external_source_neutral_momentum_amplitude", "external_source_neutral_pressure_amplitude",
+                                "external_source_neutral_controller_integral")
+const electron_source_variables = ("external_source_electron_amplitude", "external_source_electron_density_amplitude",
+                                "external_source_electron_momentum_amplitude", "external_source_electron_pressure_amplitude")
 const all_moment_variables = tuple(em_variables..., ion_moment_variables...,
                                    electron_moment_variables...,
-                                   neutral_moment_variables...)
-
+                                   neutral_moment_variables...,
+                                   ion_source_variables..., 
+                                   electron_source_variables...,
+                                   neutral_source_variables...)
 const ion_dfn_variables = ("f",)
 const electron_dfn_variables = ("f_electron",)
 const neutral_dfn_variables = ("f_neutral",)
