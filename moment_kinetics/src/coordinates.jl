@@ -7,7 +7,7 @@ export equally_spaced_grid
 export set_element_boundaries
 
 using LinearAlgebra
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions: mk_float, mk_int, OptionsDict
 using ..array_allocation: allocate_float, allocate_shared_float, allocate_int
 using ..calculus: derivative!
 using ..chebyshev: scaled_chebyshev_grid, scaled_chebyshev_radau_grid, setup_chebyshev_pseudospectral
@@ -379,6 +379,36 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     end
 
     return coord, spectral
+end
+
+"""
+    define_test_coordinate(input_dict::AbstractDict; kwargs...)
+    define_test_coordinate(name; collision_operator_dim=true, kwargs...)
+
+Wrapper for `define_coordinate()` to make creating a coordinate for tests slightly less
+verbose.
+
+When passing `input_dict`, it must contain a "name" field, and can contain other settings
+- "ngrid", "nelement", etc. Options other than "name" will be set using defaults if they
+are not passed. `kwargs` are the keyword arguments for [`define_coordinate`](@ref).
+
+The second form allows the coordinate input options to be passed as keyword arguments. For
+this form, apart from `collision_operator_dim`, the keyword arguments of
+[`define_coordinate`](@ref) cannot be passed, and `ignore_MPI=true` is always set, as this
+is most often useful for tests.
+"""
+function define_test_coordinate end
+function define_test_coordinate(input_dict::AbstractDict; kwargs...)
+    input_dict = deepcopy(input_dict)
+    name = pop!(input_dict, "name")
+    return define_coordinate(OptionsDict(name => input_dict), name; kwargs...)
+end
+function define_test_coordinate(name; collision_operator_dim=true, kwargs...)
+    coord_input_dict = OptionsDict(String(k) => v for (k,v) in kwargs)
+    coord_input_dict["name"] = name
+    return define_test_coordinate(coord_input_dict;
+                                  collision_operator_dim=collision_operator_dim,
+                                  ignore_MPI=true)
 end
 
 function set_element_boundaries(nelement_global, L, element_spacing_option, coord_name)

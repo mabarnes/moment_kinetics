@@ -2,7 +2,7 @@ module InterpolationTests
 
 include("setup.jl")
 
-using moment_kinetics.coordinates: define_coordinate
+using moment_kinetics.coordinates: define_test_coordinate
 using moment_kinetics.interpolation:
     interpolate_to_grid_1d, interpolate_to_grid_z, interpolate_to_grid_vpa
 
@@ -33,17 +33,15 @@ function runtests()
             # create the 'input' struct containing input info needed to create a coordinate
             nelement_local = nelement
             cheb_option = "FFT"
-            input = OptionsDict("coord" => OptionsDict("ngrid"=>ngrid, "nelement"=>nelement,
-                                                       "L"=>L,
-                                                       "discretization"=>discretization,
-                                                       "cheb_option"=>cheb_option,
-                                                       "bc"=>bc,
-                                                       "element_spacing_option"=>element_spacing_option))
+            input = OptionsDict("name"=>"coord", "ngrid"=>ngrid, "nelement"=>nelement,
+                                "L"=>L, "discretization"=>discretization,
+                                "cheb_option"=>cheb_option, "bc"=>bc,
+                                "element_spacing_option"=>element_spacing_option)
             # create the coordinate struct 'z'
             # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
             # errors due to communicators not being fully set up.
-            z, spectral = define_coordinate(input, "coord"; ignore_MPI=true,
-                                            collision_operator_dim=false)
+            z, spectral = define_test_coordinate(input; ignore_MPI=true,
+                                                 collision_operator_dim=false)
 
             test_grid = [z for z in range(-zlim, zlim, length=ntest)]
 

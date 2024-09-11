@@ -2,7 +2,7 @@ module CalculusTests
 
 include("setup.jl")
 
-using moment_kinetics.coordinates: define_coordinate
+using moment_kinetics.coordinates: define_test_coordinate
 using moment_kinetics.calculus: derivative!, second_derivative!, integral
 using moment_kinetics.calculus: laplacian_derivative!
 
@@ -34,19 +34,17 @@ function runtests()
                     bc = "none"
                 end
                 fd_option = ""
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                input = OptionsDict("coord" => OptionsDict("ngrid"=>ngrid, "nelement"=>nelement,
-                                                           "L"=>L,
-                                                           "discretization"=>discretization,
-                                                           "finite_difference_option"=>fd_option,
-                                                           "cheb_option"=>cheb_option,
-                                                           "bc"=>bc,
-                                                           "element_spacing_option"=>element_spacing_option))
                 # create the coordinate struct 'x'
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input, "coord"; ignore_MPI=true, collision_operator_dim=false)
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization=discretization,
+                                                     finite_difference_option=fd_option,
+                                                     cheb_option=cheb_option, bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
                 # create array for the function f(x) to be differentiated/integrated
                 f = Array{Float64,1}(undef, x.n)
                 # create array for the derivative df/dx
@@ -81,20 +79,18 @@ function runtests()
                 L = 6.0
                 bc = "periodic"
                 fd_option = ""
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
                 element_spacing_option = "uniform" # dummy value
-                input = OptionsDict("coord" => OptionsDict("ngrid"=>ngrid, "nelement"=>nelement,
-                                                           "L"=>L,
-                                                           "discretization"=>"finite_difference",
-                                                           "finite_difference_option"=>fd_option,
-                                                           "bc"=>bc,
-                                                           "element_spacing_option"=>element_spacing_option))
                 # create the coordinate struct 'x'
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input, "coord"; ignore_MPI=true)
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="finite_difference",
+                                                     finite_difference_option=fd_option,
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -129,20 +125,18 @@ function runtests()
                 L = 6.0
                 bc = "periodic"
                 fd_option = "fourth_order_centered"
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
                 element_spacing_option = "uniform" # dummy value
-                input = OptionsDict("coord" => OptionsDict("ngrid"=>ngrid, "nelement"=>nelement,
-                                                           "L"=>L,
-                                                           "discretization"=>"finite_difference",
-                                                           "finite_difference_option"=>fd_option,
-                                                           "bc"=>bc,
-                                                           "element_spacing_option"=>element_spacing_option))
                 # create the coordinate struct 'x'
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input, "coord"; ignore_MPI=true)
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="finite_difference",
+                                                     finite_difference_option=fd_option,
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -173,20 +167,18 @@ function runtests()
                 # define inputs needed for the test
                 L = 6.0
                 fd_option = ""
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
                 element_spacing_option = "uniform" # dummy value
-                input = OptionsDict("coord" => OptionsDict("ngrid"=>ngrid, "nelement"=>nelement,
-                                                           "L"=>L,
-                                                           "discretization"=>"finite_difference",
-                                                           "finite_difference_option"=>fd_option,
-                                                           "bc"=>bc,
-                                                           "element_spacing_option"=>element_spacing_option))
                 # create the coordinate struct 'x'
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input, "coord"; ignore_MPI=true)
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="finite_difference",
+                                                     finite_difference_option=fd_option,
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -225,20 +217,18 @@ function runtests()
 
                 # define inputs needed for the test
                 L = 6.0
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
                 element_spacing_option = "uniform" # dummy value
-                input = OptionsDict("coord" => OptionsDict("ngrid"=>ngrid, "nelement"=>nelement,
-                                                           "L"=>L,
-                                                           "discretization"=>"finite_difference",
-                                                           "finite_difference_option"=>fd_option,
-                                                           "bc"=>bc,
-                                                           "element_spacing_option"=>element_spacing_option))
                 # create the coordinate struct 'x'
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input, "coord"; ignore_MPI=true)
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="finite_difference",
+                                                     finite_difference_option=fd_option,
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -439,20 +429,17 @@ function runtests()
                 # define inputs needed for the test
                 L = 6.0
                 bc = "periodic"
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
                 element_spacing_option = "uniform"
-                input = OptionsDict("coord" => OptionsDict("ngrid"=>ngrid, "nelement"=>nelement,
-                                                           "L"=>L,
-                                                           "discretization"=>"chebyshev_pseudospectral",
-                                                           "cheb_option"=>cheb_option,
-                                                           "bc"=>bc,
-                                                           "element_spacing_option"=>element_spacing_option))
                 # create the coordinate struct 'x'
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input, "coord"; ignore_MPI=true)
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="chebyshev_pseudospectral",
+                                                     cheb_option=cheb_option, bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
 
                 offset = randn(rng)
                 f = @. sinpi(2.0 * x.grid / L) + offset
@@ -633,20 +620,17 @@ function runtests()
                 # define inputs needed for the test
                 L = 6.0
                 bc = "periodic"
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
                 element_spacing_option = "uniform"
-                input = OptionsDict("coord" => OptionsDict("ngrid"=>ngrid, "nelement"=>nelement,
-                                                           "L"=>L,
-                                                           "discretization"=>"chebyshev_pseudospectral",
-                                                           "cheb_option"=>cheb_option,
-                                                           "bc"=>bc,
-                                                           "element_spacing_option"=>element_spacing_option))
                 # create the coordinate struct 'x'
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input, "coord"; ignore_MPI=true)
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="chebyshev_pseudospectral",
+                                                     cheb_option=cheb_option, bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
 
                 offset = randn(rng)
                 f = @. sinpi(2.0 * x.grid / L) + offset
@@ -675,19 +659,16 @@ function runtests()
                 # define inputs needed for the test
                 L = 1.0
                 bc = "constant"
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
-                input = OptionsDict("coord" => OptionsDict("ngrid"=>ngrid, "nelement"=>nelement,
-                                                           "L"=>L,
-                                                           "discretization"=>"chebyshev_pseudospectral",
-                                                           "cheb_option"=>cheb_option,
-                                                           "bc"=>bc,
-                                                           "element_spacing_option"=>element_spacing_option))
                 # create the coordinate struct 'x'
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input, "coord"; ignore_MPI=true)
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="chebyshev_pseudospectral",
+                                                     cheb_option=cheb_option, bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
@@ -723,19 +704,16 @@ function runtests()
                 # define inputs needed for the test
                 L = 1.0
                 bc = "constant"
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
-                input = OptionsDict("coord" => OptionsDict("ngrid"=>ngrid, "nelement"=>nelement,
-                                                           "L"=>L,
-                                                           "discretization"=>"chebyshev_pseudospectral",
-                                                           "cheb_option"=>cheb_option,
-                                                           "bc"=>bc,
-                                                           "element_spacing_option"=>element_spacing_option))
                 # create the coordinate struct 'x'
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input, "coord"; ignore_MPI=true)
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="chebyshev_pseudospectral",
+                                                     cheb_option=cheb_option, bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
@@ -855,17 +833,15 @@ function runtests()
                 # define inputs needed for the test
                 L = 6.0
                 bc = "periodic"
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
-                input = OptionsDict("coord" => OptionsDict("ngrid"=>ngrid, "nelement"=>nelement,
-                                                           "L"=>L,
-                                                           "discretization"=>"gausslegendre_pseudospectral",
-                                                           "bc"=>bc))
                 # create the coordinate struct 'x'
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input, "coord"; ignore_MPI=true, collision_operator_dim=false)
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="gausslegendre_pseudospectral",
+                                                     bc=bc,
+                                                     collision_operator_dim=false)
 
                 offset = randn(rng)
                 f = @. sinpi(2.0 * x.grid / L) + offset
@@ -966,19 +942,17 @@ function runtests()
                 # define inputs needed for the test
                 L = 6.0
                 bc = "periodic"
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
                 element_spacing_option = "uniform"
-                input = OptionsDict("coord" => OptionsDict("ngrid"=>ngrid, "nelement"=>nelement,
-                                                           "L"=>L,
-                                                           "discretization"=>"gausslegendre_pseudospectral",
-                                                           "bc"=>bc,
-                                                           "element_spacing_option"=>element_spacing_option))
                 # create the coordinate struct 'x'
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input, "coord"; ignore_MPI=true, collision_operator_dim=false)
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="gausslegendre_pseudospectral",
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
 
                 offset = randn(rng)
                 f = @. sinpi(2.0 * x.grid / L) + offset
@@ -1007,18 +981,16 @@ function runtests()
                 # define inputs needed for the test
                 L = 1.0
                 bc = "constant"
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
-                input = OptionsDict("coord" => OptionsDict("ngrid"=>ngrid, "nelement"=>nelement,
-                                                           "L"=>L,
-                                                           "discretization"=>"gausslegendre_pseudospectral",
-                                                           "bc"=>bc,
-                                                           "element_spacing_option"=>element_spacing_option))
                 # create the coordinate struct 'x'
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input, "coord"; ignore_MPI=true, collision_operator_dim=false)
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="gausslegendre_pseudospectral",
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
@@ -1054,18 +1026,16 @@ function runtests()
                 # define inputs needed for the test
                 L = 1.0
                 bc = "constant"
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
-                input = OptionsDict("coord" => OptionsDict("ngrid"=>ngrid, "nelement"=>nelement,
-                                                           "L"=>L,
-                                                           "discretization"=>"gausslegendre_pseudospectral",
-                                                           "bc"=>bc,
-                                                           "element_spacing_option"=>element_spacing_option))
                 # create the coordinate struct 'x'
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input, "coord"; ignore_MPI=true, collision_operator_dim=false)
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="gausslegendre_pseudospectral",
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
@@ -1264,20 +1234,17 @@ function runtests()
                 # define inputs needed for the test
                 L = 6.0
                 bc = "periodic"
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
                 element_spacing_option = "uniform"
-                input = OptionsDict("coord" => OptionsDict("ngrid"=>ngrid, "nelement"=>nelement,
-                                                           "L"=>L,
-                                                           "discretization"=>"chebyshev_pseudospectral",
-                                                           "cheb_option"=>cheb_option,
-                                                           "bc"=>bc,
-                                                           "element_spacing_option"=>element_spacing_option))
                 # create the coordinate struct 'x'
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input, "coord"; ignore_MPI=true)
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="chebyshev_pseudospectral",
+                                                     cheb_option=cheb_option, bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
 
                 offset = randn(rng)
                 f = @. sinpi(2.0 * x.grid / L) + offset
@@ -1357,23 +1324,17 @@ function runtests()
                 # define inputs needed for the test
                 L = 6.0
                 bc = "zero"
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
                 element_spacing_option = "uniform"
-                # create the coordinate struct 'x' and info for derivatives, etc.
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                input = OptionsDict("vperp" => OptionsDict("ngrid"=>ngrid, "nelement"=>nelement,
-                                                           "L"=>L,
-                                                           "discretization"=>"chebyshev_pseudospectral",
-                                                           "cheb_option"=>cheb_option,
-                                                           "bc"=>bc,
-                                                           "element_spacing_option"=>element_spacing_option))
                 # create the coordinate struct 'x'
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input, "vperp"; ignore_MPI=true)
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("vperp"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="chebyshev_pseudospectral",
+                                                     cheb_option=cheb_option, bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
 
                 f = @. exp(-x.grid^2)
                 expected_d2f = @. 4.0*(x.grid^2 - 1.0)*exp(-x.grid^2)
@@ -1463,19 +1424,17 @@ function runtests()
                 # define inputs needed for the test
                 L = 6.0
                 bc = "periodic"
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
                 element_spacing_option = "uniform"
-                input = OptionsDict("coord" => OptionsDict("ngrid"=>ngrid, "nelement"=>nelement,
-                                                           "L"=>L,
-                                                           "discretization"=>"gausslegendre_pseudospectral",
-                                                           "bc"=>bc,
-                                                           "element_spacing_option"=>element_spacing_option))
                 # create the coordinate struct 'x'
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input, "coord"; ignore_MPI=true, collision_operator_dim=false)
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="gausslegendre_pseudospectral",
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
 
                 offset = randn(rng)
                 f = @. sinpi(2.0 * x.grid / L) + offset
@@ -1564,22 +1523,17 @@ function runtests()
                 # define inputs needed for the test
                 L = 6.0
                 bc = "zero"
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
                 element_spacing_option = "uniform"
-                # create the coordinate struct 'x' and info for derivatives, etc.
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                input = OptionsDict("vperp" => OptionsDict("ngrid"=>ngrid, "nelement"=>nelement,
-                                                           "L"=>L,
-                                                           "discretization"=>"gausslegendre_pseudospectral",
-                                                           "bc"=>bc,
-                                                           "element_spacing_option"=>element_spacing_option))
                 # create the coordinate struct 'x'
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input, "vperp"; ignore_MPI=true, collision_operator_dim=false)
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("vperp"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="gausslegendre_pseudospectral",
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
 
                 f = @. exp(-x.grid^2)
                 expected_d2f = @. 4.0*(x.grid^2 - 1.0)*exp(-x.grid^2)
