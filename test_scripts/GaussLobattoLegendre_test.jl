@@ -1,8 +1,6 @@
 export gausslegendre_test
 
-using FastGaussQuadrature
-using LegendrePolynomials: Pl
-using LinearAlgebra: mul!, lu, inv, cond
+using LinearAlgebra: mul!, cond
 using Printf
 using Plots
 using LaTeXStrings
