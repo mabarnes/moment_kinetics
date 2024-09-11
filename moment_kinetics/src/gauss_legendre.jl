@@ -119,13 +119,13 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
     L_matrix = allocate_float(coord.n,coord.n)
     L_matrix_with_bc = allocate_float(coord.n,coord.n)
 
-    setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M")
-    mass_matrix_lu = lu(sparse(mass_matrix))
-    setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms")
-    setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms")
     dirichlet_bc = (coord.bc in ["zero", "constant"]) # and further options in future
     periodic_bc = (coord.bc == "periodic")
-    if dirichlet_bc || periodic_bc
+    setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M"; periodic_bc=periodic_bc)
+    setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms"; periodic_bc=periodic_bc)
+    setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms")
+    mass_matrix_lu = lu(sparse(mass_matrix))
+    if dirichlet_bc #|| periodic_bc
         setup_global_weak_form_matrix!(L_matrix_with_bc, lobatto, radau, coord, "L", dirichlet_bc=dirichlet_bc, periodic_bc=periodic_bc)
     else
         # Fill matrix with invertible identity matrix to avoid singular LU decomposition errors
@@ -919,12 +919,19 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
         # add assembly contribution to lower endpoint from upper endpoint
         j = coord.nelement_local
         get_QQ_local!(QQ_j,j,lobatto,radau,coord,option)
-        QQ_global[1,end] += QQ_j[end,end]
+        iminl = imin[j] - (coord.nelement_local > 1)
+        imaxl = imax[j]
+        QQ_global[1,iminl:imaxl] .+= QQ_j[end,:]
         # Enforce continuity at the periodic boundary
+        # All-zero row in RHS matrix sets last element of `b` vector in
+        # `mass_matrix.x = b` to zero
         QQ_global[end,:] .= 0.0
-        QQ_global[end,1] = 1.0
-        QQ_global[end,end] = -1.0
-        # requires RHS vector b[end] = 0
+        if option == "M"
+            # enforce periodicity `x[1] = x[end]` using the last row of the
+            # `mass_matrix.x = b` system.
+            QQ_global[end,1] = 1.0
+            QQ_global[end,end] = -1.0
+        end
     end
         
     return nothing

@@ -64,7 +64,7 @@ function derivative!(df, f, coord, spectral::Union{null_spatial_dimension_info,
     return nothing
 end
 
-function second_derivative!(d2f, f, coord, spectral; handle_periodic=true)
+function second_derivative!(d2f, f, coord, spectral)
     # computes d^2f / d(coord)^2
     # For spectral element methods, calculate second derivative by applying first
     # derivative twice, with special treatment for element boundaries
@@ -131,7 +131,7 @@ function second_derivative!(d2f, f, coord, spectral; handle_periodic=true)
     return nothing
 end
 
-function laplacian_derivative!(d2f, f, coord, spectral; handle_periodic=true)
+function laplacian_derivative!(d2f, f, coord, spectral)
     # computes (1/coord) d / coord ( coord d f / d(coord)) for vperp coordinate
     # For spectral element methods, calculate second derivative by applying first
     # derivative twice, with special treatment for element boundaries
@@ -207,22 +207,12 @@ is an input.
 """
 function mass_matrix_solve! end
 
-function second_derivative!(d2f, f, coord, spectral::weak_discretization_info; handle_periodic=true)
+function second_derivative!(d2f, f, coord, spectral::weak_discretization_info)
     # obtain the RHS of numerical weak-form of the equation 
     # g = d^2 f / d coord^2, which is 
     # M * g = K * f, with M the mass matrix and K an appropriate stiffness matrix
     # by multiplying by basis functions and integrating by parts    
     mul!(coord.scratch3, spectral.K_matrix, f)
-
-    if handle_periodic && coord.bc == "periodic"
-        if coord.nrank > 1
-            error("second_derivative!() cannot handle periodic boundaries for a "
-                  * "distributed coordinate")
-        end
-
-        coord.scratch3[1] = 0.5 * (coord.scratch3[1] + coord.scratch3[end])
-        coord.scratch3[end] = coord.scratch3[1]
-    end
 
     # solve weak form matrix problem M * g = K * f to obtain g = d^2 f / d coord^2
     if coord.nrank > 1
