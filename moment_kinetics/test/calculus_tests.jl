@@ -13,7 +13,7 @@ function runtests()
     @testset "calculus" verbose=use_verbose begin
         println("calculus tests")
         @testset "fundamental theorem of calculus" begin
-            @testset "$discretization $ngrid $nelement" for
+            @testset "$discretization $ngrid $nelement $cheb_option" for
                     (discretization, element_spacing_option, etol, cheb_option) ∈ (("finite_difference", "uniform", 1.0e-15, ""), ("chebyshev_pseudospectral", "uniform", 1.0e-15, "FFT"), ("chebyshev_pseudospectral", "uniform", 2.0e-15, "matrix"), ("chebyshev_pseudospectral", "sqrt", 1.0e-2, "FFT"), ("gausslegendre_pseudospectral", "uniform", 1.0e-14, "")),
                     ngrid ∈ (5,6,7,8,9,10), nelement ∈ (1, 2, 3, 4, 5)
 
@@ -111,6 +111,7 @@ function runtests()
                 rtol = 1.e2 / (nelement*(ngrid-1))^4
                 @test isapprox(df, expected_df, rtol=rtol, atol=1.e-15,
                                norm=maxabs_norm)
+                @test df[1] == df[end]
             end
         end
 
@@ -164,6 +165,7 @@ function runtests()
                     rtol = 1.e2 / (nelement*(ngrid-1))^order
                     @test isapprox(df, expected_df, rtol=rtol, atol=1.e-15,
                                    norm=maxabs_norm)
+                    df[1] == df[end]
                 end
             end
         end
@@ -278,7 +280,7 @@ function runtests()
         end
 
         @testset "Chebyshev pseudospectral derivatives (4 argument), periodic" verbose=false begin
-            @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
+            @testset "$nelement $ngrid $cheb_option" for (nelement, ngrid, rtol) ∈
                     (
                      (1, 5, 8.e-1),
                      (1, 6, 2.e-1),
@@ -469,11 +471,12 @@ function runtests()
 
                 @test isapprox(df, expected_df, rtol=rtol, atol=1.e-14,
                                norm=maxabs_norm)
+                @test df[1] == df[end]
             end
         end
 
         @testset "Chebyshev pseudospectral derivatives upwinding (5 argument), periodic" verbose=false begin
-            @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
+            @testset "$nelement $ngrid $cheb_option" for (nelement, ngrid, rtol) ∈
                     (
                      (1, 5, 8.e-1),
                      (1, 6, 2.e-1),
@@ -668,12 +671,14 @@ function runtests()
 
                     @test isapprox(df, expected_df, rtol=rtol, atol=1.e-12,
                                    norm=maxabs_norm)
+                    @test df[1] == df[end]
                 end
             end
         end
 
         @testset "Chebyshev pseudospectral derivatives (4 argument), polynomials" verbose=false begin
-            @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"), element_spacing_option ∈ ("uniform", "sqrt"),
+            @testset "$nelement $ngrid $bc $element_spacing_option $cheb_option" for
+                    bc ∈ ("constant", "zero"), element_spacing_option ∈ ("uniform", "sqrt"),
                     nelement ∈ (1:5), ngrid ∈ (3:33), cheb_option in ("FFT","matrix")
 
                 # define inputs needed for the test
@@ -721,7 +726,8 @@ function runtests()
         end
 
         @testset "Chebyshev pseudospectral derivatives upwinding (5 argument), polynomials" verbose=false begin
-            @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"), element_spacing_option ∈ ("uniform", "sqrt"),
+            @testset "$nelement $ngrid $bc $element_spacing_option $cheb_option" for
+                    bc ∈ ("constant", "zero"), element_spacing_option ∈ ("uniform", "sqrt"),
                     nelement ∈ (1:5), ngrid ∈ (3:33), cheb_option in ("FFT","matrix")
 
                 # define inputs needed for the test
@@ -884,6 +890,7 @@ function runtests()
 
                 @test isapprox(df, expected_df, rtol=rtol, atol=1.e-14,
                                norm=maxabs_norm)
+                @test df[1] == df[end]
             end
         end
 
@@ -1002,6 +1009,7 @@ function runtests()
 
                     @test isapprox(df, expected_df, rtol=rtol, atol=1.e-12,
                                    norm=maxabs_norm)
+                    @test df[1] == df[end]
                 end
             end
         end
@@ -1107,7 +1115,7 @@ function runtests()
         end
 
         @testset "Chebyshev pseudospectral second derivatives (4 argument), periodic" verbose=false begin
-            @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
+            @testset "$nelement $ngrid $cheb_option" for (nelement, ngrid, rtol) ∈
                     (
                      (1, 5, 8.e-1),
                      (1, 6, 2.e-1),
@@ -1298,11 +1306,12 @@ function runtests()
 
                 @test isapprox(d2f, expected_d2f, rtol=rtol, atol=1.e-10,
                                norm=maxabs_norm)
+                @test d2f[1] == d2f[end]
             end
         end
         
         @testset "Chebyshev pseudospectral cylindrical laplacian derivatives (4 argument), zero" verbose=false begin
-            @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
+            @testset "$nelement $ngrid $cheb_option" for (nelement, ngrid, rtol) ∈
                     (
                      (4, 7, 2.e-1),
                      (4, 8, 2.e-1),
@@ -1497,6 +1506,7 @@ function runtests()
 
                 @test isapprox(d2f, expected_d2f, rtol=rtol, atol=1.e-10,
                                norm=maxabs_norm)
+                @test d2f[1] == d2f[end]
             end
         end
         

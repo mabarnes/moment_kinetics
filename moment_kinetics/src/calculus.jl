@@ -124,7 +124,15 @@ function second_derivative!(d2f, f, coord, spectral)
             error("Distributed memory MPI not yet supported here")
         end
         d2f[1] -= C * coord.scratch2_2d[end,end]
-        d2f[end] += C * coord.scratch2_2d[1,1]
+        # With the first derivative from the opposite end of the grid, d2f[end] here
+        # should be equal to d2f[1] up to rounding errors...
+        @boundscheck isapprox(d2f[end] + C * coord.scratch2_2d[1,1], d2f[1]; atol=1.0e-14)
+        # ...but because arithmetic operations were in a different order, there may be
+        # rounding errors, so set the two ends exactly equal to ensure consistency for the
+        # rest of the code - we assume that duplicate versions of the 'same point' on
+        # element boundaries (due to periodic bc or distributed-MPI block boundaries) are
+        # exactly equal.
+        d2f[end] = d2f[1]
     else
         error("Unsupported bc '$(coord.bc)'")
     end
@@ -220,6 +228,17 @@ function second_derivative!(d2f, f, coord, spectral::weak_discretization_info)
               * "distributed coordinate")
     end
     mass_matrix_solve!(d2f, coord.scratch3, spectral)
+
+    if coord.bc == "periodic"
+        # d2f[end] here should be equal to d2f[1] up to rounding errors...
+        @boundscheck isapprox(d2f[end], d2f[1]; atol=1.0e-14)
+        # ...but in the matrix operations arithmetic operations are not necessarily in
+        # exactly the same order, there may be rounding errors, so set the two ends
+        # exactly equal to ensure consistency for the rest of the code - we assume that
+        # duplicate versions of the 'same point' on element boundaries (due to periodic bc
+        # or distributed-MPI block boundaries) are exactly equal.
+        d2f[end] = d2f[1]
+    end
 end
 
 function laplacian_derivative!(d2f, f, coord, spectral::weak_discretization_info)
