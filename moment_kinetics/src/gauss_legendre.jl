@@ -94,8 +94,12 @@ struct gausslegendre_info{TSparse, TLU} <: weak_discretization_info
     K_matrix::TSparse
     # global (1D) weak Laplacian derivative matrix
     L_matrix::TSparse
-    # global (1D) LU object
+    # global (1D) weak Laplacian derivative matrix with boundary conditions
+    L_matrix_with_bc::TSparse
+    # mass matrix global (1D) LU object
     mass_matrix_lu::TLU
+    # Laplacian global (1D) LU object
+    L_matrix_lu::TLU
     # dummy matrix for local operators
     Qmat::Array{mk_float,2}
 end
@@ -113,14 +117,20 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
     mass_matrix = allocate_float(coord.n,coord.n)
     K_matrix = allocate_float(coord.n,coord.n)
     L_matrix = allocate_float(coord.n,coord.n)
+    L_matrix_with_bc = allocate_float(coord.n,coord.n)
 
     setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M")
     setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms")
     setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms")
+    dirichlet_bc = (coord.bc == "zero") # and further options in future
+    periodic_bc = (coord.bc == "periodic")
+    setup_global_weak_form_matrix!(L_matrix_with_bc, lobatto, radau, coord, "L", dirichlet_bc=dirichlet_bc, periodic_bc=periodic_bc)
     mass_matrix_lu = lu(sparse(mass_matrix))
+    L_matrix_lu = lu(sparse(L_matrix_with_bc))
     Qmat = allocate_float(coord.ngrid,coord.ngrid)
 
-    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),sparse(K_matrix),sparse(L_matrix),mass_matrix_lu,Qmat)
+    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),sparse(K_matrix),sparse(L_matrix),sparse(L_matrix_with_bc),
+                              mass_matrix_lu,L_matrix_lu,Qmat)
 end
 
 function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_dim=true)
@@ -822,18 +832,7 @@ Currently the function is set up to assemble the
 elemental matrices without imposing boundary conditions on the 
 first and final rows of the matrix by default. This means that 
 the operators constructed from this function can only be used
-for differentiation, and not solving 1D ODEs. To solve 1D ODEs
-with periodic or dirichlet boundary conditions, set 
-
-periodic_bc = true
-
-or 
-
-dirichlet_bc = true
-
-in the function call, and create new matrices for this purpose
-in the gausslegendre_info struct.
-
+for differentiation, and not solving 1D ODEs.
 This assembly function assumes that the 
 coordinate is not distributed. To extend this function to support
 distributed-memory MPI, addition of off-memory matrix elements
@@ -844,7 +843,22 @@ The typical use of this function is to assemble matrixes M and K in
  M * d2f = K * f 
  
 where M is the mass matrix and K is the stiffness matrix, and we wish to
-solve for d2f given f.
+solve for d2f given f. To solve 1D ODEs
+
+K * f = b = M * d2f 
+
+for f given boundary data on f
+with periodic or dirichlet boundary conditions, set 
+
+periodic_bc = true, b[end] = 0 
+
+or 
+
+dirichlet_bc = true, b[1] = f[1] (except for cylindrical coordinates), b[end] = f[end]
+
+in the function call, and create new matrices for this purpose
+in the gausslegendre_info struct. Currently the Laplacian matrix
+is supported with boundary conditions.
 """
 function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
                                lobatto::gausslegendre_base_info,
@@ -882,14 +896,19 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
             QQ_global[end,:] .= 0.0
             QQ_global[end,end] = 1.0
         end
+        # requires RHS vector b[1],b[end] = boundary values
     end
     if periodic_bc
         # Make periodic boundary condition by modifying elements of matrix for duplicate point
+        # add assembly contribution to lower endpoint from upper endpoint
+        j = coord.nelement_local
+        get_QQ_local!(QQ_j,j,lobatto,radau,coord,option)
+        QQ_global[1,end] += QQ_j[end,end]
         # Enforce continuity at the periodic boundary
-        j = nelement_local
-        QQ_global[imax[j],:] .= 0.0
-        QQ_global[imax[j],1] = 1.0
-        QQ_global[imax[j],end] = -1.0
+        QQ_global[end,:] .= 0.0
+        QQ_global[end,1] = 1.0
+        QQ_global[end,end] = -1.0
+        # requires RHS vector b[end] = 0
     end
         
     return nothing
