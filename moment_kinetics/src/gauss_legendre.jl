@@ -100,7 +100,7 @@ struct gausslegendre_info{TSparse, TLU} <: weak_discretization_info
     Qmat::Array{mk_float,2}
 end
 
-function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true, dirichlet_bc=false)
+function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
     lobatto = setup_gausslegendre_pseudospectral_lobatto(coord,collision_operator_dim=collision_operator_dim)
     radau = setup_gausslegendre_pseudospectral_radau(coord,collision_operator_dim=collision_operator_dim)
 
@@ -114,9 +114,9 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true, 
     K_matrix = allocate_float(coord.n,coord.n)
     L_matrix = allocate_float(coord.n,coord.n)
 
-    setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M"; dirichlet_bc=dirichlet_bc)
-    setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms"; dirichlet_bc=dirichlet_bc)
-    setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms"; dirichlet_bc=dirichlet_bc)
+    setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M")
+    setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms")
+    setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms")
     mass_matrix_lu = lu(sparse(mass_matrix))
     Qmat = allocate_float(coord.ngrid,coord.ngrid)
 
@@ -820,78 +820,54 @@ The 'option' variable is a flag for
 choosing the type of matrix to be constructed. 
 Currently the function is set up to assemble the 
 elemental matrices without imposing boundary conditions on the 
-first and final rows of the matrix. This means that 
+first and final rows of the matrix by default. This means that 
 the operators constructed from this function can only be used
-for differentiation, and not solving 1D ODEs. 
-The shared points in the element assembly are 
-averaged (instead of simply added) to be consistent with the 
-derivative_elements_to_full_grid!() function in calculus.jl,
-which is used to form the RHS of the equation
+for differentiation, and not solving 1D ODEs. To solve 1D ODEs
+with periodic or dirichlet boundary conditions, set 
+
+periodic_bc = true
+
+or 
+
+dirichlet_bc = true
+
+in the function call, and create new matrices for this purpose
+in the gausslegendre_info struct.
+
+This assembly function assumes that the 
+coordinate is not distributed. To extend this function to support
+distributed-memory MPI, addition of off-memory matrix elements
+to the exterior points would be required.
+
+The typical use of this function is to assemble matrixes M and K in
 
  M * d2f = K * f 
  
-where M is the mass matrix and K is the stiffness matrix. 
+where M is the mass matrix and K is the stiffness matrix, and we wish to
+solve for d2f given f.
 """
 function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
                                lobatto::gausslegendre_base_info,
                                radau::gausslegendre_base_info, 
-                               coord,option; dirichlet_bc=false)
+                               coord,option; dirichlet_bc=false, periodic_bc=false)
     QQ_j = allocate_float(coord.ngrid,coord.ngrid)
-    QQ_jp1 = allocate_float(coord.ngrid,coord.ngrid)
     
     ngrid = coord.ngrid
     imin = coord.imin
     imax = coord.imax
     @. QQ_global = 0.0
     
-    # fill in first element 
-    j = 1
-    # N.B. QQ varies with ielement for vperp, but not vpa
-    # a radau element is used for the vperp grid (see get_QQ_local!())
-    get_QQ_local!(QQ_j,j,lobatto,radau,coord,option)
-    if coord.bc == "periodic" && coord.nrank == 1
-        QQ_global[imin[j],imin[j]:imax[j]] .+= QQ_j[1,:] ./ 2.0
-    else
-        QQ_global[imin[j],imin[j]:imax[j]] .+= QQ_j[1,:]
-    end
-    for k in 2:imax[j]-imin[j] 
-        QQ_global[k,imin[j]:imax[j]] .+= QQ_j[k,:]
-    end
-    if coord.nelement_local > 1
-        QQ_global[imax[j],imin[j]:imax[j]] .+= QQ_j[ngrid,:]./2.0
-    elseif coord.bc == "periodic" && coord.nrank == 1
-        QQ_global[imin[1],imin[j]:imax[j]] .+= QQ_j[ngrid,:]./2.0
-        # Enforce continuity at the periodic boundary
-        QQ_global[imax[j],imin[j]:imax[j]] .= 0.0
-        QQ_global[imax[j],1] = 1.0
-        QQ_global[imax[j],end] = -1.0
-    else
-        QQ_global[imax[j],imin[j]:imax[j]] .+= QQ_j[ngrid,:]
-    end
-    # remaining elements recalling definitions of imax and imin
-    for j in 2:coord.nelement_local
+    # assembly below assumes no contributions 
+    # from elements outside of local domain
+    k = 0
+    for j in 1:coord.nelement_local
         get_QQ_local!(QQ_j,j,lobatto,radau,coord,option)
-        #lower boundary assembly on element
-        QQ_global[imin[j]-1,imin[j]-1:imax[j]] .+= QQ_j[1,:]./2.0
-        for k in 2:imax[j]-imin[j]+1 
-            QQ_global[k+imin[j]-2,imin[j]-1:imax[j]] .+= QQ_j[k,:]
-        end
-        # upper boundary assembly on element 
-        if j == coord.nelement_local
-            if coord.bc == "periodic" && coord.nrank == 1
-                QQ_global[imin[1],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:] / 2.0
-                # Enforce continuity at the periodic boundary
-                QQ_global[imax[j],imin[j]-1:imax[j]] .= 0.0
-                QQ_global[imax[j],1] = 1.0
-                QQ_global[imax[j],end] = -1.0
-            else
-                QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]
-            end
-        else 
-            QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]./2.0
-        end
+        iminl = imin[j]-k
+        imaxl = imax[j]
+        @. QQ_global[iminl:imaxl,iminl:imaxl] += QQ_j[:,:]
+        k = 1
     end
-
+    
     if dirichlet_bc
         # Make matrix diagonal for first/last grid points so it does not change the values
         # there
@@ -906,6 +882,14 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
             QQ_global[end,:] .= 0.0
             QQ_global[end,end] = 1.0
         end
+    end
+    if periodic_bc
+        # Make periodic boundary condition by modifying elements of matrix for duplicate point
+        # Enforce continuity at the periodic boundary
+        j = nelement_local
+        QQ_global[imax[j],:] .= 0.0
+        QQ_global[imax[j],1] = 1.0
+        QQ_global[imax[j],end] = -1.0
     end
         
     return nothing
