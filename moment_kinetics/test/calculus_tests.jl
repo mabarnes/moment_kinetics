@@ -101,8 +101,9 @@ function runtests()
 
                 # initialize f and expected df
                 offset = randn(rng)
-                f = @. sinpi(2.0 * x.grid / L) + offset
-                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L)
+                phase = 0.42
+                f = @. sinpi(2.0 * x.grid / L + phase) + offset
+                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L + phase)
 
                 # differentiate f
                 derivative!(df, f, x, spectral)
@@ -149,8 +150,9 @@ function runtests()
 
                 # initialize f and expected df
                 offset = randn(rng)
-                f = @. sinpi(2.0 * x.grid / L) + offset
-                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L)
+                phase = 0.42
+                f = @. sinpi(2.0 * x.grid / L + phase) + offset
+                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L + phase)
 
                 for advection ∈ (-1.0, 0.0, 1.0)
                     adv_fac = similar(f)
@@ -285,13 +287,13 @@ function runtests()
                      (1, 9, 5.e-3),
                      (1, 10, 3.e-3),
                      (1, 11, 1.e-4),
-                     (1, 12, 5.e-6),
+                     (1, 12, 1.e-5),
                      (1, 13, 3.e-6),
-                     (1, 14, 8.e-8),
+                     (1, 14, 1.e-7),
                      (1, 15, 4.e-8),
-                     (1, 16, 8.e-10),
+                     (1, 16, 1.e-8),
                      (1, 17, 4.e-10),
-                     (1, 18, 4.e-12),
+                     (1, 18, 1.e-10),
                      (1, 19, 2.e-12),
                      (1, 20, 2.e-13),
                      (1, 21, 2.e-13),
@@ -311,15 +313,15 @@ function runtests()
                      (2, 4, 2.e-1),
                      (2, 5, 4.e-2),
                      (2, 6, 2.e-2),
-                     (2, 7, 4.e-4),
+                     (2, 7, 1.e-3),
                      (2, 8, 2.e-4),
-                     (2, 9, 4.e-6),
+                     (2, 9, 1.e-5),
                      (2, 10, 2.e-6),
-                     (2, 11, 2.e-8),
+                     (2, 11, 1.e-7),
                      (2, 12, 1.e-8),
-                     (2, 13, 1.e-10),
+                     (2, 13, 1.e-9),
                      (2, 14, 5.e-11),
-                     (2, 15, 4.e-13),
+                     (2, 15, 1.e-12),
                      (2, 16, 2.e-13),
                      (2, 17, 2.e-13),
                      (2, 18, 2.e-13),
@@ -455,8 +457,9 @@ function runtests()
                 x, spectral = define_coordinate(input, "coord"; ignore_MPI=true)
 
                 offset = randn(rng)
-                f = @. sinpi(2.0 * x.grid / L) + offset
-                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L)
+                phase = 0.42
+                f = @. sinpi(2.0 * x.grid / L + phase) + offset
+                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L + phase)
 
                 # create array for the derivative df/dx
                 df = similar(f)
@@ -475,17 +478,17 @@ function runtests()
                      (1, 5, 8.e-1),
                      (1, 6, 2.e-1),
                      (1, 7, 1.e-1),
-                     (1, 8, 1.e-2),
+                     (1, 8, 5.e-2),
                      (1, 9, 5.e-3),
                      (1, 10, 3.e-3),
                      (1, 11, 1.e-4),
-                     (1, 12, 5.e-6),
+                     (1, 12, 3.e-5),
                      (1, 13, 3.e-6),
-                     (1, 14, 8.e-8),
+                     (1, 14, 4.e-7),
                      (1, 15, 4.e-8),
-                     (1, 16, 8.e-10),
+                     (1, 16, 4.e-9),
                      (1, 17, 4.e-10),
-                     (1, 18, 4.e-12),
+                     (1, 18, 4.e-11),
                      (1, 19, 2.e-12),
                      (1, 20, 2.e-13),
                      (1, 21, 2.e-13),
@@ -503,17 +506,17 @@ function runtests()
                      (1, 33, 2.e-13),
 
                      (2, 4, 2.e-1),
-                     (2, 5, 4.e-2),
+                     (2, 5, 6.e-2),
                      (2, 6, 2.e-2),
-                     (2, 7, 4.e-4),
+                     (2, 7, 2.e-3),
                      (2, 8, 2.e-4),
-                     (2, 9, 4.e-6),
+                     (2, 9, 2.e-5),
                      (2, 10, 2.e-6),
-                     (2, 11, 2.e-8),
+                     (2, 11, 1.e-7),
                      (2, 12, 1.e-8),
-                     (2, 13, 1.e-10),
+                     (2, 13, 1.e-9),
                      (2, 14, 5.e-11),
-                     (2, 15, 4.e-13),
+                     (2, 15, 2.e-12),
                      (2, 16, 2.e-13),
                      (2, 17, 2.e-13),
                      (2, 18, 2.e-13),
@@ -649,8 +652,9 @@ function runtests()
                 x, spectral = define_coordinate(input, "coord"; ignore_MPI=true)
 
                 offset = randn(rng)
-                f = @. sinpi(2.0 * x.grid / L) + offset
-                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L)
+                phase = 0.42
+                f = @. sinpi(2.0 * x.grid / L + phase) + offset
+                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L + phase)
 
                 # create array for the derivative df/dx
                 df = similar(f)
@@ -780,26 +784,26 @@ function runtests()
                      (1, 9, 5.e-3),
                      (1, 10, 3.e-3),
                      (1, 11, 5.e-4),
-                     (1, 12, 5.e-6),
+                     (1, 12, 1.e-5),
                      (1, 13, 3.e-6),
-                     (1, 14, 8.e-8),
+                     (1, 14, 3.e-7),
                      (1, 15, 4.e-8),
-                     (1, 16, 8.e-10),
+                     (1, 16, 4.e-9),
                      (1, 17, 8.e-10),
                      
 
                      (2, 4, 2.e-1),
                      (2, 5, 4.e-2),
                      (2, 6, 2.e-2),
-                     (2, 7, 4.e-4),
+                     (2, 7, 1.e-3),
                      (2, 8, 2.e-4),
-                     (2, 9, 4.e-6),
+                     (2, 9, 1.e-5),
                      (2, 10, 2.e-6),
-                     (2, 11, 2.e-8),
+                     (2, 11, 1.e-7),
                      (2, 12, 1.e-8),
-                     (2, 13, 1.e-10),
+                     (2, 13, 1.e-9),
                      (2, 14, 5.e-11),
-                     (2, 15, 4.e-13),
+                     (2, 15, 2.e-12),
                      (2, 16, 2.e-13),
                      (2, 17, 2.e-13),
                      
@@ -868,8 +872,9 @@ function runtests()
                 x, spectral = define_coordinate(input, "coord"; ignore_MPI=true, collision_operator_dim=false)
 
                 offset = randn(rng)
-                f = @. sinpi(2.0 * x.grid / L) + offset
-                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L)
+                phase = 0.42
+                f = @. sinpi(2.0 * x.grid / L + phase) + offset
+                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L + phase)
 
                 # create array for the derivative df/dx
                 df = similar(f)
@@ -886,31 +891,31 @@ function runtests()
             @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
                     (
                      (1, 5, 8.e-1),
-                     (1, 6, 2.e-1),
+                     (1, 6, 3.e-1),
                      (1, 7, 1.e-1),
-                     (1, 8, 1.e-2),
+                     (1, 8, 2.e-2),
                      (1, 9, 5.e-3),
                      (1, 10, 3.e-3),
                      (1, 11, 8.e-4),
-                     (1, 12, 5.e-6),
+                     (1, 12, 3.e-5),
                      (1, 13, 3.e-6),
-                     (1, 14, 8.e-8),
+                     (1, 14, 5.e-7),
                      (1, 15, 4.e-8),
-                     (1, 16, 8.e-10),
+                     (1, 16, 8.e-9),
                      (1, 17, 8.e-10),
                      
                      (2, 4, 2.e-1),
-                     (2, 5, 4.e-2),
+                     (2, 5, 8.e-2),
                      (2, 6, 2.e-2),
-                     (2, 7, 4.e-4),
+                     (2, 7, 2.e-3),
                      (2, 8, 2.e-4),
-                     (2, 9, 4.e-6),
+                     (2, 9, 2.e-5),
                      (2, 10, 2.e-6),
-                     (2, 11, 2.e-8),
+                     (2, 11, 2.e-7),
                      (2, 12, 1.e-8),
-                     (2, 13, 1.e-10),
+                     (2, 13, 1.e-9),
                      (2, 14, 5.e-11),
-                     (2, 15, 4.e-13),
+                     (2, 15, 5.e-12),
                      (2, 16, 2.e-13),
                      (2, 17, 2.e-13),
                      
@@ -939,7 +944,7 @@ function runtests()
                      (4, 9, 8.e-8),
                      (4, 10, 4.e-9),
                      (4, 11, 5.e-10),
-                     (4, 12, 4.e-12),
+                     (4, 12, 1.e-11),
                      (4, 13, 2.e-13),
                      (4, 14, 2.e-13),
                      (4, 15, 2.e-13),
@@ -949,7 +954,7 @@ function runtests()
                      (5, 3, 2.e-1),
                      (5, 4, 2.e-2),
                      (5, 5, 2.e-3),
-                     (5, 6, 1.e-4),
+                     (5, 6, 2.e-4),
                      (5, 7, 1.e-5),
                      (5, 8, 4.e-7),
                      (5, 9, 2.e-8),
@@ -981,8 +986,9 @@ function runtests()
                 x, spectral = define_coordinate(input, "coord"; ignore_MPI=true, collision_operator_dim=false)
 
                 offset = randn(rng)
-                f = @. sinpi(2.0 * x.grid / L) + offset
-                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L)
+                phase = 0.42
+                f = @. sinpi(2.0 * x.grid / L + phase) + offset
+                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L + phase)
 
                 # create array for the derivative df/dx
                 df = similar(f)
@@ -1106,17 +1112,17 @@ function runtests()
                      (1, 5, 8.e-1),
                      (1, 6, 2.e-1),
                      (1, 7, 1.e-1),
-                     (1, 8, 1.e-2),
+                     (1, 8, 4.e-2),
                      (1, 9, 5.e-3),
                      (1, 10, 3.e-3),
                      (1, 11, 2.e-4),
-                     (1, 12, 5.e-6),
-                     (1, 13, 4.e-6),
-                     (1, 14, 1.e-7),
+                     (1, 12, 2.e-4),
+                     (1, 13, 8.e-6),
+                     (1, 14, 4.e-6),
                      (1, 15, 1.e-7),
-                     (1, 16, 2.e-9),
+                     (1, 16, 1.e-7),
                      (1, 17, 1.e-9),
-                     (1, 18, 4.e-12),
+                     (1, 18, 1.e-9),
                      (1, 19, 2.e-12),
                      (1, 20, 2.e-13),
                      (1, 21, 2.e-13),
@@ -1134,15 +1140,15 @@ function runtests()
                      (1, 33, 2.e-13),
 
                      (2, 4, 2.e-1),
-                     (2, 5, 4.e-2),
+                     (2, 5, 8.e-2),
                      (2, 6, 2.e-2),
-                     (2, 7, 4.e-4),
-                     (2, 8, 2.e-4),
-                     (2, 9, 4.e-6),
+                     (2, 7, 8.e-3),
+                     (2, 8, 4.e-4),
+                     (2, 9, 2.e-4),
                      (2, 10, 4.e-6),
-                     (2, 11, 4.e-8),
+                     (2, 11, 2.e-6),
                      (2, 12, 4.e-8),
-                     (2, 13, 2.e-10),
+                     (2, 13, 2.e-8),
                      (2, 14, 2.e-10),
                      (2, 15, 4.e-13),
                      (2, 16, 2.e-13),
@@ -1167,7 +1173,7 @@ function runtests()
                      (3, 3, 4.e-1),
                      (3, 4, 1.e-1),
                      (3, 5, 2.e-2),
-                     (3, 6, 4.e-3),
+                     (3, 6, 8.e-3),
                      (3, 7, 1.e-3),
                      (3, 8, 1.e-4),
                      (3, 9, 1.e-5),
@@ -1230,7 +1236,7 @@ function runtests()
 
                      (5, 3, 4.e-1),
                      (5, 4, 4.e-2),
-                     (5, 5, 4.e-3),
+                     (5, 5, 8.e-3),
                      (5, 6, 1.e-3),
                      (5, 7, 4.e-5),
                      (5, 8, 1.e-5),
@@ -1280,8 +1286,9 @@ function runtests()
                 x, spectral = define_coordinate(input, "coord"; ignore_MPI=true)
 
                 offset = randn(rng)
-                f = @. sinpi(2.0 * x.grid / L) + offset
-                expected_d2f = @. -4.0 * π^2 / L^2 * sinpi(2.0 * x.grid / L)
+                phase = 0.42
+                f = @. sinpi(2.0 * x.grid / L + phase) + offset
+                expected_d2f = @. -4.0 * π^2 / L^2 * sinpi(2.0 * x.grid / L + phase)
 
                 # create array for the derivative d2f/dx2
                 d2f = similar(f)
@@ -1478,8 +1485,9 @@ function runtests()
                 x, spectral = define_coordinate(input, "coord"; ignore_MPI=true, collision_operator_dim=false)
 
                 offset = randn(rng)
-                f = @. sinpi(2.0 * x.grid / L) + offset
-                expected_d2f = @. -4.0 * π^2 / L^2 * sinpi(2.0 * x.grid / L)
+                phase = 0.42
+                f = @. sinpi(2.0 * x.grid / L + phase) + offset
+                expected_d2f = @. -4.0 * π^2 / L^2 * sinpi(2.0 * x.grid / L + phase)
 
                 # create array for the derivative d2f/dx2
                 d2f = similar(f)
