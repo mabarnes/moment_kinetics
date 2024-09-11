@@ -139,7 +139,7 @@ function get_coordinate_input(input_dict, name; ignore_MPI=false)
     elseif name == "r"
         default_bc = "periodic"
     elseif name == "vperp"
-        default_bc = "zero"
+        default_bc = "default"
     else
         default_bc = "zero"
     end
