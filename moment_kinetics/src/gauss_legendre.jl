@@ -120,17 +120,33 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
     L_matrix_with_bc = allocate_float(coord.n,coord.n)
 
     setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M")
+    mass_matrix_lu = lu(sparse(mass_matrix))
     setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms")
     setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms")
-    dirichlet_bc = (coord.bc == "zero") # and further options in future
+    dirichlet_bc = (coord.bc in ["zero", "constant"]) # and further options in future
     periodic_bc = (coord.bc == "periodic")
-    setup_global_weak_form_matrix!(L_matrix_with_bc, lobatto, radau, coord, "L", dirichlet_bc=dirichlet_bc, periodic_bc=periodic_bc)
-    mass_matrix_lu = lu(sparse(mass_matrix))
+    if dirichlet_bc || periodic_bc
+        setup_global_weak_form_matrix!(L_matrix_with_bc, lobatto, radau, coord, "L", dirichlet_bc=dirichlet_bc, periodic_bc=periodic_bc)
+    else
+        # Fill matrix with invertible identity matrix to avoid singular LU decomposition errors
+        # when no valid boundary condition supplied
+        identity_matrix!(L_matrix_with_bc, coord.n)
+        println("WARNING: L_matrix_with_bc replaced with identiy: 1D ODE solver requires boundary conditions")
+    end    
     L_matrix_lu = lu(sparse(L_matrix_with_bc))
+
     Qmat = allocate_float(coord.ngrid,coord.ngrid)
 
     return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),sparse(K_matrix),sparse(L_matrix),sparse(L_matrix_with_bc),
                               mass_matrix_lu,L_matrix_lu,Qmat)
+end
+
+function identity_matrix!(I,n)
+    @. I[:,:] = 0.0
+    for i in 1:n
+       I[i,i] = 1.0
+    end
+    return nothing    
 end
 
 function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_dim=true)
