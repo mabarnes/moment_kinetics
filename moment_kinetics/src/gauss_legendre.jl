@@ -82,7 +82,7 @@ struct gausslegendre_base_info
     Y31::Array{mk_float,3}
 end
 
-struct gausslegendre_info{TSparse, TLU} <: weak_discretization_info
+struct gausslegendre_info{TSparse, TLU, TLmat, TLmatLU} <: weak_discretization_info
     lobatto::gausslegendre_base_info
     radau::gausslegendre_base_info
     # global (1D) mass matrix
@@ -94,12 +94,14 @@ struct gausslegendre_info{TSparse, TLU} <: weak_discretization_info
     K_matrix::TSparse
     # global (1D) weak Laplacian derivative matrix
     L_matrix::TSparse
-    # global (1D) weak Laplacian derivative matrix with boundary conditions
-    L_matrix_with_bc::TSparse
+    # global (1D) weak Laplacian derivative matrix with boundary conditions - might be
+    # `nothing` if boundary conditions are not supported
+    L_matrix_with_bc::TLmat
     # mass matrix global (1D) LU object
     mass_matrix_lu::TLU
-    # Laplacian global (1D) LU object
-    L_matrix_lu::TLU
+    # Laplacian global (1D) LU object - might be
+    # `nothing` if boundary conditions are not supported
+    L_matrix_lu::TLmatLU
     # dummy matrix for local operators
     Qmat::Array{mk_float,2}
 end
@@ -117,7 +119,6 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
     mass_matrix = allocate_float(coord.n,coord.n)
     K_matrix = allocate_float(coord.n,coord.n)
     L_matrix = allocate_float(coord.n,coord.n)
-    L_matrix_with_bc = allocate_float(coord.n,coord.n)
 
     dirichlet_bc = (coord.bc in ["zero", "constant"]) # and further options in future
     periodic_bc = (coord.bc == "periodic")
@@ -126,18 +127,18 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
     setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms")
     mass_matrix_lu = lu(sparse(mass_matrix))
     if dirichlet_bc #|| periodic_bc
+        L_matrix_with_bc = allocate_float(coord.n,coord.n)
         setup_global_weak_form_matrix!(L_matrix_with_bc, lobatto, radau, coord, "L", dirichlet_bc=dirichlet_bc, periodic_bc=periodic_bc)
+        L_matrix_with_bc = sparse(L_matrix_with_bc )
+        L_matrix_lu = lu(sparse(L_matrix_with_bc))
     else
-        # Fill matrix with invertible identity matrix to avoid singular LU decomposition errors
-        # when no valid boundary condition supplied
-        identity_matrix!(L_matrix_with_bc, coord.n)
-        println("WARNING: L_matrix_with_bc replaced with identiy: 1D ODE solver requires boundary conditions")
+        L_matrix_with_bc = nothing
+        L_matrix_lu = nothing
     end    
-    L_matrix_lu = lu(sparse(L_matrix_with_bc))
 
     Qmat = allocate_float(coord.ngrid,coord.ngrid)
 
-    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),sparse(K_matrix),sparse(L_matrix),sparse(L_matrix_with_bc),
+    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),sparse(K_matrix),sparse(L_matrix),L_matrix_with_bc,
                               mass_matrix_lu,L_matrix_lu,Qmat)
 end
 
