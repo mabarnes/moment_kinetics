@@ -16,7 +16,8 @@ export setup_external_sources!, external_ion_source!, external_neutral_source!,
        initialize_external_source_amplitude!,
        initialize_external_source_controller_integral!,
        total_external_ion_sources!, total_external_neutral_sources!,
-       total_external_ion_source_controllers!, total_external_neutral_source_controllers!
+       total_external_ion_source_controllers!, total_external_neutral_source_controllers!,
+       external_electron_source!, total_external_electron_sources!
 
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..calculus

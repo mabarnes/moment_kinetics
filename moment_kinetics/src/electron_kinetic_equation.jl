@@ -23,7 +23,7 @@ using ..electron_fluid_equations: electron_energy_equation!, electron_energy_res
 using ..electron_z_advection: electron_z_advection!, update_electron_speed_z!
 using ..electron_vpa_advection: electron_vpa_advection!, update_electron_speed_vpa!
 using ..em_fields: update_phi!
-using ..external_sources: external_electron_source!
+using ..external_sources: total_external_electron_sources!
 using ..file_io: get_electron_io_info, write_electron_state, finish_electron_io
 using ..krook_collisions: electron_krook_collisions!
 using ..moment_constraints: hard_force_moment_constraints!,
