@@ -2707,23 +2707,24 @@ function write_neutral_moments_data_to_binary(scratch, moments, n_neutral_specie
         append_to_dynamic_var(io_moments.thermal_speed_neutral, moments.neutral.vth,
                               t_idx, parallel_io, z, r, n_neutral_species)
         if io_moments.external_source_neutral_amplitude !== nothing
+            n_sources = size(moments.neutral.external_source_amplitude)[3]
             append_to_dynamic_var(io_moments.external_source_neutral_amplitude,
                                   moments.neutral.external_source_amplitude, t_idx,
-                                  parallel_io, z, r)
+                                  parallel_io, z, r, n_sources)
             if moments.evolve_density
                 append_to_dynamic_var(io_moments.external_source_neutral_density_amplitude,
                                       moments.neutral.external_source_density_amplitude,
-                                      t_idx, parallel_io, z, r)
+                                      t_idx, parallel_io, z, r, n_sources)
             end
             if moments.evolve_upar
                 append_to_dynamic_var(io_moments.external_source_neutral_momentum_amplitude,
                                       moments.neutral.external_source_momentum_amplitude,
-                                      t_idx, parallel_io, z, r)
+                                      t_idx, parallel_io, z, r, n_sources)
             end
             if moments.evolve_ppar
                 append_to_dynamic_var(io_moments.external_source_neutral_pressure_amplitude,
                                       moments.neutral.external_source_pressure_amplitude,
-                                      t_idx, parallel_io, z, r)
+                                      t_idx, parallel_io, z, r, n_sources)
             end
         end
         if io_moments.external_source_neutral_controller_integral !== nothing
