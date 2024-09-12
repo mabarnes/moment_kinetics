@@ -935,7 +935,8 @@ function total_external_electron_sources!(pdf_out, pdf_in, electron_density, ele
 end
 
 """
-    external_electron_source!(pdf, fvec, moments, electron_source_settings, vperp,
+    external_electron_source!(pdf_out, pdf_in, electron_density, electron_upar,
+                              moments, composition, electron_source, index, vperp,
                               vpa, dt)
 
 Add external source term to the electron kinetic equation.
@@ -974,7 +975,7 @@ function external_electron_source!(pdf_out, pdf_in, electron_density, electron_u
         end
     end
 
-    if electron_source_settings.source_type == "energy"
+    if electron_source.source_type == "energy"
         # Take particles out of pdf so source does not change density
         @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
             pdf_out[ivpa,ivperp,iz,ir] -= dt * source_amplitude[iz,ir] *
