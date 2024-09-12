@@ -358,9 +358,9 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
     electron_sources = electron_source_data[]
     if electron_physics ∈ (braginskii_fluid, kinetic_electrons,
                            kinetic_electrons_with_temperature_equation)
-        electron_sources = [get_settings_electrons(ion_sources[i]) for i ∈ 1:counter]
+        electron_sources = [get_settings_electrons(this_source) for this_source ∈ ion_sources]
     else
-        electron_sources = [get_settings_electrons(get_settings_ions(1, false)) for i ∈ 1:counter]
+        electron_sources = [get_settings_electrons(get_settings_ions(1, false))]
     end
 
     # put all neutral sources into neutral_source_data struct vector
