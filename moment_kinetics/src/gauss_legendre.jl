@@ -122,13 +122,13 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
 
     dirichlet_bc = (coord.bc in ["zero", "constant"]) # and further options in future
     periodic_bc = (coord.bc == "periodic")
-    setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M"; periodic_bc_lhs=periodic_bc)
-    setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms"; periodic_bc_rhs=periodic_bc)
+    setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M"; periodic_bc=periodic_bc)
+    setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms"; periodic_bc=periodic_bc)
     setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms")
     mass_matrix_lu = lu(sparse(mass_matrix))
     if dirichlet_bc || periodic_bc
         L_matrix_with_bc = allocate_float(coord.n,coord.n)
-        setup_global_weak_form_matrix!(L_matrix_with_bc, lobatto, radau, coord, "L", dirichlet_bc=dirichlet_bc, periodic_bc_lhs=periodic_bc)
+        setup_global_weak_form_matrix!(L_matrix_with_bc, lobatto, radau, coord, "L", dirichlet_bc=dirichlet_bc, periodic_bc=periodic_bc)
         L_matrix_with_bc = sparse(L_matrix_with_bc )
         L_matrix_lu = lu(sparse(L_matrix_with_bc))
     else
@@ -880,7 +880,7 @@ is supported with boundary conditions.
 function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
                                lobatto::gausslegendre_base_info,
                                radau::gausslegendre_base_info, 
-                               coord,option; dirichlet_bc=false, periodic_bc_lhs=false, periodic_bc_rhs=false)
+                               coord,option; dirichlet_bc=false, periodic_bc=false)
     QQ_j = allocate_float(coord.ngrid,coord.ngrid)
     
     ngrid = coord.ngrid
@@ -915,7 +915,7 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
         end
         # requires RHS vector b[1],b[end] = boundary values
     end
-    if periodic_bc_lhs || periodic_bc_rhs
+    if periodic_bc
         # Make periodic boundary condition by modifying elements of matrix for duplicate point
         # add assembly contribution to lower endpoint from upper endpoint
         j = coord.nelement_local
@@ -927,15 +927,13 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
         # All-zero row in RHS matrix sets last element of `b` vector in
         # `mass_matrix.x = b` to zero
         QQ_global[end,:] .= 0.0
-        if periodic_bc_lhs
-            # enforce periodicity `x[1] = x[end]` using the last row of the
-            # `mass_matrix.x = b` system.
-            QQ_global[end,1] = 1.0
-            QQ_global[end,end] = -1.0
-            if option == "L" # or any other derivative (ODE) matrix requiring two BC (periodicity + value at endpoint)
-                QQ_global[1,:] .= 0.0
-                QQ_global[1,1] = 1.0
-            end
+        # enforce periodicity `x[1] = x[end]` using the last row of the
+        # `A.x = b` system.
+        QQ_global[end,1] = 1.0
+        QQ_global[end,end] = -1.0
+        if option == "L" # or any other derivative (ODE) matrix requiring two BC (periodicity + value at endpoint)
+            QQ_global[1,:] .= 0.0
+            QQ_global[1,1] = 1.0
         end
     end
         
