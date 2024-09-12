@@ -932,6 +932,10 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
             # `mass_matrix.x = b` system.
             QQ_global[end,1] = 1.0
             QQ_global[end,end] = -1.0
+            if option == "L" # or any other derivative (ODE) matrix requiring two BC (periodicity + value at endpoint)
+                QQ_global[1,:] .= 0.0
+                QQ_global[1,1] = 1.0
+            end
         end
     end
         

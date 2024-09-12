@@ -261,12 +261,13 @@ using moment_kinetics.type_definitions: OptionsDict
                 # test 1D ODE solve
                 # form RHS vector
                 mul!(b,y_spectral.mass_matrix,d2fperiodic_exact)
-                b[end] = 0.0
+                b[1] = 0.0 # fixes constant piece of solution
+                b[end] = 0.0 # makes sure periodicity is enforced
                 # solve ODE
                 ldiv!(fperiodic_num,y_spectral.L_matrix_lu,b)
-                # subtract constant piece (constant offset is allowed solution)
-                F_num = sum(y.wgts.*fperiodic_num)/sum(y.wgts)
-                @. fperiodic_num -= F_num
+                ## subtract constant piece (constant offset is allowed solution)
+                #F_num = sum(y.wgts.*fperiodic_num)/sum(y.wgts)
+                #@. fperiodic_num -= F_num
                 @. fperiodic_err = abs(fperiodic_num - fperiodic_exact)
                 println("max(fperiodic_err) (weak form): ",maximum(fperiodic_err))
                 plot([y.grid, y.grid], [fperiodic_num, fperiodic_exact], xlabel="z", label=["num" "exact"], ylabel="")
