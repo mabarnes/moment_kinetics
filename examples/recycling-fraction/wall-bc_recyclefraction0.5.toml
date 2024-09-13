@@ -96,7 +96,7 @@ converged_residual_value = 1.0e-3
 [krook_collisions]
 use_krook = true
 
-[ion_source]
+[ion_source_1]
 active = true
 z_profile = "gaussian"
 z_width = 0.125

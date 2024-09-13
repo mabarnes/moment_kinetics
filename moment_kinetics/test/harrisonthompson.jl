@@ -114,7 +114,7 @@ test_input_finite_difference = Dict("composition" => OptionsDict("n_ion_species"
                                     "vz_L" => 8.0,
                                     "vz_bc" => "zero",
                                     "vz_discretization" => "finite_difference",
-                                    "ion_source" => Dict("active" => true,
+                                    "ion_source_1" => Dict("active" => true,
                                                          "source_strength" => ionization_frequency,
                                                          "source_T" => 0.25,
                                                          "z_profile" => "constant",

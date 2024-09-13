@@ -23,7 +23,7 @@ using ..electron_fluid_equations: electron_energy_equation!, electron_energy_res
 using ..electron_z_advection: electron_z_advection!, update_electron_speed_z!
 using ..electron_vpa_advection: electron_vpa_advection!, update_electron_speed_vpa!
 using ..em_fields: update_phi!
-using ..external_sources: external_electron_source!
+using ..external_sources: total_external_electron_sources!
 using ..file_io: get_electron_io_info, write_electron_state, finish_electron_io
 using ..krook_collisions: electron_krook_collisions!
 using ..moment_constraints: hard_force_moment_constraints!,
@@ -1819,12 +1819,11 @@ function electron_kinetic_equation_euler_update!(fvec_out, fvec_in, moments, z, 
                                    vperp, vpa, dt)
     end
 
-    if external_source_settings.electron.active
-        external_electron_source!(fvec_out.pdf_electron, fvec_in.pdf_electron,
-                                  moments.electron.dens, moments.electron.upar, moments,
-                                  composition, external_source_settings.electron, vperp,
-                                  vpa, dt)
-    end
+    total_external_electron_sources!(fvec_out.pdf_electron, fvec_in.pdf_electron,
+                                moments.electron.dens, moments.electron.upar, moments,
+                                composition, external_source_settings.electron, vperp,
+                                vpa, dt)
+
 
     if evolve_ppar
         electron_energy_equation!(fvec_out.electron_ppar, fvec_in.electron_ppar,
@@ -2274,16 +2273,18 @@ function add_contribution_from_pdf_term!(pdf_out, pdf_in, ppar, dens, upar, mome
         end
     end
 
-    if electron_source_settings.active
-        source_density_amplitude = moments.electron.external_source_density_amplitude
-        source_momentum_amplitude = moments.electron.external_source_momentum_amplitude
-        source_pressure_amplitude = moments.electron.external_source_pressure_amplitude
-        @loop_r_z ir iz begin
-            term = dt * (1.5 * source_density_amplitude[iz,ir] / dens[iz,ir] -
-                         (0.5 * source_pressure_amplitude[iz,ir] +
-                          source_momentum_amplitude[iz,ir]) / ppar[iz,ir])
-            @loop_vperp_vpa ivperp ivpa begin
-                pdf_out[ivpa,ivperp,iz,ir] -= term * pdf_in[ivpa,ivperp,iz,ir]
+    for index ∈ eachindex(electron_source_settings)
+        if electron_source_settings[index].active
+            @views source_density_amplitude = moments.electron.external_source_density_amplitude[:, :, index]
+            @views source_momentum_amplitude = moments.electron.external_source_momentum_amplitude[:, :, index]
+            @views source_pressure_amplitude = moments.electron.external_source_pressure_amplitude[:, :, index]
+            @loop_r_z ir iz begin
+                term = dt * (1.5 * source_density_amplitude[iz,ir] / dens[iz,ir] -
+                            (0.5 * source_pressure_amplitude[iz,ir] +
+                            source_momentum_amplitude[iz,ir]) / ppar[iz,ir])
+                @loop_vperp_vpa ivperp ivpa begin
+                    pdf_out[ivpa,ivperp,iz,ir] -= term * pdf_in[ivpa,ivperp,iz,ir]
+                end
             end
         end
     end

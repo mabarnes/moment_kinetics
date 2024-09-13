@@ -73,7 +73,7 @@ sd_mi = 0.5 # mD/malpha
 sd_me = 0.000013616 # 0.25/1836.0 me/malpha
 sd_q = 1.0
 
-[ion_source]
+[ion_source_1]
 active=true
 source_strength=1.0
 source_T=0.005

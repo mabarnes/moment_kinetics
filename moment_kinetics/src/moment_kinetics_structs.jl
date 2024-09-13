@@ -132,18 +132,18 @@ struct moments_ion_substruct
     dvth_dz::Union{MPISharedArray{mk_float,3},Nothing}
     # this is the entropy production dS/dt = - int (ln f sum_s' C_ss' [f_s,f_s']) d^3 v
     dSdt::MPISharedArray{mk_float,3}
-    # Spatially varying amplitude of the external source term
-    external_source_amplitude::MPISharedArray{mk_float,2}
+    # Spatially varying amplitude of the external source term (third index is for different sources)
+    external_source_amplitude::MPISharedArray{mk_float,3}
     # Spatially varying amplitude of the density moment of the external source term
-    external_source_density_amplitude::MPISharedArray{mk_float,2}
+    external_source_density_amplitude::MPISharedArray{mk_float,3}
     # Spatially varying amplitude of the parallel momentum moment of the external source
     # term
-    external_source_momentum_amplitude::MPISharedArray{mk_float,2}
+    external_source_momentum_amplitude::MPISharedArray{mk_float,3}
     # Spatially varying amplitude of the parallel pressure moment of the external source
     # term
-    external_source_pressure_amplitude::MPISharedArray{mk_float,2}
+    external_source_pressure_amplitude::MPISharedArray{mk_float,3}
     # Integral term for the PID controller of the external source term
-    external_source_controller_integral::MPISharedArray{mk_float,2}
+    external_source_controller_integral::MPISharedArray{mk_float,3}
     # Store coefficient 'A' from applying moment constraints so we can write it out as a
     # diagnostic
     constraints_A_coefficient::Union{MPISharedArray{mk_float,3},Nothing}
@@ -184,15 +184,15 @@ struct moments_electron_substruct
     # this is the parallel friction force between ions and electrons
     parallel_friction::MPISharedArray{mk_float,2}
     # Spatially varying amplitude of the external source term
-    external_source_amplitude::MPISharedArray{mk_float,2}
+    external_source_amplitude::MPISharedArray{mk_float,3}
     # Spatially varying amplitude of the density moment of the external source term
-    external_source_density_amplitude::MPISharedArray{mk_float,2}
+    external_source_density_amplitude::MPISharedArray{mk_float,3}
     # Spatially varying amplitude of the parallel momentum moment of the external source
     # term
-    external_source_momentum_amplitude::MPISharedArray{mk_float,2}
+    external_source_momentum_amplitude::MPISharedArray{mk_float,3}
     # Spatially varying amplitude of the parallel pressure moment of the external source
     # term
-    external_source_pressure_amplitude::MPISharedArray{mk_float,2}
+    external_source_pressure_amplitude::MPISharedArray{mk_float,3}
     # if evolve_ppar = true, then the velocity variable is (vpa - upa)/vth, which introduces
     # a factor of vth for each power of wpa in velocity space integrals.
     # v_norm_fac accounts for this: it is vth if using the above definition for the parallel velocity,
@@ -297,17 +297,17 @@ struct moments_neutral_substruct
     # this is the z-derivative of the heat flux along z
     dqz_dz::Union{MPISharedArray{mk_float,3},Nothing}
     # Spatially varying amplitude of the external source term
-    external_source_amplitude::MPISharedArray{mk_float,2}
+    external_source_amplitude::MPISharedArray{mk_float,3}
     # Spatially varying amplitude of the density moment of the external source term
-    external_source_density_amplitude::MPISharedArray{mk_float,2}
+    external_source_density_amplitude::MPISharedArray{mk_float,3}
     # Spatially varying amplitude of the parallel momentum moment of the external source
     # term
-    external_source_momentum_amplitude::MPISharedArray{mk_float,2}
+    external_source_momentum_amplitude::MPISharedArray{mk_float,3}
     # Spatially varying amplitude of the parallel pressure moment of the external source
     # term
-    external_source_pressure_amplitude::MPISharedArray{mk_float,2}
+    external_source_pressure_amplitude::MPISharedArray{mk_float,3}
     # Integral term for the PID controller of the external source term
-    external_source_controller_integral::MPISharedArray{mk_float,2}
+    external_source_controller_integral::MPISharedArray{mk_float,3}
     # Store coefficient 'A' from applying moment constraints so we can write it out as a
     # diagnostic
     constraints_A_coefficient::Union{MPISharedArray{mk_float,3},Nothing}

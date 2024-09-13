@@ -60,7 +60,7 @@ nwrite = 5000
 nwrite_dfns = 5000
 split_operators = false
 
-[ion_source]
+[ion_source_1]
 active = true
 z_profile = "gaussian"
 z_width = 0.125

@@ -86,14 +86,14 @@ nwrite = 10000
 nwrite_dfns = 10000
 split_operators = false
 
-[ion_source]
+[ion_source_1]
 active = true
 z_profile = "gaussian"
 z_width = 0.125
 source_strength = 2.0
 source_T = 2.0
 
-[neutral_source]
+[neutral_source_1]
 active = true
 source_type = "recycling"
 recycling_controller_fraction = 0.25

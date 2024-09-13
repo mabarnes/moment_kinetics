@@ -126,25 +126,28 @@ function update_speed_n_u_p_evolution_neutral!(advect, fvec, moments, vz, z, r,
             end
         end
     end
-    if neutral_source_settings.active
-        source_density_amplitude = moments.neutral.external_source_density_amplitude
-        source_momentum_amplitude = moments.neutral.external_source_momentum_amplitude
-        source_pressure_amplitude = moments.neutral.external_source_pressure_amplitude
-        density = fvec.density_neutral
-        uz = fvec.uz_neutral
-        pz = fvec.pz_neutral
-        vth = moments.neutral.vth
-        vz_grid = vz.grid
-        @loop_s_r_z is ir iz begin
-            term1 = source_density_amplitude[iz,ir] * uz[iz,ir,is]/(density[iz,ir,is]*vth[iz,ir,is])
-            term2_over_vpa =
-                -0.5 * (source_pressure_amplitude[iz,ir] +
-                        2.0 * uz[iz,ir,is] * source_momentum_amplitude[iz,ir]) /
-                       pz[iz,ir,is] +
-                0.5 * source_density_amplitude[iz,ir] / density[iz,ir,is]
-            @loop_vzeta_vr_vz ivzeta ivr ivz begin
-                advect[is].speed[ivz,ivr,ivzeta,iz,ir] += term1 +
-                                                          vz_grid[ivz] * term2_over_vpa
+
+    for index ∈ eachindex(neutral_source_settings)
+        if neutral_source_settings[index].active
+            @views source_density_amplitude = moments.neutral.external_source_density_amplitude[:, :, index]
+            @views source_momentum_amplitude = moments.neutral.external_source_momentum_amplitude[:, :, index]
+            @views source_pressure_amplitude = moments.neutral.external_source_pressure_amplitude[:, :, index]
+            density = fvec.density_neutral
+            uz = fvec.uz_neutral
+            pz = fvec.pz_neutral
+            vth = moments.neutral.vth
+            vz_grid = vz.grid
+            @loop_s_r_z is ir iz begin
+                term1 = source_density_amplitude[iz,ir] * uz[iz,ir,is]/(density[iz,ir,is]*vth[iz,ir,is])
+                term2_over_vpa =
+                    -0.5 * (source_pressure_amplitude[iz,ir] +
+                            2.0 * uz[iz,ir,is] * source_momentum_amplitude[iz,ir]) /
+                        pz[iz,ir,is] +
+                    0.5 * source_density_amplitude[iz,ir] / density[iz,ir,is]
+                @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                    advect[is].speed[ivz,ivr,ivzeta,iz,ir] += term1 +
+                                                            vz_grid[ivz] * term2_over_vpa
+                end
             end
         end
     end
@@ -184,7 +187,7 @@ function update_speed_n_p_evolution_neutral!(advect, fields, fvec, moments, vz, 
             end
         end
     end
-    if ion_source_settings.active
+    if any(x -> x.active, neutral_source_settings)
         error("External source not implemented for evolving n and ppar case")
     end
 end
@@ -219,15 +222,17 @@ function update_speed_n_u_evolution_neutral!(advect, fvec, moments, vz, z, r, co
             end
         end
     end
-    if neutral_source_settings.active
-        source_density_amplitude = moments.neutral.external_source_density_amplitude
-        density = fvec.density_neutral
-        uz = fvec.uz_neutral
-        vth = moments.neutral.vth
-        @loop_sn_r_z isn ir iz begin
-            term = source_density_amplitude[iz,ir] * uz[iz,ir,isn] / density[iz,ir,isn]
-            @loop_vzeta_vr_vz ivzeta ivr ivz begin
-                advect[isn].speed[ivz,ivr,ivzeta,iz,ir] += term
+    for index ∈ eachindex(neutral_source_settings)
+        if neutral_source_settings[index].active
+            @views source_density_amplitude = moments.neutral.external_source_density_amplitude[:, :, index]
+            density = fvec.density_neutral
+            uz = fvec.uz_neutral
+            vth = moments.neutral.vth
+            @loop_sn_r_z isn ir iz begin
+                term = source_density_amplitude[iz,ir] * uz[iz,ir,isn] / density[iz,ir,isn]
+                @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                    advect[isn].speed[ivz,ivr,ivzeta,iz,ir] += term
+                end
             end
         end
     end
