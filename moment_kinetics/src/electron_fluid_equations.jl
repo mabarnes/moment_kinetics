@@ -111,6 +111,11 @@ function calculate_electron_upar_from_charge_conservation!(upar_e, updated, dens
                 # convert from parallel particle flux to parallel particle density
                 upar_e[iz,ir] /= dens_e[iz,ir]
             end
+        else
+            begin_r_z_region()
+            @loop_r_z ir iz begin
+                upar_e[iz,ir] = upar_i[iz,ir,1]
+            end
         end
         updated[] = true
     end
