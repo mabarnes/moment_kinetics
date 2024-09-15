@@ -67,8 +67,8 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
         evolve_moments.density, evolve_moments.parallel_flow,
         evolve_moments.parallel_pressure, external_source_settings.ion,
         num_diss_params)
-    electron = create_moments_electron(z.n, r.n,
-        composition.electron_physics, num_diss_params)
+    electron = create_moments_electron(z.n, r.n, composition.electron_physics, 
+        num_diss_params, length(external_source_settings.electron))
     neutral = create_moments_neutral(z.n, r.n, composition.n_neutral_species,
         evolve_moments.density, evolve_moments.parallel_flow,
         evolve_moments.parallel_pressure, external_source_settings.neutral,

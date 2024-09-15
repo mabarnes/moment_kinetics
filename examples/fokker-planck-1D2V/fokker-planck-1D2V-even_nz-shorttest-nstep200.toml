@@ -1,4 +1,4 @@
-[ion_source]
+[ion_source_1]
 z_profile = "constant"
 source_strength = 1.0
 source_T = 0.25

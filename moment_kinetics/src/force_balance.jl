@@ -29,11 +29,13 @@ function force_balance!(pflx, density_out, fvec, moments, fields, collisions, dt
                              0.5*geometry.bzed[iz,ir]*fields.Ez[iz,ir]*density[iz,ir,is])
     end
 
-    if ion_source_settings.active && false
-        source_amplitude = moments.ion.external_source_momentum_amplitude
-        @loop_s_r_z is ir iz begin
-            pflx[iz,ir,is] +=
-                dt * source_amplitude[iz,ir]
+    for index ∈ eachindex(ion_source_settings)
+        if ion_source_settings[index].active && false
+            @views source_amplitude = moments.ion.external_source_momentum_amplitude[:, :, index]
+            @loop_s_r_z is ir iz begin
+                pflx[iz,ir,is] +=
+                    dt * source_amplitude[iz,ir]
+            end
         end
     end
 
@@ -85,11 +87,13 @@ function neutral_force_balance!(pflx, density_out, fvec, moments, fields, collis
                              2.0*density[iz,ir,isn]*uz[iz,ir,isn]*moments.neutral.duz_dz_upwind[iz,ir,isn])
     end
 
-    if neutral_source_settings.active && false
-        source_amplitude = moments.neutral.external_source_momentum_amplitude
-        @loop_sn_r_z isn ir iz begin
-            pflx[iz,ir,isn] +=
-                dt * source_amplitude[iz,ir]
+    for index ∈ eachindex(neutral_source_settings)
+        if neutral_source_settings[index].active && false
+            @views source_amplitude = moments.neutral.external_source_momentum_amplitude[:, :, index]
+            @loop_sn_r_z isn ir iz begin
+                pflx[iz,ir,isn] +=
+                    dt * source_amplitude[iz,ir]
+            end
         end
     end
 

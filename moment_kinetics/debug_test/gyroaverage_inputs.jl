@@ -29,7 +29,7 @@ test_input = OptionsDict(
                                  "upar_phase" => 0.0,
                                  "temperature_amplitude" => 0.0,
                                  "temperature_phase" => 0.0),
-    "ion_source" => OptionsDict("z_profile" => "constant",
+    "ion_source_1" => OptionsDict("z_profile" => "constant",
                                 "source_strength" => 0.05,
                                 "source_T" => 0.25),
     "timestepping" => OptionsDict("nstep" => 3,

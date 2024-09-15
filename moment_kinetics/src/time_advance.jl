@@ -1189,8 +1189,8 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         if collisions.mxwl_diff.D_nn > 0.0
             advance_maxwell_diffusion_nn = true
         end
-        advance_external_source = external_source_settings.ion.active && !t_params.implicit_ion_advance
-        advance_neutral_external_source = external_source_settings.neutral.active
+        advance_external_source = any(x -> x.active, external_source_settings.ion) && !t_params.implicit_ion_advance
+        advance_neutral_external_source = any(x -> x.active, external_source_settings.neutral)
         advance_ion_numerical_dissipation = !(t_params.implicit_ion_advance || t_params.implicit_vpa_advection)
         advance_neutral_numerical_dissipation = true
         # if evolving the density, must advance the continuity equation,
@@ -1361,7 +1361,7 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
             end
         end
         advance_krook_collisions_ii = collisions.krook.nuii0 > 0.0
-        advance_external_source = external_source_settings.ion.active
+        advance_external_source = any(x -> x.active, external_source_settings.ion)
         advance_ion_numerical_dissipation = true
         advance_sources = moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
         explicit_weakform_fp_collisions = collisions.fkpl.nuii > 0.0 && vperp.n > 1
@@ -3215,11 +3215,11 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
     if advance.external_source
-        external_ion_source_controller!(fvec_in, moments, external_source_settings.ion,
+        total_external_ion_source_controllers!(fvec_in, moments, external_source_settings.ion,
                                         dt)
     end
     if advance.neutral_external_source
-        external_neutral_source_controller!(fvec_in, moments,
+        total_external_neutral_source_controllers!(fvec_in, moments,
                                             external_source_settings.neutral, r, z, dt)
     end
 
@@ -3343,11 +3343,11 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     end
 
     if advance.external_source
-        external_ion_source!(fvec_out.pdf, fvec_in, moments, external_source_settings.ion,
+        total_external_ion_sources!(fvec_out.pdf, fvec_in, moments, external_source_settings.ion,
                             vperp, vpa, dt, scratch_dummy)
     end
     if advance.neutral_external_source
-        external_neutral_source!(fvec_out.pdf_neutral, fvec_in, moments,
+        total_external_neutral_sources!(fvec_out.pdf_neutral, fvec_in, moments,
                                 external_source_settings.neutral, vzeta, vr, vz, dt)
     end
 

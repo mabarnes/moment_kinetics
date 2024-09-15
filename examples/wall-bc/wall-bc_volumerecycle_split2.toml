@@ -95,14 +95,14 @@ split_operators = false
 steady_state_residual = true
 converged_residual_value = 1.0e-3
 
-[ion_source]
+[ion_source_1]
 active = true
 z_profile = "gaussian"
 z_width = 0.125
 source_strength = 2.0
 source_T = 2.0
 
-[neutral_source]
+[neutral_source_1]
 active = true
 source_type = "recycling"
 recycling_controller_fraction = 0.25
