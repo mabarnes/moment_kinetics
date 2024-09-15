@@ -82,7 +82,7 @@ struct gausslegendre_base_info
     Y31::Array{mk_float,3}
 end
 
-struct gausslegendre_info{TSparse, TLU} <: weak_discretization_info
+struct gausslegendre_info{TSparse, TLU, TLmat, TLmatLU} <: weak_discretization_info
     lobatto::gausslegendre_base_info
     radau::gausslegendre_base_info
     # global (1D) mass matrix
@@ -94,13 +94,19 @@ struct gausslegendre_info{TSparse, TLU} <: weak_discretization_info
     K_matrix::TSparse
     # global (1D) weak Laplacian derivative matrix
     L_matrix::TSparse
-    # global (1D) LU object
+    # global (1D) weak Laplacian derivative matrix with boundary conditions - might be
+    # `nothing` if boundary conditions are not supported
+    L_matrix_with_bc::TLmat
+    # mass matrix global (1D) LU object
     mass_matrix_lu::TLU
+    # Laplacian global (1D) LU object - might be
+    # `nothing` if boundary conditions are not supported
+    L_matrix_lu::TLmatLU
     # dummy matrix for local operators
     Qmat::Array{mk_float,2}
 end
 
-function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true, dirichlet_bc=false)
+function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
     lobatto = setup_gausslegendre_pseudospectral_lobatto(coord,collision_operator_dim=collision_operator_dim)
     radau = setup_gausslegendre_pseudospectral_radau(coord,collision_operator_dim=collision_operator_dim)
 
@@ -114,13 +120,34 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true, 
     K_matrix = allocate_float(coord.n,coord.n)
     L_matrix = allocate_float(coord.n,coord.n)
 
-    setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M"; dirichlet_bc=dirichlet_bc)
-    setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms"; dirichlet_bc=dirichlet_bc)
-    setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms"; dirichlet_bc=dirichlet_bc)
+    dirichlet_bc = (coord.bc in ["zero", "constant"]) # and further options in future
+    periodic_bc = (coord.bc == "periodic")
+    setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M"; periodic_bc=periodic_bc)
+    setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms"; periodic_bc=periodic_bc)
+    setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms")
     mass_matrix_lu = lu(sparse(mass_matrix))
+    if dirichlet_bc || periodic_bc
+        L_matrix_with_bc = allocate_float(coord.n,coord.n)
+        setup_global_weak_form_matrix!(L_matrix_with_bc, lobatto, radau, coord, "L", dirichlet_bc=dirichlet_bc, periodic_bc=periodic_bc)
+        L_matrix_with_bc = sparse(L_matrix_with_bc )
+        L_matrix_lu = lu(sparse(L_matrix_with_bc))
+    else
+        L_matrix_with_bc = nothing
+        L_matrix_lu = nothing
+    end    
+
     Qmat = allocate_float(coord.ngrid,coord.ngrid)
 
-    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),sparse(K_matrix),sparse(L_matrix),mass_matrix_lu,Qmat)
+    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),sparse(K_matrix),sparse(L_matrix),L_matrix_with_bc,
+                              mass_matrix_lu,L_matrix_lu,Qmat)
+end
+
+function identity_matrix!(I,n)
+    @. I[:,:] = 0.0
+    for i in 1:n
+       I[i,i] = 1.0
+    end
+    return nothing    
 end
 
 function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_dim=true)
@@ -820,78 +847,58 @@ The 'option' variable is a flag for
 choosing the type of matrix to be constructed. 
 Currently the function is set up to assemble the 
 elemental matrices without imposing boundary conditions on the 
-first and final rows of the matrix. This means that 
+first and final rows of the matrix by default. This means that 
 the operators constructed from this function can only be used
-for differentiation, and not solving 1D ODEs. 
-The shared points in the element assembly are 
-averaged (instead of simply added) to be consistent with the 
-derivative_elements_to_full_grid!() function in calculus.jl,
-which is used to form the RHS of the equation
+for differentiation, and not solving 1D ODEs.
+This assembly function assumes that the 
+coordinate is not distributed. To extend this function to support
+distributed-memory MPI, addition of off-memory matrix elements
+to the exterior points would be required.
+
+The typical use of this function is to assemble matrixes M and K in
 
  M * d2f = K * f 
  
-where M is the mass matrix and K is the stiffness matrix. 
+where M is the mass matrix and K is the stiffness matrix, and we wish to
+solve for d2f given f. To solve 1D ODEs
+
+K * f = b = M * d2f 
+
+for f given boundary data on f
+with periodic or dirichlet boundary conditions, set 
+
+periodic_bc = true, b[end] = 0 
+
+or 
+
+dirichlet_bc = true, b[1] = f[1] (except for cylindrical coordinates), b[end] = f[end]
+
+in the function call, and create new matrices for this purpose
+in the gausslegendre_info struct. Currently the Laplacian matrix
+is supported with boundary conditions.
 """
 function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
                                lobatto::gausslegendre_base_info,
                                radau::gausslegendre_base_info, 
-                               coord,option; dirichlet_bc=false)
+                               coord,option; dirichlet_bc=false, periodic_bc=false)
     QQ_j = allocate_float(coord.ngrid,coord.ngrid)
-    QQ_jp1 = allocate_float(coord.ngrid,coord.ngrid)
     
     ngrid = coord.ngrid
     imin = coord.imin
     imax = coord.imax
     @. QQ_global = 0.0
     
-    # fill in first element 
-    j = 1
-    # N.B. QQ varies with ielement for vperp, but not vpa
-    # a radau element is used for the vperp grid (see get_QQ_local!())
-    get_QQ_local!(QQ_j,j,lobatto,radau,coord,option)
-    if coord.bc == "periodic" && coord.nrank == 1
-        QQ_global[imin[j],imin[j]:imax[j]] .+= QQ_j[1,:] ./ 2.0
-    else
-        QQ_global[imin[j],imin[j]:imax[j]] .+= QQ_j[1,:]
-    end
-    for k in 2:imax[j]-imin[j] 
-        QQ_global[k,imin[j]:imax[j]] .+= QQ_j[k,:]
-    end
-    if coord.nelement_local > 1
-        QQ_global[imax[j],imin[j]:imax[j]] .+= QQ_j[ngrid,:]./2.0
-    elseif coord.bc == "periodic" && coord.nrank == 1
-        QQ_global[imin[1],imin[j]:imax[j]] .+= QQ_j[ngrid,:]./2.0
-        # Enforce continuity at the periodic boundary
-        QQ_global[imax[j],imin[j]:imax[j]] .= 0.0
-        QQ_global[imax[j],1] = 1.0
-        QQ_global[imax[j],end] = -1.0
-    else
-        QQ_global[imax[j],imin[j]:imax[j]] .+= QQ_j[ngrid,:]
-    end
-    # remaining elements recalling definitions of imax and imin
-    for j in 2:coord.nelement_local
+    # assembly below assumes no contributions 
+    # from elements outside of local domain
+    k = 0
+    for j in 1:coord.nelement_local
         get_QQ_local!(QQ_j,j,lobatto,radau,coord,option)
-        #lower boundary assembly on element
-        QQ_global[imin[j]-1,imin[j]-1:imax[j]] .+= QQ_j[1,:]./2.0
-        for k in 2:imax[j]-imin[j]+1 
-            QQ_global[k+imin[j]-2,imin[j]-1:imax[j]] .+= QQ_j[k,:]
-        end
-        # upper boundary assembly on element 
-        if j == coord.nelement_local
-            if coord.bc == "periodic" && coord.nrank == 1
-                QQ_global[imin[1],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:] / 2.0
-                # Enforce continuity at the periodic boundary
-                QQ_global[imax[j],imin[j]-1:imax[j]] .= 0.0
-                QQ_global[imax[j],1] = 1.0
-                QQ_global[imax[j],end] = -1.0
-            else
-                QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]
-            end
-        else 
-            QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]./2.0
-        end
+        iminl = imin[j]-k
+        imaxl = imax[j]
+        @. QQ_global[iminl:imaxl,iminl:imaxl] += QQ_j[:,:]
+        k = 1
     end
-
+    
     if dirichlet_bc
         # Make matrix diagonal for first/last grid points so it does not change the values
         # there
@@ -905,6 +912,28 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
         if coord.irank == coord.nrank - 1
             QQ_global[end,:] .= 0.0
             QQ_global[end,end] = 1.0
+        end
+        # requires RHS vector b[1],b[end] = boundary values
+    end
+    if periodic_bc
+        # Make periodic boundary condition by modifying elements of matrix for duplicate point
+        # add assembly contribution to lower endpoint from upper endpoint
+        j = coord.nelement_local
+        get_QQ_local!(QQ_j,j,lobatto,radau,coord,option)
+        iminl = imin[j] - mk_int(coord.nelement_local > 1)
+        imaxl = imax[j]
+        QQ_global[1,iminl:imaxl] .+= QQ_j[end,:]
+        # Enforce continuity at the periodic boundary
+        # All-zero row in RHS matrix sets last element of `b` vector in
+        # `mass_matrix.x = b` to zero
+        QQ_global[end,:] .= 0.0
+        # enforce periodicity `x[1] = x[end]` using the last row of the
+        # `A.x = b` system.
+        QQ_global[end,1] = 1.0
+        QQ_global[end,end] = -1.0
+        if option == "L" # or any other derivative (ODE) matrix requiring two BC (periodicity + value at endpoint)
+            QQ_global[1,:] .= 0.0
+            QQ_global[1,1] = 1.0
         end
     end
         

@@ -64,7 +64,7 @@ function derivative!(df, f, coord, spectral::Union{null_spatial_dimension_info,
     return nothing
 end
 
-function second_derivative!(d2f, f, coord, spectral; handle_periodic=true)
+function second_derivative!(d2f, f, coord, spectral)
     # computes d^2f / d(coord)^2
     # For spectral element methods, calculate second derivative by applying first
     # derivative twice, with special treatment for element boundaries
@@ -124,14 +124,22 @@ function second_derivative!(d2f, f, coord, spectral; handle_periodic=true)
             error("Distributed memory MPI not yet supported here")
         end
         d2f[1] -= C * coord.scratch2_2d[end,end]
-        d2f[end] += C * coord.scratch2_2d[1,1]
+        # With the first derivative from the opposite end of the grid, d2f[end] here
+        # should be equal to d2f[1] up to rounding errors...
+        @boundscheck isapprox(d2f[end] + C * coord.scratch2_2d[1,1], d2f[1]; atol=1.0e-14)
+        # ...but because arithmetic operations were in a different order, there may be
+        # rounding errors, so set the two ends exactly equal to ensure consistency for the
+        # rest of the code - we assume that duplicate versions of the 'same point' on
+        # element boundaries (due to periodic bc or distributed-MPI block boundaries) are
+        # exactly equal.
+        d2f[end] = d2f[1]
     else
         error("Unsupported bc '$(coord.bc)'")
     end
     return nothing
 end
 
-function laplacian_derivative!(d2f, f, coord, spectral; handle_periodic=true)
+function laplacian_derivative!(d2f, f, coord, spectral)
     # computes (1/coord) d / coord ( coord d f / d(coord)) for vperp coordinate
     # For spectral element methods, calculate second derivative by applying first
     # derivative twice, with special treatment for element boundaries
@@ -207,22 +215,12 @@ is an input.
 """
 function mass_matrix_solve! end
 
-function second_derivative!(d2f, f, coord, spectral::weak_discretization_info; handle_periodic=true)
+function second_derivative!(d2f, f, coord, spectral::weak_discretization_info)
     # obtain the RHS of numerical weak-form of the equation 
     # g = d^2 f / d coord^2, which is 
     # M * g = K * f, with M the mass matrix and K an appropriate stiffness matrix
     # by multiplying by basis functions and integrating by parts    
     mul!(coord.scratch3, spectral.K_matrix, f)
-
-    if handle_periodic && coord.bc == "periodic"
-        if coord.nrank > 1
-            error("second_derivative!() cannot handle periodic boundaries for a "
-                  * "distributed coordinate")
-        end
-
-        coord.scratch3[1] = 0.5 * (coord.scratch3[1] + coord.scratch3[end])
-        coord.scratch3[end] = coord.scratch3[1]
-    end
 
     # solve weak form matrix problem M * g = K * f to obtain g = d^2 f / d coord^2
     if coord.nrank > 1
@@ -230,6 +228,17 @@ function second_derivative!(d2f, f, coord, spectral::weak_discretization_info; h
               * "distributed coordinate")
     end
     mass_matrix_solve!(d2f, coord.scratch3, spectral)
+
+    if coord.bc == "periodic"
+        # d2f[end] here should be equal to d2f[1] up to rounding errors...
+        @boundscheck isapprox(d2f[end], d2f[1]; atol=1.0e-14)
+        # ...but in the matrix operations arithmetic operations are not necessarily in
+        # exactly the same order, there may be rounding errors, so set the two ends
+        # exactly equal to ensure consistency for the rest of the code - we assume that
+        # duplicate versions of the 'same point' on element boundaries (due to periodic bc
+        # or distributed-MPI block boundaries) are exactly equal.
+        d2f[end] = d2f[1]
+    end
 end
 
 function laplacian_derivative!(d2f, f, coord, spectral::weak_discretization_info)
