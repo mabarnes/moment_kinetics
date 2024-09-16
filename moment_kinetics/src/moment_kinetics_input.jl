@@ -301,10 +301,6 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         error("maximum_dt=$(timestepping_section["maximum_dt"]) must be positive")
     end
 
-    #########################################################################
-    ########## end user inputs. do not modify following code! ###############
-    #########################################################################
-
     # set up distributed-memory MPI information for z and r coords
     # need grid and MPI information to determine these values 
     # MRH just put dummy values now 
