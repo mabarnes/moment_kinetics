@@ -12,7 +12,8 @@ using ..array_allocation: allocate_float
 using ..communication
 using ..coordinates: define_coordinate, get_coordinate_input
 using ..external_sources
-using ..file_io: io_has_parallel, input_option_error, open_ascii_output_file
+using ..file_io: io_has_parallel, input_option_error, open_ascii_output_file,
+                 setup_io_input
 using ..krook_collisions: setup_krook_collisions_input
 using ..maxwell_diffusion: setup_mxwl_diff_collisions_input
 using ..fokker_planck: setup_fkpl_collisions_input
@@ -25,7 +26,6 @@ using ..geo: init_magnetic_geometry, setup_geometry_input
 using ..species_input: get_species_input
 using MPI
 using TOML
-using UUIDs
 
 """
 Read input from a TOML file
@@ -94,24 +94,6 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
     
-    # Start processing inputs for file I/O. This is done early because we need to work
-    # out what `output_dir` should be. The setup is completed later, after some other
-    # sections have been read.
-    io_settings = set_defaults_and_check_section!(
-        input_dict, "output";
-        run_name="",
-        base_directory="runs",
-        ascii_output=false,
-        binary_format=hdf5,
-        parallel_io=nothing,
-       )
-    if io_settings["run_name"] == ""
-        error("When passing a Dict directly for input, it is required to set `run_name` "
-              * "in the `[output]` section")
-    end
-    # this is the directory where the simulation data will be stored
-    output_dir = joinpath(io_settings["base_directory"], io_settings["run_name"])
-
     # if evolve_moments.density = true, evolve density via continuity eqn
     # and g = f/n via modified drift kinetic equation
     evolve_moments_settings = set_defaults_and_check_section!(
@@ -240,7 +222,6 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     # do not want to add a value to the `input_dict`. We also add a few dummy inputs that
     # are not actually used for electrons.
     electron_timestepping_section = copy(electron_timestepping_section)
-    electron_timestepping_section["stopfile_name"] = joinpath(output_dir, "stop")
     electron_timestepping_section["atol_upar"] = NaN
     electron_timestepping_section["steady_state_residual"] = true
     if !(0.0 < electron_timestepping_section["step_update_prefactor"] < 1.0)
@@ -286,7 +267,6 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     # `electron_timestepping_section` into the Dict that is used to make
     # `timestepping_input`, so that it becomes part of `timestepping_input`.
     timestepping_section = copy(timestepping_section)
-    timestepping_section["stopfile_name"] = joinpath(output_dir, "stop")
     timestepping_section["electron_t_input"] = electron_timestepping_section
     if !(0.0 < timestepping_section["step_update_prefactor"] < 1.0)
         error("step_update_prefactor=$(timestepping_section["step_update_prefactor"]) must "
@@ -342,41 +322,17 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
                                          r_coord_input.nelement_local)
     end
 
-    # Create output_dir if it does not exist.
-    if !ignore_MPI
-        if global_rank[] == 0
-            mkpath(output_dir)
-        end
-        _block_synchronize()
-    end
+    io_immutable = setup_io_input(input_dict, timestepping_section; ignore_MPI=ignore_MPI)
 
-    # Complete setup of io_settings
-    if io_settings["parallel_io"] === nothing
-        io_settings["parallel_io"] = io_has_parallel(Val(io_settings["binary_format"]))
-    end
-    # Make copy of the section to avoid modifying the passed-in Dict
-    io_settings = copy(io_settings)
-    run_id = string(uuid4())
-    if !ignore_MPI
-        # Communicate run_id to all blocks
-        # Need to convert run_id to a Vector{Char} for MPI
-        run_id_chars = [run_id...]
-        MPI.Bcast!(run_id_chars, 0, comm_world)
-        run_id = string(run_id_chars...)
-    end
-    io_settings["run_id"] = run_id
-    io_settings["output_dir"] = output_dir
-    io_settings["write_error_diagnostics"] = timestepping_section["write_error_diagnostics"]
-    io_settings["write_steady_state_diagnostics"] = timestepping_section["write_steady_state_diagnostics"]
-    io_settings["write_electron_error_diagnostics"] = timestepping_section["electron_t_input"]["write_error_diagnostics"]
-    io_settings["write_electron_steady_state_diagnostics"] = timestepping_section["electron_t_input"]["write_steady_state_diagnostics"]
-    io_immutable = Dict_to_NamedTuple(io_settings)
+    # this is the directory where the simulation data will be stored
+    timestepping_section["stopfile_name"] = joinpath(io_immutable.output_dir, "stop")
+    electron_timestepping_section["stopfile_name"] = joinpath(io_immutable.output_dir, "stop")
 
     # initialize z grid and write grid point locations to file
     if ignore_MPI
         run_directory = nothing
     else
-        run_directory = output_dir
+        run_directory = io_immutable.output_dir
     end
     z, z_spectral = define_coordinate(z_coord_input; parallel_io=io_immutable.parallel_io,
                                       run_directory=run_directory, ignore_MPI=ignore_MPI,
@@ -439,15 +395,16 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
 
     if global_rank[] == 0 && save_inputs_to_txt
         # Make file to log some information about inputs into.
-        io = open_ascii_output_file(string(output_dir,"/",io_settings["run_name"]), "input")
+        io = open_ascii_output_file(joinpath(io_immutable.output_dir, io_immutable.run_name), "input")
     else
         io = devnull
     end
     
     # check input (and initialized coordinate structs) to catch errors/unsupported options
-    check_input(io, output_dir, timestepping_section["nstep"], timestepping_section["dt"], r, z,
-                vpa, vperp, composition, species_immutable, evolve_moments,
-                num_diss_params, save_inputs_to_txt, collisions)
+    check_input(io, io_immutable.output_dir, timestepping_section["nstep"],
+                timestepping_section["dt"], r, z, vpa, vperp, composition,
+                species_immutable, evolve_moments, num_diss_params, save_inputs_to_txt,
+                collisions)
 
     # return immutable structs for z, vpa, species and composition
     all_inputs = (io_immutable, evolve_moments, timestepping_section, z, z_spectral, r,

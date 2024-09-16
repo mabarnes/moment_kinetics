@@ -5,6 +5,7 @@ module file_io
 export input_option_error
 export get_group
 export open_output_file, open_ascii_output_file
+export setup_io_input
 export setup_file_io, finish_file_io
 export write_data_to_ascii
 
@@ -19,6 +20,7 @@ using ..type_definitions: mk_float, mk_int
 using LibGit2
 using MPI
 using Pkg
+using UUIDs
 
 @debug_shared_array using ..communication: DebugMPISharedArray
 
@@ -30,6 +32,23 @@ function __init__()
     catch
         # Do nothing
     end
+end
+
+"""
+Container for I/O settings
+"""
+Base.@kwdef struct io_input_struct
+    run_name::String
+    base_directory::String
+    ascii_output::Bool
+    binary_format::binary_format_type
+    parallel_io::Bool
+    run_id::String
+    output_dir::String
+    write_error_diagnostics::Bool
+    write_steady_state_diagnostics::Bool
+    write_electron_error_diagnostics::Bool
+    write_electron_steady_state_diagnostics::Bool
 end
 
 """
@@ -56,8 +75,7 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
                        Tchodura_upper, Texti1, Texti2, Texti3, Texti4,
                        Texti5, Textn1, Textn2, Textn3, Textn4, Textn5, Texte1, Texte2,
                        Texte3, Texte4, Tconstri, Tconstrn, Tconstre, Tint, Tfailcause,
-                       Telectrontime, Telectronint, Telectronfailcause, Tnldiagnostics,
-                       Tinput}
+                       Telectrontime, Telectronint, Telectronfailcause, Tnldiagnostics}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the time variable
@@ -211,14 +229,14 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
     nl_solver_diagnostics::Tnldiagnostics
 
     # Settings for I/O
-    io_input::Tinput
+    io_input::io_input_struct
  end
 
 """
 structure containing the data/metadata needed for binary file i/o
 distribution function data only
 """
-struct io_dfns_info{Tfile, Tfi, Tfe, Tfn, Tmoments, Tinput}
+struct io_dfns_info{Tfile, Tfi, Tfe, Tfn, Tmoments}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the ion species distribution function variable
@@ -241,7 +259,7 @@ struct io_dfns_info{Tfile, Tfi, Tfe, Tfn, Tmoments, Tinput}
     f_neutral_start_last_timestep::Union{Tfn,Nothing}
 
     # Settings for I/O
-    io_input::Tinput
+    io_input::io_input_struct
 
     # Handles for moment variables
     io_moments::Tmoments
@@ -252,8 +270,7 @@ structure containing the data/metadata needed for binary file i/o
 for electron initialization
 """
 struct io_initial_electron_info{Tfile, Tfe, Tmom, Texte1, Texte2, Texte3, Texte4,
-                                Tconstr, Telectrontime, Telectronint, Telectronfailcause,
-                                Tinput}
+                                Tconstr, Telectrontime, Telectronint, Telectronfailcause}
     # file identifier for the binary file to which data is written
     fid::Tfile
     time::Telectrontime
@@ -313,7 +330,54 @@ struct io_initial_electron_info{Tfile, Tfe, Tmom, Texte1, Texte2, Texte3, Texte4
     electron_dt_before_last_fail::Telectrontime
 
     # Settings for I/O
-    io_input::Tinput
+    io_input::io_input_struct
+end
+
+"""
+Read the settings for I/O
+"""
+function setup_io_input(input_dict, timestepping_section; ignore_MPI=false)
+    io_settings = set_defaults_and_check_section!(
+        input_dict, "output";
+        run_name="",
+        base_directory="runs",
+        ascii_output=false,
+        binary_format=hdf5,
+        parallel_io=nothing,
+       )
+    if io_settings["run_name"] == ""
+        error("When passing a Dict directly for input, it is required to set `run_name` "
+              * "in the `[output]` section")
+    end
+    if io_settings["parallel_io"] === nothing
+        io_settings["parallel_io"] = io_has_parallel(Val(io_settings["binary_format"]))
+    end
+    # Make copy of the section to avoid modifying the passed-in Dict
+    io_settings = copy(io_settings)
+    run_id = string(uuid4())
+    if !ignore_MPI
+        # Communicate run_id to all blocks
+        # Need to convert run_id to a Vector{Char} for MPI
+        run_id_chars = [run_id...]
+        MPI.Bcast!(run_id_chars, 0, comm_world)
+        run_id = string(run_id_chars...)
+    end
+    io_settings["run_id"] = run_id
+    io_settings["output_dir"] = joinpath(io_settings["base_directory"], io_settings["run_name"])
+    io_settings["write_error_diagnostics"] = timestepping_section["write_error_diagnostics"]
+    io_settings["write_steady_state_diagnostics"] = timestepping_section["write_steady_state_diagnostics"]
+    io_settings["write_electron_error_diagnostics"] = timestepping_section["electron_t_input"]["write_error_diagnostics"]
+    io_settings["write_electron_steady_state_diagnostics"] = timestepping_section["electron_t_input"]["write_steady_state_diagnostics"]
+
+    # Create output_dir if it does not exist.
+    if !ignore_MPI
+        if global_rank[] == 0
+            mkpath(io_settings["output_dir"])
+        end
+        _block_synchronize()
+    end
+
+    return io_input_struct(; (Symbol(k) => v for (k,v) ∈ io_settings)...)
 end
 
 """
@@ -1931,7 +1995,7 @@ function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz, com
                             io_f_electron, io_f_electron_loworder,
                             io_f_electron_start_last_timestep, io_f_neutral,
                             io_f_neutral_loworder, io_f_neutral_start_last_timestep,
-                            parallel_io, io_moments)
+                            io_input, io_moments)
     end
 
     # For processes other than the root process of each shared-memory group...
