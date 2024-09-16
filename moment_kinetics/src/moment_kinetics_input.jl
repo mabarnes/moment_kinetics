@@ -18,6 +18,7 @@ using ..maxwell_diffusion: setup_mxwl_diff_collisions_input
 using ..fokker_planck: setup_fkpl_collisions_input
 using ..finite_differences: fd_check_option
 using ..input_structs
+using ..manufactured_solns: setup_manufactured_solutions
 using ..numerical_dissipation: setup_numerical_dissipation
 using ..reference_parameters
 using ..geo: init_magnetic_geometry, setup_geometry_input
@@ -129,6 +130,8 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     ## set geometry_input
     geometry_in = setup_geometry_input(input_dict)
     
+    manufactured_solns_input = setup_manufactured_solutions(input_dict)
+
     reactions_input = set_defaults_and_check_section!(
         input_dict, reactions
        )
@@ -314,41 +317,6 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         error("maximum_dt=$(timestepping_section["maximum_dt"]) must be positive")
     end
 
-    use_for_init_is_default = !(("manufactured_solns" ∈ keys(input_dict)) &&
-                                ("use_for_init" ∈ keys(input_dict["manufactured_solns"])))
-    manufactured_solns_section = set_defaults_and_check_section!(
-        input_dict, "manufactured_solns";
-        use_for_advance=false,
-        use_for_init=false,
-        # constant to be used to control Ez divergence in MMS tests
-        epsilon_offset=0.001,
-        # bool to control if dfni is a function of vpa or vpabar in MMS test
-        use_vpabar_in_mms_dfni=true,
-        alpha_switch=1.0,
-        type="default",
-       )
-    if use_for_init_is_default && manufactured_solns_section["use_for_advance"]
-        # if manufactured_solns_section["use_for_init"] was set by default, set
-        # manufactured_solns_section["use_for_init"] == true
-        manufactured_solns_section["use_for_init"] = true
-    end
-    if manufactured_solns_section["use_for_init"] || manufactured_solns_section["use_for_advance"]
-        manufactured_solutions_ext = Base.get_extension(@__MODULE__, :manufactured_solns_ext)
-        if manufactured_solutions_ext === nothing
-            # If Symbolics is not installed, then the extension manufactured_solns_ext
-            # will not be loaded, in which case we cannot use manufactured solutions.
-            error("Symbolics package is not installed, so manufactured solutions are not "
-                  * "available. Re-run machines/machine-setup.sh and activate "
-                  * "manufactured solutions, or install Symbolics.")
-        end
-    end
-    if manufactured_solns_section["use_vpabar_in_mms_dfni"]
-        manufactured_solns_section["alpha_switch"] = 1.0
-    else
-        manufactured_solns_section["alpha_switch"] = 0.0
-    end
-    manufactured_solns_input = Dict_to_NamedTuple(manufactured_solns_section)
-    
     #########################################################################
     ########## end user inputs. do not modify following code! ###############
     #########################################################################
