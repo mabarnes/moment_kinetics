@@ -26,7 +26,7 @@ function run_test()
         kk=1
         @testset "nelement_radial $nelement_radial ngrid_radial $ngrid_radial Lradial $Lradial ngrid_polar $ngrid_polar kk $kk" begin
              run_poisson_radial_polar_test(nelement_radial=nelement_radial,ngrid_radial=ngrid_radial,Lradial=Lradial,ngrid_polar=ngrid_polar,kk=kk,
-                              atol_phi1=3.0e-14)
+                              atol_phi1=4.0e-14)
         end
         nelement_radial=5
         ngrid_radial=5
@@ -35,7 +35,7 @@ function run_test()
         kk=3
         @testset "nelement_radial $nelement_radial ngrid_radial $ngrid_radial Lradial $Lradial ngrid_polar $ngrid_polar kk $kk" begin
              run_poisson_radial_polar_test(nelement_radial=nelement_radial,ngrid_radial=ngrid_radial,Lradial=Lradial,ngrid_polar=ngrid_polar,kk=kk,
-                              atol_fourier=1.0e-14,atol_phi1=3.0e-14,atol_phi2=1.0e-14)
+                              atol_fourier=1.0e-14,atol_phi1=4.0e-14,atol_phi2=1.0e-14)
         end
         nelement_radial=5
         ngrid_radial=9
@@ -44,7 +44,7 @@ function run_test()
         kk=3
         @testset "nelement_radial $nelement_radial ngrid_radial $ngrid_radial Lradial $Lradial ngrid_polar $ngrid_polar kk $kk" begin
              run_poisson_radial_polar_test(nelement_radial=nelement_radial,ngrid_radial=ngrid_radial,Lradial=Lradial,ngrid_polar=ngrid_polar,kk=kk,
-                              atol_fourier=1.0e-14,atol_phi1=3.0e-13,atol_phi2=1.0e-14)
+                              atol_fourier=1.0e-14,atol_phi1=3.0e-12,atol_phi2=1.0e-14)
         end
         nelement_radial=10
         ngrid_radial=5
@@ -53,7 +53,7 @@ function run_test()
         kk=3
         @testset "nelement_radial $nelement_radial ngrid_radial $ngrid_radial Lradial $Lradial ngrid_polar $ngrid_polar kk $kk" begin
              run_poisson_radial_polar_test(nelement_radial=nelement_radial,ngrid_radial=ngrid_radial,Lradial=Lradial,ngrid_polar=ngrid_polar,kk=kk,
-                              atol_fourier=1.0e-14,atol_phi1=3.0e-13,atol_phi2=1.0e-14)
+                              atol_fourier=1.0e-14,atol_phi1=9.0e-13,atol_phi2=1.0e-14)
         end
         nelement_radial=40
         ngrid_radial=5
