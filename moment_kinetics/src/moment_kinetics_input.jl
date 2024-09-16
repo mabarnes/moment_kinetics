@@ -131,9 +131,9 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     
     reactions_settings = set_defaults_and_check_section!(
         input_dict, "reactions";
-        charge_exchange_frequency=2.0*sqrt(composition.ion[1].initial_temperature),
+        charge_exchange_frequency=0.0,
         electron_charge_exchange_frequency=0.0,
-        ionization_frequency=2.0*sqrt(composition.ion[1].initial_temperature),
+        ionization_frequency=0.0,
         electron_ionization_frequency=0.0,
         ionization_energy=0.0,
        )
