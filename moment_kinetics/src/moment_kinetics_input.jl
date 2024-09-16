@@ -166,7 +166,6 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         nwrite_dfns=nothing,
         type="SSPRK4",
         split_operators=false,
-        stopfile_name=joinpath(output_dir, "stop"),
         steady_state_residual=false,
         converged_residual_value=-1.0,
         rtol=1.0e-5,
@@ -241,7 +240,7 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     # do not want to add a value to the `input_dict`. We also add a few dummy inputs that
     # are not actually used for electrons.
     electron_timestepping_section = copy(electron_timestepping_section)
-    electron_timestepping_section["stopfile_name"] = timestepping_section["stopfile_name"]
+    electron_timestepping_section["stopfile_name"] = joinpath(output_dir, "stop")
     electron_timestepping_section["atol_upar"] = NaN
     electron_timestepping_section["steady_state_residual"] = true
     if !(0.0 < electron_timestepping_section["step_update_prefactor"] < 1.0)
@@ -287,6 +286,7 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     # `electron_timestepping_section` into the Dict that is used to make
     # `timestepping_input`, so that it becomes part of `timestepping_input`.
     timestepping_section = copy(timestepping_section)
+    timestepping_section["stopfile_name"] = joinpath(output_dir, "stop")
     timestepping_section["electron_t_input"] = electron_timestepping_section
     if !(0.0 < timestepping_section["step_update_prefactor"] < 1.0)
         error("step_update_prefactor=$(timestepping_section["step_update_prefactor"]) must "
