@@ -18,6 +18,42 @@ using ..derivatives: derivative_r!, derivative_z!, second_derivative_r!,
 using ..input_structs
 using ..type_definitions: mk_float
 
+# define individual structs for each species with their particular parameters
+Base.@kwdef struct ion_num_diss_params
+    vpa_boundary_buffer_damping_rate::mk_float = -1.0
+    vpa_boundary_buffer_diffusion_coefficient::mk_float = -1.0
+    vpa_dissipation_coefficient::mk_float = -1.0
+    vperp_dissipation_coefficient::mk_float = -1.0
+    z_dissipation_coefficient::mk_float = -1.0
+    r_dissipation_coefficient::mk_float = -1.0
+    moment_dissipation_coefficient::mk_float = -1.0
+    force_minimum_pdf_value::Union{Nothing,mk_float} = nothing
+end
+
+Base.@kwdef struct electron_num_diss_params
+    vpa_boundary_buffer_damping_rate::mk_float = -1.0
+    vpa_boundary_buffer_diffusion_coefficient::mk_float = -1.0
+    vpa_dissipation_coefficient::mk_float = -1.0
+    vperp_dissipation_coefficient::mk_float = -1.0
+    z_dissipation_coefficient::mk_float = -1.0
+    r_dissipation_coefficient::mk_float = -1.0
+    moment_dissipation_coefficient::mk_float = -1.0
+    force_minimum_pdf_value::Union{Nothing,mk_float} = nothing
+end
+
+Base.@kwdef struct neutral_num_diss_params
+    vz_dissipation_coefficient::mk_float = -1.0
+    z_dissipation_coefficient::mk_float = -1.0
+    r_dissipation_coefficient::mk_float = -1.0
+    moment_dissipation_coefficient::mk_float = -1.0
+    force_minimum_pdf_value::Union{Nothing,mk_float} = nothing
+end
+
+struct numerical_dissipation_parameters
+    ion::ion_num_diss_params
+    electron::electron_num_diss_params
+    neutral::neutral_num_diss_params
+end
 
 #############################################################
 ########### Numerical Dissipation Parameter setup ###########
@@ -43,53 +79,17 @@ vz_dissipation_coefficient
 There will still be the -1.0 default parameters.
 """
 function setup_numerical_dissipation(input_dict)
-    ion_settings = set_defaults_and_check_section!(
-        input_dict, "ion_numerical_dissipation";
-        vpa_boundary_buffer_damping_rate=-1.0,
-        vpa_boundary_buffer_diffusion_coefficient=-1.0,
-        vpa_dissipation_coefficient=-1.0,
-        vperp_dissipation_coefficient=-1.0,
-        z_dissipation_coefficient=-1.0,
-        r_dissipation_coefficient=-1.0,
-        moment_dissipation_coefficient=-1.0,
-        force_minimum_pdf_value=-Inf,
+    ion_params = set_defaults_and_check_section!(
+        input_dict, ion_num_diss_params, "ion_numerical_dissipation"
        )
-    ion_settings = deepcopy(ion_settings)
-    if ion_settings["force_minimum_pdf_value"] == -Inf
-        ion_settings["force_minimum_pdf_value"] = nothing
-    end
-    ion_params = Dict_to_NamedTuple(ion_settings)
-    electron_settings = set_defaults_and_check_section!(
-        input_dict, "electron_numerical_dissipation";
-        vpa_boundary_buffer_damping_rate=-1.0,
-        vpa_boundary_buffer_diffusion_coefficient=-1.0,
-        vpa_dissipation_coefficient=-1.0,
-        vperp_dissipation_coefficient=-1.0,
-        z_dissipation_coefficient=-1.0,
-        r_dissipation_coefficient=-1.0,
-        moment_dissipation_coefficient=-1.0,
-        force_minimum_pdf_value=-Inf,
+    electron_params = set_defaults_and_check_section!(
+        input_dict, electron_num_diss_params, "electron_numerical_dissipation"
        )
-    electron_settings = deepcopy(electron_settings)
-    if electron_settings["force_minimum_pdf_value"] == -Inf
-        electron_settings["force_minimum_pdf_value"] = nothing
-    end
-    electron_params = Dict_to_NamedTuple(electron_settings)
-    neutral_settings = set_defaults_and_check_section!(
-        input_dict, "neutral_numerical_dissipation";
-        vz_dissipation_coefficient=-1.0,
-        z_dissipation_coefficient=-1.0,
-        r_dissipation_coefficient=-1.0,
-        moment_dissipation_coefficient=-1.0,
-        force_minimum_pdf_value=-Inf,
+    neutral_params = set_defaults_and_check_section!(
+        input_dict, neutral_num_diss_params, "neutral_numerical_dissipation"
        )
-    neutral_settings = deepcopy(neutral_settings)
-    if neutral_settings["force_minimum_pdf_value"] == -Inf
-        neutral_settings["force_minimum_pdf_value"] = nothing
-    end
-    neutral_params = Dict_to_NamedTuple(neutral_settings)
 
-    return (ion=ion_params, electron=electron_params, neutral=neutral_params)
+    return numerical_dissipation_parameters(ion_params, electron_params, neutral_params)
 end
 
 """

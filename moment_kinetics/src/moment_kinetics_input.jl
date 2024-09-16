@@ -155,6 +155,8 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     collisions = collisions_input(reactions_input, electron_fluid_collisions_input,
                                   krook_input, fkpl_input, mxwl_diff_input)
 
+    num_diss_params = setup_numerical_dissipation(input_dict)
+
     # parameters related to the time stepping
     timestepping_section = set_defaults_and_check_section!(
         input_dict, "timestepping";
@@ -458,8 +460,6 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
 
     external_source_settings = setup_external_sources!(input_dict, r, z,
                                                        composition.electron_physics)
-
-    num_diss_params = setup_numerical_dissipation(input_dict)
 
     geometry = init_magnetic_geometry(geometry_in,z,r)
     if any(geometry.dBdz .!= 0.0) &&
