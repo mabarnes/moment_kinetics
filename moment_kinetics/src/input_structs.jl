@@ -10,7 +10,8 @@ export spatial_initial_condition_input, velocity_initial_condition_input
 export ion_species_parameters, neutral_species_parameters
 export species_composition
 export ion_source_data, electron_source_data, neutral_source_data
-export collisions_input, krook_collisions_input, fkpl_collisions_input
+export collisions_input, reactions, electron_fluid_collisions, krook_collisions_input,
+       fkpl_collisions_input, mxwl_diff_collisions_input
 export io_input
 export pp_input
 export geometry_input
@@ -426,10 +427,21 @@ Base.@kwdef struct neutral_source_data
     # in the event that the code is running with mk_int = Int32 but the rank is set to 0::Int64
 end
 
-"""
-Structs set up for the collision operators so far in use. These will each
-be contained in the main collisions_input struct below, as substructs. 
-"""
+#Structs set up for the collision operators so far in use. These will each
+#be contained in the main collisions_input struct below, as substructs.
+
+Base.@kwdef struct reactions
+    charge_exchange_frequency::mk_float = 0.0
+    electron_charge_exchange_frequency::mk_float = 0.0
+    ionization_frequency::mk_float = 0.0
+    electron_ionization_frequency::mk_float = 0.0
+    ionization_energy::mk_float = 0.0
+end
+
+Base.@kwdef struct electron_fluid_collisions
+    nu_ei::mk_float = 0.0
+end
+
 Base.@kwdef struct mxwl_diff_collisions_input
     use_maxwell_diffusion::Bool
     # different diffusion coefficients for each species, has units of 
@@ -489,11 +501,11 @@ end
 Collisions input struct to contain all the different collisions substructs and overall 
 collision input parameters.
 """
-struct collisions_input{Treactions,Telectronfluid}
+struct collisions_input
     # atomic reaction parameters
-    reactions::Treactions
+    reactions::reactions
     # electron fluid collision parameters
-    electron_fluid::Telectronfluid
+    electron_fluid::electron_fluid_collisions
     # struct of parameters for the Krook operator
     krook::krook_collisions_input
     # struct of parameters for the Fokker-Planck operator
