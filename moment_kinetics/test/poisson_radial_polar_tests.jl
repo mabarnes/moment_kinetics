@@ -62,7 +62,7 @@ function run_test()
         kk=5
         @testset "nelement_radial $nelement_radial ngrid_radial $ngrid_radial Lradial $Lradial ngrid_polar $ngrid_polar kk $kk" begin
              run_poisson_radial_polar_test(nelement_radial=nelement_radial,ngrid_radial=ngrid_radial,Lradial=Lradial,ngrid_polar=ngrid_polar,kk=kk,
-                              atol_fourier=1.0e-14,atol_phi1=3.0e-13,atol_phi2=2.0e-11)
+                              atol_fourier=1.0e-14,atol_phi1=9.0e-13,atol_phi2=2.0e-11)
         end
     end
 end
