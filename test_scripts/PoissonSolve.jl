@@ -15,15 +15,15 @@ using moment_kinetics.looping
 using moment_kinetics.calculus: derivative!
 
 function plot_test_data(func_exact,func_num,func_err,func_name,radial,polar)
-    @views heatmap(polar.grid, radial.grid, func_num[:,:], ylabel=L"r", xlabel=L"\theta", c = :deep, interpolation = :cubic, #, projection =:polar
+    @views heatmap(radial.grid, polar.grid, func_num[:,:], xlabel=L"r", ylabel=L"\theta", c = :deep, interpolation = :cubic, #, projection =:polar
                 windowsize = (360,240), margin = 15pt)
                 outfile = string(func_name*"_num.pdf")
                 savefig(outfile)
-    @views heatmap(polar.grid, radial.grid, func_exact[:,:], ylabel=L"r", xlabel=L"\theta", c = :deep, interpolation = :cubic, #, projection =:polar
+    @views heatmap(radial.grid, polar.grid, func_exact[:,:], xlabel=L"r", ylabel=L"\theta", c = :deep, interpolation = :cubic, #, projection =:polar
                 windowsize = (360,240), margin = 15pt)
                 outfile = string(func_name*"_exact.pdf")
                 savefig(outfile)
-    @views heatmap(polar.grid, radial.grid, func_err[:,:], ylabel=L"r", xlabel=L"\theta", c = :deep, interpolation = :cubic, #, projection =:polar
+    @views heatmap(radial.grid, polar.grid, func_err[:,:], xlabel=L"r", ylabel=L"\theta", c = :deep, interpolation = :cubic, #, projection =:polar
                 windowsize = (360,240), margin = 15pt)
                 outfile = string(func_name*"_err.pdf")
                 savefig(outfile)
@@ -86,15 +86,15 @@ function run_poisson_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelemen
    
    println("Test Poisson")
    poisson = init_spatial_poisson(radial,polar,radial_spectral)
-   phi = allocate_float(radial.n,polar.n)
-   exact_phi = allocate_float(radial.n,polar.n)
-   err_phi = allocate_float(radial.n,polar.n)
-   rho = allocate_float(radial.n,polar.n)
+   phi = allocate_float(polar.n,radial.n)
+   exact_phi = allocate_float(polar.n,radial.n)
+   err_phi = allocate_float(polar.n,radial.n)
+   rho = allocate_float(polar.n,radial.n)
    
-   for ipol in 1:polar.n
-      for irad in 1:radial.n
-         exact_phi[irad,ipol] = 0.25*(radial.grid[irad]^2 -1)
-         rho[irad,ipol] = 1.0
+   for irad in 1:radial.n
+      for ipol in 1:polar.n
+         exact_phi[ipol,irad] = 0.25*(radial.grid[irad]^2 -1)
+         rho[ipol,irad] = 1.0
       end
    end
    spatial_poisson_solve!(phi,rho,poisson,radial,polar,polar_spectral)
@@ -110,10 +110,10 @@ function run_poisson_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelemen
       error("ERROR: polar coordinate assumed angle for definition of the following test - set Lpolar = 2.0*pi")
    end
    
-   for ipol in 1:polar.n
-      for irad in 1:radial.n
-         exact_phi[irad,ipol] = (1.0 - radial.grid[irad])*(radial.grid[irad]^kk)*cos(2.0*pi*kk*polar.grid[ipol]/polar.L)
-         rho[irad,ipol] = (kk^2 - (kk+1)^2)*(radial.grid[irad]^(kk-1))*cos(2.0*kk*pi*polar.grid[ipol]/polar.L)
+   for irad in 1:radial.n
+      for ipol in 1:polar.n
+         exact_phi[ipol,irad] = (1.0 - radial.grid[irad])*(radial.grid[irad]^kk)*cos(2.0*pi*kk*polar.grid[ipol]/polar.L)
+         rho[ipol,irad] = (kk^2 - (kk+1)^2)*(radial.grid[irad]^(kk-1))*cos(2.0*kk*pi*polar.grid[ipol]/polar.L)
       end
    end
    

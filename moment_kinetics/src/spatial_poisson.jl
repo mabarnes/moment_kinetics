@@ -81,7 +81,7 @@ function init_spatial_poisson(radial::coordinate, polar::coordinate, radial_spec
    nrelement = radial.nelement_global
    laplacian = allocate_float(nrtot,nrtot,npolar)
    sourcevec = allocate_float(nrtot,nrtot)
-   rhohat = allocate_float(nrtot,npolar)
+   rhohat = allocate_float(npolar,nrtot)
    rhs_dummy = allocate_float(nrtot)
    phi_dummy = allocate_float(nrtot)
    MR = allocate_float(nrgrid,nrgrid)
@@ -133,8 +133,8 @@ nabla^2 phi = (1/r)d/dr(r dphi/dr) + (1/r^2)d^2 phi/dpolar^2
 
 The arguments are 
  
- phi(r,polar) = the function solved for
- rho(r,polar) = the source evaluated at the nodal points
+ phi(polar,r) = the function solved for
+ rho(polar,r) = the source evaluated at the nodal points
  poisson_arrays = precomputed arrays
  radial = coordinate
  polar = coordinate
@@ -159,7 +159,7 @@ function spatial_poisson_solve!(phi,rho,poisson_arrays,radial,polar,polar_spectr
    if npolar > 1
       # first FFT rho to hat{rho} appropriate for using the 1D radial operators
       for irad in 1:nradial
-         @views fourier_forward_transform!(rhohat[irad,:], polar_spectral.fext, rho[irad,:], polar_spectral.forward, polar_spectral.imidm, polar_spectral.imidp, polar.ngrid)
+         @views fourier_forward_transform!(rhohat[:,irad], polar_spectral.fext, rho[:,irad], polar_spectral.forward, polar_spectral.imidm, polar_spectral.imidp, polar.ngrid)
       end
    else
       @. rhohat = complex(rho,0.0)
@@ -168,18 +168,18 @@ function spatial_poisson_solve!(phi,rho,poisson_arrays,radial,polar,polar_spectr
    for im in 1:npolar
       # solve the linear system
       # form the rhs vector
-      mul!(rhs_dummy,sourcevec,rhohat[:,im])
+      mul!(rhs_dummy,sourcevec,rhohat[im,:])
       # set the Dirichlet BC phi = 0
       rhs_dummy[nradial] = 0.0
       lu_object_lhs = laplacian_lu_objs[im]
       ldiv!(phi_dummy, lu_object_lhs, rhs_dummy)
-      rhohat[:,im] = phi_dummy
+      rhohat[im,:] = phi_dummy
    end
    
    if npolar > 1
       # finally iFFT from hat{phi} to phi 
       for irad in 1:nradial
-         @views fourier_backward_transform!(phi[irad,:], polar_spectral.fext, rhohat[irad,:], polar_spectral.backward, polar_spectral.imidm, polar_spectral.imidp, polar.ngrid)
+         @views fourier_backward_transform!(phi[:,irad], polar_spectral.fext, rhohat[:,irad], polar_spectral.backward, polar_spectral.imidm, polar_spectral.imidp, polar.ngrid)
       end
    else
       @. phi = real(rhohat)
