@@ -544,6 +544,9 @@ end
 end
 
 """
+Type used to declare a shared-memory array. When debugging is not active `MPISharedArray`
+is just an alias for `Array`, but when `@debug_shared_array` is activated, it is instead
+defined as an alias for `DebugMPISharedArray`.
 """
 const MPISharedArray = @debug_shared_array_ifelse(DebugMPISharedArray, Array)
 
