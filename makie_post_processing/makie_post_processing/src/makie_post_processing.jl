@@ -1004,6 +1004,10 @@ function plots_for_variable(run_info, variable_name; plot_prefix, has_rdim=true,
             all(ri.collisions.krook_collisions_option == "none" for ri ∈ run_info)
         # No Krook collisions active, so do not make plots.
         return nothing
+    elseif variable_name ∈ union(electron_moment_variables, electron_source_variables, electron_dfn_variables) &&
+            all(ri.composition.electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
+                for ri ∈ run_info)
+        return nothing
     end
 
     println("Making plots for $variable_name")
