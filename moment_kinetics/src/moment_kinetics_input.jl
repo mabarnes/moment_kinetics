@@ -130,6 +130,10 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     ## set geometry_input
     geometry_in = setup_geometry_input(input_dict)
     
+    em_input = set_defaults_and_check_section!(
+        input_dict, em_fields_input, "em_fields"
+       )
+
     manufactured_solns_input = setup_manufactured_solutions(input_dict)
 
     reactions_input = set_defaults_and_check_section!(
@@ -345,12 +349,6 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         end
         _block_synchronize()
     end
-
-    em_fields_settings = set_defaults_and_check_section!(
-        input_dict, "em_fields";
-        force_Er_zero_at_wall=false,
-       )
-    em_input = Dict_to_NamedTuple(em_fields_settings)
 
     # Complete setup of io_settings
     if io_settings["parallel_io"] === nothing

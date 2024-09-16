@@ -9,6 +9,7 @@ export initial_condition_input
 export spatial_initial_condition_input, velocity_initial_condition_input
 export ion_species_parameters, neutral_species_parameters
 export species_composition
+export em_fields_input
 export ion_source_data, electron_source_data, neutral_source_data
 export collisions_input, reactions, electron_fluid_collisions, krook_collisions_input,
        fkpl_collisions_input, mxwl_diff_collisions_input
@@ -282,6 +283,13 @@ Base.@kwdef struct species_composition
     ion::Vector{ion_species_parameters}
     # array of structs of parameters for each neutral species
     neutral::Vector{neutral_species_parameters}
+end
+
+"""
+Settings for electronmagenetic fields
+"""
+Base.@kwdef struct em_fields_input
+    force_Er_zero_at_wall::Bool = false
 end
 
 """
