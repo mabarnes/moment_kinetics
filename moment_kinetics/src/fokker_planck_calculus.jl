@@ -41,6 +41,9 @@ using ..communication
 using ..communication: MPISharedArray, global_rank
 using ..lagrange_polynomials: lagrange_poly, lagrange_poly_optimised
 using ..looping
+using ..sparse_matrix_functions: icsc_func, allocate_sparse_matrix_constructor,
+                                 assemble_constructor_data!, assign_constructor_data!,
+                                 sparse_matrix_constructor, create_sparse_matrix
 using moment_kinetics.gauss_legendre: get_QQ_local!
 using Dates
 using SpecialFunctions: ellipk, ellipe
@@ -924,62 +927,6 @@ See also [`ic_func`](@ref), [`ivperp_func`](@ref).
 function ivpa_func(ic::mk_int,nvpa::mk_int)
     ivpa = ic - nvpa*(ivperp_func(ic,nvpa) - 1)
     return ivpa
-end
-
-# function that returns the sparse matrix index
-# used to directly construct the nonzero entries
-# of a 2D assembled sparse matrix
-function icsc_func(ivpa_local::mk_int,ivpap_local::mk_int,
-                   ielement_vpa::mk_int,
-                   ngrid_vpa::mk_int,nelement_vpa::mk_int,
-                   ivperp_local::mk_int,ivperpp_local::mk_int,
-                   ielement_vperp::mk_int,
-                   ngrid_vperp::mk_int,nelement_vperp::mk_int)
-    ntot_vpa = (nelement_vpa - 1)*(ngrid_vpa^2 - 1) + ngrid_vpa^2
-    #ntot_vperp = (nelement_vperp - 1)*(ngrid_vperp^2 - 1) + ngrid_vperp^2
-    
-    icsc_vpa = ((ivpap_local - 1) + (ivpa_local - 1)*ngrid_vpa +
-                (ielement_vpa - 1)*(ngrid_vpa^2 - 1))
-    icsc_vperp = ((ivperpp_local - 1) + (ivperp_local - 1)*ngrid_vperp + 
-                    (ielement_vperp - 1)*(ngrid_vperp^2 - 1))
-    icsc = 1 + icsc_vpa + ntot_vpa*icsc_vperp
-    return icsc
-end
-
-struct sparse_matrix_constructor
-    # the Ith row
-    II::Array{mk_float,1}
-    # the Jth column
-    JJ::Array{mk_float,1}
-    # the data S[I,J]
-    SS::Array{mk_float,1}
-end
-
-function allocate_sparse_matrix_constructor(nsparse::mk_int)
-    II = Array{mk_int,1}(undef,nsparse)
-    @. II = 0
-    JJ = Array{mk_int,1}(undef,nsparse)
-    @. JJ = 0
-    SS = Array{mk_float,1}(undef,nsparse)
-    @. SS = 0.0
-    return sparse_matrix_constructor(II,JJ,SS)
-end
-
-function assign_constructor_data!(data::sparse_matrix_constructor,icsc::mk_int,ii::mk_int,jj::mk_int,ss::mk_float)
-    data.II[icsc] = ii
-    data.JJ[icsc] = jj
-    data.SS[icsc] = ss
-    return nothing
-end
-function assemble_constructor_data!(data::sparse_matrix_constructor,icsc::mk_int,ii::mk_int,jj::mk_int,ss::mk_float)
-    data.II[icsc] = ii
-    data.JJ[icsc] = jj
-    data.SS[icsc] += ss
-    return nothing
-end
-
-function create_sparse_matrix(data::sparse_matrix_constructor)
-    return sparse(data.II,data.JJ,data.SS)
 end
 
 function allocate_boundary_data(vpa,vperp)
