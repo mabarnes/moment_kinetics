@@ -41,9 +41,10 @@ using ..communication
 using ..communication: MPISharedArray, global_rank
 using ..lagrange_polynomials: lagrange_poly, lagrange_poly_optimised
 using ..looping
-using ..sparse_matrix_functions: icsc_func, allocate_sparse_matrix_constructor,
+using ..sparse_matrix_functions: icsc_func, ic_func, allocate_sparse_matrix_constructor,
                                  assemble_constructor_data!, assign_constructor_data!,
-                                 sparse_matrix_constructor, create_sparse_matrix
+                                 sparse_matrix_constructor, create_sparse_matrix,
+                                 get_global_compound_index
 using moment_kinetics.gauss_legendre: get_QQ_local!
 using Dates
 using SpecialFunctions: ellipk, ellipe
@@ -884,22 +885,6 @@ function loop_over_vperp_vpa_elements_no_divergences!(G0_weights,G1_weights,H0_w
     return nothing
 end 
 
-
-"""
-    ic_func(ivpa::mk_int,ivperp::mk_int,nvpa::mk_int)
-
-Get the 'linear index' corresponding to `ivpa` and `ivperp`. Defined so that the linear
-index corresponds to the underlying layout in memory of a 2d array indexed by
-`[ivpa,ivperp]`, i.e. for a 2d array `f2d`:
-* `size(f2d) == (vpa.n, vperp.n)`
-* For a reference to `f2d` that is reshaped to a vector (a 1d array) `f1d = vec(f2d)` than
-  for any `ivpa` and `ivperp` it is true that `f1d[ic_func(ivpa,ivperp)] ==
-  f2d[ivpa,ivperp]`.
-"""
-function ic_func(ivpa::mk_int,ivperp::mk_int,nvpa::mk_int)
-    return ivpa + nvpa*(ivperp-1)
-end
-
 """
     ivperp_func(ic::mk_int,nvpa::mk_int)
 
@@ -1126,22 +1111,6 @@ function test_boundary_data(func,func_exact,func_name,vpa,vperp,buffer_vpa,buffe
     end
     max_err = max(max_lower_vpa_err,max_upper_vpa_err,max_upper_vperp_err)
     return max_err
-end
-
-"""
-    get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-
-For local (within the single element specified by `ielement_vpa` and `ielement_vperp`)
-indices `ivpa_local` and `ivperp_local`, get the global index in the 'linear-indexed' 2d
-space of size `(vperp.n, vpa.n)` (as returned by [`ic_func`](@ref)).
-"""
-function get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-    # global indices on the grids
-    ivpa_global = vpa.igrid_full[ivpa_local,ielement_vpa]
-    ivperp_global = vperp.igrid_full[ivperp_local,ielement_vperp]
-    # global compound index
-    ic_global = ic_func(ivpa_global,ivperp_global,vpa.n)
-    return ic_global
 end
 
 function enforce_zero_bc!(fvpavperp,vpa,vperp;impose_BC_at_zero_vperp=false)
