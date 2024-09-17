@@ -148,8 +148,8 @@ function run_moment_kinetics(to::Union{TimerOutput,Nothing}, input_dict=Dict();
         # Stop code from hanging when running on multiple processes if only one of them
         # throws an error
         if global_size[] > 1
-            println("$(typeof(e)) on process $(global_rank[]):")
-            showerror(stdout, e, catch_backtrace())
+            println(stderr, "$(typeof(e)) on process $(global_rank[]):")
+            showerror(stderr, e, catch_backtrace())
             flush(stdout)
             flush(stderr)
             MPI.Abort(comm_world, 1)
