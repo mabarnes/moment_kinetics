@@ -867,11 +867,11 @@ K * f = b = M * d2f
 for f given boundary data on f
 with periodic or dirichlet boundary conditions, set 
 
-periodic_bc = true, b[end] = 0 
+`periodic_bc = true`, `b[end] = 0`
 
 or 
 
-dirichlet_bc = true, b[1] = f[1] (except for cylindrical coordinates), b[end] = f[end]
+`dirichlet_bc = true`, `b[1] = f[1]` (except for cylindrical coordinates), `b[end] = f[end]`
 
 in the function call, and create new matrices for this purpose
 in the gausslegendre_info struct. Currently the Laplacian matrix
