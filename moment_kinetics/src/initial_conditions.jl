@@ -281,7 +281,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
         # Not restarting, so create initial profiles
 
         # initialise the electron thermal speed profile
-        init_electron_vth!(moments.electron.vth, moments.ion.vth, composition.T_e, composition.me_over_mi, z.grid)
+        init_electron_vth!(moments.electron.vth, moments.ion.vth, composition, z.grid)
         begin_r_z_region()
         # calculate the electron temperature from the thermal speed
         @loop_r_z ir iz begin
@@ -1065,14 +1065,18 @@ initialise the electron thermal speed profile.
 for now the only initialisation option for the temperature is constant in z.
 returns vth0 = sqrt(2*Ts/Te)
 """
-function init_electron_vth!(vth_e, vth_i, T_e, me_over_mi, z)
+function init_electron_vth!(vth_e, vth_i, composition, z)
     begin_r_z_region()
-    # @loop_r_z ir iz begin
-    #     vth_e[iz,ir] = sqrt(T_e)
-    # end
-    @loop_r_z ir iz begin
-        vth_e[iz,ir] = vth_i[iz,ir,1] / sqrt(me_over_mi)
-        #vth_e[iz,ir] = exp(-5*(z[iz]/z[end])^2)/sqrt(me_over_mi)
+    if composition.electron_physics ∈ (boltzmann_electron_response,
+                                       boltzmann_electron_response_with_simple_sheath)
+        @loop_r_z ir iz begin
+            vth_e[iz,ir] = sqrt(composition.T_e / composition.me_over_mi)
+        end
+    else
+        @loop_r_z ir iz begin
+            vth_e[iz,ir] = vth_i[iz,ir,1] / sqrt(composition.me_over_mi)
+            #vth_e[iz,ir] = exp(-5*(z[iz]/z[end])^2)/sqrt(composition.me_over_mi)
+        end
     end
 end
 
