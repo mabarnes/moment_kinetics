@@ -145,14 +145,14 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         dt=0.00025/sqrt(composition.ion[1].initial_temperature),
         CFL_prefactor=-1.0,
         nwrite=1,
-        nwrite_dfns=nothing,
+        nwrite_dfns=-1,
         type="SSPRK4",
         split_operators=false,
         steady_state_residual=false,
         converged_residual_value=-1.0,
         rtol=1.0e-5,
         atol=1.0e-12,
-        atol_upar=nothing,
+        atol_upar=-1.0,
         step_update_prefactor=0.9,
         max_increase_factor=1.05,
         max_increase_factor_near_last_fail=Inf,
@@ -172,12 +172,12 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     if timestepping_section["nwrite"] > timestepping_section["nstep"]
         timestepping_section["nwrite"] = timestepping_section["nstep"]
     end
-    if timestepping_section["nwrite_dfns"] === nothing
+    if timestepping_section["nwrite_dfns"] < 0
         timestepping_section["nwrite_dfns"] = timestepping_section["nstep"]
     elseif timestepping_section["nwrite_dfns"] > timestepping_section["nstep"]
         timestepping_section["nwrite_dfns"] = timestepping_section["nstep"]
     end
-    if timestepping_section["atol_upar"] === nothing
+    if timestepping_section["atol_upar"] < 0.0
         timestepping_section["atol_upar"] = 1.0e-2 * timestepping_section["rtol"]
     end
 
@@ -187,8 +187,8 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         nstep=50000,
         dt=timestepping_section["dt"] * sqrt(composition.me_over_mi),
         CFL_prefactor=timestepping_section["CFL_prefactor"],
-        nwrite=nothing,
-        nwrite_dfns=nothing,
+        nwrite=-1,
+        nwrite_dfns=-1,
         type=timestepping_section["type"],
         split_operators=false,
         converged_residual_value=1.0e-3,
@@ -208,12 +208,12 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         no_restart=false,
         debug_io=false,
        )
-    if electron_timestepping_section["nwrite"] === nothing
+    if electron_timestepping_section["nwrite"] < 0
         electron_timestepping_section["nwrite"] = electron_timestepping_section["nstep"]
     elseif electron_timestepping_section["nwrite"] > electron_timestepping_section["nstep"]
         electron_timestepping_section["nwrite"] = electron_timestepping_section["nstep"]
     end
-    if electron_timestepping_section["nwrite_dfns"] === nothing
+    if electron_timestepping_section["nwrite_dfns"] < 0
         electron_timestepping_section["nwrite_dfns"] = electron_timestepping_section["nstep"]
     elseif electron_timestepping_section["nwrite_dfns"] > electron_timestepping_section["nstep"]
         electron_timestepping_section["nwrite_dfns"] = electron_timestepping_section["nstep"]

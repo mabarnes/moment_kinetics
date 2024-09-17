@@ -27,7 +27,7 @@ Base.@kwdef struct ion_num_diss_params
     z_dissipation_coefficient::mk_float = -1.0
     r_dissipation_coefficient::mk_float = -1.0
     moment_dissipation_coefficient::mk_float = -1.0
-    force_minimum_pdf_value::Union{Nothing,mk_float} = nothing
+    force_minimum_pdf_value::mk_float = -Inf
 end
 
 Base.@kwdef struct electron_num_diss_params
@@ -38,7 +38,7 @@ Base.@kwdef struct electron_num_diss_params
     z_dissipation_coefficient::mk_float = -1.0
     r_dissipation_coefficient::mk_float = -1.0
     moment_dissipation_coefficient::mk_float = -1.0
-    force_minimum_pdf_value::Union{Nothing,mk_float} = nothing
+    force_minimum_pdf_value::mk_float = -Inf
 end
 
 Base.@kwdef struct neutral_num_diss_params
@@ -46,7 +46,7 @@ Base.@kwdef struct neutral_num_diss_params
     z_dissipation_coefficient::mk_float = -1.0
     r_dissipation_coefficient::mk_float = -1.0
     moment_dissipation_coefficient::mk_float = -1.0
-    force_minimum_pdf_value::Union{Nothing,mk_float} = nothing
+    force_minimum_pdf_value::mk_float = -Inf
 end
 
 struct numerical_dissipation_parameters
@@ -564,7 +564,7 @@ force_minimum_pdf_value = 0.0
 """
 function force_minimum_pdf_value!(f, minval)
 
-    if minval === nothing
+    if minval == -Inf
         return nothing
     end
 

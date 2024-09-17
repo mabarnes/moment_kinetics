@@ -343,13 +343,13 @@ function setup_io_input(input_dict, timestepping_section; ignore_MPI=false)
         base_directory="runs",
         ascii_output=false,
         binary_format=hdf5,
-        parallel_io=nothing,
+        parallel_io="",
        )
     if io_settings["run_name"] == ""
         error("When passing a Dict directly for input, it is required to set `run_name` "
               * "in the `[output]` section")
     end
-    if io_settings["parallel_io"] === nothing
+    if io_settings["parallel_io"] == ""
         io_settings["parallel_io"] = io_has_parallel(Val(io_settings["binary_format"]))
     end
     # Make copy of the section to avoid modifying the passed-in Dict

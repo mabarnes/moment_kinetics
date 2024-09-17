@@ -807,6 +807,15 @@ function _get_section_and_check_option_names(options, section_name, section_keys
     return section
 end
 
+function _check_for_nothing(section, section_name)
+    nothing_defaults = Tuple((k,v) for (k,v) ∈ section if v === nothing)
+    if length(nothing_defaults) > 0
+        error("`nothing` cannot be used as a default value, because it cannot be written "
+              * "to TOML or HDF5. In section [$section_name], found "
+              * "$(join(("$k=$v" for (k,v) ∈ nothing_defaults), ", ", ", and ")).")
+    end
+end
+
 function _store_section_name_for_check!(options, section_name)
     # Record the defined section_name in a temporary, private subsection of `options`, so
     # we can use it to check the existing sections later.
@@ -842,6 +851,8 @@ function set_defaults_and_check_section!(options::AbstractDict, section_name;
         # `Base.get()` defined above.
         section[key] = get(section, key, default_value)
     end
+
+    _check_for_nothing(section, section_name)
 
     _store_section_name_for_check!(options, section_name)
 
@@ -879,6 +890,14 @@ function set_defaults_and_check_section!(options::AbstractDict, struct_type::Typ
     # `struct_type` is an `@kwdef` struct, so this constructor takes care of the default
     # values.
     settings_instance = struct_type(; (Symbol(k) => v for (k,v) ∈ pairs(section))...)
+
+    # Save the settings with defaults applied back into `options` so they can be stored in
+    # the output file.
+    for k ∈ fieldnames(struct_type)
+        section[String(k)] = getfield(settings_instance, k)
+    end
+
+    _check_for_nothing(section, section_name)
 
     _store_section_name_for_check!(options, section_name)
 

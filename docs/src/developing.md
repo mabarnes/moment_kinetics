@@ -28,6 +28,20 @@ julia> run_moment_kinetics("input.toml")
 It might be convenient to add `using Revise` to your `startup.jl` file (`~/julia/config/startup.jl`) so it's always loaded.
 
 
+## Input options and defaults
+
+The input is read from a `.toml` file. It is also written to the output HDF5
+(or NetCDF) file, after all defaults are applied, both as a TOML-formatted
+String and as a tree of HDF5 variables.
+
+!!! warning
+    Neither TOML nor HDF5 have a 'null' type, so there is no convenient way to
+    store Julia's `nothing` when writing to TOML or HDF5.  Therefore `nothing`
+    should not be used as a default for any input option. If the code should
+    use `nothing` as a default for some setting, that is fine, but must be done
+    after the input is read, and not stored in the `input_dict`.
+
+
 ## Parallelization
 
 The code is parallelized at the moment using MPI and shared-memory arrays. Arrays representing the pdf, moments, etc. are shared between all processes. Using shared memory means, for example, we can take derivatives along one dimension while parallelising the other for any dimension without having to communicate to re-distribute the arrays. Using shared memory instead of (in future as well as) distributed memory parallelism has the advantage that it is easier to split up the points within each element between processors, giving a finer-grained parallelism which should let the code use larger numbers of processors efficiently.
