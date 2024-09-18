@@ -949,14 +949,14 @@ Note that this function operates on a single point in `r`, given by `ir`, and `p
 `pdf_in`, `electron_density`, and `electron_upar` should have no r-dimension.
 """
 function external_electron_source!(pdf_out, pdf_in, electron_density, electron_upar,
-                                   moments, composition, electron_source_settings, vperp,
-                                   vpa, dt)
+                                   moments, composition, electron_source, index,
+                                   vperp, vpa, dt)
     begin_r_z_vperp_region()
 
     me_over_mi = composition.me_over_mi
 
-    source_amplitude = moments.electron.external_source_amplitude
-    source_T = electron_source_settings.source_T
+    @views source_amplitude = moments.electron.external_source_amplitude[:,ir,index]
+    source_T = electron_source.source_T
     if vperp.n == 1
         vth_factor = 1.0 / sqrt(source_T / me_over_mi)
     else
@@ -993,9 +993,21 @@ function external_electron_source!(pdf_out, pdf_in, electron_density, electron_u
     return nothing
 end
 
-function add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments,
-                                                   me, z_speed, external_source_settings,
-                                                   z, vperp, vpa, dt, ir; f_offset=0,
+function add_total_external_electron_source_to_Jacobian!(
+        jacobian_matrix, f, moments, me, z_speed, electron_sources, z, vperp, vpa, dt, ir;
+        f_offset=0, ppar_offset=0)
+    for index ∈ eachindex(electron_sources)
+        add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments, me,
+                                                  z_speed, electron_sources[index], index,
+                                                  z, vperp, vpa, dt, ir;
+                                                  f_offset=f_offset,
+                                                  ppar_offset=ppar_offset)
+    end
+end
+
+function add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments, me,
+                                                   z_speed, electron_source, index, z,
+                                                   vperp, vpa, dt, ir; f_offset=0,
                                                    ppar_offset=0)
     if f_offset == ppar_offset
         error("Got f_offset=$f_offset the same as ppar_offset=$ppar_offset. f and ppar "
@@ -1005,12 +1017,12 @@ function add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments,
     @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n
     @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n
 
-    if !external_source_settings.electron.active
+    if !electron_source.active
         return nothing
     end
 
-    source_amplitude = moments.electron.external_source_amplitude
-    source_T = external_source_settings.electron.source_T
+    source_amplitude = @view moments.electron.external_source_amplitude[:,ir,index]
+    source_T = electron_source.source_T
     dens = @view moments.electron.dens[:,ir]
     upar = @view moments.electron.upar[:,ir]
     ppar = @view moments.electron.ppar[:,ir]
@@ -1025,7 +1037,7 @@ function add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments,
     v_size = vperp.n * vpa.n
 
     begin_z_vperp_vpa_region()
-    if external_source_settings.electron.source_type == "energy"
+    if electron_source.source_type == "energy"
         @loop_z_vperp_vpa iz ivperp ivpa begin
             if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa,
                                                      z_speed)

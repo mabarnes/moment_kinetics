@@ -253,11 +253,15 @@ function add_electron_vpa_advection_to_Jacobian!(jacobian_matrix, f, dens, upar,
             -0.25*sqrt(2.0/dens[iz]/me)/ppar[iz]^1.5*dppar_dz[iz]
             - vpa.grid[ivpa]^2*(-0.5/sqrt(2.0*dens[iz]*me)/ppar[iz]^1.5*dppar_dz[iz] - 0.25*sqrt(2.0/me/ppar[iz])/dens[iz]^1.5*ddens_dz[iz])
            ) * dpdf_dvpa[ivpa,ivperp,iz]
-        if external_source_settings.electron.active
-            jacobian_matrix[row,ppar_offset+iz] += dt * (
-                -0.5*source_density_amplitude[iz]*upar[iz]/sqrt(2.0*dens[iz])/ppar[iz]^1.5
-                + vpa.grid[ivpa]*0.5*(source_pressure_amplitude[iz] + 2.0*upar[iz]*source_momentum_amplitude[iz])/ppar[iz]^2
-               ) * dpdf_dvpa[ivpa,ivperp,iz]
+        for index ∈ eachindex(external_source_settings.electron)
+            electron_source = external_source_settings.electron[index]
+            if electron_source.active
+                jacobian_matrix[row,ppar_offset+iz] += dt * (
+                    -0.5*source_density_amplitude[iz,ir,index]*upar[iz]/sqrt(2.0*dens[iz])/ppar[iz]^1.5
+                    + vpa.grid[ivpa]*0.5*(source_pressure_amplitude[iz,ir,index]
+                                          + 2.0*upar[iz]*source_momentum_amplitude[iz,ir,index])/ppar[iz]^2
+                   ) * dpdf_dvpa[ivpa,ivperp,iz]
+            end
         end
         for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros)
             col = ppar_offset + icolz

@@ -36,7 +36,7 @@ using ..electron_vpa_advection: electron_vpa_advection!, update_electron_speed_v
                                 add_electron_vpa_advection_to_Jacobian!
 using ..em_fields: update_phi!
 using ..external_sources: total_external_electron_sources!,
-                          add_external_electron_source_to_Jacobian!
+                          add_total_external_electron_source_to_Jacobian!
 using ..file_io: get_electron_io_info, write_electron_state, finish_electron_io
 using ..krook_collisions: electron_krook_collisions!, get_collision_frequency_ee,
                           get_collision_frequency_ei,
@@ -3026,9 +3026,9 @@ function fill_electron_kinetic_equation_Jacobian!(jacobian_matrix, f, ppar, mome
     add_electron_krook_collisions_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, upar_ion, collisions, z, vperp, vpa,
         z_speed, dt, ir; ppar_offset=pdf_size)
-    add_external_electron_source_to_Jacobian!(
-        jacobian_matrix, f, moments, me, z_speed, external_source_settings, z, vperp, vpa,
-        dt, ir; ppar_offset=pdf_size)
+    add_total_external_electron_source_to_Jacobian!(
+        jacobian_matrix, f, moments, me, z_speed, external_source_settings.electron, z,
+        vperp, vpa, dt, ir; ppar_offset=pdf_size)
     add_electron_implicit_constraint_forcing_to_Jacobian!(
         jacobian_matrix, f, z_speed, z, vperp, vpa, t_params.constraint_forcing_rate, dt,
         ir)
@@ -3586,12 +3586,15 @@ function add_contribution_from_electron_pdf_term_to_Jacobian!(
                 dt * f[ivpa,ivperp,iz] * vth[iz] *
                 vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_entry
         end
-        if external_source_settings.electron.active
-            # Source terms from `add_contribution_from_pdf_term!()`
-            jacobian_matrix[row,row] += dt * (1.5 * source_density_amplitude[iz] / dens[iz]
-                                              - (0.5 * source_pressure_amplitude[iz]
-                                                 + source_momentum_amplitude[iz]) / ppar[iz]
-                                             )
+        for index ∈ eachindex(external_source_settings.electron)
+            electron_source = external_source_settings.electron[index]
+            if electron_source.active
+                # Source terms from `add_contribution_from_pdf_term!()`
+                jacobian_matrix[row,row] += dt * (1.5 * source_density_amplitude[iz,ir,index] / dens[iz]
+                                                  - (0.5 * source_pressure_amplitude[iz,ir,index]
+                                                     + source_momentum_amplitude[iz,ir,index]) / ppar[iz]
+                                                 )
+            end
         end
         jacobian_matrix[row,ppar_offset+iz] +=
             dt * f[ivpa,ivperp,iz] *
