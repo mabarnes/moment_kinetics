@@ -185,6 +185,15 @@ export braginskii_fluid
 export kinetic_electrons
 export kinetic_electrons_with_temperature_equation
 
+@enum ion_physics_type begin
+    gyrokinetic_ions
+    drift_kinetic_ions
+    braginskii_ions
+end
+export ion_physics_type
+export gyrokinetic_ions
+export drift_kinetic_ions
+export braginskii_ions
 """
 """
 mutable struct grid_input_mutable
@@ -380,6 +389,8 @@ Base.@kwdef struct species_composition
     #   density is fixed to be Nₑ*(eϕ/T_e) and N_e is calculated using a current
     #   condition at the wall
     electron_physics::electron_physics_type
+    # ion physics can be drift_kinetic_ions, gyrokinetic_ions and braginskii_ions
+    ion_physics::ion_physics_type
     # if false -- wall bc uses true Knudsen cosine to specify neutral pdf leaving the wall
     # if true -- use a simpler pdf that is easier to integrate
     use_test_neutral_wall_pdf::Bool

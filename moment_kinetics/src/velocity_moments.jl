@@ -471,7 +471,7 @@ function update_moments!(moments, ff_in, gyroavs::gyro_operators, vpa, vperp, z,
                                         moments.ion.upar[:,:,is],
                                         moments.ion.vth[:,:,is], ff[:,:,:,:,is], vpa,
                                         vperp, z, r, moments.evolve_density,
-                                        moments.evolve_upar, moments.evolve_ppar)
+                                        moments.evolve_upar, moments.evolve_ppar, composition.ion_physics)
             moments.ion.qpar_updated[is] = true
         end
     end
@@ -746,7 +746,8 @@ function update_ion_qpar!(qpar, qpar_updated, density, upar, vth, pdf, vpa, vper
         if qpar_updated[is] == false
             @views update_ion_qpar_species!(qpar[:,:,is], density[:,:,is], upar[:,:,is],
                                         vth[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r,
-                                        evolve_density, evolve_upar, evolve_ppar)
+                                        evolve_density, evolve_upar, evolve_ppar, 
+                                        composition.ion_physics)
             qpar_updated[is] = true
         end
     end
@@ -756,8 +757,24 @@ end
 calculate the updated parallel heat flux (qpar) for a given species
 """
 function update_ion_qpar_species!(qpar, density, upar, vth, ff, vpa, vperp, z, r, evolve_density,
-                              evolve_upar, evolve_ppar)
-    calculate_
+                                  evolve_upar, evolve_ppar, ion_physics)
+    if ion_physics == drift_kinetic_ions || ion_physics == gyrokinetic_ions
+        calculate_ion_qpar_from_pdf!(qpar, density, upar, vth, ff, vpa, vperp, z, r, evolve_density,
+                                     evolve_upar, evolve_ppar)
+    elseif ion_physics == braginskii_ions
+        calculate_ion_qpar_from_braginskii!(qpar, density, upar, vth, ff, vpa, vperp, z, r, evolve_density,
+                                     evolve_upar, evolve_ppar)
+    else
+        throw(ArgumentError("ion model $ion_physics not implemented for qpar calculation"))
+    end
+    return nothing
+end
+
+"""
+calculate parallel heat flux if ion composition flag is kinetic ions
+"""
+function calculate_ion_qpar_from_pdf!(qpar, density, upar, vth, ff, vpa, vperp, z, r, evolve_density, 
+                                      evolve_upar, evolve_ppar)
     @boundscheck r.n == size(ff, 4) || throw(BoundsError(ff))
     @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
     @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
@@ -794,12 +811,13 @@ function update_ion_qpar_species!(qpar, density, upar, vth, ff, vpa, vperp, z, r
     end
     return nothing
 end
-
 """
-calculate parallel heat flux if ion composition flag is kinetic ions
+calculate parallel heat flux if ion composition flag is Braginskii fluid ions
 """
-
-
+function calculate_ion_qpar_from_braginskii!(qpar, density, upar, vth, ff, vpa, vperp, z, r, evolve_density,
+                                     evolve_upar, evolve_ppar)
+    return nothing
+end
 """
 runtime diagnostic routine for computing the Chodura ratio
 in a single species plasma with Z = 1

@@ -506,8 +506,10 @@ function initialize_external_source_amplitude!(moments, external_source_settings
                 end
             end
         end
+    end
 
-        # now do same for electron sources, which (if present) are mostly mirrors of ion sources
+    # now do same for electron sources, which (if present) are mostly mirrors of ion sources
+    for index ∈ eachindex(electron_source_settings)
         if electron_source_settings[index].active
             if electron_source_settings[index].source_type == "energy"
                 @loop_r_z ir iz begin
