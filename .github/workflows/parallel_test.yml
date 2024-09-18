@@ -55,7 +55,6 @@ jobs:
           version: '1.10'
       - uses: julia-actions/cache@v2
       - run: |
-          export MPILIBPATH=$(find /opt/homebrew/Cellar/open-mpi/ -name libmpi.dylib)
           touch Project.toml
           julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["MPI", "MPIPreferences"]); using MPIPreferences; MPIPreferences.use_jll_binary("OpenMPI_jll")'
           julia --project -O3 --check-bounds=no -e 'using MPI; MPI.install_mpiexecjl(; destdir=".")'
