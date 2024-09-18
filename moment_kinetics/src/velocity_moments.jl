@@ -428,7 +428,7 @@ the function used to update moments at run time is update_derived_moments! in ti
 """
 function update_moments!(moments, ff_in, gyroavs::gyro_operators, vpa, vperp, z, r, composition,
         r_spectral, geometry, scratch_dummy, z_advect)
-    if composition.gyrokinetic_ions
+    if composition.ion_physics == gyrokinetic_ions
         ff = scratch_dummy.buffer_vpavperpzrs_1 # the buffer array for the ion pdf -> make sure not to reuse this array below
         # fill buffer with ring-averaged F (gyroaverage at fixed position)
         gyroaverage_pdf!(ff,ff_in,gyroavs,vpa,vperp,z,r,composition)
@@ -758,7 +758,7 @@ calculate the updated parallel heat flux (qpar) for a given species
 """
 function update_ion_qpar_species!(qpar, density, upar, vth, ff, vpa, vperp, z, r, evolve_density,
                                   evolve_upar, evolve_ppar, ion_physics)
-    if ion_physics == drift_kinetic_ions || ion_physics == gyrokinetic_ions
+    if ion_physics ∈ (drift_kinetic_ions, gyrokinetic_ions)
         calculate_ion_qpar_from_pdf!(qpar, density, upar, vth, ff, vpa, vperp, z, r, evolve_density,
                                      evolve_upar, evolve_ppar)
     elseif ion_physics == braginskii_ions
@@ -1599,7 +1599,7 @@ update velocity moments that are calculable from the evolved ion pdf
 function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
     r_spectral, geometry, gyroavs, scratch_dummy, z_advect, diagnostic_moments)
 
-    if composition.gyrokinetic_ions
+    if composition.ion_physics == gyrokinetic_ions
         ff = scratch_dummy.buffer_vpavperpzrs_1
         # fill buffer with ring-averaged F (gyroaverage at fixed position)
         gyroaverage_pdf!(ff,new_scratch.pdf,gyroavs,vpa,vperp,z,r,composition)

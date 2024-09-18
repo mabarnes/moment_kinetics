@@ -390,6 +390,9 @@ Base.@kwdef struct species_composition
     #   condition at the wall
     electron_physics::electron_physics_type
     # ion physics can be drift_kinetic_ions, gyrokinetic_ions and braginskii_ions
+    # gyrokinetic_ions (originally gyrokinetic_ions = true) -> use gyroaveraged fields at fixed guiding 
+    # centre and moments of the pdf computed at fixed r
+    # drift_kinetic_ions (originally gyrokinetic_ions = false) -> use drift kinetic approximation
     ion_physics::ion_physics_type
     # if false -- wall bc uses true Knudsen cosine to specify neutral pdf leaving the wall
     # if true -- use a simpler pdf that is easier to integrate
@@ -407,10 +410,6 @@ Base.@kwdef struct species_composition
     # The ion flux reaching the wall that is recycled as neutrals is reduced by
     # `recycling_fraction` to account for ions absorbed by the wall.
     recycling_fraction::mk_float
-    # gyrokinetic_ions is a flag determining if the ion species is gyrokinetic
-    # gyrokinetic_ions = true -> use gyroaveraged fields at fixed guiding centre and moments of the pdf computed at fixed r
-    # gyrokinetic_ions = false -> use drift kinetic approximation
-    gyrokinetic_ions::Bool
     # array of structs of parameters for each ion species
     ion::Vector{ion_species_parameters}
     # array of structs of parameters for each neutral species

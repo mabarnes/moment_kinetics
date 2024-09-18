@@ -53,10 +53,7 @@ function get_species_input(toml_input)
         use_test_neutral_wall_pdf = false,
         # The ion flux reaching the wall that is recycled as neutrals is reduced by
         # `recycling_fraction` to account for ions absorbed by the wall.
-        recycling_fraction = 1.0,
-        # gyrokinetic_ions = True -> use gyroaveraged fields at fixed guiding centre and moments of the pdf computed at fixed r
-        # gyrokinetic_ions = False -> use drift kinetic approximation
-        gyrokinetic_ions = false)
+        recycling_fraction = 1.0)
 
     nspec_ion = composition_section["n_ion_species"]
     nspec_neutral = composition_section["n_neutral_species"]
