@@ -216,10 +216,15 @@ Poisson's equation problem
 """
 function init_spatial_poisson2D(radial::coordinate, polar::coordinate, 
                                 radial_spectral::weak_discretization_info,
-                                polar_spectral::weak_discretization_info)
+                                polar_spectral::weak_discretization_info;
+                                use_sparse_init=false)
    npolar = polar.n
    nradial = radial.n
-   LP2D_sparse, MR2D_sparse = init_sparse_laplacian2D(radial,polar,radial_spectral,polar_spectral)
+   if use_sparse_init
+       LP2D_sparse, MR2D_sparse = init_sparse_laplacian2D(radial,polar,radial_spectral,polar_spectral)
+   else
+       LP2D_sparse, MR2D_sparse = init_laplacian2D(radial,polar,radial_spectral,polar_spectral)
+   end
    laplacian_lu = lu(LP2D_sparse)
    rhspr = allocate_float(npolar,nradial)
    return poisson2D_arrays(laplacian_lu,LP2D_sparse,MR2D_sparse,rhspr)
@@ -228,7 +233,14 @@ end
 """
 This function makes sparse matrices representing the 2D Laplacian operator.
 The compound index runs over the radial and polar coordinates. 
-We use 
+We use sparse matrix constructor functions to build the matrix with minimal
+memory usage, avoiding global matrices in the compound index.
+We assume that the polar coordinate has Jacobian = 1 
+so that we do not need to label elemental matrices when
+assembling terms from the boundary conditions.
+
+This function is currently broken due to incorrect sparse indexing functions
+which do not handle the periodic boundary conditions correctly.
 """
 function init_sparse_laplacian2D(radial::coordinate, polar::coordinate, 
                                 radial_spectral::weak_discretization_info,
@@ -390,6 +402,150 @@ function init_sparse_laplacian2D(radial::coordinate, polar::coordinate,
     end                         
     LP2D_sparse = create_sparse_matrix(LP2D)
     MR2D_sparse = create_sparse_matrix(MR2D)
+                            
+    return LP2D_sparse, MR2D_sparse
+end
+
+"""
+This function makes sparse matrices representing the 2D Laplacian operator.
+The compound index runs over the radial and polar coordinates. 
+We use global matrices in the compound index.
+We assume that the polar coordinate has Jacobian = 1 
+so that we do not need to label elemental matrices when
+assembling terms from the boundary conditions.
+"""
+function init_laplacian2D(radial::coordinate, polar::coordinate, 
+                                radial_spectral::weak_discretization_info,
+                                polar_spectral::weak_discretization_info)
+    nradial = radial.n
+    npolar = polar.n
+    
+    nc_global = nradial*npolar
+    ngrid_radial = radial.ngrid
+    ngrid_polar = polar.ngrid
+    nelement_radial = radial.nelement_local
+    nelement_polar = polar.nelement_local
+    
+    MR2D = allocate_float(nc_global,nc_global)
+    @. MR2D = 0.0
+    # Laplacian matrix
+    LP2D = allocate_float(nc_global,nc_global)
+    @. LP2D = 0.0
+    # local dummy arrays
+    MMpolar = allocate_float(ngrid_polar,ngrid_polar)
+    KKpolar = allocate_float(ngrid_polar,ngrid_polar)
+    MNradial = allocate_float(ngrid_radial,ngrid_radial)
+    MRradial = allocate_float(ngrid_radial,ngrid_radial)
+    KJradial = allocate_float(ngrid_radial,ngrid_radial)
+    PPradial = allocate_float(ngrid_radial,ngrid_radial)
+    # loop over elements to carry out assembly
+    for ielement_radial in 1:nelement_radial
+        # get local radial 1D matrices
+        get_QQ_local!(MNradial,ielement_radial,radial_spectral.lobatto,radial_spectral.radau,radial,"N")
+        get_QQ_local!(MRradial,ielement_radial,radial_spectral.lobatto,radial_spectral.radau,radial,"R")
+        get_QQ_local!(KJradial,ielement_radial,radial_spectral.lobatto,radial_spectral.radau,radial,"J")
+        get_QQ_local!(PPradial,ielement_radial,radial_spectral.lobatto,radial_spectral.radau,radial,"P")
+        for ielement_polar in 1:nelement_polar
+            # get local polar 1D matrices
+            get_QQ_local!(MMpolar,ielement_polar,polar_spectral.lobatto,polar_spectral.radau,polar,"M")
+            get_QQ_local!(KKpolar,ielement_polar,polar_spectral.lobatto,polar_spectral.radau,polar,"K")
+            # loop over grid points
+            for iradialp_local in 1:ngrid_radial
+                for iradial_local in 1:ngrid_radial
+                    for ipolarp_local in 1:ngrid_polar
+                        for ipolar_local in 1:ngrid_polar
+                            ic_global = get_global_compound_index(polar,radial,ielement_polar,ielement_radial,ipolar_local,iradial_local)
+                            icp_global = get_global_compound_index(polar,radial,ielement_polar,ielement_radial,ipolarp_local,iradialp_local)
+                            # boundary condition possibilities
+                            lower_boundary_row_polar = (ielement_polar == 1 && ipolar_local == 1)
+                            upper_boundary_row_polar = (ielement_polar == polar.nelement_local && ipolar_local == polar.ngrid)
+                            lower_boundary_row_radial = (ielement_radial == 1 && iradial_local == 1)
+                            upper_boundary_row_radial = (ielement_radial == radial.nelement_local && iradial_local == radial.ngrid)
+                            
+                            # Laplacian assembly
+                            if upper_boundary_row_radial
+                                # Dirichlet boundary condition on outer boundary
+                                if iradialp_local == radial.ngrid && ipolar_local == ipolarp_local
+                                    LP2D[ic_global,icp_global] = 1.0
+                                else
+                                    LP2D[ic_global,icp_global] = 0.0
+                                end
+                            elseif upper_boundary_row_polar
+                                # ensure periodicity by setting this row to 0 apart from appropriately placed 1, -1.
+                                if ipolarp_local == ngrid_polar && iradial_local == iradialp_local
+                                    # assign -1 to this point using loop icsc, ic, icp
+                                    LP2D[ic_global,icp_global] = -1.0
+                                    # find other end of polar domain for this ipolar_local
+                                    # and set ipolarp_local = ielement_polar = 1.
+                                    icp_global_bc = get_global_compound_index(polar,radial,1,ielement_radial,1,iradialp_local)
+                                    # assign 1 to this point using ic from loop and updated icsc, icp
+                                    LP2D[ic_global,icp_global_bc] = 1.0
+                                else 
+                                    LP2D[ic_global,icp_global] = 0.0
+                                end
+                            else 
+                                # carry out assembly
+                                # of Laplacian matrix data
+                                LP2D[ic_global,icp_global] +=(MMpolar[ipolar_local,ipolarp_local]*
+                                                             (KJradial[iradial_local,iradialp_local] - 
+                                                              PPradial[iradial_local,iradialp_local]) +
+                                                             KKpolar[ipolar_local,ipolarp_local]*
+                                                             MNradial[iradial_local,iradialp_local])
+                                if lower_boundary_row_polar
+                                    # assemble the contributions from the upper_boundary_row_polar location
+                                    # take data from
+                                    #     ielement_polar = nelement_polar
+                                    #     ipolar_local = ngrid_polar
+                                    # but ensure that data is put into correct target index (ic_global is unchanged from loop)
+                                    # no elemental index on polar matrices here => assume elemental matrices independent of element index
+                                    icp_global_bc = get_global_compound_index(polar,radial,nelement_polar,ielement_radial,ipolarp_local,iradialp_local)
+                                    LP2D[ic_global,icp_global_bc] +=(MMpolar[ngrid_polar,ipolarp_local]*
+                                                                     (KJradial[iradial_local,iradialp_local] - 
+                                                                      PPradial[iradial_local,iradialp_local]) +
+                                                                     KKpolar[ngrid_polar,ipolarp_local]*
+                                                                     MNradial[iradial_local,iradialp_local])
+                                end
+                            end # Laplacian assembly
+                            
+                            # mass matrices for RHS of matrix equation (enforce periodicity only)
+                            if upper_boundary_row_polar
+                                # ensure periodicity by setting this row to 0 apart from appropriately placed 1, -1.
+                                if ipolarp_local == ngrid_polar && iradial_local == iradialp_local
+                                    # assign -1 to this point using loop icsc, ic, icp
+                                    MR2D[ic_global,icp_global] = -1.0
+                                    # find other end of polar domain for this ipolar_local
+                                    # and set ipolarp_local = ielement_polar = 1.
+                                    icp_global_bc = get_global_compound_index(polar,radial,1,ielement_radial,1,iradialp_local)
+                                    # assign 1 to this point using ic from loop and updated icsc, icp
+                                    MR2D[ic_global,icp_global_bc] = 1.0
+                                else 
+                                    MR2D[ic_global,icp_global] = 0.0
+                                end
+                            else 
+                                # carry out assembly
+                                # of mass matrix data
+                                MR2D[ic_global,icp_global] +=(MMpolar[ipolar_local,ipolarp_local]*
+                                                              MRradial[iradial_local,iradialp_local])
+                                if lower_boundary_row_polar
+                                    # assemble the contributions from the upper_boundary_row_polar location
+                                    # take data from
+                                    #     ielement_polar = nelement_polar
+                                    #     ipolar_local = ngrid_polar
+                                    # but ensure that data is put into correct target index (ic_global is unchanged from loop)
+                                    # no elemental index on polar matrices here => assume elemental matrices independent of element index
+                                    icp_global_bc = get_global_compound_index(polar,radial,nelement_polar,ielement_radial,ipolarp_local,iradialp_local)
+                                    MR2D[ic_global,icp_global_bc] +=(MMpolar[ngrid_polar,ipolarp_local]*
+                                                                     MRradial[iradial_local,iradialp_local])
+                                end # mass matrix assembly
+                            end
+                        end                         
+                    end                         
+                end                         
+            end                         
+        end                         
+    end                         
+    LP2D_sparse = sparse(LP2D)
+    MR2D_sparse = sparse(MR2D)
                             
     return LP2D_sparse, MR2D_sparse
 end

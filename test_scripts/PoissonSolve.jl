@@ -203,7 +203,7 @@ function run_poisson2D_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelem
    
    spatial_poisson2D_solve!(phi,rho,poisson)
    @. err_phi = abs(phi - exact_phi)
-   println("Maximum error value Test rho = (kk^2 - (kk+1)^2) * cos(2 pi kk P/L) * r^(kk-1): ",maximum(err_phi))
+   println("Maximum error value Test rho = (kk^2 - (kk+1)^2) * cos(2 pi kk P/L + phase) * r^(kk-1): ",maximum(err_phi))
    if plot_results
       plot_test_data(exact_phi,phi,err_phi,"phi_2",radial,polar)
       println("phi(theta=-pi,r=0): ",phi[1,1])
