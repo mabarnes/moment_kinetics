@@ -4251,7 +4251,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             n = get_variable(run_info, "density"; kwargs...)
 
             # Note factor of 0.5 in front of qpar because the definition of qpar (see e.g.
-            # `update_qpar_species!()`) is unconventional (i.e. missing a factor of 0.5).
+            # `update_ion_qpar_species!()`) is unconventional (i.e. missing a factor of 0.5).
             # Factor of 3/2 in front of 1/2*n*vth^2*upar because this in 1V - would be 5/2
             # for 2V/3V cases.
             variable = @. 0.5*qpar + 0.75*n*vth^2*upar + 0.5*n*upar^3
@@ -4266,7 +4266,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             n = get_variable(run_info, "density_neutral"; kwargs...)
 
             # Note factor of 0.5 in front of qpar because the definition of qpar (see e.g.
-            # `update_qpar_species!()`) is unconventional (i.e. missing a factor of 0.5).
+            # `update_ion_qpar_species!()`) is unconventional (i.e. missing a factor of 0.5).
             # Factor of 3/2 in front of 1/2*n*vth^2*upar because this in 1V - would be 5/2
             # for 2V/3V cases.
             variable = @. 0.5*qpar + 0.75*n*vth^2*upar + 0.5*n*upar^3

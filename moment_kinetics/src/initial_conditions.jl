@@ -32,7 +32,7 @@ using ..nonlinear_solvers: nl_solver_info
 using ..velocity_moments: integrate_over_vspace, integrate_over_neutral_vspace
 using ..velocity_moments: integrate_over_positive_vz, integrate_over_negative_vz
 using ..velocity_moments: create_moments_ion, create_moments_electron, create_moments_neutral
-using ..velocity_moments: update_qpar!
+using ..velocity_moments: update_ion_qpar!
 using ..velocity_moments: update_neutral_density!, update_neutral_pz!, update_neutral_pr!, update_neutral_pzeta!
 using ..velocity_moments: update_neutral_uz!, update_neutral_ur!, update_neutral_uzeta!, update_neutral_qz!
 using ..velocity_moments: update_ppar!, update_upar!, update_density!, update_pperp!, update_vth!, reset_moments_status!
@@ -201,7 +201,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
 
         begin_s_r_z_region()
         # calculate the initial parallel heat flux from the initial un-normalised pdf
-        update_qpar!(moments.ion.qpar, moments.ion.qpar_updated,
+        update_ion_qpar!(moments.ion.qpar, moments.ion.qpar_updated,
                      moments.ion.dens, moments.ion.upar, moments.ion.vth,
                      pdf.ion.norm, vpa, vperp, z, r, composition,
                      moments.evolve_density, moments.evolve_upar, moments.evolve_ppar)
@@ -1663,7 +1663,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
                  vpa, vperp, z, r, composition, moments.evolve_density,
                  moments.evolve_upar)
     update_pperp!(moments.ion.pperp, pdf.ion.norm, vpa, vperp, z, r, composition)
-    update_qpar!(moments.ion.qpar, moments.ion.qpar_updated,
+    update_ion_qpar!(moments.ion.qpar, moments.ion.qpar_updated,
                  moments.ion.dens, moments.ion.upar,
                  moments.ion.vth, pdf.ion.norm, vpa, vperp, z, r,
                  composition, moments.evolve_density, moments.evolve_upar,

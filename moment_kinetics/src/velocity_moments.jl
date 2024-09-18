@@ -11,7 +11,7 @@ export update_density!
 export update_upar!
 export update_ppar!
 export update_pperp!
-export update_qpar!
+export update_ion_qpar!
 export update_vth!
 export reset_moments_status!
 export update_neutral_density!
@@ -466,7 +466,7 @@ function update_moments!(moments, ff_in, gyroavs::gyro_operators, vpa, vperp, z,
         end
         @views update_pperp_species!(moments.ion.pperp[:,:,is], ff[:,:,:,:,is], vpa, vperp, z, r)
         if moments.ion.qpar_updated[is] == false
-            @views update_qpar_species!(moments.ion.qpar[:,:,is],
+            @views update_ion_qpar_species!(moments.ion.qpar[:,:,is],
                                         moments.ion.dens[:,:,is],
                                         moments.ion.upar[:,:,is],
                                         moments.ion.vth[:,:,is], ff[:,:,:,:,is], vpa,
@@ -736,7 +736,7 @@ end
 """
 NB: the incoming pdf is the normalized pdf
 """
-function update_qpar!(qpar, qpar_updated, density, upar, vth, pdf, vpa, vperp, z, r,
+function update_ion_qpar!(qpar, qpar_updated, density, upar, vth, pdf, vpa, vperp, z, r,
                       composition, evolve_density, evolve_upar, evolve_ppar)
     @boundscheck composition.n_ion_species == size(qpar,3) || throw(BoundsError(qpar))
 
@@ -744,7 +744,7 @@ function update_qpar!(qpar, qpar_updated, density, upar, vth, pdf, vpa, vperp, z
 
     @loop_s is begin
         if qpar_updated[is] == false
-            @views update_qpar_species!(qpar[:,:,is], density[:,:,is], upar[:,:,is],
+            @views update_ion_qpar_species!(qpar[:,:,is], density[:,:,is], upar[:,:,is],
                                         vth[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r,
                                         evolve_density, evolve_upar, evolve_ppar)
             qpar_updated[is] = true
@@ -755,8 +755,9 @@ end
 """
 calculate the updated parallel heat flux (qpar) for a given species
 """
-function update_qpar_species!(qpar, density, upar, vth, ff, vpa, vperp, z, r, evolve_density,
+function update_ion_qpar_species!(qpar, density, upar, vth, ff, vpa, vperp, z, r, evolve_density,
                               evolve_upar, evolve_ppar)
+    calculate_
     @boundscheck r.n == size(ff, 4) || throw(BoundsError(ff))
     @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
     @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
@@ -793,6 +794,11 @@ function update_qpar_species!(qpar, density, upar, vth, ff, vpa, vperp, z, r, ev
     end
     return nothing
 end
+
+"""
+calculate parallel heat flux if ion composition flag is kinetic ions
+"""
+
 
 """
 runtime diagnostic routine for computing the Chodura ratio
@@ -1621,7 +1627,7 @@ function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composi
         rethrow(e)
     end
     # update the parallel heat flux
-    update_qpar!(moments.ion.qpar, moments.ion.qpar_updated, new_scratch.density,
+    update_ion_qpar!(moments.ion.qpar, moments.ion.qpar_updated, new_scratch.density,
                  new_scratch.upar, moments.ion.vth, ff, vpa, vperp, z, r,
                  composition, moments.evolve_density, moments.evolve_upar,
                  moments.evolve_ppar)
