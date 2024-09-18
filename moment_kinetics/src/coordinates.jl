@@ -196,6 +196,27 @@ function get_coordinate_input(input_dict, name; ignore_MPI=false)
     # Make a copy so we do not add "name" to the global input_dict
     coord_input_dict = copy(coord_input_dict)
     coord_input_dict["name"] = name
+
+    # Get some parameters that may be used for the boundary condition
+    if input_dict === nothing
+        boundary_parameters = nothing
+    else
+        boundary_parameters_defaults = Dict{Symbol,Any}()
+        if name == "z"
+            # parameter controlling the cutoff of the ion distribution function in the vpa
+            # domain at the wall in z
+            boundary_parameters_defaults[:epsz] = 0.0
+        end
+        boundary_parameters_input = set_defaults_and_check_section!(
+            input_dict, "$(name)_boundary_condition_parameters";
+            boundary_parameters_defaults...
+           )
+        boundary_parameters = Dict_to_NamedTuple(boundary_parameters_input)
+    end
+
+    coord_input_dict = deepcopy(coord_input_dict)
+    coord_input_dict["boundary_parameters"] = boundary_parameters
+
     coord_input = Dict_to_NamedTuple(coord_input_dict)
 
     return coord_input
@@ -277,22 +298,6 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
                   coord_input.discretization, coord_input.name)
     # calculate the widths of the cells between neighboring grid points
     cell_width = grid_spacing(grid, n_local)
-    # Get some parameters that may be used for the boundary condition
-    if input_dict === nothing
-        boundary_parameters = nothing
-    else
-        boundary_parameters_defaults = Dict{Symbol,Any}()
-        if input.name == "z"
-            # parameter controlling the cutoff of the ion distribution function in the vpa
-            # domain at the wall in z
-            boundary_parameters_defaults[:epsz] = 0.0
-        end
-        boundary_parameters_input = set_defaults_and_check_section!(
-            input_dict, "$(input.name)_boundary_condition_parameters";
-            boundary_parameters_defaults...
-           )
-        boundary_parameters = Dict_to_NamedTuple(boundary_parameters_input)
-    end
     # duniform_dgrid is the local derivative of the uniform grid with respect to
     # the coordinate grid
     duniform_dgrid = allocate_float(coord_input.ngrid, coord_input.nelement_local)
@@ -372,11 +377,11 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         coord_input.nelement, coord_input.nelement_local, nrank, irank, coord_input.L,
         grid, cell_width, igrid, ielement, imin, imax, igrid_full,
         coord_input.discretization, coord_input.finite_difference_option,
-        coord_input.cheb_option, coord_input.bc, boundary_parameters, wgts, uniform_grid,
-        duniform_dgrid, scratch, copy(scratch), copy(scratch), copy(scratch),
+        coord_input.cheb_option, coord_input.bc, coord_input.boundary_parameters, wgts,
+        uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
         copy(scratch), copy(scratch), copy(scratch), copy(scratch), copy(scratch),
-        scratch_shared, scratch_shared2, scratch_2d, copy(scratch_2d), advection,
-        send_buffer, receive_buffer, comm, local_io_range, global_io_range,
+        copy(scratch), scratch_shared, scratch_shared2, scratch_2d, copy(scratch_2d),
+        advection, send_buffer, receive_buffer, comm, local_io_range, global_io_range,
         element_scale, element_shift, coord_input.element_spacing_option,
         element_boundaries, radau_first_element, other_nodes, one_over_denominator)
 
