@@ -77,7 +77,7 @@ layout of the variable to be solved (i.e. fastest-varying first).
 The nonlinear solver will be called inside a loop over `outer_coords`, so we might need
 for example a preconditioner object for each point in that outer loop.
 """
-function setup_nonlinear_solve(input_dict, coords, outer_coords=(); default_rtol=1.0e-5,
+function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); default_rtol=1.0e-5,
                                default_atol=1.0e-12, serial_solve=false,
                                electron_ppar_pdf_solve=false, preconditioner_type="none")
     nl_solver_section = set_defaults_and_check_section!(
@@ -91,6 +91,13 @@ function setup_nonlinear_solve(input_dict, coords, outer_coords=(); default_rtol
         linear_max_restarts=0,
         preconditioner_update_interval=300,
        )
+
+    if !active
+        # This solver will not be used. Return here, after reading the options, so that we
+        # can always check that input file sections are supposed to exist.
+        return nothing
+    end
+
     nl_solver_input = Dict_to_NamedTuple(nl_solver_section)
 
     coord_sizes = Tuple(isa(c, coordinate) ? c.n : c for c ∈ coords)

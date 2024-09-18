@@ -68,6 +68,7 @@ include("energy_equation.jl")
 include("force_balance.jl")
 include("source_terms.jl")
 include("numerical_dissipation.jl")
+include("species_input.jl")
 include("moment_kinetics_input.jl")
 include("utils.jl")
 include("load_data.jl")
@@ -147,8 +148,8 @@ function run_moment_kinetics(to::Union{TimerOutput,Nothing}, input_dict=Dict();
         # Stop code from hanging when running on multiple processes if only one of them
         # throws an error
         if global_size[] > 1
-            println("$(typeof(e)) on process $(global_rank[]):")
-            showerror(stdout, e, catch_backtrace())
+            println(stderr, "$(typeof(e)) on process $(global_rank[]):")
+            showerror(stderr, e, catch_backtrace())
             flush(stdout)
             flush(stderr)
             MPI.Abort(comm_world, 1)
@@ -232,7 +233,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
         vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
         vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
-        drive_input, external_source_settings, num_diss_params,
+        em_input, external_source_settings, num_diss_params,
         manufactured_solns_input = input
 
     # Create loop range variables for shared-memory-parallel loops
@@ -258,8 +259,7 @@ function setup_moment_kinetics(input_dict::AbstractDict;
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and the electromagnetic fields
     fields = setup_em_fields(vperp.n, z.n, r.n, composition.n_ion_species,
-                             drive_input.force_phi, drive_input.amplitude,
-                             drive_input.frequency, drive_input.force_Er_zero_at_wall)
+                             em_input)
 
     # Allocate arrays and create the pdf and moments structs
     pdf, moments, boundary_distributions =
@@ -363,8 +363,8 @@ function setup_moment_kinetics(input_dict::AbstractDict;
         restart_time_index, previous_runs_info, time_for_setup, t_params,
         nl_solver_params)
     # write initial data to ascii files
-    write_data_to_ascii(pdf, moments, fields, vpa, vperp, z, r, t_params.t[],
-        composition.n_ion_species, composition.n_neutral_species, ascii_io)
+    write_data_to_ascii(pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r,
+        t_params.t[], composition.n_ion_species, composition.n_neutral_species, ascii_io)
     # write initial data to binary files
 
     t_params.moments_output_counter[] += 1

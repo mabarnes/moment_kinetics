@@ -36,9 +36,8 @@ using moment_kinetics: check_so_newer_than_code
 using moment_kinetics.communication
 using moment_kinetics.quadrature: composite_simpson_weights
 using moment_kinetics.array_allocation: allocate_float
-using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.file_io: open_ascii_output_file
-using moment_kinetics.type_definitions: mk_float, mk_int
+using moment_kinetics.type_definitions: mk_float, mk_int, OptionsDict
 using moment_kinetics.load_data: open_readonly_output_file, get_group, load_input,
                                  load_time_data, construct_global_zr_coords
 using moment_kinetics.load_data: get_nranks
@@ -59,14 +58,15 @@ using moment_kinetics.velocity_moments: integrate_over_vspace
 using moment_kinetics.manufactured_solns: manufactured_solutions,
                                           manufactured_electric_fields,
                                           manufactured_geometry
-using moment_kinetics.moment_kinetics_input: mk_input, get, get_default_rhostar
-using moment_kinetics.input_structs: geometry_input, grid_input, species_composition
-using moment_kinetics.input_structs: electron_physics_type, boltzmann_electron_response,
+using moment_kinetics.moment_kinetics_input: mk_input, get
+using moment_kinetics.input_structs: geometry_input, species_composition
+using moment_kinetics.input_structs: boltzmann_electron_response, #electron_physics_type,
                                      boltzmann_electron_response_with_simple_sheath
+using moment_kinetics.species_input: get_species_input
 using moment_kinetics.reference_parameters
 using moment_kinetics.geo: init_magnetic_geometry
 using .post_processing_input: pp
-using .shared_utils: calculate_and_write_frequencies, get_geometry, get_composition
+using .shared_utils: calculate_and_write_frequencies, get_geometry
 using TOML
 import Base: get
 
@@ -238,27 +238,34 @@ function allocate_global_zr_neutral_moments(nz_global,nr_global,n_neutral_specie
     return neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed
 end
 
+function _get_nested(scan_input, section, option, default)
+    if section ∉ keys(scan_input)
+        return default
+    end
+    return get(scan_input[section], option, default)
+end
+
 function get_coords_nelement(scan_input)
     # use 1 as default because these values should be set in input .toml
-    z_nelement = get(scan_input, "z_nelement", 1)
-    r_nelement = get(scan_input, "r_nelement", 1)
-    vpa_nelement = get(scan_input, "vpa_nelement", 1)
-    vperp_nelement = get(scan_input, "vperp_nelement", 1)
-    vz_nelement = get(scan_input, "vz_nelement", 1)
-    vr_nelement = get(scan_input, "vr_nelement", 1)
-    vzeta_nelement = get(scan_input, "vzeta_nelement", 1)
+    z_nelement = _get_nested(scan_input, "z", "nelement", 1)
+    r_nelement = _get_nested(scan_input, "r", "nelement", 1)
+    vpa_nelement = _get_nested(scan_input, "vpa", "nelement", 1)
+    vperp_nelement = _get_nested(scan_input, "vperp", "nelement", 1)
+    vz_nelement = _get_nested(scan_input, "vz", "nelement", 1)
+    vr_nelement = _get_nested(scan_input, "vr", "nelement", 1)
+    vzeta_nelement = _get_nested(scan_input, "vzeta", "nelement", 1)
     return z_nelement, r_nelement, vpa_nelement, vperp_nelement, vz_nelement, vr_nelement, vzeta_nelement
 end
 
 function get_coords_ngrid(scan_input)
     # use 1 as default because these values should be set in input .toml
-    z_ngrid = get(scan_input, "z_ngrid", 1)
-    r_ngrid = get(scan_input, "r_ngrid", 1)
-    vpa_ngrid = get(scan_input, "vpa_ngrid", 1)
-    vperp_ngrid = get(scan_input, "vperp_ngrid", 1)
-    vz_ngrid = get(scan_input, "vz_ngrid", 1)
-    vr_ngrid = get(scan_input, "vr_ngrid", 1)
-    vzeta_ngrid = get(scan_input, "vzeta_ngrid", 1)
+    z_ngrid = _get_nested(scan_input, "z", "ngrid", 1)
+    r_ngrid = _get_nested(scan_input, "r", "ngrid", 1)
+    vpa_ngrid = _get_nested(scan_input, "vpa", "ngrid", 1)
+    vperp_ngrid = _get_nested(scan_input, "vperp", "ngrid", 1)
+    vz_ngrid = _get_nested(scan_input, "vz", "ngrid", 1)
+    vr_ngrid = _get_nested(scan_input, "vr", "ngrid", 1)
+    vzeta_ngrid = _get_nested(scan_input, "vzeta", "ngrid", 1)
     return z_ngrid, r_ngrid, vpa_ngrid, vperp_ngrid, vz_ngrid, vr_ngrid, vzeta_ngrid
 end
 
@@ -679,7 +686,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     geometry =
         get_tuple_of_return_values(get_geometry, scan_input, z, r)
     composition =
-        get_tuple_of_return_values(get_composition, scan_input)
+        get_tuple_of_return_values(get_species_input, scan_input)
 
     # initialise the post-processing input options
     nwrite_movie, itime_min, itime_max, nwrite_movie_pdfs, itime_min_pdfs, itime_max_pdfs,
@@ -3242,7 +3249,7 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
         trygif(anim, outfile, fps=5)
     elseif pp.animate_phi_vs_r_z && nr == 1 && nz > 1 # make a gif animation of ϕ(z) at different times
         anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-            @views plot(z, phi[:,1,i], xlabel="z", ylabel=L"\widetilde{\phi}", ylims = (phimin,phimax))
+            @views plot(z, phi[:,1,i], xlabel="z", ylabel=L"\widetilde{\phi}", ylims = (phimin,phimax),label ="")
         end
         outfile = string(run_name, "_phi_vs_z.gif")
         trygif(anim, outfile, fps=5)
@@ -3267,13 +3274,13 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
         outfile = string(run_name, "_Ez"*description*"_vs_r_z.gif")
         trygif(anim, outfile, fps=5)
         anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-            @views plot(r, Ez[1,:,i], xlabel="r", ylabel=L"\widetilde{E}_z", ylims = (Ezmin,Ezmax))
+            @views plot(r, Ez[1,:,i], xlabel="r", ylabel=L"\widetilde{E}_z", ylims = (Ezmin,Ezmax), label="")
         end
         outfile = string(run_name, "_Ez(zwall-)_vs_r.gif")
         trygif(anim, outfile, fps=5)
     elseif pp.animate_Ez_vs_r_z && nr == 1 && nz > 1
         anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-            @views plot(z, Ez[:,1,i], xlabel="z", ylabel=L"\widetilde{E}_z", ylims = (Ezmin,Ezmax))
+            @views plot(z, Ez[:,1,i], xlabel="z", ylabel=L"\widetilde{E}_z", ylims = (Ezmin,Ezmax), label="")
         end
         outfile = string(run_name, "_Ez_vs_z.gif")
         trygif(anim, outfile, fps=5)
@@ -3290,7 +3297,7 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
         outfile = string(run_name, "_Er"*description*"(r,z_wall-)_vs_r.pdf")
         trysavefig(outfile)
         anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-            @views plot(r, Er[1,:,i], xlabel="r", ylabel=L"\widetilde{E}_r", ylims = (Ermin,Ermax))
+            @views plot(r, Er[1,:,i], xlabel="r", ylabel=L"\widetilde{E}_r", ylims = (Ermin,Ermax), label="")
         end
         outfile = string(run_name, "_Er(zwall-)_vs_r.gif")
         trygif(anim, outfile, fps=5)
@@ -3319,7 +3326,7 @@ function plot_ion_moments_2D(density, parallel_flow, parallel_pressure,
 		description = "_ion_spec"*string(is)*"_"
 		# the density
 		densitymin = minimum(density[:,:,is,:])
-		densitymax = maximum(density)
+		densitymax = maximum(density[:,:,is,:])
 		if pp.plot_density_vs_r0_z && nz > 1 # plot last timestep density[z,ir0]
 			@views plot(z, density[:,ir0,is,end], xlabel=L"z/L_z", ylabel=L"n_i")
 			outfile = string(run_name, "_density"*description*"(r0,z)_vs_z.pdf")
@@ -3337,7 +3344,13 @@ function plot_ion_moments_2D(density, parallel_flow, parallel_pressure,
 			end
 			outfile = string(run_name, "_density"*description*"_vs_r_z.gif")
 			trygif(anim, outfile, fps=5)
-		end
+		elseif pp.animate_density_vs_r_z && nr == 1 && nz > 1
+                    anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                       @views plot(z, density[:,1,is,i], xlabel="z", ylabel=L"n_i", ylims = (densitymin,densitymax),label ="")
+                    end
+                    outfile = string(run_name, "_density"*description*"_vs_z.gif")
+                    trygif(anim, outfile, fps=5)
+                end
 		if pp.plot_density_vs_r_z && nr > 1 && nz > 1
 			@views heatmap(r, z, density[:,:,is,end], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
 			windowsize = (360,240), margin = 15pt)
@@ -3354,7 +3367,7 @@ function plot_ion_moments_2D(density, parallel_flow, parallel_pressure,
         end
 		# the parallel flow
 		parallel_flowmin = minimum(parallel_flow[:,:,is,:])
-		parallel_flowmax = maximum(parallel_flow)
+		parallel_flowmax = maximum(parallel_flow[:,:,is,:])
 		if pp.plot_parallel_flow_vs_r0_z && nz > 1 # plot last timestep parallel_flow[z,ir0]
 			@views plot(z, parallel_flow[:,ir0,is,end], xlabel=L"z/L_z", ylabel=L"u_{i\|\|}")
 			outfile = string(run_name, "_parallel_flow"*description*"(r0,z)_vs_z.pdf")
@@ -3372,6 +3385,12 @@ function plot_ion_moments_2D(density, parallel_flow, parallel_pressure,
 			end
 			outfile = string(run_name, "_parallel_flow"*description*"_vs_r_z.gif")
 			trygif(anim, outfile, fps=5)
+		elseif pp.animate_parallel_flow_vs_r_z && nr == 1 && nz > 1
+                    anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                       @views plot(z, parallel_flow[:,1,is,i], xlabel="z", ylabel=L"u_{i\|\|}", ylims = (parallel_flowmin,parallel_flowmax),label ="")
+                    end
+                    outfile = string(run_name, "_parallel_flow"*description*"_vs_z.gif")
+                    trygif(anim, outfile, fps=5)
 		end
 		if pp.plot_parallel_flow_vs_r_z && nr > 1 && nz > 1
 			@views heatmap(r, z, parallel_flow[:,:,is,end], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
@@ -3499,6 +3518,14 @@ function plot_ion_moments_2D(density, parallel_flow, parallel_pressure,
                        label = [L"p_{i\|\|}" L"p_{i\perp}" L"p_{i}"], foreground_color_legend = nothing, background_color_legend = nothing)
            outfile = string(run_name, "_all_pressures"*description*"(r0,z)_vs_z.pdf")
            trysavefig(outfile)
+           pmin = min(minimum(parallel_pressure[:,ir0,is,:]),minimum(perpendicular_pressure[:,ir0,is,:]),minimum(total_pressure[:,ir0,is,:]))
+           pmax = max(maximum(parallel_pressure[:,ir0,is,:]),maximum(perpendicular_pressure[:,ir0,is,:]),maximum(total_pressure[:,ir0,is,:]))
+           anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+              @views plot([z,z,z], [parallel_pressure[:,ir0,is,i],perpendicular_pressure[:,ir0,is,i],total_pressure[:,ir0,is,i]], xlabel=L"z/L_z", ylabel="",
+                       label = [L"p_{i\|\|}" L"p_{i\perp}" L"p_{i}"], foreground_color_legend = nothing, background_color_legend = nothing, ylims = (pmin,pmax))
+           end
+           outfile = string(run_name, "_all_pressures"*description*"(r0,z)_vs_z.gif")
+           trygif(anim, outfile, fps=5)
         end
         # the thermal speed
         if pp.plot_vth0_vs_t

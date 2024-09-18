@@ -8,7 +8,6 @@ using LinearAlgebra: mul!, ldiv!
 using moment_kinetics.communication
 using moment_kinetics.looping
 using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
-using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
@@ -33,32 +32,27 @@ function create_grids(ngrid,nelement_vpa,nelement_vperp;
         nelement_local_vperp = nelement_vperp # number of elements per rank
         nelement_global_vperp = nelement_local_vperp # total number of elements 
         bc = "zero" # used only in derivative! functions 
-        # fd_option and adv_input not actually used so given values unimportant
         #discretization = "chebyshev_pseudospectral"
         discretization = "gausslegendre_pseudospectral"
-        fd_option = "fourth_order_centered"
-        cheb_option = "matrix"
-        adv_input = advection_input("default", 1.0, 0.0, 0.0)
-        nrank = 1
-        irank = 0
-        comm = MPI.COMM_NULL
         # create the 'input' struct containing input info needed to create a
         # coordinate
         element_spacing_option = "uniform"
-        vpa_input = grid_input("vpa", ngrid, nelement_global_vpa, nelement_local_vpa, 
-            nrank, irank, Lvpa, discretization, fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
-        vperp_input = grid_input("vperp", ngrid, nelement_global_vperp, nelement_local_vperp, 
-            nrank, irank, Lvperp, discretization, fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
-        # create the coordinate struct 'x'
-        #println("made inputs")
-        #println("vpa: ngrid: ",ngrid," nelement: ",nelement_local_vpa, " Lvpa: ",Lvpa)
-        #println("vperp: ngrid: ",ngrid," nelement: ",nelement_local_vperp, " Lvperp: ",Lvperp)
+        coords_input = OptionsDict(
+            "vperp"=>OptionsDict("ngrid"=>ngrid, "nelement"=>nelement_global_vperp,
+                                 "nelement_local"=>nelement_local_vperp, "L"=>Lvperp,
+                                 "discretization"=>discretization, "bc"=>bc,
+                                 "element_spacing_option"=>element_spacing_option),
+            "vpa"=>OptionsDict("ngrid"=>ngrid, "nelement"=>nelement_global_vpa,
+                               "nelement_local"=>nelement_local_vpa, "L"=>Lvpa,
+                               "discretization"=>discretization, "bc"=>bc,
+                               "element_spacing_option"=>element_spacing_option),
+        )
         
         # Set up MPI
         initialize_comms!()
         setup_distributed_memory_MPI(1,1,1,1)
-        vpa, vpa_spectral = define_coordinate(vpa_input)
-        vperp, vperp_spectral = define_coordinate(vperp_input)
+        vperp, vperp_spectral = define_coordinate(coords_input, "vperp")
+        vpa, vpa_spectral = define_coordinate(coords_input, "vpa")
         looping.setup_loop_ranges!(block_rank[], block_size[];
                                        s=1, sn=1,
                                        r=1, z=1, vperp=vperp.n, vpa=vpa.n,

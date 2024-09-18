@@ -1,88 +1,72 @@
 test_type = "restart_interpolation"
+using moment_kinetics.type_definitions: OptionsDict
+using moment_kinetics.utils: recursive_merge
 
 # default inputs for tests
-base_input = Dict(
-     "run_name" => "base",
-     "n_ion_species" => 2,
-     "n_neutral_species" => 2,
-     "boltzmann_electron_response" => true,
-     "base_directory" => test_output_directory,
-     "evolve_moments_density" => false,
-     "evolve_moments_parallel_flow" => false,
-     "evolve_moments_parallel_pressure" => false,
-     "evolve_moments_conservation" => true,
-     "T_e" => 1.0,
-     "initial_density1" => 0.5,
-     "initial_temperature1" => 1.0,
-     "initial_density2" => 0.5,
-     "initial_temperature2" => 1.0,
-     "z_IC_option1" => "sinusoid",
-     "z_IC_density_amplitude1" => 0.001,
-     "z_IC_density_phase1" => 0.0,
-     "z_IC_upar_amplitude1" => 0.0,
-     "z_IC_upar_phase1" => 0.0,
-     "z_IC_temperature_amplitude1" => 0.0,
-     "z_IC_temperature_phase1" => 0.0,
-     "z_IC_option2" => "sinusoid",
-     "z_IC_density_amplitude2" => 0.001,
-     "z_IC_density_phase2" => 0.0,
-     "z_IC_upar_amplitude2" => 0.0,
-     "z_IC_upar_phase2" => 0.0,
-     "z_IC_temperature_amplitude2" => 0.0,
-     "z_IC_temperature_phase2" => 0.0,
-     "charge_exchange_frequency" => 2*π*0.1,
-     "ionization_frequency" => 0.0,
-     "timestepping" => Dict{String,Any}("nstep" => 3,
-                                        "dt" => 0.0,
-                                        "nwrite" => 2,
-                                        "type" => "SSPRK2",
-                                        "split_operators" => false),
-     "z_ngrid" => 3,
-     "z_nelement" => 2,
-     "z_bc" => "periodic",
-     "z_discretization" => "chebyshev_pseudospectral",
-     "r_ngrid" => 1,
-     "r_nelement" => 1,
-     "vpa_ngrid" => 3,
-     "vpa_nelement" => 2,
-     "vpa_L" => 8.0,
-     "vpa_bc" => "periodic",
-     "vpa_discretization" => "chebyshev_pseudospectral",
-     "vperp_ngrid" => 1,
-     "vperp_nelement" => 1,
-     "vz_ngrid" => 3,
-     "vz_nelement" => 2,
-     "vz_L" => 8.0,
-     "vz_bc" => "periodic",
-     "vz_discretization" => "chebyshev_pseudospectral",
-     "vzeta_ngrid" => 1,
-     "vzeta_nelement" => 1,
-     "vr_ngrid" => 1,
-     "vr_nelement" => 1,
-     "ion_numerical_dissipation" => Dict{String,Any}("force_minimum_pdf_value" => 0.0),
-     "neutral_numerical_dissipation" => Dict{String,Any}("force_minimum_pdf_value" => 0.0))
+base_input = OptionsDict(
+     "output" => OptionsDict("run_name" => "base",
+                             "base_directory" => test_output_directory),
+     "composition" => OptionsDict("n_ion_species" => 2,
+                                  "n_neutral_species" => 2,
+                                  "electron_physics" => "boltzmann_electron_response",
+                                  "T_e" => 1.0),
+     "evolve_moments" => OptionsDict("density" => false,
+                                     "parallel_flow" => false,
+                                     "parallel_pressure" => false,
+                                     "moments_conservation" => true),
+     "reactions" => OptionsDict("charge_exchange_frequency" => 2*π*0.1,
+                                "ionization_frequency" => 0.0),
+     "timestepping" => OptionsDict("nstep" => 3,
+                                   "dt" => 0.0,
+                                   "nwrite" => 2,
+                                   "type" => "SSPRK2",
+                                   "split_operators" => false),
+     "z" => OptionsDict("ngrid" => 3,
+                        "nelement" => 2,
+                        "bc" => "periodic",
+                        "discretization" => "chebyshev_pseudospectral"),
+     "r" => OptionsDict("ngrid" => 1,
+                        "nelement" => 1),
+     "vpa" => OptionsDict("ngrid" => 3,
+                          "nelement" => 2,
+                          "L" => 8.0,
+                          "bc" => "periodic",
+                          "discretization" => "chebyshev_pseudospectral"),
+     "vperp" => OptionsDict("ngrid" => 1,
+                            "nelement" => 1),
+     "vz" => OptionsDict("ngrid" => 3,
+                         "nelement" => 2,
+                         "L" => 8.0,
+                         "bc" => "periodic",
+                         "discretization" => "chebyshev_pseudospectral"),
+     "vzeta" => OptionsDict("ngrid" => 1,
+                            "nelement" => 1),
+     "vr" => OptionsDict("ngrid" => 1,
+                         "nelement" => 1),
+     "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0),
+     "neutral_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0))
 
 test_input =
-    merge(base_input,
-          Dict("run_name" => "full-f",
-               "z_nelement" => 3,
-               "vpa_nelement" => 3,
-               "vz_nelement" => 3))
+    recursive_merge(base_input,
+                    OptionsDict("output" => OptionsDict("run_name" => "full-f"),
+                                "z" => OptionsDict("nelement" => 3),
+                                "vpa" => OptionsDict("nelement" => 3),
+                                "vz" => OptionsDict("nelement" => 3)))
 
 test_input_split1 =
-    merge(test_input,
-          Dict("run_name" => "split1",
-               "evolve_moments_density" => true))
+    recursive_merge(test_input,
+                    OptionsDict("output" => OptionsDict("run_name" => "split1"),
+                                "evolve_moments" => OptionsDict("density" => true)))
 
-test_input_split2 =
-    merge(test_input_split1 ,
-          Dict("run_name" => "split2",
-               "evolve_moments_parallel_flow" => true))
+    test_input_split2 =
+    recursive_merge(test_input_split1 ,
+                    OptionsDict("output" => OptionsDict("run_name" => "split2"),
+                                "evolve_moments" => OptionsDict("parallel_flow" => true)))
 
-test_input_split3 =
-    merge(test_input_split2,
-          Dict("run_name" => "split3",
-               "evolve_moments_parallel_pressure" => true))
+    test_input_split3 =
+    recursive_merge(test_input_split2,
+                    OptionsDict("output" => OptionsDict("run_name" => "split3"),
+                                "evolve_moments" => OptionsDict("parallel_pressure" => true)))
 
 test_input_list = [
      test_input,

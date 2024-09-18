@@ -4,10 +4,10 @@ export get_scan_inputs, generate_scan_input_files
 
 using ..command_line_options: get_options
 using ..moment_kinetics_input: read_input_file
+using ..input_structs: options_to_TOML
 
 using Glob
 using OrderedCollections: OrderedDict
-using TOML
 
 """
     get_scan_inputs(scan_inputs::AbstractDict)
@@ -33,10 +33,10 @@ parameter scan.
 function get_scan_inputs(scan_inputs::AbstractDict)
     scan_inputs = OrderedDict{String,Any}(scan_inputs)
 
-    if "base_directory" ∉ keys(scan_inputs)
+    if "base_directory" ∉ keys(scan_inputs["output"])
         # Set up base_directory so that the runs in the scan are created in subdirectories
         # under a directory for the whole scan.
-        scan_inputs["base_directory"] = joinpath("runs", scan_inputs["run_name"])
+        scan_inputs["output"]["base_directory"] = joinpath("runs", scan_inputs["output"]["run_name"])
     end
 
     combine_outer = pop!(scan_inputs, "combine_outer", String[])
@@ -64,7 +64,7 @@ function get_scan_inputs(scan_inputs::AbstractDict)
 
     result = Vector{OrderedDict}(undef, length_inner_product)
     for i ∈ 1:length_inner_product
-        run_name = scan_inputs["run_name"]
+        run_name = scan_inputs["output"]["run_name"]
         result[i] = OrderedDict{String,Any}()
         for (k,v) ∈ scan_inputs
             if v isa Vector
@@ -76,7 +76,7 @@ function get_scan_inputs(scan_inputs::AbstractDict)
                 result[i][k] = v
             end
         end
-        result[i]["run_name"] = run_name
+        result[i]["output"]["run_name"] = run_name
     end
 
     # Combine 'result' with 'combine_outer' fields
@@ -104,7 +104,7 @@ function get_scan_inputs(scan_inputs::AbstractDict)
                 new_dict[key] = vals[j]
                 # Truncate `key` - seems that if file names are too long, HDF5 has a
                 # buffer overflow
-                new_dict["run_name"] = new_dict["run_name"] *
+                new_dict["output"]["run_name"] = new_dict["output"]["run_name"] *
                                        "_$(key[1:min(3, length(key))])_$(vals[j])"
                 new_scan_inputs[count] = new_dict
             end
@@ -122,7 +122,7 @@ function get_scan_inputs(scan_inputs::AbstractDict)
 
     println("Running scan:")
     for x in result
-        println(x["run_name"])
+        println(x["output"]["run_name"])
     end
 
     return result
@@ -178,13 +178,13 @@ function generate_scan_input_files(scan_input::AbstractDict, dirname::AbstractSt
 
     for input ∈ input_dicts
         # Write the file, but do not overwrite
-        filename = joinpath(dirname, input["run_name"] * ".toml")
+        filename = joinpath(dirname, input["output"]["run_name"] * ".toml")
         ispath(filename) && error("The file $filename already exists.")
         open(filename, "w") do io
             # The run name will be created from the name of the input file, so do not need
             # to save "run_name" in the file.
-            pop!(input, "run_name")
-            TOML.print(io, input)
+            pop!(input["output"], "run_name")
+            options_to_TOML(io, input)
         end
     end
 

@@ -20,7 +20,10 @@ end
 input = TOML.parsefile(inputfile)
 
 if "run_name" ∈ keys(input)
+    # Old position for option
     run_name = input["run_name"]
+elseif "output" ∈ keys(input) && "run_name" ∈ keys(input["output"])
+    run_name = input["output"]["run_name"]
 else
     # For branch with run name from input file name, should handle that here...
     run_name = basename(splitext(inputfile)[1])

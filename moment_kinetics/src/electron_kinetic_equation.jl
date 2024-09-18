@@ -35,7 +35,7 @@ using ..electron_z_advection: electron_z_advection!, update_electron_speed_z!,
 using ..electron_vpa_advection: electron_vpa_advection!, update_electron_speed_vpa!,
                                 add_electron_vpa_advection_to_Jacobian!
 using ..em_fields: update_phi!
-using ..external_sources: external_electron_source!,
+using ..external_sources: total_external_electron_sources!,
                           add_external_electron_source_to_Jacobian!
 using ..file_io: get_electron_io_info, write_electron_state, finish_electron_io
 using ..krook_collisions: electron_krook_collisions!, get_collision_frequency_ee,
@@ -1752,7 +1752,8 @@ function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, mo
     calculate_electron_parallel_friction_force!(
         moments.electron.parallel_friction, fvec_out.electron_density,
         fvec_out.electron_upar, fvec_out.upar, moments.electron.dT_dz,
-        composition.me_over_mi, collisions.nu_ei, composition.electron_physics)
+        composition.me_over_mi, collisions.electron_fluid.nu_ei,
+        composition.electron_physics)
 
     # Solve for EM fields now that electrons are updated.
     update_phi!(fields, fvec_out, vperp, z, r, composition, collisions, moments,
@@ -2888,12 +2889,10 @@ function electron_kinetic_equation_euler_update!(f_out, ppar_out, f_in, ppar_in,
                                           vpa, dt)
     end
 
-    if external_source_settings.electron.active
-        @views external_electron_source!(f_out, f_in, moments.electron.dens[:,ir],
-                                         moments.electron.upar[:,ir], moments,
-                                         composition, external_source_settings.electron,
-                                         vperp, vpa, dt, ir)
-    end
+    @views total_external_electron_sources!(f_out, f_in, moments.electron.dens[:,ir],
+                                            moments.electron.upar[:,ir], moments,
+                                            composition, external_source_settings.electron,
+                                            vperp, vpa, dt, ir)
 
     if soft_force_constraints
         electron_implicit_constraint_forcing!(f_out, f_in,
@@ -3485,16 +3484,18 @@ function add_contribution_from_pdf_term!(pdf_out, pdf_in, ppar, dens, upar, mome
         end
     end
 
-    if electron_source_settings.active
-        source_density_amplitude = @view moments.electron.external_source_density_amplitude[:,ir]
-        source_momentum_amplitude = @view moments.electron.external_source_momentum_amplitude[:,ir]
-        source_pressure_amplitude = @view moments.electron.external_source_pressure_amplitude[:,ir]
-        @loop_z iz begin
-            term = dt * (1.5 * source_density_amplitude[iz] / dens[iz] -
-                         (0.5 * source_pressure_amplitude[iz] +
-                          source_momentum_amplitude[iz]) / ppar[iz])
-            @loop_vperp_vpa ivperp ivpa begin
-                pdf_out[ivpa,ivperp,iz] -= term * pdf_in[ivpa,ivperp,iz]
+    for index ∈ eachindex(electron_source_settings)
+        if electron_source_settings[index].active
+            @views source_density_amplitude = moments.electron.external_source_density_amplitude[:, ir, index]
+            @views source_momentum_amplitude = moments.electron.external_source_momentum_amplitude[:, ir, index]
+            @views source_pressure_amplitude = moments.electron.external_source_pressure_amplitude[:, ir, index]
+            @loop_z iz begin
+                term = dt * (1.5 * source_density_amplitude[iz,ir] / dens[iz,ir] -
+                            (0.5 * source_pressure_amplitude[iz,ir] +
+                            source_momentum_amplitude[iz,ir]) / ppar[iz,ir])
+                @loop_vperp_vpa ivperp ivpa begin
+                    pdf_out[ivpa,ivperp,iz,ir] -= term * pdf_in[ivpa,ivperp,iz,ir]
+                end
             end
         end
     end

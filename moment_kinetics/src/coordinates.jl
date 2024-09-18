@@ -7,15 +7,16 @@ export equally_spaced_grid
 export set_element_boundaries
 
 using LinearAlgebra
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions: mk_float, mk_int, OptionsDict
 using ..array_allocation: allocate_float, allocate_shared_float, allocate_int
 using ..calculus: derivative!
 using ..chebyshev: scaled_chebyshev_grid, scaled_chebyshev_radau_grid, setup_chebyshev_pseudospectral
 using ..communication
 using ..finite_differences: finite_difference_info
 using ..gauss_legendre: scaled_gauss_legendre_lobatto_grid, scaled_gauss_legendre_radau_grid, setup_gausslegendre_pseudospectral
+using ..input_structs
 using ..quadrature: composite_simpson_weights
-using ..input_structs: advection_input
+using ..input_structs
 using ..moment_kinetics_structs: null_spatial_dimension_info, null_velocity_dimension_info
 
 using MPI
@@ -23,7 +24,7 @@ using MPI
 """
 structure containing basic information related to coordinates
 """
-struct coordinate{T <: AbstractVector{mk_float}}
+struct coordinate{T <: AbstractVector{mk_float},Tbparams}
     # name is the name of the variable associated with this coordiante
     name::String
     # n_global is the total number of grid points associated with this coordinate
@@ -58,12 +59,15 @@ struct coordinate{T <: AbstractVector{mk_float}}
     igrid_full::Array{mk_int,2}
     # discretization option for the grid
     discretization::String
-    # if the discretization is finite differences, fd_option provides the precise scheme
-    fd_option::String
+    # if the discretization is finite differences, finite_difference_option provides the precise scheme
+    finite_difference_option::String
     # if the discretization is chebyshev_pseudospectral, cheb_option chooses whether to use FFT or differentiation matrices for d / d coord
     cheb_option::String
     # bc is the boundary condition option for this coordinate
     bc::String
+    # struct containing some parameters that may be used for applying the boundary
+    # condition.
+    boundary_parameters::Tbparams
     # wgts contains the integration weights associated with each grid point
     wgts::Array{mk_float,1}
     # uniform_grid contains location of grid points mapped to a uniform grid
@@ -132,40 +136,174 @@ struct coordinate{T <: AbstractVector{mk_float}}
 end
 
 """
-create arrays associated with a given coordinate,
-setup the coordinate grid, and populate the coordinate structure
-containing all of this information
+    get_coordinate_input(input_dict, name)
+
+Read the input for coordinate `name` from `input_dict`, setting defaults, etc.
 """
-function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing,
-                           ignore_MPI=false, collision_operator_dim::Bool=true)
+function get_coordinate_input(input_dict, name; ignore_MPI=false)
+    if name == "z"
+        default_bc = "wall"
+    elseif name == "r"
+        default_bc = "periodic"
+    elseif name == "vperp"
+        default_bc = "default"
+    else
+        default_bc = "zero"
+    end
+    coord_input_dict = set_defaults_and_check_section!(
+        input_dict, name;
+        # ngrid is number of grid points per element
+        ngrid=1,
+        # nelement is the number of elements in total
+        nelement=1,
+        # nelement_local is the number of elements on each process
+        nelement_local=-1,
+        # L is the box length in this coordinate
+        L=1.0,
+        # discretization option for the coordinate grid supported options are
+        # "chebyshev_pseudospectral", "gausslegendre_pseudospectral" and
+        # "finite_difference"
+        discretization="chebyshev_pseudospectral",
+        # option for implementation of chebyshev discretization: "FFT" or "matrix"
+        cheb_option="FFT",
+        # finite_difference_option determines the finite difference scheme to be used
+        # supported options are "third_order_upwind", "second_order_upwind" and
+        # "first_order_upwind"
+        finite_difference_option="third_order_upwind",
+        element_spacing_option="uniform",
+        # which boundary condition to use
+        bc=default_bc,
+        # determine the option used for the advection speed in z supported options are
+        # "constant" and "oscillating", in addition to the "default" option which uses
+        # d(coord)/dt from the moment-kinetic equations as the advection speed
+        advection_option="default",
+        # constant advection speed to use with advection_option = "constant"
+        advection_speed=0.0,
+        # for advection_option = "oscillating", advection speed is of form
+        # speed = advection_speed*(1 + advection_oscillation_amplitude*sinpi(advection_oscillation_frequency*t))
+        advection_oscillation_amplitude=1.0,
+        advection_oscillation_frequency=1.0,
+       )
+    if coord_input_dict["nelement_local"] == -1 || ignore_MPI
+        coord_input_dict["nelement_local"] = coord_input_dict["nelement"]
+    end
+    if name == "vperp" && coord_input_dict["bc"] == "default"
+        if coord_input_dict["ngrid"] == 1 && coord_input_dict["nelement"] == 1
+            # 1V simulation, so boundary condition should be "none"
+            coord_input_dict["bc"] = "none"
+        else
+            # 2V simulation, so boundary condition should be "zero"
+            coord_input_dict["bc"] = "zero"
+        end
+    end
+    # Make a copy so we do not add "name" to the global input_dict
+    coord_input_dict = copy(coord_input_dict)
+    coord_input_dict["name"] = name
+
+    # Get some parameters that may be used for the boundary condition
+    if input_dict === nothing
+        boundary_parameters = nothing
+    else
+        boundary_parameters_defaults = Dict{Symbol,Any}()
+        if name == "z"
+            # parameter controlling the cutoff of the ion distribution function in the vpa
+            # domain at the wall in z
+            boundary_parameters_defaults[:epsz] = 0.0
+        end
+        boundary_parameters_input = set_defaults_and_check_section!(
+            input_dict, "$(name)_boundary_condition_parameters";
+            boundary_parameters_defaults...
+           )
+        boundary_parameters = Dict_to_NamedTuple(boundary_parameters_input)
+    end
+
+    coord_input_dict = deepcopy(coord_input_dict)
+    coord_input_dict["boundary_parameters"] = boundary_parameters
+
+    coord_input = Dict_to_NamedTuple(coord_input_dict)
+
+    return coord_input
+end
+
+"""
+    define_coordinate(input_dict, name; parallel_io::Bool=false,
+                      run_directory=nothing, ignore_MPI=false,
+                      collision_operator_dim::Bool=true)
+    define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
+                      run_directory=nothing, ignore_MPI=false,
+                      collision_operator_dim::Bool=true, irank=0, nrank=1,
+                      comm=MPI.COMM_NULL)
+
+Create arrays associated with a given coordinate, setup the coordinate grid, and populate
+the coordinate structure containing all of this information.
+
+When `input_dict` is passed, any missing settings will be set with default values.
+
+When `coord_input` is passed, it should be a `NamedTuple` as generated by
+[`get_coordinate_input`](@ref), which contains a field for every coordinate input option.
+"""
+function define_coordinate end
+
+function define_coordinate(input_dict, name; kwargs...)
+
+    coord_input = get_coordinate_input(input_dict, name)
+
+    return define_coordinate(coord_input; kwargs...)
+end
+
+function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
+                           run_directory=nothing, ignore_MPI=false,
+                           collision_operator_dim::Bool=true, irank=0, nrank=1,
+                           comm=MPI.COMM_NULL)
+
+    if coord_input.name ∉ ("r", "z")
+        if irank != 0 || nrank != 1 || comm != MPI.COMM_NULL
+            if comm == MPI.COMM_NULL
+                comm_message = "comm is MPI.COMM_NULL"
+            else
+                comm_message = "comm is not MPI.COMM_NULL"
+            end
+            error("Distributed-memory MPI is not supported for coordinate "
+                  * "$(coord_input.name), but got irank=$irank, nrank=$nrank and "
+                  * "$comm_message")
+        end
+    end
+
     # total number of grid points is ngrid for the first element
     # plus ngrid-1 unique points for each additional element due
     # to the repetition of a point at the element boundary
-    n_global = (input.ngrid-1)*input.nelement_global + 1
+    n_global = (coord_input.ngrid-1)*coord_input.nelement + 1
     # local number of points on this process
-    n_local = (input.ngrid-1)*input.nelement_local + 1
+    n_local = (coord_input.ngrid-1)*coord_input.nelement_local + 1
     # obtain index mapping from full (local) grid to the
     # grid within each element (igrid, ielement)
-    igrid, ielement = full_to_elemental_grid_map(input.ngrid,
-        input.nelement_local, n_local)
+    igrid, ielement = full_to_elemental_grid_map(coord_input.ngrid,
+        coord_input.nelement_local, n_local)
     # obtain (local) index mapping from the grid within each element
     # to the full grid
-    imin, imax, igrid_full = elemental_to_full_grid_map(input.ngrid, input.nelement_local)
+    imin, imax, igrid_full = elemental_to_full_grid_map(coord_input.ngrid,
+                                                        coord_input.nelement_local)
     # initialise the data used to construct the grid
     # boundaries for each element
-    element_boundaries = set_element_boundaries(input.nelement_global, input.L, input.element_spacing_option, input.name)
+    element_boundaries = set_element_boundaries(coord_input.nelement,
+                                                coord_input.L,
+                                                coord_input.element_spacing_option,
+                                                coord_input.name)
     # shift and scale factors for each local element
-    element_scale, element_shift = set_element_scale_and_shift(input.nelement_global, input.nelement_local, input.irank, element_boundaries)
+    element_scale, element_shift =
+        set_element_scale_and_shift(coord_input.nelement, coord_input.nelement_local,
+                                    irank, element_boundaries)
     # initialize the grid and the integration weights associated with the grid
     # also obtain the Chebyshev theta grid and spacing if chosen as discretization option
-    grid, wgts, uniform_grid, radau_first_element = init_grid(input.ngrid,
-        input.nelement_local, n_global, n_local, input.irank, input.L, element_scale,
-        element_shift, imin, imax, igrid, input.discretization, input.name)
+    grid, wgts, uniform_grid, radau_first_element =
+        init_grid(coord_input.ngrid, coord_input.nelement_local, n_global, n_local,
+                  irank, coord_input.L, element_scale, element_shift, imin, imax, igrid,
+                  coord_input.discretization, coord_input.name)
     # calculate the widths of the cells between neighboring grid points
     cell_width = grid_spacing(grid, n_local)
     # duniform_dgrid is the local derivative of the uniform grid with respect to
     # the coordinate grid
-    duniform_dgrid = allocate_float(input.ngrid, input.nelement_local)
+    duniform_dgrid = allocate_float(coord_input.ngrid, coord_input.nelement_local)
     # scratch is an array used for intermediate calculations requiring n entries
     scratch = allocate_float(n_local)
     if ignore_MPI
@@ -188,9 +326,12 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
         _block_synchronize()
     end
     # scratch_2d is an array used for intermediate calculations requiring ngrid x nelement entries
-    scratch_2d = allocate_float(input.ngrid, input.nelement_local)
+    scratch_2d = allocate_float(coord_input.ngrid, coord_input.nelement_local)
     # struct containing the advection speed options/inputs for this coordinate
-    advection = input.advection
+    advection = advection_input(coord_input.advection_option,
+                                coord_input.advection_speed,
+                                coord_input.advection_oscillation_frequency,
+                                coord_input.advection_oscillation_amplitude)
     # buffers for cyclic communication of boundary points
     # each chain of elements has only two external (off-rank)
     # endpoints, so only two pieces of information must be shared
@@ -201,23 +342,24 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
         # No parallel io, just write everything
         local_io_range = 1:n_local
         global_io_range = 1:n_local
-    elseif input.irank == input.nrank-1
+    elseif irank == nrank-1
         # Include endpoint on final block
         local_io_range = 1:n_local
-        global_io_range = input.irank*(n_local-1)+1:n_global
+        global_io_range = irank*(n_local-1)+1:n_global
     else
         # Skip final point, because it is shared with the next block
         # Choose to skip final point in each block so all blocks (except the final one)
         # write a 'chunk' of the same size to the output file. This makes it simple to
         # align HDF5 'chunks' with the data being written
         local_io_range = 1 : n_local-1
-        global_io_range = input.irank*(n_local-1)+1 : (input.irank+1)*(n_local-1)
+        global_io_range = irank*(n_local-1)+1 : (irank+1)*(n_local-1)
     end
 
     # Precompute some values for Lagrange polynomial evaluation
-    other_nodes = allocate_float(input.ngrid-1, input.ngrid, input.nelement_local)
-    one_over_denominator = allocate_float(input.ngrid, input.nelement_local)
-    for ielement ∈ 1:input.nelement_local
+    other_nodes = allocate_float(coord_input.ngrid-1, coord_input.ngrid,
+                                 coord_input.nelement_local)
+    one_over_denominator = allocate_float(coord_input.ngrid, coord_input.nelement_local)
+    for ielement ∈ 1:coord_input.nelement_local
         if ielement == 1
             this_imin = imin[ielement]
         else
@@ -225,11 +367,11 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
         end
         this_imax = imax[ielement]
         this_grid = grid[this_imin:this_imax]
-        for j ∈ 1:input.ngrid
+        for j ∈ 1:coord_input.ngrid
             @views other_nodes[1:j-1,j,ielement] .= this_grid[1:j-1]
             @views other_nodes[j:end,j,ielement] .= this_grid[j+1:end]
 
-            if input.ngrid == 1
+            if coord_input.ngrid == 1
                 one_over_denominator[j,ielement] = 1.0
             else
                 one_over_denominator[j,ielement] = 1.0 / prod(this_grid[j] - n for n ∈ @view other_nodes[:,j,ielement])
@@ -237,15 +379,17 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
         end
     end
 
-    coord = coordinate(input.name, n_global, n_local, input.ngrid,
-        input.nelement_global, input.nelement_local, input.nrank, input.irank, input.L, grid,
-        cell_width, igrid, ielement, imin, imax, igrid_full, input.discretization, input.fd_option, input.cheb_option,
-        input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch),
+    coord = coordinate(coord_input.name, n_global, n_local, coord_input.ngrid,
+        coord_input.nelement, coord_input.nelement_local, nrank, irank, coord_input.L,
+        grid, cell_width, igrid, ielement, imin, imax, igrid_full,
+        coord_input.discretization, coord_input.finite_difference_option,
+        coord_input.cheb_option, coord_input.bc, coord_input.boundary_parameters, wgts,
+        uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
         copy(scratch), copy(scratch), copy(scratch), copy(scratch), copy(scratch),
-        copy(scratch), copy(scratch), scratch_shared, scratch_shared2, scratch_shared3,
-        scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
-        local_io_range, global_io_range, element_scale, element_shift,
-        input.element_spacing_option, element_boundaries, radau_first_element,
+        copy(scratch), scratch_shared, scratch_shared2, scratch_shared3, scratch_2d,
+        copy(scratch_2d), advection, send_buffer, receive_buffer, comm, local_io_range,
+        global_io_range, element_scale, element_shift,
+        coord_input.element_spacing_option, element_boundaries, radau_first_element,
         other_nodes, one_over_denominator)
 
     if coord.n == 1 && occursin("v", coord.name)
@@ -254,14 +398,14 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
     elseif coord.n == 1
         spectral = null_spatial_dimension_info()
         coord.duniform_dgrid .= 1.0
-    elseif input.discretization == "chebyshev_pseudospectral"
+    elseif coord_input.discretization == "chebyshev_pseudospectral"
         # create arrays needed for explicit Chebyshev pseudospectral treatment in this
         # coordinate and create the plans for the forward and backward fast Chebyshev
         # transforms
         spectral = setup_chebyshev_pseudospectral(coord, run_directory; ignore_MPI=ignore_MPI)
         # obtain the local derivatives of the uniform grid with respect to the used grid
         derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
-    elseif input.discretization == "gausslegendre_pseudospectral"
+    elseif coord_input.discretization == "gausslegendre_pseudospectral"
         # create arrays needed for explicit GaussLegendre pseudospectral treatment in this
         # coordinate and create the matrices for differentiation
         spectral = setup_gausslegendre_pseudospectral(coord, collision_operator_dim=collision_operator_dim)
@@ -275,6 +419,36 @@ function define_coordinate(input, parallel_io::Bool=false; run_directory=nothing
     end
 
     return coord, spectral
+end
+
+"""
+    define_test_coordinate(input_dict::AbstractDict; kwargs...)
+    define_test_coordinate(name; collision_operator_dim=true, kwargs...)
+
+Wrapper for `define_coordinate()` to make creating a coordinate for tests slightly less
+verbose.
+
+When passing `input_dict`, it must contain a "name" field, and can contain other settings
+- "ngrid", "nelement", etc. Options other than "name" will be set using defaults if they
+are not passed. `kwargs` are the keyword arguments for [`define_coordinate`](@ref).
+
+The second form allows the coordinate input options to be passed as keyword arguments. For
+this form, apart from `collision_operator_dim`, the keyword arguments of
+[`define_coordinate`](@ref) cannot be passed, and `ignore_MPI=true` is always set, as this
+is most often useful for tests.
+"""
+function define_test_coordinate end
+function define_test_coordinate(input_dict::AbstractDict; kwargs...)
+    input_dict = deepcopy(input_dict)
+    name = pop!(input_dict, "name")
+    return define_coordinate(OptionsDict(name => input_dict), name; kwargs...)
+end
+function define_test_coordinate(name; collision_operator_dim=true, kwargs...)
+    coord_input_dict = OptionsDict(String(k) => v for (k,v) in kwargs)
+    coord_input_dict["name"] = name
+    return define_test_coordinate(coord_input_dict;
+                                  collision_operator_dim=collision_operator_dim,
+                                  ignore_MPI=true)
 end
 
 function set_element_boundaries(nelement_global, L, element_spacing_option, coord_name)

@@ -7,9 +7,8 @@ include("setup.jl")
 using Base.Filesystem: tempname
 
 using moment_kinetics.communication
-using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.file_io: io_has_parallel
-using moment_kinetics.input_structs: grid_input, advection_input, hdf5
+using moment_kinetics.input_structs: hdf5
 using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data,
                                  load_species_data, load_fields_data,
                                  load_ion_moments_data, load_pdf_data,
@@ -19,6 +18,7 @@ using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_
 using moment_kinetics.load_data: get_run_info_no_setup, close_run_info,
                                  postproc_load_variable
 using moment_kinetics.type_definitions: mk_float
+using moment_kinetics.utils: merge_dict_with_kwargs!
 
 include("nonlinear_sound_wave_inputs_and_expected_data.jl")
 
@@ -28,51 +28,55 @@ base_input["timestepping"]["nwrite"] = 50
 base_input["timestepping"]["nwrite_dfns"] = 50
 if global_size[] > 1 && global_size[] % 2 == 0
     # Test using distributed-memory
-    base_input["z_nelement_local"] = base_input["z_nelement"] ÷ 2
+    base_input["z"]["nelement_local"] = base_input["z"]["nelement"] ÷ 2
 end
-base_input["output"] = Dict{String,Any}("parallel_io" => false)
+base_input["output"]["parallel_io"] = false
 
 restart_test_input_chebyshev =
-    merge(deepcopy(base_input),
-          Dict("run_name" => "restart_chebyshev_pseudospectral",
-               "r_ngrid" => 3, "r_nelement" => 2,
-               "r_discretization" => "chebyshev_pseudospectral",
-               "z_ngrid" => 17, "z_nelement" => 2,
-               "vpa_ngrid" => 9, "vpa_nelement" => 32,
-               "vz_ngrid" => 9, "vz_nelement" => 32))
+recursive_merge(deepcopy(base_input),
+                OptionsDict("output" => OptionsDict("run_name" => "restart_chebyshev_pseudospectral"),
+                            "r" => OptionsDict("ngrid" => 3, "nelement" => 2,
+                                               "discretization" => "chebyshev_pseudospectral"),
+                            "z" => OptionsDict("ngrid" => 17, "nelement" => 2),
+                            "vpa" => OptionsDict("ngrid" => 9, "nelement" => 32),
+                            "vz" => OptionsDict("ngrid" => 9, "nelement" => 32)),
+               )
 if global_size[] > 1 && global_size[] % 2 == 0
     # Test using distributed-memory
-    restart_test_input_chebyshev["z_nelement_local"] = restart_test_input_chebyshev["z_nelement"] ÷ 2
+    restart_test_input_chebyshev["z"]["nelement_local"] = restart_test_input_chebyshev["z"]["nelement"] ÷ 2
 end
 
 restart_test_input_chebyshev_split_1_moment =
-    merge(deepcopy(restart_test_input_chebyshev),
-          Dict("run_name" => "restart_chebyshev_pseudospectral_split_1_moment",
-               "evolve_moments_density" => true))
+    recursive_merge(deepcopy(restart_test_input_chebyshev),
+                    OptionsDict("output" => OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_1_moment"),
+                                "evolve_moments" => OptionsDict("density" => true)),
+                   )
 
 restart_test_input_chebyshev_split_2_moments =
-    merge(deepcopy(restart_test_input_chebyshev_split_1_moment),
-          Dict("run_name" => "restart_chebyshev_pseudospectral_split_2_moments",
-               "r_ngrid" => 1, "r_nelement" => 1,
-               "evolve_moments_parallel_flow" => true))
+    recursive_merge(deepcopy(restart_test_input_chebyshev_split_1_moment),
+                    OptionsDict("output" => OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_2_moments"),
+                                "r" => OptionsDict("ngrid" => 1, "nelement" => 1),
+                                "evolve_moments" => OptionsDict("parallel_flow" => true)),
+                   )
 
 restart_test_input_chebyshev_split_3_moments =
-    merge(deepcopy(restart_test_input_chebyshev_split_2_moments),
-          Dict("run_name" => "restart_chebyshev_pseudospectral_split_3_moments",
-               "evolve_moments_parallel_pressure" => true,
-               "vpa_L" => 1.5*vpa_L, "vz_L" => 1.5*vpa_L))
+    recursive_merge(deepcopy(restart_test_input_chebyshev_split_2_moments),
+                    OptionsDict("output" => OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_3_moments"),
+                                "evolve_moments" => OptionsDict("parallel_pressure" => true),
+                                "vpa" => OptionsDict("L" => 1.5*vpa_L), "vz" => OptionsDict("L" => 1.5*vpa_L)),
+                   )
 
 """
 Run a sound-wave test for a single set of parameters
 """
 # Note 'name' should not be shared by any two tests in this file
-function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
-    # by passing keyword arguments to run_test, kwargs becomes a Tuple of Pairs which can be used to
+function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
+    # by passing keyword arguments to run_test, args becomes a Tuple of Pairs which can be used to
     # update the default inputs
 
     # Make a copy to make sure nothing modifies the input Dicts defined in this test
     # script.
-    test_input = deepcopy(test_input)
+    input = deepcopy(test_input)
 
     if tol_3V === nothing
         atol_3V = atol
@@ -82,11 +86,26 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
         rtol_3V = tol_3V
     end
 
-    parallel_io = test_input["output"]["parallel_io"]
+    parallel_io = input["output"]["parallel_io"]
     # Convert keyword arguments to a unique name
-    name = test_input["run_name"]
-    if length(kwargs) > 0
-        name = string(name, (string(String(k)[1], v) for (k, v) in kwargs)...)
+    function stringify_arg(key, value)
+        if isa(value, AbstractDict)
+            return string(string(key)[1], (stringify_arg(k, v) for (k, v) in value)...)
+        else
+            if isa(value, AbstractString)
+                return string(string(key)[1], value[1])
+            else
+                return string(string(key)[1], value)
+            end
+        end
+    end
+    name = input["output"]["run_name"]
+    if length(args) > 0
+        name = string(name, "_", (stringify_arg(k, v) for (k, v) in args)...)
+    end
+    # Make sure name is not too long
+    if length(name) > 80
+        name = name[1:80]
     end
     if parallel_io
         name *= "parallel-io"
@@ -95,30 +114,20 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
     # Provide some progress info
     println("    - testing ", message)
 
-    # Convert from Tuple of Pairs with symbol keys to Dict with String keys
-    modified_inputs = Dict(String(k) => v for (k, v) in kwargs
-                           if String(k) ∉ keys(test_input["timestepping"]))
-    modified_timestepping_inputs = Dict(String(k) => v for (k, v) in kwargs
-                                        if String(k) ∈ keys(test_input["timestepping"]))
-
-    # Update default inputs with values to be changed
-    input = merge(test_input, modified_inputs)
-    input["timestepping"] = merge(test_input["timestepping"],
-                                  modified_timestepping_inputs)
-
-    input["run_name"] = name
+    merge_dict_with_kwargs!(input; args...)
+    input["output"]["run_name"] = name
 
     # Suppress console output while running
     quietoutput() do
         # run simulation
         if parallel_io
-            restart_filename = joinpath(base["base_directory"],
-                                        base["run_name"],
-                                        base["run_name"] * ".dfns.h5")
+            restart_filename = joinpath(base["output"]["base_directory"],
+                                        base["output"]["run_name"],
+                                        base["output"]["run_name"] * ".dfns.h5")
         else
-            restart_filename = joinpath(base["base_directory"],
-                                        base["run_name"],
-                                        base["run_name"] * ".dfns.0.h5")
+            restart_filename = joinpath(base["output"]["base_directory"],
+                                        base["output"]["run_name"],
+                                        base["output"]["run_name"] * ".dfns.0.h5")
         end
         run_moment_kinetics(input; restart=restart_filename)
     end
@@ -143,7 +152,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
             #########################
 
             # Read the output data
-            path = joinpath(realpath(input["base_directory"]), name)
+            path = joinpath(realpath(input["output"]["base_directory"]), name)
 
             run_info = get_run_info_no_setup((path, -1); dfns=true)
             z = run_info.z
@@ -182,7 +191,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
             close_run_info(run_info)
 
             # Delete output because output files for 3V tests can be large
-            rm(joinpath(realpath(input["base_directory"]), name); recursive=true)
+            rm(joinpath(realpath(input["output"]["base_directory"]), name); recursive=true)
 
             phi = phi_zrt[:,1,:]
             n_ion = n_ion_zrst[:,1,:,:]
@@ -199,7 +208,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
             f_neutral = f_neutral_vzvrvzetazrst[:,:,1,:,:]
 
             # Unnormalize f
-            if input["evolve_moments_density"]
+            if input["evolve_moments"]["density"]
                 for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
                     f_ion[:,iz,is,it] .*= n_ion[iz,is,it]
                 end
@@ -207,7 +216,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
                     f_neutral[:,iz,isn,it] .*= n_neutral[iz,isn,it]
                 end
             end
-            if input["evolve_moments_parallel_pressure"]
+            if input["evolve_moments"]["parallel_pressure"]
                 for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
                     f_ion[:,iz,is,it] ./= v_t_ion[iz,is,it]
                 end
@@ -241,10 +250,10 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
                                  size(newgrid_f_ion, 4))
         for iz ∈ 1:length(expected.z)
             wpa = copy(expected.vpa)
-            if input["evolve_moments_parallel_flow"]
+            if input["evolve_moments"]["parallel_flow"]
                 wpa .-= newgrid_upar_ion[iz,1]
             end
-            if input["evolve_moments_parallel_pressure"]
+            if input["evolve_moments"]["parallel_pressure"]
                 wpa ./= newgrid_vth_ion[iz,1]
             end
             newgrid_f_ion[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vpa, vpa_spectral)
@@ -275,10 +284,10 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, kwargs...)
                                  size(newgrid_f_neutral, 4))
         for iz ∈ 1:length(expected.z)
             wpa = copy(expected.vpa)
-            if input["evolve_moments_parallel_flow"]
+            if input["evolve_moments"]["parallel_flow"]
                 wpa .-= newgrid_upar_neutral[iz,1]
             end
-            if input["evolve_moments_parallel_pressure"]
+            if input["evolve_moments"]["parallel_pressure"]
                 wpa ./= newgrid_vth_neutral[iz,1]
             end
             newgrid_f_neutral[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vz, vz_spectral)
@@ -290,23 +299,29 @@ end
 
 function runtests()
     function do_tests(label, rtol=1.0e-3, nstep=50, include_moment_kinetic=true;
-                      tol_3V=nothing, kwargs...)
+                      tol_3V=nothing, args...)
         # Only testing Chebyshev discretization because interpolation not yet implemented
         # for finite-difference
 
         parallel_io = base_input["output"]["parallel_io"]
 
         base_input_full_f = deepcopy(base_input)
-        base_input_full_f["timestepping"] = merge(base_input["timestepping"],
-                                                  Dict("nstep" => nstep))
-        base_input_evolve_density = merge(base_input_full_f,
-                                          Dict("evolve_moments_density" => true))
-        base_input_evolve_upar = merge(base_input_evolve_density,
-                                       Dict("evolve_moments_parallel_flow" => true,
-                                            "vpa_L" => 1.5*vpa_L, "vz_L" => 1.5*vpa_L))
-        base_input_evolve_ppar = merge(base_input_evolve_upar,
-                                       Dict("evolve_moments_parallel_pressure" => true,
-                                            "vpa_L" => 1.5*vpa_L, "vz_L" => 1.5*vpa_L))
+        base_input_full_f["timestepping"] = recursive_merge(base_input["timestepping"],
+                                                            OptionsDict("nstep" => nstep),
+                                                           )
+        base_input_evolve_density = recursive_merge(base_input_full_f,
+                                                    OptionsDict("evolve_moments" => OptionsDict("density" => true)),
+                                                   )
+        base_input_evolve_upar = recursive_merge(base_input_evolve_density,
+                                                 OptionsDict("evolve_moments" => OptionsDict("parallel_flow" => true),
+                                                             "vpa" => OptionsDict("L" => 1.5*vpa_L),
+                                                             "vz" => OptionsDict("L" => 1.5*vpa_L)),
+                                                )
+        base_input_evolve_ppar = recursive_merge(base_input_evolve_upar,
+                                                 OptionsDict("evolve_moments" => OptionsDict("parallel_pressure" => true),
+                                                             "vpa" => OptionsDict("L" => 1.5*vpa_L),
+                                                             "vz" => OptionsDict("L" => 1.5*vpa_L)),
+                                                )
 
         for (base, base_label) ∈ ((base_input_full_f, "full-f"),
                                   (base_input_evolve_density, "split 1"),
@@ -314,7 +329,7 @@ function runtests()
                                   (base_input_evolve_ppar, "split 3"))
 
             test_output_directory = get_MPI_tempdir()
-            base["base_directory"] = test_output_directory
+            base["output"]["base_directory"] = test_output_directory
 
             # Base run, from which tests are restarted
             # Suppress console output while running
@@ -330,31 +345,31 @@ function runtests()
                 # simulation) don't test upar. upar and uz end up with large 'errors'
                 # (~50%), and it is not clear why, but ignore this so test can pass.
                 this_input = deepcopy(restart_test_input_chebyshev)
-                this_input["base_directory"] = test_output_directory
+                this_input["output"]["base_directory"] = test_output_directory
                 this_input["output"]["parallel_io"] = parallel_io
-                run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
+                run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
             end
             if include_moment_kinetic
                 message = "restart split 1 from $base_label$label"
                 @testset "$message" begin
                     this_input = deepcopy(restart_test_input_chebyshev_split_1_moment)
-                    this_input["base_directory"] = test_output_directory
+                    this_input["output"]["base_directory"] = test_output_directory
                     this_input["output"]["parallel_io"] = parallel_io
-                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
+                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
                 end
                 message = "restart split 2 from $base_label$label"
                 @testset "$message" begin
                     this_input = deepcopy(restart_test_input_chebyshev_split_2_moments)
-                    this_input["base_directory"] = test_output_directory
+                    this_input["output"]["base_directory"] = test_output_directory
                     this_input["output"]["parallel_io"] = parallel_io
-                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
+                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
                 end
                 message = "restart split 3 from $base_label$label"
                 @testset "$message" begin
                     this_input = deepcopy(restart_test_input_chebyshev_split_3_moments)
-                    this_input["base_directory"] = test_output_directory
+                    this_input["output"]["base_directory"] = test_output_directory
                     this_input["output"]["parallel_io"] = parallel_io
-                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
+                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
                 end
             end
 
@@ -373,17 +388,21 @@ function runtests()
         # Note: only do 2 steps in 2V/3V mode because it is so slow. Also, linear
         # interpolation used for ion-neutral coupling in 2V/3V case has low accuracy, so
         # use looser tolerance for various things.
-        @long do_tests(", 2V/3V", 1.0e-1, 98, false; tol_3V=0.3, nstep=2, r_ngrid=1,
-                       r_nelement=1, vperp_ngrid=17, vperp_nelement=4, vperp_L=vpa_L,
-                       vpa_ngrid=17, vpa_nelement=8, vzeta_ngrid=17, vzeta_nelement=4,
-                       vzeta_L=vpa_L, vr_ngrid=17, vr_nelement=4, vr_L=vpa_L, vz_ngrid=17,
-                       vz_nelement=8)
+        @long do_tests(", 2V/3V", 1.0e-1, 98, false; tol_3V=0.3,
+                       timestepping=OptionsDict("nstep" => 2),
+                       r=OptionsDict("ngrid" => 1, "nelement" => 1),
+                       vperp=OptionsDict("ngrid" => 17, "nelement" => 4, "L" => vpa_L, "ngrid" => 17),
+                       vpa=OptionsDict("nelement" => 8),
+                       vzeta=OptionsDict("ngrid" => 17, "nelement" => 4, "L" => vpa_L),
+                       vr=OptionsDict("ngrid" => 17, "nelement" => 4, "L" => vpa_L),
+                       vz=OptionsDict("ngrid" => 17, "nelement" => 8),
+                      )
 
         if io_has_parallel(Val(hdf5))
             orig_base_input = deepcopy(base_input)
             # Also test not using parallel_io
             base_input["output"]["parallel_io"] = true
-            base_input["run_name"] *= "_parallel_io"
+            base_input["output"]["run_name"] *= "_parallel_io"
 
             do_tests(", parallel I/O")
 
@@ -391,10 +410,14 @@ function runtests()
             # interpolation used for ion-neutral coupling in 2V/3V case has low accuracy,
             # so use looser tolerance for various things.
             @long do_tests(", 2V/3V, parallel I/O", 2.0e-1, 98, false; tol_3V=0.3,
-                           nstep=2, r_ngrid=1, r_nelement=1, vperp_ngrid=17,
-                           vperp_nelement=4, vperp_L=vpa_L, vpa_ngrid=17, vpa_nelement=8,
-                           vzeta_ngrid=17, vzeta_nelement=4, vzeta_L=vpa_L, vr_ngrid=17,
-                           vr_nelement=4, vr_L=vpa_L, vz_ngrid=17, vz_nelement=8)
+                           timestepping=OptionsDict("nstep" => 2),
+                           r=OptionsDict("ngrid" => 1, "nelement" => 1),
+                           vperp=OptionsDict("ngrid" => 17, "nelement" => 4, "L" => vpa_L, "ngrid" => 17),
+                           vpa=OptionsDict("nelement" => 8),
+                           vzeta=OptionsDict("ngrid" => 17, "nelement" => 4, "L" => vpa_L),
+                           vr=OptionsDict("ngrid" => 17, "nelement" => 4, "L" => vpa_L),
+                           vz=OptionsDict("ngrid" => 17, "nelement" => 8),
+                          )
 
             global base_input = orig_base_input
         end

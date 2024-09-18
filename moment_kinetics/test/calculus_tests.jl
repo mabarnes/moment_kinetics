@@ -2,8 +2,7 @@ module CalculusTests
 
 include("setup.jl")
 
-using moment_kinetics.input_structs: grid_input, advection_input
-using moment_kinetics.coordinates: define_coordinate
+using moment_kinetics.coordinates: define_test_coordinate
 using moment_kinetics.calculus: derivative!, second_derivative!, integral
 using moment_kinetics.calculus: laplacian_derivative!
 
@@ -14,7 +13,7 @@ function runtests()
     @testset "calculus" verbose=use_verbose begin
         println("calculus tests")
         @testset "fundamental theorem of calculus" begin
-            @testset "$discretization $ngrid $nelement" for
+            @testset "$discretization $ngrid $nelement $cheb_option" for
                     (discretization, element_spacing_option, etol, cheb_option) ∈ (("finite_difference", "uniform", 1.0e-15, ""), ("chebyshev_pseudospectral", "uniform", 1.0e-15, "FFT"), ("chebyshev_pseudospectral", "uniform", 2.0e-15, "matrix"), ("chebyshev_pseudospectral", "sqrt", 1.0e-2, "FFT"), ("gausslegendre_pseudospectral", "uniform", 1.0e-14, "")),
                     ngrid ∈ (5,6,7,8,9,10), nelement ∈ (1, 2, 3, 4, 5)
 
@@ -29,24 +28,23 @@ function runtests()
 
                 # define inputs needed for the test
                 L = 6.0
-                bc = "periodic"
-                # fd_option and adv_input not actually used so given values unimportant
+                if discretization == "finite_difference"
+                    bc = "periodic"
+                else
+                    bc = "none"
+                end
                 fd_option = ""
-                adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
-				nrank_per_block = 0 # dummy value
-				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value 
-				input = grid_input("coord", ngrid, nelement,
-                    nelement_local, nrank_per_block, irank, L,
-                    discretization, fd_option, cheb_option, bc, adv_input, comm,
-                    element_spacing_option)
                 # create the coordinate struct 'x'
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; ignore_MPI=true)
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization=discretization,
+                                                     finite_difference_option=fd_option,
+                                                     cheb_option=cheb_option, bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
                 # create array for the function f(x) to be differentiated/integrated
                 f = Array{Float64,1}(undef, x.n)
                 # create array for the derivative df/dx
@@ -80,33 +78,28 @@ function runtests()
                 # define inputs needed for the test
                 L = 6.0
                 bc = "periodic"
-                # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
-                adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                cheb_option = ""
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
-				nrank_per_block = 0 # dummy value
-				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value 
-				element_spacing_option = "uniform" # dummy value
-                input = grid_input("coord", ngrid, nelement,
-                    nelement_local, nrank_per_block, irank, L,
-                    "finite_difference", fd_option, cheb_option, bc, adv_input, comm,
-                    element_spacing_option)
+                element_spacing_option = "uniform" # dummy value
                 # create the coordinate struct 'x'
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; ignore_MPI=true)
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="finite_difference",
+                                                     finite_difference_option=fd_option,
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
 
                 # initialize f and expected df
                 offset = randn(rng)
-                f = @. sinpi(2.0 * x.grid / L) + offset
-                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L)
+                phase = 0.42
+                f = @. sinpi(2.0 * x.grid / L + phase) + offset
+                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L + phase)
 
                 # differentiate f
                 derivative!(df, f, x, spectral)
@@ -114,6 +107,7 @@ function runtests()
                 rtol = 1.e2 / (nelement*(ngrid-1))^4
                 @test isapprox(df, expected_df, rtol=rtol, atol=1.e-15,
                                norm=maxabs_norm)
+                @test df[1] == df[end]
             end
         end
 
@@ -132,33 +126,28 @@ function runtests()
                 # define inputs needed for the test
                 L = 6.0
                 bc = "periodic"
-                # fd_option and adv_input not actually used so given values unimportant
                 fd_option = "fourth_order_centered"
-                adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                cheb_option = ""
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
-				nrank_per_block = 0 # dummy value
-				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value
                 element_spacing_option = "uniform" # dummy value
-				input = grid_input("coord", ngrid, nelement,
-                    nelement_local, nrank_per_block, irank, L,
-                    "finite_difference", fd_option, cheb_option, bc, adv_input, comm,
-                    element_spacing_option)
                 # create the coordinate struct 'x'
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; ignore_MPI=true)
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="finite_difference",
+                                                     finite_difference_option=fd_option,
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
 
                 # initialize f and expected df
                 offset = randn(rng)
-                f = @. sinpi(2.0 * x.grid / L) + offset
-                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L)
+                phase = 0.42
+                f = @. sinpi(2.0 * x.grid / L + phase) + offset
+                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L + phase)
 
                 for advection ∈ (-1.0, 0.0, 1.0)
                     adv_fac = similar(f)
@@ -170,6 +159,7 @@ function runtests()
                     rtol = 1.e2 / (nelement*(ngrid-1))^order
                     @test isapprox(df, expected_df, rtol=rtol, atol=1.e-15,
                                    norm=maxabs_norm)
+                    df[1] == df[end]
                 end
             end
         end
@@ -180,25 +170,19 @@ function runtests()
 
                 # define inputs needed for the test
                 L = 6.0
-                # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
-                adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                cheb_option = ""
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
-				nrank_per_block = 0 # dummy value
-				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value
                 element_spacing_option = "uniform" # dummy value
-				input = grid_input("coord", ngrid, nelement,
-                    nelement_local, nrank_per_block, irank, L,
-                    "finite_difference", fd_option, cheb_option, bc, adv_input, comm,
-                    element_spacing_option)
                 # create the coordinate struct 'x'
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; ignore_MPI=true)
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="finite_difference",
+                                                     finite_difference_option=fd_option,
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -237,24 +221,18 @@ function runtests()
 
                 # define inputs needed for the test
                 L = 6.0
-                # fd_option and adv_input not actually used so given values unimportant
-                adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                cheb_option = ""
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
-				nrank_per_block = 0 # dummy value
-				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value
                 element_spacing_option = "uniform" # dummy value
-				input = grid_input("coord", ngrid, nelement,
-                    nelement_local, nrank_per_block, irank, L,
-                    "finite_difference", fd_option, cheb_option, bc, adv_input, comm,
-                    element_spacing_option)
-               # create the coordinate struct 'x'
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; ignore_MPI=true)
+                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="finite_difference",
+                                                     finite_difference_option=fd_option,
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -292,7 +270,7 @@ function runtests()
         end
 
         @testset "Chebyshev pseudospectral derivatives (4 argument), periodic" verbose=false begin
-            @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
+            @testset "$nelement $ngrid $cheb_option" for (nelement, ngrid, rtol) ∈
                     (
                      (1, 5, 8.e-1),
                      (1, 6, 2.e-1),
@@ -301,13 +279,13 @@ function runtests()
                      (1, 9, 5.e-3),
                      (1, 10, 3.e-3),
                      (1, 11, 1.e-4),
-                     (1, 12, 5.e-6),
+                     (1, 12, 1.e-5),
                      (1, 13, 3.e-6),
-                     (1, 14, 8.e-8),
+                     (1, 14, 1.e-7),
                      (1, 15, 4.e-8),
-                     (1, 16, 8.e-10),
+                     (1, 16, 1.e-8),
                      (1, 17, 4.e-10),
-                     (1, 18, 4.e-12),
+                     (1, 18, 1.e-10),
                      (1, 19, 2.e-12),
                      (1, 20, 2.e-13),
                      (1, 21, 2.e-13),
@@ -327,15 +305,15 @@ function runtests()
                      (2, 4, 2.e-1),
                      (2, 5, 4.e-2),
                      (2, 6, 2.e-2),
-                     (2, 7, 4.e-4),
+                     (2, 7, 1.e-3),
                      (2, 8, 2.e-4),
-                     (2, 9, 4.e-6),
+                     (2, 9, 1.e-5),
                      (2, 10, 2.e-6),
-                     (2, 11, 2.e-8),
+                     (2, 11, 1.e-7),
                      (2, 12, 1.e-8),
-                     (2, 13, 1.e-10),
+                     (2, 13, 1.e-9),
                      (2, 14, 5.e-11),
-                     (2, 15, 4.e-13),
+                     (2, 15, 1.e-12),
                      (2, 16, 2.e-13),
                      (2, 17, 2.e-13),
                      (2, 18, 2.e-13),
@@ -455,28 +433,22 @@ function runtests()
                 # define inputs needed for the test
                 L = 6.0
                 bc = "periodic"
-                # fd_option and adv_input not actually used so given values unimportant
-                fd_option = ""
-                adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
-				nrank_per_block = 0 # dummy value
-				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value
                 element_spacing_option = "uniform"
-				input = grid_input("coord", ngrid, nelement,
-                    nelement_local, nrank_per_block, irank, L,
-                    "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
-                    element_spacing_option)
-                # create the coordinate struct 'x' and info for derivatives, etc.
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; ignore_MPI=true)
+                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="chebyshev_pseudospectral",
+                                                     cheb_option=cheb_option, bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
 
                 offset = randn(rng)
-                f = @. sinpi(2.0 * x.grid / L) + offset
-                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L)
+                phase = 0.42
+                f = @. sinpi(2.0 * x.grid / L + phase) + offset
+                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L + phase)
 
                 # create array for the derivative df/dx
                 df = similar(f)
@@ -486,26 +458,27 @@ function runtests()
 
                 @test isapprox(df, expected_df, rtol=rtol, atol=1.e-14,
                                norm=maxabs_norm)
+                @test df[1] == df[end]
             end
         end
 
         @testset "Chebyshev pseudospectral derivatives upwinding (5 argument), periodic" verbose=false begin
-            @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
+            @testset "$nelement $ngrid $cheb_option" for (nelement, ngrid, rtol) ∈
                     (
                      (1, 5, 8.e-1),
                      (1, 6, 2.e-1),
                      (1, 7, 1.e-1),
-                     (1, 8, 1.e-2),
+                     (1, 8, 5.e-2),
                      (1, 9, 5.e-3),
                      (1, 10, 3.e-3),
                      (1, 11, 1.e-4),
-                     (1, 12, 5.e-6),
+                     (1, 12, 3.e-5),
                      (1, 13, 3.e-6),
-                     (1, 14, 8.e-8),
+                     (1, 14, 4.e-7),
                      (1, 15, 4.e-8),
-                     (1, 16, 8.e-10),
+                     (1, 16, 4.e-9),
                      (1, 17, 4.e-10),
-                     (1, 18, 4.e-12),
+                     (1, 18, 4.e-11),
                      (1, 19, 2.e-12),
                      (1, 20, 2.e-13),
                      (1, 21, 2.e-13),
@@ -523,17 +496,17 @@ function runtests()
                      (1, 33, 2.e-13),
 
                      (2, 4, 2.e-1),
-                     (2, 5, 4.e-2),
+                     (2, 5, 6.e-2),
                      (2, 6, 2.e-2),
-                     (2, 7, 4.e-4),
+                     (2, 7, 2.e-3),
                      (2, 8, 2.e-4),
-                     (2, 9, 4.e-6),
+                     (2, 9, 2.e-5),
                      (2, 10, 2.e-6),
-                     (2, 11, 2.e-8),
+                     (2, 11, 1.e-7),
                      (2, 12, 1.e-8),
-                     (2, 13, 1.e-10),
+                     (2, 13, 1.e-9),
                      (2, 14, 5.e-11),
-                     (2, 15, 4.e-13),
+                     (2, 15, 2.e-12),
                      (2, 16, 2.e-13),
                      (2, 17, 2.e-13),
                      (2, 18, 2.e-13),
@@ -653,28 +626,22 @@ function runtests()
                 # define inputs needed for the test
                 L = 6.0
                 bc = "periodic"
-                # fd_option and adv_input not actually used so given values unimportant
-                fd_option = ""
-                adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
-				nrank_per_block = 0 # dummy value
-				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value
                 element_spacing_option = "uniform"
-				input = grid_input("coord", ngrid, nelement,
-                    nelement_local, nrank_per_block, irank, L,
-                    "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
-                    element_spacing_option)
-                # create the coordinate struct 'x' and info for derivatives, etc.
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; ignore_MPI=true)
+                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="chebyshev_pseudospectral",
+                                                     cheb_option=cheb_option, bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
 
                 offset = randn(rng)
-                f = @. sinpi(2.0 * x.grid / L) + offset
-                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L)
+                phase = 0.42
+                f = @. sinpi(2.0 * x.grid / L + phase) + offset
+                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L + phase)
 
                 # create array for the derivative df/dx
                 df = similar(f)
@@ -688,34 +655,29 @@ function runtests()
 
                     @test isapprox(df, expected_df, rtol=rtol, atol=1.e-12,
                                    norm=maxabs_norm)
+                    @test df[1] == df[end]
                 end
             end
         end
 
         @testset "Chebyshev pseudospectral derivatives (4 argument), polynomials" verbose=false begin
-            @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"), element_spacing_option ∈ ("uniform", "sqrt"),
+            @testset "$nelement $ngrid $bc $element_spacing_option $cheb_option" for
+                    bc ∈ ("constant", "zero"), element_spacing_option ∈ ("uniform", "sqrt"),
                     nelement ∈ (1:5), ngrid ∈ (3:33), cheb_option in ("FFT","matrix")
 
                 # define inputs needed for the test
                 L = 1.0
                 bc = "constant"
-                # fd_option and adv_input not actually used so given values unimportant
-                fd_option = ""
-                adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
-				nrank_per_block = 0 # dummy value
-				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value
-                input = grid_input("coord", ngrid, nelement,
-                    nelement_local, nrank_per_block, irank, L,
-                    "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
-                    element_spacing_option)
-                # create the coordinate struct 'x' and info for derivatives, etc.
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; ignore_MPI=true)
+                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="chebyshev_pseudospectral",
+                                                     cheb_option=cheb_option, bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
@@ -745,29 +707,23 @@ function runtests()
         end
 
         @testset "Chebyshev pseudospectral derivatives upwinding (5 argument), polynomials" verbose=false begin
-            @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"), element_spacing_option ∈ ("uniform", "sqrt"),
+            @testset "$nelement $ngrid $bc $element_spacing_option $cheb_option" for
+                    bc ∈ ("constant", "zero"), element_spacing_option ∈ ("uniform", "sqrt"),
                     nelement ∈ (1:5), ngrid ∈ (3:33), cheb_option in ("FFT","matrix")
 
                 # define inputs needed for the test
                 L = 1.0
                 bc = "constant"
-                # fd_option and adv_input not actually used so given values unimportant
-                fd_option = ""
-                adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
-				nrank_per_block = 0 # dummy value
-				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value
-                input = grid_input("coord", ngrid, nelement,
-                    nelement_local, nrank_per_block, irank, L,
-                    "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
-                    element_spacing_option)
-                # create the coordinate struct 'x' and info for derivatives, etc.
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; ignore_MPI=true)
+                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="chebyshev_pseudospectral",
+                                                     cheb_option=cheb_option, bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
@@ -812,26 +768,26 @@ function runtests()
                      (1, 9, 5.e-3),
                      (1, 10, 3.e-3),
                      (1, 11, 5.e-4),
-                     (1, 12, 5.e-6),
+                     (1, 12, 1.e-5),
                      (1, 13, 3.e-6),
-                     (1, 14, 8.e-8),
+                     (1, 14, 3.e-7),
                      (1, 15, 4.e-8),
-                     (1, 16, 8.e-10),
+                     (1, 16, 4.e-9),
                      (1, 17, 8.e-10),
                      
 
                      (2, 4, 2.e-1),
                      (2, 5, 4.e-2),
                      (2, 6, 2.e-2),
-                     (2, 7, 4.e-4),
+                     (2, 7, 1.e-3),
                      (2, 8, 2.e-4),
-                     (2, 9, 4.e-6),
+                     (2, 9, 1.e-5),
                      (2, 10, 2.e-6),
-                     (2, 11, 2.e-8),
+                     (2, 11, 1.e-7),
                      (2, 12, 1.e-8),
-                     (2, 13, 1.e-10),
+                     (2, 13, 1.e-9),
                      (2, 14, 5.e-11),
-                     (2, 15, 4.e-13),
+                     (2, 15, 2.e-12),
                      (2, 16, 2.e-13),
                      (2, 17, 2.e-13),
                      
@@ -887,29 +843,20 @@ function runtests()
                 # define inputs needed for the test
                 L = 6.0
                 bc = "periodic"
-                # fd_option and adv_input not actually used so given values unimportant
-                fd_option = ""
-                adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                cheb_option = ""
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
-				nrank_per_block = 0 # dummy value
-				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value
-                element_spacing_option = "uniform"
-				input = grid_input("coord", ngrid, nelement,
-                    nelement_local, nrank_per_block, irank, L,
-                    "gausslegendre_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
-                    element_spacing_option)
-                # create the coordinate struct 'x' and info for derivatives, etc.
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; ignore_MPI=true, collision_operator_dim=false)
+                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="gausslegendre_pseudospectral",
+                                                     bc=bc,
+                                                     collision_operator_dim=false)
 
                 offset = randn(rng)
-                f = @. sinpi(2.0 * x.grid / L) + offset
-                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L)
+                phase = 0.42
+                f = @. sinpi(2.0 * x.grid / L + phase) + offset
+                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L + phase)
 
                 # create array for the derivative df/dx
                 df = similar(f)
@@ -919,6 +866,7 @@ function runtests()
 
                 @test isapprox(df, expected_df, rtol=rtol, atol=1.e-14,
                                norm=maxabs_norm)
+                @test df[1] == df[end]
             end
         end
 
@@ -926,31 +874,31 @@ function runtests()
             @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
                     (
                      (1, 5, 8.e-1),
-                     (1, 6, 2.e-1),
+                     (1, 6, 3.e-1),
                      (1, 7, 1.e-1),
-                     (1, 8, 1.e-2),
+                     (1, 8, 2.e-2),
                      (1, 9, 5.e-3),
                      (1, 10, 3.e-3),
                      (1, 11, 8.e-4),
-                     (1, 12, 5.e-6),
+                     (1, 12, 3.e-5),
                      (1, 13, 3.e-6),
-                     (1, 14, 8.e-8),
+                     (1, 14, 5.e-7),
                      (1, 15, 4.e-8),
-                     (1, 16, 8.e-10),
+                     (1, 16, 8.e-9),
                      (1, 17, 8.e-10),
                      
                      (2, 4, 2.e-1),
-                     (2, 5, 4.e-2),
+                     (2, 5, 8.e-2),
                      (2, 6, 2.e-2),
-                     (2, 7, 4.e-4),
+                     (2, 7, 2.e-3),
                      (2, 8, 2.e-4),
-                     (2, 9, 4.e-6),
+                     (2, 9, 2.e-5),
                      (2, 10, 2.e-6),
-                     (2, 11, 2.e-8),
+                     (2, 11, 2.e-7),
                      (2, 12, 1.e-8),
-                     (2, 13, 1.e-10),
+                     (2, 13, 1.e-9),
                      (2, 14, 5.e-11),
-                     (2, 15, 4.e-13),
+                     (2, 15, 5.e-12),
                      (2, 16, 2.e-13),
                      (2, 17, 2.e-13),
                      
@@ -979,7 +927,7 @@ function runtests()
                      (4, 9, 8.e-8),
                      (4, 10, 4.e-9),
                      (4, 11, 5.e-10),
-                     (4, 12, 4.e-12),
+                     (4, 12, 1.e-11),
                      (4, 13, 2.e-13),
                      (4, 14, 2.e-13),
                      (4, 15, 2.e-13),
@@ -989,7 +937,7 @@ function runtests()
                      (5, 3, 2.e-1),
                      (5, 4, 2.e-2),
                      (5, 5, 2.e-3),
-                     (5, 6, 1.e-4),
+                     (5, 6, 2.e-4),
                      (5, 7, 1.e-5),
                      (5, 8, 4.e-7),
                      (5, 9, 2.e-8),
@@ -1006,29 +954,22 @@ function runtests()
                 # define inputs needed for the test
                 L = 6.0
                 bc = "periodic"
-                # fd_option and adv_input not actually used so given values unimportant
-                fd_option = ""
-                adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                cheb_option = ""
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
-				nrank_per_block = 0 # dummy value
-				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value
                 element_spacing_option = "uniform"
-				input = grid_input("coord", ngrid, nelement,
-                    nelement_local, nrank_per_block, irank, L,
-                    "gausslegendre_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
-                    element_spacing_option)
-                # create the coordinate struct 'x' and info for derivatives, etc.
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; ignore_MPI=true, collision_operator_dim=false)
+                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="gausslegendre_pseudospectral",
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
 
                 offset = randn(rng)
-                f = @. sinpi(2.0 * x.grid / L) + offset
-                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L)
+                phase = 0.42
+                f = @. sinpi(2.0 * x.grid / L + phase) + offset
+                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L + phase)
 
                 # create array for the derivative df/dx
                 df = similar(f)
@@ -1042,6 +983,7 @@ function runtests()
 
                     @test isapprox(df, expected_df, rtol=rtol, atol=1.e-12,
                                    norm=maxabs_norm)
+                    @test df[1] == df[end]
                 end
             end
         end
@@ -1053,24 +995,16 @@ function runtests()
                 # define inputs needed for the test
                 L = 1.0
                 bc = "constant"
-                # fd_option and adv_input not actually used so given values unimportant
-                fd_option = ""
-                adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                cheb_option = "" #not used
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
-				nrank_per_block = 0 # dummy value
-				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value
-                input = grid_input("coord", ngrid, nelement,
-                    nelement_local, nrank_per_block, irank, L,
-                    "gausslegendre_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
-                    element_spacing_option)
-                # create the coordinate struct 'x' and info for derivatives, etc.
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; ignore_MPI=true, collision_operator_dim=false)
+                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="gausslegendre_pseudospectral",
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
@@ -1106,24 +1040,16 @@ function runtests()
                 # define inputs needed for the test
                 L = 1.0
                 bc = "constant"
-                # fd_option and adv_input not actually used so given values unimportant
-                fd_option = ""
-                adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                cheb_option = "" # not used
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
-				nrank_per_block = 0 # dummy value
-				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value
-                input = grid_input("coord", ngrid, nelement,
-                    nelement_local, nrank_per_block, irank, L,
-                    "gausslegendre_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
-                    element_spacing_option)
-                # create the coordinate struct 'x' and info for derivatives, etc.
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; ignore_MPI=true, collision_operator_dim=false)
+                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="gausslegendre_pseudospectral",
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
@@ -1159,22 +1085,22 @@ function runtests()
         end
 
         @testset "Chebyshev pseudospectral second derivatives (4 argument), periodic" verbose=false begin
-            @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
+            @testset "$nelement $ngrid $cheb_option" for (nelement, ngrid, rtol) ∈
                     (
                      (1, 5, 8.e-1),
                      (1, 6, 2.e-1),
                      (1, 7, 1.e-1),
-                     (1, 8, 1.e-2),
+                     (1, 8, 4.e-2),
                      (1, 9, 5.e-3),
                      (1, 10, 3.e-3),
                      (1, 11, 2.e-4),
-                     (1, 12, 5.e-6),
-                     (1, 13, 4.e-6),
-                     (1, 14, 1.e-7),
+                     (1, 12, 2.e-4),
+                     (1, 13, 8.e-6),
+                     (1, 14, 4.e-6),
                      (1, 15, 1.e-7),
-                     (1, 16, 2.e-9),
+                     (1, 16, 1.e-7),
                      (1, 17, 1.e-9),
-                     (1, 18, 4.e-12),
+                     (1, 18, 1.e-9),
                      (1, 19, 2.e-12),
                      (1, 20, 2.e-13),
                      (1, 21, 2.e-13),
@@ -1192,15 +1118,15 @@ function runtests()
                      (1, 33, 2.e-13),
 
                      (2, 4, 2.e-1),
-                     (2, 5, 4.e-2),
+                     (2, 5, 8.e-2),
                      (2, 6, 2.e-2),
-                     (2, 7, 4.e-4),
-                     (2, 8, 2.e-4),
-                     (2, 9, 4.e-6),
+                     (2, 7, 8.e-3),
+                     (2, 8, 4.e-4),
+                     (2, 9, 2.e-4),
                      (2, 10, 4.e-6),
-                     (2, 11, 4.e-8),
+                     (2, 11, 2.e-6),
                      (2, 12, 4.e-8),
-                     (2, 13, 2.e-10),
+                     (2, 13, 2.e-8),
                      (2, 14, 2.e-10),
                      (2, 15, 4.e-13),
                      (2, 16, 2.e-13),
@@ -1225,7 +1151,7 @@ function runtests()
                      (3, 3, 4.e-1),
                      (3, 4, 1.e-1),
                      (3, 5, 2.e-2),
-                     (3, 6, 4.e-3),
+                     (3, 6, 8.e-3),
                      (3, 7, 1.e-3),
                      (3, 8, 1.e-4),
                      (3, 9, 1.e-5),
@@ -1288,7 +1214,7 @@ function runtests()
 
                      (5, 3, 4.e-1),
                      (5, 4, 4.e-2),
-                     (5, 5, 4.e-3),
+                     (5, 5, 8.e-3),
                      (5, 6, 1.e-3),
                      (5, 7, 4.e-5),
                      (5, 8, 1.e-5),
@@ -1322,28 +1248,22 @@ function runtests()
                 # define inputs needed for the test
                 L = 6.0
                 bc = "periodic"
-                # fd_option and adv_input not actually used so given values unimportant
-                fd_option = ""
-                adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
-				nrank_per_block = 0 # dummy value
-				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value
                 element_spacing_option = "uniform"
-				input = grid_input("coord", ngrid, nelement,
-                    nelement_local, nrank_per_block, irank, L,
-                    "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
-                    element_spacing_option)
-                # create the coordinate struct 'x' and info for derivatives, etc.
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; ignore_MPI=true)
+                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="chebyshev_pseudospectral",
+                                                     cheb_option=cheb_option, bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
 
                 offset = randn(rng)
-                f = @. sinpi(2.0 * x.grid / L) + offset
-                expected_d2f = @. -4.0 * π^2 / L^2 * sinpi(2.0 * x.grid / L)
+                phase = 0.42
+                f = @. sinpi(2.0 * x.grid / L + phase) + offset
+                expected_d2f = @. -4.0 * π^2 / L^2 * sinpi(2.0 * x.grid / L + phase)
 
                 # create array for the derivative d2f/dx2
                 d2f = similar(f)
@@ -1353,11 +1273,12 @@ function runtests()
 
                 @test isapprox(d2f, expected_d2f, rtol=rtol, atol=1.e-10,
                                norm=maxabs_norm)
+                @test d2f[1] == d2f[end]
             end
         end
         
         @testset "Chebyshev pseudospectral cylindrical laplacian derivatives (4 argument), zero" verbose=false begin
-            @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
+            @testset "$nelement $ngrid $cheb_option" for (nelement, ngrid, rtol) ∈
                     (
                      (4, 7, 2.e-1),
                      (4, 8, 2.e-1),
@@ -1419,24 +1340,17 @@ function runtests()
                 # define inputs needed for the test
                 L = 6.0
                 bc = "zero"
-                # fd_option and adv_input not actually used so given values unimportant
-                fd_option = ""
-                adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
-				nrank_per_block = 0 # dummy value
-				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value
                 element_spacing_option = "uniform"
-				input = grid_input("vperp", ngrid, nelement,
-                    nelement_local, nrank_per_block, irank, L,
-                    "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
-                    element_spacing_option)
-                # create the coordinate struct 'x' and info for derivatives, etc.
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; ignore_MPI=true)
+                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("vperp"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="chebyshev_pseudospectral",
+                                                     cheb_option=cheb_option, bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
 
                 f = @. exp(-x.grid^2)
                 expected_d2f = @. 4.0*(x.grid^2 - 1.0)*exp(-x.grid^2)
@@ -1526,29 +1440,22 @@ function runtests()
                 # define inputs needed for the test
                 L = 6.0
                 bc = "periodic"
-                # fd_option and adv_input not actually used so given values unimportant
-                fd_option = ""
-                adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                cheb_option = ""
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
-				nrank_per_block = 0 # dummy value
-				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value
                 element_spacing_option = "uniform"
-				input = grid_input("coord", ngrid, nelement,
-                    nelement_local, nrank_per_block, irank, L,
-                    "gausslegendre_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
-                    element_spacing_option)
-                # create the coordinate struct 'x' and info for derivatives, etc.
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; ignore_MPI=true, collision_operator_dim=false)
+                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="gausslegendre_pseudospectral",
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
 
                 offset = randn(rng)
-                f = @. sinpi(2.0 * x.grid / L) + offset
-                expected_d2f = @. -4.0 * π^2 / L^2 * sinpi(2.0 * x.grid / L)
+                phase = 0.42
+                f = @. sinpi(2.0 * x.grid / L + phase) + offset
+                expected_d2f = @. -4.0 * π^2 / L^2 * sinpi(2.0 * x.grid / L + phase)
 
                 # create array for the derivative d2f/dx2
                 d2f = similar(f)
@@ -1558,20 +1465,21 @@ function runtests()
 
                 @test isapprox(d2f, expected_d2f, rtol=rtol, atol=1.e-10,
                                norm=maxabs_norm)
+                @test d2f[1] == d2f[end]
             end
         end
         
-    @testset "GaussLegendre pseudospectral cylindrical laplacian derivatives (4 argument), zero" verbose=false begin
+        @testset "GaussLegendre pseudospectral cylindrical laplacian derivatives (4 argument), zero" verbose=false begin
             @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
                     (
-                     (1, 8, 5.e-2),
+                     (1, 8, 1.e-1),
                      (1, 9, 1.e-1),
                      (1, 10, 2.e-1),
-                     (1, 11, 5.e-2),
+                     (1, 11, 6.e-2),
                      (1, 12, 5.e-2),
                      (1, 13, 5.e-2),
                      (1, 14, 5.e-2),
-                     (1, 15, 5.e-3),
+                     (1, 15, 1.e-2),
                      (1, 16, 5.e-2),
                      (1, 17, 5.e-3),
                      
@@ -1633,25 +1541,17 @@ function runtests()
                 # define inputs needed for the test
                 L = 6.0
                 bc = "zero"
-                # fd_option and adv_input not actually used so given values unimportant
-                fd_option = ""
-                adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                cheb_option = ""
-                # create the 'input' struct containing input info needed to create a
-                # coordinate
-                nelement_local = nelement
-				nrank_per_block = 0 # dummy value
-				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value
                 element_spacing_option = "uniform"
-				input = grid_input("vperp", ngrid, nelement,
-                    nelement_local, nrank_per_block, irank, L,
-                    "gausslegendre_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
-                    element_spacing_option)
-                # create the coordinate struct 'x' and info for derivatives, etc.
-                # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-                # errors due to communicators not being fully set up.
-                x, spectral = define_coordinate(input; ignore_MPI=true, collision_operator_dim=false)
+                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("vperp"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="gausslegendre_pseudospectral",
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
 
                 f = @. exp(-x.grid^2)
                 expected_d2f = @. 4.0*(x.grid^2 - 1.0)*exp(-x.grid^2)

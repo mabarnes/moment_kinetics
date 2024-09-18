@@ -53,7 +53,7 @@ function linear_test()
         the_coord = coordinate("foo", n, n, n, 1, 1, 1, 0, 1.0, zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_int, 0), zeros(mk_int, 0),
                                zeros(mk_int, 0), zeros(mk_int, 0), zeros(mk_int, 0, 0),
-                               "", "", "", "", zeros(mk_float, 0), zeros(mk_float, 0),
+                               "", "", "", "", nothing, zeros(mk_float, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
@@ -113,11 +113,12 @@ function linear_test()
         end
 
         nl_solver_params = setup_nonlinear_solve(
-            Dict{String,Any}("nonlinear_solver" =>
-                             Dict{String,Any}("rtol" => 0.0,
-                                              "atol" => atol,
-                                              "linear_restart" => restart,
-                                              "linear_max_restarts" => max_restarts)),
+            true,
+            OptionsDict("nonlinear_solver" =>
+                        OptionsDict("rtol" => 0.0,
+                                    "atol" => atol,
+                                    "linear_restart" => restart,
+                                    "linear_max_restarts" => max_restarts)),
             coords; serial_solve=serial_solve)
 
         newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, v, w, nl_solver_params;
@@ -165,7 +166,7 @@ function nonlinear_test()
         the_coord = coordinate("foo", n, n, n, 1, 1, 1, 0, 1.0, zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_int, 0), zeros(mk_int, 0),
                                zeros(mk_int, 0), zeros(mk_int, 0), zeros(mk_int, 0, 0),
-                               "", "", "", "", zeros(mk_float, 0), zeros(mk_float, 0),
+                               "", "", "", "", nothing, zeros(mk_float, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
@@ -245,12 +246,13 @@ function nonlinear_test()
         end
 
         nl_solver_params = setup_nonlinear_solve(
-            Dict{String,Any}("nonlinear_solver" =>
-                             Dict{String,Any}("rtol" => 0.0,
-                                              "atol" => atol,
-                                              "linear_restart" => restart,
-                                              "linear_max_restarts" => max_restarts,
-                                              "nonlinear_max_iterations" => 100)),
+            true,
+            OptionsDict("nonlinear_solver" =>
+                        OptionsDict("rtol" => 0.0,
+                                    "atol" => atol,
+                                    "linear_restart" => restart,
+                                    "linear_max_restarts" => max_restarts,
+                                    "nonlinear_max_iterations" => 100)),
             coords; serial_solve=serial_solve)
 
         newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, v, w, nl_solver_params;

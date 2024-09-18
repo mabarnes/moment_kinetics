@@ -12,9 +12,9 @@ include("restart_interpolation_inputs.jl")
 run_moment_kinetics(base_input)
 
 if moment_kinetics.file_io.io_has_parallel(Val(moment_kinetics.file_io.hdf5))
-    base_output_file = realpath(joinpath(base_input["base_directory"], base_input["run_name"], string(base_input["run_name"], ".dfns.h5")))
+    base_output_file = realpath(joinpath(base_input["output"]["base_directory"], base_input["output"]["run_name"], string(base_input["output"]["run_name"], ".dfns.h5")))
 else
-    base_output_file = realpath(joinpath(base_input["base_directory"], base_input["run_name"], string(base_input["run_name"], ".dfns.0.h5")))
+    base_output_file = realpath(joinpath(base_input["output"]["base_directory"], base_input["output"]["run_name"], string(base_input["output"]["run_name"], ".dfns.0.h5")))
 end
 
 # Defines the test functions, using variables defined in the *_inputs.jl file

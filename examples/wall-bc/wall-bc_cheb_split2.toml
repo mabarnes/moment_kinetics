@@ -1,64 +1,87 @@
-n_ion_species = 1
-n_neutral_species = 1
-boltzmann_electron_response = true
-#runtime_plots = true
-evolve_moments_density = true
-evolve_moments_parallel_flow = true
-evolve_moments_parallel_pressure = false
-evolve_moments_conservation = true
-T_e = 1.0
-T_wall = 1.0
-initial_density1 = 1.0
-initial_temperature1 = 1.0
-z_IC_option1 = "gaussian"
-z_IC_density_amplitude1 = 0.001
-z_IC_density_phase1 = 0.0
-z_IC_upar_amplitude1 = 1.0
-z_IC_upar_phase1 = 0.0
-z_IC_temperature_amplitude1 = 0.0
-z_IC_temperature_phase1 = 0.0
-vpa_IC_option1 = "gaussian"
-vpa_IC_density_amplitude1 = 1.0
-vpa_IC_density_phase1 = 0.0
-vpa_IC_upar_amplitude1 = 0.0
-vpa_IC_upar_phase1 = 0.0
-vpa_IC_temperature_amplitude1 = 0.0
-vpa_IC_temperature_phase1 = 0.0
-initial_density2 = 1.0
-initial_temperature2 = 1.0
-z_IC_option2 = "gaussian"
-z_IC_density_amplitude2 = 0.001
-z_IC_density_phase2 = 0.0
-z_IC_upar_amplitude2 = -1.0
-z_IC_upar_phase2 = 0.0
-z_IC_temperature_amplitude2 = 0.0
-z_IC_temperature_phase2 = 0.0
-vpa_IC_option2 = "gaussian"
-vpa_IC_density_amplitude2 = 1.0
-vpa_IC_density_phase2 = 0.0
-vpa_IC_upar_amplitude2 = 0.0
-vpa_IC_upar_phase2 = 0.0
-vpa_IC_temperature_amplitude2 = 0.0
-vpa_IC_temperature_phase2 = 0.0
+[reactions]
 charge_exchange_frequency = 0.5
 ionization_frequency = 0.75
-constant_ionization_rate = false
-r_ngrid = 1
-r_nelement = 1
-z_ngrid = 9
-z_nelement = 32
-z_bc = "wall"
-z_discretization = "chebyshev_pseudospectral"
-vpa_ngrid = 9
-vpa_nelement = 64
-vpa_L = 18.0
-vpa_bc = "both_zero"
-vpa_discretization = "chebyshev_pseudospectral"
-vz_ngrid = 9
-vz_nelement = 64
-vz_L = 18.0
-vz_bc = "both_zero"
-vz_discretization = "chebyshev_pseudospectral"
+
+[evolve_moments]
+density = true
+parallel_flow = true
+parallel_pressure = false
+moments_conservation = true
+
+[r]
+ngrid = 1
+nelement = 1
+
+[z]
+ngrid = 9
+nelement = 32
+bc = "wall"
+discretization = "chebyshev_pseudospectral"
+
+[vpa]
+ngrid = 9
+nelement = 64
+L = 18.0
+bc = "both_zero"
+discretization = "chebyshev_pseudospectral"
+
+[vz]
+ngrid = 9
+nelement = 64
+L = 18.0
+bc = "both_zero"
+discretization = "chebyshev_pseudospectral"
+
+[composition]
+n_ion_species = 1
+n_neutral_species = 1
+electron_physics = "boltzmann_electron_response"
+T_e = 1.0
+T_wall = 1.0
+
+[ion_species_1]
+initial_density = 1.0
+initial_temperature = 1.0
+
+[z_IC_ion_species_1]
+initialization_option = "gaussian"
+density_amplitude = 0.001
+density_phase = 0.0
+upar_amplitude = 1.0
+upar_phase = 0.0
+temperature_amplitude = 0.0
+temperature_phase = 0.0
+
+[vpa_IC_ion_species_1]
+initialization_option = "gaussian"
+density_amplitude = 1.0
+density_phase = 0.0
+upar_amplitude = 0.0
+upar_phase = 0.0
+temperature_amplitude = 0.0
+temperature_phase = 0.0
+
+[neutral_species_1]
+initial_density = 1.0
+initial_temperature = 1.0
+
+[z_IC_neutral_species_1]
+initialization_option = "gaussian"
+density_amplitude = 0.001
+density_phase = 0.0
+upar_amplitude = -1.0
+upar_phase = 0.0
+temperature_amplitude = 0.0
+temperature_phase = 0.0
+
+[vz_IC_neutral_species_1]
+initialization_option = "gaussian"
+density_amplitude = 1.0
+density_phase = 0.0
+upar_amplitude = 0.0
+upar_phase = 0.0
+temperature_amplitude = 0.0
+temperature_phase = 0.0
 
 [timestepping]
 nstep = 50000

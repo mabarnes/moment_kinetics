@@ -12,6 +12,7 @@ using ..input_structs: krook_collisions_input, set_defaults_and_check_section!
 using ..reference_parameters: get_reference_collision_frequency_ii,
                               get_reference_collision_frequency_ee,
                               get_reference_collision_frequency_ei
+using ..reference_parameters: setup_reference_parameters
 
 
 """
@@ -23,7 +24,8 @@ use_krook = true
 nuii0 = 1.0
 frequency_option = "manual"
 """
-function setup_krook_collisions_input(toml_input::Dict, reference_params)
+function setup_krook_collisions_input(toml_input::Dict)
+    reference_params = setup_reference_parameters(toml_input)
     # get reference collision frequency
     nuii_krook_default = get_reference_collision_frequency_ii(reference_params)
     nuee_krook_default = get_reference_collision_frequency_ee(reference_params)
@@ -43,6 +45,10 @@ function setup_krook_collisions_input(toml_input::Dict, reference_params)
         input_section["nuii0"] = nuii_krook_default
         input_section["nuee0"] = nuee_krook_default
         input_section["nuei0"] = nuei_krook_default
+    elseif frequency_option == "collisionality_scan"
+        input_section["nuii0"] *= nuii_krook_default
+        input_section["nuee0"] *= nuee_krook_default
+        input_section["nuei0"] *= nuei_krook_default
     elseif frequency_option == "manual" 
         # use the frequency from the input file
         # do nothing
@@ -76,7 +82,7 @@ function get_collision_frequency_ii(collisions, n, vth)
     colk = collisions.krook
     nuii0 = colk.nuii0
     frequency_option = colk.frequency_option
-    if frequency_option == "reference_parameters"
+    if frequency_option ∈ ("reference_parameters", "collisionality_scan")
         return @. nuii0 * n * vth^(-3)
     elseif frequency_option == "manual"
         # Include 0.0*n so that the result gets promoted to an array if n is an array,

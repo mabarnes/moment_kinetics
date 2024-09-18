@@ -30,7 +30,7 @@ using ..looping
 using ..moment_kinetics_input: mk_input
 using ..neutral_vz_advection: update_speed_neutral_vz!
 using ..neutral_z_advection: update_speed_neutral_z!
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions: mk_float, mk_int, OptionsDict
 using ..utils: get_CFL!, get_minimum_CFL_z, get_minimum_CFL_vpa, get_minimum_CFL_neutral_z,
                get_minimum_CFL_neutral_vz, enum_from_string
 using ..vpa_advection: update_speed_vpa!
@@ -66,10 +66,20 @@ const neutral_moment_variables = ("density_neutral", "uz_neutral", "pz_neutral",
                                   "thermal_speed_neutral", "temperature_neutral",
                                   "qz_neutral", "total_energy_neutral",
                                   "total_energy_flux_neutral")
+const ion_source_variables = ("external_source_amplitude", "external_source_density_amplitude",
+                                "external_source_momentum_amplitude", "external_source_pressure_amplitude",
+                                "external_source_controller_integral")
+const neutral_source_variables = ("external_source_neutral_amplitude", "external_source_neutral_density_amplitude",
+                                "external_source_neutral_momentum_amplitude", "external_source_neutral_pressure_amplitude",
+                                "external_source_neutral_controller_integral")
+const electron_source_variables = ("external_source_electron_amplitude", "external_source_electron_density_amplitude",
+                                "external_source_electron_momentum_amplitude", "external_source_electron_pressure_amplitude")
 const all_moment_variables = tuple(em_variables..., ion_moment_variables...,
                                    electron_moment_variables...,
-                                   neutral_moment_variables...)
-
+                                   neutral_moment_variables...,
+                                   ion_source_variables..., 
+                                   electron_source_variables...,
+                                   neutral_source_variables...)
 const ion_dfn_variables = ("f",)
 const electron_dfn_variables = ("f_electron",)
 const neutral_dfn_variables = ("f_neutral",)
@@ -189,7 +199,7 @@ function read_Dict_from_section(file_or_group, section_name; ignore_subsections=
     # Function that can be called recursively to read nested Dicts from sub-groups in
     # the output file
     section_io = get_group(file_or_group, section_name)
-    section = Dict{String,Any}()
+    section = OptionsDict()
 
     for key ∈ get_variable_keys(section_io)
         section[key] = load_variable(section_io, key)
@@ -246,7 +256,9 @@ function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=no
         return nothing, nothing, nothing
     end
 
+    input = OptionsDict()
     ngrid = load_variable(coord_group, "ngrid")
+    input["ngrid"] = ngrid
     n_local = load_variable(coord_group, "n_local")
     n_global = load_variable(coord_group, "n_global")
     grid = load_variable(coord_group, "grid")
@@ -303,30 +315,35 @@ function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=no
             chunk_size = n_local - 1
         end
     end
+    input["nelement"] = nelement_global
+    input["nelement_local"] = nelement_local
     # L = global box length
-    L = load_variable(coord_group, "L")
-    discretization = load_variable(coord_group, "discretization")
-    fd_option = load_variable(coord_group, "fd_option")
+    input["L"] = load_variable(coord_group, "L")
+    input["discretization"] = load_variable(coord_group, "discretization")
+    if "finite_difference_option" ∈ keys(coord_group)
+        input["finite_difference_option"] = load_variable(coord_group, "finite_difference_option")
+    else
+        # Older output file
+        input["finite_difference_option"] = load_variable(coord_group, "fd_option")
+    end
     if "cheb_option" ∈ keys(coord_group)
-        cheb_option = load_variable(coord_group, "cheb_option")
+        input["cheb_option"] = load_variable(coord_group, "cheb_option")
     else
         # Old output file
-        cheb_option = "FFT"
+        input["cheb_option"] = "FFT"
     end
-    bc = load_variable(coord_group, "bc")
+    input["bc"] = load_variable(coord_group, "bc")
     if "element_spacing_option" ∈ keys(coord_group)
-        element_spacing_option = load_variable(coord_group, "element_spacing_option")
+        input["element_spacing_option"] = load_variable(coord_group, "element_spacing_option")
     else
-        element_spacing_option = "uniform"
+        input["element_spacing_option"] = "uniform"
     end
-    # Define input to create coordinate struct
-    input = grid_input(name, ngrid, nelement_global, nelement_local, nrank, irank, L,
-                       discretization, fd_option, cheb_option, bc,
-                       advection_input("default", 0.0, 0.0, 0.0), MPI.COMM_NULL,
-                       element_spacing_option)
 
-    coord, spectral = define_coordinate(input, parallel_io; run_directory=run_directory,
-                                        ignore_MPI=ignore_MPI)
+    coord, spectral = define_coordinate(OptionsDict(name => input), name;
+                                        parallel_io=parallel_io,
+                                        run_directory=run_directory,
+                                        ignore_MPI=ignore_MPI, irank=irank, nrank=nrank,
+                                        comm=MPI.COMM_NULL)
 
     return coord, spectral, chunk_size
 end
@@ -3506,14 +3523,12 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
     else
         dummy_adv_input = advection_input("default", 1.0, 0.0, 0.0)
         dummy_comm = MPI.COMM_NULL
-        dummy_input = grid_input("dummy", 1, 1, 1, 1, 0, 1.0,
-                                 "chebyshev_pseudospectral", "", "", "periodic",
-                                 dummy_adv_input, dummy_comm, "uniform")
-        vzeta, vzeta_spectral = define_coordinate(dummy_input)
+        dummy_input = OptionsDict("dummy" => OptionsDict())
+        vzeta, vzeta_spectral = define_coordinate(dummy_input, "dummy"; ignore_MPI = true)
         vzeta_chunk_size = 1
-        vr, vr_spectral = define_coordinate(dummy_input)
+        vr, vr_spectral = define_coordinate(dummy_input, "dummy"; ignore_MPI = true)
         vr_chunk_size = 1
-        vz, vz_spectral = define_coordinate(dummy_input)
+        vz, vz_spectral = define_coordinate(dummy_input, "dummy"; ignore_MPI = true)
         vz_chunk_size = 1
     end
 
@@ -4336,28 +4351,30 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         dppar_dz = get_z_derivative(run_info, "parallel_pressure")
         dvth_dz = get_z_derivative(run_info, "thermal_speed")
         dqpar_dz = get_z_derivative(run_info, "parallel_heat_flux")
-        if run_info.external_source_settings.ion.active
+        if any(x -> x.active, run_info.external_source_settings.ion)
+            n_sources = length(run_info.external_source_settings.ion)
             external_source_amplitude = get_variable(run_info, "external_source_amplitude")
             if run_info.evolve_density
                 external_source_density_amplitude = get_variable(run_info, "external_source_density_amplitude")
             else
-                external_source_density_amplitude = zeros(0,0,run_info.nt)
+                external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
             end
             if run_info.evolve_upar
                 external_source_momentum_amplitude = get_variable(run_info, "external_source_momentum_amplitude")
             else
-                external_source_momentum_amplitude = zeros(0,0,run_info.nt)
+                external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
             end
             if run_info.evolve_ppar
                 external_source_pressure_amplitude = get_variable(run_info, "external_source_pressure_amplitude")
             else
-                external_source_pressure_amplitude = zeros(0,0,run_info.nt)
+                external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
             end
         else
-            external_source_amplitude = zeros(0,0,run_info.nt)
-            external_source_density_amplitude = zeros(0,0,run_info.nt)
-            external_source_momentum_amplitude = zeros(0,0,run_info.nt)
-            external_source_pressure_amplitude = zeros(0,0,run_info.nt)
+            n_sources = 0
+            external_source_amplitude = zeros(0,0,n_sources,run_info.nt)
+            external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
+            external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
+            external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
         end
 
         nz, nr, nspecies, nt = size(vth)
@@ -4389,10 +4406,10 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                                    dvth_dz=dvth_dz[:,:,:,it],
                                    dqpar_dz=dqpar_dz[:,:,:,it],
                                    vth=vth[:,:,:,it],
-                                   external_source_amplitude=external_source_amplitude[:,:,it],
-                                   external_source_density_amplitude=external_source_density_amplitude[:,:,it],
-                                   external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,it],
-                                   external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,it]),
+                                   external_source_amplitude=external_source_amplitude[:,:,n_sources,it],
+                                   external_source_density_amplitude=external_source_density_amplitude[:,:,n_sources,it],
+                                   external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,n_sources,it],
+                                   external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,n_sources,it]),
                              evolve_density=run_info.evolve_density,
                              evolve_upar=run_info.evolve_upar,
                              evolve_ppar=run_info.evolve_ppar)
@@ -4477,16 +4494,18 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         dppar_dz = get_z_derivative(run_info, "electron_parallel_pressure")
         dvth_dz = get_z_derivative(run_info, "electron_thermal_speed")
         dqpar_dz = get_z_derivative(run_info, "electron_parallel_heat_flux")
-        if run_info.external_source_settings.electron.active
+        if any(x -> x.active, run_info.external_source_settings.electron)
+            n_sources = length(run_info.external_source_settings.electron)
             external_source_amplitude = get_variable(run_info, "external_source_electron_amplitude")
             external_source_density_amplitude = get_variable(run_info, "external_source_electron_density_amplitude")
             external_source_momentum_amplitude = get_variable(run_info, "external_source_electron_momentum_amplitude")
             external_source_pressure_amplitude = get_variable(run_info, "external_source_electron_pressure_amplitude")
         else
-            external_source_amplitude = zeros(0,0,run_info.nt)
-            external_source_density_amplitude = zeros(0,0,run_info.nt)
-            external_source_momentum_amplitude = zeros(0,0,run_info.nt)
-            external_source_pressure_amplitude = zeros(0,0,run_info.nt)
+            n_sources = 0
+            external_source_amplitude = zeros(0,0,n_sources,run_info.nt)
+            external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
+            external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
+            external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
         end
 
         nz, nr, nt = size(vth)
@@ -4510,10 +4529,10 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                                  dppar_dz=dppar_dz[:,:,it],
                                  dqpar_dz=dqpar_dz[:,:,it],
                                  dvth_dz=dvth_dz[:,:,it],
-                                 external_source_amplitude=external_source_amplitude[:,:,it],
-                                 external_source_density_amplitude=external_source_density_amplitude[:,:,it],
-                                 external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,it],
-                                 external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,it]),)
+                                 external_source_amplitude=external_source_amplitude[:,:,:,it],
+                                 external_source_density_amplitude=external_source_density_amplitude[:,:,:,it],
+                                 external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,:,it],
+                                 external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,:,it]),)
             for ir ∈ 1:run_info.r.n
                 @views update_electron_speed_vpa!(advect, density[:,ir,it], upar[:,ir,it],
                                                   ppar[:,ir,it], moments, run_info.vpa.grid,
@@ -4598,28 +4617,30 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         dpz_dz = get_z_derivative(run_info, "pz_neutral")
         dvth_dz = get_z_derivative(run_info, "thermal_speed_neutral")
         dqz_dz = get_z_derivative(run_info, "qz_neutral")
-        if run_info.external_source_settings.neutral.active
+        if any(x -> x.active, run_info.external_source_settings.neutral)
+            n_sources = length(run_info.external_source_settings.neutral)
             external_source_amplitude = get_variable(run_info, "external_source_neutral_amplitude")
             if run_info.evolve_density
                 external_source_density_amplitude = get_variable(run_info, "external_source_neutral_density_amplitude")
             else
-                external_source_density_amplitude = zeros(0,0,run_info.nt)
+                external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
             end
             if run_info.evolve_upar
                 external_source_momentum_amplitude = get_variable(run_info, "external_source_neutral_momentum_amplitude")
             else
-                external_source_momentum_amplitude = zeros(0,0,run_info.nt)
+                external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
             end
             if run_info.evolve_ppar
                 external_source_pressure_amplitude = get_variable(run_info, "external_source_neutral_pressure_amplitude")
             else
-                external_source_pressure_amplitude = zeros(0,0,run_info.nt)
+                external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
             end
         else
-            external_source_amplitude = zeros(0,0,run_info.nt)
-            external_source_density_amplitude = zeros(0,0,run_info.nt)
-            external_source_momentum_amplitude = zeros(0,0,run_info.nt)
-            external_source_pressure_amplitude = zeros(0,0,run_info.nt)
+            n_sources = 0
+            external_source_amplitude = zeros(0,0,n_sources,run_info.nt)
+            external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
+            external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
+            external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
         end
 
         nz, nr, nspecies, nt = size(vth)
@@ -4649,10 +4670,10 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                                        dvth_dz=dvth_dz[:,:,:,it],
                                        dqz_dz=dqz_dz[:,:,:,it],
                                        vth=vth[:,:,:,it],
-                                       external_source_amplitude=external_source_amplitude[:,:,it],
-                                       external_source_density_amplitude=external_source_density_amplitude[:,:,it],
-                                       external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,it],
-                                       external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,it]),
+                                       external_source_amplitude=external_source_amplitude[:,:,n_sources,it],
+                                       external_source_density_amplitude=external_source_density_amplitude[:,:,n_sources,it],
+                                       external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,n_sources,it],
+                                       external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,n_sources,it]),
                              evolve_density=run_info.evolve_density,
                              evolve_upar=run_info.evolve_upar,
                              evolve_ppar=run_info.evolve_ppar)
@@ -5080,14 +5101,19 @@ end
 function construct_global_zr_coords(r_local, z_local; ignore_MPI=true)
 
     function make_global_input(coord_local)
-        return grid_input(coord_local.name, coord_local.ngrid,
-            coord_local.nelement_global, coord_local.nelement_global, 1, 0, coord_local.L,
-            coord_local.discretization, coord_local.fd_option, coord_local.cheb_option, coord_local.bc,
-            coord_local.advection, MPI.COMM_NULL, coord_local.element_spacing_option)
+        return OptionsDict(coord_local.name => OptionsDict("ngrid" => coord_local.ngrid,
+                                                           "nelement" => coord_local.nelement_global,
+                                                           "nelement_local" => coord_local.nelement_global,
+                                                           "L" => coord_local.L,
+                                                           "discretization" => coord_local.discretization,
+                                                           "cheb_option" => coord_local.cheb_option,
+                                                           "bc" => coord_local.bc,
+                                                           "element_spacing_option" => coord_local.element_spacing_option,),
+                          )
     end
 
-    r_global, r_global_spectral = define_coordinate(make_global_input(r_local); ignore_MPI=ignore_MPI)
-    z_global, z_global_spectral = define_coordinate(make_global_input(z_local); ignore_MPI=ignore_MPI)
+    r_global, r_global_spectral = define_coordinate(make_global_input(r_local), "r"; ignore_MPI=ignore_MPI)
+    z_global, z_global_spectral = define_coordinate(make_global_input(z_local), "z"; ignore_MPI=ignore_MPI)
 
     return r_global, r_global_spectral, z_global, z_global_spectral
 end

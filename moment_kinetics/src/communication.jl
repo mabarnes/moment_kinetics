@@ -433,7 +433,7 @@ end
             previous_is_read .= true
             previous_is_written = Array{Bool}(undef, dims)
             previous_is_written .= true
-            return DebugMPISharedArray(array, is_initialized, is_read, is_written,
+            return DebugMPISharedArray(array, accessed, is_initialized, is_read, is_written,
                                        creation_stack_trace, previous_is_read,
                                        previous_is_written)
         end
@@ -544,6 +544,9 @@ end
 end
 
 """
+Type used to declare a shared-memory array. When debugging is not active `MPISharedArray`
+is just an alias for `Array`, but when `@debug_shared_array` is activated, it is instead
+defined as an alias for `DebugMPISharedArray`.
 """
 const MPISharedArray = @debug_shared_array_ifelse(DebugMPISharedArray, Array)
 

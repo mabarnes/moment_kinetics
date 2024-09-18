@@ -36,11 +36,11 @@ end
     elementwise_derivative!(coord, f, adv_fac, not_spectral::finite_difference_info)
 
 Calculate the derivative of f using finite differences, with particular scheme
-specified by coord.fd_option; result stored in coord.scratch_2d.
+specified by coord.finite_difference_option; result stored in coord.scratch_2d.
 """
 function elementwise_derivative!(coord, f, adv_fac, not_spectral::finite_difference_info)
     return derivative_finite_difference!(coord.scratch_2d, f, coord.cell_width, adv_fac,
-        coord.bc, coord.fd_option, coord.igrid, coord.ielement)
+        coord.bc, coord.finite_difference_option, coord.igrid, coord.ielement)
 end
 
 """
@@ -79,18 +79,19 @@ end
 
 """
 """
-function derivative_finite_difference!(df, f, del, adv_fac, bc, fd_option, igrid, ielement)
-	if fd_option == "second_order_upwind"
+function derivative_finite_difference!(df, f, del, adv_fac, bc, finite_difference_option,
+                                       igrid, ielement)
+	if finite_difference_option == "second_order_upwind"
 		upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
-	elseif fd_option == "third_order_upwind"
+	elseif finite_difference_option == "third_order_upwind"
 		upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
-	elseif fd_option == "fourth_order_upwind"
+	elseif finite_difference_option == "fourth_order_upwind"
 		upwind_fourth_order!(df, f, del, bc, igrid, ielement)
-	elseif fd_option == "second_order_centered"
+	elseif finite_difference_option == "second_order_centered"
 		centered_second_order!(df, f, del, bc, igrid, ielement)
-	elseif fd_option == "fourth_order_centered"
+	elseif finite_difference_option == "fourth_order_centered"
 		centered_fourth_order!(df, f, del, bc, igrid, ielement)
-	elseif fd_option == "first_order_upwind"
+	elseif finite_difference_option == "first_order_upwind"
 		upwind_first_order!(df, f, del, adv_fac, bc, igrid, ielement)
 	end
 	# have not filled df array values for the first grid point in each element
@@ -110,10 +111,11 @@ end
 
 """
 """
-function derivative_finite_difference!(df, f, del, bc, fd_option, igrid, ielement)
-	if fd_option == "fourth_order_centered"
+function derivative_finite_difference!(df, f, del, bc, finite_difference_option, igrid,
+                                       ielement)
+	if finite_difference_option == "fourth_order_centered"
 		centered_fourth_order!(df, f, del, bc, igrid, ielement)
-	elseif fd_option == "second_order_centered"
+	elseif finite_difference_option == "second_order_centered"
 		centered_second_order!(df, f, del, bc, igrid, ielement)
 	end
 	return nothing

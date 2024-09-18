@@ -13,10 +13,13 @@ using moment_kinetics
 module MKTestUtilities
 
 export use_verbose, force_optional_dependencies, @long, quietoutput, get_MPI_tempdir,
-       global_rank, global_size, maxabs_norm, elementwise_isapprox, @testset_skip
+       global_rank, global_size, maxabs_norm, elementwise_isapprox, @testset_skip,
+       recursive_merge, OptionsDict
 
 using moment_kinetics.communication: comm_world, global_rank, global_size
 using moment_kinetics.command_line_options: get_options
+using moment_kinetics.type_definitions: OptionsDict
+using moment_kinetics.utils: recursive_merge
 
 using MPI
 

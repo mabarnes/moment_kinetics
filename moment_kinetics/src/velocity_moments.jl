@@ -138,39 +138,40 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
 
     entropy_production = allocate_shared_float(nz, nr, n_species)
 
-    if ion_source_settings.active
-        external_source_amplitude = allocate_shared_float(nz, nr)
+    n_sources = length(ion_source_settings)
+    if any(x -> x.active, ion_source_settings)
+        external_source_amplitude = allocate_shared_float(nz, nr, n_sources)
         if evolve_density
-            external_source_density_amplitude = allocate_shared_float(nz, nr)
+            external_source_density_amplitude = allocate_shared_float(nz, nr, n_sources)
         else
-            external_source_density_amplitude = allocate_shared_float(1, 1)
+            external_source_density_amplitude = allocate_shared_float(1, 1, n_sources)
         end
         if evolve_upar
-            external_source_momentum_amplitude = allocate_shared_float(nz, nr)
+            external_source_momentum_amplitude = allocate_shared_float(nz, nr, n_sources)
         else
-            external_source_momentum_amplitude = allocate_shared_float(1, 1)
+            external_source_momentum_amplitude = allocate_shared_float(1, 1, n_sources)
         end
         if evolve_ppar
-            external_source_pressure_amplitude = allocate_shared_float(nz, nr)
+            external_source_pressure_amplitude = allocate_shared_float(nz, nr, n_sources)
         else
-            external_source_pressure_amplitude = allocate_shared_float(1, 1)
+            external_source_pressure_amplitude = allocate_shared_float(1, 1, n_sources)
         end
-        if ion_source_settings.PI_density_controller_I != 0.0 &&
-                ion_source_settings.source_type ∈ ("density_profile_control", "density_midpoint_control")
-            if ion_source_settings.source_type == "density_profile_control"
-                external_source_controller_integral = allocate_shared_float(nz, nr)
+        if any(x -> x.PI_density_controller_I != 0.0 && x.source_type ∈ 
+                    ("density_profile_control", "density_midpoint_control"), ion_source_settings)
+            if any(x -> x.source_type == "density_profile_control", ion_source_settings)
+                external_source_controller_integral = allocate_shared_float(nz, nr, n_sources)
             else
-                external_source_controller_integral = allocate_shared_float(1, 1)
+                external_source_controller_integral = allocate_shared_float(1, 1, n_sources)
             end
         else
-            external_source_controller_integral = allocate_shared_float(1, 1)
+            external_source_controller_integral = allocate_shared_float(1, 1, n_sources)
         end
     else
-        external_source_amplitude = allocate_shared_float(1, 1)
-        external_source_density_amplitude = allocate_shared_float(1, 1)
-        external_source_momentum_amplitude = allocate_shared_float(1, 1)
-        external_source_pressure_amplitude = allocate_shared_float(1, 1)
-        external_source_controller_integral = allocate_shared_float(1, 1)
+        external_source_amplitude = allocate_shared_float(1, 1, n_sources)
+        external_source_density_amplitude = allocate_shared_float(1, 1, n_sources)
+        external_source_momentum_amplitude = allocate_shared_float(1, 1, n_sources)
+        external_source_pressure_amplitude = allocate_shared_float(1, 1, n_sources)
+        external_source_controller_integral = allocate_shared_float(1, 1, n_sources)
     end
 
     if evolve_density || evolve_upar || evolve_ppar
@@ -199,7 +200,7 @@ end
 """
 create a moment struct containing information about the electron moments
 """
-function create_moments_electron(nz, nr, electron_model, num_diss_params)
+function create_moments_electron(nz, nr, electron_model, num_diss_params, n_sources)
     # allocate array used for the particle density
     density = allocate_shared_float(nz, nr)
     # initialise Bool variable that indicates if the density is updated for each species
@@ -222,11 +223,11 @@ function create_moments_electron(nz, nr, electron_model, num_diss_params)
     parallel_heat_flux_updated = Ref(false)
     # allocate array used for the election-ion parallel friction force
     parallel_friction_force = allocate_shared_float(nz, nr)
-    # allocate arrays used for external sources
-    external_source_amplitude = allocate_shared_float(nz, nr)
-    external_source_density_amplitude = allocate_shared_float(nz, nr)
-    external_source_momentum_amplitude = allocate_shared_float(nz, nr)
-    external_source_pressure_amplitude = allocate_shared_float(nz, nr)
+    # allocate arrays used for external sources (third index is for the different sources)
+    external_source_amplitude = allocate_shared_float(nz, nr, n_sources)
+    external_source_density_amplitude = allocate_shared_float(nz, nr, n_sources)
+    external_source_momentum_amplitude = allocate_shared_float(nz, nr, n_sources)
+    external_source_pressure_amplitude = allocate_shared_float(nz, nr, n_sources)
     # allocate array used for the thermal speed
     thermal_speed = allocate_shared_float(nz, nr)
     # if evolving the electron pdf, it will be a function of the vth-normalised peculiar velocity
@@ -363,39 +364,40 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
         dvth_dz = nothing
     end
 
-    if neutral_source_settings.active
-        external_source_amplitude = allocate_shared_float(nz, nr)
+    n_sources = length(neutral_source_settings)
+    if any(x -> x.active, neutral_source_settings)
+        external_source_amplitude = allocate_shared_float(nz, nr, n_sources)
         if evolve_density
-            external_source_density_amplitude = allocate_shared_float(nz, nr)
+            external_source_density_amplitude = allocate_shared_float(nz, nr, n_sources)
         else
-            external_source_density_amplitude = allocate_shared_float(1, 1)
+            external_source_density_amplitude = allocate_shared_float(1, 1, n_sources)
         end
         if evolve_upar
-            external_source_momentum_amplitude = allocate_shared_float(nz, nr)
+            external_source_momentum_amplitude = allocate_shared_float(nz, nr, n_sources)
         else
-            external_source_momentum_amplitude = allocate_shared_float(1, 1)
+            external_source_momentum_amplitude = allocate_shared_float(1, 1, n_sources)
         end
         if evolve_ppar
-            external_source_pressure_amplitude = allocate_shared_float(nz, nr)
+            external_source_pressure_amplitude = allocate_shared_float(nz, nr, n_sources)
         else
-            external_source_pressure_amplitude = allocate_shared_float(1, 1)
+            external_source_pressure_amplitude = allocate_shared_float(1, 1, n_sources)
         end
-        if neutral_source_settings.PI_density_controller_I != 0.0 &&
-                neutral_source_settings.source_type ∈ ("density_profile_control", "density_midpoint_control")
-            if neutral_source_settings.source_type == "density_profile_control"
-                external_source_controller_integral = allocate_shared_float(nz, nr)
+        if any(x -> x.PI_density_controller_I != 0.0 && x.source_type ∈ 
+                    ("density_profile_control", "density_midpoint_control"), neutral_source_settings)
+            if any(x -> x.source_type == "density_profile_control", neutral_source_settings)
+                external_source_controller_integral = allocate_shared_float(nz, nr, n_sources)
             else
-                external_source_controller_integral = allocate_shared_float(1, 1)
+                external_source_controller_integral = allocate_shared_float(1, 1, n_sources)
             end
         else
-            external_source_controller_integral = allocate_shared_float(1, 1)
+            external_source_controller_integral = allocate_shared_float(1, 1, n_sources)
         end
     else
-        external_source_amplitude = allocate_shared_float(1, 1)
-        external_source_density_amplitude = allocate_shared_float(1, 1)
-        external_source_momentum_amplitude = allocate_shared_float(1, 1)
-        external_source_pressure_amplitude = allocate_shared_float(1, 1)
-        external_source_controller_integral = allocate_shared_float(1, 1)
+        external_source_amplitude = allocate_shared_float(1, 1, n_sources)
+        external_source_density_amplitude = allocate_shared_float(1, 1, n_sources)
+        external_source_momentum_amplitude = allocate_shared_float(1, 1, n_sources)
+        external_source_pressure_amplitude = allocate_shared_float(1, 1, n_sources)
+        external_source_controller_integral = allocate_shared_float(1, 1, n_sources)
     end
 
     if evolve_density || evolve_upar || evolve_ppar
