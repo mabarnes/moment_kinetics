@@ -921,18 +921,20 @@ function external_ion_source!(pdf, fvec, moments, ion_source, index, vperp, vpa,
 end
 
 """
-    total_external_electron_sources!(pdf, fvec, moments, electron_sources, vperp, vpa, dt, scratch_dummy)
+    total_external_electron_sources!(pdf_out, pdf_in, electron_density, electron_upar,
+                                     moments, composition, electron_sources, vperp,
+                                     vpa, dt, ir)
 
 Contribute all of the electron sources to the electron pdf, one by one.
 """
 function total_external_electron_sources!(pdf_out, pdf_in, electron_density, electron_upar,
                                           moments, composition, electron_sources, vperp,
-                                          vpa, dt)
+                                          vpa, dt, ir)
     for index ∈ eachindex(electron_sources)
         if electron_sources[index].active
             external_electron_source!(pdf_out, pdf_in, electron_density, electron_upar,
                                       moments, composition, electron_sources[index], index,
-                                      vperp, vpa, dt)
+                                      vperp, vpa, dt, ir)
         end
     end
     return nothing
@@ -941,7 +943,7 @@ end
 """
     external_electron_source!(pdf_out, pdf_in, electron_density, electron_upar,
                               moments, composition, electron_source, index, vperp,
-                              vpa, dt)
+                              vpa, dt, ir)
 
 Add external source term to the electron kinetic equation.
 
@@ -950,7 +952,7 @@ Note that this function operates on a single point in `r`, given by `ir`, and `p
 """
 function external_electron_source!(pdf_out, pdf_in, electron_density, electron_upar,
                                    moments, composition, electron_source, index,
-                                   vperp, vpa, dt)
+                                   vperp, vpa, dt, ir)
     begin_r_z_vperp_region()
 
     me_over_mi = composition.me_over_mi

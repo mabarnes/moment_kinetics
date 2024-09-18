@@ -25,8 +25,8 @@ using moment_kinetics.electron_vpa_advection: electron_vpa_advection!,
 using moment_kinetics.electron_z_advection: electron_z_advection!,
                                             update_electron_speed_z!,
                                             add_electron_z_advection_to_Jacobian!
-using moment_kinetics.external_sources: external_electron_source!,
-                                        add_external_electron_source_to_Jacobian!
+using moment_kinetics.external_sources: total_external_electron_sources!,
+                                        add_total_external_electron_source_to_Jacobian!
 using moment_kinetics.krook_collisions: electron_krook_collisions!,
                                         add_electron_krook_collisions_to_Jacobian!
 using moment_kinetics.looping
@@ -54,122 +54,135 @@ zero = 1.0e-14
 # * For `z_bc = "periodic"`, the Jacobian matrices (by design) do not account for the
 #   periodicity. This should be fine when they are used as preconditioners, but does
 #   introduce errors at the periodic boundaries which would complicate testing.
-test_input = Dict("run_name" => "jacobian_matrix",
-                  "n_ion_species" => 1,
-                  "n_neutral_species" => 1,
-                  "electron_physics" => "kinetic_electrons",
-                  "evolve_moments_density" => true,
-                  "evolve_moments_parallel_flow" => true,
-                  "evolve_moments_parallel_pressure" => true,
-                  "evolve_moments_conservation" => true,
-                  "recycling_fraction" => 0.5,
-                  "T_e" => 1.0,
-                  "T_wall" => 0.1,
-                  "initial_density1" => 1.0,
-                  "initial_temperature1" => 1.0,
-                  "z_IC_option1" => "sinusoid",
-                  "z_IC_density_amplitude1" => 0.1,
-                  "z_IC_density_phase1" => mk_float(π),
-                  "z_IC_upar_amplitude1" => 0.1,
-                  "z_IC_upar_phase1" => mk_float(π),
-                  "z_IC_temperature_amplitude1" => 0.1,
-                  "z_IC_temperature_phase1" => mk_float(π),
-                  "vpa_IC_option1" => "gaussian",
-                  "vpa_IC_density_amplitude1" => 1.0,
-                  "vpa_IC_density_phase1" => 0.0,
-                  "vpa_IC_upar_amplitude1" => 0.0,
-                  "vpa_IC_upar_phase1" => 0.0,
-                  "vpa_IC_temperature_amplitude1" => 0.0,
-                  "vpa_IC_temperature_phase1" => 0.0,
-                  "initial_density2" => 1.0,
-                  "initial_temperature2" => 1.0,
-                  "z_IC_option2" => "sinusoid",
-                  "z_IC_density_amplitude2" => 0.001,
-                  "z_IC_density_phase2" => mk_float(π),
-                  "z_IC_upar_amplitude2" => 0.0,
-                  "z_IC_upar_phase2" => mk_float(π),
-                  "z_IC_temperature_amplitude2" => 0.0,
-                  "z_IC_temperature_phase2" => mk_float(π),
-                  "vpa_IC_option2" => "gaussian",
-                  "vpa_IC_density_amplitude2" => 1.0,
-                  "vpa_IC_density_phase2" => 0.0,
-                  "vpa_IC_upar_amplitude2" => 0.0,
-                  "vpa_IC_upar_phase2" => 0.0,
-                  "vpa_IC_temperature_amplitude2" => 0.0,
-                  "vpa_IC_temperature_phase2" => 0.0,
-                  "charge_exchange_frequency" => 0.75,
-                  "ionization_frequency" => 0.0,
-                  "constant_ionization_rate" => false,
-                  "r_ngrid" => 1,
-                  "r_nelement" => 1,
-                  "z_ngrid" => 9,
-                  "z_nelement" => 16,
-                  "z_bc" => "constant",
-                  "z_discretization" => "gausslegendre_pseudospectral",
-                  "vpa_ngrid" => 6,
-                  "vpa_nelement" => 31,
-                  "vpa_L" => 12.0,
-                  "vpa_bc" => "zero",
-                  "vpa_discretization" => "gausslegendre_pseudospectral",
-                  "vpa_element_spacing_option" => "coarse_tails",
-                  "vz_ngrid" => 6,
-                  "vz_nelement" => 31,
-                  "vz_L" => 12.0,
-                  "vz_bc" => "zero",
-                  "vz_discretization" => "gausslegendre_pseudospectral",
-                  "vz_element_spacing_option" => "coarse_tails",
-                  "timestepping" => Dict{String,Any}("type" => "KennedyCarpenterARK324",
-                                                     "implicit_electron_advance" => false,
-                                                     "implicit_electron_ppar" => true,
-                                                     "implicit_ion_advance" => false,
-                                                     "implicit_vpa_advection" => false,
-                                                     "nstep" => 1,
-                                                     "dt" => ion_dt,
-                                                     "minimum_dt" => 1.0e-7,
-                                                     "rtol" => 1.0e-4,
-                                                     "max_increase_factor_near_last_fail" => 1.001,
-                                                     "last_fail_proximity_factor" => 1.1,
-                                                     "max_increase_factor" => 1.05,
-                                                     "nwrite" => 10000,
-                                                     "nwrite_dfns" => 10000,
-                                                     "steady_state_residual" => true,
-                                                     "converged_residual_value" => 1.0e-3,
-                                                    ),
-                  "electron_timestepping" => Dict{String,Any}("nstep" => 1,
-                                                              "dt" => dt,
-                                                              "maximum_dt" => 1.0,
-                                                              "nwrite" => 10000,
-                                                              "nwrite_dfns" => 100000,
-                                                              "type" => "Fekete4(3)",
-                                                              "rtol" => 1.0e-6,
-                                                              "atol" => 1.0e-14,
-                                                              "minimum_dt" => 1.0e-10,
-                                                              "initialization_residual_value" => 2.5,
-                                                              "converged_residual_value" => 1.0e-2,
-                                                              "constraint_forcing_rate" => 2.321,
-                                                             ),
-                  "nonlinear_solver" => Dict{String,Any}("nonlinear_max_iterations" => 100,
-                                                         "rtol" => 1.0e-5,
-                                                         "atol" => 1.0e-15,
-                                                         "preconditioner_update_interval" => 1,
+test_input = OptionsDict("output" => OptionsDict("run_name" => "jacobian_matrix",
+                                                ),
+                         "composition" => OptionsDict("n_ion_species" => 1,
+                                                      "n_neutral_species" => 1,
+                                                      "electron_physics" => "kinetic_electrons",
+                                                      "recycling_fraction" => 0.5,
+                                                      "T_e" => 1.0,
+                                                      "T_wall" => 0.1,
+                                                     ),
+                         "evolve_moments" => OptionsDict("density" => true,
+                                                         "parallel_flow" => true,
+                                                         "parallel_pressure" => true,
+                                                         "moments_conservation" => true,
                                                         ),
-                  "ion_numerical_dissipation" => Dict{String,Any}("vpa_dissipation_coefficient" => 1.0e0,
-                                                                  "force_minimum_pdf_value" => 0.0,
-                                                                 ),
-                  "electron_numerical_dissipation" => Dict{String,Any}("vpa_dissipation_coefficient" => 2.0,
-                                                                       "force_minimum_pdf_value" => 0.0,
-                                                                      ),
-                  "neutral_numerical_dissipation" => Dict{String,Any}("vz_dissipation_coefficient" => 1.0e-1,
-                                                                      "force_minimum_pdf_value" => 0.0,
-                                                                     ),
-                  "ion_source" => Dict{String,Any}("active" => true,
-                                                   "z_profile" => "gaussian",
-                                                   "z_width" => 0.125,
-                                                   "source_strength" => 0.1,
-                                                   "source_T" => 2.0,
-                                                  ),
-                  "krook_collisions" => Dict{String,Any}("use_krook" => true),
-                 )
+                         "ion_species_1" => OptionsDict("initial_density" => 1.0,
+                                                        "initial_temperature" => 1.0,
+                                                       ),
+                         "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
+                                                             "density_amplitude" => 0.1,
+                                                             "density_phase" => mk_float(π),
+                                                             "upar_amplitude" => 0.1,
+                                                             "upar_phase" => mk_float(π),
+                                                             "temperature_amplitude" => 0.1,
+                                                             "temperature_phase" => mk_float(π),
+                                                            ),
+                         "vpa_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                               "density_amplitude" => 1.0,
+                                                               "density_phase" => 0.0,
+                                                               "upar_amplitude" => 0.0,
+                                                               "upar_phase" => 0.0,
+                                                               "temperature_amplitude" => 0.0,
+                                                               "temperature_phase" => 0.0,
+                                                              ),
+                         "neutral_species_1" => OptionsDict("initial_density" => 1.0,
+                                                            "initial_temperature" => 1.0,
+                                                           ),
+                         "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "sinusoid",
+                                                                 "density_amplitude" => 0.001,
+                                                                 "density_phase" => mk_float(π),
+                                                                 "upar_amplitude" => 0.0,
+                                                                 "upar_phase" => mk_float(π),
+                                                                 "temperature_amplitude" => 0.0,
+                                                                 "temperature_phase" => mk_float(π),
+                                                                ),
+                         "vz_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                                   "density_amplitude" => 1.0,
+                                                                   "density_phase" => 0.0,
+                                                                   "upar_amplitude" => 0.0,
+                                                                   "upar_phase" => 0.0,
+                                                                   "temperature_amplitude" => 0.0,
+                                                                   "temperature_phase" => 0.0,
+                                                                  ),
+                         "reactions" => OptionsDict("charge_exchange_frequency" => 0.75,
+                                                    "ionization_frequency" => 0.0,
+                                                   ),
+                         "r" => OptionsDict("ngrid" => 1,
+                                            "nelement" => 1,
+                                           ),
+                         "z" => OptionsDict("ngrid" => 9,
+                                            "nelement" => 16,
+                                            "bc" => "constant",
+                                            "discretization" => "gausslegendre_pseudospectral",
+                                           ),
+                         "vpa" => OptionsDict("ngrid" => 6,
+                                              "nelement" => 31,
+                                              "L" => 12.0,
+                                              "bc" => "zero",
+                                              "discretization" => "gausslegendre_pseudospectral",
+                                              "element_spacing_option" => "coarse_tails",
+                                             ),
+                         "vz" => OptionsDict("ngrid" => 6,
+                                             "nelement" => 31,
+                                             "L" => 12.0,
+                                             "bc" => "zero",
+                                             "discretization" => "gausslegendre_pseudospectral",
+                                             "element_spacing_option" => "coarse_tails",
+                                            ),
+                         "timestepping" => Dict{String,Any}("type" => "KennedyCarpenterARK324",
+                                                            "implicit_electron_advance" => false,
+                                                            "implicit_electron_ppar" => true,
+                                                            "implicit_ion_advance" => false,
+                                                            "implicit_vpa_advection" => false,
+                                                            "nstep" => 1,
+                                                            "dt" => ion_dt,
+                                                            "minimum_dt" => 1.0e-7,
+                                                            "rtol" => 1.0e-4,
+                                                            "max_increase_factor_near_last_fail" => 1.001,
+                                                            "last_fail_proximity_factor" => 1.1,
+                                                            "max_increase_factor" => 1.05,
+                                                            "nwrite" => 10000,
+                                                            "nwrite_dfns" => 10000,
+                                                            "steady_state_residual" => true,
+                                                            "converged_residual_value" => 1.0e-3,
+                                                           ),
+                         "electron_timestepping" => Dict{String,Any}("nstep" => 1,
+                                                                     "dt" => dt,
+                                                                     "maximum_dt" => 1.0,
+                                                                     "nwrite" => 10000,
+                                                                     "nwrite_dfns" => 100000,
+                                                                     "type" => "Fekete4(3)",
+                                                                     "rtol" => 1.0e-6,
+                                                                     "atol" => 1.0e-14,
+                                                                     "minimum_dt" => 1.0e-10,
+                                                                     "initialization_residual_value" => 2.5,
+                                                                     "converged_residual_value" => 1.0e-2,
+                                                                     "constraint_forcing_rate" => 2.321,
+                                                                    ),
+                         "nonlinear_solver" => Dict{String,Any}("nonlinear_max_iterations" => 100,
+                                                                "rtol" => 1.0e-5,
+                                                                "atol" => 1.0e-15,
+                                                                "preconditioner_update_interval" => 1,
+                                                               ),
+                         "ion_numerical_dissipation" => Dict{String,Any}("vpa_dissipation_coefficient" => 1.0e0,
+                                                                         "force_minimum_pdf_value" => 0.0,
+                                                                        ),
+                         "electron_numerical_dissipation" => Dict{String,Any}("vpa_dissipation_coefficient" => 2.0,
+                                                                              "force_minimum_pdf_value" => 0.0,
+                                                                             ),
+                         "neutral_numerical_dissipation" => Dict{String,Any}("vz_dissipation_coefficient" => 1.0e-1,
+                                                                             "force_minimum_pdf_value" => 0.0,
+                                                                            ),
+                         "ion_source_1" => Dict{String,Any}("active" => true,
+                                                            "z_profile" => "gaussian",
+                                                            "z_width" => 0.125,
+                                                            "source_strength" => 0.1,
+                                                            "source_T" => 2.0,
+                                                           ),
+                         "krook_collisions" => Dict{String,Any}("use_krook" => true),
+                        )
 
 function get_mk_state(test_input)
     mk_state = nothing
@@ -211,7 +224,7 @@ end
 # error (∼epsilon^2) could be multiplied by ∼vth*vpa.L/2∼sqrt(2)*60*6≈500.
 function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
     test_input = deepcopy(test_input)
-    test_input["run_name"] *= "_electron_z_advection"
+    test_input["output"]["run_name"] *= "_electron_z_advection"
     println("    electron_z_advection")
 
     @testset "electron_z_advection" begin
@@ -439,7 +452,7 @@ end
 
 function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
     test_input = deepcopy(test_input)
-    test_input["run_name"] *= "_electron_vpa_advection"
+    test_input["output"]["run_name"] *= "_electron_vpa_advection"
     println("    electron_vpa_advection")
 
     @testset "electron_vpa_advection" begin
@@ -707,7 +720,7 @@ end
 
 function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilon)^2)
     test_input = deepcopy(test_input)
-    test_input["run_name"] *= "_contribution_from_electron_pdf_term"
+    test_input["output"]["run_name"] *= "_contribution_from_electron_pdf_term"
     println("    contribution_from_electron_pdf_term")
 
     @testset "contribution_from_electron_pdf_term" begin
@@ -961,7 +974,7 @@ end
 
 function test_electron_dissipation_term(test_input; rtol=(3.0e0*epsilon)^2)
     test_input = deepcopy(test_input)
-    test_input["run_name"] *= "_electron_dissipation_term"
+    test_input["output"]["run_name"] *= "_electron_dissipation_term"
     println("    electron_dissipation_term")
 
     @testset "electron_dissipation_term" begin
@@ -1193,7 +1206,7 @@ end
 
 function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
     test_input = deepcopy(test_input)
-    test_input["run_name"] *= "_electron_krook_collisions"
+    test_input["output"]["run_name"] *= "_electron_krook_collisions"
     println("    electron_krook_collisions")
 
     @testset "electron_krook_collisions" begin
@@ -1431,7 +1444,7 @@ end
 
 function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
     test_input = deepcopy(test_input)
-    test_input["run_name"] *= "_external_electron_source"
+    test_input["output"]["run_name"] *= "_external_electron_source"
     println("    external_electron_source")
 
     @testset "external_electron_source" begin
@@ -1513,9 +1526,9 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
             end
         end
 
-        add_external_electron_source_to_Jacobian!(
-            jacobian_matrix, f, moments, me, z_speed, external_source_settings, z, vperp,
-            vpa, dt, ir; ppar_offset=pdf_size)
+        add_total_external_electron_source_to_Jacobian!(
+            jacobian_matrix, f, moments, me, z_speed, external_source_settings.electron,
+            z, vperp, vpa, dt, ir; ppar_offset=pdf_size)
 
         function residual_func!(residual, this_f, this_p)
             begin_z_region()
@@ -1544,9 +1557,10 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual[ivpa,ivperp,iz] = f[ivpa,ivperp,iz]
             end
-            external_electron_source!(residual, this_f, dens, upar, moments, composition,
-                                      external_source_settings.electron, vperp, vpa, dt,
-                                      ir)
+            total_external_electron_sources!(residual, this_f, dens, upar, moments,
+                                             composition,
+                                             external_source_settings.electron, vperp,
+                                             vpa, dt, ir)
             # Now
             #   residual = f_electron_old + dt*RHS(f_electron_newvar)
             # so update to desired residual
@@ -1703,7 +1717,7 @@ end
 # correct.
 function test_electron_implicit_constraint_forcing(test_input; rtol=(1.5e0*epsilon))
     test_input = deepcopy(test_input)
-    test_input["run_name"] *= "_electron_implicit_constraint_forcing"
+    test_input["output"]["run_name"] *= "_electron_implicit_constraint_forcing"
     println("    electron_implicit_constraint_forcing")
 
     @testset "electron_implicit_constraint_forcing" begin
@@ -1938,7 +1952,7 @@ end
 
 function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
     test_input = deepcopy(test_input)
-    test_input["run_name"] *= "_electron_energy_equation"
+    test_input["output"]["run_name"] *= "_electron_energy_equation"
     println("    electron_energy_equation")
 
     @testset "electron_energy_equation" begin
@@ -2147,7 +2161,7 @@ end
 
 function test_ion_dt_forcing_of_electron_ppar(test_input; rtol=(1.5e1*epsilon)^2)
     test_input = deepcopy(test_input)
-    test_input["run_name"] *= "_ion_dt_forcing_of_electron_ppar"
+    test_input["output"]["run_name"] *= "_ion_dt_forcing_of_electron_ppar"
     println("    ion_dt_forcing_of_electron_ppar")
 
     @testset "ion_dt_forcing_of_electron_ppar" begin
@@ -2342,7 +2356,7 @@ end
 
 function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
     test_input = deepcopy(test_input)
-    test_input["run_name"] *= "_electron_kinetic_equation"
+    test_input["output"]["run_name"] *= "_electron_kinetic_equation"
     println("    electron_kinetic_equation")
 
     @testset "electron_kinetic_equation" begin
@@ -2590,7 +2604,7 @@ end
 function runtests()
     # Create a temporary directory for test output
     test_output_directory = get_MPI_tempdir()
-    test_input["base_directory"] = test_output_directory
+    test_input["output"]["base_directory"] = test_output_directory
 
     @testset "Jacobian matrix" verbose=use_verbose begin
         println("  Jacobian matrix")

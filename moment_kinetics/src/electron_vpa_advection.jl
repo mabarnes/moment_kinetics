@@ -67,13 +67,13 @@ function update_electron_speed_vpa!(advect, density, upar, ppar, moments, vpa,
             @views source_density_amplitude = moments.electron.external_source_density_amplitude[:, ir, index]
             @views source_momentum_amplitude = moments.electron.external_source_momentum_amplitude[:, ir, index]
             @views source_pressure_amplitude = moments.electron.external_source_pressure_amplitude[:, ir, index]
-            @loop_r_z ir iz begin
-                term1 = source_density_amplitude[iz,ir] * upar[iz,ir]/(density[iz,ir]*vth[iz,ir])
+            @loop_z iz begin
+                term1 = source_density_amplitude[iz] * upar[iz]/(density[iz]*vth[iz])
                 term2_over_vpa =
-                    -0.5 * (source_pressure_amplitude[iz,ir] +
-                            2.0 * upar[iz,ir] * source_momentum_amplitude[iz,ir]) /
-                        ppar[iz,ir] +
-                    0.5 * source_density_amplitude[iz,ir] / density[iz,ir]
+                    -0.5 * (source_pressure_amplitude[iz] +
+                            2.0 * upar[iz] * source_momentum_amplitude[iz]) /
+                        ppar[iz] +
+                    0.5 * source_density_amplitude[iz] / density[iz]
                 @loop_vperp_vpa ivperp ivpa begin
                     advect.speed[ivpa,ivperp,iz,ir] += term1 + vpa[ivpa] * term2_over_vpa
                 end
@@ -108,9 +108,9 @@ function add_electron_vpa_advection_to_Jacobian!(jacobian_matrix, f, dens, upar,
     @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n
 
     v_size = vperp.n * vpa.n
-    source_density_amplitude = @view moments.electron.external_source_density_amplitude[:,ir]
-    source_momentum_amplitude = @view moments.electron.external_source_momentum_amplitude[:,ir]
-    source_pressure_amplitude = @view moments.electron.external_source_pressure_amplitude[:,ir]
+    source_density_amplitude = @view moments.electron.external_source_density_amplitude[:,ir,:]
+    source_momentum_amplitude = @view moments.electron.external_source_momentum_amplitude[:,ir,:]
+    source_pressure_amplitude = @view moments.electron.external_source_pressure_amplitude[:,ir,:]
 
     dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
     begin_z_vperp_region()
@@ -257,9 +257,9 @@ function add_electron_vpa_advection_to_Jacobian!(jacobian_matrix, f, dens, upar,
             electron_source = external_source_settings.electron[index]
             if electron_source.active
                 jacobian_matrix[row,ppar_offset+iz] += dt * (
-                    -0.5*source_density_amplitude[iz,ir,index]*upar[iz]/sqrt(2.0*dens[iz])/ppar[iz]^1.5
-                    + vpa.grid[ivpa]*0.5*(source_pressure_amplitude[iz,ir,index]
-                                          + 2.0*upar[iz]*source_momentum_amplitude[iz,ir,index])/ppar[iz]^2
+                    -0.5*source_density_amplitude[iz,index]*upar[iz]/sqrt(2.0*dens[iz])/ppar[iz]^1.5
+                    + vpa.grid[ivpa]*0.5*(source_pressure_amplitude[iz,index]
+                                          + 2.0*upar[iz]*source_momentum_amplitude[iz,index])/ppar[iz]^2
                    ) * dpdf_dvpa[ivpa,ivperp,iz]
             end
         end

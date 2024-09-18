@@ -257,12 +257,12 @@ function electron_energy_equation_no_r!(ppar_out, ppar_in, electron_density,
 
         for index ∈ eachindex(electron_source_settings)
             if electron_source_settings[index].active
-                @views pressure_source_amplitude = moments.external_source_pressure_amplitude[:, :, index]
-                @views density_source_amplitude = moments.external_source_density_amplitude[:, :, index]
+                pressure_source_amplitude = @view moments.external_source_pressure_amplitude[:, ir, index]
+                density_source_amplitude = @view moments.external_source_density_amplitude[:, ir, index]
                 @loop_z iz begin
-                    ppar_out[iz,ir] += dt * (2.0 * pressure_source_amplitude[iz,ir]
-                                            - T_in[iz,ir] * density_source_amplitude[iz,ir]) /
-                                            electron_density[iz,ir]
+                    ppar_out[iz] += dt * (2.0 * pressure_source_amplitude[iz]
+                                          - T_in[iz] * density_source_amplitude[iz]) /
+                                         electron_density[iz]
                 end
             end
         end
@@ -343,7 +343,7 @@ function electron_energy_equation_no_r!(ppar_out, ppar_in, electron_density,
 
         for index ∈ eachindex(electron_source_settings)
             if electron_source_settings[index].active
-                @views source_amplitude = moments.external_source_pressure_amplitude[:, ir, index]
+                source_amplitude = @view moments.external_source_pressure_amplitude[:, ir, index]
                 @loop_z iz begin
                     ppar_out[iz] += dt * source_amplitude[iz]
                 end
