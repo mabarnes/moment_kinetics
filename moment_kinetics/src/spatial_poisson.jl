@@ -321,6 +321,10 @@ function init_sparse_laplacian2D(radial::coordinate, polar::coordinate,
                                              MNradial[iradial_local,iradialp_local]))
                                 if lower_boundary_row_polar
                                     # assemble the contributions from the upper_boundary_row_polar location
+                                    # take data from
+                                    #     ielement_polar = nelement_polar
+                                    #     ipolar_local = ngrid_polar
+                                    # but ensure that data is put into correct target index (ic_global is unchanged from loop)
                                     icp_global_bc = get_global_compound_index(polar,radial,nelement_polar,ielement_radial,ipolarp_local,iradialp_local)
                                     icsc_bc = icsc_func(ipolar_local,ipolarp_local,nelement_polar,
                                            ngrid_polar,nelement_polar,
@@ -328,13 +332,13 @@ function init_sparse_laplacian2D(radial::coordinate, polar::coordinate,
                                            ielement_radial,
                                            ngrid_radial,nelement_radial)
                                     assemble_constructor_data!(LP2D,icsc_bc,ic_global,icp_global_bc,
-                                            (MMpolar[ipolar_local,ipolarp_local]*
+                                            (MMpolar[ngrid_polar,ipolarp_local]*
                                              (KJradial[iradial_local,iradialp_local] - 
                                               PPradial[iradial_local,iradialp_local]) +
-                                             KKpolar[ipolar_local,ipolarp_local]*
+                                             KKpolar[ngrid_polar,ipolarp_local]*
                                              MNradial[iradial_local,iradialp_local]))    
                                 end
-                            end # Laplcian assembly
+                            end # Laplacian assembly
                             
                             # mass matrices for RHS of matrix equation (enforce periodicity only)
                             if upper_boundary_row_polar
@@ -363,6 +367,10 @@ function init_sparse_laplacian2D(radial::coordinate, polar::coordinate,
                                              MRradial[iradial_local,iradialp_local]))
                                 if lower_boundary_row_polar
                                     # assemble the contributions from the upper_boundary_row_polar location
+                                    # take data from
+                                    #     ielement_polar = nelement_polar
+                                    #     ipolar_local = ngrid_polar
+                                    # but ensure that data is put into correct target index (ic_global is unchanged from loop)
                                     icp_global_bc = get_global_compound_index(polar,radial,nelement_polar,ielement_radial,ipolarp_local,iradialp_local)
                                     icsc_bc = icsc_func(ipolar_local,ipolarp_local,nelement_polar,
                                            ngrid_polar,nelement_polar,
@@ -370,7 +378,7 @@ function init_sparse_laplacian2D(radial::coordinate, polar::coordinate,
                                            ielement_radial,
                                            ngrid_radial,nelement_radial)
                                     assemble_constructor_data!(MR2D,icsc_bc,ic_global,icp_global_bc,
-                                            (MMpolar[ipolar_local,ipolarp_local]*
+                                            (MMpolar[ngrid_polar,ipolarp_local]*
                                              MRradial[iradial_local,iradialp_local]))    
                                 end # mass matrix assembly
                             end

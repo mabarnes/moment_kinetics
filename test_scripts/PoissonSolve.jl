@@ -128,7 +128,7 @@ function run_poisson_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelemen
    return nothing
 end
 
-function run_poisson2D_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelement_polar=5,ngrid_polar=5,Lpolar=2.0*pi,kk::mk_int=1,plot_results=false)
+function run_poisson2D_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelement_polar=5,ngrid_polar=5,Lpolar=2.0*pi,kk::mk_int=1,phase::mk_float=0.0,plot_results=false)
 
    nelement_local_polar = nelement_polar # number of elements per rank
    nelement_global_polar = nelement_local_polar # total number of elements 
@@ -180,8 +180,8 @@ function run_poisson2D_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelem
    println("Maximum error value Test rho=1 : ",maximum(abs.(phi- exact_phi)))
    if plot_results
       plot_test_data(exact_phi,phi,err_phi,"phi_1",radial,polar)
-      println("phi(theta=-pi): ",phi[1,:])
-      println("phi(theta=pi): ",phi[end,:])
+      println("phi(theta=-pi,r=0): ",phi[1,1])
+      println("phi(theta=pi,r=0): ",phi[end,1])
    end
    
    if kk < 1
@@ -196,8 +196,8 @@ function run_poisson2D_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelem
    
    for irad in 1:radial.n
       for ipol in 1:polar.n
-         exact_phi[ipol,irad] = (1.0 - radial.grid[irad])*(radial.grid[irad]^kk)*cos(2.0*pi*kk*polar.grid[ipol]/polar.L)
-         rho[ipol,irad] = (kk^2 - (kk+1)^2)*(radial.grid[irad]^(kk-1))*cos(2.0*kk*pi*polar.grid[ipol]/polar.L)
+         exact_phi[ipol,irad] = (1.0 - radial.grid[irad])*(radial.grid[irad]^kk)*cos(2.0*pi*kk*polar.grid[ipol]/polar.L + phase)
+         rho[ipol,irad] = (kk^2 - (kk+1)^2)*(radial.grid[irad]^(kk-1))*cos(2.0*kk*pi*polar.grid[ipol]/polar.L  + phase)
       end
    end
    
@@ -206,6 +206,8 @@ function run_poisson2D_test(; nelement_radial=5,ngrid_radial=5,Lradial=1.0,nelem
    println("Maximum error value Test rho = (kk^2 - (kk+1)^2) * cos(2 pi kk P/L) * r^(kk-1): ",maximum(err_phi))
    if plot_results
       plot_test_data(exact_phi,phi,err_phi,"phi_2",radial,polar)
+      println("phi(theta=-pi,r=0): ",phi[1,1])
+      println("phi(theta=pi,r=0): ",phi[end,1])
    end
    finalize_comms!()
    return nothing
