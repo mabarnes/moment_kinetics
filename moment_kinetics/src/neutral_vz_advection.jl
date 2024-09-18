@@ -111,10 +111,12 @@ function update_speed_n_u_p_evolution_neutral!(advect, fvec, moments, vz, z, r,
             end
         end
         # add in contributions from charge exchange and ionization collisions
-        if abs(collisions.charge_exchange) > 0.0 || abs(collisions.ionization) > 0.0
+        charge_exchange = collisions.reactions.charge_exchange_frequency
+        ionization = collisions.reactions.ionization_frequency
+        if abs(charge_exchange) > 0.0 || abs(ionization) > 0.0
             @loop_r_z_vzeta_vr ir iz ivzeta ivr begin
                 @views @. advect[isn].speed[:,ivr,ivzeta,iz,ir] +=
-                    collisions.charge_exchange *
+                    charge_exchange *
                     (0.5*vz.grid/fvec.pz_neutral[iz,ir,isn]
                      * (fvec.density[iz,ir,isn]*fvec.pz_neutral[iz,ir,isn]
                         - fvec.density_neutral[iz,ir,isn]*fvec.ppar[iz,ir,isn]
@@ -176,13 +178,14 @@ function update_speed_n_p_evolution_neutral!(advect, fields, fvec, moments, vz, 
                     vz.grid*moments.neutral.duz_dz[iz,ir,isn]
             end
         end
-        if abs(collisions.charge_exchange) > 0.0
+        charge_exchange = collisions.reactions.charge_exchange_frequency
+        if abs(charge_exchange) > 0.0
             # add in contributions from charge exchange and ionization collisions
             error("suspect the charge exchange and ionization contributions here may be "
                   * "wrong because (upar[is]-upar[isp])^2 type terms were missed in the "
                   * "energy equation when it was substituted in to derive them.")
             @loop_r_z_vzeta_vr ir iz ivzeta ivr begin
-                @views @. advect[is].speed[:,ivr,ivzeta,iz,ir] += collisions.charge_exchange *
+                @views @. advect[is].speed[:,ivr,ivzeta,iz,ir] += charge_exchange *
                         0.5*vz.grid*fvec.density_neutral[iz,ir,is] * (1.0-fvec.ppar[iz,ir,is]/fvec.pz_neutral[iz,ir,is])
             end
         end
@@ -215,10 +218,11 @@ function update_speed_n_u_evolution_neutral!(advect, fvec, moments, vz, z, r, co
         # if neutrals present compute contribution to parallel acceleration due to charge exchange
         # and/or ionization collisions betweens ions and neutrals
 
-        if abs(collisions.charge_exchange) > 0.0
+        charge_exchange = collisions.reactions.charge_exchange_frequency
+        if abs(charge_exchange) > 0.0
             # include contribution to neutral acceleration due to collisional friction with ions
             @loop_r_z_vzeta_vr ir iz ivzeta ivr begin
-                @views @. advect[isn].speed[:,ivr,ivzeta,iz,ir] -= collisions.charge_exchange*fvec.density[iz,ir,isn]*(fvec.upar[iz,ir,isn]-fvec.uz_neutral[iz,ir,isn])
+                @views @. advect[isn].speed[:,ivr,ivzeta,iz,ir] -= charge_exchange*fvec.density[iz,ir,isn]*(fvec.upar[iz,ir,isn]-fvec.uz_neutral[iz,ir,isn])
             end
         end
     end
