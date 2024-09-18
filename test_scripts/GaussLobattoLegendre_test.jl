@@ -1,8 +1,6 @@
 export gausslegendre_test
 
-using FastGaussQuadrature
-using LegendrePolynomials: Pl
-using LinearAlgebra: mul!, lu, inv, cond
+using LinearAlgebra: mul!, cond, ldiv!
 using Printf
 using Plots
 using LaTeXStrings
@@ -11,10 +9,10 @@ using Measures
 
 import moment_kinetics
 using moment_kinetics.gauss_legendre
-using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.calculus: derivative!, second_derivative!, laplacian_derivative!
 using moment_kinetics.calculus: mass_matrix_solve!
+using moment_kinetics.type_definitions: OptionsDict
 
 
     function print_matrix(matrix,name,n,m)
@@ -44,33 +42,35 @@ using moment_kinetics.calculus: mass_matrix_solve!
         #nelement = 4
         y_ngrid = ngrid #number of points per element 
         y_nelement_local = nelement # number of elements per rank
-        y_nelement_global = y_nelement_local # total number of elements 
-        bc = "zero" 
+        y_nelement_global = y_nelement_local # total number of elements  
         discretization = "gausslegendre_pseudospectral"
         # fd_option and adv_input not actually used so given values unimportant
-        fd_option = "fourth_order_centered"
-        cheb_option = "matrix"
-        adv_input = advection_input("default", 1.0, 0.0, 0.0)
-        nrank = 1
-        irank = 0#1
-        comm = MPI.COMM_NULL
         element_spacing_option = "uniform"
         # create the 'input' struct containing input info needed to create a
         # coordinate
-        for y_name in ["vpa","vperp"]
+        for y_name in ["vpa","vperp","z"]
             println("")
             println("$y_name test")
             println("")
             if y_name == "vperp"
-                y_L = L_in #physical box size in reference units 
-            else 
+                y_L = L_in #physical box size in reference units
+                bc = "zero"
+            elseif y_name =="vpa" 
                 y_L = 2*L_in
+                bc = "zero"
+            elseif y_name == "z"
+                y_L = L_in
+                bc = "periodic"
             end
-            y_input = grid_input(y_name, y_ngrid, y_nelement_global, y_nelement_local, 
-                nrank, irank, y_L, discretization, fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
-            
-            # create the coordinate structs
-            y, y_spectral = define_coordinate(y_input,init_YY=false)
+            input = OptionsDict(y_name => OptionsDict("ngrid"=>y_ngrid, "nelement"=>y_nelement_global,
+                                                      "nelement_local"=>y_nelement_local, "L"=>y_L,
+                                                      "discretization"=>discretization,
+                                                      "element_spacing_option"=>element_spacing_option,
+                                                      "bc"=>bc))
+            # create the coordinate struct 'x'
+            # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
+            # errors due to communicators not being fully set up.
+            y, y_spectral = define_coordinate(input, y_name; collision_operator_dim=true, ignore_MPI=true)
             #print_matrix(Mmat,"Mmat",y.n,y.n)
             #print_matrix(y_spectral.radau.M0,"local radau mass matrix M0",y.ngrid,y.ngrid)
             #print_matrix(y_spectral.radau.M1,"local radau mass matrix M1",y.ngrid,y.ngrid)
@@ -96,11 +96,15 @@ using moment_kinetics.calculus: mass_matrix_solve!
             #print_vector(y_spectral.lobatto.D0,"local lobatto D matrix D0",y.ngrid)
             
             f_exact = Array{Float64,1}(undef,y.n)
+            f_num = Array{Float64,1}(undef,y.n)
+            f_err = Array{Float64,1}(undef,y.n)
             df_exact = Array{Float64,1}(undef,y.n)
             df_num = Array{Float64,1}(undef,y.n)
             df_err = Array{Float64,1}(undef,y.n)
             g_exact = Array{Float64,1}(undef,y.n)
             h_exact = Array{Float64,1}(undef,y.n)
+            h_num = Array{Float64,1}(undef,y.n)
+            h_err = Array{Float64,1}(undef,y.n)
             divg_exact = Array{Float64,1}(undef,y.n)
             divg_num = Array{Float64,1}(undef,y.n)
             divg_err = Array{Float64,1}(undef,y.n)
@@ -110,6 +114,12 @@ using moment_kinetics.calculus: mass_matrix_solve!
             d2f_exact = Array{Float64,1}(undef,y.n)
             d2f_num = Array{Float64,1}(undef,y.n)
             d2f_err = Array{Float64,1}(undef,y.n)
+            fperiodic_err = Array{Float64,1}(undef,y.n)
+            fperiodic_num = Array{Float64,1}(undef,y.n)
+            fperiodic_exact = Array{Float64,1}(undef,y.n)
+            d2fperiodic_exact = Array{Float64,1}(undef,y.n)
+            d2fperiodic_num = Array{Float64,1}(undef,y.n)
+            d2fperiodic_err = Array{Float64,1}(undef,y.n)
             b = Array{Float64,1}(undef,y.n)
             for iy in 1:y.n
                 f_exact[iy] = exp(-y.grid[iy]^2)
@@ -124,28 +134,32 @@ using moment_kinetics.calculus: mass_matrix_solve!
                 #h_exact[iy] = exp(-y.grid[iy]^3)
                 #laph_exact[iy] = 9.0*y.grid[iy]*(y.grid[iy]^3 - 1.0)*exp(-y.grid[iy]^3)
                 #f_exact[iy] = -2.0*y.grid[iy]*exp(-y.grid[iy]^2)
-                
+                fperiodic_exact[iy] = sin(2.0*pi*y.grid[iy]/y.L)
+                d2fperiodic_exact[iy] = -((2.0*pi/y.L)^2)*sin(2.0*pi*y.grid[iy]/y.L)
             end
-            if y.name == "vpa" 
-                F_exact = sqrt(pi)
-            elseif y.name == "vperp"
-                F_exact = 1.0
-            end
-            # do a test integration
-            #println(f_exact)
-            F_num = sum(y.wgts.*f_exact)
-            F_err = abs(F_num - F_exact)
-            #for ix in 1:ngrid
-            #    F_num += w[ix]*df_exact[ix]
-            #end
-            println("F_err: ", F_err,  " F_exact: ",F_exact, " F_num: ", F_num)
             
-            derivative!(df_num, f_exact, y, y_spectral)
-            @. df_err = df_num - df_exact
-            println("max(df_err) (interpolation): ",maximum(df_err))
-            derivative!(d2f_num, df_num, y, y_spectral)
-            @. d2f_err = d2f_num - d2f_exact
-            println("max(d2f_err) (double first derivative by interpolation): ",maximum(d2f_err))  
+            if y.name in ["vpa","vperp"]
+                if y.name == "vpa" 
+                    F_exact = sqrt(pi)
+                elseif y.name == "vperp"
+                    F_exact = 1.0
+                end
+                # do a test integration
+                #println(f_exact)
+                F_num = sum(y.wgts.*f_exact)
+                F_err = abs(F_num - F_exact)
+                #for ix in 1:ngrid
+                #    F_num += w[ix]*df_exact[ix]
+                #end
+                println("F_err: ", F_err,  " F_exact: ",F_exact, " F_num: ", F_num)
+                
+                derivative!(df_num, f_exact, y, y_spectral)
+                @. df_err = df_num - df_exact
+                println("max(df_err) (interpolation): ",maximum(df_err))
+                derivative!(d2f_num, df_num, y, y_spectral)
+                @. d2f_err = d2f_num - d2f_exact
+                println("max(d2f_err) (double first derivative by interpolation): ",maximum(d2f_err))  
+            end
             if y.name == "vpa"
                 mul!(b,y_spectral.S_matrix,f_exact)
                 mass_matrix_solve!(df_num,b,y_spectral)
@@ -162,6 +176,20 @@ using moment_kinetics.calculus: mass_matrix_solve!
                 println("max(d2f_err) (weak form): ",maximum(d2f_err))
                 plot([y.grid, y.grid], [d2f_num, d2f_exact], xlabel="vpa", label=["num" "exact"], ylabel="")
                 outfile = "vpa_test.pdf"
+                savefig(outfile)
+                
+                # test 1D ODE solve
+                # form RHS vector
+                mul!(b,y_spectral.mass_matrix,d2f_exact)
+                # Dirichlet zero BCs
+                b[1] = 0.0
+                b[end] = 0.0
+                # solve ODE
+                ldiv!(f_num,y_spectral.L_matrix_lu,b)
+                @. f_err = abs(f_num - f_exact)
+                println("max(f_err) (weak form): ",maximum(f_err))
+                plot([y.grid, y.grid], [f_num, f_exact], xlabel="vpa", label=["num" "exact"], ylabel="")
+                outfile = "vpa_test_ode.pdf"
                 savefig(outfile)
                 
             elseif y.name == "vperp"
@@ -212,6 +240,40 @@ using moment_kinetics.calculus: mass_matrix_solve!
                 @. laph_err = abs(laph_num - laph_exact)
                 println("max(laph_err) (interpolation): ",maximum(laph_err))
                 
+                # test 1D ODE solve
+                # form RHS vector
+                mul!(b,y_spectral.mass_matrix,laph_exact)
+                # Dirichlet zero BC at upper endpoint
+                b[end] = 0.0
+                # solve ODE
+                ldiv!(h_num,y_spectral.L_matrix_lu,b)
+                @. h_err = abs(h_num - h_exact)
+                println("max(h_err) (weak form): ",maximum(h_err))
+                plot([y.grid, y.grid], [h_num, h_exact], xlabel="vperp", label=["num" "exact"], ylabel="")
+                outfile = "vperp_test_ode.pdf"
+                savefig(outfile)
+            elseif y.name == "z"
+                # test 1D differentiation
+                second_derivative!(d2fperiodic_num, fperiodic_exact, y, y_spectral)
+                @. d2fperiodic_err = abs(d2fperiodic_num - d2fperiodic_exact)
+                println("max(d2fperiodic_err) (weak form): ",maximum(d2fperiodic_err))
+                
+                # test 1D ODE solve
+                # form RHS vector
+                mul!(b,y_spectral.mass_matrix,d2fperiodic_exact)
+                b[1] = 0.0 # fixes constant piece of solution
+                b[end] = 0.0 # makes sure periodicity is enforced
+                # solve ODE
+                ldiv!(fperiodic_num,y_spectral.L_matrix_lu,b)
+                ## subtract constant piece (constant offset is allowed solution)
+                #F_num = sum(y.wgts.*fperiodic_num)/sum(y.wgts)
+                #@. fperiodic_num -= F_num
+                @. fperiodic_err = abs(fperiodic_num - fperiodic_exact)
+                println("max(fperiodic_err) (weak form): ",maximum(fperiodic_err))
+                plot([y.grid, y.grid], [fperiodic_num, fperiodic_exact], xlabel="z", label=["num" "exact"], ylabel="")
+                outfile = "periodic_test_ode.pdf"
+                savefig(outfile)
+            
             end
         end
     end

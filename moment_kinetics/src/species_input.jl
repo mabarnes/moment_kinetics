@@ -67,61 +67,22 @@ function get_species_input(toml_input)
             # initial temperature
             initial_temperature = 1.0)
         
-        z_IC_section = set_defaults_and_check_section!(toml_input, "z_IC_ion_species_$is",
-            # [ion_z_IC_species_1], [ion_z_IC_species_2], etc 
-            initialization_option = "gaussian",
-            width = 0.125,
-            wavenumber = 1,
-            density_amplitude = 0.001,
-            density_phase = 0.0,
-            upar_amplitude = 0.0,
-            upar_phase = 0.0,
-            temperature_amplitude = 0.0,
-            temperature_phase = 0.0,
-            monomial_degree = 2)
-        z_IC_input = Dict(Symbol(k)=>v for (k,v) in z_IC_section)
-        z_IC = spatial_initial_condition_input(; z_IC_input...)
+        z_IC = set_defaults_and_check_section!(toml_input,
+                                               spatial_initial_condition_input,
+                                               "z_IC_ion_species_$is")
         
-        r_IC_section = set_defaults_and_check_section!(toml_input, "r_IC_ion_species_$is",
-            # [ion_r_IC_species_1], [ion_r_IC_species_2], etc 
-            initialization_option = "gaussian",
-            width = 0.125,
-            wavenumber = 1,
-            density_amplitude = 0.001,
-            density_phase = 0.0,
-            upar_amplitude = 0.0,
-            upar_phase = 0.0,
-            temperature_amplitude = 0.0,
-            temperature_phase = 0.0,
-            monomial_degree = 2)
-        r_IC_input= Dict(Symbol(k)=>v for (k,v) in r_IC_section)
-        r_IC = spatial_initial_condition_input(; r_IC_input...)
+        r_IC = set_defaults_and_check_section!(toml_input,
+                                               spatial_initial_condition_input,
+                                               "r_IC_ion_species_$is")
         
-        vpa_IC_section = set_defaults_and_check_section!(toml_input, "vpa_IC_ion_species_$is",
-            # [ion_vpa_IC_species_1], [ion_vpa_IC_species_2], etc 
-            initialization_option = "gaussian",
-            width = 1.0,
-            wavenumber = 1,
-            density_amplitude = 1.0,
-            density_phase = 0.0,
-            upar_amplitude = 0.0,
-            upar_phase = 0.0,
-            temperature_amplitude = 0.0,
-            temperature_phase = 0.0,
-            monomial_degree = 2,
-            # need to read resolutions before setting defaults here
-            v0 = 1.0,
-            vth0 = 1.0,
-            vpa0 = 1.0,
-            vperp0 = 1.0)
-        vpa_IC_input= Dict(Symbol(k)=>v for (k,v) in vpa_IC_section)
-        vpa_IC = velocity_initial_condition_input(; vpa_IC_input...)
+        vpa_IC = set_defaults_and_check_section!(toml_input,
+                                                 velocity_initial_condition_input,
+                                                 "vpa_IC_ion_species_$is")
         
-        IC_input = Dict("z_IC" => z_IC, "r_IC" => r_IC, "vpa_IC" => vpa_IC)
-        type_input = Dict("type" => "ion")
-        spec_section = merge(spec_section, IC_input, type_input)
         spec_input = Dict(Symbol(k)=>v for (k,v) in spec_section)
-        ion_spec_params_list[is] = ion_species_parameters(; spec_input...)
+        ion_spec_params_list[is] = ion_species_parameters(; type="ion", z_IC=z_IC,
+                                                            r_IC=r_IC, vpa_IC=vpa_IC,
+                                                            spec_input...)
     end
     for isn in 1:nspec_neutral
         spec_section = set_defaults_and_check_section!(toml_input, "neutral_species_$isn",
@@ -133,68 +94,29 @@ function get_species_input(toml_input)
             # initial temperature
             initial_temperature = 1.0)
         
-        z_IC_section = set_defaults_and_check_section!(toml_input, "z_IC_neutral_species_$isn",
-            # [neutral_z_IC_species_1], [neutral_z_IC_species_2], etc 
-            initialization_option = "gaussian",
-            width = 0.125,
-            wavenumber = 1,
-            density_amplitude = 0.001,
-            density_phase = 0.0,
-            upar_amplitude = 0.0,
-            upar_phase = 0.0,
-            temperature_amplitude = 0.0,
-            temperature_phase = 0.0,
-            monomial_degree = 2)
-        z_IC_input = Dict(Symbol(k)=>v for (k,v) in z_IC_section)
-        z_IC = spatial_initial_condition_input(; z_IC_input...)
+        z_IC = set_defaults_and_check_section!(toml_input,
+                                               spatial_initial_condition_input,
+                                               "z_IC_neutral_species_$isn")
         
-        r_IC_section = set_defaults_and_check_section!(toml_input, "r_IC_neutral_species_$isn",
-            # [neutral_r_IC_species_1], [neutral_r_IC_species_2], etc 
-            initialization_option = "gaussian",
-            width = 0.125,
-            wavenumber = 1,
-            density_amplitude = 0.001,
-            density_phase = 0.0,
-            upar_amplitude = 0.0,
-            upar_phase = 0.0,
-            temperature_amplitude = 0.0,
-            temperature_phase = 0.0,
-            monomial_degree = 2)
-        r_IC_input= Dict(Symbol(k)=>v for (k,v) in r_IC_section)
-        r_IC = spatial_initial_condition_input(; r_IC_input...)
+        r_IC = set_defaults_and_check_section!(toml_input,
+                                               spatial_initial_condition_input,
+                                               "r_IC_neutral_species_$isn")
         
-        vpa_IC_section = set_defaults_and_check_section!(toml_input, "vz_IC_neutral_species_$isn",
-            # [neutral_vpa_IC_species_1], [neutral_vpa_IC_species_2], etc 
-            initialization_option = "gaussian",
-            width = 1.0,
-            wavenumber = 1,
-            density_amplitude = 1.0,
-            density_phase = 0.0,
-            upar_amplitude = 0.0,
-            upar_phase = 0.0,
-            temperature_amplitude = 0.0,
-            temperature_phase = 0.0,
-            monomial_degree = 2,
-            # need to read resolutions before setting defaults here
-            v0 = 1.0,
-            vth0 = 1.0,
-            vpa0 = 1.0,
-            vperp0 = 1.0)
-        vpa_IC_input= Dict(Symbol(k)=>v for (k,v) in vpa_IC_section)
-        vpa_IC = velocity_initial_condition_input(; vpa_IC_input...)
+        vz_IC = set_defaults_and_check_section!(toml_input,
+                                                velocity_initial_condition_input,
+                                                "vz_IC_neutral_species_$isn")
         
-        IC_input = Dict("z_IC" => z_IC, "r_IC" => r_IC, "vpa_IC" => vpa_IC)
-        type_input = Dict("type" => "neutral")
-        spec_section = merge(spec_section, IC_input, type_input)
         spec_input = Dict(Symbol(k)=>v for (k,v) in spec_section)
-        neutral_spec_params_list[isn] = neutral_species_parameters(; spec_input...)
+        neutral_spec_params_list[isn] = neutral_species_parameters(; type="neutral",
+                                                                     z_IC=z_IC, r_IC=r_IC,
+                                                                     vz_IC=vz_IC,
+                                                                     spec_input...)
     end
-    # construct composition dict
-    species_dict = Dict("n_species" => nspec_tot, "ion" => ion_spec_params_list, "neutral" => neutral_spec_params_list)
-    composition_section = merge(composition_section,species_dict)
-    input = Dict(Symbol(k)=>v for (k,v) in composition_section)
     # construct composition struct
-    composition = species_composition(; input...)
+    composition_input = Dict(Symbol(k)=>v for (k,v) in composition_section)
+    composition = species_composition(; n_species=nspec_tot, ion=ion_spec_params_list,
+                                        neutral=neutral_spec_params_list,
+                                        composition_input...)
     
     ## checks and errors
     if !(0.0 <= composition.recycling_fraction <= 1.0)

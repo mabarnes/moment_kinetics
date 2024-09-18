@@ -6,15 +6,14 @@ include("setup.jl")
 
 using Base.Filesystem: tempname
 
-using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.input_structs: grid_input, advection_input, merge_dict_with_kwargs!
 using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data,
                                  load_species_data, load_fields_data,
                                  load_ion_moments_data, load_pdf_data,
                                  load_neutral_particle_moments_data,
                                  load_neutral_pdf_data, load_time_data, load_species_data
 using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
-using moment_kinetics.type_definitions: mk_float, OptionsDict
+using moment_kinetics.type_definitions: mk_float
+using moment_kinetics.utils: merge_dict_with_kwargs!
 
 # Useful parameters
 const z_L = 1.0 # always 1 in normalized units?
@@ -85,76 +84,79 @@ const expected =
                 0.024284888662941113 0.010011392733734206 0.008423252360063494 0.019281192435730943 0.036719507768509525 0.041644492169994836 0.03692283098105331 0.03638215764882269 0.04191389118981368 0.04071460358290303 0.024284888662941134])
 
 # default inputs for tests
-test_input_full_f = Dict("composition" => OptionsDict("n_ion_species" => 1,
-                                                          "n_neutral_species" => 1,
-                                                          "electron_physics" => "boltzmann_electron_response",
-                                                          "T_e" => 1.0,
-                                                          "T_wall" => 1.0),
-                        "ion_species_1" => OptionsDict("initial_density" => 0.5,
-                                                            "initial_temperature" => 1.0),
-                        "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
-                                                                 "density_amplitude" => 0.5,
-                                                                 "density_phase" => 0.0,
-                                                                 "upar_amplitude" => 0.0,
-                                                                 "upar_phase" => 0.0,
-                                                                 "temperature_amplitude" => 0.5,
-                                                                 "temperature_phase" => mk_float(π)),
-                        "neutral_species_1" => OptionsDict("initial_density" => 0.5,
-                                                                "initial_temperature" => 1.0),
-                        "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "sinusoid",
-                                                                     "density_amplitude" => 0.5,
-                                                                     "density_phase" => mk_float(π),
-                                                                     "upar_amplitude" => 0.0,
-                                                                     "upar_phase" => 0.0,
-                                                                     "temperature_amplitude" => 0.5,
-                                                                     "temperature_phase" => 0.0),  
-                         "run_name" => "full_f",
-                         "evolve_moments_density" => false,
-                         "evolve_moments_parallel_flow" => false,
-                         "evolve_moments_parallel_pressure" => false,
-                         "evolve_moments_conservation" => true,
-                         "krook_collisions" => OptionsDict("use_krook" => true,"frequency_option" => "reference_parameters"),
-                         "charge_exchange_frequency" => 2*π*0.1,
-                         "ionization_frequency" => 0.0,
-                         "timestepping" => OptionsDict("nstep" => 100,
-                                                            "dt" => 0.001,
-                                                            "nwrite" => 100,
-                                                            "nwrite_dfns" => 100,
-                                                            "split_operators" => false),
-                         "r_ngrid" => 1,
-                         "r_nelement" => 1,
-                         "r_bc" => "periodic",
-                         "r_discretization" => "chebyshev_pseudospectral",
-                         "z_ngrid" => 9,
-                         "z_nelement" => 4,
-                         "z_bc" => "periodic",
-                         "z_discretization" => "chebyshev_pseudospectral",
-                         "vpa_ngrid" => 17,
-                         "vpa_nelement" => 8,
-                         "vpa_L" => vpa_L,
-                         "vpa_bc" => "periodic",
-                         "vpa_discretization" => "chebyshev_pseudospectral",
-                         "vz_ngrid" => 17,
-                         "vz_nelement" => 8,
-                         "vz_L" => vpa_L,
-                         "vz_bc" => "periodic",
-                         "vz_discretization" => "chebyshev_pseudospectral")
+test_input_full_f = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
+                                                             "n_neutral_species" => 1,
+                                                             "electron_physics" => "boltzmann_electron_response",
+                                                             "T_e" => 1.0,
+                                                             "T_wall" => 1.0),
+                                "ion_species_1" => OptionsDict("initial_density" => 0.5,
+                                                               "initial_temperature" => 1.0),
+                                "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
+                                                                    "density_amplitude" => 0.5,
+                                                                    "density_phase" => 0.0,
+                                                                    "upar_amplitude" => 0.0,
+                                                                    "upar_phase" => 0.0,
+                                                                    "temperature_amplitude" => 0.5,
+                                                                    "temperature_phase" => mk_float(π)),
+                                "neutral_species_1" => OptionsDict("initial_density" => 0.5,
+                                                                   "initial_temperature" => 1.0),
+                                "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "sinusoid",
+                                                                        "density_amplitude" => 0.5,
+                                                                        "density_phase" => mk_float(π),
+                                                                        "upar_amplitude" => 0.0,
+                                                                        "upar_phase" => 0.0,
+                                                                        "temperature_amplitude" => 0.5,
+                                                                        "temperature_phase" => 0.0),  
+                                "output" => OptionsDict("run_name" => "full_f"),
+                                "evolve_moments" => OptionsDict("density" => false,
+                                                                "parallel_flow" => false,
+                                                                "parallel_pressure" => false,
+                                                                "moments_conservation" => true),
+                                "krook_collisions" => OptionsDict("use_krook" => true,"frequency_option" => "reference_parameters"),
+                                "reactions" => OptionsDict("charge_exchange_frequency" => 2*π*0.1,
+                                                           "ionization_frequency" => 0.0),
+                                "timestepping" => OptionsDict("nstep" => 100,
+                                                              "dt" => 0.001,
+                                                              "nwrite" => 100,
+                                                              "nwrite_dfns" => 100,
+                                                              "split_operators" => false),
+                                "r" => OptionsDict("ngrid" => 1,
+                                                   "nelement" => 1,
+                                                   "bc" => "periodic",
+                                                   "discretization" => "chebyshev_pseudospectral"),
+                                "z" => OptionsDict("ngrid" => 9,
+                                                   "nelement" => 4,
+                                                   "bc" => "periodic",
+                                                   "discretization" => "chebyshev_pseudospectral"),
+                                "vpa" => OptionsDict("ngrid" => 17,
+                                                     "nelement" => 8,
+                                                     "L" => vpa_L,
+                                                     "bc" => "periodic",
+                                                     "discretization" => "chebyshev_pseudospectral"),
+                                "vz" => OptionsDict("ngrid" => 17,
+                                                    "nelement" => 8,
+                                                    "L" => vpa_L,
+                                                    "bc" => "periodic",
+                                                    "discretization" => "chebyshev_pseudospectral")
+                               )
 
 test_input_split_1_moment =
-    merge(test_input_full_f,
-          Dict("run_name" => "split_1_moment",
-               "evolve_moments_density" => true))
+    recursive_merge(test_input_full_f,
+                    OptionsDict("output" => OptionsDict("run_name" => "split_1_moment"),
+                                "evolve_moments" => OptionsDict("density" => true)))
 
 test_input_split_2_moments =
-    merge(test_input_split_1_moment,
-          Dict("run_name" => "split_2_moments",
-               "evolve_moments_parallel_flow" => true))
+    recursive_merge(test_input_split_1_moment,
+                    OptionsDict("output" => OptionsDict("run_name" => "split_2_moments"),
+                                "evolve_moments" => OptionsDict("parallel_flow" => true)))
 
 test_input_split_3_moments =
-    merge(test_input_split_2_moments,
-          Dict("run_name" => "split_3_moments",
-               "evolve_moments_parallel_pressure" => true,
-               "vpa_L" => 12.0, "vz_L" => 12.0))
+    recursive_merge(test_input_split_2_moments,
+                    OptionsDict("output" => OptionsDict("run_name" => "split_3_moments"),
+                                "evolve_moments" => OptionsDict("parallel_pressure" => true),
+                                "vpa" => OptionsDict("L" => 12.0),
+                                "vz" => OptionsDict("L" => 12.0),
+                               ))
 
 
 """
@@ -170,7 +172,7 @@ function run_test(test_input, rtol, atol; args...)
     input = deepcopy(test_input)
 
     # Convert keyword arguments to a unique name
-    name = input["run_name"]
+    name = input["output"]["run_name"]
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
 
@@ -183,7 +185,7 @@ function run_test(test_input, rtol, atol; args...)
 
     # Update default inputs with values to be changed
     merge_dict_with_kwargs!(input; args...)
-    input["run_name"] = name
+    input["output"]["run_name"] = name
 
     # Suppress console output while running
     quietoutput() do
@@ -209,7 +211,7 @@ function run_test(test_input, rtol, atol; args...)
             # Load and analyse output
             #########################
 
-            path = joinpath(realpath(input["base_directory"]), name, name)
+            path = joinpath(realpath(input["output"]["base_directory"]), name, name)
 
             # open the netcdf file containing moments data and give it the handle 'fid'
             fid = open_readonly_output_file(path, "moments")
@@ -254,7 +256,7 @@ function run_test(test_input, rtol, atol; args...)
             f_neutral = f_neutral_vzvrvzetazrst[:,1,1,:,1,:,:]
 
             # Unnormalize f
-            if input["evolve_moments_density"]
+            if input["evolve_moments"]["density"]
                 for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
                     f_ion[:,iz,is,it] .*= n_ion[iz,is,it]
                 end
@@ -262,7 +264,7 @@ function run_test(test_input, rtol, atol; args...)
                     f_neutral[:,iz,isn,it] .*= n_neutral[iz,isn,it]
                 end
             end
-            if input["evolve_moments_parallel_pressure"]
+            if input["evolve_moments"]["parallel_pressure"]
                 for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
                     f_ion[:,iz,is,it] ./= v_t_ion[iz,is,it]
                 end
@@ -356,10 +358,10 @@ function run_test(test_input, rtol, atol; args...)
                                          size(newgrid_f_ion, 4))
                 for iz ∈ 1:length(expected.z)
                     wpa = copy(expected.vpa)
-                    if input["evolve_moments_parallel_flow"]
+                    if input["evolve_moments"]["parallel_flow"]
                         wpa .-= newgrid_upar_ion[iz,1]
                     end
-                    if input["evolve_moments_parallel_pressure"]
+                    if input["evolve_moments"]["parallel_pressure"]
                         wpa ./= newgrid_vth_ion[iz,1]
                     end
                     newgrid_f_ion[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vpa, vpa_spectral)
@@ -387,10 +389,10 @@ function run_test(test_input, rtol, atol; args...)
                                          size(newgrid_f_neutral, 4))
                 for iz ∈ 1:length(expected.z)
                     wpa = copy(expected.vpa)
-                    if input["evolve_moments_parallel_flow"]
+                    if input["evolve_moments"]["parallel_flow"]
                         wpa .-= newgrid_upar_neutral[iz,1]
                     end
-                    if input["evolve_moments_parallel_pressure"]
+                    if input["evolve_moments"]["parallel_pressure"]
                         wpa ./= newgrid_vth_neutral[iz,1]
                     end
                     newgrid_f_neutral[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vpa, vpa_spectral)
@@ -417,19 +419,19 @@ function runtests()
 
         # Benchmark data is taken from this run (full-f with no splitting)
         @testset "full-f" begin
-            test_input_full_f["base_directory"] = test_output_directory
+            test_input_full_f["output"]["base_directory"] = test_output_directory
             run_test(test_input_full_f, 1.e-10, 3.e-16)
         end
         @testset "split 1" begin
-            test_input_split_1_moment["base_directory"] = test_output_directory
+            test_input_split_1_moment["output"]["base_directory"] = test_output_directory
             run_test(test_input_split_1_moment, 1.e-3, 1.e-15)
         end
         @testset "split 2" begin
-            test_input_split_2_moments["base_directory"] = test_output_directory
+            test_input_split_2_moments["output"]["base_directory"] = test_output_directory
             run_test(test_input_split_2_moments, 1.e-3, 1.e-15)
         end
         @testset "split 3" begin
-            test_input_split_3_moments["base_directory"] = test_output_directory
+            test_input_split_3_moments["output"]["base_directory"] = test_output_directory
             run_test(test_input_split_3_moments, 1.e-3, 1.e-15)
         end
     end

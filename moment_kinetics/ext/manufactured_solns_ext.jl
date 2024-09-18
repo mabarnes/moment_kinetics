@@ -605,8 +605,8 @@ using IfElse
         ExBgeofac = 0.5*rhostar*Bzeta*jacobian/Bmag^2
         #exceptions for cases with missing terms 
         if composition.n_neutral_species > 0
-            cx_frequency = collisions.charge_exchange
-            ionization_frequency = collisions.ionization
+            cx_frequency = collisions.reactions.charge_exchange_frequency
+            ionization_frequency = collisions.reactions.ionization_frequency
         else 
             cx_frequency = 0.0
             ionization_frequency = 0.0

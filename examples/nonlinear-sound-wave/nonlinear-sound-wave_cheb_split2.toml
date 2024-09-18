@@ -1,20 +1,36 @@
-evolve_moments_density = true
-evolve_moments_parallel_flow = true
-evolve_moments_parallel_pressure = false
-evolve_moments_conservation = true
+[reactions]
 charge_exchange_frequency = 0.62831853071
 ionization_frequency = 0.0
-r_ngrid = 1
-r_nelement = 1
-z_ngrid = 9
-z_nelement = 2
-z_bc = "periodic"
-z_discretization = "chebyshev_pseudospectral"
-vpa_ngrid = 17
-vpa_nelement = 8
-vpa_L = 8.0
-vpa_bc = "periodic"
-vpa_discretization = "chebyshev_pseudospectral"
+
+[evolve_moments]
+density = true
+parallel_flow = true
+parallel_pressure = false
+moments_conservation = true
+
+[r]
+ngrid = 1
+nelement = 1
+
+[z]
+ngrid = 9
+nelement = 2
+bc = "periodic"
+discretization = "chebyshev_pseudospectral"
+
+[vpa]
+ngrid = 17
+nelement = 8
+L = 8.0
+bc = "periodic"
+discretization = "chebyshev_pseudospectral"
+
+[vz]
+ngrid = 17
+nelement = 8
+L = 8.0
+bc = "periodic"
+discretization = "chebyshev_pseudospectral"
 
 [composition]
 n_ion_species = 1

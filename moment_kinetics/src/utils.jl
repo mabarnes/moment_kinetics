@@ -4,7 +4,7 @@ Utility functions
 module utils
 
 export get_unnormalized_parameters, print_unnormalized_parameters, to_seconds, to_minutes,
-       to_hours
+       to_hours, recursive_merge, merge_dict_with_kwargs!
 
 using ..communication
 using ..constants
@@ -54,7 +54,7 @@ function get_unnormalized_parameters(input::Dict)
     mi = reference_params.mref * Unitful.kg
 
     parameters = OrderedDict{String,Any}()
-    parameters["run_name"] = run_name
+    parameters["run_name"] = io_input.run_name
 
     parameters["Nnorm"] = Nnorm
     parameters["Tnorm"] = Tnorm
@@ -72,10 +72,10 @@ function get_unnormalized_parameters(input::Dict)
     parameters["T_e"] = Tnorm * composition.T_e
     parameters["T_wall"] = Tnorm * composition.T_wall
 
-    parameters["CX_rate_coefficient"] = collisions.charge_exchange / Nnorm / timenorm
-    parameters["ionization_rate_coefficient"] = collisions.ionization / Nnorm / timenorm
+    parameters["CX_rate_coefficient"] = collisions.reactions.charge_exchange_frequency / Nnorm / timenorm
+    parameters["ionization_rate_coefficient"] = collisions.reactions.ionization_frequency / Nnorm / timenorm
     parameters["coulomb_collision_frequency0"] =
-        collisions.coulomb_collision_frequency_prefactor / timenorm
+        collisions.krook.nu_ii0 / timenorm
 
     return parameters
 end
@@ -290,6 +290,43 @@ function enum_from_string(enum_type, name)
         if name == Symbol(e)
             return e
         end
+    end
+    return nothing
+end
+
+"""
+    recursive_merge(a, b)
+
+Merge two AbstractDicts `a` and `b`. Any elements that are AbstractDicts are also merged
+(rather than just replacing with the entry in `b`).
+"""
+function recursive_merge end
+function recursive_merge(a::AbstractDict, b::AbstractDict)
+    return mergewith(recursive_merge, a, b)
+end
+function recursive_merge(a::AbstractDict, b)
+    error("Cannot merge a Dict with a non-Dict, got $a and $b")
+end
+function recursive_merge(a, b::AbstractDict)
+    error("Cannot merge a Dict with a non-Dict, got $a and $b")
+end
+function recursive_merge(a, b)
+    return b
+end
+
+"""
+Dict merge function for named keyword arguments
+for case when input Dict is a mixed Dict of Dicts
+and non-Dict float/int/string entries, and the
+keyword arguments are also a mix of Dicts and non-Dicts
+"""
+function merge_dict_with_kwargs!(dict_base; args...)
+    for (k,v) in args
+        k = String(k)
+        if k in keys(dict_base) && isa(v, AbstractDict)
+            v = recursive_merge(dict_base[k], v)
+        end
+        dict_base[k] = v
     end
     return nothing
 end

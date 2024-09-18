@@ -111,10 +111,12 @@ function update_speed_n_u_p_evolution_neutral!(advect, fvec, moments, vz, z, r,
             end
         end
         # add in contributions from charge exchange and ionization collisions
-        if abs(collisions.charge_exchange) > 0.0 || abs(collisions.ionization) > 0.0
+        charge_exchange = collisions.reactions.charge_exchange_frequency
+        ionization = collisions.reactions.ionization_frequency
+        if abs(charge_exchange) > 0.0 || abs(ionization) > 0.0
             @loop_r_z_vzeta_vr ir iz ivzeta ivr begin
                 @views @. advect[isn].speed[:,ivr,ivzeta,iz,ir] +=
-                    collisions.charge_exchange *
+                    charge_exchange *
                     (0.5*vz.grid/fvec.pz_neutral[iz,ir,isn]
                      * (fvec.density[iz,ir,isn]*fvec.pz_neutral[iz,ir,isn]
                         - fvec.density_neutral[iz,ir,isn]*fvec.ppar[iz,ir,isn]
@@ -126,25 +128,28 @@ function update_speed_n_u_p_evolution_neutral!(advect, fvec, moments, vz, z, r,
             end
         end
     end
-    if neutral_source_settings.active
-        source_density_amplitude = moments.neutral.external_source_density_amplitude
-        source_momentum_amplitude = moments.neutral.external_source_momentum_amplitude
-        source_pressure_amplitude = moments.neutral.external_source_pressure_amplitude
-        density = fvec.density_neutral
-        uz = fvec.uz_neutral
-        pz = fvec.pz_neutral
-        vth = moments.neutral.vth
-        vz_grid = vz.grid
-        @loop_s_r_z is ir iz begin
-            term1 = source_density_amplitude[iz,ir] * uz[iz,ir,is]/(density[iz,ir,is]*vth[iz,ir,is])
-            term2_over_vpa =
-                -0.5 * (source_pressure_amplitude[iz,ir] +
-                        2.0 * uz[iz,ir,is] * source_momentum_amplitude[iz,ir]) /
-                       pz[iz,ir,is] +
-                0.5 * source_density_amplitude[iz,ir] / density[iz,ir,is]
-            @loop_vzeta_vr_vz ivzeta ivr ivz begin
-                advect[is].speed[ivz,ivr,ivzeta,iz,ir] += term1 +
-                                                          vz_grid[ivz] * term2_over_vpa
+
+    for index ∈ eachindex(neutral_source_settings)
+        if neutral_source_settings[index].active
+            @views source_density_amplitude = moments.neutral.external_source_density_amplitude[:, :, index]
+            @views source_momentum_amplitude = moments.neutral.external_source_momentum_amplitude[:, :, index]
+            @views source_pressure_amplitude = moments.neutral.external_source_pressure_amplitude[:, :, index]
+            density = fvec.density_neutral
+            uz = fvec.uz_neutral
+            pz = fvec.pz_neutral
+            vth = moments.neutral.vth
+            vz_grid = vz.grid
+            @loop_s_r_z is ir iz begin
+                term1 = source_density_amplitude[iz,ir] * uz[iz,ir,is]/(density[iz,ir,is]*vth[iz,ir,is])
+                term2_over_vpa =
+                    -0.5 * (source_pressure_amplitude[iz,ir] +
+                            2.0 * uz[iz,ir,is] * source_momentum_amplitude[iz,ir]) /
+                        pz[iz,ir,is] +
+                    0.5 * source_density_amplitude[iz,ir] / density[iz,ir,is]
+                @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                    advect[is].speed[ivz,ivr,ivzeta,iz,ir] += term1 +
+                                                            vz_grid[ivz] * term2_over_vpa
+                end
             end
         end
     end
@@ -173,18 +178,19 @@ function update_speed_n_p_evolution_neutral!(advect, fields, fvec, moments, vz, 
                     vz.grid*moments.neutral.duz_dz[iz,ir,isn]
             end
         end
-        if abs(collisions.charge_exchange) > 0.0
+        charge_exchange = collisions.reactions.charge_exchange_frequency
+        if abs(charge_exchange) > 0.0
             # add in contributions from charge exchange and ionization collisions
             error("suspect the charge exchange and ionization contributions here may be "
                   * "wrong because (upar[is]-upar[isp])^2 type terms were missed in the "
                   * "energy equation when it was substituted in to derive them.")
             @loop_r_z_vzeta_vr ir iz ivzeta ivr begin
-                @views @. advect[is].speed[:,ivr,ivzeta,iz,ir] += collisions.charge_exchange *
+                @views @. advect[is].speed[:,ivr,ivzeta,iz,ir] += charge_exchange *
                         0.5*vz.grid*fvec.density_neutral[iz,ir,is] * (1.0-fvec.ppar[iz,ir,is]/fvec.pz_neutral[iz,ir,is])
             end
         end
     end
-    if ion_source_settings.active
+    if any(x -> x.active, neutral_source_settings)
         error("External source not implemented for evolving n and ppar case")
     end
 end
@@ -212,22 +218,25 @@ function update_speed_n_u_evolution_neutral!(advect, fvec, moments, vz, z, r, co
         # if neutrals present compute contribution to parallel acceleration due to charge exchange
         # and/or ionization collisions betweens ions and neutrals
 
-        if abs(collisions.charge_exchange) > 0.0
+        charge_exchange = collisions.reactions.charge_exchange_frequency
+        if abs(charge_exchange) > 0.0
             # include contribution to neutral acceleration due to collisional friction with ions
             @loop_r_z_vzeta_vr ir iz ivzeta ivr begin
-                @views @. advect[isn].speed[:,ivr,ivzeta,iz,ir] -= collisions.charge_exchange*fvec.density[iz,ir,isn]*(fvec.upar[iz,ir,isn]-fvec.uz_neutral[iz,ir,isn])
+                @views @. advect[isn].speed[:,ivr,ivzeta,iz,ir] -= charge_exchange*fvec.density[iz,ir,isn]*(fvec.upar[iz,ir,isn]-fvec.uz_neutral[iz,ir,isn])
             end
         end
     end
-    if neutral_source_settings.active
-        source_density_amplitude = moments.neutral.external_source_density_amplitude
-        density = fvec.density_neutral
-        uz = fvec.uz_neutral
-        vth = moments.neutral.vth
-        @loop_sn_r_z isn ir iz begin
-            term = source_density_amplitude[iz,ir] * uz[iz,ir,isn] / density[iz,ir,isn]
-            @loop_vzeta_vr_vz ivzeta ivr ivz begin
-                advect[isn].speed[ivz,ivr,ivzeta,iz,ir] += term
+    for index ∈ eachindex(neutral_source_settings)
+        if neutral_source_settings[index].active
+            @views source_density_amplitude = moments.neutral.external_source_density_amplitude[:, :, index]
+            density = fvec.density_neutral
+            uz = fvec.uz_neutral
+            vth = moments.neutral.vth
+            @loop_sn_r_z isn ir iz begin
+                term = source_density_amplitude[iz,ir] * uz[iz,ir,isn] / density[iz,ir,isn]
+                @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                    advect[isn].speed[ivz,ivr,ivzeta,iz,ir] += term
+                end
             end
         end
     end

@@ -2,8 +2,7 @@ module InterpolationTests
 
 include("setup.jl")
 
-using moment_kinetics.input_structs: grid_input, advection_input
-using moment_kinetics.coordinates: define_coordinate
+using moment_kinetics.coordinates: define_test_coordinate
 using moment_kinetics.interpolation:
     interpolate_to_grid_1d, interpolate_to_grid_z, interpolate_to_grid_vpa
 
@@ -20,9 +19,6 @@ println("interpolation tests")
 ngrid = 33
 L = 6.0
 bc = "periodic"
-# fd_option and adv_input not actually used so given values unimportant
-fd_option = ""
-adv_input = advection_input("default", 1.0, 0.0, 0.0)
 
 function runtests()
     @testset "interpolation" verbose=use_verbose begin
@@ -35,20 +31,17 @@ function runtests()
                     ntest ∈ (3, 14), nelement ∈ (2, 8), zlim ∈ (L/2.0, L/5.0)
 
             # create the 'input' struct containing input info needed to create a coordinate
-			nelement_local = nelement
-			nrank_per_block = 0 # dummy value
-			irank = 0 # dummy value
-			comm = MPI.COMM_NULL # dummy value
+            nelement_local = nelement
             cheb_option = "FFT"
-            #element_spacing_option = "uniform"
-            input = grid_input("coord", ngrid, nelement,
-                                nelement_local, nrank_per_block, irank, L, 
-                                discretization, fd_option, cheb_option, bc, adv_input, comm,
-                                element_spacing_option)
+            input = OptionsDict("name"=>"coord", "ngrid"=>ngrid, "nelement"=>nelement,
+                                "L"=>L, "discretization"=>discretization,
+                                "cheb_option"=>cheb_option, "bc"=>bc,
+                                "element_spacing_option"=>element_spacing_option)
             # create the coordinate struct 'z'
             # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
             # errors due to communicators not being fully set up.
-            z, spectral = define_coordinate(input, nothing; ignore_MPI=true, collision_operator_dim=false)
+            z, spectral = define_test_coordinate(input; ignore_MPI=true,
+                                                 collision_operator_dim=false)
 
             test_grid = [z for z in range(-zlim, zlim, length=ntest)]
 

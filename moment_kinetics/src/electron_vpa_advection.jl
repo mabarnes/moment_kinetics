@@ -66,19 +66,22 @@ function update_electron_speed_vpa!(advect, density, upar, ppar, moments, vpa,
         advect.speed[ivpa,ivperp,iz,ir] = ((vth[iz,ir] * dppar_dz[iz,ir] + vpa[ivpa] * dqpar_dz[iz,ir]) 
                                            / (2 * ppar[iz,ir]) - vpa[ivpa]^2 * dvth_dz[iz,ir])
     end
-    if electron_source_settings.active
-        source_density_amplitude = moments.electron.external_source_density_amplitude
-        source_momentum_amplitude = moments.electron.external_source_momentum_amplitude
-        source_pressure_amplitude = moments.electron.external_source_pressure_amplitude
-        @loop_r_z ir iz begin
-            term1 = source_density_amplitude[iz,ir] * upar[iz,ir]/(density[iz,ir]*vth[iz,ir])
-            term2_over_vpa =
-                -0.5 * (source_pressure_amplitude[iz,ir] +
-                        2.0 * upar[iz,ir] * source_momentum_amplitude[iz,ir]) /
-                       ppar[iz,ir] +
-                0.5 * source_density_amplitude[iz,ir] / density[iz,ir]
-            @loop_vperp_vpa ivperp ivpa begin
-                advect.speed[ivpa,ivperp,iz,ir] += term1 + vpa[ivpa] * term2_over_vpa
+
+    for index ∈ eachindex(electron_source_settings)
+        if electron_source_settings[index].active
+            @views source_density_amplitude = moments.electron.external_source_density_amplitude[:, :, index]
+            @views source_momentum_amplitude = moments.electron.external_source_momentum_amplitude[:, :, index]
+            @views source_pressure_amplitude = moments.electron.external_source_pressure_amplitude[:, :, index]
+            @loop_r_z ir iz begin
+                term1 = source_density_amplitude[iz,ir] * upar[iz,ir]/(density[iz,ir]*vth[iz,ir])
+                term2_over_vpa =
+                    -0.5 * (source_pressure_amplitude[iz,ir] +
+                            2.0 * upar[iz,ir] * source_momentum_amplitude[iz,ir]) /
+                        ppar[iz,ir] +
+                    0.5 * source_density_amplitude[iz,ir] / density[iz,ir]
+                @loop_vperp_vpa ivperp ivpa begin
+                    advect.speed[ivpa,ivperp,iz,ir] += term1 + vpa[ivpa] * term2_over_vpa
+                end
             end
         end
     end

@@ -3,38 +3,27 @@
 module input_structs
 
 export advance_info
-export evolve_moments_options
 export time_info
-export advection_input, advection_input_mutable
-export grid_input, grid_input_mutable
-export initial_condition_input, initial_condition_input_mutable
+export advection_input
+export initial_condition_input
 export spatial_initial_condition_input, velocity_initial_condition_input
-export ion_species_parameters, neutral_species_parameters, species_parameters_mutable
+export ion_species_parameters, neutral_species_parameters
 export species_composition
-export drive_input, drive_input_mutable
-export collisions_input, krook_collisions_input, fkpl_collisions_input
+export em_fields_input
+export ion_source_data, electron_source_data, neutral_source_data
+export collisions_input, reactions, electron_fluid_collisions, krook_collisions_input,
+       fkpl_collisions_input, mxwl_diff_collisions_input
 export io_input
 export pp_input
 export geometry_input
 export set_defaults_and_check_top_level!, set_defaults_and_check_section!,
-       options_to_TOML, Dict_to_NamedTuple
-export merge_dict_with_kwargs!, merge_dict_of_dicts!, merge_dict_of_dicts
+       check_sections!, options_to_TOML, Dict_to_NamedTuple
 
 using ..communication
 using ..type_definitions: mk_float, mk_int
 
 using MPI
 using TOML
-
-"""
-"""
-mutable struct evolve_moments_options
-    density::Bool
-    parallel_flow::Bool
-    parallel_pressure::Bool
-    conservation::Bool
-    #advective_form::Bool
-end
 
 """
 `t_error_sum` is included so that a type which might be mk_float or Float128 can be set by
@@ -144,19 +133,6 @@ end
 
 """
 """
-mutable struct advection_input_mutable
-    # advection speed option
-    option::String
-    # constant advection speed to use with the "constant" advection option
-    constant_speed::mk_float
-    # for option = "oscillating", advection speed is of form
-    # speed = constant_speed*(1 + oscillation_amplitude*sinpi(frequency*t))
-    frequency::mk_float
-    oscillation_amplitude::mk_float
-end
-
-"""
-"""
 struct advection_input
     # advection speed option
     option::String
@@ -186,141 +162,45 @@ export kinetic_electrons_with_temperature_equation
 
 """
 """
-mutable struct grid_input_mutable
-    # name of the variable associated with this coordinate
-    name::String
-    # number of grid points per element
-    ngrid::mk_int
-    # number of elements in global grid across ranks 
-    nelement_global::mk_int
-    # number of elements in local grid on this rank 
-    nelement_local::mk_int
-	# box length
-    L::mk_float
-    # discretization option
-    discretization::String
-    # finite difference option (only used if discretization is "finite_difference")
-    fd_option::String
-    # cheb option (only used if discretization is "chebyshev_pseudospectral")
-    cheb_option::String
-    # boundary option
-    bc::String
-    # mutable struct containing advection speed options
-    advection::advection_input_mutable
-    # string option determining boundary spacing
-    element_spacing_option::String
-end
-
-"""
-"""
-struct grid_input
-    # name of the variable associated with this coordinate
-    name::String
-    # number of grid points per element
-    ngrid::mk_int
-    # number of elements globally
-    nelement_global::mk_int
-    # number of elements locally
-    nelement_local::mk_int
-    # number of ranks involved in the calculation
-    nrank::mk_int
-    # rank of this process
-    irank::mk_int
-    # box length
-    L::mk_float
-    # discretization option
-    discretization::String
-    # finite difference option (only used if discretization is "finite_difference")
-    fd_option::String
-    # cheb option (only used if discretization is "chebyshev_pseudospectral")
-    cheb_option::String
-    # boundary option
-    bc::String
-    # struct containing advection speed options
-    advection::advection_input
-    # MPI communicator
-    comm::MPI.Comm
-    # string option determining boundary spacing
-    element_spacing_option::String
-end
-
-"""
-"""
-mutable struct initial_condition_input_mutable
-    # initialization inputs for one coordinate of a separable distribution function
-    initialization_option::String
-    # inputs for "gaussian" initial condition
-    width::mk_float
-    # inputs for "sinusoid" initial condition
-    wavenumber::mk_int
-    density_amplitude::mk_float
-    density_phase::mk_float
-    upar_amplitude::mk_float
-    upar_phase::mk_float
-    temperature_amplitude::mk_float
-    temperature_phase::mk_float
-    # inputs for "monomial" initial condition
-    monomial_degree::mk_int
-end
-
-"""
-"""
 Base.@kwdef struct spatial_initial_condition_input
     # initialization inputs for one coordinate of a separable distribution function
-    initialization_option::String
+    initialization_option::String = "gaussian"
     # inputs for "gaussian" initial condition
-    width::mk_float
+    width::mk_float = 0.125
     # inputs for "sinusoid" initial condition
-    wavenumber::mk_int
-    density_amplitude::mk_float
-    density_phase::mk_float
-    upar_amplitude::mk_float
-    upar_phase::mk_float
-    temperature_amplitude::mk_float
-    temperature_phase::mk_float
+    wavenumber::mk_int = 1
+    density_amplitude::mk_float = 0.001
+    density_phase::mk_float = 0.0
+    upar_amplitude::mk_float = 0.0
+    upar_phase::mk_float = 0.0
+    temperature_amplitude::mk_float = 0.0
+    temperature_phase::mk_float = 0.0
     # inputs for "monomial" initial condition
-    monomial_degree::mk_int
+    monomial_degree::mk_int = 2
 end
 
 """
 """
 Base.@kwdef struct velocity_initial_condition_input
     # initialization inputs for one coordinate of a separable distribution function
-    initialization_option::String
+    initialization_option::String = "gaussian"
     # inputs for "gaussian" initial condition
-    width::mk_float
+    width::mk_float = 1.0
     # inputs for "sinusoid" initial condition
-    wavenumber::mk_int
-    density_amplitude::mk_float
-    density_phase::mk_float
-    upar_amplitude::mk_float
-    upar_phase::mk_float
-    temperature_amplitude::mk_float
-    temperature_phase::mk_float
+    wavenumber::mk_int = 1
+    density_amplitude::mk_float = 1.0
+    density_phase::mk_float = 0.0
+    upar_amplitude::mk_float = 0.0
+    upar_phase::mk_float = 0.0
+    temperature_amplitude::mk_float = 0.0
+    temperature_phase::mk_float = 0.0
     # inputs for "monomial" initial condition
-    monomial_degree::mk_int
+    monomial_degree::mk_int = 2
     # inputs for "isotropic-beam", "directed-beam" initial conditions
-    v0::mk_float
-    vth0::mk_float
-    vpa0::mk_float
-    vperp0::mk_float
-end
-
-"""
-"""
-mutable struct species_parameters_mutable
-    # type is the type of species; options are 'ion' or 'neutral'
-    type::String
-    # array containing the initial line-averaged temperature for this species
-    initial_temperature::mk_float
-    # array containing the initial line-averaged density for this species
-    initial_density::mk_float
-    # struct containing the initial condition info in z for this species
-    z_IC::initial_condition_input_mutable
-    # struct containing the initial condition info in r for this species
-    r_IC::initial_condition_input_mutable
-    # struct containing the initial condition info in vpa for this species
-    vpa_IC::initial_condition_input_mutable
+    v0::mk_float = 1.0
+    vth0::mk_float = 1.0
+    vpa0::mk_float = 1.0
+    vperp0::mk_float = 1.0
 end
 
 """
@@ -359,8 +239,8 @@ Base.@kwdef struct neutral_species_parameters
     z_IC::spatial_initial_condition_input
     # struct containing the initial condition info in r for this species
     r_IC::spatial_initial_condition_input
-    # struct containing the initial condition info in vpa for this species
-    vpa_IC::velocity_initial_condition_input
+    # struct containing the initial condition info in vz for this species
+    vz_IC::velocity_initial_condition_input
 end
 
 """
@@ -406,33 +286,170 @@ Base.@kwdef struct species_composition
 end
 
 """
+Settings for electronmagenetic fields
 """
-mutable struct drive_input_mutable
-    # if drive.phi = true, include external electrostatic potential
-    force_phi::Bool
-    # if external field included, it is of the form
-    # phi(z,t=0)*amplitude*sinpi(t*frequency)
-    amplitude::mk_float
-    frequency::mk_float
+Base.@kwdef struct em_fields_input
+    force_Er_zero_at_wall::Bool = false
 end
 
 """
+Source profile structs for ions and electrons which allows them to have any number 
+of different sources (from wall perhaps, superposition of core sources, etc.). These
+sources are then contained in a vector of structs.
+
+Since the ion source must be the same as the electron source in all respects (apart
+from possibly a different electron temperature or source strength), the electron
+vector of source profile structs will be a kind of mirror of the ion vector of structs. 
 """
-struct drive_input
-    # if drive.phi = true, include external electrostatic potential
-    force_phi::Bool
-    # if external field included, it is of the form
-    # phi(z,t=0)*amplitude*sinpi(t*frequency)
-    amplitude::mk_float
-    frequency::mk_float
-    # if true, forces Er = 0.0 at wall plates 
-    force_Er_zero_at_wall::Bool 
+Base.@kwdef struct ion_source_data
+    # struct containing source data for ions
+    # is the source active or not
+    active::Bool
+    # An overall multiplier for the strength (i.e. 0.0 would turn off the source)
+    source_strength::mk_float
+    # For use with "energy" option, Krook source (...)
+    source_n::mk_float
+    # Temperature of source (variation along z can be introduced later)
+    source_T::mk_float
+    # birth speed for "alphas" option
+    source_v0::mk_float
+    # birth vpa for "beam" option
+    source_vpa0::mk_float
+    # birth vperp for "beam" option
+    source_vperp0::mk_float
+    # strength of sink in "alphas-with-losses" & "beam-with-losses" option
+    sink_strength::mk_float
+    # thermal speed for sink in "alphas-with-losses" & "beam-with-losses" option
+    sink_vth::mk_float
+    # profile for source in r ('constant' or 'gaussian' or 'parabolic' etc.) 
+    r_profile::String
+    # width of source in r (doesn't apply to constant profile)
+    r_width::mk_float
+    # relative minimum of source in r, acts as the baseline
+    r_relative_minimum::mk_float
+    # profile for source in z ('constant' or 'gaussian' or 'parabolic' etc.)
+    z_profile::String
+    # width of source in z (doesn't apply to constant profile)
+    z_width::mk_float
+    # relative minimum of source in z, acts as the baseline (so you can elevate
+    # your gaussian source above 0, for example)
+    z_relative_minimum::mk_float
+    # velocity profile for the source, Maxwellian would be default, can have beams too 
+    source_type::String #"Maxwellian" "energy", "alphas", "alphas-with-losses", "beam", "beam-with-losses"
+    # proportional integral controllers - for when you want to find a source profile that matches
+    # a target density 
+    PI_density_controller_P::mk_float
+    PI_density_controller_I::mk_float
+    PI_density_target_amplitude::mk_float
+    PI_density_target_r_profile::String
+    PI_density_target_r_width::mk_float
+    PI_density_target_r_relative_minimum::mk_float
+    PI_density_target_z_profile::String
+    PI_density_target_z_width::mk_float
+    PI_density_target_z_relative_minimum::mk_float
+    recycling_controller_fraction::mk_float
+    # r_amplitude through the r coordinate (in 1D this can just be set to 1.0)
+    r_amplitude::Vector{mk_float}
+    # z_amplitude through the z coordinate, which will have your gaussian profile,
+    # constant profile, parabolic, etc..
+    z_amplitude::Vector{mk_float}
+    PI_density_target::Union{mk_float, Nothing, MPISharedArray{mk_float,2}}
+    PI_controller_amplitude::Union{Nothing, MPISharedArray{mk_float,1}}
+    controller_source_profile::Union{Nothing, MPISharedArray{mk_float,2}, Array{mk_float, 2}}
+    PI_density_target_ir::Union{mk_int, Nothing}
+    PI_density_target_iz::Union{mk_int, Nothing}
+    PI_density_target_rank::Union{mk_int, Nothing} #possibly this should have Int64 as well, 
+    # in the event that the code is running with mk_int = Int32 but the rank is set to 0::Int64
 end
 
-"""
-Structs set up for the collision operators so far in use. These will each
-be contained in the main collisions_input struct below, as substructs. 
-"""
+Base.@kwdef struct electron_source_data
+    # most of the electron parameters must be the same as for ions, so only 
+    # source strength (in the case of an ion energy source) and source Temperature
+    # can be different. The other four are set by the ion source data.
+    source_strength::mk_float
+    source_T::mk_float
+    active::Bool
+    r_amplitude::Vector{mk_float}
+    z_amplitude::Vector{mk_float}
+    source_type::String
+end
+
+Base.@kwdef struct neutral_source_data
+    # struct containing source data for neutrals
+    # is the source active or not
+    active::Bool
+    # An overall multiplier for the strength (i.e. 0.0 would turn off the source)
+    source_strength::mk_float
+    # For use with "energy" option, Krook source (...)
+    source_n::mk_float
+    # Temperature of source (variation along z can be introduced later)
+    source_T::mk_float
+    # birth speed for "alphas" option
+    source_v0::mk_float
+    # birth vpa for "beam" option
+    source_vpa0::mk_float
+    # birth vperp for "beam" option
+    source_vperp0::mk_float
+    # strength of sink in "alphas-with-losses" & "beam-with-losses" option
+    sink_strength::mk_float
+    # thermal speed for sink in "alphas-with-losses" & "beam-with-losses" option
+    sink_vth::mk_float
+    # profile for source in r ('constant' or 'gaussian' or 'parabolic' etc.) 
+    r_profile::String
+    # width of source in r (doesn't apply to constant profile)
+    r_width::mk_float
+    # relative minimum of source in r, acts as the baseline
+    r_relative_minimum::mk_float
+    # profile for source in z ('constant' or 'gaussian' or 'parabolic' etc.)
+    z_profile::String
+    # width of source in z (doesn't apply to constant profile)
+    z_width::mk_float
+    # relative minimum of source in z, acts as the baseline (so you can elevate
+    # your gaussian source above 0, for example)
+    z_relative_minimum::mk_float
+    # velocity profile for the source, Maxwellian would be default, can have beams too 
+    source_type::String #"Maxwellian" "energy", "alphas", "alphas-with-losses", "beam", "beam-with-losses"
+    # proportional integral controllers - for when you want to find a source profile that matches
+    # a target density 
+    PI_density_controller_P::mk_float
+    PI_density_controller_I::mk_float
+    PI_density_target_amplitude::mk_float
+    PI_density_target_r_profile::String
+    PI_density_target_r_width::mk_float
+    PI_density_target_r_relative_minimum::mk_float
+    PI_density_target_z_profile::String
+    PI_density_target_z_width::mk_float
+    PI_density_target_z_relative_minimum::mk_float
+    recycling_controller_fraction::mk_float
+    # r_amplitude through the r coordinate (in 1D this can just be set to 1.0)
+    r_amplitude::Vector{mk_float}
+    # z_amplitude through the z coordinate, which will have your gaussian profile,
+    # constant profile, parabolic, etc..
+    z_amplitude::Vector{mk_float}
+    PI_density_target::Union{mk_float, Nothing, MPISharedArray{mk_float,2}}
+    PI_controller_amplitude::Union{Nothing, MPISharedArray{mk_float,1}}
+    controller_source_profile::Union{Nothing, MPISharedArray{mk_float,2}, Array{mk_float, 2}}
+    PI_density_target_ir::Union{mk_int, Nothing}
+    PI_density_target_iz::Union{mk_int, Nothing}
+    PI_density_target_rank::Union{mk_int, Nothing} #possibly this should have Int64 as well, 
+    # in the event that the code is running with mk_int = Int32 but the rank is set to 0::Int64
+end
+
+#Structs set up for the collision operators so far in use. These will each
+#be contained in the main collisions_input struct below, as substructs.
+
+Base.@kwdef struct reactions
+    charge_exchange_frequency::mk_float = 0.0
+    electron_charge_exchange_frequency::mk_float = 0.0
+    ionization_frequency::mk_float = 0.0
+    electron_ionization_frequency::mk_float = 0.0
+    ionization_energy::mk_float = 0.0
+end
+
+Base.@kwdef struct electron_fluid_collisions
+    nu_ei::mk_float = 0.0
+end
+
 Base.@kwdef struct mxwl_diff_collisions_input
     use_maxwell_diffusion::Bool
     # different diffusion coefficients for each species, has units of 
@@ -493,18 +510,10 @@ Collisions input struct to contain all the different collisions substructs and o
 collision input parameters.
 """
 struct collisions_input
-    # ion-neutral charge exchange collision frequency
-    charge_exchange::mk_float
-    # electron-neutral charge exchange collision frequency
-    charge_exchange_electron::mk_float
-    # ionization collision frequency
-    ionization::mk_float
-    # ionization collision frequency for electrons (probably should be same as for ions)
-    ionization_electron::mk_float
-    # ionization energy cost
-    ionization_energy::mk_float
-    # electron-ion collision frequency
-    nu_ei::mk_float
+    # atomic reaction parameters
+    reactions::reactions
+    # electron fluid collision parameters
+    electron_fluid::electron_fluid_collisions
     # struct of parameters for the Krook operator
     krook::krook_collisions_input
     # struct of parameters for the Fokker-Planck operator
@@ -536,18 +545,6 @@ end
 
 @enum binary_format_type hdf5 netcdf
 export binary_format_type, hdf5, netcdf
-
-"""
-Settings and input for setting up file I/O
-"""
-Base.@kwdef struct io_input
-    output_dir::String
-    run_name::String
-    ascii_output::Bool
-    binary_format::binary_format_type
-    parallel_io::Bool
-    run_id::String
-end
 
 """
 """
@@ -779,15 +776,8 @@ function set_defaults_and_check_top_level!(options::AbstractDict; kwargs...)
     return options
 end
 
-"""
-Set the defaults for options in a section, and check that there are not any unexpected
-options (i.e. options that have no default).
+function _get_section_and_check_option_names(options, section_name, section_keys)
 
-Modifies the options[section_name]::Dict by adding defaults for any values that are not
-already present.
-"""
-function set_defaults_and_check_section!(options::AbstractDict, section_name;
-                                         kwargs...)
     DictType = typeof(options)
 
     if !(section_name ∈ keys(options))
@@ -804,13 +794,55 @@ function set_defaults_and_check_section!(options::AbstractDict, section_name;
 
     # Check for any unexpected values in the section - all options that are set should be
     # present in the kwargs of this function call
-    section_keys_symbols = keys(kwargs)
-    section_keys = (String(k) for k ∈ section_keys_symbols)
+    unexpected_options = String[]
     for (key, value) in section
         if !(key ∈ section_keys)
-            error("Unexpected option '$key=$value' in section '$section_name'")
+            push!(unexpected_options, key)
         end
     end
+    if length(unexpected_options) > 0
+        error("Unexpected options $(join(("$k=$(section[k])" for k ∈ unexpected_options), ", ", ", and ")) in section '$section_name'")
+    end
+
+    return section
+end
+
+function _check_for_nothing(section, section_name)
+    nothing_defaults = Tuple((k,v) for (k,v) ∈ section if v === nothing)
+    if length(nothing_defaults) > 0
+        error("`nothing` cannot be used as a default value, because it cannot be written "
+              * "to TOML or HDF5. In section [$section_name], found "
+              * "$(join(("$k=$v" for (k,v) ∈ nothing_defaults), ", ", ", and ")).")
+    end
+end
+
+function _store_section_name_for_check!(options, section_name)
+    # Record the defined section_name in a temporary, private subsection of `options`, so
+    # we can use it to check the existing sections later.
+    if !(_section_check_store_name ∈ keys(options))
+        # If section is not present, create it
+        options[_section_check_store_name] = String[]
+    end
+    push!(options[_section_check_store_name], section_name)
+
+    return nothing
+end
+
+const _section_check_store_name = "_section_check_store"
+
+"""
+Set the defaults for options in a section, and check that there are not any unexpected
+options (i.e. options that have no default).
+
+Modifies the options[section_name]::Dict by adding defaults for any values that are not
+already present.
+"""
+function set_defaults_and_check_section!(options::AbstractDict, section_name;
+                                         kwargs...)
+
+    section_keys_symbols = keys(kwargs)
+    section_keys = (String(k) for k ∈ section_keys_symbols)
+    section = _get_section_and_check_option_names(options, section_name, section_keys)
 
     # Set default values if a key was not set explicitly
     for (key_sym, default_value) ∈ kwargs
@@ -820,7 +852,91 @@ function set_defaults_and_check_section!(options::AbstractDict, section_name;
         section[key] = get(section, key, default_value)
     end
 
+    _check_for_nothing(section, section_name)
+
+    _store_section_name_for_check!(options, section_name)
+
     return section
+end
+
+"""
+    set_defaults_and_check_section!(options::AbstractDict, struct_type::Type,
+                                    name::Union{String,Nothing}=nothing)
+
+Alternative form to be used when the options should be stored in a struct of type
+`struct_type` rather than a `NamedTuple`. `struct_type` must be defined using `@kwdef`.
+
+The returned instance of `struct_type` is immutable, so if you need to modify the settings
+- e.g. to apply some logic to set defaults depending on other settings/parameters - then
+you should use the 'standard' version of [`set_defaults_and_check_section!`](@ref) that
+returns a `Dict` that can be modified, and then use that `Dict` to initialise the
+`struct_type`.
+
+The name of the section in the options that will be read defaults to the name of
+`struct_type`, but can be set using the `section_name` argument.
+
+Returns an instance of `struct_type`.
+"""
+function set_defaults_and_check_section!(options::AbstractDict, struct_type::Type,
+                                         section_name::Union{String,Nothing}=nothing)
+
+    if section_name === nothing
+        section_name = String(nameof(struct_type))
+    end
+    section_keys = (String(key) for key ∈ fieldnames(struct_type))
+    section = _get_section_and_check_option_names(options, section_name, section_keys)
+
+    # Pass the settings in `section` as kwargs to the constructor for `struct_type`.
+    # `struct_type` is an `@kwdef` struct, so this constructor takes care of the default
+    # values.
+    settings_instance = struct_type(; (Symbol(k) => v for (k,v) ∈ pairs(section))...)
+
+    # Save the settings with defaults applied back into `options` so they can be stored in
+    # the output file.
+    for k ∈ fieldnames(struct_type)
+        section[String(k)] = getfield(settings_instance, k)
+    end
+
+    _check_for_nothing(section, section_name)
+
+    _store_section_name_for_check!(options, section_name)
+
+    return settings_instance
+end
+
+"""
+    check_sections!(options::AbstractDict)
+
+Check that there are no unexpected sections in `options`. The 'expected sections' are the
+ones that were defined with [`set_defaults_and_check_section!`](@ref).
+"""
+function check_sections!(options::AbstractDict; check_no_top_level_options=true)
+
+    expected_section_names = pop!(options, _section_check_store_name)
+
+    unexpected_section_names = String[]
+    unexpected_top_level_options = String[]
+    for (k,v) ∈ pairs(options)
+        if isa(v, AbstractDict)
+            if k ∉ expected_section_names
+                push!(unexpected_section_names, k)
+            end
+        elseif check_no_top_level_options
+            push!(unexpected_top_level_options, k)
+        end
+    end
+
+    if length(unexpected_section_names) > 0 && length(unexpected_top_level_options) > 0
+        error("Input had unexpected sections $unexpected_section_names, and unexpected "
+              * "options in the top level $unexpected_top_level_options")
+    elseif length(unexpected_section_names) > 0
+        error("Input had unexpected sections $unexpected_section_names.")
+    elseif length(unexpected_top_level_options) > 0
+        error("Input had unexpected options in the top level "
+              * "$unexpected_top_level_options")
+    end
+
+    return nothing
 end
 
 """
@@ -830,57 +946,6 @@ Useful as NamedTuple is immutable, so option values cannot be accidentally chang
 """
 function Dict_to_NamedTuple(d)
     return NamedTuple(Symbol(k)=>v for (k,v) ∈ d)
-end
-
-"""
-Dict merge function for named keyword arguments 
-for case when input Dict is a mixed Dict of Dicts
-and non-Dict float/int/string entries, and the 
-keyword arguments are also a mix of Dicts and non-Dicts
-"""
-
-function merge_dict_with_kwargs!(dict_base; args...)
-    for (k,v) in args
-        k = String(k)
-        if k in keys(dict_base) && isa(v, AbstractDict)
-            v = merge(dict_base[k], v)
-        end
-        dict_base[k] = v
-    end
-    return nothing
-end
-
-"""
-Dict merge function for merging Dicts of Dicts
-In place merge, returns nothing 
-"""
-
-function merge_dict_of_dicts!(dict_base, dict_mod)
-    for (k,v) in dict_mod
-        k = String(k)
-        if k in keys(dict_base) && isa(v, AbstractDict)
-            v = merge(dict_base[k], v)
-        end
-        dict_base[k] = v
-    end
-    return nothing
-end
-
-"""
-Dict merge function for merging Dicts of Dicts
-Creates new dict, which is returned 
-"""
-
-function merge_dict_of_dicts(dict_base, dict_mod)
-    dict_new = deepcopy(dict_base)
-    for (k,v) in dict_mod
-        k = String(k)
-        if k in keys(dict_new) && isa(v, AbstractDict)
-            v = merge(dict_new[k], v)
-        end
-        dict_new[k] = v
-    end
-    return dict_new
 end
 
 """

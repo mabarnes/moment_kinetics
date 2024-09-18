@@ -97,9 +97,17 @@ end
 
 function write_single_value!(file_or_group::NCDataset, name,
                              value::Union{Number, AbstractString, AbstractArray{T,N}},
-                             coords...; parallel_io, n_ion_species=nothing,
-                             n_neutral_species=nothing, description=nothing,
-                             units=nothing) where {T,N}
+                             coords::Union{coordinate,NamedTuple}...; parallel_io,
+                             description=nothing, units=nothing) where {T,N}
+
+    if any(c.n < 0 for c ∈ coords)
+        error("Got a negative `n` in $coords")
+    end
+    if any(c.n == 0 for c ∈ coords)
+        # No data to write
+        return nothing
+    end
+
     if description !== nothing || units !== nothing
         attributes = Dict{String, Any}()
         if description !== nothing
@@ -110,11 +118,6 @@ function write_single_value!(file_or_group::NCDataset, name,
         end
     else
         attributes = ()
-    end
-
-    if n_ion_species !== nothing && n_neutral_species != nothing
-        error("Cannot have both ion-species and neutral species dimensions." *
-              "Got n_ion_species=$n_ion_species, n_neutral_species=$n_neutral_species")
     end
 
     if isa(value, Number) || isa(value, AbstractString)
@@ -134,26 +137,6 @@ function write_single_value!(file_or_group::NCDataset, name,
             maybe_create_netcdf_dim(file_or_group, c)
         end
         dims = Tuple(c.name for c in coords)
-
-        if n_ion_species !== nothing
-            if n_ion_species < 0
-                error("n_ion_species must be non-negative, got $n_ion_species")
-            elseif n_ion_species == 0
-                # No data to write
-                return nothing
-            end
-            maybe_create_netcdf_dim(file_or_group, "ion_species", n_ion_species)
-            dims = tuple(dims..., "ion_species")
-        elseif n_neutral_species !== nothing
-            if n_neutral_species < 0
-                error("n_neutral_species must be non-negative, got $n_neutral_species")
-            elseif n_neutral_species == 0
-                # No data to write
-                return nothing
-            end
-            maybe_create_netcdf_dim(file_or_group, "neutral_species", n_neutral_species)
-            dims = tuple(dims..., "neutral_species")
-        end
     end
     if isa(value, Bool)
         # As a hack, write bools to NetCDF as Char, as NetCDF does not support bools (?),
@@ -169,49 +152,19 @@ function write_single_value!(file_or_group::NCDataset, name,
 end
 
 function create_dynamic_variable!(file_or_group::NCDataset, name, type,
-                                  coords::coordinate...; parallel_io,
-                                  n_ion_species=nothing, n_neutral_species=nothing,
-                                  diagnostic_var_size=nothing, description=nothing,
-                                  units=nothing)
+                                  coords::Union{coordinate,NamedTuple}...; parallel_io,
+                                  description=nothing, units=nothing)
 
-    if n_ion_species !== nothing && n_neutral_species !== nothing
-        error("Variable should not contain both ion and neutral species dimensions. "
-              * "Got n_ion_species=$n_ion_species and "
-              * "n_neutral_species=$n_neutral_species")
+    if any(c.n < 0 for c ∈ coords)
+        error("Got a negative `n` in $coords")
     end
-    if diagnostic_var_size !== nothing && n_ion_species !== nothing
-        error("Diagnostic variable should not contain both ion species dimension. Got "
-              * "diagnostic_var_size=$diagnostic_var_size and "
-              * "n_ion_species=$n_ion_species")
-    end
-    if diagnostic_var_size !== nothing && n_neutral_species !== nothing
-        error("Diagnostic variable should not contain both neutral species dimension. "
-              * "Got diagnostic_var_size=$diagnostic_var_size and "
-              * "n_neutral_species=$n_neutral_species")
+    if any(c.n == 0 for c ∈ coords)
+        # No data to write
+        return nothing
     end
 
     # Create time dimension if necessary
     maybe_create_netcdf_dim(file_or_group, "time", Inf)
-
-    # Create species dimension if necessary
-    if n_ion_species !== nothing
-        if n_ion_species < 0
-            error("n_ion_species must be non-negative, got $n_ion_species")
-        elseif n_ion_species == 0
-            # No data to write
-            return nothing
-        end
-        maybe_create_netcdf_dim(file_or_group, "ion_species", n_ion_species)
-    end
-    if n_neutral_species !== nothing
-        if n_neutral_species < 0
-            error("n_neutral_species must be non-negative, got $n_neutral_species")
-        elseif n_neutral_species == 0
-            # No data to write
-            return nothing
-        end
-        maybe_create_netcdf_dim(file_or_group, "neutral_species", n_neutral_species)
-    end
 
     # Create other dimensions if necessary
     for c ∈ coords
@@ -221,23 +174,7 @@ function create_dynamic_variable!(file_or_group::NCDataset, name, type,
     # create the variable so it can be expanded indefinitely (up to the largest unsigned
     # integer in size) in the time dimension
     coord_dims = Tuple(c.name for c ∈ coords)
-    if diagnostic_var_size !== nothing
-        if isa(diagnostic_var_size, Number)
-            # Make diagnostic_var_size a Tuple
-            diagnostic_var_size = (diagnostic_var_size,)
-        end
-        for (i,dim_size) ∈ enumerate(diagnostic_var_size)
-            maybe_create_netcdf_dim(file_or_group, "$name$i", dim_size)
-        end
-        fixed_dims = Tuple("$name$i" for i ∈ 1:length(diagnostic_var_size))
-    elseif n_ion_species !== nothing
-        fixed_dims = tuple(coord_dims..., "ion_species")
-    elseif n_neutral_species !== nothing
-        fixed_dims = tuple(coord_dims..., "neutral_species")
-    else
-        fixed_dims = coord_dims
-    end
-    dims = tuple(fixed_dims..., "time")
+    dims = tuple(coord_dims..., "time")
 
     # create the variable so it can be expanded indefinitely (up to the largest unsigned
     # integer in size) in the time dimension
