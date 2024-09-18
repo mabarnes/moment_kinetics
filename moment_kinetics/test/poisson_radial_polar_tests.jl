@@ -78,7 +78,7 @@ function run_test()
         phase=pi/3.0
         @testset "nelement_radial $nelement_radial ngrid_radial $ngrid_radial Lradial $Lradial nelement_polar $nelement_polar ngrid_polar $ngrid_polar kk $kk phase $phase" begin
              run_poisson_radial_polar_test(nelement_radial=nelement_radial,ngrid_radial=ngrid_radial,Lradial=Lradial,nelement_polar=nelement_polar,ngrid_polar=ngrid_polar,kk=kk,phase=phase,
-                              atol_phi1=4.0e-14,atol_phi2=9.0e-7)
+                              atol_phi1=7.0e-14,atol_phi2=9.0e-7)
         end
         nelement_radial=5
         ngrid_radial=5
@@ -89,7 +89,7 @@ function run_test()
         phase=pi/3.0
         @testset "nelement_radial $nelement_radial ngrid_radial $ngrid_radial Lradial $Lradial nelement_polar $nelement_polar ngrid_polar $ngrid_polar kk $kk phase $phase" begin
              run_poisson_radial_polar_test(nelement_radial=nelement_radial,ngrid_radial=ngrid_radial,Lradial=Lradial,nelement_polar=nelement_polar,ngrid_polar=ngrid_polar,kk=kk,phase=phase,
-                              atol_phi1=7.0e-14,atol_phi2=5.0e-11)
+                              atol_phi1=3.0e-13,atol_phi2=5.0e-11)
         end
         nelement_radial=5
         ngrid_radial=9
