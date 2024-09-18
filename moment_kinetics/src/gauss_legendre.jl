@@ -134,7 +134,7 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
     setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M"; periodic_bc=periodic_bc)
     setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms"; periodic_bc=periodic_bc)
     setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms")
-    setup_global_weak_form_matrix!(D_matrix, lobatto, radau, coord, "D"; periodic_bc=periodic_bc)
+    setup_global_strong_form_matrix!(D_matrix, lobatto, radau, coord, "D"; periodic_bc=periodic_bc)
     dense_second_deriv_matrix = inv(mass_matrix) * K_matrix
     mass_matrix_lu = lu(sparse(mass_matrix))
     if dirichlet_bc || periodic_bc
@@ -948,6 +948,79 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
         end
     end
         
+    return nothing
+end
+
+"""
+A function that assigns the local matrices to
+a global array QQ_global for later evaluating strong form of required 1D equation.
+
+The 'option' variable is a flag for
+choosing the type of matrix to be constructed.
+Currently the function is set up to assemble the
+elemental matrices without imposing boundary conditions on the
+first and final rows of the matrix. This means that
+the operators constructed from this function can only be used
+for differentiation, and not solving 1D ODEs.
+The shared points in the element assembly are
+averaged (instead of simply added) to be consistent with the
+derivative_elements_to_full_grid!() function in calculus.jl.
+"""
+function setup_global_strong_form_matrix!(QQ_global::Array{mk_float,2},
+                                          lobatto::gausslegendre_base_info,
+                                          radau::gausslegendre_base_info, 
+                                          coord,option; periodic_bc=false)
+    QQ_j = allocate_float(coord.ngrid,coord.ngrid)
+    QQ_jp1 = allocate_float(coord.ngrid,coord.ngrid)
+
+    ngrid = coord.ngrid
+    imin = coord.imin
+    imax = coord.imax
+    @. QQ_global = 0.0
+
+    # fill in first element
+    j = 1
+    # N.B. QQ varies with ielement for vperp, but not vpa
+    # a radau element is used for the vperp grid (see get_QQ_local!())
+    get_QQ_local!(QQ_j,j,lobatto,radau,coord,option)
+    if periodic_bc && coord.nrank != 1
+        error("periodic boundary conditions not supported when dimension is distributed")
+    end
+    if periodic_bc && coord.nrank == 1
+        QQ_global[imax[end], imin[j]:imax[j]] .+= QQ_j[1,:] ./ 2.0
+        QQ_global[1,1] += 1.0
+        QQ_global[1,end] += -1.0
+    else
+        QQ_global[imin[j],imin[j]:imax[j]] .+= QQ_j[1,:]
+    end
+    for k in 2:imax[j]-imin[j] 
+        QQ_global[k,imin[j]:imax[j]] .+= QQ_j[k,:]
+    end
+    if coord.nelement_local > 1
+        QQ_global[imax[j],imin[j]:imax[j]] .+= QQ_j[ngrid,:]./2.0
+    else
+        QQ_global[imax[j],imin[j]:imax[j]] .+= QQ_j[ngrid,:]
+    end
+    # remaining elements recalling definitions of imax and imin
+    for j in 2:coord.nelement_local
+        get_QQ_local!(QQ_j,j,lobatto,radau,coord,option)
+        #lower boundary assembly on element
+        QQ_global[imin[j]-1,imin[j]-1:imax[j]] .+= QQ_j[1,:]./2.0
+        for k in 2:imax[j]-imin[j]+1
+            QQ_global[k+imin[j]-2,imin[j]-1:imax[j]] .+= QQ_j[k,:]
+        end
+        # upper boundary assembly on element
+        if j == coord.nelement_local
+            if periodic_bc && coord.nrank == 1
+                QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:] / 2.0
+            else
+                QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]
+            end
+        else
+            QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]./2.0
+        end
+    end
+
     return nothing
 end
 
