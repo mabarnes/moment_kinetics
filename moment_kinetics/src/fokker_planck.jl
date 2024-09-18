@@ -70,6 +70,7 @@ using ..fokker_planck_calculus: calculate_rosenbluth_potentials_via_elliptic_sol
 using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_fluxes, H_Maxwellian, dGdvperp_Maxwellian
 using ..fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian
 using ..fokker_planck_test: F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
+using ..reference_parameters: setup_reference_parameters
 
 """
 Function for reading Fokker Planck collision operator input parameters. 
@@ -80,7 +81,8 @@ use_fokker_planck = true
 nuii = 1.0
 frequency_option = "manual"
 """
-function setup_fkpl_collisions_input(toml_input::Dict, reference_params)
+function setup_fkpl_collisions_input(toml_input::Dict)
+    reference_params = setup_reference_parameters(toml_input)
     # get reference collision frequency (note factor of 1/2 due to definition choices)
     nuii_fkpl_default = 0.5*get_reference_collision_frequency_ii(reference_params)
     # read the input toml and specify a sensible default

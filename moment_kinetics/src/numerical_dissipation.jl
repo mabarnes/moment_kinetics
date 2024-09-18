@@ -15,8 +15,45 @@ using ..looping
 using ..calculus: derivative!, second_derivative!, laplacian_derivative!
 using ..derivatives: derivative_r!, derivative_z!, second_derivative_r!,
                      second_derivative_z!
+using ..input_structs
 using ..type_definitions: mk_float
 
+# define individual structs for each species with their particular parameters
+Base.@kwdef struct ion_num_diss_params
+    vpa_boundary_buffer_damping_rate::mk_float = -1.0
+    vpa_boundary_buffer_diffusion_coefficient::mk_float = -1.0
+    vpa_dissipation_coefficient::mk_float = -1.0
+    vperp_dissipation_coefficient::mk_float = -1.0
+    z_dissipation_coefficient::mk_float = -1.0
+    r_dissipation_coefficient::mk_float = -1.0
+    moment_dissipation_coefficient::mk_float = -1.0
+    force_minimum_pdf_value::mk_float = -Inf
+end
+
+Base.@kwdef struct electron_num_diss_params
+    vpa_boundary_buffer_damping_rate::mk_float = -1.0
+    vpa_boundary_buffer_diffusion_coefficient::mk_float = -1.0
+    vpa_dissipation_coefficient::mk_float = -1.0
+    vperp_dissipation_coefficient::mk_float = -1.0
+    z_dissipation_coefficient::mk_float = -1.0
+    r_dissipation_coefficient::mk_float = -1.0
+    moment_dissipation_coefficient::mk_float = -1.0
+    force_minimum_pdf_value::mk_float = -Inf
+end
+
+Base.@kwdef struct neutral_num_diss_params
+    vz_dissipation_coefficient::mk_float = -1.0
+    z_dissipation_coefficient::mk_float = -1.0
+    r_dissipation_coefficient::mk_float = -1.0
+    moment_dissipation_coefficient::mk_float = -1.0
+    force_minimum_pdf_value::mk_float = -Inf
+end
+
+struct numerical_dissipation_parameters
+    ion::ion_num_diss_params
+    electron::electron_num_diss_params
+    neutral::neutral_num_diss_params
+end
 
 #############################################################
 ########### Numerical Dissipation Parameter setup ###########
@@ -41,63 +78,16 @@ vz_dissipation_coefficient
 
 There will still be the -1.0 default parameters.
 """
-
-# define individual structs for each species with their particular parameters
-Base.@kwdef struct ion_num_diss_params
-    vpa_boundary_buffer_damping_rate::mk_float = -1.0
-    vpa_boundary_buffer_diffusion_coefficient::mk_float = -1.0
-    vpa_dissipation_coefficient::mk_float = -1.0
-    vperp_dissipation_coefficient::mk_float = -1.0
-    z_dissipation_coefficient::mk_float = -1.0
-    r_dissipation_coefficient::mk_float = -1.0
-    moment_dissipation_coefficient::mk_float = -1.0
-    force_minimum_pdf_value::Union{Nothing,mk_float} = nothing
-end
-
-Base.@kwdef struct electron_num_diss_params
-    vpa_boundary_buffer_damping_rate::mk_float = -1.0
-    vpa_boundary_buffer_diffusion_coefficient::mk_float = -1.0
-    vpa_dissipation_coefficient::mk_float = -1.0
-    vperp_dissipation_coefficient::mk_float = -1.0
-    z_dissipation_coefficient::mk_float = -1.0
-    r_dissipation_coefficient::mk_float = -1.0
-    moment_dissipation_coefficient::mk_float = -1.0
-    force_minimum_pdf_value::Union{Nothing,mk_float} = nothing
-end
-
-Base.@kwdef struct neutral_num_diss_params
-    vz_dissipation_coefficient::mk_float = -1.0
-    z_dissipation_coefficient::mk_float = -1.0
-    r_dissipation_coefficient::mk_float = -1.0
-    moment_dissipation_coefficient::mk_float = -1.0
-    force_minimum_pdf_value::Union{Nothing,mk_float} = nothing
-end
-
-struct numerical_dissipation_parameters
-    ion::ion_num_diss_params
-    electron::electron_num_diss_params
-    neutral::neutral_num_diss_params
-end
-
-######### End Of Numerical Dissipation Parameter setup #########
-################################################################
-
-function setup_numerical_dissipation(ion_input::Dict, electron_input::Dict, 
-                                     neutral_input::Dict, is_1V)
-    if is_1V && "vpa_dissipation_coefficient" ∈ keys(ion_input)
-        # Set default for vz_dissipation_coefficient the same as
-        # ion_vpa_dissipation_coefficient for 1V case
-        neutral_input["vz_dissipation_coefficient"] =
-            get(neutral_input, "vz_dissipation_coefficient",
-                ion_input["vpa_dissipation_coefficient"])
-    end
-
-    ion_input_dict = Dict(Symbol(k)=>v for (k,v) in ion_input)
-    ion_params = ion_num_diss_params(; ion_input_dict...)
-    electron_input_dict = Dict(Symbol(k)=>v for (k,v) in electron_input)
-    electron_params = electron_num_diss_params(; electron_input_dict...)
-    neutral_input_dict = Dict(Symbol(k)=>v for (k,v) in neutral_input)
-    neutral_params = neutral_num_diss_params(; neutral_input_dict...)
+function setup_numerical_dissipation(input_dict)
+    ion_params = set_defaults_and_check_section!(
+        input_dict, ion_num_diss_params, "ion_numerical_dissipation"
+       )
+    electron_params = set_defaults_and_check_section!(
+        input_dict, electron_num_diss_params, "electron_numerical_dissipation"
+       )
+    neutral_params = set_defaults_and_check_section!(
+        input_dict, neutral_num_diss_params, "neutral_numerical_dissipation"
+       )
 
     return numerical_dissipation_parameters(ion_params, electron_params, neutral_params)
 end
@@ -574,7 +564,7 @@ force_minimum_pdf_value = 0.0
 """
 function force_minimum_pdf_value!(f, minval)
 
-    if minval === nothing
+    if minval == -Inf
         return nothing
     end
 

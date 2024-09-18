@@ -5,9 +5,9 @@ using MPI
 
 import moment_kinetics
 using moment_kinetics.chebyshev
-using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.calculus: derivative!
+using moment_kinetics.type_definitions: OptionsDict
 
 
 function print_matrix(matrix,name,n,m)
@@ -46,10 +46,8 @@ function chebyshevradau_test(; ngrid=5, L_in=3.0, discretization="chebyshev_pseu
     y_nelement_global = y_nelement_local # total number of elements 
     y_L = L_in
     bc = "zero" 
-    # fd_option and adv_input not actually used so given values unimportant
     fd_option = "fourth_order_centered"
     cheb_option = "matrix"
-    adv_input = advection_input("default", 1.0, 0.0, 0.0)
     nrank = 1
     irank = 0#1
     comm = MPI.COMM_NULL
@@ -57,9 +55,16 @@ function chebyshevradau_test(; ngrid=5, L_in=3.0, discretization="chebyshev_pseu
     # create the 'input' struct containing input info needed to create a
     # coordinate
     y_name = "vperp" # to use radau grid
-    y_input = grid_input(y_name, y_ngrid, y_nelement_global, y_nelement_local, 
-            nrank, irank, y_L, discretization, fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
-    y, y_spectral = define_coordinate(y_input)
+    input = OptionsDict(y_name => OptionsDict("ngrid"=>y_ngrid, "nelement"=>y_nelement_global,
+                                              "nelement_local"=>y_nelement_local, "L"=>y_L,
+                                              "discretization"=>discretization,
+                                              "finite_difference_option"=>fd_option,
+                                              "cheb_option"=>cheb_option, "bc"=>bc,
+                                              "element_spacing_option"=>element_spacing_option))
+    # create the coordinate struct 'x'
+    # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
+    # errors due to communicators not being fully set up.
+    y, y_spectral = define_coordinate(input, y_name; ignore_MPI=true)
       
     Dmat = y_spectral.radau.Dmat
     print_matrix(Dmat,"Radau Dmat",y.ngrid,y.ngrid)

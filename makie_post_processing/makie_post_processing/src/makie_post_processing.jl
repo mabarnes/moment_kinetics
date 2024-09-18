@@ -29,7 +29,6 @@ using moment_kinetics.analysis: analyze_fields_data, check_Chodura_condition,
                                 get_unnormalised_f_1d, vpagrid_to_dzdt_2d,
                                 get_unnormalised_f_2d
 using moment_kinetics.array_allocation: allocate_float
-using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs
 using moment_kinetics.looping: all_dimensions, ion_dimensions, neutral_dimensions
 using moment_kinetics.manufactured_solns: manufactured_solutions,
@@ -40,7 +39,8 @@ using moment_kinetics.load_data: close_run_info, get_run_info_no_setup, get_vari
                                  neutral_moment_variables, all_moment_variables,
                                  ion_dfn_variables, electron_dfn_variables,
                                  neutral_dfn_variables, all_dfn_variables, ion_variables,
-                                 neutral_variables, all_variables
+                                 neutral_variables, all_variables, ion_source_variables,
+                                 neutral_source_variables, electron_source_variables
 using moment_kinetics.initial_conditions: vpagrid_to_dzdt
 using .shared_utils: calculate_and_write_frequencies
 using moment_kinetics.type_definitions: mk_float, mk_int
@@ -233,14 +233,6 @@ function makie_post_process(run_dir::Union{String,Tuple},
     # Plots from moment variables
     #############################
 
-    moment_variable_list = tuple(em_variables..., ion_moment_variables...)
-    if has_electrons
-        moment_variable_list = tuple(moment_variable_list..., electron_moment_variables...)
-    end
-    if has_neutrals
-        moment_variable_list = tuple(moment_variable_list..., neutral_moment_variables...)
-    end
-
     if any(ri !== nothing for ri ∈ run_info_moments)
         has_moments = true
 
@@ -276,7 +268,7 @@ function makie_post_process(run_dir::Union{String,Tuple},
     end
 
     do_steady_state_residuals = any(input_dict[v]["steady_state_residual"]
-                                    for v ∈ moment_variable_list)
+                                    for v ∈ all_moment_variables)
     if do_steady_state_residuals
         textoutput_files = Tuple(ri.run_prefix * "_residuals.txt"
                                  for ri in run_info if ri !== nothing)
@@ -299,7 +291,7 @@ function makie_post_process(run_dir::Union{String,Tuple},
         steady_state_residual_fig_axes = nothing
     end
 
-    for variable_name ∈ moment_variable_list
+    for variable_name ∈ all_moment_variables
         plots_for_variable(run_info, variable_name; plot_prefix=plot_prefix,
                            has_rdim=has_rdim, has_zdim=has_zdim, is_1V=is_1V,
                            steady_state_residual_fig_axes=steady_state_residual_fig_axes)
@@ -818,6 +810,9 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         animate_steady_state_residual=false,
        )
 
+    # We allow top-level options in the post-processing input file
+    check_sections!(this_input_dict; check_no_top_level_options=false)
+
     return nothing
 end
 
@@ -1011,6 +1006,10 @@ function plots_for_variable(run_info, variable_name; plot_prefix, has_rdim=true,
             all(ri.collisions.krook_collisions_option == "none" for ri ∈ run_info)
         # No Krook collisions active, so do not make plots.
         return nothing
+    elseif variable_name ∈ union(electron_moment_variables, electron_source_variables, electron_dfn_variables) &&
+            all(ri.composition.electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
+                for ri ∈ run_info)
+        return nothing
     end
 
     println("Making plots for $variable_name")
@@ -1030,8 +1029,18 @@ function plots_for_variable(run_info, variable_name; plot_prefix, has_rdim=true,
     elseif variable_name ∈ neutral_moment_variables ||
            variable_name ∈ neutral_dfn_variables
         species_indices = 1:maximum(ri.n_neutral_species for ri ∈ run_info)
-    else
+    elseif variable_name ∈ ion_moment_variables ||
+           variable_name ∈ ion_dfn_variables
         species_indices = 1:maximum(ri.n_ion_species for ri ∈ run_info)
+    elseif variable_name in ion_source_variables
+        species_indices = 1:maximum(length(ri.external_source_settings.ion) for ri ∈ run_info)
+    elseif variable_name in electron_source_variables
+        species_indices = 1:maximum(length(ri.external_source_settings.electron) for ri ∈ run_info)
+    elseif variable_name in neutral_source_variables
+        species_indices = 1:maximum(length(ri.external_source_settings.neutral) for ri ∈ run_info)
+    else
+        species_indices = 1:1
+        #error("variable_name=$variable_name not found in any defined group")
     end
     for is ∈ species_indices
         if is !== nothing

@@ -8,9 +8,8 @@ export run_test
 using MPI
 import moment_kinetics
 using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
-using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.type_definitions: mk_float, mk_int
+using moment_kinetics.type_definitions: mk_float, mk_int, OptionsDict
 using moment_kinetics.spatial_poisson: init_spatial_poisson, spatial_poisson_solve!
 using moment_kinetics.spatial_poisson: init_spatial_poisson2D, spatial_poisson2D_solve!
 using moment_kinetics.communication
@@ -135,27 +134,25 @@ function run_poisson_radial_polar_fourier_test(; nelement_radial=5,ngrid_radial=
    nelement_local_radial = nelement_radial # number of elements per rank
    nelement_global_radial = nelement_local_radial # total number of elements 
    bc = "none" #not required to take a particular value, not used, set to "none" to avoid extra BC impositions 
-   # fd_option and adv_input not actually used so given values unimportant
-   fd_option = "fourth_order_centered"
-   cheb_option = "matrix"
-   adv_input = advection_input("default", 1.0, 0.0, 0.0)
-   nrank = 1
-   irank = 0
-   comm = MPI.COMM_NULL
-   # create the 'input' struct containing input info needed to create a
-   # coordinate
+   GL_discretization = "gausslegendre_pseudospectral"
+   F_discretization = "fourier_pseudospectral"
    element_spacing_option = "uniform"
-   polar_input = grid_input("polar", ngrid_polar, nelement_global_polar, nelement_local_polar, 
-      nrank, irank, Lpolar, "fourier_pseudospectral", fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
-   radial_input = grid_input("r", ngrid_radial, nelement_global_radial, nelement_local_radial, 
-      nrank, irank, Lradial, "gausslegendre_pseudospectral", fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
-   
+   coords_input = OptionsDict(
+                    "radial"=>OptionsDict("ngrid"=>ngrid_radial, "nelement"=>nelement_global_radial,
+                                         "nelement_local"=>nelement_local_radial, "L"=>Lradial,
+                                         "discretization"=>GL_discretization, "bc"=>bc,
+                                         "element_spacing_option"=>element_spacing_option),
+                    "polar"=>OptionsDict("ngrid"=>ngrid_polar, "nelement"=>nelement_global_polar,
+                                       "nelement_local"=>nelement_local_polar, "L"=>Lpolar,
+                                       "discretization"=>F_discretization, "bc"=>bc,
+                                       "element_spacing_option"=>element_spacing_option),
+                     )
    # Set up MPI
    initialize_comms!()
    setup_distributed_memory_MPI(1,1,1,1)
    # ignore MPI here to avoid FFTW wisdom problems, test runs on a single core below
-   polar, polar_spectral = define_coordinate(polar_input, ignore_MPI=true)
-   radial, radial_spectral = define_coordinate(radial_input)
+   polar, polar_spectral = define_coordinate(coords_input, "polar", ignore_MPI=true)
+   radial, radial_spectral = define_coordinate(coords_input, "radial", ignore_MPI=true)
    looping.setup_loop_ranges!(block_rank[], block_size[];
                                  s=1, sn=1,
                                  r=radial.n, z=polar.n, vperp=1, vpa=1,
@@ -237,28 +234,25 @@ function run_poisson_radial_polar_test(; nelement_radial=5,ngrid_radial=5,Lradia
    nelement_global_polar = nelement_local_polar # total number of elements 
    nelement_local_radial = nelement_radial # number of elements per rank
    nelement_global_radial = nelement_local_radial # total number of elements 
-   bc = "none" #not required to take a particular value, not used, set to "none" to avoid extra BC impositions 
-   # fd_option and adv_input not actually used so given values unimportant
-   fd_option = "fourth_order_centered"
-   cheb_option = "matrix"
-   adv_input = advection_input("default", 1.0, 0.0, 0.0)
-   nrank = 1
-   irank = 0
-   comm = MPI.COMM_NULL
-   # create the 'input' struct containing input info needed to create a
-   # coordinate
+   bc = "none" #not required to take a particular value, finite element assembly takes care of BCs, so not used, set to "none" to avoid extra BC impositions
+   discretization = "gausslegendre_pseudospectral"
    element_spacing_option = "uniform"
-   polar_input = grid_input("polar", ngrid_polar, nelement_global_polar, nelement_local_polar, 
-      nrank, irank, Lpolar, "gausslegendre_pseudospectral", fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
-   radial_input = grid_input("r", ngrid_radial, nelement_global_radial, nelement_local_radial, 
-      nrank, irank, Lradial, "gausslegendre_pseudospectral", fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
-   
+   coords_input = OptionsDict(
+                    "radial"=>OptionsDict("ngrid"=>ngrid_radial, "nelement"=>nelement_global_radial,
+                                         "nelement_local"=>nelement_local_radial, "L"=>Lradial,
+                                         "discretization"=>discretization, "bc"=>bc,
+                                         "element_spacing_option"=>element_spacing_option),
+                    "polar"=>OptionsDict("ngrid"=>ngrid_polar, "nelement"=>nelement_global_polar,
+                                       "nelement_local"=>nelement_local_polar, "L"=>Lpolar,
+                                       "discretization"=>discretization, "bc"=>bc,
+                                       "element_spacing_option"=>element_spacing_option),
+                     )
    # Set up MPI
    initialize_comms!()
    setup_distributed_memory_MPI(1,1,1,1)
    # ignore MPI here to avoid FFTW wisdom problems, test runs on a single core below
-   polar, polar_spectral = define_coordinate(polar_input, ignore_MPI=true)
-   radial, radial_spectral = define_coordinate(radial_input)
+   polar, polar_spectral = define_coordinate(coords_input, "polar", ignore_MPI=true)
+   radial, radial_spectral = define_coordinate(coords_input, "radial", ignore_MPI=true)
    looping.setup_loop_ranges!(block_rank[], block_size[];
                                  s=1, sn=1,
                                  r=radial.n, z=polar.n, vperp=1, vpa=1,

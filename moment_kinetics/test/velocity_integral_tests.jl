@@ -2,7 +2,6 @@ module VelocityIntegralTests
 
 include("setup.jl")
 
-using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
 using moment_kinetics.array_allocation: allocate_float
@@ -23,34 +22,36 @@ function runtests()
         Lvpa = 18.0 #physical box size in reference units 
         Lvperp = 9.0 #physical box size in reference units 
         bc = "" #not required to take a particular value, not used 
-        # fd_option and adv_input not actually used so given values unimportant
         discretization = "chebyshev_pseudospectral"
-        fd_option = "fourth_order_centered"
         cheb_option = "FFT"
-        adv_input = advection_input("default", 1.0, 0.0, 0.0)
-        nrank = 1
-        irank = 0
-        comm = MPI.COMM_NULL
-        # create the 'input' struct containing input info needed to create a
-        # coordinate
-        vr_input = grid_input("vperp", 1, 1, 1, nrank, irank, 1.0, discretization,
-                              fd_option, cheb_option, bc, adv_input, comm, "uniform")
-        vz_input = grid_input("vpa", ngrid, nelement_global, nelement_local, nrank, irank,
-                              Lvpa, discretization, fd_option, cheb_option, bc, adv_input, comm,
-                              "uniform")
-        vpa_input = grid_input("vpa", ngrid, nelement_global, nelement_local, nrank,
-                               irank, Lvpa, discretization, fd_option, cheb_option, bc, adv_input,
-                               comm, "uniform")
-        vperp_input = grid_input("vperp", ngrid, nelement_global, nelement_local, nrank,
-                                 irank, Lvperp, discretization, fd_option, cheb_option, bc, adv_input,
-                                 comm, "uniform")
-        # create the coordinate struct 'x'
-        # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
-        # errors due to communicators not being fully set up.
-        vpa, vpa_spectral = define_coordinate(vpa_input; ignore_MPI=true)
-        vperp, vperp_spectral = define_coordinate(vperp_input; ignore_MPI=true)
-        vz, vz_spectral = define_coordinate(vz_input; ignore_MPI=true)
-        vr, vr_spectral = define_coordinate(vr_input; ignore_MPI=true)
+        # create the 'input' struct containing input info needed to create
+        # coordinates
+        coords_input = OptionsDict("vperp1d"=>OptionsDict("ngrid"=>1, "nelement"=>1, "nelement_local"=>1, "L"=>1.0,
+                                                          "discretization"=>discretization,
+                                                          "cheb_option"=>cheb_option, "bc"=>bc,
+                                                          "element_spacing_option"=>"uniform"),
+                                   "vpa1d"=>OptionsDict("ngrid"=>ngrid, "nelement"=>nelement_global,
+                                                        "nelement_local"=>nelement_local, "L"=>Lvpa,
+                                                        "discretization"=>discretization,
+                                                        "cheb_option"=>cheb_option, "bc"=>bc,
+                                                        "element_spacing_option"=>"uniform"),
+                                   "vperp"=>OptionsDict("ngrid"=>ngrid, "nelement"=>nelement_global,
+                                                        "nelement_local"=>nelement_local, "L"=>Lvperp,
+                                                        "discretization"=>discretization,
+                                                        "cheb_option"=>cheb_option, "bc"=>bc,
+                                                        "element_spacing_option"=>"uniform"),
+                                   "vpa"=>OptionsDict("ngrid"=>ngrid, "nelement"=>nelement_global,
+                                                      "nelement_local"=>nelement_local, "L"=>Lvpa,
+                                                      "discretization"=>discretization,
+                                                      "cheb_option"=>cheb_option, "bc"=>bc,
+                                                      "element_spacing_option"=>"uniform"),
+                                  )
+
+        # create the coordinate structs
+        vpa, vpa_spectral = define_coordinate(coords_input, "vpa"; ignore_MPI=true)
+        vperp, vperp_spectral = define_coordinate(coords_input, "vperp"; ignore_MPI=true)
+        vz, vz_spectral = define_coordinate(coords_input, "vpa1d"; ignore_MPI=true)
+        vr, vr_spectral = define_coordinate(coords_input, "vperp1d"; ignore_MPI=true)
 
         dfn = allocate_float(vpa.n,vperp.n)
         dfn1D = allocate_float(vz.n, vr.n)

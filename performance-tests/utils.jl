@@ -246,7 +246,7 @@ Returns
 [minimum time, median time, maximum time]
 """
 function run_test(input)
-    message = input["run_name"] * " ($(block_size[]) procs)"
+    message = input["output"]["run_name"] * " ($(block_size[]) procs)"
     _println0(message)
     _println0("=" ^ length(message))
     _println0()

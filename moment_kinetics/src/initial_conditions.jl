@@ -67,14 +67,14 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
         evolve_moments.density, evolve_moments.parallel_flow,
         evolve_moments.parallel_pressure, external_source_settings.ion,
         num_diss_params)
-    electron = create_moments_electron(z.n, r.n,
-        composition.electron_physics, num_diss_params)
+    electron = create_moments_electron(z.n, r.n, composition.electron_physics, 
+        num_diss_params, length(external_source_settings.electron))
     neutral = create_moments_neutral(z.n, r.n, composition.n_neutral_species,
         evolve_moments.density, evolve_moments.parallel_flow,
         evolve_moments.parallel_pressure, external_source_settings.neutral,
         num_diss_params)
 
-    if abs(collisions.ionization) > 0.0 || z.bc == "wall"
+    if abs(collisions.reactions.ionization_frequency) > 0.0 || z.bc == "wall"
         # if ionization collisions are included or wall BCs are enforced, then particle
         # number is not conserved within each species
         particle_number_conserved = false
@@ -85,7 +85,7 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
 
     moments = moments_struct(ion, electron, neutral, evolve_moments.density,
                              particle_number_conserved,
-                             evolve_moments.conservation,
+                             evolve_moments.moments_conservation,
                              evolve_moments.parallel_flow,
                              evolve_moments.parallel_pressure)
 
@@ -281,7 +281,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
         # Not restarting, so create initial profiles
 
         # initialise the electron thermal speed profile
-        init_electron_vth!(moments.electron.vth, moments.ion.vth, composition.T_e, composition.me_over_mi, z.grid)
+        init_electron_vth!(moments.electron.vth, moments.ion.vth, composition, z.grid)
         begin_r_z_region()
         # calculate the electron temperature from the thermal speed
         @loop_r_z ir iz begin
@@ -362,10 +362,11 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
                 # and this is only a rough initial condition anyway
                 #
                 # q at the boundaries tells us dTe/dz for Braginskii electrons
+                nu_ei = collisions.electron_fluid.nu_ei
                 if z.irank == 0
                     dTe_dz_lower = @. -moments.electron.qpar[1,:] * 2.0 / 3.16 /
                                        moments.electron.ppar[1,:] *
-                                       composition.me_over_mi * collisions.nu_ei
+                                       composition.me_over_mi * nu_ei
                 else
                     dTe_dz_lower = nothing
                 end
@@ -374,7 +375,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
                 if z.irank == z.nrank - 1
                     dTe_dz_upper = @. -moments.electron.qpar[end,:] * 2.0 / 3.16 /
                                        moments.electron.ppar[end,:] *
-                                       composition.me_over_mi * collisions.nu_ei
+                                       composition.me_over_mi * nu_ei
                 else
                     dTe_dz_upper = nothing
                 end
@@ -421,8 +422,8 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
     end
     moments.electron.qpar_updated[] = false
     calculate_electron_qpar!(moments.electron, pdf.electron, moments.electron.ppar,
-        moments.electron.upar, moments.ion.upar, collisions.nu_ei, composition.me_over_mi,
-        composition.electron_physics, vpa)
+        moments.electron.upar, moments.ion.upar, collisions.electron_fluid.nu_ei,
+        composition.me_over_mi, composition.electron_physics, vpa)
     if composition.electron_physics == braginskii_fluid
         electron_fluid_qpar_boundary_condition!(
             moments.electron.ppar, moments.electron.upar, moments.electron.dens,
@@ -435,7 +436,8 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
     # calculate the electron-ion parallel friction force
     calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, moments.electron.dens,
         moments.electron.upar, moments.ion.upar, moments.electron.dT_dz,
-        composition.me_over_mi, collisions.nu_ei, composition.electron_physics)
+        composition.me_over_mi, collisions.electron_fluid.nu_ei,
+        composition.electron_physics)
     
     # initialize the scratch arrays containing pdfs and moments for the first RK stage
     # the electron pdf is yet to be initialised but with the current code logic, the scratch
@@ -651,7 +653,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
         moments.electron.qpar_updated[] = false
         calculate_electron_qpar!(moments.electron, pdf.electron, moments.electron.ppar,
                                  moments.electron.upar, moments.ion.upar,
-                                 collisions.nu_ei, composition.me_over_mi,
+                                 collisions.electron_fluid.nu_ei, composition.me_over_mi,
                                  composition.electron_physics, vpa)
         # update dqpar/dz for electrons
         # calculate the zed derivative of the initial electron parallel heat flux
@@ -682,7 +684,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
         end
         if code_time > 0.0
             tind = searchsortedfirst(t_params.electron.moments_output_times, code_time)
-            n_truncated = length(t_params.electron.moments_output_times) - tind
+            n_truncated = max(length(t_params.electron.moments_output_times) - tind, 0)
             truncated_times = t_params.electron.moments_output_times[tind+1:end]
             resize!(t_params.electron.moments_output_times, n_truncated)
             t_params.electron.moments_output_times .= truncated_times
@@ -1063,14 +1065,18 @@ initialise the electron thermal speed profile.
 for now the only initialisation option for the temperature is constant in z.
 returns vth0 = sqrt(2*Ts/Te)
 """
-function init_electron_vth!(vth_e, vth_i, T_e, me_over_mi, z)
+function init_electron_vth!(vth_e, vth_i, composition, z)
     begin_r_z_region()
-    # @loop_r_z ir iz begin
-    #     vth_e[iz,ir] = sqrt(T_e)
-    # end
-    @loop_r_z ir iz begin
-        vth_e[iz,ir] = vth_i[iz,ir,1] / sqrt(me_over_mi)
-        #vth_e[iz,ir] = exp(-5*(z[iz]/z[end])^2)/sqrt(me_over_mi)
+    if composition.electron_physics ∈ (boltzmann_electron_response,
+                                       boltzmann_electron_response_with_simple_sheath)
+        @loop_r_z ir iz begin
+            vth_e[iz,ir] = sqrt(composition.T_e / composition.me_over_mi)
+        end
+    else
+        @loop_r_z ir iz begin
+            vth_e[iz,ir] = vth_i[iz,ir,1] / sqrt(composition.me_over_mi)
+            #vth_e[iz,ir] = exp(-5*(z[iz]/z[end])^2)/sqrt(composition.me_over_mi)
+        end
     end
 end
 
@@ -1292,7 +1298,7 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
 
     #if spec.vz_IC.initialization_option == "gaussian"
     # For now, continue to use 'vpa' initialization options for neutral species
-    if spec.vpa_IC.initialization_option == "gaussian"
+    if spec.vz_IC.initialization_option == "gaussian"
         # initial condition is a Gaussian in the peculiar velocity
         if z.bc != "wall"
             for iz ∈ 1:z.n
@@ -1516,20 +1522,20 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
             end
         end
     #elseif spec.vz_IC.initialization_option == "vzgaussian"
-    elseif spec.vpa_IC.initialization_option == "vzgaussian"
+    elseif spec.vz_IC.initialization_option == "vzgaussian"
         @loop_z_vzeta_vr iz ivzeta ivr begin
             @. pdf[:,ivr,ivzeta,iz] = vz.grid^2*exp(-vz.scratch^2 - vr[ivr]^2 -
                                                     vzeta[ivzeta]^2) / vth[iz]
         end
     #elseif spec.vz_IC.initialization_option == "sinusoid"
-    elseif spec.vpa_IC.initialization_option == "sinusoid"
+    elseif spec.vz_IC.initialization_option == "sinusoid"
         # initial condition is sinusoid in vz
         @loop_z_vzeta_vr iz ivzeta ivr begin
             @. pdf[:,ivr,ivzeta,iz] =
                 spec.vz_IC.amplitude*cospi(2.0*spec.vz_IC.wavenumber*vz.grid/vz.L)
         end
     #elseif spec.vz_IC.initialization_option == "monomial"
-    elseif spec.vpa_IC.initialization_option == "monomial"
+    elseif spec.vz_IC.initialization_option == "monomial"
         # linear variation in vz, with offset so that
         # function passes through zero at upwind boundary
         @loop_z_vzeta_vr iz ivzeta ivr begin

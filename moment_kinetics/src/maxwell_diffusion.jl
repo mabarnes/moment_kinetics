@@ -18,7 +18,7 @@ export setup_mxwl_diff_collisions_input, ion_vpa_maxwell_diffusion!, neutral_vz_
 using ..looping
 using ..input_structs: mxwl_diff_collisions_input, set_defaults_and_check_section!
 using ..calculus: second_derivative!
-using ..reference_parameters: get_reference_collision_frequency_ii
+using ..reference_parameters: get_reference_collision_frequency_ii, setup_reference_parameters
 
 """
 Function for reading Maxwell diffusion operator input parameters. 
@@ -29,7 +29,8 @@ use_maxwell_diffusion = true
 D_ii = 1.0
 diffusion_coefficient_option = "manual"
 """
-function setup_mxwl_diff_collisions_input(toml_input::Dict, reference_params)
+function setup_mxwl_diff_collisions_input(toml_input::Dict)
+    reference_params = setup_reference_parameters(toml_input)
     # get reference diffusion coefficient, made up of collision frequency and 
     # thermal speed for now. NOTE THAT THIS CONSTANT PRODUCES ERRORS. DO NOT USE
     D_ii_mxwl_diff_default = get_reference_collision_frequency_ii(reference_params)# *

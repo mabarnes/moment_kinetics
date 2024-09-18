@@ -12,7 +12,7 @@ using ..input_structs: geometry_input, set_defaults_and_check_section!
 using ..file_io: input_option_error
 using ..array_allocation: allocate_float
 using ..type_definitions: mk_float, mk_int
-
+using ..reference_parameters: setup_reference_parameters
 
 """
 struct containing the geometric data necessary for 
@@ -61,6 +61,15 @@ gbdriftz::Array{mk_float,2}
 end
 
 """
+    function get_default_rhostar(reference_params)
+
+Calculate the normalised ion gyroradius at reference parameters
+"""
+function get_default_rhostar(reference_params)
+    return reference_params.cref / reference_params.Omegaref / reference_params.Lref
+end
+
+"""
 function to read the geometry input data from the TOML file
 
 the TOML namelist should be structured like
@@ -72,7 +81,10 @@ DeltaB = 0.0
 option = ""
 
 """
-function setup_geometry_input(toml_input::Dict, reference_rhostar)
+function setup_geometry_input(toml_input::Dict)
+
+    reference_params = setup_reference_parameters(toml_input)
+    reference_rhostar = get_default_rhostar(reference_params)
     # read the input toml and specify a sensible default
     input_section = set_defaults_and_check_section!(toml_input, "geometry",
         # begin default inputs (as kwargs)
