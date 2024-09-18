@@ -134,7 +134,7 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
     setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M"; periodic_bc=periodic_bc)
     setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms"; periodic_bc=periodic_bc)
     setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms")
-    setup_global_weak_form_matrix!(D_matrix, lobatto, radau, coord, "D"; dirichlet_bc=dirichlet_bc)
+    setup_global_weak_form_matrix!(D_matrix, lobatto, radau, coord, "D"; periodic_bc=periodic_bc)
     dense_second_deriv_matrix = inv(mass_matrix) * K_matrix
     mass_matrix_lu = lu(sparse(mass_matrix))
     if dirichlet_bc || periodic_bc
