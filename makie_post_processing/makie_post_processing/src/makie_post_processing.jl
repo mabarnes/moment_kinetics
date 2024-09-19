@@ -675,39 +675,37 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
     animate_log_options_1d = Tuple(Symbol(:animate_log_vs_, d) for d ∈ one_dimension_combinations_no_t)
     animate_options_2d = Tuple(Symbol(:animate_vs_, d2, :_, d1) for (d1, d2) ∈ two_dimension_combinations_no_t)
     animate_log_options_2d = Tuple(Symbol(:animate_log_vs_, d2, :_, d1) for (d1, d2) ∈ two_dimension_combinations_no_t)
-    if dfns
-        for variable_name ∈ all_dfn_variables
-            set_defaults_and_check_section!(
-                this_input_dict, variable_name;
-                check_moments=false,
-                (o=>false for o ∈ plot_options_1d if String(o) ∉ keys(section_defaults))...,
-                (o=>false for o ∈ plot_log_options_1d if String(o) ∉ keys(section_defaults))...,
-                (o=>false for o ∈ plot_options_2d if String(o) ∉ keys(section_defaults))...,
-                (o=>false for o ∈ plot_log_options_2d if String(o) ∉ keys(section_defaults))...,
-                (o=>false for o ∈ animate_options_1d if String(o) ∉ keys(section_defaults))...,
-                (o=>false for o ∈ animate_log_options_1d if String(o) ∉ keys(section_defaults))...,
-                (o=>false for o ∈ animate_options_2d if String(o) ∉ keys(section_defaults))...,
-                (o=>false for o ∈ animate_log_options_2d if String(o) ∉ keys(section_defaults))...,
-                plot_unnorm_vs_vpa=false,
-                plot_unnorm_vs_vz=false,
-                plot_unnorm_vs_vpa_z=false,
-                plot_unnorm_vs_vz_z=false,
-                plot_log_unnorm_vs_vpa=false,
-                plot_log_unnorm_vs_vz=false,
-                plot_log_unnorm_vs_vpa_z=false,
-                plot_log_unnorm_vs_vz_z=false,
-                animate_unnorm_vs_vpa=false,
-                animate_unnorm_vs_vz=false,
-                animate_unnorm_vs_vpa_z=false,
-                animate_unnorm_vs_vz_z=false,
-                animate_log_unnorm_vs_vpa=false,
-                animate_log_unnorm_vs_vz=false,
-                animate_log_unnorm_vs_vpa_z=false,
-                animate_log_unnorm_vs_vz_z=false,
-                OrderedDict(Symbol(k)=>v for (k,v) ∈ section_defaults)...)
-            # Sort keys to make dict easier to read
-            sort!(this_input_dict[variable_name])
-        end
+    for variable_name ∈ all_dfn_variables
+        set_defaults_and_check_section!(
+            this_input_dict, variable_name;
+            check_moments=false,
+            (o=>false for o ∈ plot_options_1d if String(o) ∉ keys(section_defaults))...,
+            (o=>false for o ∈ plot_log_options_1d if String(o) ∉ keys(section_defaults))...,
+            (o=>false for o ∈ plot_options_2d if String(o) ∉ keys(section_defaults))...,
+            (o=>false for o ∈ plot_log_options_2d if String(o) ∉ keys(section_defaults))...,
+            (o=>false for o ∈ animate_options_1d if String(o) ∉ keys(section_defaults))...,
+            (o=>false for o ∈ animate_log_options_1d if String(o) ∉ keys(section_defaults))...,
+            (o=>false for o ∈ animate_options_2d if String(o) ∉ keys(section_defaults))...,
+            (o=>false for o ∈ animate_log_options_2d if String(o) ∉ keys(section_defaults))...,
+            plot_unnorm_vs_vpa=false,
+            plot_unnorm_vs_vz=false,
+            plot_unnorm_vs_vpa_z=false,
+            plot_unnorm_vs_vz_z=false,
+            plot_log_unnorm_vs_vpa=false,
+            plot_log_unnorm_vs_vz=false,
+            plot_log_unnorm_vs_vpa_z=false,
+            plot_log_unnorm_vs_vz_z=false,
+            animate_unnorm_vs_vpa=false,
+            animate_unnorm_vs_vz=false,
+            animate_unnorm_vs_vpa_z=false,
+            animate_unnorm_vs_vz_z=false,
+            animate_log_unnorm_vs_vpa=false,
+            animate_log_unnorm_vs_vz=false,
+            animate_log_unnorm_vs_vpa_z=false,
+            animate_log_unnorm_vs_vz_z=false,
+            OrderedDict(Symbol(k)=>v for (k,v) ∈ section_defaults)...)
+        # Sort keys to make dict easier to read
+        sort!(this_input_dict[variable_name])
     end
 
     set_defaults_and_check_section!(
