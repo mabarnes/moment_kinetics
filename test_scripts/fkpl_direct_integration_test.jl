@@ -8,7 +8,6 @@ using MPI
 using Dates
 
 import moment_kinetics
-using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions_direct_integration
 using moment_kinetics.fokker_planck_calculus: calculate_rosenbluth_potentials_via_direct_integration!
@@ -78,21 +77,20 @@ function init_grids(nelement,ngrid)
     fd_option = "fourth_order_centered"
     cheb_option = "matrix"
     element_spacing_option = "uniform"
-    adv_input = advection_input("default", 1.0, 0.0, 0.0)
-    nrank = 1
-    irank = 0
-    comm = MPI.COMM_NULL
     # create the 'input' struct containing input info needed to create a
     # coordinate
-    vpa_input = grid_input("vpa", vpa_ngrid, vpa_nelement_global, vpa_nelement_local, 
-        nrank, irank, vpa_L, discretization, fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
-    vperp_input = grid_input("vperp", vperp_ngrid, vperp_nelement_global, vperp_nelement_local, 
-        nrank, irank, vperp_L, discretization, fd_option, cheb_option, bc, adv_input,comm,element_spacing_option)
-    
+    coords_input = OptionsDict(
+        "vperp"=>OptionsDict("ngrid"=>vperp_ngrid, "nelement"=>vperp_nelement_global,
+                             "nelement_local"=>vperp_nelement_local, "L"=>vperp_L,
+                             "element_spacing_option"=>element_spacing_option),
+        "vpa"=>OptionsDict("ngrid"=>vpa_ngrid, "nelement"=>vpa_nelement_global,
+                           "nelement_local"=>vpa_nelement_local, "L"=>vpa_L,
+                           "discretization"=>discretization,
+                           "element_spacing_option"=>element_spacing_option),
+    )
     # create the coordinate structs
-    #println("made inputs")
-    vpa, vpa_spectral = define_coordinate(vpa_input)
-    vperp, vperp_spectral = define_coordinate(vperp_input)
+    vperp, vperp_spectral = define_coordinate(coords_input, "vperp")
+    vpa, vpa_spectral = define_coordinate(coords_input, "vpa")
     return vpa, vperp, vpa_spectral, vperp_spectral
 end
 

@@ -1,32 +1,45 @@
 # cheap input file for a 0D2V relaxation with numerical diffusion terms d^2 F / dvpa^2 and d^2 F / vperp^2.
-evolve_moments_density = false
-evolve_moments_parallel_flow = false
-evolve_moments_parallel_pressure = false
-evolve_moments_conservation = false
+[reactions]
 charge_exchange_frequency = 0.0
 ionization_frequency = 0.0
-constant_ionization_rate = false
+
+[fokker_planck_collisions]
+use_fokker_planck = true
 nuii = 0.0
-z_ngrid = 1
-z_nelement = 1
-z_nelement_local = 1
-z_bc = "wall"
-z_discretization = "chebyshev_pseudospectral"
-r_ngrid = 1
-r_nelement = 1
-r_nelement_local = 1
-r_bc = "periodic"
-r_discretization = "chebyshev_pseudospectral"
-vpa_ngrid = 5
-vpa_nelement = 16
-vpa_L = 6.0
-vpa_bc = "zero"
-vpa_discretization = "gausslegendre_pseudospectral"
-vperp_ngrid = 5
-vperp_nelement = 8
-vperp_L = 3.0
-vperp_bc = "zero"
-vperp_discretization = "gausslegendre_pseudospectral"
+
+[evolve_moments]
+density = false
+parallel_flow = false
+parallel_pressure = false
+moments_conservation = false
+
+[z]
+ngrid = 1
+nelement = 1
+nelement_local = 1
+bc = "wall"
+discretization = "chebyshev_pseudospectral"
+
+[r]
+ngrid = 1
+nelement = 1
+nelement_local = 1
+bc = "periodic"
+discretization = "chebyshev_pseudospectral"
+
+[vpa]
+ngrid = 5
+nelement = 16
+L = 6.0
+bc = "zero"
+discretization = "gausslegendre_pseudospectral"
+
+[vperp]
+ngrid = 5
+nelement = 8
+L = 3.0
+bc = "zero"
+discretization = "gausslegendre_pseudospectral"
 
 [composition]
 n_ion_species = 1

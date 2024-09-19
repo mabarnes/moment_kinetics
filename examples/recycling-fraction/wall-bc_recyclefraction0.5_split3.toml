@@ -1,30 +1,40 @@
-evolve_moments_density = true
-evolve_moments_parallel_flow = true
-evolve_moments_parallel_pressure = true
-evolve_moments_conservation = true
+[reactions]
 charge_exchange_frequency = 0.75
 ionization_frequency = 0.5
-constant_ionization_rate = false
-r_ngrid = 1
-r_nelement = 1
-z_ngrid = 9
-z_nelement = 32
-z_nelement_local = 16
-z_bc = "wall"
-z_discretization = "chebyshev_pseudospectral"
-z_element_spacing_option = "sqrt"
-vpa_ngrid = 10
-vpa_nelement = 63
-vpa_L = 36.0
-vpa_bc = "zero"
-vpa_discretization = "chebyshev_pseudospectral"
-vpa_element_spacing_option = "coarse_tails"
-vz_ngrid = 10
-vz_nelement = 63
-vz_L = 36.0
-vz_bc = "zero"
-vz_discretization = "chebyshev_pseudospectral"
-vz_element_spacing_option = "coarse_tails"
+
+[evolve_moments]
+density = true
+parallel_flow = true
+parallel_pressure = true
+moments_conservation = true
+
+[r]
+ngrid = 1
+nelement = 1
+
+[z]
+ngrid = 9
+nelement = 32
+#nelement_local = 16
+bc = "wall"
+discretization = "chebyshev_pseudospectral"
+element_spacing_option = "sqrt"
+
+[vpa]
+ngrid = 10
+nelement = 63
+L = 36.0
+bc = "zero"
+discretization = "chebyshev_pseudospectral"
+element_spacing_option = "coarse_tails"
+
+[vz]
+ngrid = 10
+nelement = 63
+L = 36.0
+bc = "zero"
+discretization = "chebyshev_pseudospectral"
+element_spacing_option = "coarse_tails"
 
 [composition]
 n_ion_species = 1
@@ -69,7 +79,7 @@ upar_phase = 0.0
 temperature_amplitude = 0.0
 temperature_phase = 0.0
 
-[vpa_IC_neutral_species_1]
+[vz_IC_neutral_species_1]
 initialization_option= "gaussian"
 density_amplitude = 1.0
 density_phase = 0.0

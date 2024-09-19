@@ -1,20 +1,36 @@
-evolve_moments_density = true
-evolve_moments_parallel_flow = false
-evolve_moments_parallel_pressure = false
-evolve_moments_conservation = true
+[reactions]
 charge_exchange_frequency = 0.62831853071
 ionization_frequency = 0.0
-r_ngrid = 1
-r_nelement = 1
-z_ngrid = 100
-z_nelement = 1
-z_bc = "periodic"
-z_discretization = "finite_difference"
-vpa_ngrid = 180
-vpa_nelement = 1
-vpa_L = 8.0
-vpa_bc = "periodic"
-vpa_discretization = "finite_difference"
+
+[evolve_moments]
+density = true
+parallel_flow = false
+parallel_pressure = false
+moments_conservation = true
+
+[r]
+ngrid = 1
+nelement = 1
+
+[z]
+ngrid = 100
+nelement = 1
+bc = "periodic"
+discretization = "finite_difference"
+
+[vpa]
+ngrid = 180
+nelement = 1
+L = 8.0
+bc = "periodic"
+discretization = "finite_difference"
+
+[vz]
+ngrid = 180
+nelement = 1
+L = 8.0
+bc = "periodic"
+discretization = "finite_difference"
 
 [composition]
 n_ion_species = 1

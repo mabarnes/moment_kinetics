@@ -75,9 +75,10 @@ function ion_ionization_collisions_1V!(f_out, fvec_in, vz, vpa, vperp, z, r, vz_
                 # no need to interpolate if neither upar or ppar evolved separately from pdf
                 vpa.scratch2 .= fvec_in.pdf_neutral[:,1,1,iz,ir,isn]
             end
+            ionization = collisions.reactions.ionization_frequency
             @loop_vpa ivpa begin
                 f_out[ivpa,1,iz,ir,is] +=
-                    dt*collisions.ionization*fvec_in.density_neutral[iz,ir,isn]*
+                    dt*ionization*fvec_in.density_neutral[iz,ir,isn]*
                     (vpa.scratch2[ivpa]*vth_ratio - fvec_in.pdf[ivpa,1,iz,ir,is])
             end
         end
@@ -88,6 +89,7 @@ function ion_ionization_collisions_1V!(f_out, fvec_in, vz, vpa, vperp, z, r, vz_
             # no gyroaverage here as 1V code
             #NB: used quasineutrality to replace electron density n_e with ion density
             #NEEDS GENERALISATION TO n_ion_species > 1 (missing species charge: Sum_i Z_i n_i = n_e)
+            ionization = collisions.reactions.ionization_frequency
             isn = is
             @loop_r_z ir iz begin
                 @views interpolate_to_grid_vpa!(vpa.scratch, vpa.grid,
@@ -95,7 +97,7 @@ function ion_ionization_collisions_1V!(f_out, fvec_in, vz, vpa, vperp, z, r, vz_
                                                 vz_spectral)
                 @loop_vpa ivpa begin
                     # apply ionization collisions to all ion species
-                    f_out[ivpa,1,iz,ir,is] += dt*collisions.ionization*vpa.scratch[ivpa]*fvec_in.density[iz,ir,is]
+                    f_out[ivpa,1,iz,ir,is] += dt*ionization*vpa.scratch[ivpa]*fvec_in.density[iz,ir,is]
                 end
             end
         end
@@ -117,6 +119,7 @@ function neutral_ionization_collisions_1V!(f_neutral_out, fvec_in, vz, vpa, vper
     if !moments.evolve_density
         begin_sn_r_z_vz_region()
 
+        ionization = collisions.reactions.ionization_frequency
         @loop_sn isn begin
             # ion ionisation rate =   < f_n > n_e R_ion
             # neutral "ionisation" (depopulation) rate =   -  f_n  n_e R_ion
@@ -126,7 +129,7 @@ function neutral_ionization_collisions_1V!(f_neutral_out, fvec_in, vz, vpa, vper
             is = isn
             @loop_r_z_vz ir iz ivz begin
                 # apply ionization collisions to all neutral species
-                f_neutral_out[ivz,1,1,iz,ir,isn] -= dt*collisions.ionization*fvec_in.pdf_neutral[ivz,1,1,iz,ir,isn]*fvec_in.density[iz,ir,is]
+                f_neutral_out[ivz,1,1,iz,ir,isn] -= dt*ionization*fvec_in.pdf_neutral[ivz,1,1,iz,ir,isn]*fvec_in.density[iz,ir,is]
             end
         end
     end
@@ -145,7 +148,7 @@ function ion_ionization_collisions_3V!(f_out, f_neutral_gav_in, fvec_in, composi
     @boundscheck r.n == size(f_neutral_gav_in,4) || throw(BoundsError(f_neutral_gav_in))
     @boundscheck composition.n_neutral_species == size(f_neutral_gav_in,5) || throw(BoundsError(f_neutral_gav_in))
     
-    ionization_frequency = collisions.ionization
+    ionization_frequency = collisions.reactions.ionization_frequency
     
     begin_s_r_z_vperp_vpa_region()
 
@@ -173,7 +176,7 @@ function neutral_ionization_collisions_3V!(f_neutral_out, fvec_in, composition, 
     @boundscheck r.n == size(f_neutral_out,5) || throw(BoundsError(f_neutral_out))
     @boundscheck composition.n_neutral_species == size(f_neutral_out,6) || throw(BoundsError(f_neutral_out))
 
-    ionization_frequency = collisions.ionization
+    ionization_frequency = collisions.reactions.ionization_frequency
 
     # ion ionization rate =   < f_n > n_e R_ion
     # neutral "ionization" (depopulation) rate =   -  f_n  n_e R_ion

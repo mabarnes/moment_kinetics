@@ -25,15 +25,19 @@ z_IC_temperature_amplitude2 = 0.5
 z_IC_temperature_phase2 = 0.0
 charge_exchange_frequency = 0.6283185307179586
 ionization_frequency = 0.0
-z_ngrid = 81
-z_nelement = 1
-z_bc = "periodic"
-z_discretization = "finite_difference"
-vpa_ngrid = 241
-vpa_nelement = 1
-vpa_L = 8.0
-vpa_bc = "periodic"
-vpa_discretization = "finite_difference"
+
+[z]
+ngrid = 81
+nelement = 1
+bc = "periodic"
+discretization = "finite_difference"
+
+[vpa]
+ngrid = 241
+nelement = 1
+L = 8.0
+bc = "periodic"
+discretization = "finite_difference"
 
 [timestepping]
 nstep = 100
