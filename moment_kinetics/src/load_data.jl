@@ -875,12 +875,13 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                 restart_electron_evolve_ppar = true, true, true
             electron_evolve_density, electron_evolve_upar, electron_evolve_ppar =
                 true, true, true
-            if "electron_physics" ∈ keys(restart_input)
-                restart_electron_physics = enum_from_string(electron_physics_type,
-                                                            restart_input["electron_physics"])
-            else
-                restart_electron_physics = boltzmann_electron_response
-            end
+            # Input is written to output files with all defaults filled in, and
+            # restart_input is read from a previous output file.
+            # restart_input["composition"]["electron_physics"] should always exist, even
+            # if it was set from a default, so we do not have to check the keys to see
+            # whether it exists.
+            restart_electron_physics = enum_from_string(electron_physics_type,
+                                                        restart_input["composition"]["electron_physics"])
             if pdf.electron !== nothing &&
                     restart_electron_physics ∈ (kinetic_electrons,
                                                 kinetic_electrons_with_temperature_equation)
