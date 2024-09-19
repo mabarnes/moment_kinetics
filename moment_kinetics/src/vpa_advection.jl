@@ -404,13 +404,15 @@ function update_speed_n_u_p_evolution!(advect, fvec, moments, vpa, z, r, composi
         end
     end
     # add in contributions from charge exchange and ionization collisions
+    charge_exchange = collisions.reactions.charge_exchange_frequency
+    ionization = collisions.reactions.ionization_frequency
     if composition.n_neutral_species > 0 &&
-            (abs(collisions.charge_exchange) > 0.0 || abs(collisions.ionization) > 0.0)
+            (abs(charge_exchange) > 0.0 || abs(ionization) > 0.0)
 
         @loop_s is begin
             @loop_r_z_vperp ir iz ivperp begin
                 @views @. advect[is].speed[:,ivperp,iz,ir] +=
-                    collisions.charge_exchange *
+                    charge_exchange *
                     (0.5*vpa.grid/fvec.ppar[iz,ir,is]
                      * (fvec.density_neutral[iz,ir,is]*fvec.ppar[iz,ir,is]
                         - fvec.density[iz,ir,is]*fvec.pz_neutral[iz,ir,is]
@@ -419,7 +421,7 @@ function update_speed_n_u_p_evolution!(advect, fvec, moments, vpa, z, r, composi
                      - fvec.density_neutral[iz,ir,is]
                        * (fvec.uz_neutral[iz,ir,is]-fvec.upar[iz,ir,is])
                        / moments.ion.vth[iz,ir,is]) +
-                    collisions.ionization *
+                    ionization *
                     (0.5*vpa.grid
                        * (fvec.density_neutral[iz,ir,is]
                           - fvec.density[iz,ir,is]*fvec.pz_neutral[iz,ir,is]
@@ -487,10 +489,12 @@ function update_speed_n_p_evolution!(advect, fields, fvec, moments, vpa, z, r,
         error("suspect the charge exchange and ionization contributions here may be "
               * "wrong because (upar[is]-upar[isp])^2 type terms were missed in the "
               * "energy equation when it was substituted in to derive them.")
-        if abs(collisions.charge_exchange + collisions.ionization) > 0.0
+        charge_exchange = collisions.reactions.charge_exchange_frequency
+        ionization = collisions.reactions.ionization_frequency
+        if abs(charge_exchange + ionization) > 0.0
             @loop_s is begin
                 @loop_r_z_vperp ir iz ivperp begin
-                    @views @. advect[is].speed[:,ivperp,iz,ir] += (collisions.charge_exchange + collisions.ionization) *
+                    @views @. advect[is].speed[:,ivperp,iz,ir] += (charge_exchange + ionization) *
                             0.5*vpa.grid*fvec.density[iz,ir,is] * (1.0-fvec.pz_neutral[iz,ir,is]/fvec.ppar[iz,ir,is])
                 end
             end
@@ -525,17 +529,19 @@ function update_speed_n_u_evolution!(advect, fvec, moments, vpa, z, r, compositi
     # and/or ionization collisions betweens ions and neutrals
     if composition.n_neutral_species > 0
         # account for collisional charge exchange friction between ions and neutrals
-        if abs(collisions.charge_exchange) > 0.0
+        charge_exchange = collisions.reactions.charge_exchange_frequency
+        ionization = collisions.reactions.ionization_frequency
+        if abs(charge_exchange) > 0.0
             @loop_s is begin
                 @loop_r_z_vperp ir iz ivperp begin
-                    @views @. advect[is].speed[:,ivperp,iz,ir] -= collisions.charge_exchange*fvec.density_neutral[iz,ir,is]*(fvec.uz_neutral[iz,ir,is]-fvec.upar[iz,ir,is])
+                    @views @. advect[is].speed[:,ivperp,iz,ir] -= charge_exchange*fvec.density_neutral[iz,ir,is]*(fvec.uz_neutral[iz,ir,is]-fvec.upar[iz,ir,is])
                 end
             end
         end
-        if abs(collisions.ionization) > 0.0
+        if abs(ionization) > 0.0
             @loop_s is begin
                 @loop_r_z_vperp ir iz ivperp begin
-                    @views @. advect[is].speed[:,ivperp,iz,ir] -= collisions.ionization*fvec.density_neutral[iz,ir,is]*(fvec.uz_neutral[iz,ir,is]-fvec.upar[iz,ir,is])
+                    @views @. advect[is].speed[:,ivperp,iz,ir] -= ionization*fvec.density_neutral[iz,ir,is]*(fvec.uz_neutral[iz,ir,is]-fvec.upar[iz,ir,is])
                 end
             end
         end

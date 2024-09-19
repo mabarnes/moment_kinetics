@@ -5,6 +5,7 @@ module file_io
 export input_option_error
 export get_group
 export open_output_file, open_ascii_output_file
+export setup_io_input
 export setup_file_io, finish_file_io
 export write_data_to_ascii
 
@@ -19,6 +20,7 @@ using ..type_definitions: mk_float, mk_int
 using LibGit2
 using MPI
 using Pkg
+using UUIDs
 
 @debug_shared_array using ..communication: DebugMPISharedArray
 
@@ -30,6 +32,23 @@ function __init__()
     catch
         # Do nothing
     end
+end
+
+"""
+Container for I/O settings
+"""
+Base.@kwdef struct io_input_struct
+    run_name::String
+    base_directory::String
+    ascii_output::Bool
+    binary_format::binary_format_type
+    parallel_io::Bool
+    run_id::String
+    output_dir::String
+    write_error_diagnostics::Bool
+    write_steady_state_diagnostics::Bool
+    write_electron_error_diagnostics::Bool
+    write_electron_steady_state_diagnostics::Bool
 end
 
 """
@@ -56,8 +75,7 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
                        Tchodura_upper, Texti1, Texti2, Texti3, Texti4,
                        Texti5, Textn1, Textn2, Textn3, Textn4, Textn5, Texte1, Texte2,
                        Texte3, Texte4, Tconstri, Tconstrn, Tconstre, Tint, Tfailcause,
-                       Telectrontime, Telectronint, Telectronfailcause, Tnldiagnostics,
-                       Tinput}
+                       Telectrontime, Telectronint, Telectronfailcause, Tnldiagnostics}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the time variable
@@ -211,14 +229,14 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
     nl_solver_diagnostics::Tnldiagnostics
 
     # Settings for I/O
-    io_input::Tinput
+    io_input::io_input_struct
  end
 
 """
 structure containing the data/metadata needed for binary file i/o
 distribution function data only
 """
-struct io_dfns_info{Tfile, Tfi, Tfe, Tfn, Tmoments, Tinput}
+struct io_dfns_info{Tfile, Tfi, Tfe, Tfn, Tmoments}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the ion species distribution function variable
@@ -241,7 +259,7 @@ struct io_dfns_info{Tfile, Tfi, Tfe, Tfn, Tmoments, Tinput}
     f_neutral_start_last_timestep::Union{Tfn,Nothing}
 
     # Settings for I/O
-    io_input::Tinput
+    io_input::io_input_struct
 
     # Handles for moment variables
     io_moments::Tmoments
@@ -252,8 +270,7 @@ structure containing the data/metadata needed for binary file i/o
 for electron initialization
 """
 struct io_initial_electron_info{Tfile, Tfe, Tmom, Texte1, Texte2, Texte3, Texte4,
-                                Tconstr, Telectrontime, Telectronint, Telectronfailcause,
-                                Tinput}
+                                Tconstr, Telectrontime, Telectronint, Telectronfailcause}
     # file identifier for the binary file to which data is written
     fid::Tfile
     time::Telectrontime
@@ -313,7 +330,54 @@ struct io_initial_electron_info{Tfile, Tfe, Tmom, Texte1, Texte2, Texte3, Texte4
     electron_dt_before_last_fail::Telectrontime
 
     # Settings for I/O
-    io_input::Tinput
+    io_input::io_input_struct
+end
+
+"""
+Read the settings for I/O
+"""
+function setup_io_input(input_dict, timestepping_section; ignore_MPI=false)
+    io_settings = set_defaults_and_check_section!(
+        input_dict, "output";
+        run_name="",
+        base_directory="runs",
+        ascii_output=false,
+        binary_format=hdf5,
+        parallel_io="",
+       )
+    if io_settings["run_name"] == ""
+        error("When passing a Dict directly for input, it is required to set `run_name` "
+              * "in the `[output]` section")
+    end
+    if io_settings["parallel_io"] == ""
+        io_settings["parallel_io"] = io_has_parallel(Val(io_settings["binary_format"]))
+    end
+    # Make copy of the section to avoid modifying the passed-in Dict
+    io_settings = copy(io_settings)
+    run_id = string(uuid4())
+    if !ignore_MPI
+        # Communicate run_id to all blocks
+        # Need to convert run_id to a Vector{Char} for MPI
+        run_id_chars = [run_id...]
+        MPI.Bcast!(run_id_chars, 0, comm_world)
+        run_id = string(run_id_chars...)
+    end
+    io_settings["run_id"] = run_id
+    io_settings["output_dir"] = joinpath(io_settings["base_directory"], io_settings["run_name"])
+    io_settings["write_error_diagnostics"] = timestepping_section["write_error_diagnostics"]
+    io_settings["write_steady_state_diagnostics"] = timestepping_section["write_steady_state_diagnostics"]
+    io_settings["write_electron_error_diagnostics"] = timestepping_section["electron_t_input"]["write_error_diagnostics"]
+    io_settings["write_electron_steady_state_diagnostics"] = timestepping_section["electron_t_input"]["write_steady_state_diagnostics"]
+
+    # Create output_dir if it does not exist.
+    if !ignore_MPI
+        if global_rank[] == 0
+            mkpath(io_settings["output_dir"])
+        end
+        _block_synchronize()
+    end
+
+    return io_input_struct(; (Symbol(k) => v for (k,v) ∈ io_settings)...)
 end
 
 """
@@ -631,10 +695,10 @@ function write_overview!(fid, composition, collisions, parallel_io, evolve_densi
         write_single_value!(overview, "T_e", composition.T_e, parallel_io=parallel_io,
                             description="fixed electron temperature")
         write_single_value!(overview, "charge_exchange_frequency",
-                            collisions.charge_exchange, parallel_io=parallel_io,
+                            collisions.reactions.charge_exchange_frequency, parallel_io=parallel_io,
                             description="quantity related to the charge exchange frequency")
-        write_single_value!(overview, "ionization_frequency", collisions.ionization,
-                            parallel_io=parallel_io,
+        write_single_value!(overview, "ionization_frequency",
+                            collisions.reactions.ionization_frequency, parallel_io=parallel_io,
                             description="quantity related to the ionization frequency")
         write_single_value!(overview, "evolve_density", evolve_density,
                             parallel_io=parallel_io,
@@ -949,7 +1013,8 @@ function define_io_coordinate!(parent, coord, coord_name, description, parallel_
                             description="discretization used for $coord_name")
 
         # write the finite-difference option for the coordinate
-        write_single_value!(group, "fd_option", coord.fd_option; parallel_io=parallel_io,
+        write_single_value!(group, "finite_difference_option",
+                            coord.finite_difference_option; parallel_io=parallel_io,
                             description="type of finite difference for $coord_name, if used")
 
         write_single_value!(group, "cheb_option", coord.cheb_option; parallel_io=parallel_io,
@@ -1930,7 +1995,7 @@ function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz, com
                             io_f_electron, io_f_electron_loworder,
                             io_f_electron_start_last_timestep, io_f_neutral,
                             io_f_neutral_loworder, io_f_neutral_start_last_timestep,
-                            parallel_io, io_moments)
+                            io_input, io_moments)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -2983,21 +3048,32 @@ include("file_io_hdf5.jl")
 
 """
 """
-function write_data_to_ascii(pdf, moments, fields, vpa, vperp, z, r, t, n_ion_species,
-                             n_neutral_species, ascii_io::Union{ascii_ios,Nothing})
+function write_data_to_ascii(pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r, t,
+                             n_ion_species, n_neutral_species,
+                             ascii_io::Union{ascii_ios,Nothing})
     if ascii_io === nothing || ascii_io.moments_ion === nothing
         # ascii I/O is disabled
         return nothing
     end
 
+    if r.n > 1 || vperp.n > 1 || vzeta.n > 1 || vr.n > 1
+        error("Ascii I/O is only implemented for 1D1V case")
+    end
+    if vz.n != vpa.n
+        error("ASCII I/O is only implemented when vz.n($(vz.n))==vpa.n($(vpa.n))")
+    end
+    if n_neutral_species != n_ion_species
+        error("ASCII I/O is only implemented when n_neutral_species($(n_neutral_species))==n_ion_species($(n_ion_species))")
+    end
+
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        write_f_ascii(pdf, z, vpa, t, ascii_io.ff)
+        @views write_f_ascii(pdf, z, vpa, t, ascii_io.ff)
         write_moments_ion_ascii(moments.ion, z, r, t, n_ion_species, ascii_io.moments_ion)
         write_moments_electron_ascii(moments.electron, z, r, t, ascii_io.moments_electron)
         if n_neutral_species > 0
-            write_moments_neutral_ascii(moments.neutral, z, r, t, n_neutral_species, ascii_io.moments_neutral)
+            @views write_moments_neutral_ascii(moments.neutral, z, r, t, n_neutral_species, ascii_io.moments_neutral)
         end
         write_fields_ascii(fields, z, r, t, ascii_io.fields)
     end
@@ -3014,11 +3090,11 @@ function write_f_ascii(f, z, vpa, t, ascii_io)
         @inbounds begin
             #n_species = size(f,3)
             #for is ∈ 1:n_species
-                for j ∈ 1:vpa.n
-                    for i ∈ 1:z.n
+                for i ∈ 1:z.n
+                    for j ∈ 1:vpa.n
                         println(ascii_io,"t: ", t, "   z: ", z.grid[i],
-                            "  vpa: ", vpa.grid[j], "   fion: ", f.ion.norm[i,j,1], 
-                            "   fneutral: ", f.neutral.norm[i,j,1])
+                            "  vpa: ", vpa.grid[j], "   fion: ", f.ion.norm[j,1,i,1,1],
+                            "   fneutral: ", f.neutral.norm[j,1,1,i,1,1])
                     end
                     println(ascii_io)
                 end

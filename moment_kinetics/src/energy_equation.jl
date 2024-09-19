@@ -41,20 +41,22 @@ function energy_equation!(ppar, fvec, moments, collisions, dt, spectral, composi
 
     # add in contributions due to charge exchange/ionization collisions
     if composition.n_neutral_species > 0
-        if abs(collisions.charge_exchange) > 0.0
+        charge_exchange = collisions.reactions.charge_exchange_frequency
+        ionization = collisions.reactions.ionization_frequency
+        if abs(charge_exchange) > 0.0
             @loop_s_r_z is ir iz begin
                 ppar[iz,ir,is] -=
-                    dt*collisions.charge_exchange*(
+                    dt*charge_exchange*(
                         fvec.density_neutral[iz,ir,is]*fvec.ppar[iz,ir,is] -
                         fvec.density[iz,ir,is]*fvec.pz_neutral[iz,ir,is] -
                         fvec.density[iz,ir,is]*fvec.density_neutral[iz,ir,is] *
                             (fvec.upar[iz,ir,is] - fvec.uz_neutral[iz,ir,is])^2)
             end
         end
-        if abs(collisions.ionization) > 0.0
+        if abs(ionization) > 0.0
             @loop_s_r_z is ir iz begin
                 ppar[iz,ir,is] +=
-                    dt*collisions.ionization*fvec.density[iz,ir,is] * (
+                    dt*ionization*fvec.density[iz,ir,is] * (
                         fvec.pz_neutral[iz,ir,is] +
                         fvec.density_neutral[iz,ir,is] *
                             (fvec.upar[iz,ir,is]-fvec.uz_neutral[iz,ir,is])^2)
@@ -95,20 +97,22 @@ function neutral_energy_equation!(pz, fvec, moments, collisions, dt, spectral,
 
     # add in contributions due to charge exchange/ionization collisions
     if composition.n_neutral_species > 0
-        if abs(collisions.charge_exchange) > 0.0
+        charge_exchange = collisions.reactions.charge_exchange_frequency
+        ionization = collisions.reactions.ionization_frequency
+        if abs(charge_exchange) > 0.0
             @loop_sn_r_z isn ir iz begin
                 pz[iz,ir,isn] -=
-                    dt*collisions.charge_exchange*(
+                    dt*charge_exchange*(
                         fvec.density[iz,ir,isn]*fvec.pz_neutral[iz,ir,isn] -
                         fvec.density_neutral[iz,ir,isn]*fvec.ppar[iz,ir,isn] -
                         fvec.density_neutral[iz,ir,isn]*fvec.density[iz,ir,isn] *
                             (fvec.uz_neutral[iz,ir,isn] - fvec.upar[iz,ir,isn])^2)
             end
         end
-        if abs(collisions.ionization) > 0.0
+        if abs(ionization) > 0.0
             @loop_sn_r_z isn ir iz begin
                 pz[iz,ir,isn] -=
-                    dt*collisions.ionization*fvec.density[iz,ir,isn]*fvec.pz_neutral[iz,ir,isn]
+                    dt*ionization*fvec.density[iz,ir,isn]*fvec.pz_neutral[iz,ir,isn]
             end
         end
     end

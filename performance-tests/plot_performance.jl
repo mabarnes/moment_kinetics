@@ -287,13 +287,13 @@ function get_grid_sizes(prefix)
         inputs_list = SoundWavePerformance.inputs_list
         # Use nz as the 'grid size' because that is the outer-loop in most of the 1D1V
         # code (basically everything apart from z_advection!()).
-        grid_sizes = [input["z_nelement"] * (input["z_ngrid"] - 1) + 1
+        grid_sizes = [input["z"]["nelement"] * (input["z"]["ngrid"] - 1) + 1
                       for input in inputs_list]
     elseif prefix == "sound_wave-2xres"
         inputs_list = SoundWave2xResPerformance.inputs_list
         # Use nz as the 'grid size' because that is the outer-loop in most of the 1D1V
         # code (basically everything apart from z_advection!()).
-        grid_sizes = [input["z_nelement"] * (input["z_ngrid"] - 1) + 1
+        grid_sizes = [input["z"]["nelement"] * (input["z"]["ngrid"] - 1) + 1
                       for input in inputs_list]
     else
         error("Unrecognized prefix $prefix")

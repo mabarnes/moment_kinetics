@@ -56,11 +56,6 @@ struct em_fields_struct
     gEr::MPISharedArray{mk_float,4}
     # gEz is the gyroaveraged parallel electric field
     gEz::MPISharedArray{mk_float,4}
-    # if including an external forcing for phi, it is of the form
-    # phi_external = phi0*drive_amplitude*sinpi(t*drive_frequency)
-    force_phi::Bool
-    drive_amplitude::mk_float
-    drive_frequency::mk_float
     # if true, force Er = 0 at wall plates
     force_Er_zero_at_wall::Bool
 end

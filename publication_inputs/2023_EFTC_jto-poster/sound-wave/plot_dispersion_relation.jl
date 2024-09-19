@@ -293,7 +293,7 @@ end
 function get_sim_omega_gamma(sim)
     try
         s = nothing
-        open(joinpath("..", "..", sim["base_directory"], sim["run_name"], basename(sim["run_name"]) * ".frequency_fit.txt"),
+        open(joinpath("..", "..", sim["output"]["base_directory"], sim["output"]["run_name"], basename(sim["output"]["run_name"]) * ".frequency_fit.txt"),
              "r") do io
             s = split(readline(io))
         end
@@ -310,7 +310,7 @@ function get_sim_omega_gamma(sim)
 
         return omega, gamma
     catch e
-        println("Error for ", sim["run_name"], " ", e)
+        println("Error for ", sim["output"]["run_name"], " ", e)
         return NaN, NaN
     end
 end
@@ -322,7 +322,7 @@ function plot_sim_output!(ax_omega, ax_gamma, sims, ni, nn, Th, Te; kwargs...)
     omega = zeros(length(sims))
     gamma = zeros(length(sims))
     for (i, s) ∈ enumerate(sims)
-        Ri[i] = s["charge_exchange_frequency"]
+        Ri[i] = s["reactions"]["charge_exchange_frequency"]
         omega[i], gamma[i] = get_sim_omega_gamma(s)
     end
 

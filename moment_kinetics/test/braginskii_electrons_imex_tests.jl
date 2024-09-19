@@ -9,22 +9,20 @@ include("setup.jl")
 using Base.Filesystem: tempname
 using MPI
 
-using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.input_structs: grid_input, advection_input, merge_dict_with_kwargs!
 using moment_kinetics.interpolation: interpolate_to_grid_z
 using moment_kinetics.load_data: get_run_info_no_setup, close_run_info, get_variable
-using moment_kinetics.type_definitions: OptionsDict
+using moment_kinetics.utils: merge_dict_with_kwargs!
 
 # default inputs for tests
 test_input = OptionsDict( "composition" => OptionsDict("n_ion_species" => 1,
                                                   "n_neutral_species" => 1,
                                                   "electron_physics" => "braginskii_fluid",
                                                   "T_e" => 0.2),
-                  "run_name" => "braginskii-electrons-imex",
-                  "evolve_moments_density" => true,
-                  "evolve_moments_parallel_flow" => true,
-                  "evolve_moments_parallel_pressure" => true,
-                  "evolve_moments_conservation" => true,
+                  "output" => OptionsDict("run_name" => "braginskii-electrons-imex"),
+                  "evolve_moments" => OptionsDict("density" => true,
+                                                  "parallel_flow" => true,
+                                                  "parallel_pressure" => true,
+                                                  "moments_conservation" => true),
                   "ion_species_1" => OptionsDict("initial_density" => 1.0,
                                                       "initial_temperature" => 1.0),
                   "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
@@ -50,17 +48,18 @@ test_input = OptionsDict( "composition" => OptionsDict("n_ion_species" => 1,
                                                                "upar_phase" => 0.0,
                                                                "temperature_amplitude" => 0.0,
                                                                "temperature_phase" => 0.0),
-                  "vpa_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
-                                                                  "density_amplitude" => 1.0,
-                                                                  "density_phase" => 0.0,
-                                                                  "upar_amplitude" => 0.0,
-                                                                  "upar_phase" => 0.0,
-                                                                  "temperature_amplitude" => 0.0,
-                                                                  "temperature_phase" => 0.0),
-                  "nu_ei" => 1.0e3,
-                  "charge_exchange_frequency" => 0.75,
-                  "ionization_frequency" => 0.5,
-                  "constant_ionization_rate" => false,
+                  "vz_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                           "density_amplitude" => 1.0,
+                                                           "density_phase" => 0.0,
+                                                           "upar_amplitude" => 0.0,
+                                                           "upar_phase" => 0.0,
+                                                           "temperature_amplitude" => 0.0,
+                                                           "temperature_phase" => 0.0),
+                  "electron_fluid_collisions" => OptionsDict("nu_ei" => 1.0e3),
+                  "reactions" => OptionsDict("charge_exchange_frequency" => 0.75,
+                                             "electron_charge_exchange_frequency" => 0.0,
+                                             "ionization_frequency" => 0.5,
+                                             "electron_ionization_frequency" => 0.5),
                   "timestepping" => OptionsDict("type" => "KennedyCarpenterARK324",
                                                      "implicit_ion_advance" => false,
                                                      "implicit_vpa_advection" => false,
@@ -71,22 +70,22 @@ test_input = OptionsDict( "composition" => OptionsDict("n_ion_species" => 1,
                                                      "nwrite" => 10000,
                                                      "high_precision_error_sum" => true),
                   "nonlinear_solver" => OptionsDict("nonlinear_max_iterations" => 100),
-                  "r_ngrid" => 1,
-                  "r_nelement" => 1,
-                  "z_ngrid" => 17,
-                  "z_nelement" => 16,
-                  "z_bc" => "periodic",
-                  "z_discretization" => "chebyshev_pseudospectral",
-                  "vpa_ngrid" => 6,
-                  "vpa_nelement" => 31,
-                  "vpa_L" => 12.0,
-                  "vpa_bc" => "zero",
-                  "vpa_discretization" => "chebyshev_pseudospectral",
-                  "vz_ngrid" => 6,
-                  "vz_nelement" => 31,
-                  "vz_L" => 12.0,
-                  "vz_bc" => "zero",
-                  "vz_discretization" => "chebyshev_pseudospectral",
+                  "r" => OptionsDict("ngrid" => 1,
+                                     "nelement" => 1),
+                  "z" => OptionsDict("ngrid" => 17,
+                                     "nelement" => 16,
+                                     "bc" => "periodic",
+                                     "discretization" => "chebyshev_pseudospectral"),
+                  "vpa" => OptionsDict("ngrid" => 6,
+                                       "nelement" => 31,
+                                       "L" => 12.0,
+                                       "bc" => "zero",
+                                       "discretization" => "chebyshev_pseudospectral"),
+                  "vz" => OptionsDict("ngrid" => 6,
+                                      "nelement" => 31,
+                                      "L" => 12.0,
+                                      "bc" => "zero",
+                                      "discretization" => "chebyshev_pseudospectral"),
                   "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
                                                                   "vpa_dissipation_coefficient" => 1e0),
                   "neutral_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
@@ -94,7 +93,7 @@ test_input = OptionsDict( "composition" => OptionsDict("n_ion_species" => 1,
 
 if global_size[] > 2 && global_size[] % 2 == 0
     # Test using distributed-memory
-    test_input["z_nelement_local"] = test_input["z_nelement"] ÷ 2
+    test_input["z"]["nelement_local"] = test_input["z"]["nelement"] ÷ 2
 end
 
 """
@@ -110,7 +109,7 @@ function run_test(test_input, expected_p, expected_q, expected_vt; rtol=1.e-6,
     input = deepcopy(test_input)
 
     # Convert keyword arguments to a unique name
-    name = input["run_name"]
+    name = input["output"]["run_name"]
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
 
@@ -123,7 +122,7 @@ function run_test(test_input, expected_p, expected_q, expected_vt; rtol=1.e-6,
 
     # Update default inputs with values to be changed
     merge_dict_with_kwargs!(input; args...)
-    input["run_name"] = name
+    input["output"]["run_name"] = name
 
     # Suppress console output while running
     p = undef
@@ -139,7 +138,7 @@ function run_test(test_input, expected_p, expected_q, expected_vt; rtol=1.e-6,
             # Load and analyse output
             #########################
 
-            path = joinpath(realpath(input["base_directory"]), name)
+            path = joinpath(realpath(input["output"]["base_directory"]), name)
 
             # open the output file
             run_info = get_run_info_no_setup(path)
@@ -283,15 +282,15 @@ function runtests()
             end
         else
             @testset "Split 3" begin
-                test_input["base_directory"] = test_output_directory
+                test_input["output"]["base_directory"] = test_output_directory
                 run_test(test_input, expected_p, expected_q, expected_vt)
             end
             @long @testset "Check other timestep - $type" for
                     type ∈ ("KennedyCarpenterARK437",)
 
                 timestep_check_input = deepcopy(test_input)
-                timestep_check_input["base_directory"] = test_output_directory
-                timestep_check_input["run_name"] = type
+                timestep_check_input["output"]["base_directory"] = test_output_directory
+                timestep_check_input["output"]["run_name"] = type
                 timestep_check_input["timestepping"]["type"] = type
                 run_test(timestep_check_input, expected_p, expected_q, expected_vt,
                          rtol=2.e-4, atol=1.e-10)

@@ -33,6 +33,7 @@ using moment_kinetics.moment_kinetics_input: mk_input, read_input_file
 using moment_kinetics.input_structs: geometry_input
 using moment_kinetics.reference_parameters
 using moment_kinetics.species_input: get_species_input
+using moment_kinetics.type_definitions: OptionsDict
 
 import Base: get
 
@@ -233,8 +234,8 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         end
         
         
-        r_bc = get(scan_input, "r_bc", "periodic")
-        z_bc = get(scan_input, "z_bc", "periodic")
+        r_bc = get(get(scan_input, "r", OptionsDict()), "bc", "periodic")
+        z_bc = get(get(scan_input, "z", OptionsDict()), "bc", "periodic")
         # avoid passing Lr = 0 into manufactured_solns functions 
         if r.n > 1
             Lr_in = r.L 

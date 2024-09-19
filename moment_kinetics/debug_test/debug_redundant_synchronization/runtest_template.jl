@@ -7,7 +7,7 @@ function run_test(test_input; args...)
     # update the default inputs
 
     # Convert keyword arguments to a unique name
-    name = test_input["run_name"]
+    name = test_input["output"]["run_name"]
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
 
@@ -25,7 +25,7 @@ function run_test(test_input; args...)
         # Update default inputs with values to be changed
         input = merge(test_input, modified_inputs)
 
-        input["run_name"] = name
+        input["output"]["run_name"] = name
 
         # run simulation
         run_moment_kinetics(input)

@@ -21,7 +21,7 @@ using MPI
 
 """
 """
-function setup_em_fields(nvperp, nz, nr, n_ion_species, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
+function setup_em_fields(nvperp, nz, nr, n_ion_species, em_input)
     phi = allocate_shared_float(nz,nr)
     phi0 = allocate_shared_float(nz,nr)
     Er = allocate_shared_float(nz,nr)
@@ -29,7 +29,8 @@ function setup_em_fields(nvperp, nz, nr, n_ion_species, force_phi, drive_amplitu
     gphi = allocate_shared_float(nvperp,nz,nr,n_ion_species)
     gEr = allocate_shared_float(nvperp,nz,nr,n_ion_species)
     gEz = allocate_shared_float(nvperp,nz,nr,n_ion_species)
-    return em_fields_struct(phi, phi0, Er, Ez, gphi, gEr, gEz, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
+    return em_fields_struct(phi, phi0, Er, Ez, gphi, gEr, gEz,
+                            em_input.force_Er_zero_at_wall)
 end
 
 """
@@ -116,9 +117,10 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
     elseif composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons,
                                            kinetic_electrons_with_temperature_equation)
         calculate_Epar_from_electron_force_balance!(fields.Ez, dens_e, moments.electron.dppar_dz,
-            collisions.nu_ei, moments.electron.parallel_friction,
-            composition.n_neutral_species, collisions.charge_exchange_electron, composition.me_over_mi,
-            fvec.density_neutral, fvec.uz_neutral, fvec.electron_upar)
+            collisions.electron_fluid.nu_ei, moments.electron.parallel_friction,
+            composition.n_neutral_species, collisions.reactions.electron_charge_exchange_frequency,
+            composition.me_over_mi, fvec.density_neutral, fvec.uz_neutral,
+            fvec.electron_upar)
         calculate_phi_from_Epar!(fields.phi, fields.Ez, r, z)
     end
     ## can calculate phi at z = L and hence phi_wall(z=L) using jpar_i at z =L if needed
