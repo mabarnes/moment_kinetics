@@ -319,9 +319,14 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                                         t_input["split_operators"])
 
     if !adaptive
-        # No adaptive timestep, want to use the value from the input file even when we are
-        # restarting
-        dt_reload = nothing
+        if electron !== nothing
+            # No adaptive timestep, want to use the value from the input file even when we are
+            # restarting.
+            # Do not want to do this for electrons, because electron_backward_euler!()
+            # uses an adaptive timestep (based on nonlinear solver iteration counts) even
+            # though it does not use an adaptive RK scheme.
+            dt_reload = nothing
+        end
 
         # Makes no sense to use write_error_diagnostics because non-adaptive schemes have
         # no error estimate
