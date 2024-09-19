@@ -200,10 +200,11 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
                         vpa, vzeta, vr, vz, vpa_spectral, vz_spectral, species)
 
         begin_s_r_z_region()
-        # calculate the initial parallel heat flux from the initial un-normalised pdf
+        # calculate the initial parallel heat flux from the initial un-normalised pdf. Even if Braginskii fluid is being
+        # advanced, initialised ion_qpar uses the pdf 
         update_ion_qpar!(moments.ion.qpar, moments.ion.qpar_updated,
                      moments.ion.dens, moments.ion.upar, moments.ion.vth,
-                     pdf.ion.norm, vpa, vperp, z, r, composition,
+                     pdf.ion.norm, vpa, vperp, z, r, composition, drift_kinetic_ions,
                      moments.evolve_density, moments.evolve_upar, moments.evolve_ppar)
 
         begin_serial_region()
@@ -1668,7 +1669,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
     update_ion_qpar!(moments.ion.qpar, moments.ion.qpar_updated,
                  moments.ion.dens, moments.ion.upar,
                  moments.ion.vth, pdf.ion.norm, vpa, vperp, z, r,
-                 composition, moments.evolve_density, moments.evolve_upar,
+                 composition, drift_kinetic_ions, moments.evolve_density, moments.evolve_upar,
                  moments.evolve_ppar)
     update_vth!(moments.ion.vth, moments.ion.ppar, moments.ion.pperp, moments.ion.dens, vperp, z, r, composition)
 

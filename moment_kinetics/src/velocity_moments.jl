@@ -737,7 +737,7 @@ end
 NB: the incoming pdf is the normalized pdf
 """
 function update_ion_qpar!(qpar, qpar_updated, density, upar, vth, pdf, vpa, vperp, z, r,
-                      composition, evolve_density, evolve_upar, evolve_ppar)
+                          composition, ion_physics, evolve_density, evolve_upar, evolve_ppar)
     @boundscheck composition.n_ion_species == size(qpar,3) || throw(BoundsError(qpar))
 
     begin_s_r_z_region()
@@ -747,7 +747,7 @@ function update_ion_qpar!(qpar, qpar_updated, density, upar, vth, pdf, vpa, vper
             @views update_ion_qpar_species!(qpar[:,:,is], density[:,:,is], upar[:,:,is],
                                         vth[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r,
                                         evolve_density, evolve_upar, evolve_ppar, 
-                                        composition.ion_physics)
+                                        ion_physics)
             qpar_updated[is] = true
         end
     end
@@ -1663,7 +1663,7 @@ function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composi
     # update the parallel heat flux
     update_ion_qpar!(moments.ion.qpar, moments.ion.qpar_updated, new_scratch.density,
                  new_scratch.upar, moments.ion.vth, ff, vpa, vperp, z, r,
-                 composition, moments.evolve_density, moments.evolve_upar,
+                 composition, composition.ion_physics, moments.evolve_density, moments.evolve_upar,
                  moments.evolve_ppar)
     # add further moments to be computed here
 
