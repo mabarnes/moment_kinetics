@@ -814,8 +814,24 @@ end
 """
 calculate parallel heat flux if ion composition flag is Braginskii fluid ions
 """
-function calculate_ion_qpar_from_braginskii!(qpar, density, upar, vth, ff, vpa, vperp, z, r, evolve_density,
-                                     evolve_upar, evolve_ppar)
+function calculate_ion_qpar_from_braginskii!(qpar, density, vth, ff, vpa, vperp, z, r, collisions)
+    # Note that this is a braginskii heat flux for ions using the krook operator. The full Fokker-Planck operator
+    # Braginskii heat flux is different! This also assumes one ion species, and so no friction between ions.
+    @boundscheck r.n == size(ff, 4) || throw(BoundsError(ff))
+    @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
+    @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
+    @boundscheck r.n == size(qpar, 2) || throw(BoundsError(qpar))
+    @boundscheck z.n == size(qpar, 1) || throw(BoundsError(qpar))
+    # For now, I'll do the dT_dz calculation here, because it is only used for the Braginskii so should
+    # not clutter up the rest of the code.
+    dT_dz = 
+    begin_r_z_region()
+    @loop_r_z ir iz begin
+        nu_ii = get_collision_frequency_ii(collisions, density[iz,ir], vth[iz,ir])
+        qpar[iz,ir] = -(1/2) * 5/4 * density[iz,ir] * vth[iz,ir]^2 /nu_ii * dT_dz[iz,ir]
+    end
+
     return nothing
 end
 """
