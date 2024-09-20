@@ -902,7 +902,7 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
     if dirichlet_bc
         # Make matrix diagonal for first/last grid points so it does not change the values
         # there
-        if !(coord.name == "vperp") 
+        if !(coord.cylindrical) 
             # modify lower endpoint if not a radial/cylindrical coordinate
             if coord.irank == 0
                 QQ_global[1,:] .= 0.0
@@ -978,7 +978,7 @@ function get_MM_local!(QQ,ielement,
         
         scale_factor = coord.element_scale[ielement]
         shift_factor = coord.element_shift[ielement]
-        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+        if coord.cylindrical # assume integrals of form int^infty_0 (.) vperp d vperp
             # extra scale and shift factors required because of vperp in integral
             if ielement > 1 || coord.irank > 0 # lobatto points
                 @. QQ =  (shift_factor*lobatto.M0 + scale_factor*lobatto.M1)*scale_factor
@@ -998,7 +998,7 @@ function get_SS_local!(QQ,ielement,
         
         scale_factor = coord.element_scale[ielement]
         shift_factor = coord.element_shift[ielement]
-        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+        if coord.cylindrical # assume integrals of form int^infty_0 (.) vperp d vperp
             # extra scale and shift factors required because of vperp in integral
             if ielement > 1 || coord.irank > 0 # lobatto points
                 @. QQ =  shift_factor*lobatto.S0 + scale_factor*lobatto.S1
@@ -1029,7 +1029,7 @@ function get_KK_local!(QQ,ielement,
         nelement = coord.nelement_local
         scale_factor = coord.element_scale[ielement]
         shift_factor = coord.element_shift[ielement]
-        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+        if coord.cylindrical # assume integrals of form int^infty_0 (.) vperp d vperp
             # extra scale and shift factors required because of vperp in integral
             # P0 factors make this a d^2 / dvperp^2 rather than (1/vperp) d ( vperp d (.) / d vperp)
             if ielement > 1 || coord.irank > 0 # lobatto points
@@ -1075,7 +1075,7 @@ function get_KJ_local!(QQ,ielement,
         
         scale_factor = scale_factor_func(coord.L,coord.nelement_global)
         shift_factor = shift_factor_func(coord.L,coord.nelement_global,coord.nelement_local,coord.irank,ielement) + 0.5*coord.L
-        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+        if coord.cylindrical # assume integrals of form int^infty_0 (.) vperp d vperp
             # extra scale and shift factors required because of vperp^2 in integral
             if ielement > 1 || coord.irank > 0 # lobatto points
                 @. QQ = (lobatto.K0*((shift_factor^2)/scale_factor) +
@@ -1099,7 +1099,7 @@ function get_LL_local!(QQ,ielement,
         nelement = coord.nelement_local
         scale_factor = coord.element_scale[ielement]
         shift_factor = coord.element_shift[ielement]
-        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+        if coord.cylindrical # assume integrals of form int^infty_0 (.) vperp d vperp
             # extra scale and shift factors required because of vperp in integral
             #  (1/vperp) d ( vperp d (.) / d vperp)
             if ielement > 1 || coord.irank > 0 # lobatto points
@@ -1144,7 +1144,7 @@ function get_MN_local!(QQ,ielement,
         coord)
         
         scale_factor = coord.element_scale[ielement]
-        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+        if coord.cylindrical # assume integrals of form int^infty_0 (.) vperp d vperp
             # extra scale and shift factors required because of vperp in integral
             if ielement > 1 || coord.irank > 0 # lobatto points
                 @. QQ =  lobatto.M0*scale_factor
@@ -1166,7 +1166,7 @@ function get_MR_local!(QQ,ielement,
         
         scale_factor = coord.element_scale[ielement]
         shift_factor = coord.element_shift[ielement]
-        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+        if coord.cylindrical # assume integrals of form int^infty_0 (.) vperp d vperp
             # extra scale and shift factors required because of vperp in integral
             if ielement > 1 || coord.irank > 0 # lobatto points
                 @. QQ =  (lobatto.M0*shift_factor^2 +
@@ -1192,7 +1192,7 @@ function get_PP_local!(QQ,ielement,
         
         scale_factor = coord.element_scale[ielement]
         shift_factor = coord.element_shift[ielement]
-        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+        if coord.cylindrical # assume integrals of form int^infty_0 (.) vperp d vperp
             # extra scale and shift factors required because of vperp in integral
             if ielement > 1 || coord.irank > 0 # lobatto points
                 @. QQ =  lobatto.P0*shift_factor + lobatto.P1*scale_factor
@@ -1215,7 +1215,7 @@ function get_PU_local!(QQ,ielement,
         
         scale_factor = coord.element_scale[ielement]
         shift_factor = coord.element_shift[ielement]
-        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+        if coord.cylindrical # assume integrals of form int^infty_0 (.) vperp d vperp
             # extra scale and shift factors required because of vperp in integral
             if ielement > 1 || coord.irank > 0 # lobatto points
                 @. QQ =  (lobatto.P0*shift_factor^2 + 
@@ -1261,7 +1261,7 @@ function get_YY0_local!(QQ,ielement,
         
         scale_factor = coord.element_scale[ielement]
         shift_factor = coord.element_shift[ielement]
-        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+        if coord.cylindrical # assume integrals of form int^infty_0 (.) vperp d vperp
             # extra scale and shift factors required because of vperp in integral
             if ielement > 1 || coord.irank > 0 # lobatto points
                 @. QQ =  (shift_factor*lobatto.Y00 + scale_factor*lobatto.Y01)*scale_factor
@@ -1281,7 +1281,7 @@ function get_YY1_local!(QQ,ielement,
         
         scale_factor = coord.element_scale[ielement]
         shift_factor = coord.element_shift[ielement]
-        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+        if coord.cylindrical # assume integrals of form int^infty_0 (.) vperp d vperp
             # extra scale and shift factors required because of vperp in integral
             if ielement > 1 || coord.irank > 0 # lobatto points
                 @. QQ =  shift_factor*lobatto.Y10 + scale_factor*lobatto.Y11
@@ -1301,7 +1301,7 @@ function get_YY2_local!(QQ,ielement,
         
         scale_factor = coord.element_scale[ielement]
         shift_factor = coord.element_shift[ielement]
-        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+        if coord.cylindrical # assume integrals of form int^infty_0 (.) vperp d vperp
             # extra scale and shift factors required because of vperp in integral
             if ielement > 1 || coord.irank > 0 # lobatto points
                 @. QQ =  (shift_factor/scale_factor)*lobatto.Y20 + lobatto.Y21
@@ -1321,7 +1321,7 @@ function get_YY3_local!(QQ,ielement,
         
         scale_factor = coord.element_scale[ielement]
         shift_factor = coord.element_shift[ielement]
-        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+        if coord.cylindrical # assume integrals of form int^infty_0 (.) vperp d vperp
             # extra scale and shift factors required because of vperp in integral
             if ielement > 1 || coord.irank > 0 # lobatto points
                 @. QQ =  shift_factor*lobatto.Y30 + scale_factor*lobatto.Y31

@@ -8,6 +8,7 @@ using moment_kinetics.calculus: laplacian_derivative!
 
 using MPI
 using Random
+using LinearAlgebra: mul!, ldiv!
 
 function runtests()
     @testset "calculus" verbose=use_verbose begin
@@ -1562,6 +1563,297 @@ function runtests()
                 laplacian_derivative!(d2f, f, x, spectral)
 
                 @test isapprox(d2f, expected_d2f, rtol=rtol, atol=1.e-10,
+                               norm=maxabs_norm)
+            end
+        end
+        
+        @testset "GaussLegendre pseudospectral cylindrical laplacian ODE solve, zero" verbose=false begin
+            @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
+                    (
+                     (1, 8, 5.e-2),
+                     (1, 9, 3.e-2),
+                     (1, 10, 4.e-3),
+                     (1, 11, 3.e-3),
+                     (1, 12, 6.e-4),
+                     (1, 13, 4.e-4),
+                     (1, 14, 2.e-4),
+                     (1, 15, 5.e-5),
+                     (1, 16, 3.e-5),
+                     (1, 17, 9.e-6),
+                     
+                     (2, 6, 8.e-3),
+                     (2, 7, 4.e-3),
+                     (2, 8, 4.e-4),
+                     (2, 9, 2.e-4),
+                     (2, 10, 5.e-5),
+                     (2, 11, 1.e-5),
+                     (2, 12, 5.e-6),
+                     (2, 13, 4.e-7),
+                     (2, 14, 4.e-7),
+                     (2, 15, 5.e-8),
+                     (2, 16, 2.e-8),
+                     (2, 17, 5.e-9),
+                     
+                     (3, 6, 2.e-3),
+                     (3, 7, 2.e-4),
+                     (3, 8, 5.e-5),
+                     (3, 9, 3.e-6),
+                     (3, 10, 2.e-6),
+                     (3, 11, 3.e-7),
+                     (3, 12, 6.e-8),
+                     (3, 13, 9.e-9),
+                     (3, 14, 2.e-9),
+                     (3, 15, 4.e-10),
+                     (3, 16, 3.e-11),
+                     (3, 17, 1.e-11),
+                     
+                     (4, 5, 1.e-3),
+                     (4, 6, 8.e-5),
+                     (4, 7, 3.e-5),
+                     (4, 8, 3.e-6),
+                     (4, 9, 6.e-7),
+                     (4, 10, 8.e-8),
+                     (4, 11, 2.e-8),
+                     (4, 12, 3.e-9),
+                     (4, 13, 3.e-10),
+                     (4, 14, 5.e-11),
+                     (4, 15, 3.e-12),
+                     (4, 16, 2.e-12),
+                     (4, 17, 1.e-12),
+                     
+                     (5, 5, 4.e-4),
+                     (5, 6, 3.e-5),
+                     (5, 7, 6.e-6),
+                     (5, 8, 4.e-7),
+                     (5, 9, 9.e-8),
+                     (5, 10, 4.e-9),
+                     (5, 11, 2.e-9),
+                     (5, 12, 8.e-11),
+                     (5, 13, 3.e-11),
+                     (5, 14, 1.e-12),
+                     (5, 15, 4.e-13),
+                     (5, 16, 4.e-13),
+                     (5, 17, 2.e-12),
+                     )
+
+                # define inputs needed for the test
+                L = 6.0
+                bc = "zero"
+                element_spacing_option = "uniform"
+                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("vperp"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="gausslegendre_pseudospectral",
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
+                expected_f = @. exp(-x.grid^2)
+                d2f = @. 4.0*(x.grid^2 - 1.0)*exp(-x.grid^2)
+                # create array for the numerical solution
+                f = similar(expected_f)
+                # create array for RHS vector b
+                b = similar(expected_f)
+                # solve for f
+                mul!(b,spectral.mass_matrix,d2f)
+                # Dirichlet zero BC at upper endpoint
+                b[end] = 0.0
+                # solve ODE
+                ldiv!(f,spectral.L_matrix_lu,b)
+                #err = maximum(abs.(f.-expected_f))
+                #println("$nelement $ngrid $err")
+                @test isapprox(f, expected_f, rtol=rtol, atol=1.e-10,
+                               norm=maxabs_norm)
+            end
+        end
+        
+        @testset "GaussLegendre pseudospectral second derivative ODE solve, zero" verbose=false begin
+            @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
+                    (
+                     (1, 23, 1.e-2),
+                     (1, 24, 5.e-3),
+                     (1, 25, 3.e-3),
+                     (1, 26, 2.e-3),
+                     (1, 27, 1.e-3),
+                     (1, 28, 6.e-4),
+                     (1, 29, 5.e-4),
+                     (1, 30, 3.e-4),
+                     (1, 31, 2.e-4),
+                     (1, 32, 8.e-5),
+                     
+                     (2, 9, 3.e-2),
+                     (2, 10, 2.e-2),
+                     (2, 11, 4.e-3),
+                     (2, 12, 1.e-3),
+                     (2, 13, 4.e-4),
+                     (2, 14, 2.e-4),
+                     (2, 15, 9.e-5),
+                     (2, 16, 3.e-5),
+                     (2, 17, 7.e-6),
+                     
+                     (3, 9, 2.e-2),
+                     (3, 10, 2.e-3),
+                     (3, 11, 6.e-4),
+                     (3, 12, 2.e-4),
+                     (3, 13, 7.e-5),
+                     (3, 14, 1.e-5),
+                     (3, 15, 9.e-6),
+                     (3, 16, 9.e-7),
+                     (3, 17, 1.e-6),
+                     
+                     (4, 7, 3.e-3),
+                     (4, 8, 8.e-4),
+                     (4, 9, 2.e-4),
+                     (4, 10, 4.e-5),
+                     (4, 11, 2.e-5),
+                     (4, 12, 4.e-6),
+                     (4, 13, 9.e-7),
+                     (4, 14, 4.e-7),
+                     (4, 15, 3.e-8),
+                     (4, 16, 3.e-8),
+                     (4, 17, 4.e-9),
+                     
+                     (5, 8, 2.e-4),
+                     (5, 9, 7.e-5),
+                     (5, 10, 7.e-6),
+                     (5, 11, 4.e-6),
+                     (5, 12, 3.e-7),
+                     (5, 13, 3.e-7),
+                     (5, 14, 9.e-9),
+                     (5, 15, 1.e-8),
+                     (5, 16, 3.e-10),
+                     (5, 17, 4.e-10),
+                     )
+
+                # define inputs needed for the test
+                L = 12.0
+                bc = "zero"
+                element_spacing_option = "uniform"
+                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("vpa"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="gausslegendre_pseudospectral",
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
+                expected_f = @. exp(-x.grid^2)
+                d2f = @. (4.0*x.grid^2 - 2.0)*exp(-x.grid^2)
+                # create array for the numerical solution
+                f = similar(expected_f)
+                # create array for RHS vector b
+                b = similar(expected_f)
+                # solve for f
+                mul!(b,spectral.mass_matrix,d2f)
+                # Dirichlet zero BC at lower and upper endpoint
+                b[1] = 0.0
+                b[end] = 0.0
+                # solve ODE
+                ldiv!(f,spectral.L_matrix_lu,b)
+                #err = maximum(abs.(f.-expected_f))
+                #maxfe = maximum(expected_f)
+                #maxf = maximum(f)
+                #minf = minimum(f)
+                #println("$nelement $ngrid $err $maxfe $maxf $minf")
+                @test isapprox(f, expected_f, rtol=rtol, atol=1.e-10,
+                               norm=maxabs_norm)
+            end
+        end
+        
+        @testset "GaussLegendre pseudospectral second derivative ODE solve, periodic" verbose=false begin
+            @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
+                    (
+                     (1, 10, 6.e-6),
+                     (1, 11, 2.e-6),
+                     (1, 12, 8.e-8),
+                     (1, 13, 2.e-8),
+                     (1, 14, 1.e-9),
+                     (1, 15, 2.e-10),
+                     (1, 16, 9.e-12),
+                     (1, 17, 2.e-12),
+                     
+                     (2, 9, 5.e-8),
+                     (2, 10, 6.e-9),
+                     (2, 11, 3.e-10),
+                     (2, 12, 3.e-11),
+                     (2, 13, 7.e-13),
+                     (2, 14, 1.e-13),
+                     (2, 15, 1.e-13),
+                     (2, 16, 1.e-13),
+                     (2, 17, 1.e-13),
+                     
+                     (3, 9, 2.e-9),
+                     (3, 10, 7.e-11),
+                     (3, 11, 4.e-12),
+                     (3, 12, 3.e-13),
+                     (3, 13, 3.e-13),
+                     (3, 14, 1.e-13),
+                     (3, 15, 1.e-13),
+                     (3, 16, 3.e-13),
+                     (3, 17, 1.e-13),
+                     
+                     (4, 7, 5.e-8),
+                     (4, 8, 3.e-9),
+                     (4, 9, 8.e-11),
+                     (4, 10, 4.e-12),
+                     (4, 11, 3.e-13),
+                     (4, 12, 1.e-13),
+                     (4, 13, 3.e-13),
+                     (4, 14, 1.e-13),
+                     (4, 15, 1.e-13),
+                     (4, 16, 3.e-13),
+                     (4, 17, 3.e-13),
+                     
+                     (5, 8, 5.e-10),
+                     (5, 9, 9.e-12),
+                     (5, 10, 5.e-13),
+                     (5, 11, 3.e-13),
+                     (5, 12, 1.e-13),
+                     (5, 13, 5.e-13),
+                     (5, 14, 1.e-13),
+                     (5, 15, 2.e-13),
+                     (5, 16, 5.e-13),
+                     (5, 17, 5.e-13),
+                     )
+
+                # define inputs needed for the test
+                L = 1.0
+                bc = "periodic"
+                element_spacing_option = "uniform"
+                phase = pi/3.0
+                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("vpa"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="gausslegendre_pseudospectral",
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
+                expected_f = @. sin((2.0*pi*x.grid/x.L) + phase)
+                d2f = @. -((2.0*pi/x.L)^2)*sin((2.0*pi*x.grid/x.L)+phase)
+                # create array for the numerical solution
+                f = similar(expected_f)
+                # create array for RHS vector b
+                b = similar(expected_f)
+                # solve for f
+                mul!(b,spectral.mass_matrix,d2f)
+                # Dirichlet zero BC at lower endpoint, periodic bc at upper endpoint
+                b[1] = sin((2.0*pi*x.grid[1]/x.L) + phase) # fixes constant piece of solution
+                b[end] = 0.0 # makes sure periodicity is enforced
+                # solve ODE
+                ldiv!(f,spectral.L_matrix_lu,b)
+                #err = maximum(abs.(f.-expected_f))
+                #maxfe = maximum(expected_f)
+                #maxf = maximum(f)
+                #minf = minimum(f)
+                #println("$nelement $ngrid $err $maxfe $maxf $minf")
+                @test isapprox(f, expected_f, rtol=rtol, atol=1.e-10,
                                norm=maxabs_norm)
             end
         end

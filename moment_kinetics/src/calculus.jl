@@ -147,7 +147,7 @@ function laplacian_derivative!(d2f, f, coord, spectral)
     # First derivative
     elementwise_derivative!(coord, f, spectral)
     derivative_elements_to_full_grid!(coord.scratch3, coord.scratch_2d, coord)
-    if coord.name == "vperp"
+    if coord.cylindrical
         # include the Jacobian
         @. coord.scratch3 *= coord.grid
     end
@@ -159,7 +159,7 @@ function laplacian_derivative!(d2f, f, coord, spectral)
     # Second derivative for element interiors
     elementwise_derivative!(coord, coord.scratch3, spectral)
     derivative_elements_to_full_grid!(d2f, coord.scratch_2d, coord)
-    if coord.name == "vperp"
+    if coord.cylindrical
         # include the Jacobian
         @. d2f /= coord.grid
     end
@@ -249,8 +249,8 @@ function laplacian_derivative!(d2f, f, coord, spectral::weak_discretization_info
     # for all other coord.name, do exactly the same as second_derivative! above.
     mul!(coord.scratch3, spectral.L_matrix, f)
 
-    if coord.bc == "periodic" && coord.name == "vperp"
-        error("laplacian_derivative!() cannot handle periodic boundaries for vperp")
+    if coord.bc == "periodic" && coord.cylindrical
+        error("laplacian_derivative!() cannot handle periodic boundaries for cylindrical coordinates like vperp")
     elseif coord.bc == "periodic"
         if coord.nrank > 1
             error("laplacian_derivative!() cannot handle periodic boundaries for a "

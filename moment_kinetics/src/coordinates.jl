@@ -11,6 +11,7 @@ using ..type_definitions: mk_float, mk_int, OptionsDict
 using ..array_allocation: allocate_float, allocate_shared_float, allocate_int
 using ..calculus: derivative!
 using ..chebyshev: scaled_chebyshev_grid, scaled_chebyshev_radau_grid, setup_chebyshev_pseudospectral
+using ..fourier: scaled_fourier_grid, setup_fourier_pseudospectral
 using ..communication
 using ..finite_differences: finite_difference_info
 using ..gauss_legendre: scaled_gauss_legendre_lobatto_grid, scaled_gauss_legendre_radau_grid, setup_gausslegendre_pseudospectral
@@ -126,6 +127,8 @@ struct coordinate{T <: AbstractVector{mk_float}}
     other_nodes::Array{mk_float,3}
     # One over the denominators of the Lagrange polynomials
     one_over_denominator::Array{mk_float,2}
+    # flag to determine if the coordinate is cylindrical
+    cylindrical::Bool
 end
 
 """
@@ -255,12 +258,15 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     # to the full grid
     imin, imax, igrid_full = elemental_to_full_grid_map(coord_input.ngrid,
                                                         coord_input.nelement_local)
+    # check name of coordinate to determine if radial or vperp cylindrical coordinate
+    cylindrical = (coord_input.name == "vperp") || (coord_input.name == "radial")
     # initialise the data used to construct the grid
     # boundaries for each element
     element_boundaries = set_element_boundaries(coord_input.nelement,
                                                 coord_input.L,
                                                 coord_input.element_spacing_option,
-                                                coord_input.name)
+                                                coord_input.name,
+                                                cylindrical)
     # shift and scale factors for each local element
     element_scale, element_shift =
         set_element_scale_and_shift(coord_input.nelement, coord_input.nelement_local,
@@ -270,7 +276,7 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     grid, wgts, uniform_grid, radau_first_element =
         init_grid(coord_input.ngrid, coord_input.nelement_local, n_global, n_local,
                   irank, coord_input.L, element_scale, element_shift, imin, imax, igrid,
-                  coord_input.discretization, coord_input.name)
+                  coord_input.discretization, coord_input.name, cylindrical)
     # calculate the widths of the cells between neighboring grid points
     cell_width = grid_spacing(grid, n_local)
     # duniform_dgrid is the local derivative of the uniform grid with respect to
@@ -358,7 +364,7 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         scratch_shared2, scratch_2d, copy(scratch_2d), advection, send_buffer,
         receive_buffer, comm, local_io_range, global_io_range, element_scale,
         element_shift, coord_input.element_spacing_option, element_boundaries,
-        radau_first_element, other_nodes, one_over_denominator)
+        radau_first_element, other_nodes, one_over_denominator, cylindrical)
 
     if coord.n == 1 && occursin("v", coord.name)
         spectral = null_velocity_dimension_info()
@@ -377,6 +383,18 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         # create arrays needed for explicit GaussLegendre pseudospectral treatment in this
         # coordinate and create the matrices for differentiation
         spectral = setup_gausslegendre_pseudospectral(coord, collision_operator_dim=collision_operator_dim)
+        # obtain the local derivatives of the uniform grid with respect to the used grid
+        derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
+    elseif coord_input.discretization == "fourier_pseudospectral"
+        if !(coord.bc == "none")
+         error("fourier_pseudospectral option requires bc='none' (periodicity enforced by basis functions, not be explicit assignment)")
+        end
+        if !(coord.nelement_global == 1)
+         error("fourier_pseudospectral option requires nelement=1")
+        end        
+        # create arrays needed for explicit GaussLegendre pseudospectral treatment in this
+        # coordinate and create the matrices for differentiation
+        spectral = setup_fourier_pseudospectral(coord, run_directory; ignore_MPI=ignore_MPI)
         # obtain the local derivatives of the uniform grid with respect to the used grid
         derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
     else
@@ -419,7 +437,7 @@ function define_test_coordinate(name; collision_operator_dim=true, kwargs...)
                                   ignore_MPI=true)
 end
 
-function set_element_boundaries(nelement_global, L, element_spacing_option, coord_name)
+function set_element_boundaries(nelement_global, L, element_spacing_option, coord_name, coord_cylindrical)
     # set global element boundaries between [-L/2,L/2]
     element_boundaries = allocate_float(nelement_global+1)
     if element_spacing_option == "sqrt" && nelement_global > 3
@@ -476,7 +494,7 @@ function set_element_boundaries(nelement_global, L, element_spacing_option, coor
     else 
         println("ERROR: element_spacing_option: ",element_spacing_option, " not supported")
     end
-    if coord_name == "vperp"
+    if coord_cylindrical
         #shift so that the range of element boundaries is [0,L]
         for j in 1:nelement_global+1
             element_boundaries[j] += L/2.0
@@ -502,7 +520,7 @@ end
 setup a grid with n_global grid points on the interval [-L/2,L/2]
 """
 function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_scale, element_shift,
-                   imin, imax, igrid, discretization, name)
+                   imin, imax, igrid, discretization, name, cylindrical)
     uniform_grid = equally_spaced_grid(n_global, n_local, irank, L)
     uniform_grid_shifted = equally_spaced_grid_shifted(n_global, n_local, irank, L)
     radau_first_element = false
@@ -517,7 +535,7 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
             wgts[1] = 1.0
         end
     elseif discretization == "chebyshev_pseudospectral"
-        if name == "vperp"
+        if cylindrical
             # initialize chebyshev grid defined on [-L/2,L/2]
             grid, wgts = scaled_chebyshev_radau_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax, irank)
             wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
@@ -533,7 +551,7 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
             grid, wgts = scaled_chebyshev_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax)
         end
     elseif discretization == "gausslegendre_pseudospectral"
-        if name == "vperp"
+        if cylindrical
             # use a radau grid for the 1st element near the origin
             grid, wgts = scaled_gauss_legendre_radau_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax, irank)
             wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
@@ -542,8 +560,14 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
         else
             grid, wgts = scaled_gauss_legendre_lobatto_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax)
         end
+    elseif discretization == "fourier_pseudospectral"
+        if cylindrical
+            error("fourier_pseudospectral is inappropriate for cylindrical radial coordinates")
+        else
+            grid, wgts = scaled_fourier_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax)
+        end
     elseif discretization == "finite_difference"
-        if name == "vperp"
+        if cylindrical
             # initialize equally spaced grid defined on [0,L]
             grid = uniform_grid_shifted
             # use composite Simpson's rule to obtain integration weights associated with this coordinate
