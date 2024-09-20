@@ -99,8 +99,8 @@ Note that `integrate_over_vspace()` includes the 1/sqrt(pi) factor already.
 
 If `ir0` is passed, only load the data for as single r-point (to save memory).
 """
-function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, composition, Er,
-                                 geometry, z_bc, nblocks, run_name=nothing,
+function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, temp_e, composition,
+                                 Er, geometry, z_bc, nblocks, run_name=nothing,
                                  it0::Union{Nothing, mk_int}=nothing,
                                  ir0::Union{Nothing, mk_int}=nothing;
                                  f_lower=nothing, f_upper=nothing,
@@ -127,6 +127,12 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, composition,
     else
         nr = 1
     end
+
+    if temp_e === nothing
+        # Assume this is from a Boltzmann electron response simulation
+        temp_e = fill(composition.T_e, 2, nr, ntime)
+    end
+
     lower_result = zeros(nr, ntime)
     upper_result = zeros(nr, ntime)
     if f_lower !== nothing || f_upper !== nothing
@@ -183,7 +189,7 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, composition,
             println("result lower ", lower_result[ir,it])
         end
 
-        lower_result[ir,it] *= 0.5 * composition.T_e / dens[1,ir,is,it]
+        lower_result[ir,it] *= 0.5 * temp_e[1,ir,it] / dens[1,ir,is,it]
 
         v_parallel = vpagrid_to_dzdt(vpa.grid, vth[end,ir,is,it], upar[end,ir,is,it],
                                      evolve_ppar, evolve_upar)
@@ -205,7 +211,7 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, composition,
             println("result upper ", upper_result[ir,it])
         end
 
-        upper_result[ir,it] *= 0.5 * composition.T_e / dens[end,ir,is,it]
+        upper_result[ir,it] *= 0.5 * temp_e[end,ir,it] / dens[end,ir,is,it]
     end
 
     println("final Chodura results result ", lower_result[1,end], " ", upper_result[1,end])

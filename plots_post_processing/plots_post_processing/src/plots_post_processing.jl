@@ -776,10 +776,13 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     end
 
     if pp.diagnostics_chodura_t
+        # At the moment electron data is not loaded, so we pass `nothing` for the `temp_e`
+        # argument to use the Boltzmann electron response version of
+        # check_Chodura_condition().
         Chodura_ratio_lower, Chodura_ratio_upper =
             get_tuple_of_return_values(check_Chodura_condition, r, z, vperp, vpa,
                                        density_at_pdf_times, parallel_flow_at_pdf_times,
-                                       thermal_speed_at_pdf_times, composition,
+                                       thermal_speed_at_pdf_times, nothing, composition,
                                        Er_at_pdf_times, geometry, "wall", nblocks,
                                        run_names, nothing, ir0,
                                        evolve_density=evolve_density,
@@ -802,10 +805,13 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     end
 
     if pp.diagnostics_chodura_r
+        # At the moment electron data is not loaded, so we pass `nothing` for the `temp_e`
+        # argument to use the Boltzmann electron response version of
+        # check_Chodura_condition().
         Chodura_ratio_lower, Chodura_ratio_upper =
             get_tuple_of_return_values(check_Chodura_condition, r, z, vperp, vpa,
                                        density_at_pdf_times, parallel_flow_at_pdf_times,
-                                       thermal_speed_at_pdf_times, composition,
+                                       thermal_speed_at_pdf_times, nothing, composition,
                                        Er_at_pdf_times, geometry, "wall", nblocks,
                                        run_names, ntime_pdfs, nothing,
                                        evolve_density=evolve_density,
