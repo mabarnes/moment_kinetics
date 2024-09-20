@@ -5811,6 +5811,7 @@ function Chodura_condition_plots(run_info; plot_prefix=nothing, axes=nothing)
         f_input["iz0"] = 1
         plot_f_unnorm_vs_vpa(run_info; f_over_vpa2=true, input=f_input, is=1, fig=fig,
                              ax=ax, label=label)
+        vlines!(ax, cutoff_lower[input.ir0,input.it0]; linestyle=:dash, color=:red)
         if plot_prefix !== nothing && fig !== nothing
             outfile=plot_prefix * "pdf_unnorm_over_vpa2_wall-_vs_vpa.pdf"
             save(outfile, fig)
@@ -5832,6 +5833,7 @@ function Chodura_condition_plots(run_info; plot_prefix=nothing, axes=nothing)
         f_input["iz0"] = run_info.z.n
         plot_f_unnorm_vs_vpa(run_info; f_over_vpa2=true, input=f_input, is=1, fig=fig,
                              ax=ax, label=label)
+        vlines!(ax, cutoff_upper[input.ir0,input.it0]; linestyle=:dash, color=:red)
         if plot_prefix !== nothing && fig !== nothing
             outfile=plot_prefix * "pdf_unnorm_over_vpa2_wall+_vs_vpa.pdf"
             save(outfile, fig)
@@ -5855,6 +5857,7 @@ function Chodura_condition_plots(run_info; plot_prefix=nothing, axes=nothing)
         f_input["iz0"] = 1
         animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=true, input=f_input, is=1, iz=1,
                                 fig=fig, ax=ax, frame_index=frame_index, label=label)
+        vlines!(ax, @lift cutoff_lower[input.ir0,$frame_index]; linestyle=:dash, color=:red)
         if plot_prefix !== nothing && fig !== nothing
             outfile=plot_prefix * "pdf_unnorm_over_vpa2_wall-_vs_vpa." * input.animation_ext
             save_animation(fig, frame_index, run_info.nt, outfile)
@@ -5877,6 +5880,7 @@ function Chodura_condition_plots(run_info; plot_prefix=nothing, axes=nothing)
         animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=true, input=f_input, is=1,
                                 iz=run_info.z.n, fig=fig, ax=ax, frame_index=frame_index,
                                 label=label)
+        vlines!(ax, @lift cutoff_upper[input.ir0,$frame_index]; linestyle=:dash, color=:red)
         if plot_prefix !== nothing && fig !== nothing
             outfile=plot_prefix * "pdf_unnorm_over_vpa2_wall+_vs_vpa." * input.animation_ext
             save_animation(fig, frame_index, run_info.nt, outfile)
