@@ -3942,6 +3942,13 @@ function plot_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing, neutra
 
     l = plot_1d(dzdt, f_unnorm; ax=ax, label=run_info.run_name, kwargs...)
 
+    if input.show_element_boundaries && fig !== nothing
+        element_boundary_inds =
+        [i for i ∈ 1:run_info.vpa.ngrid-1:run_info.vpa.n_global]
+        element_boundary_positions = dzdt[element_boundary_inds]
+        vlines!(ax, element_boundary_positions, color=:black, alpha=0.3)
+    end
+
     if outfile !== nothing
         if fig === nothing
             error("When ax is passed, fig must also be passed to save the plot using "
@@ -4317,6 +4324,14 @@ function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
     f_unnorm = @lift transform.(get_this_f_unnorm($frame_index))
 
     l = plot_1d(dzdt, f_unnorm; ax=ax, label=run_info.run_name, yscale=yscale, kwargs...)
+
+    if input.show_element_boundaries && fig !== nothing
+        element_boundary_inds =
+        [i for i ∈ 1:run_info.vpa.ngrid-1:run_info.vpa.n_global]
+        element_boundary_positions = @lift $dzdt[element_boundary_inds]
+        vlines!(ax, element_boundary_positions, color=:black, alpha=0.3)
+    end
+
 
     if outfile !== nothing
         if fig === nothing
