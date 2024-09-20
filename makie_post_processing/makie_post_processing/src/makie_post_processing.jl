@@ -4161,8 +4161,8 @@ it might be useful to pass `transform=abs` (to plot the absolute value) or
 `axis_args` are passed as keyword arguments to `get_1d_ax()`, and from there to the `Axis`
 constructor.
 
-Any extra `kwargs` are passed to [`plot_1d`](@ref) (which is used to create the plot, as
-we have to handle time-varying coordinates so cannot use [`animate_1d`](@ref)).
+Any extra `kwargs` are passed to `lines!()` (which is used to create the plot, as we have
+to handle time-varying coordinates so cannot use [`animate_1d`](@ref)).
 """
 function animate_f_unnorm_vs_vpa end
 
@@ -4264,16 +4264,16 @@ function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
                                          run_info.evolve_density, run_info.evolve_ppar)
 
         if f_over_vpa2
-            dzdt = vpagrid_to_dzdt(vcoord.grid, vth[it], upar[it],
-                                   run_info.evolve_ppar, run_info.evolve_upar)
-            dzdt2 = dzdt.^2
-            for i ∈ eachindex(dzdt2)
-                if dzdt2[i] == 0.0
-                    dzdt2[i] = 1.0
+            this_dzdt = vpagrid_to_dzdt(vcoord.grid, vth[it], upar[it],
+                                        run_info.evolve_ppar, run_info.evolve_upar)
+            this_dzdt2 = this_dzdt.^2
+            for i ∈ eachindex(this_dzdt2)
+                if this_dzdt2[i] == 0.0
+                    this_dzdt2[i] = 1.0
                 end
             end
 
-            f_unnorm = @. copy(f_unnorm) / dzdt2
+            f_unnorm = @. copy(f_unnorm) / this_dzdt2
         end
 
         return f_unnorm
