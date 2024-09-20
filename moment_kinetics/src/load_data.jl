@@ -4343,9 +4343,6 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         density = get_variable(run_info, "density")
         upar = get_variable(run_info, "parallel_flow")
         ppar = get_variable(run_info, "parallel_pressure")
-        density_neutral = get_variable(run_info, "density_neutral")
-        uz_neutral = get_variable(run_info, "uz_neutral")
-        pz_neutral = get_variable(run_info, "pz_neutral")
         vth = get_variable(run_info, "thermal_speed")
         dupar_dz = get_z_derivative(run_info, "parallel_flow")
         dppar_dz = get_z_derivative(run_info, "parallel_pressure")
@@ -4395,6 +4392,15 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
                            vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
                            vr=run_info.vr.n, vz=run_info.vz.n)
+        
+        # Use neutrals for fvec calculation in moment_kinetic version only when 
+        # n_neutrals != 0
+        if run_info.n_neutral_species != 0
+            density_neutral = get_variable(run_info, "density_neutral")
+            uz_neutral = get_variable(run_info, "uz_neutral")
+            pz_neutral = get_variable(run_info, "pz_neutral")
+        end
+
         for it ∈ 1:nt
             begin_serial_region()
             # Only need some struct with a 'speed' variable
@@ -4413,12 +4419,18 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                              evolve_density=run_info.evolve_density,
                              evolve_upar=run_info.evolve_upar,
                              evolve_ppar=run_info.evolve_ppar)
-            @views fvec = (density=density[:,:,:,it],
-                           upar=upar[:,:,:,it],
-                           ppar=ppar[:,:,:,it],
-                           density_neutral=density_neutral[:,:,:,it],
-                           uz_neutral=uz_neutral[:,:,:,it],
-                           pz_neutral=pz_neutral[:,:,:,it])
+            if run_info.n_neutral_species != 0
+                @views fvec = (density=density[:,:,:,it],
+                            upar=upar[:,:,:,it],
+                            ppar=ppar[:,:,:,it],
+                            density_neutral=density_neutral[:,:,:,it],
+                            uz_neutral=uz_neutral[:,:,:,it],
+                            pz_neutral=pz_neutral[:,:,:,it])
+            else
+                @views fvec = (density=density[:,:,:,it],
+                            upar=upar[:,:,:,it],
+                            ppar=ppar[:,:,:,it])
+            end
             @views update_speed_vpa!(advect, fields, fvec, moments, run_info.vpa,
                                      run_info.vperp, run_info.z, run_info.r,
                                      run_info.composition, run_info.collisions,
