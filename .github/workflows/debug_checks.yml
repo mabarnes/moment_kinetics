@@ -15,14 +15,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: mpi4py/setup-mpi@v1
-        with:
-          mpi: 'openmpi'
       - uses: julia-actions/setup-julia@latest
         with:
           version: '1.10'
           arch: x64
-      - uses: julia-actions/cache@v1
+      - uses: julia-actions/cache@v2
       - name: Debug test
         run: |
           # Hard code the debug level so that we can run without using the
