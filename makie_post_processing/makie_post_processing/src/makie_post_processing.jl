@@ -7357,30 +7357,30 @@ will be saved with the format `plot_prefix_timestep_diagnostics.pdf`.
 """
 function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=nothing,
                               electron=false)
-    try
-        if !isa(run_info, Tuple)
-            run_info = (run_info,)
-        end
+    if !isa(run_info, Tuple)
+        run_info = (run_info,)
+    end
 
-        if electron
-            println("Making electron timestep diagnostics plots")
-        else
-            println("Making timestep diagnostics plots")
-        end
+    if electron
+        println("Making electron timestep diagnostics plots")
+    else
+        println("Making timestep diagnostics plots")
+    end
 
-        input = Dict_to_NamedTuple(input_dict["timestep_diagnostics"])
+    input = Dict_to_NamedTuple(input_dict["timestep_diagnostics"])
 
-        steps_fig = nothing
-        dt_fig = nothing
-        CFL_fig = nothing
+    steps_fig = nothing
+    dt_fig = nothing
+    CFL_fig = nothing
 
-        if electron
-            electron_prefix = "electron_"
-        else
-            electron_prefix = ""
-        end
+    if electron
+        electron_prefix = "electron_"
+    else
+        electron_prefix = ""
+    end
 
-        if input.plot
+    if input.plot
+        try
             # Plot numbers of steps and numbers of failures
             ###############################################
 
@@ -7514,6 +7514,19 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
 
             put_legend_right(steps_fig, ax_failures)
 
+            if plot_prefix !== nothing
+                outfile = plot_prefix * electron_prefix * "timestep_diagnostics.pdf"
+                save(outfile, steps_fig)
+            else
+                display(steps_fig)
+            end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() steps_fig.")
+        end
+
+        try
             # Plot average timesteps
             ########################
 
@@ -7524,6 +7537,16 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
             end
             dt_fig = plot_vs_t(run_info, "$(electron_prefix)average_successful_dt"; outfile=outfile)
 
+            if plot_prefix === nothing
+                display(dt_fig)
+            end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() dt_fig.")
+        end
+
+        try
             # PLot minimum CFL factors
             ##########################
 
@@ -7589,6 +7612,19 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
             #ylims!(ax, 0.0, 10.0 * maxval)
             put_legend_right(CFL_fig, ax)
 
+            if plot_prefix !== nothing
+                outfile = plot_prefix * electron_prefix * "CFL_factors.pdf"
+                save(outfile, CFL_fig)
+            else
+                display(CFL_fig)
+            end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() CFL_fig.")
+        end
+
+        try
             limits_fig, ax = get_1d_ax(; xlabel="time", ylabel="number of limits per factor per output",
                                        size=(600, 500))
 
@@ -7743,6 +7779,19 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
 
             put_legend_right(limits_fig, ax)
 
+            if plot_prefix !== nothing
+                outfile = plot_prefix * electron_prefix * "timestep_limits.pdf"
+                save(outfile, limits_fig)
+            else
+                display(limits_fig)
+            end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() limits_fig.")
+        end
+
+        try
             # Plot nonlinear solver diagnostics (if any)
             nl_solvers_fig, ax = get_1d_ax(; xlabel="time", ylabel="iterations per solve/nonlinear-iteration")
             has_nl_solver = false
@@ -7783,35 +7832,23 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
 
             if has_nl_solver
                 put_legend_right(nl_solvers_fig, ax)
-            end
 
-
-            if plot_prefix !== nothing
-                outfile = plot_prefix * electron_prefix * "timestep_diagnostics.pdf"
-                save(outfile, steps_fig)
-
-                outfile = plot_prefix * electron_prefix * "CFL_factors.pdf"
-                save(outfile, CFL_fig)
-
-                outfile = plot_prefix * electron_prefix * "timestep_limits.pdf"
-                save(outfile, limits_fig)
-
-                if has_nl_solver
+                if plot_prefix !== nothing
                     outfile = plot_prefix * "nonlinear_solver_iterations.pdf"
                     save(outfile, nl_solvers_fig)
-                end
-            else
-                display(steps_fig)
-                display(dt_fig)
-                display(CFL_fig)
-                display(limits_fig)
-                if has_nl_solver
+                else
                     display(nl_solvers_fig)
                 end
             end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() nl_solvers_fig.")
         end
+    end
 
-        if input.animate_CFL
+    if input.animate_CFL
+        try
             if plot_prefix === nothing
                 error("plot_prefix is required when animate_CFL=true")
             end
@@ -7889,23 +7926,29 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                                                :leftspinevisible=>false,
                                                :rightspinevisible=>false))
             end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() CFL animations.")
         end
+    end
 
-        if run_info_dfns[1].dfns
-            this_input_dict = input_dict_dfns
-        else
-            this_input_dict = input_dict
-        end
-        if electron
-            variable_list = (v for v ∈ union((ri.evolving_variables for ri in run_info_dfns)...)
-                             if occursin("electron", v))
-        else
-            variable_list = (v for v ∈ union((ri.evolving_variables for ri in run_info_dfns)...)
-                             if !occursin("electron", v))
-        end
-        all_variable_names = union((ri.variable_names for ri ∈ run_info_dfns)...)
+    if run_info_dfns[1].dfns
+        this_input_dict = input_dict_dfns
+    else
+        this_input_dict = input_dict
+    end
+    if electron
+        variable_list = (v for v ∈ union((ri.evolving_variables for ri in run_info_dfns)...)
+                         if occursin("electron", v))
+    else
+        variable_list = (v for v ∈ union((ri.evolving_variables for ri in run_info_dfns)...)
+                         if !occursin("electron", v))
+    end
+    all_variable_names = union((ri.variable_names for ri ∈ run_info_dfns)...)
 
-        if input.plot_timestep_residual
+    if input.plot_timestep_residual
+        try
             for variable_name ∈ variable_list
                 loworder_name = variable_name * "_loworder"
                 if loworder_name ∉ all_variable_names
@@ -7927,9 +7970,15 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                               outfile=plot_prefix * residual_name * "_vs_z.pdf")
                 end
             end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() timestep residual plots.")
         end
+    end
 
-        if input.animate_timestep_residual
+    if input.animate_timestep_residual
+        try
             for variable_name ∈ variable_list
                 loworder_name = variable_name * "_loworder"
                 if loworder_name ∉ all_variable_names
@@ -7951,9 +8000,15 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                                  outfile=plot_prefix * residual_name * "_vs_z." * this_input_dict[variable_name]["animation_ext"])
                 end
             end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() timestep residual animations.")
         end
+    end
 
-        if input.plot_timestep_error
+    if input.plot_timestep_error
+        try
             for variable_name ∈ variable_list
                 loworder_name = variable_name * "_loworder"
                 if loworder_name ∉ all_variable_names
@@ -7975,9 +8030,15 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                               outfile=plot_prefix * error_name * "_vs_z.pdf")
                 end
             end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() timestep error plots.")
         end
+    end
 
-        if input.animate_timestep_error
+    if input.animate_timestep_error
+        try
             for variable_name ∈ variable_list
                 loworder_name = variable_name * "_loworder"
                 if loworder_name ∉ all_variable_names
@@ -7999,9 +8060,15 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                                  outfile=plot_prefix * error_name * "_vs_z." * this_input_dict[variable_name]["animation_ext"])
                 end
             end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() timestep error animations.")
         end
+    end
 
-        if input.plot_steady_state_residual
+    if input.plot_steady_state_residual
+        try
             for variable_name ∈ variable_list
                 loworder_name = variable_name * "_loworder"
                 if loworder_name ∉ all_variable_names
@@ -8023,9 +8090,15 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                               outfile=plot_prefix * residual_name * "_vs_z.pdf")
                 end
             end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() steady state residual plots.")
         end
+    end
 
-        if input.animate_steady_state_residual
+    if input.animate_steady_state_residual
+        try
             for variable_name ∈ variable_list
                 loworder_name = variable_name * "_loworder"
                 if loworder_name ∉ all_variable_names
@@ -8047,14 +8120,14 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                                  outfile=plot_prefix * residual_name * "_vs_z." * this_input_dict[variable_name]["animation_ext"])
                 end
             end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() steady state residual animations.")
         end
-
-        return steps_fig, dt_fig, CFL_fig
-    catch e
-        return makie_post_processing_error_handler(
-                   e,
-                   "Error in timestep_diagnostics().")
     end
+
+    return steps_fig, dt_fig, CFL_fig
 end
 
 # Utility functions
