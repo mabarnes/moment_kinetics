@@ -758,8 +758,11 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         plot_vs_t=false,
         plot_vs_r=false,
         plot_vs_r_t=false,
+        plot_f_over_vpa2=false,
+        animate_f_over_vpa2=false,
         it0=this_input_dict["it0"],
         ir0=this_input_dict["ir0"],
+        animation_ext=this_input_dict["animation_ext"],
        )
 
     set_defaults_and_check_section!(
@@ -4656,11 +4659,6 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
                     save(outfile, fig)
                 end
 
-                if !electron
-                    plot_f_unnorm_vs_vpa(run_info; f_over_vpa2=true, input=f_input, is=1,
-                                         outfile=plot_prefix * "pdf_unnorm_over_vpa2_$(label)_vs_vpa.pdf")
-                end
-
                 if !is_1V
                     plot_vs_vpa_vperp(run_info, "f$electron_suffix"; is=1, input=f_input,
                                       outfile=plot_prefix * "pdf$(electron_suffix)_$(label)_vs_vpa_vperp.pdf")
@@ -4757,11 +4755,6 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
                     put_legend_right(fig, ax)
                     outfile=plot_prefix * "logpdf_unnorm_$(label)_vs_vpa." * input.animation_ext
                     save_animation(fig, frame_index, nt, outfile)
-                end
-
-                if !electron
-                    animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=true, input=f_input, is=1,
-                                            outfile=plot_prefix * "pdf_unnorm_over_vpa2_$(label)_vs_vpa." * input.animation_ext)
                 end
 
                 if !is_1V
@@ -5551,6 +5544,53 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix)
                 push!(a, nothing)
             end
         end
+        if input.plot_f_over_vpa2
+            println("going to plot f_over_vpa2")
+            fig, ax = get_1d_ax(title="f/vpa^2 lower wall", xlabel="vpa", ylabel="f / vpa^2")
+            push!(figs, fig)
+            for a ∈ axes
+                push!(a, ax)
+            end
+
+            fig, ax = get_1d_ax(title="f/vpa^2 upper wall", xlabel="vpa", ylabel="f / vpa^2")
+            push!(figs, fig)
+            for a ∈ axes
+                push!(a, ax)
+            end
+        else
+            push!(figs, nothing)
+            for a ∈ axes
+                push!(a, nothing)
+            end
+            push!(figs, nothing)
+            for a ∈ axes
+                push!(a, nothing)
+            end
+        end
+        if input.animate_f_over_vpa2
+            fig, ax = get_1d_ax(title="f/vpa^2 lower wall", xlabel="vpa", ylabel="f / vpa^2")
+            frame_index = Observable(1)
+            push!(figs, fig)
+            for a ∈ axes
+                push!(a, (ax, frame_index))
+            end
+
+            fig, ax = get_1d_ax(title="f/vpa^2 upper wall", xlabel="vpa", ylabel="f / vpa^2")
+            frame_index = Observable(1)
+            push!(figs, fig)
+            for a ∈ axes
+                push!(a, (ax, frame_index))
+            end
+        else
+            push!(figs, nothing)
+            for a ∈ axes
+                push!(a, nothing)
+            end
+            push!(figs, nothing)
+            for a ∈ axes
+                push!(a, nothing)
+            end
+        end
 
         for (ri, ax) ∈ zip(run_info, axes)
             Chodura_condition_plots(ri; axes=ax)
@@ -5559,26 +5599,26 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix)
         if input.plot_vs_t
             fig = figs[1]
             ax = axes[1][1]
-            put_legend_right(fig, ax)
+            put_legend_below(fig, ax)
             outfile = string(plot_prefix, "Chodura_ratio_lower_vs_t.pdf")
             save(outfile, fig)
 
             fig = figs[2]
-            ax = axes[2][1]
-            put_legend_right(fig, ax)
+            ax = axes[1][2]
+            put_legend_below(fig, ax)
             outfile = string(plot_prefix, "Chodura_ratio_upper_vs_t.pdf")
             save(outfile, fig)
         end
         if input.plot_vs_r
             fig = figs[3]
-            ax = axes[3][1]
-            put_legend_right(fig, ax)
+            ax = axes[1][3]
+            put_legend_below(fig, ax)
             outfile = string(plot_prefix, "Chodura_ratio_lower_vs_r.pdf")
             save(outfile, fig)
 
             fig = figs[4]
-            ax = axes[4][1]
-            put_legend_right(fig, ax)
+            ax = axes[1][4]
+            put_legend_below(fig, ax)
             outfile = string(plot_prefix, "Chodura_ratio_upper_vs_r.pdf")
             save(outfile, fig)
         end
@@ -5590,6 +5630,37 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix)
             fig = figs[6]
             outfile = string(plot_prefix, "Chodura_ratio_upper_vs_r_t.pdf")
             save(outfile, fig)
+        end
+        if input.plot_f_over_vpa2
+            fig = figs[7]
+            println("check axes ", axes)
+            ax = axes[1][7]
+            put_legend_below(fig, ax)
+            outfile = string(plot_prefix, "pdf_unnorm_over_vpa2_wall-_vs_vpa.pdf")
+            save(outfile, fig)
+
+            fig = figs[8]
+            ax = axes[1][8]
+            put_legend_below(fig, ax)
+            outfile = string(plot_prefix, "pdf_unnorm_over_vpa2_wall+_vs_vpa.pdf")
+            save(outfile, fig)
+        end
+        if input.animate_f_over_vpa2
+            nt = minimum(ri.nt for ri ∈ run_info)
+
+            fig = figs[9]
+            ax = axes[1][9][1]
+            frame_index = axes[1][9][2]
+            put_legend_below(fig, ax)
+            outfile = string(plot_prefix, "pdf_unnorm_over_vpa2_wall-_vs_vpa." * input.animation_ext)
+            save_animation(fig, frame_index, nt, outfile)
+
+            fig = figs[10]
+            ax = axes[1][10][1]
+            frame_index = axes[1][10][2]
+            put_legend_below(fig, ax)
+            outfile = string(plot_prefix, "pdf_unnorm_over_vpa2_wall+_vs_vpa." * input.animation_ext)
+            save_animation(fig, frame_index, nt, outfile)
         end
     catch e
         return makie_post_processing_error_handler(
@@ -5720,6 +5791,95 @@ function Chodura_condition_plots(run_info; plot_prefix=nothing, axes=nothing)
         if plot_prefix !== nothing
             outfile = string(plot_prefix, "Chodura_ratio_upper_vs_r_t.pdf")
             save(outfile, fig)
+        end
+    end
+
+    if input.plot_f_over_vpa2
+        if axes === nothing
+            fig, ax, = get_1d_ax(title="f/vpa^2 lower wall",
+                                 xlabel="vpa", ylabel="f / vpa^2")
+            title = nothing
+            label = ""
+        else
+            fig = nothing
+            ax = axes[7]
+            label = run_info.run_name
+        end
+        f_input = copy(input_dict_dfns["f"])
+        f_input["it0"] = input.it0
+        f_input["ir0"] = input.ir0
+        f_input["iz0"] = 1
+        plot_f_unnorm_vs_vpa(run_info; f_over_vpa2=true, input=f_input, is=1, fig=fig,
+                             ax=ax, label=label)
+        if plot_prefix !== nothing && fig !== nothing
+            outfile=plot_prefix * "pdf_unnorm_over_vpa2_wall-_vs_vpa.pdf"
+            save(outfile, fig)
+        end
+
+        if axes === nothing
+            fig, ax, = get_1d_ax(title="f/vpa^2 upper wall",
+                                 xlabel="vpa", ylabel="f / vpa^2")
+            title = nothing
+            label = ""
+        else
+            fig = nothing
+            ax = axes[8]
+            label = run_info.run_name
+        end
+        f_input = copy(input_dict_dfns["f"])
+        f_input["it0"] = input.it0
+        f_input["ir0"] = input.ir0
+        f_input["iz0"] = run_info.z.n
+        plot_f_unnorm_vs_vpa(run_info; f_over_vpa2=true, input=f_input, is=1, fig=fig,
+                             ax=ax, label=label)
+        if plot_prefix !== nothing && fig !== nothing
+            outfile=plot_prefix * "pdf_unnorm_over_vpa2_wall+_vs_vpa.pdf"
+            save(outfile, fig)
+        end
+    end
+
+    if input.animate_f_over_vpa2
+        if axes === nothing
+            fig, ax, = get_1d_ax(title="f/vpa^2 lower wall",
+                                 xlabel="vpa", ylabel="f / vpa^2")
+            frame_index = Observable(1)
+            title = nothing
+            label = ""
+        else
+            fig = nothing
+            ax, frame_index = axes[9]
+            label = run_info.run_name
+        end
+        f_input = copy(input_dict_dfns["f"])
+        f_input["ir0"] = input.ir0
+        f_input["iz0"] = 1
+        animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=true, input=f_input, is=1, iz=1,
+                                fig=fig, ax=ax, frame_index=frame_index, label=label)
+        if plot_prefix !== nothing && fig !== nothing
+            outfile=plot_prefix * "pdf_unnorm_over_vpa2_wall-_vs_vpa." * input.animation_ext
+            save_animation(fig, frame_index, run_info.nt, outfile)
+        end
+
+        if axes === nothing
+            fig, ax, = get_1d_ax(title="f/vpa^2 upper wall",
+                                 xlabel="vpa", ylabel="f / vpa^2")
+            frame_index = Observable(1)
+            title = nothing
+            label = ""
+        else
+            fig = nothing
+            ax, frame_index = axes[10]
+            label = run_info.run_name
+        end
+        f_input = copy(input_dict_dfns["f"])
+        f_input["ir0"] = input.ir0
+        f_input["iz0"] = run_info.z.n
+        animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=true, input=f_input, is=1,
+                                iz=run_info.z.n, fig=fig, ax=ax, frame_index=frame_index,
+                                label=label)
+        if plot_prefix !== nothing && fig !== nothing
+            outfile=plot_prefix * "pdf_unnorm_over_vpa2_wall+_vs_vpa." * input.animation_ext
+            save_animation(fig, frame_index, run_info.nt, outfile)
         end
     end
 
