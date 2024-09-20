@@ -3014,8 +3014,8 @@ function fill_electron_kinetic_equation_Jacobian!(jacobian_matrix, f, ppar, mome
     z_speed = @view z_advect[1].speed[:,:,:,ir]
     begin_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
-        adv_fac_lower[ivpa,ivperp] = -z_speed[ivpa,ivperp,1]
-        adv_fac_upper[ivpa,ivperp] = -z_speed[ivpa,ivperp,end]
+        adv_fac_lower[ivpa,ivperp] = -z_speed[1,ivpa,ivperp]
+        adv_fac_upper[ivpa,ivperp] = -z_speed[end,ivpa,ivperp]
     end
 
     add_electron_z_advection_to_Jacobian!(
