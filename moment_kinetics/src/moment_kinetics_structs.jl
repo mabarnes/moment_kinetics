@@ -95,6 +95,8 @@ struct moments_ion_substruct
     qpar_updated::Vector{Bool}
     # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
     vth::MPISharedArray{mk_float,3}
+    # this is the temperature, calculated from 2ppar/dens (the comment below may be out of date?)
+    temp::MPISharedArray{mk_float,3}
     # generalised Chodura integrals for the lower and upper plates
     chodura_integral_lower::MPISharedArray{mk_float,2}
     chodura_integral_upper::MPISharedArray{mk_float,2}
@@ -125,6 +127,8 @@ struct moments_ion_substruct
     dqpar_dz::Union{MPISharedArray{mk_float,3},Nothing}
     # this is the z-derivative of the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
     dvth_dz::Union{MPISharedArray{mk_float,3},Nothing}
+    # this is the z-derivative of the temperature
+    dT_dz::Union{MPISharedArray{mk_float,3},Nothing}
     # this is the entropy production dS/dt = - int (ln f sum_s' C_ss' [f_s,f_s']) d^3 v
     dSdt::MPISharedArray{mk_float,3}
     # Spatially varying amplitude of the external source term (third index is for different sources)

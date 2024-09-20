@@ -942,7 +942,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         # constraints to the pdf
         reset_moments_status!(moments)
         update_moments!(moments, pdf.ion.norm, gyroavs, vpa, vperp, z, r, composition,
-           r_spectral,geometry,scratch_dummy,z_advect)
+           r_spectral,geometry,scratch_dummy,z_advect, collisions)
         # enforce boundary conditions in r and z on the neutral particle distribution function
         if n_neutral_species > 0
             # Note, so far vr and vzeta do not need advect objects, so pass `nothing` for
@@ -2351,7 +2351,7 @@ function apply_all_bcs_constraints_update_moments!(
     # calculated before that is applied. Also may be needed to calculate advection speeds
     # for for CFL stability limit calculations in adaptive_timestep_update!().
     update_derived_moments!(this_scratch, moments, vpa, vperp, z, r, composition,
-        r_spectral, geometry, gyroavs, scratch_dummy, z_advect, diagnostic_moments)
+        r_spectral, geometry, gyroavs, scratch_dummy, z_advect, collisions, diagnostic_moments)
 
     calculate_ion_moment_derivatives!(moments, this_scratch, scratch_dummy, z, z_spectral,
                                       num_diss_params.ion.moment_dissipation_coefficient)
@@ -3727,7 +3727,7 @@ function implicit_ion_advance!(fvec_out, fvec_in, pdf, fields, moments, advect_o
         # Ensure moments are consistent with f_new
         update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
                                 r_spectral, geometry, gyroavs, scratch_dummy, z_advect,
-                                false)
+                                collisions, false)
         calculate_ion_moment_derivatives!(moments, new_scratch, scratch_dummy, z,
                                           z_spectral,
                                           num_diss_params.ion.moment_dissipation_coefficient)

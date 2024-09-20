@@ -141,7 +141,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
                                              r, composition.n_ion_species,
                                              composition.n_neutral_species,
                                              geometry.input, composition, species,
-                                             manufactured_solns_input)
+                                             manufactured_solns_input, collisions)
     else
         n_ion_species = composition.n_ion_species
         n_neutral_species = composition.n_neutral_species
@@ -203,8 +203,8 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
         # calculate the initial parallel heat flux from the initial un-normalised pdf. Even if Braginskii fluid is being
         # advanced, initialised ion_qpar uses the pdf 
         update_ion_qpar!(moments.ion.qpar, moments.ion.qpar_updated,
-                     moments.ion.dens, moments.ion.upar, moments.ion.vth,
-                     pdf.ion.norm, vpa, vperp, z, r, composition, drift_kinetic_ions,
+                     moments.ion.dens, moments.ion.upar, moments.ion.vth, moments.ion.dT_dz,
+                     pdf.ion.norm, vpa, vperp, z, r, composition, drift_kinetic_ions, collisions,
                      moments.evolve_density, moments.evolve_upar, moments.evolve_ppar)
 
         begin_serial_region()
@@ -1639,7 +1639,8 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
     end
 end
 
-function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, geometry,composition)
+function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, 
+                                              geometry, composition, species, manufactured_solns_input, collisions)
     manufactured_solns_list = manufactured_solutions(r.L,z.L,r.bc,z.bc,geometry,composition,r.n)
     dfni_func = manufactured_solns_list.dfni_func
     densi_func = manufactured_solns_list.densi_func
@@ -1668,8 +1669,8 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
     update_pperp!(moments.ion.pperp, pdf.ion.norm, vpa, vperp, z, r, composition)
     update_ion_qpar!(moments.ion.qpar, moments.ion.qpar_updated,
                  moments.ion.dens, moments.ion.upar,
-                 moments.ion.vth, pdf.ion.norm, vpa, vperp, z, r,
-                 composition, drift_kinetic_ions, moments.evolve_density, moments.evolve_upar,
+                 moments.ion.vth, moments.ion.dT_dz, pdf.ion.norm, vpa, vperp, z, r,
+                 composition, drift_kinetic_ions, collisions, moments.evolve_density, moments.evolve_upar,
                  moments.evolve_ppar)
     update_vth!(moments.ion.vth, moments.ion.ppar, moments.ion.pperp, moments.ion.dens, vperp, z, r, composition)
 
