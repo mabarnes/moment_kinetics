@@ -1340,7 +1340,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                             t_params.previous_dt[] /= t_params.max_increase_factor
                             println(" -> ", t_params.previous_dt[])
                         #elseif nl_solver_params.max_linear_iterations_this_step[] < max(0.1 * nl_solver_params.nonlinear_max_iterations, 2)
-                        elseif nl_solver_params.max_linear_iterations_this_step[] < 20 && t_params.previous_dt[] < cap_factor_ion_dt * ion_dt
+                        elseif nl_solver_params.max_linear_iterations_this_step[] < 20 && (ion_dt === nothing || t_params.previous_dt[] < cap_factor_ion_dt * ion_dt)
                             # Only took a few iterations, so increase initial step size.
                             print("increasing previous_dt due to iteration count ", t_params.previous_dt[])
                             if ion_dt === nothing
@@ -1361,7 +1361,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                     if nl_solver_params.max_linear_iterations_this_step[] > 100 && t_params.dt[] > t_params.previous_dt[]
                         # Step succeeded, but took a lot of iterations so decrease step size.
                         t_params.dt[] /= t_params.max_increase_factor
-                    elseif nl_solver_params.max_linear_iterations_this_step[] < 20 && t_params.dt[] < cap_factor_ion_dt * ion_dt
+                    elseif nl_solver_params.max_linear_iterations_this_step[] < 20 && (ion_dt === nothing || t_params.dt[] < cap_factor_ion_dt * ion_dt)
                         # Only took a few iterations, so increase step size.
                         if ion_dt === nothing
                             t_params.dt[] *= t_params.max_increase_factor
