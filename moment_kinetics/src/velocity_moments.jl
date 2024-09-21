@@ -768,7 +768,7 @@ function update_ion_qpar_species!(qpar, density, upar, vth, dT_dz, ff, vpa, vper
         calculate_ion_qpar_from_pdf!(qpar, density, upar, vth, ff, vpa, vperp, z, r, evolve_density,
                                      evolve_upar, evolve_ppar)
     elseif ion_physics == braginskii_ions
-        calculate_ion_qpar_from_braginskii!(qpar, density, vth, dT_dz, z, r, collisions, evolve_density, 
+        calculate_ion_qpar_from_braginskii!(qpar, density, upar, vth, dT_dz, z, r, collisions, evolve_density, 
                                             evolve_upar, evolve_ppar)
     else
         throw(ArgumentError("ion model $ion_physics not implemented for qpar calculation"))
@@ -820,7 +820,7 @@ end
 """
 calculate parallel heat flux if ion composition flag is Braginskii fluid ions
 """
-function calculate_ion_qpar_from_braginskii!(qpar, density, vth, dT_dz, z, r, collisions, evolve_density, evolve_upar, evolve_ppar)
+function calculate_ion_qpar_from_braginskii!(qpar, density, upar, vth, dT_dz, z, r, collisions, evolve_density, evolve_upar, evolve_ppar)
     # Note that this is a braginskii heat flux for ions using the krook operator. The full Fokker-Planck operator
     # Braginskii heat flux is different! This also assumes one ion species, and so no friction between ions.
     @boundscheck r.n == size(qpar, 2) || throw(BoundsError(qpar))
@@ -834,7 +834,50 @@ function calculate_ion_qpar_from_braginskii!(qpar, density, vth, dT_dz, z, r, co
             qpar[iz,ir] = -(1/2) * 5/4 * density[iz,ir] * vth[iz,ir]^2 /nu_ii * dT_dz[iz,ir,1]
         end
     else
-        throw(ArgumentError("Braginskii heat flux simulation requires evolve_density, evolve_upar and evolve_ppar to be true, since it is a purely fluid simulation"))
+        throw(ArgumentError("Braginskii heat flux simulation requires evolve_density, 
+              evolve_upar and evolve_ppar to be true, since it is a purely fluid simulation"))
+    end
+
+    # add boundary condition to the heat flux, since now there is no distribution function 
+    # (in this case shape function) whose cutoff boundary condition can hold the parallel heat
+    # flux in check. See Stangeby textbook, equations (2.92) and (2.93), and the paragraph between.
+
+    if z.bc == "periodic"
+        # There's no wall boundary condition here, do nothing (qpar can be what it wants)
+        return nothing
+    end
+
+    begin_r_region()
+
+    if z.irank == 0 && (z.irank == z.nrank - 1)
+        z_indices = (1, z.n)
+    elseif z.irank == 0
+        z_indices = (1,)
+    elseif z.irank == z.nrank - 1
+        z_indices = (z.n,)
+    else
+        return nothing
+    end
+
+    @loop_r ir begin
+        for iz ∈ z_indices
+            this_ppar = vth[iz,ir]^2 * density[iz,ir]/2.0
+            this_upar = upar[iz,ir]
+            this_dens = density[iz,ir]
+            particle_flux = this_dens * this_upar
+            T_i = vth[iz,ir]^2
+
+            # Stangeby paragraph after (2.92)
+            gamma_i = 2.0
+
+            # Stangeby (2.92)
+            total_heat_flux = gamma_i * T_i * particle_flux
+
+            # E.g. Helander&Sigmar (2.14) ??????? what is it for ions?
+            conductive_heat_flux = total_heat_flux - 2.5 * this_ppar * this_upar
+
+            qpar[iz,ir] = conductive_heat_flux
+        end
     end
     return nothing
 end

@@ -346,6 +346,8 @@ function makie_post_process(run_dir::Union{String,Tuple},
 
     sound_wave_plots(run_info; plot_prefix=plot_prefix)
 
+    collisionality_plots(run_info, plot_prefix)
+
     if all(ri === nothing for ri ∈ run_info_dfns)
         nvperp = nothing
     else
@@ -806,6 +808,24 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         animate_timestep_error=false,
         plot_steady_state_residual=false,
         animate_steady_state_residual=false,
+       )
+    
+    set_defaults_and_check_section!(
+        this_input_dict, "collisionality_plots";
+        plot=true,
+        plot_dT_dz_vs_z=false,
+        animate_dT_dz_vs_z=false,
+        plot_mfp_vs_z=false,
+        animate_mfp_vs_z=false,
+        plot_nu_ii_vth_mfp_vs_z = false,
+        plot_LT_mfp_vs_z = false,
+        animate_LT_mfp_vs_z = false,
+        plot_LT_dT_dz_temp_vs_z = false,
+        plot_Ln_mfp_vs_z = false,
+        animate_Ln_mfp_vs_z = false,
+        plot_Lupar_mfp_vs_z = false,
+        animate_Lupar_mfp_vs_z = false,
+        animation_ext = "gif"
        )
 
     # We allow top-level options in the post-processing input file
@@ -8128,6 +8148,202 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
     end
 
     return steps_fig, dt_fig, CFL_fig
+end
+
+
+
+function collisionality_plots(run_info, plot_prefix=nothing)
+    # plot the mean free path of the ions at every point in z, and on the same graph
+    # plot the lengthscales of the gradients of all moments at each point in z
+    #println("run_info is ", run_info)
+    println("Making plots for collisionality")
+    if !isa(run_info, Tuple)
+        run_info = (run_info,)
+    end
+
+    input = Dict_to_NamedTuple(input_dict["collisionality_plots"])
+    temperature_input = Dict_to_NamedTuple(input_dict["temperature"])
+
+    mfp = get_variable(run_info, "mfp")
+    L_T = get_variable(run_info, "L_T")
+    L_n = get_variable(run_info, "L_n")
+    L_upar = get_variable(run_info, "L_upar")
+
+    if input.plot_mfp_vs_z
+        variable_name = "mean_free_path"
+        variable = mfp
+        variable_prefix = plot_prefix * variable_name
+        plot_vs_z(run_info, variable_name, is=1, data=variable, input=temperature_input,
+                  outfile=variable_prefix * "_vs_z.pdf")
+    end
+
+    if input.animate_mfp_vs_z
+        variable_name = "mean_free_path"
+        variable = mfp
+        variable_prefix = plot_prefix * variable_name
+        animate_vs_z(run_info, variable_name, is=1, data=variable, input=temperature_input,
+                        outfile=variable_prefix * "_vs_z." * input.animation_ext)
+    end
+    # TASKS: plot mean free path vs z, plot collision frequency vs z, make sure it agrees
+    # with original plot for it, and plot thermal speed and make sure that agrees, and then
+    # make sure that the mean free path then makes sense.
+    # Then plot the temperature and temperature gradient on the same plot
+    # Eventually plot the upar and dupar_dz and density and ddens_dz on plots too. Again,
+    # make sure they agree with the original plots.
+    if input.plot_dT_dz_vs_z
+        variable_name = "dT_dz"
+        variable = nothing
+        try
+            variable = get_variable(run_info, variable_name)
+        catch e
+            return makie_post_processing_error_handler(
+                    e,
+                    "collisionality_plots () failed for $variable_name - could not load data.")
+        end
+        #println("variable is ", variable)
+        variable_prefix = plot_prefix * variable_name
+        plot_vs_z(run_info, variable_name, is=1, data=variable, input=temperature_input,
+                  outfile=variable_prefix * "_vs_z.pdf")
+    end
+
+    if input.animate_dT_dz_vs_z
+        variable_name = "dT_dz"
+        variable = nothing
+        try
+            variable = get_variable(run_info, variable_name)
+        catch e
+            return makie_post_processing_error_handler(
+                    e,
+                    "collisionality_plots () failed for $variable_name - could not load data.")
+        end
+        #println("variable is ", variable)
+        variable_prefix = plot_prefix * variable_name
+        animate_vs_z(run_info, variable_name, is=1, data=variable, input=temperature_input,
+                        outfile=variable_prefix * "_vs_z." * input.animation_ext)
+    end
+
+    if input.plot_nu_ii_vth_mfp_vs_z
+        vth = get_variable(run_info, "thermal_speed")
+        nu_ii = get_variable(run_info, "collision_frequency_ii")
+        variable_prefix = plot_prefix * "checking_mfp_vth_and_nu_ii"
+        #println("vth[1] is ", vth[1])
+        fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
+        plot_1d(run_info[1].z.grid, vth[1][:,1,1,21], xlabel="z",
+                ylabel="values", label="vth", ax=ax[1], title = "checking_mfp_vth")
+        plot_1d(run_info[1].z.grid, nu_ii[1][:,1,1,21], label="nu_ii", ax=ax[1])
+        plot_1d(run_info[1].z.grid, mfp[1][:,1,1,21], label="mfp", ax=ax[1])
+        Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+               orientation=:horizontal)
+        #plot_1d(z.grid, select_slice(error, :z; input=input), xlabel=L"z",
+        #        ylabel=norm_label, ax=ax[2])
+        outfile = variable_prefix * "_vs_z.pdf"
+        save(outfile, fig)
+    end
+
+    if input.plot_LT_dT_dz_temp_vs_z
+        dT_dz = get_variable(run_info, "dT_dz")
+        temp = get_variable(run_info, "temperature")
+        variable_prefix = plot_prefix * "LT_dT_dz_temp"
+        fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
+        plot_1d(run_info[1].z.grid, L_T[1][:,1,1,21], xlabel="z",
+                ylabel="values", label="L_T", ax=ax[1], title = "LT_dT_dz_temp")
+        plot_1d(run_info[1].z.grid, dT_dz[1][:,1,1,21], label="dT_dz", ax=ax[1])
+        plot_1d(run_info[1].z.grid, temp[1][:,1,1,21], label="temp", ax=ax[1])
+        Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+               orientation=:horizontal)
+        outfile = variable_prefix * "_vs_z.pdf"
+        save(outfile, fig)
+    end
+
+    if input.plot_LT_mfp_vs_z
+        variable_prefix = plot_prefix * "LT_mfp_first_comparison"
+        fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
+        plot_1d(run_info[1].z.grid, L_T[1][:,1,1,21], xlabel="z",
+                ylabel="values", label="L_T", ax=ax[1], title = "L_T and mean free path comparison")
+        plot_1d(run_info[1].z.grid, mfp[1][:,1,1,21], label="mfp", ax=ax[1])
+        Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+               orientation=:horizontal)
+        outfile = variable_prefix * "_vs_z.pdf"
+        save(outfile, fig)
+    end
+
+    if input.animate_LT_mfp_vs_z
+        nt = length(mfp[1][1,1,1,:])
+        variable_prefix = plot_prefix * "LT_mfp_first_comparison"
+
+        fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
+        frame_index = Observable(1)
+        animate_1d(run_info[1].z.grid, L_T[1][:,1,1,:],
+                   frame_index=frame_index, xlabel="z", ylabel="values",
+                   label="L_T", ax=ax[1])
+        animate_1d(run_info[1].z.grid, mfp[1][:,1,1,:],
+                   frame_index=frame_index, xlabel="z", ylabel="values",
+                   label="mfp", ax=ax[1])
+        Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+               orientation=:horizontal)
+        outfile = variable_prefix * "_vs_z." * input.animation_ext
+        save_animation(fig, frame_index, nt, outfile)
+    end
+
+    if input.plot_Ln_mfp_vs_z
+        variable_prefix = plot_prefix * "Ln_mfp_first_comparison"
+        fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
+        plot_1d(run_info[1].z.grid, L_n[1][:,1,1,21], xlabel="z",
+                ylabel="values", label="L_n", ax=ax[1], title = "Ln and mean free path comparison")
+        plot_1d(run_info[1].z.grid, mfp[1][:,1,1,21], label="mfp", ax=ax[1])
+        Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+               orientation=:horizontal)
+        outfile = variable_prefix * "_vs_z.pdf"
+        save(outfile, fig)
+    end
+
+    if input.animate_Ln_mfp_vs_z
+        nt = length(mfp[1][1,1,1,:])
+        variable_prefix = plot_prefix * "Ln_mfp_first_comparison"
+
+        fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
+        frame_index = Observable(1)
+        animate_1d(run_info[1].z.grid, L_n[1][:,1,1,:],
+                   frame_index=frame_index, xlabel="z", ylabel="values",
+                   label="L_n", ax=ax[1])
+        animate_1d(run_info[1].z.grid, mfp[1][:,1,1,:],
+                   frame_index=frame_index, xlabel="z", ylabel="values",
+                   label="mfp", ax=ax[1])
+        Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+               orientation=:horizontal)
+        outfile = variable_prefix * "_vs_z." * input.animation_ext
+        save_animation(fig, frame_index, nt, outfile)
+    end
+
+    if input.plot_Lupar_mfp_vs_z
+        variable_prefix = plot_prefix * "Lupar_mfp_first_comparison"
+        fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
+        plot_1d(run_info[1].z.grid, L_upar[1][:,1,1,21], xlabel="z",
+                ylabel="values", label="L_upar", ax=ax[1], title = "Lupar and mean free path comparison")
+        plot_1d(run_info[1].z.grid, mfp[1][:,1,1,21], label="mfp", ax=ax[1])
+        Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+               orientation=:horizontal)
+        outfile = variable_prefix * "_vs_z.pdf"
+        save(outfile, fig)
+    end
+
+    if input.animate_Lupar_mfp_vs_z
+        nt = length(mfp[1][1,1,1,:])
+        variable_prefix = plot_prefix * "Lupar_mfp_first_comparison"
+
+        fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
+        frame_index = Observable(1)
+        animate_1d(run_info[1].z.grid, L_upar[1][:,1,1,:],
+                   frame_index=frame_index, xlabel="z", ylabel="values",
+                   label="L_upar", ax=ax[1])
+        animate_1d(run_info[1].z.grid, mfp[1][:,1,1,:],
+                   frame_index=frame_index, xlabel="z", ylabel="values",
+                   label="mfp", ax=ax[1])
+        Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+               orientation=:horizontal)
+        outfile = variable_prefix * "_vs_z." * input.animation_ext
+        save_animation(fig, frame_index, nt, outfile)
+    end
 end
 
 # Utility functions

@@ -4145,6 +4145,82 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
     if variable_name == "temperature"
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         variable = vth.^2
+    elseif variable_name == "dT_dz"
+        T = get_variable(run_info, "temperature"; kwargs...)
+        variable = similar(T)
+        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
+            error("Cannot take z-derivative when iz!==nothing")
+        end
+        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            for it ∈ 1:size(variable, 3)
+                @views derivative!(variable[:,:,it], T[:,:,it], run_info.z, run_info.z_spectral)
+            end
+        else
+            for it ∈ 1:size(variable, 4), ir ∈ 1:run_info.r.n
+                @views derivative!(variable[:,:,ir,it], T[:,:,ir,it], run_info.z, run_info.z_spectral)
+            end
+        end
+    elseif variable_name == "dn_dz"
+        n = get_variable(run_info, "density"; kwargs...)
+        variable = similar(n)
+        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
+            error("Cannot take z-derivative when iz!==nothing")
+        end
+        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            for it ∈ 1:size(variable, 3)
+                @views derivative!(variable[:,:,it], n[:,:,it], run_info.z, run_info.z_spectral)
+            end
+        else
+            for it ∈ 1:size(variable, 4), ir ∈ 1:run_info.r.n
+                @views derivative!(variable[:,:,ir,it], n[:,:,ir,it], run_info.z, run_info.z_spectral)
+            end
+        end
+    elseif variable_name == "dupar_dz"
+        upar = get_variable(run_info, "parallel_flow"; kwargs...)
+        variable = similar(upar)
+        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
+            error("Cannot take z-derivative when iz!==nothing")
+        end
+        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            for it ∈ 1:size(variable, 3)
+                @views derivative!(variable[:,:,it], upar[:,:,it], run_info.z, run_info.z_spectral)
+            end
+        else
+            for it ∈ 1:size(variable, 4), ir ∈ 1:run_info.r.n
+                @views derivative!(variable[:,:,ir,it], upar[:,:,ir,it], run_info.z, run_info.z_spectral)
+            end
+        end
+    elseif variable_name == "mfp"
+        vth = get_variable(run_info, "thermal_speed"; kwargs...)
+        nu_ii = get_variable(run_info, "collision_frequency_ii"; kwargs...)
+        variable = vth ./ nu_ii
+    elseif variable_name == "L_T"
+        dT_dz = get_variable(run_info, "dT_dz"; kwargs...)
+        temp = get_variable(run_info, "temperature"; kwargs...)
+        # We define gradient lengthscale of T as LT^-1 = dln(T)/dz (ignore negative sign
+        # tokamak convention as we're only concerned with comparing magnitudes)
+        variable = abs.(temp .* dT_dz.^(-1))
+        # flat points in temperature have diverging LT, so ignore those with NaN
+        # using a hard coded 10.0 tolerance for now
+        variable[variable .> 10.0] .= NaN
+    elseif variable_name == "L_n"
+        dn_dz = get_variable(run_info, "dn_dz"; kwargs...)
+        n = get_variable(run_info, "density"; kwargs...)
+        # We define gradient lengthscale of n as Ln^-1 = dln(n)/dz (ignore negative sign
+        # tokamak convention as we're only concerned with comparing magnitudes)
+        variable = abs.(n .* dn_dz.^(-1))
+        # flat points in temperature have diverging Ln, so ignore those with NaN
+        # using a hard coded 10.0 tolerance for now
+        variable[variable .> 10.0] .= NaN
+    elseif variable_name == "L_upar"
+        dupar_dz = get_variable(run_info, "dupar_dz"; kwargs...)
+        upar = get_variable(run_info, "parallel_flow"; kwargs...)
+        # We define gradient lengthscale of upar as Lupar^-1 = dln(upar)/dz (ignore negative sign
+        # tokamak convention as we're only concerned with comparing magnitudes)
+        variable = abs.(upar .* dupar_dz.^(-1))
+        # flat points in temperature have diverging Lupar, so ignore those with NaN
+        # using a hard coded 10.0 tolerance for now
+        variable[variable .> 10.0] .= NaN
     elseif variable_name == "collision_frequency_ii"
         n = get_variable(run_info, "density"; kwargs...)
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
