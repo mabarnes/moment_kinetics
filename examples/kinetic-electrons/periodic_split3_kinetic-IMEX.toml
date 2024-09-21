@@ -2,9 +2,6 @@
 charge_exchange_frequency = 0.75
 ionization_frequency = 0.0
 
-[electron_fluid_collisions]
-nu_ei = 1000.0
-
 [evolve_moments]
 density = true
 parallel_flow = true
@@ -16,25 +13,25 @@ ngrid = 1
 nelement = 1
 
 [z]
-ngrid = 17
-nelement = 16
+ngrid = 5
+nelement = 32
 #nelement_local = 16
 bc = "periodic"
-discretization = "chebyshev_pseudospectral"
+discretization = "gausslegendre_pseudospectral"
 
 [vpa]
 ngrid = 6
 nelement = 31
 L = 12.0
 bc = "zero"
-discretization = "chebyshev_pseudospectral"
+discretization = "gausslegendre_pseudospectral"
 
 [vz]
 ngrid = 6
 nelement = 31
 L = 12.0
 bc = "zero"
-discretization = "chebyshev_pseudospectral"
+discretization = "gausslegendre_pseudospectral"
 
 [composition]
 n_ion_species = 1

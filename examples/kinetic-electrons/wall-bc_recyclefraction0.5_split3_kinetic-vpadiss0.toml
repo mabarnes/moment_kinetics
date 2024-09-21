@@ -17,27 +17,28 @@ ngrid = 5
 nelement = 32
 #nelement_local = 16
 bc = "wall"
-discretization = "chebyshev_pseudospectral"
+discretization = "gausslegendre_pseudospectral"
 element_spacing_option = "sqrt"
 
 [vpa]
 ngrid = 6
-nelement = 63
+nelement = 31 #63
 L = 48.0
 bc = "zero"
-discretization = "chebyshev_pseudospectral"
+discretization = "gausslegendre_pseudospectral"
 
 [vz]
 ngrid = 6
-nelement = 63
+nelement = 31 #63
 L = 36.0
 bc = "zero"
-discretization = "chebyshev_pseudospectral"
+discretization = "gausslegendre_pseudospectral"
 
 [composition]
 n_ion_species = 1
 n_neutral_species = 1
-electron_physics = "kinetic_electrons_with_temperature_equation"
+#electron_physics = "kinetic_electrons_with_temperature_equation"
+electron_physics = "kinetic_electrons"
 recycling_fraction = 0.5
 T_e = 0.2 # 1.0
 T_wall = 0.1
