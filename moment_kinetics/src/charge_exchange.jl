@@ -120,39 +120,38 @@ function charge_exchange_collisions_single_species!(f_out, pdf_in, pdf_other,
         # values of dz/dt; as charge exchange and ionization collisions require
         # the evaluation of the pdf for species s' to obtain the update for species s,
         # will thus have to interpolate between the different vpa grids
-        if moments.evolve_ppar || moments.evolve_upar
-            if !moments.evolve_upar
-                # if evolve_ppar = true and evolve_upar = false, vpa coordinate is
-                # vpahat_s = vpa/vth_s;
-                # we have f_{s'}(vpahat_{s'}) = f_{s'}(vpahat_s * vth_s / vth_{s'});
-                # to get f_{s'}(vpahat_s), need to obtain vpahat_s grid locations
-                # in terms of the vpahat_{s'} coordinate:
-                # (vpahat_s)_j = (vpahat_{s'})_j * vth_{s'} / vth_{s}
-                @. vpa.scratch = vpa.grid / vth_ratio
-            elseif !moments.evolve_ppar
-                # if evolve_ppar = false and evolve_upar = true, vpa coordinate is
-                # wpa_s = vpa-upar_s;
-                # we have f_{s'}(wpa_{s'}) = f_{s'}((wpa_s + upar_s - upar_{s'};
-                # to get f_{s'}(wpa_s), need to obtain wpa_s grid locations
-                # in terms of the wpa_{s'} coordinate:
-                # (wpa_s)_j = (wpa_{s'})_j + upar_{s'} - upar_{s}
-                @. vpa.scratch = vpa.grid + upar[iz,ir] - upar_other[iz,ir]
-            else
-                # if evolve_ppar = true and evolve_upar = true, vpa coordinate is
-                # wpahat_s = (vpa-upar_s)/vth_s;
-                # we have f_{s'}(wpahat_{s'}) = f_{s'}((wpahat_s * vth_s + upar_s - upar_{s'}) / vth_{s'});
-                # to get f_{s'}(wpahat_s), need to obtain wpahat_s grid locations
-                # in terms of the wpahat_{s'} coordinate:
-                # (wpahat_{s'})_j = ((wpahat_{s})_j * vth_{s} + upar_{s} - upar_{s'}) / vth_{s'}
-                @. vpa.scratch = (vpa.grid * vth[iz,ir] + upar[iz,ir] - upar_other[iz,ir]) / vth_other[iz,ir]
-            end
-            # interpolate to the new grid (passed in as vpa.scratch)
-            # and return interpolated values in vpa.scratch2
-            @views interpolate_to_grid_vpa!(vpa.scratch2, vpa.scratch, pdf_other[:,iz,ir], vpa_other, spectral_other)
+        if moments.evolve_upar && moments.evolve_ppar
+            # if evolve_ppar = true and evolve_upar = true, vpa coordinate is
+            # wpahat_s = (vpa-upar_s)/vth_s;
+            # we have f_{s'}(wpahat_{s'}) = f_{s'}((wpahat_s * vth_s + upar_s - upar_{s'}) / vth_{s'});
+            # to get f_{s'}(wpahat_s), need to obtain wpahat_s grid locations
+            # in terms of the wpahat_{s'} coordinate:
+            # (wpahat_{s'})_j = ((wpahat_{s})_j * vth_{s} + upar_{s} - upar_{s'}) / vth_{s'}
+            new_grid = @. vpa.scratch = (vpa.grid * vth[iz,ir] + upar[iz,ir] - upar_other[iz,ir]) / vth_other[iz,ir]
+        elseif !moments.evolve_upar
+            # if evolve_ppar = true and evolve_upar = false, vpa coordinate is
+            # vpahat_s = vpa/vth_s;
+            # we have f_{s'}(vpahat_{s'}) = f_{s'}(vpahat_s * vth_s / vth_{s'});
+            # to get f_{s'}(vpahat_s), need to obtain vpahat_s grid locations
+            # in terms of the vpahat_{s'} coordinate:
+            # (vpahat_s)_j = (vpahat_{s'})_j * vth_{s'} / vth_{s}
+            new_grid = @. vpa.scratch = vpa.grid / vth_ratio
+        elseif !moments.evolve_ppar
+            # if evolve_ppar = false and evolve_upar = true, vpa coordinate is
+            # wpa_s = vpa-upar_s;
+            # we have f_{s'}(wpa_{s'}) = f_{s'}((wpa_s + upar_s - upar_{s'};
+            # to get f_{s'}(wpa_s), need to obtain wpa_s grid locations
+            # in terms of the wpa_{s'} coordinate:
+            # (wpa_s)_j = (wpa_{s'})_j + upar_{s'} - upar_{s}
+            new_grid = @. vpa.scratch = vpa.grid + upar[iz,ir] - upar_other[iz,ir]
         else
-            # no need to interpolate if neither upar or ppar evolved separately from pdf
-            vpa.scratch2 .= pdf_other[:,iz,ir]
+            # Interpolate even when using 'drift-kinetic' mode, so that vpa and vz
+            # coordinates can be different.
+            new_grid = vpa.grid
         end
+        # interpolate to new_grid and return interpolated values in vpa.scratch2
+        @views interpolate_to_grid_vpa!(vpa.scratch2, new_grid, pdf_other[:,iz,ir], vpa_other, spectral_other)
+
         if neutrals
             @loop_vz ivz begin
                 f_out[ivz,iz,ir] += dt * charge_exchange_frequency * density_other[iz,ir] *
