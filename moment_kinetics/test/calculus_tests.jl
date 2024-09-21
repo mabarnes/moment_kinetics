@@ -1651,13 +1651,15 @@ function runtests()
                                                      element_spacing_option=element_spacing_option,
                                                      collision_operator_dim=false)
                 expected_f = @. exp(-x.grid^2)
-                d2f = @. 4.0*(x.grid^2 - 1.0)*exp(-x.grid^2)
+                # Test solver for
+                #   Laplacian_f = 1/x * d/dx(x*df/dx)
+                Laplacian_f = @. 4.0*(x.grid^2 - 1.0)*exp(-x.grid^2)
                 # create array for the numerical solution
                 f = similar(expected_f)
                 # create array for RHS vector b
                 b = similar(expected_f)
                 # solve for f
-                mul!(b,spectral.mass_matrix,d2f)
+                mul!(b,spectral.mass_matrix,Laplacian_f)
                 # Dirichlet zero BC at upper endpoint
                 b[end] = 0.0
                 # solve ODE
@@ -1742,6 +1744,8 @@ function runtests()
                                                      element_spacing_option=element_spacing_option,
                                                      collision_operator_dim=false)
                 expected_f = @. exp(-x.grid^2)
+                # Test solver for
+                #   d2f = d^2f/dx^2
                 d2f = @. (4.0*x.grid^2 - 2.0)*exp(-x.grid^2)
                 # create array for the numerical solution
                 f = similar(expected_f)
@@ -1836,6 +1840,8 @@ function runtests()
                                                      element_spacing_option=element_spacing_option,
                                                      collision_operator_dim=false)
                 expected_f = @. sin((2.0*pi*x.grid/x.L) + phase)
+                # Test solver for
+                #   d2f = d^2f/dx^2
                 d2f = @. -((2.0*pi/x.L)^2)*sin((2.0*pi*x.grid/x.L)+phase)
                 # create array for the numerical solution
                 f = similar(expected_f)
