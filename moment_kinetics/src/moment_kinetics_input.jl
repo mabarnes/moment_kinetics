@@ -207,6 +207,9 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         write_steady_state_diagnostics=false,
         high_precision_error_sum=timestepping_section["high_precision_error_sum"],
         initialization_residual_value=1.0,
+        decrease_dt_iteration_threshold=100,
+        increase_dt_iteration_threshold=20,
+        cap_factor_ion_dt=10.0,
         no_restart=false,
         debug_io=false,
        )

@@ -434,12 +434,21 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         else
             debug_io = nothing
         end
+        decrease_dt_iteration_threshold = t_input["decrease_dt_iteration_threshold"]
+        increase_dt_iteration_threshold = t_input["increase_dt_iteration_threshold"]
+        cap_factor_ion_dt = t_input["cap_factor_ion_dt"]
         electron_t_params = nothing
     elseif electron === false
         debug_io = nothing
+        decrease_dt_iteration_threshold = -1
+        increase_dt_iteration_threshold = typemax(mk_int)
+        cap_factor_ion_dt = Inf
         electron_t_params = nothing
     else
         debug_io = nothing
+        decrease_dt_iteration_threshold = -1
+        increase_dt_iteration_threshold = typemax(mk_int)
+        cap_factor_ion_dt = Inf
         electron_t_params = electron
     end
     return time_info(n_variables, t_input["nstep"], end_time, t_shared, dt_shared,
@@ -461,7 +470,8 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      electron !== nothing && t_input["implicit_ion_advance"],
                      electron !== nothing && t_input["implicit_vpa_advection"],
                      electron !== nothing && t_input["implicit_electron_ppar"],
-                     t_input["constraint_forcing_rate"],
+                     t_input["constraint_forcing_rate"], decrease_dt_iteration_threshold,
+                     increase_dt_iteration_threshold, cap_factor_ion_dt,
                      t_input["write_after_fixed_step_count"], error_sum_zero,
                      t_input["split_operators"], t_input["steady_state_residual"],
                      t_input["converged_residual_value"],

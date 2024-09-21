@@ -80,6 +80,9 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     implicit_vpa_advection::Bool
     implicit_electron_ppar::Bool
     constraint_forcing_rate::mk_float
+    decrease_dt_iteration_threshold::mk_int
+    increase_dt_iteration_threshold::mk_int
+    cap_factor_ion_dt::mk_float
     write_after_fixed_step_count::Bool
     error_sum_zero::Terrorsum
     split_operators::Bool
