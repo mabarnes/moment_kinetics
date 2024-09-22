@@ -154,8 +154,6 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                                 allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size),
                                 allocate_shared_float(pdf_plus_ppar_size),
                                 allocate_shared_float(pdf_plus_ppar_size),
-                                allocate_shared_float(coords.vpa.n,coords.vperp.n),
-                                allocate_shared_float(coords.vpa.n,coords.vperp.n),
                                ),
                                reverse(outer_coord_sizes))
     elseif preconditioner_type == "none"

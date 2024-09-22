@@ -2421,7 +2421,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             jacobian_matrix, f, ppar, moments, collisions, composition, z, vperp, vpa,
             z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
             external_source_settings, num_diss_params, t_params.electron, ion_dt, ir,
-            true, scratch_dummy.buffer_vpavperp_1, scratch_dummy.buffer_vpavperp_2)
+            true)
 
         function residual_func!(residual_f, residual_p, this_f, this_p)
             begin_z_region()

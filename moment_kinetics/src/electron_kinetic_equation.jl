@@ -1031,18 +1031,19 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                 end
 
                 if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
+println("recalculating precon")
                     nl_solver_params.solves_since_precon_update[] = 0
                     nl_solver_params.precon_dt[] = t_params.dt[]
 
-                    orig_lu, precon_matrix, input_buffer, output_buffer, adv_fac_lower,
-                        adv_fac_upper = nl_solver_params.preconditioners[ir]
+                    orig_lu, precon_matrix, input_buffer, output_buffer =
+                        nl_solver_params.preconditioners[ir]
 
                     fill_electron_kinetic_equation_Jacobian!(
                         precon_matrix, f_electron_new, electron_ppar_new, moments,
                         collisions, composition, z, vperp, vpa, z_spectral,
                         vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                         external_source_settings, num_diss_params, t_params, ion_dt,
-                        ir, evolve_ppar, adv_fac_lower, adv_fac_upper)
+                        ir, evolve_ppar)
 
                     begin_serial_region()
                     if block_rank[] == 0
@@ -1051,7 +1052,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                             # cannot reuse it.
                             nl_solver_params.preconditioners[ir] =
                                 (lu(sparse(precon_matrix)), precon_matrix, input_buffer,
-                                 output_buffer, adv_fac_lower, adv_fac_upper)
+                                 output_buffer)
                         else
                             # LU decomposition was previously created. The Jacobian always
                             # has the same sparsity pattern, so by using `lu!()` we can
@@ -1067,13 +1068,11 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                 orig_lu = lu(sparse(precon_matrix))
                             end
                             nl_solver_params.preconditioners[ir] =
-                                (orig_lu, precon_matrix, input_buffer, output_buffer,
-                                 adv_fac_lower, adv_fac_upper)
+                                (orig_lu, precon_matrix, input_buffer, output_buffer)
                         end
                     else
                         nl_solver_params.preconditioners[ir] =
-                            (orig_lu, precon_matrix, input_buffer, output_buffer,
-                             adv_fac_lower, adv_fac_upper)
+                            (orig_lu, precon_matrix, input_buffer, output_buffer)
                     end
                 end
 
@@ -1081,8 +1080,8 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                 function lu_precon!(x)
                     precon_ppar, precon_f = x
 
-                    precon_lu, _, input_buffer, output_buffer, adv_fac_lower,
-                        adv_fac_upper = nl_solver_params.preconditioners[ir]
+                    precon_lu, _, input_buffer, output_buffer =
+                        nl_solver_params.preconditioners[ir]
 
                     begin_serial_region()
                     counter = 1
@@ -1123,9 +1122,21 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                         f_lower_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,1]
                         f_upper_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,end]
                     end
+                    # We upwind the z-derivatives in `electron_z_advection!()`, so would
+                    # expect that upwinding the results here in z would make sense.
+                    # However, upwinding here makes convergence much slower (~10x),
+                    # compared to picking the values from one side or other of the block
+                    # boundary, or taking the average of the values on either side.
+                    # Neither direction is special, so taking the average seems most
+                    # sensible (although in an intial test it does not seem to converge
+                    # faster than just picking one or the other).
+                    # Maybe this could indicate that it is more important to have a fully
+                    # self-consistent Jacobian inversion for the
+                    # `electron_vpa_advection()` part rather than taking half(ish) of the
+                    # values from one block and the other half(ish) from the other.
                     reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(
-                        precon_f, adv_fac_lower, adv_fac_upper, f_lower_endpoints,
-                        f_upper_endpoints, receive_buffer1, receive_buffer2, z)
+                        precon_f, f_lower_endpoints, f_upper_endpoints, receive_buffer1,
+                        receive_buffer2, z)
 
                     begin_serial_region()
                     @serial_region begin
@@ -2944,8 +2955,7 @@ end
                                              vpa_spectral, z_advect, vpa_advect,
                                              scratch_dummy, external_source_settings,
                                              num_diss_params, t_params, ion_dt,
-                                             ir, evolve_ppar, adv_fac_lower,
-                                             adv_fac_upper)
+                                             ir, evolve_ppar)
 
 Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equation and (if
 `evolve_ppar=true`) the electron energy equation.
@@ -2956,8 +2966,7 @@ function fill_electron_kinetic_equation_Jacobian!(jacobian_matrix, f, ppar, mome
                                                   vpa_spectral, z_advect, vpa_advect,
                                                   scratch_dummy, external_source_settings,
                                                   num_diss_params, t_params, ion_dt, ir,
-                                                  evolve_ppar, adv_fac_lower,
-                                                  adv_fac_upper)
+                                                  evolve_ppar)
     dt = t_params.dt[]
 
     buffer_1 = @view scratch_dummy.buffer_rs_1[ir,1]
@@ -3011,11 +3020,6 @@ function fill_electron_kinetic_equation_Jacobian!(jacobian_matrix, f, ppar, mome
     end
 
     z_speed = @view z_advect[1].speed[:,:,:,ir]
-    begin_vperp_vpa_region()
-    @loop_vperp_vpa ivperp ivpa begin
-        adv_fac_lower[ivpa,ivperp] = -z_speed[1,ivpa,ivperp]
-        adv_fac_upper[ivpa,ivperp] = -z_speed[end,ivpa,ivperp]
-    end
 
     add_electron_z_advection_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, me, z, vperp, vpa, z_spectral,
