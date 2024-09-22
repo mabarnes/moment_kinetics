@@ -3533,7 +3533,8 @@ function backward_euler!(fvec_out, fvec_in, scratch_electron, pdf, fields, momen
                                              r_spectral, z_spectral, vperp_spectral,
                                              vpa_spectral, electron_z_advect,
                                              electron_vpa_advect, gyroavs, scratch_dummy,
-                                             dt, nl_solver_params.electron_advance)
+                                             t_params.electron, t_params.dt[],
+                                             nl_solver_params.electron_advance)
     elseif t_params.implicit_electron_ppar
         max_electron_pdf_iterations = 1000
         max_electron_sim_time = 1.0e-3

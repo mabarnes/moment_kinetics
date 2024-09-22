@@ -757,8 +757,11 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                    nl_solver_params.electron_advance.global_nonlinear_iterations,
                                    nl_solver_params.electron_advance.global_linear_iterations,
                                    nl_solver_params.electron_advance.solves_since_precon_update,
+                                   nl_solver_params.electron_advance.precon_dt,
                                    nl_solver_params.electron_advance.serial_solve,
                                    nl_solver_params.electron_advance.max_nonlinear_iterations_this_step,
+                                   nl_solver_params.electron_advance.max_linear_iterations_this_step,
+                                   nl_solver_params.electron_advance.preconditioner_type,
                                    nl_solver_params.electron_advance.preconditioner_update_interval,
                                    nl_solver_params.electron_advance.preconditioners,
                                   )
@@ -772,8 +775,8 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                                num_diss_params, r, z, vperp, vpa,
                                                r_spectral, z_spectral, vperp_spectral,
                                                vpa_spectral, z_advect, vpa_advect,
-                                               gyroavs, scratch_dummy, 0.0,
-                                               initialisation_nl_solver_params)
+                                               gyroavs, scratch_dummy, t_params.electron,
+                                               0.0, initialisation_nl_solver_params)
             else
                 success =
                     update_electron_pdf!(scratch_electron, pdf.electron.norm, moments,

@@ -1586,7 +1586,7 @@ function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, mo
                                     external_source_settings, num_diss_params, r, z,
                                     vperp, vpa, r_spectral, z_spectral, vperp_spectral,
                                     vpa_spectral, z_advect, vpa_advect, gyroavs,
-                                    scratch_dummy, dt, nl_solver_params)
+                                    scratch_dummy, t_params, ion_dt, nl_solver_params)
 
     electron_ppar_out = fvec_out.electron_ppar
     # Store the solved-for pdf in n_rk_stages+1, because this was the version that gets
@@ -1612,9 +1612,10 @@ function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, mo
                               fvec_in.density, fvec_in.electron_upar, fvec_in.density,
                               fvec_in.upar, fvec_in.ppar, fvec_in.density_neutral,
                               fvec_in.uz_neutral, fvec_in.pz_neutral, moments.electron,
-                              collisions, dt, composition,
+                              collisions, ion_dt, composition,
                               external_source_settings.electron, num_diss_params, r, z)
 
+    newton_success = false
     for ir ∈ 1:r.n
         function residual_func!(residual, new_variables; debug=false)
             electron_ppar_residual, f_electron_residual = residual
@@ -1658,7 +1659,7 @@ function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, mo
             #                                 fvec_in.ppar[:,ir], fvec_in, moments,
             #                                 collisions, composition,
             #                                 external_source_settings, num_diss_params,
-            #                                 z, dt, ir)
+            #                                 z, ion_dt, ir)
 
             # electron_kinetic_equation_euler_update!() just adds dt*d(g_e)/dt to the
             # electron_pdf member of the first argument, so if we set the electron_pdf member
@@ -1668,12 +1669,12 @@ function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, mo
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 f_electron_residual[ivpa,ivperp,iz] = 0.0
             end
+            t_params.dt[] = pdf_electron_normalisation_factor
             electron_kinetic_equation_euler_update!(
                 f_electron_residual, electron_ppar_residual, f_electron_new,
                 electron_ppar_new, moments, z, vperp, vpa, z_spectral, vpa_spectral, z_advect,
                 vpa_advect, scratch_dummy, collisions, composition, external_source_settings,
-                num_diss_params, pdf_electron_normalisation_factor, t_params, ir;
-                soft_force_constraints=true)
+                num_diss_params, t_params, ir; soft_force_constraints=true)
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 f_electron_residual[ivpa,ivperp,iz] /= sqrt(1.0 + vpa.grid[ivpa]^2)
             end
@@ -1754,7 +1755,10 @@ function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, mo
                                               rhs_delta, v, w, nl_solver_params;
                                               left_preconditioner=nothing,
                                               right_preconditioner=nothing,
-                                              coords=(r=r, z=z, vperp=vperp, vpa=vpa))
+                                              coords=(z=z, vperp=vperp, vpa=vpa))
+        if !newton_success
+            break
+        end
     end
 
     # Fill pdf.electron.norm
