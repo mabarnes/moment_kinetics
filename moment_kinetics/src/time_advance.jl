@@ -921,7 +921,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         # condition
         enforce_boundary_conditions!(
             pdf.ion.norm, boundary_distributions.pdf_rboundary_ion,
-            moments.ion.dens, moments.ion.upar, moments.ion.ppar, moments,
+            moments.ion.dens, moments.ion.upar, moments.ion.ppar, fields.phi, moments,
             vpa.bc, z.bc, r.bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral,
             vpa_advect, vperp_advect, z_advect, r_advect,
             composition, scratch_dummy, advance.r_diffusion,
@@ -2327,7 +2327,7 @@ function apply_all_bcs_constraints_update_moments!(
         # should be set to zero at the sheath boundary according to the final upar has a
         # non-zero contribution from one or more of the terms.  NB: probably need to do the
         # same for the evolved moments
-        enforce_boundary_conditions!(this_scratch, moments,
+        enforce_boundary_conditions!(this_scratch, moments, fields,
             boundary_distributions.pdf_rboundary_ion, vpa.bc, z.bc, r.bc, vpa, vperp, z, r,
             vpa_spectral, vperp_spectral, vpa_advect, vperp_advect, z_advect, r_advect,
             composition, scratch_dummy, advance.r_diffusion, advance.vpa_diffusion,
@@ -2652,11 +2652,12 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron,
                 density = @view scratch[t_params.n_rk_stages+1].density[:,ir,is]
                 upar = @view scratch[t_params.n_rk_stages+1].upar[:,ir,is]
                 ppar = @view scratch[t_params.n_rk_stages+1].ppar[:,ir,is]
+                phi = fields.phi[:,ir]
                 last_negative_vpa_ind, first_positive_vpa_ind =
                     get_ion_z_boundary_cutoff_indices(density, upar, ppar,
                                                       moments.evolve_upar,
                                                       moments.evolve_ppar, z, vpa,
-                                                      1.0e-14)
+                                                      1.0e-14, phi)
                 if z.irank == 0
                     scratch[2].pdf[last_negative_vpa_ind,:,1,ir,is] .=
                         scratch[t_params.n_rk_stages+1].pdf[last_negative_vpa_ind,:,1,ir,is]

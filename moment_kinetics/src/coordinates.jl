@@ -14,6 +14,7 @@ using ..chebyshev: scaled_chebyshev_grid, scaled_chebyshev_radau_grid, setup_che
 using ..communication
 using ..finite_differences: finite_difference_info
 using ..gauss_legendre: scaled_gauss_legendre_lobatto_grid, scaled_gauss_legendre_radau_grid, setup_gausslegendre_pseudospectral
+using ..input_structs
 using ..quadrature: composite_simpson_weights
 using ..input_structs
 using ..moment_kinetics_structs: null_spatial_dimension_info, null_velocity_dimension_info
@@ -23,7 +24,7 @@ using MPI
 """
 structure containing basic information related to coordinates
 """
-struct coordinate{T <: AbstractVector{mk_float}}
+struct coordinate{T <: AbstractVector{mk_float},Tbparams}
     # name is the name of the variable associated with this coordiante
     name::String
     # n_global is the total number of grid points associated with this coordinate
@@ -64,6 +65,9 @@ struct coordinate{T <: AbstractVector{mk_float}}
     cheb_option::String
     # bc is the boundary condition option for this coordinate
     bc::String
+    # struct containing some parameters that may be used for applying the boundary
+    # condition.
+    boundary_parameters::Tbparams
     # wgts contains the integration weights associated with each grid point
     wgts::Array{mk_float,1}
     # uniform_grid contains location of grid points mapped to a uniform grid
@@ -192,6 +196,27 @@ function get_coordinate_input(input_dict, name; ignore_MPI=false)
     # Make a copy so we do not add "name" to the global input_dict
     coord_input_dict = copy(coord_input_dict)
     coord_input_dict["name"] = name
+
+    # Get some parameters that may be used for the boundary condition
+    if input_dict === nothing
+        boundary_parameters = nothing
+    else
+        boundary_parameters_defaults = Dict{Symbol,Any}()
+        if name == "z"
+            # parameter controlling the cutoff of the ion distribution function in the vpa
+            # domain at the wall in z
+            boundary_parameters_defaults[:epsz] = 0.0
+        end
+        boundary_parameters_input = set_defaults_and_check_section!(
+            input_dict, "$(name)_boundary_condition_parameters";
+            boundary_parameters_defaults...
+           )
+        boundary_parameters = Dict_to_NamedTuple(boundary_parameters_input)
+    end
+
+    coord_input_dict = deepcopy(coord_input_dict)
+    coord_input_dict["boundary_parameters"] = boundary_parameters
+
     coord_input = Dict_to_NamedTuple(coord_input_dict)
 
     return coord_input
@@ -352,13 +377,13 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         coord_input.nelement, coord_input.nelement_local, nrank, irank, coord_input.L,
         grid, cell_width, igrid, ielement, imin, imax, igrid_full,
         coord_input.discretization, coord_input.finite_difference_option,
-        coord_input.cheb_option, coord_input.bc, wgts, uniform_grid, duniform_dgrid,
-        scratch, copy(scratch), copy(scratch), copy(scratch), copy(scratch),
-        copy(scratch), copy(scratch), copy(scratch), copy(scratch), scratch_shared,
-        scratch_shared2, scratch_2d, copy(scratch_2d), advection, send_buffer,
-        receive_buffer, comm, local_io_range, global_io_range, element_scale,
-        element_shift, coord_input.element_spacing_option, element_boundaries,
-        radau_first_element, other_nodes, one_over_denominator)
+        coord_input.cheb_option, coord_input.bc, coord_input.boundary_parameters, wgts,
+        uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
+        copy(scratch), copy(scratch), copy(scratch), copy(scratch), copy(scratch),
+        copy(scratch), scratch_shared, scratch_shared2, scratch_2d, copy(scratch_2d),
+        advection, send_buffer, receive_buffer, comm, local_io_range, global_io_range,
+        element_scale, element_shift, coord_input.element_spacing_option,
+        element_boundaries, radau_first_element, other_nodes, one_over_denominator)
 
     if coord.n == 1 && occursin("v", coord.name)
         spectral = null_velocity_dimension_info()
