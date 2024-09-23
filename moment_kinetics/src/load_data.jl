@@ -779,7 +779,8 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                     length(moments.ion.external_source_controller_integral) == 1
                 moments.ion.external_source_controller_integral .=
                     load_slice(dynamic, "external_source_controller_integral", time_index)
-            elseif length(moments.ion.external_source_controller_integral) > 1
+            elseif size(moments.ion.external_source_controller_integral)[1] > 1 ||
+                    size(moments.ion.external_source_controller_integral)[2] > 1 
                 moments.ion.external_source_controller_integral .=
                     reload_moment("external_source_controller_integral", dynamic,
                                   time_index, r, z, r_range, z_range, restart_r,
