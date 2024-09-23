@@ -8235,10 +8235,10 @@ function collisionality_plots(run_info, plot_prefix=nothing)
                 else
                     run_label = " "
                 end
-                plot_1d(run_info[ri].z.grid, vth[ri][:,1,1,21], xlabel="z",
+                plot_1d(run_info[ri].z.grid, vth[ri][:,1,1,end], xlabel="z",
                         ylabel="values", label=run_label*"vth", ax=ax[1], title = "checking_mfp_vth")
-                plot_1d(run_info[ri].z.grid, nu_ii[ri][:,1,1,21], label=run_label*"nu_ii", ax=ax[1])
-                plot_1d(run_info[ri].z.grid, mfp[ri][:,1,1,21], label=run_label*"mfp", ax=ax[1])
+                plot_1d(run_info[ri].z.grid, nu_ii[ri][:,1,1,end], label=run_label*"nu_ii", ax=ax[1])
+                plot_1d(run_info[ri].z.grid, mfp[ri][:,1,1,end], label=run_label*"mfp", ax=ax[1])
             end
             Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
                 orientation=:vertical)
@@ -8257,10 +8257,10 @@ function collisionality_plots(run_info, plot_prefix=nothing)
                 else
                     run_label = " "
                 end
-                plot_1d(run_info[ri].z.grid, L_T[ri][:,1,1,21], xlabel="z",
+                plot_1d(run_info[ri].z.grid, L_T[ri][:,1,1,end], xlabel="z",
                         ylabel="values", label=run_label*"L_T", ax=ax[1], title = "LT_dT_dz_temp")
-                plot_1d(run_info[ri].z.grid, dT_dz[ri][:,1,1,21], label=run_label*"dT_dz", ax=ax[1])
-                plot_1d(run_info[ri].z.grid, temp[ri][:,1,1,21], label=run_label*"temp", ax=ax[1])
+                plot_1d(run_info[ri].z.grid, dT_dz[ri][:,1,1,end], label=run_label*"dT_dz", ax=ax[1])
+                plot_1d(run_info[ri].z.grid, temp[ri][:,1,1,end], label=run_label*"temp", ax=ax[1])
             end
             Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
                 orientation=:vertical)
@@ -8277,9 +8277,9 @@ function collisionality_plots(run_info, plot_prefix=nothing)
                 else
                     run_label = " "
                 end
-                plot_1d(run_info[ri].z.grid, L_T[ri][:,1,1,21], xlabel="z",
+                plot_1d(run_info[ri].z.grid, L_T[ri][:,1,1,end], xlabel="z",
                         ylabel="values", label=run_label*"L_T", ax=ax[1], title = "L_T and mean free path comparison")
-                plot_1d(run_info[ri].z.grid, mfp[ri][:,1,1,21], label=run_label*"mfp", ax=ax[1])
+                plot_1d(run_info[ri].z.grid, mfp[ri][:,1,1,end], label=run_label*"mfp", ax=ax[1])
             end
             Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
                 orientation=:vertical)
@@ -8320,9 +8320,9 @@ function collisionality_plots(run_info, plot_prefix=nothing)
                 else
                     run_label = " "
                 end
-                plot_1d(run_info[ri].z.grid, L_n[ri][:,1,1,21], xlabel="z",
+                plot_1d(run_info[ri].z.grid, L_n[ri][:,1,1,end], xlabel="z",
                         ylabel="values", label=run_label*"L_n", ax=ax[1], title = "Ln and mean free path comparison")
-                plot_1d(run_info[ri].z.grid, mfp[ri][:,1,1,21], label=run_label*"mfp", ax=ax[1])
+                plot_1d(run_info[ri].z.grid, mfp[ri][:,1,1,end], label=run_label*"mfp", ax=ax[1])
             end
             Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
                 orientation=:vertical)
@@ -8363,9 +8363,9 @@ function collisionality_plots(run_info, plot_prefix=nothing)
                 else
                     run_label = " "
                 end
-                plot_1d(run_info[ri].z.grid, L_upar[ri][:,1,1,21], xlabel="z",
+                plot_1d(run_info[ri].z.grid, L_upar[ri][:,1,1,end], xlabel="z",
                         ylabel="values", label=run_label*"L_upar", ax=ax[1], title = "Lupar and mean free path comparison")
-                plot_1d(run_info[ri].z.grid, mfp[ri][:,1,1,21], label=run_label*"mfp", ax=ax[1])
+                plot_1d(run_info[ri].z.grid, mfp[ri][:,1,1,end], label=run_label*"mfp", ax=ax[1])
             end
             Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
                 orientation=:vertical)
@@ -8406,11 +8406,11 @@ function collisionality_plots(run_info, plot_prefix=nothing)
                 else
                     run_label = " "
                 end
-                plot_1d(run_info[ri].z.grid, L_upar[ri][:,1,1,21], xlabel="z",
+                plot_1d(run_info[ri].z.grid, L_upar[ri][:,1,1,end], xlabel="z",
                         ylabel="values", label=run_label*"L_upar", ax=ax[1], title = "Lupar Ln LT and mean free path comparison")
-                plot_1d(run_info[ri].z.grid, L_n[ri][:,1,1,21], label=run_label*"L_n", ax=ax[1])
-                plot_1d(run_info[ri].z.grid, L_T[ri][:,1,1,21], label=run_label*"L_T", ax=ax[1])
-                plot_1d(run_info[ri].z.grid, mfp[ri][:,1,1,21], label=run_label*"mfp", ax=ax[1])
+                plot_1d(run_info[ri].z.grid, L_n[ri][:,1,1,end], label=run_label*"L_n", ax=ax[1])
+                plot_1d(run_info[ri].z.grid, L_T[ri][:,1,1,end], label=run_label*"L_T", ax=ax[1])
+                plot_1d(run_info[ri].z.grid, mfp[ri][:,1,1,end], label=run_label*"mfp", ax=ax[1])
             end
             Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
                 orientation=:vertical)
