@@ -953,7 +953,7 @@ Note that this function operates on a single point in `r`, given by `ir`, and `p
 function external_electron_source!(pdf_out, pdf_in, electron_density, electron_upar,
                                    moments, composition, electron_source, index,
                                    vperp, vpa, dt, ir)
-    begin_r_z_vperp_region()
+    begin_z_vperp_region()
 
     me_over_mi = composition.me_over_mi
 

@@ -410,7 +410,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         end
     end
 
-    if t_input["implicit_vpa_advection"]
+    if electron !== nothing && t_input["implicit_vpa_advection"]
         error("implicit_vpa_advection does not work at the moment. Need to figure out "
               * "what to do with constraints, as explicit and implicit parts would not "
               * "preserve constaints separately.")

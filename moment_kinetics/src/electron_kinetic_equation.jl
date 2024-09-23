@@ -638,6 +638,10 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
         error("Must set one of max_electron_pdf_iterations and max_electron_sim_time")
     end
 
+    # Need to always synchronize here because `t_params.dt[]` might have been read by
+    # other processes in the block even though the region type was
+    # `begin_region_serial()`.
+    _block_synchronize()
     begin_serial_region()
     @serial_region begin
         t_params.dt[] = t_params.previous_dt[]
@@ -1549,7 +1553,11 @@ println("recalculating precon")
     if t_params.previous_dt[] < initial_dt_scale_factor * t_params.dt[]
         # If dt has increased a lot, we can probably try a larger initial dt for the next
         # solve.
-        t_params.previous_dt[] = initial_dt_scale_factor * t_params.dt[]
+        begin_serial_region()
+        @serial_region begin
+            t_params.previous_dt[] = initial_dt_scale_factor * t_params.dt[]
+        end
+        _block_synchronize()
     end
 
     if ion_dt !== nothing && t_params.dt[] != t_params.previous_dt[]
@@ -1558,6 +1566,7 @@ println("recalculating precon")
         @serial_region begin
             t_params.dt[] = t_params.previous_dt[]
         end
+        _block_synchronize()
     end
     if !electron_pdf_converged
         success = "kinetic-electrons"
