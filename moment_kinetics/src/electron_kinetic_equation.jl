@@ -2935,10 +2935,10 @@ function electron_kinetic_equation_euler_update!(f_out, ppar_out, f_in, ppar_in,
     if evolve_ppar
         @views electron_energy_equation_no_r!(
                    ppar_out, ppar_in, moments.electron.dens[:,ir],
-                   moments.electron.upar[:,ir], moments.ion.dens[:,ir],
-                   moments.ion.upar[:,ir], moments.ion.ppar[:,ir],
-                   moments.neutral.dens[:,ir], moments.neutral.uz[:,ir],
-                   moments.neutral.pz[:,ir], moments.electron, collisions, dt,
+                   moments.electron.upar[:,ir], moments.ion.dens[:,ir,:],
+                   moments.ion.upar[:,ir,:], moments.ion.ppar[:,ir,:],
+                   moments.neutral.dens[:,ir,:], moments.neutral.uz[:,ir,:],
+                   moments.neutral.pz[:,ir,:], moments.electron, collisions, dt,
                    composition, external_source_settings.electron, num_diss_params, z, ir)
 
         if ion_dt !== nothing
