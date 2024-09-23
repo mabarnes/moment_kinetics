@@ -873,8 +873,12 @@ function calculate_ion_qpar_from_braginskii!(qpar, density, upar, vth, dT_dz, z,
             # Stangeby (2.92)
             total_heat_flux = gamma_i * T_i * particle_flux
 
-            # E.g. Helander&Sigmar (2.14) ??????? what is it for ions?
-            conductive_heat_flux = total_heat_flux - 2.5 * this_ppar * this_upar
+            # E.g. Helander&Sigmar (2.14) ??????? what is it for ions? From back
+            # of the envelope calculation, ignoring viscosity means what we ignored 
+            # from the electrons was their mean flow contribution, but here it does matter
+            # (I don't have access to the book right now)
+            conductive_heat_flux = total_heat_flux - 2.5 * this_ppar * this_upar - 
+                                                     0.5 * this_dens * this_upar^3
 
             qpar[iz,ir] = conductive_heat_flux
         end
