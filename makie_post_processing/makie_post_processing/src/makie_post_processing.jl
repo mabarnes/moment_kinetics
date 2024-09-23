@@ -8152,13 +8152,15 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
     return steps_fig, dt_fig, CFL_fig
 end
 
+"""
+A function to plot collisionalities. The mean free path is plotted (or animated) 
+along with the lengthscales of the gradients of density, parallel flow and temperature.
 
-
+There are also functions to check the calculations of the mean free path and the 
+comparison of temperature, L_T and dT_dz. They would only be for making sure
+lengthscales and mean free path calculations are sensible.
+"""
 function collisionality_plots(run_info, plot_prefix=nothing)
-    # plot the mean free path of the ions at every point in z, and on the same graph
-    # plot the lengthscales of the gradients of all moments at each point in z
-    #println("run_info is ", run_info)
-
     if !isa(run_info, Tuple)
         run_info = (run_info,)
     end
