@@ -604,8 +604,8 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
     # - Don't allow setting "itime_*" and "itime_*_dfns" per-variable because we
     #   load time and time_dfns in run_info and these must use the same
     #   "itime_*"/"itime_*_dfns" setting as each variable.
-    time_index_options = ("itime_min", "itime_max", "itime_skip", "itime_min_dfns",
-                          "itime_max_dfns", "itime_skip_dfns")
+    only_global_options = ("itime_min", "itime_max", "itime_skip", "itime_min_dfns",
+                           "itime_max_dfns", "itime_skip_dfns", "handle_errors")
 
     set_defaults_and_check_top_level!(this_input_dict;
        # Options that only apply at the global level (not per-variable)
@@ -656,11 +656,14 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
        animate_vs_z_r=false,
        show_element_boundaries=false,
        steady_state_residual=false,
+       # By default, errors are caught so that later plots can still be made. For
+       # debugging it can be useful to turn this off.
+       handle_errors=true,
       )
 
     section_defaults = OrderedDict(k=>v for (k,v) ∈ this_input_dict
                                    if !isa(v, AbstractDict) &&
-                                      !(k ∈ time_index_options))
+                                      !(k ∈ only_global_options))
     for variable_name ∈ tuple(all_moment_variables..., timestep_diagnostic_variables...)
         set_defaults_and_check_section!(
             this_input_dict, variable_name;
@@ -818,7 +821,8 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
 end
 
 function makie_post_processing_error_handler(e::Exception, message::String)
-    if isa(e, InterruptException)
+    handle_errors = get(input_dict, "handle_errors", true)
+    if isa(e, InterruptException) || !handle_errors
         rethrow(e)
     else
         println(message * "\nError was $e.")
