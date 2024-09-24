@@ -21,6 +21,7 @@ function runtests()
         include(joinpath(@__DIR__, "fokker_planck_time_evolution_tests.jl"))
         include(joinpath(@__DIR__, "gyroaverage_tests.jl"))
         include(joinpath(@__DIR__, "jacobian_matrix_tests.jl"))
+        include(joinpath(@__DIR__, "kinetic_electron_tests.jl"))
     end
 end
 

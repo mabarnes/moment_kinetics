@@ -2607,7 +2607,7 @@ function runtests()
     test_input["output"]["base_directory"] = test_output_directory
 
     @testset "Jacobian matrix" verbose=use_verbose begin
-        println("  Jacobian matrix")
+        println("Jacobian matrix")
 
         test_electron_z_advection(test_input)
         test_electron_vpa_advection(test_input)
