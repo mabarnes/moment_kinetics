@@ -4731,7 +4731,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         electron_steps_per_output = get_variable(run_info, "electron_steps_per_output"; kwargs...)
         electron_failures_per_output = get_variable(run_info, "electron_failures_per_output"; kwargs...)
         electron_successful_steps_per_output = electron_steps_per_output - electron_failures_per_output
-        electron_pseudotime = get_variable("electron_cumulative_pseudotime"; kwargs...)
+        electron_pseudotime = get_variable(run_info, "electron_cumulative_pseudotime"; kwargs...)
 
         delta_t = copy(electron_pseudotime)
         for i ∈ length(delta_t):-1:2

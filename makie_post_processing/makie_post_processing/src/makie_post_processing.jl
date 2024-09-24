@@ -7637,6 +7637,14 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                     plot_1d(time, @view failure_caused_by_per_output[counter,:];
                             linestyle=:dash, label=prefix * "failures caused by p_electron",
                             ax=ax_failures)
+                    if !electron && ri.composition.electron_physics ∈ (kinetic_electrons,
+                                                                       kinetic_electrons_with_temperature_equation)
+                        # Kinetic electron nonlinear solver failure
+                        counter += 1
+                        plot_1d(time, @view failure_caused_by_per_output[counter,:];
+                                linestyle=:dash, label=prefix * "failures caused by kinetic electron solve",
+                                ax=ax_failures)
+                    end
                 end
                 if !electron && ri.n_neutral_species > 0
                     # Neutral pdf failure counter
