@@ -407,8 +407,9 @@ function get_source_profile(profile_type, width, relative_minimum, coord)
         return profile
     elseif profile_type == "wall_exp_decay"
         x = coord.grid
-        return @. (1.0 - relative_minimum) * exp(-(x-x[1]) / width) + relative_minimum +
-                  (1.0 - relative_minimum) * exp(-(x[end]-x) / width) + relative_minimum
+        L = coord.L
+        return @. (1.0 - relative_minimum) * exp(-(x+0.5*L) / width) + relative_minimum +
+                  (1.0 - relative_minimum) * exp(-(0.5*L-x) / width) + relative_minimum
     else
         error("Unrecognised source profile type '$profile_type'.")
     end
