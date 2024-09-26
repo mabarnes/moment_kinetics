@@ -53,6 +53,9 @@ using ..utils: get_minimum_CFL_z, get_minimum_CFL_vpa
 using ..velocity_moments: integrate_over_vspace, calculate_electron_moment_derivatives!,
                           calculate_electron_moment_derivatives_no_r!
 
+# Only needed so we can reference it in a docstring
+import ..runge_kutta
+
 """
 update_electron_pdf is a function that uses the electron kinetic equation 
 to solve for the updated electron pdf
