@@ -771,16 +771,17 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                 end
             end
 
-            if "external_source_controller_integral" ∈ get_variable_keys(dynamic) &&
-                    length(moments.ion.external_source_controller_integral) == 1
-                moments.ion.external_source_controller_integral .=
-                    load_slice(dynamic, "external_source_controller_integral", time_index)
-            elseif length(moments.ion.external_source_controller_integral) > 1
-                moments.ion.external_source_controller_integral .=
-                    reload_moment("external_source_controller_integral", dynamic,
-                                  time_index, r, z, r_range, z_range, restart_r,
-                                  restart_r_spectral, restart_z, restart_z_spectral,
-                                  interpolation_needed)
+            if "external_source_controller_integral" ∈ get_variable_keys(dynamic)
+                if length(moments.ion.external_source_controller_integral) == 1
+                    moments.ion.external_source_controller_integral .=
+                        load_slice(dynamic, "external_source_controller_integral", time_index)
+                else
+                    moments.ion.external_source_controller_integral .=
+                        reload_moment("external_source_controller_integral", dynamic,
+                                      time_index, r, z, r_range, z_range, restart_r,
+                                      restart_r_spectral, restart_z, restart_z_spectral,
+                                      interpolation_needed)
+                end
             end
 
             pdf.ion.norm .= reload_ion_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_range,
