@@ -14,9 +14,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: mpi4py/setup-mpi@v1
-        with:
-          mpi: 'openmpi'
       - uses: julia-actions/setup-julia@latest
         with:
           version: '1.10'
@@ -28,14 +25,10 @@ jobs:
           julia --project -O3 --check-bounds=no -e 'using MPI; MPI.install_mpiexecjl(; destdir=".")'
           julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["Random", "SpecialFunctions", "StatsBase", "Test"]); Pkg.develop(path="moment_kinetics/")'
           julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.precompile()'
-          # Need to use openmpi so that the following arguments work:
-          # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
-          #   than physical cores).
-          # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
-          #   terrible performance when oversubscribing.
-          ./mpiexecjl -np 3 --mca rmaps_base_oversubscribe 1 julia --project -O3 --check-bounds=no moment_kinetics/test/runtests.jl --debug 1
-          ./mpiexecjl -np 4 --mca rmaps_base_oversubscribe 1 julia --project -O3 --check-bounds=no moment_kinetics/test/runtests.jl --debug 1
-          ./mpiexecjl -np 2 --mca rmaps_base_oversubscribe 1 julia --project -O3 --check-bounds=no moment_kinetics/test/runtests.jl --debug 1 --long
+          # Need to use openmpi so that we can use `--oversubscribe` to allow using more MPI ranks than physical cores
+          ./mpiexecjl -np 3 --oversubscribe julia --project -O3 --check-bounds=no moment_kinetics/test/runtests.jl --debug 1
+          ./mpiexecjl -np 4 --oversubscribe julia --project -O3 --check-bounds=no moment_kinetics/test/runtests.jl --debug 1
+          ./mpiexecjl -np 2 --oversubscribe julia --project -O3 --check-bounds=no moment_kinetics/test/runtests.jl --debug 1 --long
           # Note: MPI.jl's default implementation is mpich, which has a similar option
           # `--with-device=ch3:sock`, but that needs to be set when compiling mpich.
         shell: bash
@@ -47,9 +40,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: mpi4py/setup-mpi@v1
-        with:
-          mpi: 'openmpi'
       - uses: julia-actions/setup-julia@latest
         with:
           version: '1.10'
@@ -60,12 +50,8 @@ jobs:
           julia --project -O3 --check-bounds=no -e 'using MPI; MPI.install_mpiexecjl(; destdir=".")'
           julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["Random", "SpecialFunctions", "StatsBase", "Test"]); Pkg.develop(path="moment_kinetics/")'
           julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.precompile()'
-          # Need to use openmpi so that the following arguments work:
-          # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
-          #   than physical cores).
-          # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
-          #   terrible performance when oversubscribing.
-          ./mpiexecjl -np 4 --mca rmaps_base_oversubscribe 1 julia --project -O3 --check-bounds=no moment_kinetics/test/runtests.jl --debug 1
+          # Need to use openmpi so that we can use `--oversubscribe` to allow using more MPI ranks than physical cores
+          ./mpiexecjl -np 4 --oversubscribe julia --project -O3 --check-bounds=no moment_kinetics/test/runtests.jl --debug 1
           # Note: MPI.jl's default implementation is mpich, which has a similar option
           # `--with-device=ch3:sock`, but that needs to be set when compiling mpich.
         shell: bash

@@ -6,7 +6,7 @@ export analyze_fields_data
 export analyze_moments_data
 export analyze_pdf_data
 
-using ..array_allocation: allocate_float
+using ..array_allocation: allocate_float, allocate_int
 using ..calculus: integral
 using ..communication
 using ..coordinates: coordinate
@@ -98,18 +98,24 @@ TeN / (2 neN sqrt(pi)) * ∫dvpaN fN / vpaN^2 ≤ 1
 Note that `integrate_over_vspace()` includes the 1/sqrt(pi) factor already.
 
 If `ir0` is passed, only load the data for as single r-point (to save memory).
+
+If `find_extra_offset=true` is passed, calculates how many entries of `f_lower`/`f_upper`
+adjacent to \$v_∥=0\$ would need to be zero-ed out in order for the condition to be
+satisfied.
 """
-function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, composition, Er,
-                                 geometry, z_bc, nblocks, run_name=nothing,
+function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, temp_e, composition,
+                                 Er, geometry, z_bc, nblocks, run_name=nothing,
                                  it0::Union{Nothing, mk_int}=nothing,
                                  ir0::Union{Nothing, mk_int}=nothing;
                                  f_lower=nothing, f_upper=nothing,
                                  evolve_density=false, evolve_upar=false,
-                                 evolve_ppar=false)
+                                 evolve_ppar=false, find_extra_offset=false)
 
     if z_bc != "wall"
         return nothing, nothing
     end
+
+    zero = 1.0e-14
 
     if it0 === nothing
         ntime = size(Er, 3)
@@ -127,6 +133,14 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, composition,
     else
         nr = 1
     end
+    nvperp = size(f_lower,2)
+    nvpa = size(f_lower,1)
+
+    if temp_e === nothing
+        # Assume this is from a Boltzmann electron response simulation
+        temp_e = fill(composition.T_e, 2, nr, ntime)
+    end
+
     lower_result = zeros(nr, ntime)
     upper_result = zeros(nr, ntime)
     if f_lower !== nothing || f_upper !== nothing
@@ -162,7 +176,18 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, composition,
                                            evolve_density, evolve_ppar)
     f_upper = @views get_unnormalised_f_1d(f_upper, dens[end,:,:,:], vth[end,:,:,:],
                                            evolve_density, evolve_ppar)
+    if find_extra_offset
+        # Allocate output arrays for the number of entries that would need to be zero-ed
+        # out.
+        extra_offset_lower = allocate_int(nr,ntime)
+        extra_offset_upper = allocate_int(nr,ntime)
+        cutoff_lower = allocate_float(nr,ntime)
+        cutoff_upper = allocate_float(nr,ntime)
+    end
     for it ∈ 1:ntime, ir ∈ 1:nr
+        # Lower target
+        ##############
+
         v_parallel = vpagrid_to_dzdt(vpa.grid, vth[1,ir,is,it], upar[1,ir,is,it],
                                      evolve_ppar, evolve_upar)
         vpabar = @. v_parallel - 0.5 * geometry.rhostar * Er[1,ir,it] / geometry.bzed[1,ir]
@@ -170,7 +195,7 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, composition,
         # Get rid of a zero if it is there to avoid a blow up - f should be zero at that
         # point anyway
         for ivpa ∈ eachindex(vpabar)
-            if abs(vpabar[ivpa]) < 1.e-14
+            if abs(vpabar[ivpa]) < zero
                 vpabar[ivpa] = 1.0
             end
         end
@@ -183,7 +208,29 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, composition,
             println("result lower ", lower_result[ir,it])
         end
 
-        lower_result[ir,it] *= 0.5 * composition.T_e / dens[1,ir,is,it]
+        lower_result[ir,it] *= 0.5 * temp_e[1,ir,it] / dens[1,ir,is,it]
+
+        if find_extra_offset
+            if lower_result[ir,it] ≤ 1.0
+                extra_offset_lower[ir,it] = 0
+            else
+                integrand = f_lower[:,:,ir,is,it]
+                for ivperp ∈ 1:nvperp
+                    # 1/sqrt(π) factor to correspond with behaviour of
+                    # `integrate_over_vspace()`.
+                    @. integrand[:,ivperp] *= vpabar^(-2) * vpa.wgts * vperp.wgts[ivperp] / sqrt(π)
+                end
+                vperp_integral = @view sum(integrand; dims=2)[:,1]
+                cumulative_vpa_integral = cumsum(vperp_integral)
+                cutoff_index = searchsortedfirst(cumulative_vpa_integral, 2.0 * dens[1,ir,is,it] / temp_e[1,ir,it]) - 1
+                cutoff_lower[ir,it] = mean(vpabar[cutoff_index:cutoff_index+1])
+                vpa_before_zero_index = searchsortedfirst(vpabar, -zero) - 1
+                extra_offset_lower[ir,it] = vpa_before_zero_index - cutoff_index
+            end
+        end
+
+        # Upper target
+        ##############
 
         v_parallel = vpagrid_to_dzdt(vpa.grid, vth[end,ir,is,it], upar[end,ir,is,it],
                                      evolve_ppar, evolve_upar)
@@ -192,7 +239,7 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, composition,
         # Get rid of a zero if it is there to avoid a blow up - f should be zero at that
         # point anyway
         for ivpa ∈ eachindex(vpabar)
-            if abs(vpabar[ivpa]) < 1.e-14
+            if abs(vpabar[ivpa]) < zero
                 vpabar[ivpa] = 1.0
             end
         end
@@ -205,10 +252,33 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, composition,
             println("result upper ", upper_result[ir,it])
         end
 
-        upper_result[ir,it] *= 0.5 * composition.T_e / dens[end,ir,is,it]
+        upper_result[ir,it] *= 0.5 * temp_e[end,ir,it] / dens[end,ir,is,it]
+
+        if find_extra_offset
+            if upper_result[ir,it] ≤ 1.0
+                extra_offset_upper[ir,it] = 0
+            else
+                integrand = f_upper[:,:,ir,is,it]
+                for ivperp ∈ 1:nvperp
+                    # 1/sqrt(π) factor to correspond with behaviour of
+                    # `integrate_over_vspace()`.
+                    @. integrand[:,ivperp] *= vpabar^(-2) * vpa.wgts * vperp.wgts[ivperp] / sqrt(π)
+                end
+                vperp_integral = @view sum(integrand; dims=2)[:,1]
+                cumulative_vpa_integral = reverse(cumsum(reverse(vperp_integral)))
+                cutoff_index = searchsortedfirst(cumulative_vpa_integral, 2.0 * dens[end,ir,is,it] / temp_e[end,ir,it]; rev=true)
+                cutoff_upper[ir,it] = mean(vpabar[cutoff_index-1:cutoff_index])
+                vpa_after_zero_index = searchsortedlast(vpabar, zero) + 1
+                extra_offset_upper[ir,it] = cutoff_index - vpa_after_zero_index
+            end
+        end
     end
 
-    println("final Chodura results result ", lower_result[1,end], " ", upper_result[1,end])
+    if find_extra_offset
+        println("final Chodura results ", lower_result[1,end], " (", extra_offset_lower[1,end], ") ", upper_result[1,end], " (", extra_offset_upper[1,end], ")")
+    else
+        println("final Chodura results ", lower_result[1,end], " ", upper_result[1,end])
+    end
 
     if it0 !== nothing && ir0 !== nothing
         lower_result = lower_result[1,1]
@@ -221,7 +291,11 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, composition,
         upper_result = @view upper_result[1,:]
     end
 
-    return lower_result, upper_result
+    if find_extra_offset
+        return lower_result, upper_result, cutoff_lower, cutoff_upper
+    else
+        return lower_result, upper_result
+    end
 end
 
 """

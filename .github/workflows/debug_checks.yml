@@ -15,9 +15,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: mpi4py/setup-mpi@v1
-        with:
-          mpi: 'openmpi'
       - uses: julia-actions/setup-julia@latest
         with:
           version: '1.10'
@@ -36,11 +33,7 @@ jobs:
           julia --project -O3 --check-bounds=yes -e 'using Pkg; Pkg.develop(path="moment_kinetics/"); Pkg.precompile()'
           julia --project -O3 --check-bounds=yes precompile-with-check-bounds.jl --debug 2
 
-          # Need to use openmpi so that the following arguments work:
-          # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
-          #   than physical cores).
-          # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
-          #   terrible performance when oversubscribing.
+          # Need to use openmpi so that we can use `--oversubscribe` to allow using more MPI ranks than physical cores
           ## Don't use --compiled-modules=no for now, as it currently breaks Symbolics.jl
-          #mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no moment_kinetics/debug_test/sound_wave_tests.jl --debug 2
-          ./mpiexecjl -np 4 --mca rmaps_base_oversubscribe 1 julia --project -Jmoment_kinetics.so -O3 --check-bounds=yes moment_kinetics/debug_test/runtests.jl --debug 2
+          #mpiexec -np 4 --oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no moment_kinetics/debug_test/sound_wave_tests.jl --debug 2
+          ./mpiexecjl -np 4 --oversubscribe julia --project -Jmoment_kinetics.so -O3 --check-bounds=yes moment_kinetics/debug_test/runtests.jl --debug 2

@@ -756,8 +756,11 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         plot_vs_t=false,
         plot_vs_r=false,
         plot_vs_r_t=false,
+        plot_f_over_vpa2=false,
+        animate_f_over_vpa2=false,
         it0=this_input_dict["it0"],
         ir0=this_input_dict["ir0"],
+        animation_ext=this_input_dict["animation_ext"],
        )
 
     set_defaults_and_check_section!(
@@ -3937,6 +3940,13 @@ function plot_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing, neutra
 
     l = plot_1d(dzdt, f_unnorm; ax=ax, label=run_info.run_name, kwargs...)
 
+    if input.show_element_boundaries && fig !== nothing
+        element_boundary_inds =
+        [i for i ∈ 1:run_info.vpa.ngrid-1:run_info.vpa.n_global]
+        element_boundary_positions = dzdt[element_boundary_inds]
+        vlines!(ax, element_boundary_positions, color=:black, alpha=0.3)
+    end
+
     if outfile !== nothing
         if fig === nothing
             error("When ax is passed, fig must also be passed to save the plot using "
@@ -4159,8 +4169,8 @@ it might be useful to pass `transform=abs` (to plot the absolute value) or
 `axis_args` are passed as keyword arguments to `get_1d_ax()`, and from there to the `Axis`
 constructor.
 
-Any extra `kwargs` are passed to [`plot_1d`](@ref) (which is used to create the plot, as
-we have to handle time-varying coordinates so cannot use [`animate_1d`](@ref)).
+Any extra `kwargs` are passed to `lines!()` (which is used to create the plot, as we have
+to handle time-varying coordinates so cannot use [`animate_1d`](@ref)).
 """
 function animate_f_unnorm_vs_vpa end
 
@@ -4262,16 +4272,16 @@ function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
                                          run_info.evolve_density, run_info.evolve_ppar)
 
         if f_over_vpa2
-            dzdt = vpagrid_to_dzdt(vcoord.grid, vth[it], upar[it],
-                                   run_info.evolve_ppar, run_info.evolve_upar)
-            dzdt2 = dzdt.^2
-            for i ∈ eachindex(dzdt2)
-                if dzdt2[i] == 0.0
-                    dzdt2[i] = 1.0
+            this_dzdt = vpagrid_to_dzdt(vcoord.grid, vth[it], upar[it],
+                                        run_info.evolve_ppar, run_info.evolve_upar)
+            this_dzdt2 = this_dzdt.^2
+            for i ∈ eachindex(this_dzdt2)
+                if this_dzdt2[i] == 0.0
+                    this_dzdt2[i] = 1.0
                 end
             end
 
-            f_unnorm = @. copy(f_unnorm) / dzdt2
+            f_unnorm = @. copy(f_unnorm) / this_dzdt2
         end
 
         return f_unnorm
@@ -4312,6 +4322,14 @@ function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
     f_unnorm = @lift transform.(get_this_f_unnorm($frame_index))
 
     l = plot_1d(dzdt, f_unnorm; ax=ax, label=run_info.run_name, yscale=yscale, kwargs...)
+
+    if input.show_element_boundaries && fig !== nothing
+        element_boundary_inds =
+        [i for i ∈ 1:run_info.vpa.ngrid-1:run_info.vpa.n_global]
+        element_boundary_positions = @lift $dzdt[element_boundary_inds]
+        vlines!(ax, element_boundary_positions, color=:black, alpha=0.3)
+    end
+
 
     if outfile !== nothing
         if fig === nothing
@@ -4654,11 +4672,6 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
                     save(outfile, fig)
                 end
 
-                if !electron
-                    plot_f_unnorm_vs_vpa(run_info; f_over_vpa2=true, input=f_input, is=1,
-                                         outfile=plot_prefix * "pdf_unnorm_over_vpa2_$(label)_vs_vpa.pdf")
-                end
-
                 if !is_1V
                     plot_vs_vpa_vperp(run_info, "f$electron_suffix"; is=1, input=f_input,
                                       outfile=plot_prefix * "pdf$(electron_suffix)_$(label)_vs_vpa_vperp.pdf")
@@ -4755,11 +4768,6 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
                     put_legend_right(fig, ax)
                     outfile=plot_prefix * "logpdf_unnorm_$(label)_vs_vpa." * input.animation_ext
                     save_animation(fig, frame_index, nt, outfile)
-                end
-
-                if !electron
-                    animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=true, input=f_input, is=1,
-                                            outfile=plot_prefix * "pdf_unnorm_over_vpa2_$(label)_vs_vpa." * input.animation_ext)
                 end
 
                 if !is_1V
@@ -5549,6 +5557,53 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix)
                 push!(a, nothing)
             end
         end
+        if input.plot_f_over_vpa2
+            println("going to plot f_over_vpa2")
+            fig, ax = get_1d_ax(title="f/vpa^2 lower wall", xlabel="vpa", ylabel="f / vpa^2")
+            push!(figs, fig)
+            for a ∈ axes
+                push!(a, ax)
+            end
+
+            fig, ax = get_1d_ax(title="f/vpa^2 upper wall", xlabel="vpa", ylabel="f / vpa^2")
+            push!(figs, fig)
+            for a ∈ axes
+                push!(a, ax)
+            end
+        else
+            push!(figs, nothing)
+            for a ∈ axes
+                push!(a, nothing)
+            end
+            push!(figs, nothing)
+            for a ∈ axes
+                push!(a, nothing)
+            end
+        end
+        if input.animate_f_over_vpa2
+            fig, ax = get_1d_ax(title="f/vpa^2 lower wall", xlabel="vpa", ylabel="f / vpa^2")
+            frame_index = Observable(1)
+            push!(figs, fig)
+            for a ∈ axes
+                push!(a, (ax, frame_index))
+            end
+
+            fig, ax = get_1d_ax(title="f/vpa^2 upper wall", xlabel="vpa", ylabel="f / vpa^2")
+            frame_index = Observable(1)
+            push!(figs, fig)
+            for a ∈ axes
+                push!(a, (ax, frame_index))
+            end
+        else
+            push!(figs, nothing)
+            for a ∈ axes
+                push!(a, nothing)
+            end
+            push!(figs, nothing)
+            for a ∈ axes
+                push!(a, nothing)
+            end
+        end
 
         for (ri, ax) ∈ zip(run_info, axes)
             Chodura_condition_plots(ri; axes=ax)
@@ -5557,26 +5612,26 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix)
         if input.plot_vs_t
             fig = figs[1]
             ax = axes[1][1]
-            put_legend_right(fig, ax)
+            put_legend_below(fig, ax)
             outfile = string(plot_prefix, "Chodura_ratio_lower_vs_t.pdf")
             save(outfile, fig)
 
             fig = figs[2]
-            ax = axes[2][1]
-            put_legend_right(fig, ax)
+            ax = axes[1][2]
+            put_legend_below(fig, ax)
             outfile = string(plot_prefix, "Chodura_ratio_upper_vs_t.pdf")
             save(outfile, fig)
         end
         if input.plot_vs_r
             fig = figs[3]
-            ax = axes[3][1]
-            put_legend_right(fig, ax)
+            ax = axes[1][3]
+            put_legend_below(fig, ax)
             outfile = string(plot_prefix, "Chodura_ratio_lower_vs_r.pdf")
             save(outfile, fig)
 
             fig = figs[4]
-            ax = axes[4][1]
-            put_legend_right(fig, ax)
+            ax = axes[1][4]
+            put_legend_below(fig, ax)
             outfile = string(plot_prefix, "Chodura_ratio_upper_vs_r.pdf")
             save(outfile, fig)
         end
@@ -5588,6 +5643,37 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix)
             fig = figs[6]
             outfile = string(plot_prefix, "Chodura_ratio_upper_vs_r_t.pdf")
             save(outfile, fig)
+        end
+        if input.plot_f_over_vpa2
+            fig = figs[7]
+            println("check axes ", axes)
+            ax = axes[1][7]
+            put_legend_below(fig, ax)
+            outfile = string(plot_prefix, "pdf_unnorm_over_vpa2_wall-_vs_vpa.pdf")
+            save(outfile, fig)
+
+            fig = figs[8]
+            ax = axes[1][8]
+            put_legend_below(fig, ax)
+            outfile = string(plot_prefix, "pdf_unnorm_over_vpa2_wall+_vs_vpa.pdf")
+            save(outfile, fig)
+        end
+        if input.animate_f_over_vpa2
+            nt = minimum(ri.nt for ri ∈ run_info)
+
+            fig = figs[9]
+            ax = axes[1][9][1]
+            frame_index = axes[1][9][2]
+            put_legend_below(fig, ax)
+            outfile = string(plot_prefix, "pdf_unnorm_over_vpa2_wall-_vs_vpa." * input.animation_ext)
+            save_animation(fig, frame_index, nt, outfile)
+
+            fig = figs[10]
+            ax = axes[1][10][1]
+            frame_index = axes[1][10][2]
+            put_legend_below(fig, ax)
+            outfile = string(plot_prefix, "pdf_unnorm_over_vpa2_wall+_vs_vpa." * input.animation_ext)
+            save_animation(fig, frame_index, nt, outfile)
         end
     catch e
         return makie_post_processing_error_handler(
@@ -5616,18 +5702,20 @@ function Chodura_condition_plots(run_info; plot_prefix=nothing, axes=nothing)
     density = get_variable(run_info, "density")
     upar = get_variable(run_info, "parallel_flow")
     vth = get_variable(run_info, "thermal_speed")
+    temp_e = get_variable(run_info, "electron_temperature")
     Er = get_variable(run_info, "Er")
     f_lower = get_variable(run_info, "f", iz=1)
     f_upper = get_variable(run_info, "f", iz=run_info.z.n_global)
 
-    Chodura_ratio_lower, Chodura_ratio_upper =
+    Chodura_ratio_lower, Chodura_ratio_upper, cutoff_lower, cutoff_upper =
         check_Chodura_condition(run_info.r_local, run_info.z_local, run_info.vperp,
-                                run_info.vpa, density, upar, vth, run_info.composition,
-                                Er, run_info.geometry, run_info.z.bc, nothing;
+                                run_info.vpa, density, upar, vth, temp_e,
+                                run_info.composition, Er, run_info.geometry,
+                                run_info.z.bc, nothing;
                                 evolve_density=run_info.evolve_density,
                                 evolve_upar=run_info.evolve_upar,
                                 evolve_ppar=run_info.evolve_ppar,
-                                f_lower=f_lower, f_upper=f_upper)
+                                f_lower=f_lower, f_upper=f_upper, find_extra_offset=true)
 
     if input.plot_vs_t
         if axes === nothing
@@ -5716,6 +5804,99 @@ function Chodura_condition_plots(run_info; plot_prefix=nothing, axes=nothing)
         if plot_prefix !== nothing
             outfile = string(plot_prefix, "Chodura_ratio_upper_vs_r_t.pdf")
             save(outfile, fig)
+        end
+    end
+
+    if input.plot_f_over_vpa2
+        if axes === nothing
+            fig, ax, = get_1d_ax(title="f/vpa^2 lower wall",
+                                 xlabel="vpa", ylabel="f / vpa^2")
+            title = nothing
+            label = ""
+        else
+            fig = nothing
+            ax = axes[7]
+            label = run_info.run_name
+        end
+        f_input = copy(input_dict_dfns["f"])
+        f_input["it0"] = input.it0
+        f_input["ir0"] = input.ir0
+        f_input["iz0"] = 1
+        plot_f_unnorm_vs_vpa(run_info; f_over_vpa2=true, input=f_input, is=1, fig=fig,
+                             ax=ax, label=label)
+        vlines!(ax, cutoff_lower[input.ir0,input.it0]; linestyle=:dash, color=:red)
+        if plot_prefix !== nothing && fig !== nothing
+            outfile=plot_prefix * "pdf_unnorm_over_vpa2_wall-_vs_vpa.pdf"
+            save(outfile, fig)
+        end
+
+        if axes === nothing
+            fig, ax, = get_1d_ax(title="f/vpa^2 upper wall",
+                                 xlabel="vpa", ylabel="f / vpa^2")
+            title = nothing
+            label = ""
+        else
+            fig = nothing
+            ax = axes[8]
+            label = run_info.run_name
+        end
+        f_input = copy(input_dict_dfns["f"])
+        f_input["it0"] = input.it0
+        f_input["ir0"] = input.ir0
+        f_input["iz0"] = run_info.z.n
+        plot_f_unnorm_vs_vpa(run_info; f_over_vpa2=true, input=f_input, is=1, fig=fig,
+                             ax=ax, label=label)
+        vlines!(ax, cutoff_upper[input.ir0,input.it0]; linestyle=:dash, color=:red)
+        if plot_prefix !== nothing && fig !== nothing
+            outfile=plot_prefix * "pdf_unnorm_over_vpa2_wall+_vs_vpa.pdf"
+            save(outfile, fig)
+        end
+    end
+
+    if input.animate_f_over_vpa2
+        if axes === nothing
+            fig, ax, = get_1d_ax(title="f/vpa^2 lower wall",
+                                 xlabel="vpa", ylabel="f / vpa^2")
+            frame_index = Observable(1)
+            title = nothing
+            label = ""
+        else
+            fig = nothing
+            ax, frame_index = axes[9]
+            label = run_info.run_name
+        end
+        f_input = copy(input_dict_dfns["f"])
+        f_input["ir0"] = input.ir0
+        f_input["iz0"] = 1
+        animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=true, input=f_input, is=1, iz=1,
+                                fig=fig, ax=ax, frame_index=frame_index, label=label)
+        vlines!(ax, @lift cutoff_lower[input.ir0,$frame_index]; linestyle=:dash, color=:red)
+        if plot_prefix !== nothing && fig !== nothing
+            outfile=plot_prefix * "pdf_unnorm_over_vpa2_wall-_vs_vpa." * input.animation_ext
+            save_animation(fig, frame_index, run_info.nt, outfile)
+        end
+
+        if axes === nothing
+            fig, ax, = get_1d_ax(title="f/vpa^2 upper wall",
+                                 xlabel="vpa", ylabel="f / vpa^2")
+            frame_index = Observable(1)
+            title = nothing
+            label = ""
+        else
+            fig = nothing
+            ax, frame_index = axes[10]
+            label = run_info.run_name
+        end
+        f_input = copy(input_dict_dfns["f"])
+        f_input["ir0"] = input.ir0
+        f_input["iz0"] = run_info.z.n
+        animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=true, input=f_input, is=1,
+                                iz=run_info.z.n, fig=fig, ax=ax, frame_index=frame_index,
+                                label=label)
+        vlines!(ax, @lift cutoff_upper[input.ir0,$frame_index]; linestyle=:dash, color=:red)
+        if plot_prefix !== nothing && fig !== nothing
+            outfile=plot_prefix * "pdf_unnorm_over_vpa2_wall+_vs_vpa." * input.animation_ext
+            save_animation(fig, frame_index, run_info.nt, outfile)
         end
     end
 
@@ -7357,30 +7538,30 @@ will be saved with the format `plot_prefix_timestep_diagnostics.pdf`.
 """
 function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=nothing,
                               electron=false)
-    try
-        if !isa(run_info, Tuple)
-            run_info = (run_info,)
-        end
+    if !isa(run_info, Tuple)
+        run_info = (run_info,)
+    end
 
-        if electron
-            println("Making electron timestep diagnostics plots")
-        else
-            println("Making timestep diagnostics plots")
-        end
+    if electron
+        println("Making electron timestep diagnostics plots")
+    else
+        println("Making timestep diagnostics plots")
+    end
 
-        input = Dict_to_NamedTuple(input_dict["timestep_diagnostics"])
+    input = Dict_to_NamedTuple(input_dict["timestep_diagnostics"])
 
-        steps_fig = nothing
-        dt_fig = nothing
-        CFL_fig = nothing
+    steps_fig = nothing
+    dt_fig = nothing
+    CFL_fig = nothing
 
-        if electron
-            electron_prefix = "electron_"
-        else
-            electron_prefix = ""
-        end
+    if electron
+        electron_prefix = "electron_"
+    else
+        electron_prefix = ""
+    end
 
-        if input.plot
+    if input.plot
+        try
             # Plot numbers of steps and numbers of failures
             ###############################################
 
@@ -7514,6 +7695,19 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
 
             put_legend_right(steps_fig, ax_failures)
 
+            if plot_prefix !== nothing
+                outfile = plot_prefix * electron_prefix * "timestep_diagnostics.pdf"
+                save(outfile, steps_fig)
+            else
+                display(steps_fig)
+            end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() steps_fig.")
+        end
+
+        try
             # Plot average timesteps
             ########################
 
@@ -7524,6 +7718,16 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
             end
             dt_fig = plot_vs_t(run_info, "$(electron_prefix)average_successful_dt"; outfile=outfile)
 
+            if plot_prefix === nothing
+                display(dt_fig)
+            end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() dt_fig.")
+        end
+
+        try
             # PLot minimum CFL factors
             ##########################
 
@@ -7589,6 +7793,19 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
             #ylims!(ax, 0.0, 10.0 * maxval)
             put_legend_right(CFL_fig, ax)
 
+            if plot_prefix !== nothing
+                outfile = plot_prefix * electron_prefix * "CFL_factors.pdf"
+                save(outfile, CFL_fig)
+            else
+                display(CFL_fig)
+            end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() CFL_fig.")
+        end
+
+        try
             limits_fig, ax = get_1d_ax(; xlabel="time", ylabel="number of limits per factor per output",
                                        size=(600, 500))
 
@@ -7743,6 +7960,19 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
 
             put_legend_right(limits_fig, ax)
 
+            if plot_prefix !== nothing
+                outfile = plot_prefix * electron_prefix * "timestep_limits.pdf"
+                save(outfile, limits_fig)
+            else
+                display(limits_fig)
+            end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() limits_fig.")
+        end
+
+        try
             # Plot nonlinear solver diagnostics (if any)
             nl_solvers_fig, ax = get_1d_ax(; xlabel="time", ylabel="iterations per solve/nonlinear-iteration")
             has_nl_solver = false
@@ -7776,9 +8006,21 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
 
             if has_nl_solver
                 put_legend_right(nl_solvers_fig, ax)
+
+                if plot_prefix !== nothing
+                    outfile = plot_prefix * "nonlinear_solver_iterations.pdf"
+                    save(outfile, nl_solvers_fig)
+                else
+                    display(nl_solvers_fig)
+                end
             end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() nl_solvers_fig.")
+        end
 
-
+        try
             # Plot electron solver diagnostics
             electron_solver_fig, ax = get_1d_ax(; xlabel="time", ylabel="electron steps per ion step")
 
@@ -7805,40 +8047,23 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
 
             if has_electron_solve
                 put_legend_right(electron_solver_fig, ax)
-            end
-
-
-            if plot_prefix !== nothing
-                outfile = plot_prefix * electron_prefix * "timestep_diagnostics.pdf"
-                save(outfile, steps_fig)
-
-                outfile = plot_prefix * electron_prefix * "CFL_factors.pdf"
-                save(outfile, CFL_fig)
-
-                outfile = plot_prefix * electron_prefix * "timestep_limits.pdf"
-                save(outfile, limits_fig)
-
-                if has_nl_solver
-                    outfile = plot_prefix * "nonlinear_solver_iterations.pdf"
-                    save(outfile, nl_solvers_fig)
-                end
 
                 if has_electron_solve
                     outfile = plot_prefix * "electron_steps.pdf"
                     save(outfile, electron_solver_fig)
-                end
-            else
-                display(steps_fig)
-                display(dt_fig)
-                display(CFL_fig)
-                display(limits_fig)
-                if has_nl_solver
-                    display(nl_solvers_fig)
+                else
+                    display(electron_solver_fig)
                 end
             end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() nl_solvers_fig.")
         end
+    end
 
-        if input.animate_CFL
+    if input.animate_CFL
+        try
             if plot_prefix === nothing
                 error("plot_prefix is required when animate_CFL=true")
             end
@@ -7916,23 +8141,29 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                                                :leftspinevisible=>false,
                                                :rightspinevisible=>false))
             end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() CFL animations.")
         end
+    end
 
-        if run_info_dfns[1].dfns
-            this_input_dict = input_dict_dfns
-        else
-            this_input_dict = input_dict
-        end
-        if electron
-            variable_list = (v for v ∈ union((ri.evolving_variables for ri in run_info_dfns)...)
-                             if occursin("electron", v))
-        else
-            variable_list = (v for v ∈ union((ri.evolving_variables for ri in run_info_dfns)...)
-                             if !occursin("electron", v))
-        end
-        all_variable_names = union((ri.variable_names for ri ∈ run_info_dfns)...)
+    if run_info_dfns[1].dfns
+        this_input_dict = input_dict_dfns
+    else
+        this_input_dict = input_dict
+    end
+    if electron
+        variable_list = (v for v ∈ union((ri.evolving_variables for ri in run_info_dfns)...)
+                         if occursin("electron", v))
+    else
+        variable_list = (v for v ∈ union((ri.evolving_variables for ri in run_info_dfns)...)
+                         if !occursin("electron", v))
+    end
+    all_variable_names = union((ri.variable_names for ri ∈ run_info_dfns)...)
 
-        if input.plot_timestep_residual
+    if input.plot_timestep_residual
+        try
             for variable_name ∈ variable_list
                 loworder_name = variable_name * "_loworder"
                 if loworder_name ∉ all_variable_names
@@ -7954,9 +8185,15 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                               outfile=plot_prefix * residual_name * "_vs_z.pdf")
                 end
             end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() timestep residual plots.")
         end
+    end
 
-        if input.animate_timestep_residual
+    if input.animate_timestep_residual
+        try
             for variable_name ∈ variable_list
                 loworder_name = variable_name * "_loworder"
                 if loworder_name ∉ all_variable_names
@@ -7978,9 +8215,15 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                                  outfile=plot_prefix * residual_name * "_vs_z." * this_input_dict[variable_name]["animation_ext"])
                 end
             end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() timestep residual animations.")
         end
+    end
 
-        if input.plot_timestep_error
+    if input.plot_timestep_error
+        try
             for variable_name ∈ variable_list
                 loworder_name = variable_name * "_loworder"
                 if loworder_name ∉ all_variable_names
@@ -8002,9 +8245,15 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                               outfile=plot_prefix * error_name * "_vs_z.pdf")
                 end
             end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() timestep error plots.")
         end
+    end
 
-        if input.animate_timestep_error
+    if input.animate_timestep_error
+        try
             for variable_name ∈ variable_list
                 loworder_name = variable_name * "_loworder"
                 if loworder_name ∉ all_variable_names
@@ -8026,9 +8275,15 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                                  outfile=plot_prefix * error_name * "_vs_z." * this_input_dict[variable_name]["animation_ext"])
                 end
             end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() timestep error animations.")
         end
+    end
 
-        if input.plot_steady_state_residual
+    if input.plot_steady_state_residual
+        try
             for variable_name ∈ variable_list
                 loworder_name = variable_name * "_loworder"
                 if loworder_name ∉ all_variable_names
@@ -8050,9 +8305,15 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                               outfile=plot_prefix * residual_name * "_vs_z.pdf")
                 end
             end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() steady state residual plots.")
         end
+    end
 
-        if input.animate_steady_state_residual
+    if input.animate_steady_state_residual
+        try
             for variable_name ∈ variable_list
                 loworder_name = variable_name * "_loworder"
                 if loworder_name ∉ all_variable_names
@@ -8074,14 +8335,14 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                                  outfile=plot_prefix * residual_name * "_vs_z." * this_input_dict[variable_name]["animation_ext"])
                 end
             end
+        catch e
+            makie_post_processing_error_handler(
+                e,
+                "Error in timestep_diagnostics() steady state residual animations.")
         end
-
-        return steps_fig, dt_fig, CFL_fig
-    catch e
-        return makie_post_processing_error_handler(
-                   e,
-                   "Error in timestep_diagnostics().")
     end
+
+    return steps_fig, dt_fig, CFL_fig
 end
 
 # Utility functions
