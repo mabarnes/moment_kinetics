@@ -317,13 +317,13 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
                 PI_controller_amplitude, controller_source_profile,
                 PI_density_target_ir, PI_density_target_iz, PI_density_target_rank)
     end
-    function get_settings_electrons(ion_settings)
+    function get_settings_electrons(i, ion_settings)
         # Note most settings for the electron source are copied from the ion source,
         # because we require that the particle sources are the same for ions and
         # electrons. `source_T` can be set independently, and when using
         # `source_type="energy"`, the `source_strength` could also be set.
         input = set_defaults_and_check_section!(
-                     input_dict, "electron_source";
+                     input_dict, "electron_source_$i";
                      source_strength=ion_settings.source_strength,
                      source_T=ion_settings.source_T,
                     )
@@ -339,8 +339,8 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
             input["source_strength"] = ion_settings.source_strength
         end
         return electron_source_data(input["source_strength"], input["source_T"],
-                                       ion_settings.active, ion_settings.r_amplitude, 
-                                       ion_settings.z_amplitude, ion_settings.source_type)
+                                    ion_settings.active, ion_settings.r_amplitude,
+                                    ion_settings.z_amplitude, ion_settings.source_type)
     end
 
     # put all ion sources into ion_source_data struct vector
@@ -361,9 +361,9 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
     electron_sources = electron_source_data[]
     if electron_physics ∈ (braginskii_fluid, kinetic_electrons,
                            kinetic_electrons_with_temperature_equation)
-        electron_sources = [get_settings_electrons(this_source) for this_source ∈ ion_sources]
+        electron_sources = [get_settings_electrons(i, this_source) for (i,this_source) ∈ enumerate(ion_sources)]
     else
-        electron_sources = [get_settings_electrons(get_settings_ions(1, false))]
+        electron_sources = [get_settings_electrons(1, get_settings_ions(1, false))]
     end
 
     # put all neutral sources into neutral_source_data struct vector
