@@ -830,6 +830,8 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         animate_Lupar_mfp_vs_z = false,
         plot_Lupar_Ln_LT_mfp_vs_z = false,
         animate_Lupar_Ln_LT_mfp_vs_z = false,
+        plot_overlay_braginskii_heat_flux = false,
+        animate_overlay_braginskii_heat_flux = false,
         animation_ext = "gif"
        )
 
@@ -8622,6 +8624,53 @@ function collisionality_plots(run_info, plot_prefix=nothing)
                 animate_1d(run_info[ri].z.grid, mfp[ri][:,1,1,:],
                         frame_index=frame_index, xlabel="z", ylabel="values",
                         label=run_label*"mfp", ax=ax[1])
+            end
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                orientation=:vertical)
+            outfile = variable_prefix * "_vs_z." * input.animation_ext
+            save_animation(fig, frame_index, nt, outfile)
+        end
+
+        if input.plot_overlay_braginskii_heat_flux
+            variable_prefix = plot_prefix * "braginskii_vs_original_heat_flux"
+            braginskii_q = get_variable(run_info, "braginskii_heat_flux")
+            original_q = get_variable(run_info, "parallel_heat_flux")
+            fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
+            for ri ∈ eachindex(run_info)
+                if length(run_info) > 1
+                    run_label = run_info[ri].run_name * " "
+                else
+                    run_label = " "
+                end
+                plot_1d(run_info[ri].z.grid, braginskii_q[ri][:,1,1,end], xlabel="z",
+                        ylabel="values", label=run_label*"braginskii_q", ax=ax[1], title = "Braginskii heat flux overlay")
+                plot_1d(run_info[ri].z.grid, original_q[ri][:,1,1,end], label=run_label*"original_q", ax=ax[1])
+            end
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                orientation=:vertical)
+            outfile = variable_prefix * "_vs_z.pdf"
+            save(outfile, fig)
+        end
+
+        if input.animate_overlay_braginskii_heat_flux
+            nt = length(mfp[1][1,1,1,:])
+            variable_prefix = plot_prefix * "braginskii_vs_original_heat_flux"
+            braginskii_q = get_variable(run_info, "braginskii_heat_flux")
+            original_q = get_variable(run_info, "parallel_heat_flux")
+            fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
+            frame_index = Observable(1)
+            for ri ∈ eachindex(run_info)
+                if length(run_info) > 1
+                    run_label = run_info[ri].run_name * " "
+                else
+                    run_label = " "
+                end
+                animate_1d(run_info[ri].z.grid, braginskii_q[ri][:,1,1,:],
+                        frame_index=frame_index, xlabel="z", ylabel="values",
+                        label=run_label*"braginskii_q", ax=ax[1], title = "Braginskii heat flux overlay")
+                animate_1d(run_info[ri].z.grid, original_q[ri][:,1,1,:],
+                        frame_index=frame_index, xlabel="z", ylabel="values",
+                        label=run_label*"original_q", ax=ax[1])
             end
             Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
                 orientation=:vertical)
