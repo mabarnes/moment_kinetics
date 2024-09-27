@@ -22,6 +22,7 @@ Useful references:
 [3] https://en.wikipedia.org/wiki/Generalized_minimal_residual_method
 [4] https://www.rikvoorhaar.com/blog/gmres
 [5] E. Carson , J. Liesen, Z. Strakoš, "Towards understanding CG and GMRES through examples", Linear Algebra and its Applications 692, 241–291 (2024), https://doi.org/10.1016/j.laa.2024.04.003. 
+[6] Q. Zou, "GMRES algorithms over 35 years", Applied Mathematics and Computation 445, 127869 (2023), https://doi.org/10.1016/j.amc.2023.127869
 """
 module nonlinear_solvers
 
@@ -36,12 +37,11 @@ using ..looping
 using ..type_definitions: mk_float, mk_int
 
 using LinearAlgebra
-using MINPACK
 using MPI
 using SparseArrays
 using StatsBase: mean
 
-struct nl_solver_info{TH,TV,Tlig,Tprecon}
+struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon}
     rtol::mk_float
     atol::mk_float
     nonlinear_max_iterations::mk_int
@@ -50,6 +50,9 @@ struct nl_solver_info{TH,TV,Tlig,Tprecon}
     linear_restart::mk_int
     linear_max_restarts::mk_int
     H::TH
+    c::Tcsg
+    s::Tcsg
+    g::Tcsg
     V::TV
     linear_initial_guess::Tlig
     n_solves::Ref{mk_int}
@@ -108,17 +111,29 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
 
     if serial_solve
         H = allocate_float(linear_restart + 1, linear_restart)
+        c = allocate_float(linear_restart + 1)
+        s = allocate_float(linear_restart + 1)
+        g = allocate_float(linear_restart + 1)
         V = allocate_float(reverse(coord_sizes)..., linear_restart+1)
         H .= 0.0
+        c .= 0.0
+        s .= 0.0
+        g .= 0.0
         V .= 0.0
     elseif electron_ppar_pdf_solve
         H = allocate_shared_float(linear_restart + 1, linear_restart)
+        c = allocate_shared_float(linear_restart + 1)
+        s = allocate_shared_float(linear_restart + 1)
+        g = allocate_shared_float(linear_restart + 1)
         V_ppar = allocate_shared_float(coords.z.n, linear_restart+1)
         V_pdf = allocate_shared_float(reverse(coord_sizes)..., linear_restart+1)
 
         begin_serial_region()
         @serial_region begin
             H .= 0.0
+            c .= 0.0
+            s .= 0.0
+            g .= 0.0
             V_ppar .= 0.0
             V_pdf .= 0.0
         end
@@ -126,11 +141,17 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
         V = (V_ppar, V_pdf)
     else
         H = allocate_shared_float(linear_restart + 1, linear_restart)
+        c = allocate_shared_float(linear_restart + 1)
+        s = allocate_shared_float(linear_restart + 1)
+        g = allocate_shared_float(linear_restart + 1)
         V = allocate_shared_float(reverse(coord_sizes)..., linear_restart+1)
 
         begin_serial_region()
         @serial_region begin
             H .= 0.0
+            c .= 0.0
+            s .= 0.0
+            g .= 0.0
             V .= 0.0
         end
     end
@@ -167,8 +188,8 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
     return nl_solver_info(nl_solver_input.rtol, nl_solver_input.atol,
                           nl_solver_input.nonlinear_max_iterations,
                           nl_solver_input.linear_rtol, nl_solver_input.linear_atol,
-                          linear_restart, nl_solver_input.linear_max_restarts, H, V,
-                          linear_initial_guess, Ref(0), Ref(0), Ref(0), Ref(0), Ref(0),
+                          linear_restart, nl_solver_input.linear_max_restarts, H, c, s, g,
+                          V, linear_initial_guess, Ref(0), Ref(0), Ref(0), Ref(0), Ref(0),
                           Ref(0), Ref(nl_solver_input.preconditioner_update_interval),
                           Ref(0.0), serial_solve, Ref(0), Ref(0), preconditioner_type,
                           nl_solver_input.preconditioner_update_interval, preconditioners)
@@ -324,8 +345,9 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
                                    max_restarts=nl_solver_params.linear_max_restarts,
                                    left_preconditioner=left_preconditioner,
                                    right_preconditioner=right_preconditioner,
-                                   H=nl_solver_params.H, V=nl_solver_params.V,
-                                   rhs_delta=rhs_delta,
+                                   H=nl_solver_params.H, c=nl_solver_params.c,
+                                   s=nl_solver_params.s, g=nl_solver_params.g,
+                                   V=nl_solver_params.V, rhs_delta=rhs_delta,
                                    initial_guess=nl_solver_params.linear_initial_guess,
                                    distributed_norm=distributed_norm,
                                    distributed_dot=distributed_dot,
@@ -1063,11 +1085,16 @@ end
 """
 Apply the GMRES algorithm to solve the 'linear problem' J.δx^n = R(x^n), which is needed
 at each step of the outer Newton iteration (in `newton_solve!()`).
+
+Uses Givens rotations to reduce the upper Hessenberg matrix to an upper triangular form,
+which allows conveniently finding the residual at each step, and computing the final
+solution, without calculating a least-squares minimisation at each step. See 'algorithm 2
+MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
 """
 function linear_solve!(x, residual_func!, residual0, delta_x, v, w; coords, rtol, atol,
                        restart, max_restarts, left_preconditioner, right_preconditioner,
-                       H, V, rhs_delta, initial_guess, distributed_norm, distributed_dot,
-                       parallel_map, parallel_delta_x_calc, serial_solve)
+                       H, c, s, g, V, rhs_delta, initial_guess, distributed_norm,
+                       distributed_dot, parallel_map, parallel_delta_x_calc, serial_solve)
     # Solve (approximately?):
     #   J δx = residual0
 
@@ -1105,6 +1132,14 @@ function linear_solve!(x, residual_func!, residual0, delta_x, v, w; coords, rtol
     parallel_map((residual0, v) -> -residual0 - v, w, residual0, v)
     beta = distributed_norm(w)
     parallel_map((w) -> w/beta, select_from_V(V, 1), w)
+    if serial_solve
+        g[1] = beta
+    else
+        begin_serial_region()
+        @serial_region begin
+            g[1] = beta
+        end
+    end
 
     # Set tolerance for GMRES iteration to rtol times the initial residual, unless this is
     # so small that it is smaller than atol, in which case use atol instead.
@@ -1115,7 +1150,9 @@ function linear_solve!(x, residual_func!, residual0, delta_x, v, w; coords, rtol
     counter = 0
     restart_counter = 1
     while true
-        for i ∈ 1:restart
+        i = 0
+        while i < restart
+            i += 1
             counter += 1
             #println("Linear ", counter)
 
@@ -1148,52 +1185,51 @@ function linear_solve!(x, residual_func!, residual0, delta_x, v, w; coords, rtol
             end
             parallel_map((w) -> w / H[i+1,i], select_from_V(V, i+1), w)
 
-            function temporary_residual!(result, guess)
-                #println("temporary residual ", size(result), " ", size(@view(H[1:i+1,1:i])), " ", size(guess))
-                result .= @view(H[1:i+1,1:i]) * guess
-                result[1] -= beta
-            end
-
-            # Second argument to fsolve needs to be a Vector{Float64}
             if serial_solve
-                resize!(initial_guess, i)
-                initial_guess[1] = beta
-                initial_guess[2:i] .= 0.0
-                lsq_result = fsolve(temporary_residual!, initial_guess, i+1; method=:lm)
-                residual = norm(lsq_result.f)
+                for j ∈ 1:i-1
+                    gamma = c[j] * H[j,i] + s[j] * H[j+1,i]
+                    H[j+1,i] = -s[j] * H[j,i] + c[j] * H[j+1,i]
+                    H[j,i] = gamma
+                end
+                delta = sqrt(H[i,i]^2 + H[i+1,i]^2)
+                s[i] = H[i+1,i] / delta
+                c[i] = H[i,i] / delta
+                H[i,i] = c[i] * H[i,i] + s[i] * H[i+1,i]
+                H[i+1,i] = 0
+                g[i+1] = -s[i] * g[i]
+                g[i] = c[i] * g[i]
             else
                 begin_serial_region()
-                if global_rank[] == 0
-                    resize!(initial_guess, i)
-                    initial_guess[1] = beta
-                    initial_guess[2:i] .= 0.0
-                    lsq_result = fsolve(temporary_residual!, initial_guess, i+1; method=:lm)
-                    residual = norm(lsq_result.f)
-                else
-                    residual = nothing
+                @serial_region begin
+                    for j ∈ 1:i-1
+                        gamma = c[j] * H[j,i] + s[j] * H[j+1,i]
+                        H[j+1,i] = -s[j] * H[j,i] + c[j] * H[j+1,i]
+                        H[j,i] = gamma
+                    end
+                    delta = sqrt(H[i,i]^2 + H[i+1,i]^2)
+                    s[i] = H[i+1,i] / delta
+                    c[i] = H[i,i] / delta
+                    H[i,i] = c[i] * H[i,i] + s[i] * H[i+1,i]
+                    H[i+1,i] = 0
+                    g[i+1] = -s[i] * g[i]
+                    g[i] = c[i] * g[i]
                 end
-                residual = MPI.bcast(residual, comm_world; root=0)
+                _block_synchronize()
             end
+            residual = abs(g[i+1])
+
             if residual < tol
                 break
             end
         end
 
-        # Update initial guess fo restart
-        if serial_solve
-            y = lsq_result.x
-        else
-            if global_rank[] == 0
-                y = lsq_result.x
-            else
-                y = nothing
-            end
-            y = MPI.bcast(y, comm_world; root=0)
-        end
+        # Update initial guess to restart
+        #################################
 
-        # The following is the `parallel_map()` version of
+        @views y = H[1:i,1:i] \ g[1:i]
+
+        # The following calculates
         #    delta_x .= delta_x .+ sum(y[i] .* V[:,i] for i ∈ 1:length(y))
-        # slightly abusing splatting to get the sum into a lambda-function.
         parallel_delta_x_calc(delta_x, V, y)
         right_preconditioner(delta_x)
 
