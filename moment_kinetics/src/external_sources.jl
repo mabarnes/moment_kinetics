@@ -471,7 +471,7 @@ function initialize_external_source_amplitude!(moments, external_source_settings
                 if moments.evolve_ppar
                     @loop_r_z ir iz begin
                         moments.ion.external_source_pressure_amplitude[iz,ir,index] =
-                            (0.5 * ion_source.source_T +
+                            (0.5 * ion_source_settings[index].source_T +
                             moments.ion.upar[iz,ir]^2 - moments.ion.ppar[iz,ir]) *
                             ion_source_settings[index].source_strength *
                             ion_source_settings[index].r_amplitude[ir] *
