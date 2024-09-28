@@ -1021,7 +1021,10 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                                                 time_index)
             end
             if "electron_dt" ∈ keys(dynamic)
-                electron_dt = load_slice(dynamic, "electron_dt", time_index)
+                # The algorithm for electron pseudo-timestepping actually starts each
+                # solve using t_params.electron.previous_dt[], so "electron_previous_dt"
+                # is the thing to load.
+                electron_dt = load_slice(dynamic, "electron_previous_dt", time_index)
             end
             if "electron_dt_before_last_fail" ∈ keys(dynamic)
                 electron_dt_before_last_fail =
