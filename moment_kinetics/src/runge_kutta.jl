@@ -1082,26 +1082,26 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
 
     if error_norm_method == "Linf"
         # Get overall maximum error on the shared-memory block
-        error_norms = MPI.Reduce(error_norms, max, comm_block[]; root=0)
+        MPI.Reduce!(error_norms, max, comm_block[]; root=0)
 
-        error_norm = nothing
+        error_norm = Ref{mk_float}(0.0)
         max_error_variable_index = -1
         @serial_region begin
             # Get maximum error over all blocks
-            error_norms = MPI.Allreduce(error_norms, max, comm_inter_block[])
+            MPI.Allreduce!(error_norms, max, comm_inter_block[])
             max_error_variable_index = argmax(error_norms)
-            error_norm = error_norms[max_error_variable_index]
+            error_norm[] = error_norms[max_error_variable_index]
         end
-        error_norm = MPI.bcast(error_norm, 0, comm_block[])
+        MPI.Bcast!(error_norm, 0, comm_block[])
     elseif error_norm_method == "L2"
         # Get overall maximum error on the shared-memory block
-        error_norms = MPI.Reduce(error_norms, +, comm_block[]; root=0)
+        MPI.Reduce!(error_norms, +, comm_block[]; root=0)
 
-        error_norm = nothing
+        error_norm = Ref{mk_float}(0.0)
         max_error_variable_index = -1
         @serial_region begin
             # Get maximum error over all blocks
-            error_norms = MPI.Allreduce(error_norms, +, comm_inter_block[])
+            MPI.Allreduce!(error_norms, +, comm_inter_block[])
 
             # So far `error_norms` is the sum of squares of the errors. Now that summation
             # is finished, need to divide by total number of points and take square-root.
@@ -1110,13 +1110,13 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
             # Weight the error from each variable equally by taking the mean, so the
             # larger number of points in the distribution functions does not mean that
             # error on the moments is ignored.
-            error_norm = mean(error_norms)
+            error_norm[] = mean(error_norms)
 
             # Record which variable had the maximum error
             max_error_variable_index = argmax(error_norms)
         end
 
-        error_norm = MPI.bcast(error_norm, 0, comm_block[])
+        MPI.Bcast!(error_norm, 0, comm_block[])
     else
         error("Unrecognized error_norm_method '$method'")
     end
@@ -1170,7 +1170,7 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
             t_params.step_to_moments_output[] = false
             t_params.step_to_dfns_output[] = false
         end
-    elseif (error_norm > 1.0 || isnan(error_norm)) && current_dt > t_params.minimum_dt * (1.0 + 1.0e-13)
+    elseif (error_norm[] > 1.0 || isnan(error_norm[])) && current_dt > t_params.minimum_dt * (1.0 + 1.0e-13)
         # (1.0 + 1.0e-13) fudge factor accounts for possible rounding errors when
         # t+dt=next_output_time.
         # Use current_dt instead of t_params.dt[] here because we are about to write to
@@ -1191,7 +1191,7 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
             # Get new timestep estimate using same formula as for a successful step, but
             # limit decrease to factor 1/2 - this factor should probably be settable!
             t_params.dt[] = max(t_params.dt[] / 2.0,
-                                t_params.dt[] * t_params.step_update_prefactor * error_norm^(-1.0/t_params.rk_order))
+                                t_params.dt[] * t_params.step_update_prefactor * error_norm[]^(-1.0/t_params.rk_order))
             t_params.dt[] = max(t_params.dt[], t_params.minimum_dt)
 
             # Don't update the simulation time, as this step failed
@@ -1206,7 +1206,7 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
             t_params.step_to_moments_output[] = false
             t_params.step_to_dfns_output[] = false
 
-            #println("t=$t, timestep failed, error_norm=$error_norm, error_norms=$error_norms, decreasing timestep to ", t_params.dt[])
+            #println("t=$t, timestep failed, error_norm=$(error_norm[]), error_norms=$error_norms, decreasing timestep to ", t_params.dt[])
         end
     else
         @serial_region begin
@@ -1237,7 +1237,7 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                 # `step_update_prefactor` is a constant numerical factor to make the estimate
                 # of a good value for the next timestep slightly conservative. It defaults to
                 # 0.9.
-                t_params.dt[] *= t_params.step_update_prefactor * error_norm^(-1.0/t_params.rk_order)
+                t_params.dt[] *= t_params.step_update_prefactor * error_norm[]^(-1.0/t_params.rk_order)
 
                 if t_params.dt[] > CFL_limit
                     t_params.dt[] = CFL_limit

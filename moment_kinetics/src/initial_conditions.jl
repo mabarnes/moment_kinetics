@@ -364,23 +364,21 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
                 #
                 # q at the boundaries tells us dTe/dz for Braginskii electrons
                 nu_ei = collisions.electron_fluid.nu_ei
+                dTe_dz_lower = Ref{mk_float}(0.0)
                 if z.irank == 0
-                    dTe_dz_lower = @. -moments.electron.qpar[1,:] * 2.0 / 3.16 /
-                                       moments.electron.ppar[1,:] *
-                                       composition.me_over_mi * nu_ei
-                else
-                    dTe_dz_lower = nothing
+                    dTe_dz_lower[] = @. -moments.electron.qpar[1,:] * 2.0 / 3.16 /
+                                         moments.electron.ppar[1,:] *
+                                         composition.me_over_mi * nu_ei
                 end
-                dTe_dz_lower = MPI.bcast(dTe_dz_lower, z.comm; root=0)
+                MPI.Bcast!(dTe_dz_lower, z.comm; root=0)
 
+                dTe_dz_upper = Ref{mk_float}(0.0)
                 if z.irank == z.nrank - 1
-                    dTe_dz_upper = @. -moments.electron.qpar[end,:] * 2.0 / 3.16 /
-                                       moments.electron.ppar[end,:] *
-                                       composition.me_over_mi * nu_ei
-                else
-                    dTe_dz_upper = nothing
+                    dTe_dz_upper[] = @. -moments.electron.qpar[end,:] * 2.0 / 3.16 /
+                                         moments.electron.ppar[end,:] *
+                                         composition.me_over_mi * nu_ei
                 end
-                dTe_dz_upper = MPI.bcast(dTe_dz_upper, z.comm; root=(z.nrank - 1))
+                MPI.Bcast!(dTe_dz_upper, z.comm; root=(z.nrank - 1))
 
                 # The temperature should already be equal to the 'Boltzmann electron'
                 # Te, so we just need to add a cubic that vanishes at ±Lz/2
@@ -401,9 +399,9 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
                 #   2*B - 3*2*B = -4*B = dTe/dz_upper + dTe/dz_lower
                 Lz = z.L
                 zg = z.grid
-                C = @. (dTe_dz_upper - dTe_dz_lower) / 2.0 / Lz
+                C = @. (dTe_dz_upper[] - dTe_dz_lower[]) / 2.0 / Lz
                 A = @. -C * Lz^2 / 4
-                B = @. -(dTe_dz_lower + dTe_dz_upper) / 4.0
+                B = @. -(dTe_dz_lower[] + dTe_dz_upper[]) / 4.0
                 D = @. -4.0 * B / Lz^2
                 @loop_r ir begin
                     @. moments.electron.temp[:,ir] += A[ir] + B[ir]*zg + C[ir]*zg^2 +
