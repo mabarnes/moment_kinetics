@@ -157,23 +157,23 @@ struct moments_electron_substruct
     # this is the particle density
     dens::MPISharedArray{mk_float,2}
     # flag that keeps track of if the density needs updating before use
-    dens_updated::Ref{Bool}
+    dens_updated::Base.RefValue{Bool}
     # this is the parallel flow
     upar::MPISharedArray{mk_float,2}
     # flag that keeps track of whether or not upar needs updating before use
-    upar_updated::Ref{Bool}
+    upar_updated::Base.RefValue{Bool}
     # this is the parallel pressure
     ppar::MPISharedArray{mk_float,2}
     # flag that keeps track of whether or not ppar needs updating before use
-    ppar_updated::Ref{Bool}
+    ppar_updated::Base.RefValue{Bool}
     # this is the temperature
     temp::MPISharedArray{mk_float,2}
     # flag that keeps track of whether or not temp needs updating before use
-    temp_updated::Ref{Bool}
+    temp_updated::Base.RefValue{Bool}
     # this is the parallel heat flux
     qpar::MPISharedArray{mk_float,2}
     # flag that keeps track of whether or not qpar needs updating before use
-    qpar_updated::Ref{Bool}
+    qpar_updated::Base.RefValue{Bool}
     # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
     vth::MPISharedArray{mk_float,2}
     # this is the parallel friction force between ions and electrons

@@ -397,7 +397,7 @@ end
     """
     struct DebugMPISharedArray{T, N, TArray <: AbstractArray{T,N}, TIntArray <: AbstractArray{mk_int,N}, TBoolArray <: AbstractArray{Bool,N}} <: AbstractArray{T, N}
         data::TArray
-        accessed::Ref{Bool}
+        accessed::Base.RefValue{Bool}
         is_initialized::TIntArray
         is_read::TBoolArray
         is_written::TBoolArray

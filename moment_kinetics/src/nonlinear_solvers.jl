@@ -55,17 +55,17 @@ struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon}
     g::Tcsg
     V::TV
     linear_initial_guess::Tlig
-    n_solves::Ref{mk_int}
-    nonlinear_iterations::Ref{mk_int}
-    linear_iterations::Ref{mk_int}
-    global_n_solves::Ref{mk_int}
-    global_nonlinear_iterations::Ref{mk_int}
-    global_linear_iterations::Ref{mk_int}
-    solves_since_precon_update::Ref{mk_int}
-    precon_dt::Ref{mk_float}
+    n_solves::Base.RefValue{mk_int}
+    nonlinear_iterations::Base.RefValue{mk_int}
+    linear_iterations::Base.RefValue{mk_int}
+    global_n_solves::Base.RefValue{mk_int}
+    global_nonlinear_iterations::Base.RefValue{mk_int}
+    global_linear_iterations::Base.RefValue{mk_int}
+    solves_since_precon_update::Base.RefValue{mk_int}
+    precon_dt::Base.RefValue{mk_float}
     serial_solve::Bool
-    max_nonlinear_iterations_this_step::Ref{mk_int}
-    max_linear_iterations_this_step::Ref{mk_int}
+    max_nonlinear_iterations_this_step::Base.RefValue{mk_int}
+    max_linear_iterations_this_step::Base.RefValue{mk_int}
     preconditioner_type::String
     preconditioner_update_interval::mk_int
     preconditioners::Tprecon
