@@ -34,17 +34,16 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     n_variables::mk_int
     nstep::mk_int
     end_time::mk_float
-    t::MPISharedArray{mk_float,1}
-    dt::MPISharedArray{mk_float,1}
-    previous_dt::MPISharedArray{mk_float,1}
-    next_output_time::MPISharedArray{mk_float,1}
-    dt_before_output::MPISharedArray{mk_float,1}
-    dt_before_last_fail::MPISharedArray{mk_float,1}
+    t::Base.RefValue{mk_float}
+    dt::Base.RefValue{mk_float}
+    previous_dt::Base.RefValue{mk_float}
+    dt_before_output::Base.RefValue{mk_float}
+    dt_before_last_fail::Base.RefValue{mk_float}
     CFL_prefactor::mk_float
-    step_to_moments_output::MPISharedArray{Bool,1}
-    step_to_dfns_output::MPISharedArray{Bool,1}
-    write_moments_output::MPISharedArray{Bool,1}
-    write_dfns_output::MPISharedArray{Bool,1}
+    step_to_moments_output::Base.RefValue{Bool}
+    step_to_dfns_output::Base.RefValue{Bool}
+    write_moments_output::Base.RefValue{Bool}
+    write_dfns_output::Base.RefValue{Bool}
     step_counter::Base.RefValue{mk_int}
     max_step_count_this_ion_step::Base.RefValue{mk_int}
     max_t_increment_this_ion_step::Base.RefValue{mk_float}

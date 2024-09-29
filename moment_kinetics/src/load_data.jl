@@ -632,10 +632,10 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                                  restart_prefix_iblock, time_index, composition, geometry,
                                  r, z, vpa, vperp, vzeta, vr, vz)
     code_time = 0.0
-    dt = nothing
-    dt_before_last_fail = nothing
-    electron_dt = nothing
-    electron_dt_before_last_fail = nothing
+    dt = Ref(-Inf)
+    dt_before_last_fail = Ref(Inf)
+    electron_dt = Ref(-Inf)
+    electron_dt_before_last_fail = Ref(Inf)
     previous_runs_info = nothing
     restart_electron_physics = nothing
     begin_serial_region()
@@ -1010,24 +1010,24 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                 # If "dt" is not present, the file being restarted from is an older
                 # one that did not have an adaptive timestep, so just leave the value
                 # of "dt" from the input file.
-                dt = load_slice(dynamic, "dt", time_index)
+                dt[] = load_slice(dynamic, "dt", time_index)
             end
             if "dt_before_last_fail" ∈ keys(dynamic)
                 # If "dt_before_last_fail" is not present, the file being
                 # restarted from is an older one that did not have an adaptive
                 # timestep, so just leave the value of "dt_before_last_fail" from
                 # the input file.
-                dt_before_last_fail = load_slice(dynamic, "dt_before_last_fail",
+                dt_before_last_fail[] = load_slice(dynamic, "dt_before_last_fail",
                                                 time_index)
             end
             if "electron_dt" ∈ keys(dynamic)
                 # The algorithm for electron pseudo-timestepping actually starts each
                 # solve using t_params.electron.previous_dt[], so "electron_previous_dt"
                 # is the thing to load.
-                electron_dt = load_slice(dynamic, "electron_previous_dt", time_index)
+                electron_dt[] = load_slice(dynamic, "electron_previous_dt", time_index)
             end
             if "electron_dt_before_last_fail" ∈ keys(dynamic)
-                electron_dt_before_last_fail =
+                electron_dt_before_last_fail[] =
                     load_slice(dynamic, "electron_dt_before_last_fail", time_index)
             end
         finally
@@ -1048,9 +1048,25 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
     moments.neutral.qz_updated .= true
 
     restart_electron_physics = MPI.bcast(restart_electron_physics, 0, comm_block[])
+    MPI.Bcast!(dt, comm_block[])
+    MPI.Bcast!(dt_before_last_fail, comm_block[])
+    MPI.Bcast!(electron_dt, comm_block[])
+    MPI.Bcast!(electron_dt_before_last_fail, comm_block[])
 
-    return code_time, dt, dt_before_last_fail, electron_dt, electron_dt_before_last_fail,
-           previous_runs_info, time_index, restart_electron_physics
+    if dt[] == -Inf
+        dt = nothing
+    else
+        dt = dt[]
+    end
+    if electron_dt[] == -Inf
+        electron_dt = nothing
+    else
+        electron_dt = electron_dt[]
+    end
+
+    return code_time, dt, dt_before_last_fail[], electron_dt,
+           electron_dt_before_last_fail[], previous_runs_info, time_index,
+           restart_electron_physics
 end
 
 """

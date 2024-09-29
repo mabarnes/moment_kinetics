@@ -464,10 +464,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         end
 
         # update the time following the pdf update
-        @serial_region begin
-            t_params.t[] += t_params.previous_dt[]
-        end
-        _block_synchronize()
+        t_params.t[] += t_params.previous_dt[]
 
         residual = -1.0
         if t_params.previous_dt[] > 0.0
@@ -641,14 +638,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
         error("Must set one of max_electron_pdf_iterations and max_electron_sim_time")
     end
 
-    # Need to always synchronize here because `t_params.dt[]` might have been read by
-    # other processes in the block even though the region type was
-    # `begin_region_serial()`.
-    _block_synchronize()
-    begin_serial_region()
-    @serial_region begin
-        t_params.dt[] = t_params.previous_dt[]
-    end
+    t_params.dt[] = t_params.previous_dt[]
 
     begin_r_z_region()
     @loop_r_z ir iz begin
@@ -717,10 +707,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
     end
 
     if initial_time !== nothing
-        @serial_region begin
-            t_params.t[] = initial_time
-        end
-        _block_synchronize()
+        t_params.t[] = initial_time
         # Make sure that output times are set relative to this initial_time (the values in
         # t_params are set relative to 0.0).
         moments_output_times = t_params.moments_output_times .+ initial_time
@@ -1331,71 +1318,63 @@ println("recalculating precon")
                                            coords=(z=z, vperp=vperp, vpa=vpa))
             if newton_success
                 #println("Newton its ", nl_solver_params.max_nonlinear_iterations_this_step[], " ", t_params.dt[])
-                begin_serial_region()
-                @serial_region begin
-                    # update the time following the pdf update
-                    t_params.t[] += t_params.dt[]
+                # update the time following the pdf update
+                t_params.t[] += t_params.dt[]
 
-                    if first_step && !reduced_by_ion_dt
-                        # Adjust t_params.previous_dt[] which gives the initial timestep for
-                        # the electron pseudotimestepping loop.
-                        # If ion_dt<t_params.previous_dt[], assume that this is because we are
-                        # taking a short ion step to an output time, so we do not want to mess
-                        # up t_params.previous_dt[], which should be set sensibly for a
-                        # 'normal' timestep.
-                        if t_params.dt[] < t_params.previous_dt[]
-                            # Had to decrease timestep on the first step to get convergence,
-                            # so start next ion timestep with the decreased value.
-                            print("decreasing previous_dt due to failures ", t_params.previous_dt[])
-                            t_params.previous_dt[] = t_params.dt[]
-                            println(" -> ", t_params.previous_dt[])
-                        #elseif nl_solver_params.max_linear_iterations_this_step[] > max(0.4 * nl_solver_params.nonlinear_max_iterations, 5)
-                        elseif nl_solver_params.max_linear_iterations_this_step[] > t_params.decrease_dt_iteration_threshold
-                            # Step succeeded, but took a lot of iterations so decrease initial
-                            # step size.
-                            print("decreasing previous_dt due to iteration count ", t_params.previous_dt[])
-                            t_params.previous_dt[] /= t_params.max_increase_factor
-                            println(" -> ", t_params.previous_dt[])
-                        #elseif nl_solver_params.max_linear_iterations_this_step[] < max(0.1 * nl_solver_params.nonlinear_max_iterations, 2)
-                        elseif nl_solver_params.max_linear_iterations_this_step[] < t_params.increase_dt_iteration_threshold && (ion_dt === nothing || t_params.previous_dt[] < t_params.cap_factor_ion_dt * ion_dt)
-                            # Only took a few iterations, so increase initial step size.
-                            print("increasing previous_dt due to iteration count ", t_params.previous_dt[])
-                            if ion_dt === nothing
-                                t_params.previous_dt[] *= t_params.max_increase_factor
-                            else
-                                t_params.previous_dt[] = min(t_params.previous_dt[] * t_params.max_increase_factor, t_params.cap_factor_ion_dt * ion_dt)
-                            end
-                            println(" -> ", t_params.previous_dt[])
-                        end
-                    end
-
-                    # Adjust the timestep depending on the iteration count.
-                    # Note nl_solver_params.max_linear_iterations_this_step[] gives the total
-                    # number of iterations, so is a better measure of the total work done by
-                    # the solver than the nonlinear iteration count, or the linear iterations
-                    # per nonlinear iteration
-                    #if nl_solver_params.max_linear_iterations_this_step[] > max(0.2 * nl_solver_params.nonlinear_max_iterations, 10)
-                    if nl_solver_params.max_linear_iterations_this_step[] > t_params.decrease_dt_iteration_threshold && t_params.dt[] > t_params.previous_dt[]
-                        # Step succeeded, but took a lot of iterations so decrease step size.
-                        t_params.dt[] /= t_params.max_increase_factor
-                    elseif nl_solver_params.max_linear_iterations_this_step[] < t_params.increase_dt_iteration_threshold && (ion_dt === nothing || t_params.dt[] < t_params.cap_factor_ion_dt * ion_dt)
-                        # Only took a few iterations, so increase step size.
+                if first_step && !reduced_by_ion_dt
+                    # Adjust t_params.previous_dt[] which gives the initial timestep for
+                    # the electron pseudotimestepping loop.
+                    # If ion_dt<t_params.previous_dt[], assume that this is because we are
+                    # taking a short ion step to an output time, so we do not want to mess
+                    # up t_params.previous_dt[], which should be set sensibly for a
+                    # 'normal' timestep.
+                    if t_params.dt[] < t_params.previous_dt[]
+                        # Had to decrease timestep on the first step to get convergence,
+                        # so start next ion timestep with the decreased value.
+                        print("decreasing previous_dt due to failures ", t_params.previous_dt[])
+                        t_params.previous_dt[] = t_params.dt[]
+                        println(" -> ", t_params.previous_dt[])
+                    #elseif nl_solver_params.max_linear_iterations_this_step[] > max(0.4 * nl_solver_params.nonlinear_max_iterations, 5)
+                    elseif nl_solver_params.max_linear_iterations_this_step[] > t_params.decrease_dt_iteration_threshold
+                        # Step succeeded, but took a lot of iterations so decrease initial
+                        # step size.
+                        print("decreasing previous_dt due to iteration count ", t_params.previous_dt[])
+                        t_params.previous_dt[] /= t_params.max_increase_factor
+                        println(" -> ", t_params.previous_dt[])
+                    #elseif nl_solver_params.max_linear_iterations_this_step[] < max(0.1 * nl_solver_params.nonlinear_max_iterations, 2)
+                    elseif nl_solver_params.max_linear_iterations_this_step[] < t_params.increase_dt_iteration_threshold && (ion_dt === nothing || t_params.previous_dt[] < t_params.cap_factor_ion_dt * ion_dt)
+                        # Only took a few iterations, so increase initial step size.
+                        print("increasing previous_dt due to iteration count ", t_params.previous_dt[])
                         if ion_dt === nothing
-                            t_params.dt[] *= t_params.max_increase_factor
+                            t_params.previous_dt[] *= t_params.max_increase_factor
                         else
-                            t_params.dt[] = min(t_params.dt[] * t_params.max_increase_factor, t_params.cap_factor_ion_dt * ion_dt)
+                            t_params.previous_dt[] = min(t_params.previous_dt[] * t_params.max_increase_factor, t_params.cap_factor_ion_dt * ion_dt)
                         end
+                        println(" -> ", t_params.previous_dt[])
                     end
                 end
-                _block_synchronize()
+
+                # Adjust the timestep depending on the iteration count.
+                # Note nl_solver_params.max_linear_iterations_this_step[] gives the total
+                # number of iterations, so is a better measure of the total work done by
+                # the solver than the nonlinear iteration count, or the linear iterations
+                # per nonlinear iteration
+                #if nl_solver_params.max_linear_iterations_this_step[] > max(0.2 * nl_solver_params.nonlinear_max_iterations, 10)
+                if nl_solver_params.max_linear_iterations_this_step[] > t_params.decrease_dt_iteration_threshold && t_params.dt[] > t_params.previous_dt[]
+                    # Step succeeded, but took a lot of iterations so decrease step size.
+                    t_params.dt[] /= t_params.max_increase_factor
+                elseif nl_solver_params.max_linear_iterations_this_step[] < t_params.increase_dt_iteration_threshold && (ion_dt === nothing || t_params.dt[] < t_params.cap_factor_ion_dt * ion_dt)
+                    # Only took a few iterations, so increase step size.
+                    if ion_dt === nothing
+                        t_params.dt[] *= t_params.max_increase_factor
+                    else
+                        t_params.dt[] = min(t_params.dt[] * t_params.max_increase_factor, t_params.cap_factor_ion_dt * ion_dt)
+                    end
+                end
 
                 first_step = false
             else
-                begin_serial_region()
-                @serial_region begin
-                    t_params.dt[] *= 0.5
-                end
-                _block_synchronize()
+                t_params.dt[] *= 0.5
 
                 # Force the preconditioner to be recalculated, because we have just
                 # changed `dt` by a fairly large amount.
@@ -1556,20 +1535,12 @@ println("recalculating precon")
     if t_params.previous_dt[] < initial_dt_scale_factor * t_params.dt[]
         # If dt has increased a lot, we can probably try a larger initial dt for the next
         # solve.
-        begin_serial_region()
-        @serial_region begin
-            t_params.previous_dt[] = initial_dt_scale_factor * t_params.dt[]
-        end
-        _block_synchronize()
+        t_params.previous_dt[] = initial_dt_scale_factor * t_params.dt[]
     end
 
     if ion_dt !== nothing && t_params.dt[] != t_params.previous_dt[]
         # Reset dt in case it was reduced to be less than 0.5*ion_dt
-        begin_serial_region()
-        @serial_region begin
-            t_params.dt[] = t_params.previous_dt[]
-        end
-        _block_synchronize()
+        t_params.dt[] = t_params.previous_dt[]
     end
     if !electron_pdf_converged
         success = "kinetic-electrons"
@@ -2571,11 +2542,6 @@ function electron_adaptive_timestep_update!(scratch, t, t_params, moments, phi, 
     error_norms = error_norm_type[]
     total_points = mk_int[]
 
-    # Read the current dt here, so we only need one _block_synchronize() call for this and
-    # the begin_s_r_z_vperp_vpa_region()
-    current_dt = t_params.dt[]
-    _block_synchronize()
-
     # Test CFL conditions for advection in electron kinetic equation to give stability
     # limit for timestep
     #
@@ -2655,9 +2621,8 @@ function electron_adaptive_timestep_update!(scratch, t, t_params, moments, phi, 
     end
 
     adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms, total_points,
-                                       current_dt, error_norm_method, "", 0.0,
-                                       composition; electron=true,
-                                       local_max_dt=local_max_dt)
+                                       error_norm_method, "", 0.0, composition;
+                                       electron=true, local_max_dt=local_max_dt)
     if t_params.previous_dt[] == 0.0
         # Timestep failed, so reset  scratch[t_params.n_rk_stages+1] equal to
         # scratch[1] to start the timestep over.

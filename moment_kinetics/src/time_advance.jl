@@ -341,29 +341,15 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                 * "`write_after_fixed_step_count=true`.")
     end
 
-    t_shared = allocate_shared_float(1)
-    dt_shared = allocate_shared_float(1)
-    previous_dt_shared = allocate_shared_float(1)
-    next_output_time = allocate_shared_float(1)
-    dt_before_output = allocate_shared_float(1)
-    dt_before_last_fail = allocate_shared_float(1)
-    step_to_moments_output = allocate_shared_bool(1)
-    step_to_dfns_output = allocate_shared_bool(1)
-    write_moments_output = allocate_shared_bool(1)
-    write_dfns_output = allocate_shared_bool(1)
-    if block_rank[] == 0
-        t_shared[] = code_time
-        dt_shared[] = dt_reload === nothing ? t_input["dt"] : dt_reload
-        previous_dt_shared[] = dt_reload === nothing ? t_input["dt"] : dt_reload
-        next_output_time[] = 0.0
-        dt_before_output[] = dt_reload === nothing ? t_input["dt"] : dt_reload
-        dt_before_last_fail[] = dt_before_last_fail_reload === nothing ? Inf : dt_before_last_fail_reload
-        step_to_moments_output[] = false
-        step_to_dfns_output[] = false
-        write_moments_output[] = false
-        write_dfns_output[] = false
-    end
-    _block_synchronize()
+    t = Ref(code_time)
+    dt = Ref(dt_reload === nothing ? t_input["dt"] : dt_reload)
+    previous_dt = Ref(dt[])
+    dt_before_output = Ref(dt[])
+    dt_before_last_fail = Ref(dt_before_last_fail_reload === nothing ? Inf : dt_before_last_fail_reload)
+    step_to_moments_output = Ref(false)
+    step_to_dfns_output = Ref(false)
+    write_moments_output = Ref(false)
+    write_dfns_output = Ref(false)
 
     end_time = code_time + t_input["dt"] * t_input["nstep"]
     epsilon = 1.e-11
@@ -451,17 +437,16 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         cap_factor_ion_dt = Inf
         electron_t_params = electron
     end
-    return time_info(n_variables, t_input["nstep"], end_time, t_shared, dt_shared,
-                     previous_dt_shared, next_output_time, dt_before_output,
-                     dt_before_last_fail, CFL_prefactor, step_to_moments_output,
-                     step_to_dfns_output, write_moments_output, write_dfns_output, Ref(0),
-                     Ref(0), Ref{mk_float}(0.0), Ref(0), Ref(0), Ref(0), mk_int[],
-                     mk_int[], t_input["nwrite"], t_input["nwrite_dfns"],
-                     moments_output_times, dfns_output_times, t_input["type"], rk_coefs,
-                     rk_coefs_implicit, implicit_coefficient_is_zero, n_rk_stages,
-                     rk_order, adaptive, low_storage, t_input["rtol"], t_input["atol"],
-                     t_input["atol_upar"], t_input["step_update_prefactor"],
-                     t_input["max_increase_factor"],
+    return time_info(n_variables, t_input["nstep"], end_time, t, dt, previous_dt,
+                     dt_before_output, dt_before_last_fail, CFL_prefactor,
+                     step_to_moments_output, step_to_dfns_output, write_moments_output,
+                     write_dfns_output, Ref(0), Ref(0), Ref{mk_float}(0.0), Ref(0),
+                     Ref(0), Ref(0), mk_int[], mk_int[], t_input["nwrite"],
+                     t_input["nwrite_dfns"], moments_output_times, dfns_output_times,
+                     t_input["type"], rk_coefs, rk_coefs_implicit,
+                     implicit_coefficient_is_zero, n_rk_stages, rk_order, adaptive,
+                     low_storage, t_input["rtol"], t_input["atol"], t_input["atol_upar"],
+                     t_input["step_update_prefactor"], t_input["max_increase_factor"],
                      t_input["max_increase_factor_near_last_fail"],
                      t_input["last_fail_proximity_factor"], t_input["minimum_dt"],
                      t_input["maximum_dt"],
@@ -1809,10 +1794,7 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
                                        diagnostic_checks, t_params.step_counter[])
         end
         # update the time
-        @serial_region begin
-            t_params.t[] += t_params.previous_dt[]
-        end
-        _block_synchronize()
+        t_params.t[] += t_params.previous_dt[]
 
         if t_params.t[] ≥ t_params.end_time - epsilon ||
                 (t_params.write_after_fixed_step_count &&
@@ -1838,11 +1820,8 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
             write_moments = t_params.write_moments_output[] || finish_now
             write_dfns = t_params.write_dfns_output[] || finish_now
 
-            _block_synchronize()
-            @serial_region begin
-                t_params.write_moments_output[] = false
-                t_params.write_dfns_output[] = false
-            end
+            t_params.write_moments_output[] = false
+            t_params.write_dfns_output[] = false
         else
             write_moments = (t_params.step_counter[] % t_params.nwrite_moments == 0
                              || t_params.step_counter[] >= t_params.nstep
@@ -2536,11 +2515,6 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron,
     error_norms = error_norm_type[]
     total_points = mk_int[]
 
-    # Read the current dt here, so we only need one _block_synchronize() call for this and
-    # the begin_s_r_z_vperp_vpa_region()
-    current_dt = t_params.dt[]
-    _block_synchronize()
-
     # Test CFL conditions for advection in kinetic equation to give stability limit for
     # timestep
     #
@@ -2827,8 +2801,8 @@ function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron,
     end
 
     adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms, total_points,
-                                       current_dt, error_norm_method, success,
-                                       nl_max_its_fraction, composition)
+                                       error_norm_method, success, nl_max_its_fraction,
+                                       composition)
 
     if composition.electron_physics ∈ (kinetic_electrons,
                                        kinetic_electrons_with_temperature_equation)
