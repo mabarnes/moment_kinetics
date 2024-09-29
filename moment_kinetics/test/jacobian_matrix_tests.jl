@@ -225,7 +225,7 @@ end
 function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
     test_input = deepcopy(test_input)
     test_input["output"]["run_name"] *= "_electron_z_advection"
-    println("    electron_z_advection")
+    println("    - electron_z_advection")
 
     @testset "electron_z_advection" begin
         # Suppress console output while running
@@ -453,7 +453,7 @@ end
 function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
     test_input = deepcopy(test_input)
     test_input["output"]["run_name"] *= "_electron_vpa_advection"
-    println("    electron_vpa_advection")
+    println("    - electron_vpa_advection")
 
     @testset "electron_vpa_advection" begin
         # Suppress console output while running
@@ -721,7 +721,7 @@ end
 function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilon)^2)
     test_input = deepcopy(test_input)
     test_input["output"]["run_name"] *= "_contribution_from_electron_pdf_term"
-    println("    contribution_from_electron_pdf_term")
+    println("    - contribution_from_electron_pdf_term")
 
     @testset "contribution_from_electron_pdf_term" begin
         # Suppress console output while running
@@ -975,7 +975,7 @@ end
 function test_electron_dissipation_term(test_input; rtol=(3.0e0*epsilon)^2)
     test_input = deepcopy(test_input)
     test_input["output"]["run_name"] *= "_electron_dissipation_term"
-    println("    electron_dissipation_term")
+    println("    - electron_dissipation_term")
 
     @testset "electron_dissipation_term" begin
         # Suppress console output while running
@@ -1207,7 +1207,7 @@ end
 function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
     test_input = deepcopy(test_input)
     test_input["output"]["run_name"] *= "_electron_krook_collisions"
-    println("    electron_krook_collisions")
+    println("    - electron_krook_collisions")
 
     @testset "electron_krook_collisions" begin
         # Suppress console output while running
@@ -1445,7 +1445,7 @@ end
 function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
     test_input = deepcopy(test_input)
     test_input["output"]["run_name"] *= "_external_electron_source"
-    println("    external_electron_source")
+    println("    - external_electron_source")
 
     @testset "external_electron_source" begin
         # Suppress console output while running
@@ -1718,7 +1718,7 @@ end
 function test_electron_implicit_constraint_forcing(test_input; rtol=(1.5e0*epsilon))
     test_input = deepcopy(test_input)
     test_input["output"]["run_name"] *= "_electron_implicit_constraint_forcing"
-    println("    electron_implicit_constraint_forcing")
+    println("    - electron_implicit_constraint_forcing")
 
     @testset "electron_implicit_constraint_forcing" begin
         # Suppress console output while running
@@ -1953,7 +1953,7 @@ end
 function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
     test_input = deepcopy(test_input)
     test_input["output"]["run_name"] *= "_electron_energy_equation"
-    println("    electron_energy_equation")
+    println("    - electron_energy_equation")
 
     @testset "electron_energy_equation" begin
         # Suppress console output while running
@@ -2162,7 +2162,7 @@ end
 function test_ion_dt_forcing_of_electron_ppar(test_input; rtol=(1.5e1*epsilon)^2)
     test_input = deepcopy(test_input)
     test_input["output"]["run_name"] *= "_ion_dt_forcing_of_electron_ppar"
-    println("    ion_dt_forcing_of_electron_ppar")
+    println("    - ion_dt_forcing_of_electron_ppar")
 
     @testset "ion_dt_forcing_of_electron_ppar" begin
         # Suppress console output while running
@@ -2357,7 +2357,7 @@ end
 function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
     test_input = deepcopy(test_input)
     test_input["output"]["run_name"] *= "_electron_kinetic_equation"
-    println("    electron_kinetic_equation")
+    println("    - electron_kinetic_equation")
 
     @testset "electron_kinetic_equation" begin
         # Suppress console output while running
