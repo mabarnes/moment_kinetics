@@ -271,11 +271,6 @@ function run_test()
 end
 
 function runtests()
-    if Sys.isapple()
-        @testset_skip "MINPACK is broken on macOS (https://github.com/sglyon/MINPACK.jl/issues/18)" "non-linear solvers" begin
-        end
-        return nothing
-    end
     @testset "kinetic electrons" begin
         println("Kinetic electron tests")
         run_test()

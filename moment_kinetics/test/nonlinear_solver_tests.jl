@@ -272,18 +272,10 @@ function nonlinear_test()
 end
 
 function runtests()
-    if Sys.isapple()
-        @testset_skip "MINPACK is broken on macOS (https://github.com/sglyon/MINPACK.jl/issues/18)" "non-linear solvers" begin
-            println("non-linear solver tests")
-            linear_test()
-            nonlinear_test()
-        end
-    else
-        @testset "non-linear solvers" begin
-            println("non-linear solver tests")
-            linear_test()
-            nonlinear_test()
-        end
+    @testset "non-linear solvers" begin
+        println("non-linear solver tests")
+        linear_test()
+        nonlinear_test()
     end
 end
 
