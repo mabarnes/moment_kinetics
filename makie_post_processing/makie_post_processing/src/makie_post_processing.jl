@@ -8596,7 +8596,7 @@ function collisionality_plots(run_info, plot_prefix=nothing)
                 plot_1d(run_info[ri].z.grid, mfp[ri][:,1,1,end], label=run_label*"mfp", ax=ax[1])
             end
             Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
-                orientation=:vertical)
+                orientation=:horizontal)
             outfile = variable_prefix * "_vs_z.pdf"
             save(outfile, fig)
         end
@@ -8642,8 +8642,10 @@ function collisionality_plots(run_info, plot_prefix=nothing)
                 else
                     run_label = " "
                 end
-                plot_1d(run_info[ri].z.grid, braginskii_q[ri][:,1,1,end], xlabel="z",
-                        ylabel="values", label=run_label*"braginskii_q", ax=ax[1], title = "Braginskii heat flux overlay")
+                if get(run_info[ri].input["composition"], "ion_physics", "") !== braginskii_ions
+                    plot_1d(run_info[ri].z.grid, braginskii_q[ri][:,1,1,end], xlabel="z",
+                            ylabel="values", label=run_label*"braginskii_q", ax=ax[1], title = "Braginskii heat flux overlay")
+                end
                 plot_1d(run_info[ri].z.grid, original_q[ri][:,1,1,end], label=run_label*"original_q", ax=ax[1])
             end
             Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
@@ -8652,7 +8654,7 @@ function collisionality_plots(run_info, plot_prefix=nothing)
             save(outfile, fig)
         end
 
-        if input.animate_overlay_braginskii_heat_flux
+        if input.animate_overlay_braginskii_heat_flux 
             nt = length(mfp[1][1,1,1,:])
             variable_prefix = plot_prefix * "braginskii_vs_original_heat_flux"
             braginskii_q = get_variable(run_info, "braginskii_heat_flux")
@@ -8665,9 +8667,11 @@ function collisionality_plots(run_info, plot_prefix=nothing)
                 else
                     run_label = " "
                 end
-                animate_1d(run_info[ri].z.grid, braginskii_q[ri][:,1,1,:],
-                        frame_index=frame_index, xlabel="z", ylabel="values",
-                        label=run_label*"braginskii_q", ax=ax[1], title = "Braginskii heat flux overlay")
+                if get(run_info[ri].input["composition"], "ion_physics", "") !== braginskii_ions
+                    animate_1d(run_info[ri].z.grid, braginskii_q[ri][:,1,1,:],
+                            frame_index=frame_index, xlabel="z", ylabel="values",
+                            label=run_label*"braginskii_q", ax=ax[1], title = "Braginskii heat flux overlay")
+                end
                 animate_1d(run_info[ri].z.grid, original_q[ri][:,1,1,:],
                         frame_index=frame_index, xlabel="z", ylabel="values",
                         label=run_label*"original_q", ax=ax[1])
