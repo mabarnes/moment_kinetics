@@ -1129,6 +1129,7 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, has_rdim=t
     input = Dict_to_NamedTuple(input_dict_dfns[variable_name])
 
     is_neutral = variable_name ∈ neutral_dfn_variables
+    is_electron = variable_name ∈ electron_dfn_variables
 
     if is_neutral
         animate_dims = setdiff(neutral_dimensions, (:sn,))
@@ -1245,23 +1246,30 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, has_rdim=t
                 else
                     if input[Symbol(:plot, log, :_unnorm_vs_vpa)]
                         outfile = var_prefix * "unnorm_vs_vpa.pdf"
-                        plot_f_unnorm_vs_vpa(run_info; input=input, is=is, outfile=outfile,
-                                             yscale=yscale, transform=transform)
+                        plot_f_unnorm_vs_vpa(run_info; input=input, electron=is_electron,
+                                             is=is, outfile=outfile, yscale=yscale,
+                                             transform=transform)
                     end
                     if has_zdim && input[Symbol(:plot, log, :_unnorm_vs_vpa_z)]
                         outfile = var_prefix * "unnorm_vs_vpa_z.pdf"
-                        plot_f_unnorm_vs_vpa_z(run_info; input=input, is=is, outfile=outfile,
-                                               colorscale=yscale, transform=transform)
+                        plot_f_unnorm_vs_vpa_z(run_info; input=input,
+                                               electron=is_electron, is=is,
+                                               outfile=outfile, colorscale=yscale,
+                                               transform=transform)
                     end
                     if input[Symbol(:animate, log, :_unnorm_vs_vpa)]
                         outfile = var_prefix * "unnorm_vs_vpa." * input.animation_ext
-                        animate_f_unnorm_vs_vpa(run_info; input=input, is=is, outfile=outfile,
-                                                yscale=yscale, transform=transform)
+                        animate_f_unnorm_vs_vpa(run_info; input=input,
+                                                electron=is_electron, is=is,
+                                                outfile=outfile, yscale=yscale,
+                                                transform=transform)
                     end
                     if has_zdim && input[Symbol(:animate, log, :_unnorm_vs_vpa_z)]
                         outfile = var_prefix * "unnorm_vs_vpa_z." * input.animation_ext
-                        animate_f_unnorm_vs_vpa_z(run_info; input=input, is=is, outfile=outfile,
-                                                  colorscale=yscale, transform=transform)
+                        animate_f_unnorm_vs_vpa_z(run_info; input=input,
+                                                  electron=is_electron, is=is,
+                                                  outfile=outfile, colorscale=yscale,
+                                                  transform=transform)
                     end
                 end
                 check_moment_constraints(run_info, is_neutral; input=input, plot_prefix)
@@ -3801,9 +3809,9 @@ function calculate_steady_state_residual(run_info, variable_name; is=1, data=not
 end
 
 """
-    plot_f_unnorm_vs_vpa(run_info; input=nothing, neutral=false, it=nothing, is=1,
-                         iz=nothing, fig=nothing, ax=nothing, outfile=nothing,
-                         yscale=identity, transform=identity,
+    plot_f_unnorm_vs_vpa(run_info; input=nothing, electron=false, neutral=false,
+                         it=nothing, is=1, iz=nothing, fig=nothing, ax=nothing,
+                         outfile=nothing, yscale=identity, transform=identity,
                          axis_args=Dict{Symbol,Any}(), kwargs...)
 
 Plot an unnormalized distribution function against \$v_\\parallel\$ at a fixed z.
@@ -3815,8 +3823,9 @@ The information for the runs to plot is passed in `run_info` (as returned by
 [`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where plots
 from the different runs are overlayed on the same axis.
 
-By default plots the ion distribution function. If `neutrals=true` is passed, plots the
-neutral distribution function instead.
+By default plots the ion distribution function. If `electron=true` is passed, plots the
+electron distribution function instead. If `neutral=true` is passed, plots the neutral
+distribution function instead.
 
 `is` selects which species to analyse.
 
@@ -3848,8 +3857,9 @@ Any extra `kwargs` are passed to [`plot_1d`](@ref).
 """
 function plot_f_unnorm_vs_vpa end
 
-function plot_f_unnorm_vs_vpa(run_info::Tuple; f_over_vpa2=false, neutral=false,
-                              outfile=nothing, axis_args=Dict{Symbol,Any}(), kwargs...)
+function plot_f_unnorm_vs_vpa(run_info::Tuple; f_over_vpa2=false, electron=false,
+                              neutral=false, outfile=nothing,
+                              axis_args=Dict{Symbol,Any}(), kwargs...)
     try
         n_runs = length(run_info)
 
@@ -3859,8 +3869,8 @@ function plot_f_unnorm_vs_vpa(run_info::Tuple; f_over_vpa2=false, neutral=false,
         fig, ax = get_1d_ax(; xlabel=L"v_\parallel", ylabel=ylabel, axis_args...)
 
         for ri ∈ run_info
-            plot_f_unnorm_vs_vpa(ri; f_over_vpa2=f_over_vpa2, neutral=neutral, ax=ax,
-                                 kwargs...)
+            plot_f_unnorm_vs_vpa(ri; f_over_vpa2=f_over_vpa2, electron=electron,
+                                 neutral=neutral, ax=ax, kwargs...)
         end
 
         if n_runs > 1
@@ -3879,10 +3889,16 @@ function plot_f_unnorm_vs_vpa(run_info::Tuple; f_over_vpa2=false, neutral=false,
     end
 end
 
-function plot_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing, neutral=false,
-                              it=nothing, is=1, iz=nothing, fig=nothing, ax=nothing,
-                              outfile=nothing, transform=identity,
+function plot_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing, electron=false,
+                              neutral=false, it=nothing, is=1, iz=nothing, fig=nothing,
+                              ax=nothing, outfile=nothing, transform=identity,
                               axis_args=Dict{Symbol,Any}(), kwargs...)
+
+    if electron && neutral
+        error("does not make sense to pass electron=true and neutral=true at the same "
+              * "time")
+    end
+
     if input === nothing
         if neutral
             input = Dict_to_NamedTuple(input_dict_dfns["f_neutral"])
@@ -3901,7 +3917,7 @@ function plot_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing, neutra
     end
 
     if ax === nothing
-        species_label = neutral ? "n" : "i"
+        species_label = neutral ? "n" : electron ? "e" : "i"
         divide_by = f_over_vpa2 ? L"/v_\parallel^2" : ""
         ylabel = L"f_{%$species_label,\mathrm{unnormalized}}%$divide_by"
         fig, ax = get_1d_ax(; xlabel=L"v_\parallel", ylabel=ylabel, axis_args...)
@@ -3917,11 +3933,13 @@ function plot_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing, neutra
                            iz=iz)
         vcoord = run_info.vz
     else
-        f = get_variable(run_info, "f"; it=it, is=is, ir=input.ir0, iz=iz,
+        suffix = electron ? "_electron" : ""
+        prefix = electron ? "electron_" : ""
+        f = get_variable(run_info, "f$suffix"; it=it, is=is, ir=input.ir0, iz=iz,
                          ivperp=input.ivperp0)
-        density = get_variable(run_info, "density"; it=it, is=is, ir=input.ir0, iz=iz)
-        upar = get_variable(run_info, "parallel_flow"; it=it, is=is, ir=input.ir0, iz=iz)
-        vth = get_variable(run_info, "thermal_speed"; it=it, is=is, ir=input.ir0, iz=iz)
+        density = get_variable(run_info, "$(prefix)density"; it=it, is=is, ir=input.ir0, iz=iz)
+        upar = get_variable(run_info, "$(prefix)parallel_flow"; it=it, is=is, ir=input.ir0, iz=iz)
+        vth = get_variable(run_info, "$(prefix)thermal_speed"; it=it, is=is, ir=input.ir0, iz=iz)
         vcoord = run_info.vpa
     end
 
@@ -3967,10 +3985,10 @@ function plot_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing, neutra
 end
 
 """
-    plot_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, it=nothing, is=1,
-                           fig=nothing, ax=nothing, outfile=nothing, yscale=identity,
-                           transform=identity, rasterize=true, subtitles=nothing,
-                           axis_args=Dict{Symbol,Any}(), kwargs...)
+    plot_f_unnorm_vs_vpa_z(run_info; input=nothing, electron=false, neutral=false,
+                           it=nothing, is=1, fig=nothing, ax=nothing, outfile=nothing,
+                           yscale=identity, transform=identity, rasterize=true,
+                           subtitles=nothing, axis_args=Dict{Symbol,Any}(), kwargs...)
 
 Plot unnormalized distribution function against \$v_\\parallel\$ and z.
 
@@ -3981,8 +3999,9 @@ The information for the runs to plot is passed in `run_info` (as returned by
 [`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where plots
 from the different runs are displayed in a horizontal row.
 
-By default plots the ion distribution function. If `neutrals=true` is passed, plots the
-neutral distribution function instead.
+By default plots the ion distribution function. If `electron=true` is passed, plots the
+electron distribution function instead. If `neutral=true` is passed, plots the neutral
+distribution function instead.
 
 `is` selects which species to analyse.
 
@@ -4021,24 +4040,24 @@ Any extra `kwargs` are passed to [`plot_2d`](@ref).
 """
 function plot_f_unnorm_vs_vpa_z end
 
-function plot_f_unnorm_vs_vpa_z(run_info::Tuple; neutral=false, outfile=nothing,
-                                axis_args=Dict{Symbol,Any}(), title=nothing,
-                                subtitles=nothing, kwargs...)
+function plot_f_unnorm_vs_vpa_z(run_info::Tuple; electron=false, neutral=false,
+                                outfile=nothing, axis_args=Dict{Symbol,Any}(),
+                                title=nothing, subtitles=nothing, kwargs...)
     try
         n_runs = length(run_info)
         if subtitles === nothing
             subtitles = Tuple(nothing for _ ∈ 1:n_runs)
         end
         if title !== nothing
-            title = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+            title = neutral ? L"f_{n,\mathrm{unnormalized}}" : electron ? L"f_{e,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
         end
         fig, axes, colorbar_places =
             get_2d_ax(n_runs; title=title, xlabel=L"v_\parallel", ylabel=L"z",
                       axis_args...)
 
         for (ri, ax, colorbar_place, st) ∈ zip(run_info, axes, colorbar_places, subtitles)
-            plot_f_unnorm_vs_vpa_z(ri; neutral=neutral, ax=ax, colorbar_place=colorbar_place,
-                                   title=st, kwargs...)
+            plot_f_unnorm_vs_vpa_z(ri; electron=electron, neutral=neutral, ax=ax,
+                                   colorbar_place=colorbar_place, title=st, kwargs...)
         end
 
         if outfile !== nothing
@@ -4053,10 +4072,17 @@ function plot_f_unnorm_vs_vpa_z(run_info::Tuple; neutral=false, outfile=nothing,
     end
 end
 
-function plot_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, it=nothing, is=1,
-                                fig=nothing, ax=nothing, colorbar_place=nothing, title=nothing,
-                                outfile=nothing, transform=identity, rasterize=true,
+function plot_f_unnorm_vs_vpa_z(run_info; input=nothing, electron=false, neutral=false,
+                                it=nothing, is=1, fig=nothing, ax=nothing,
+                                colorbar_place=nothing, title=nothing, outfile=nothing,
+                                transform=identity, rasterize=true,
                                 axis_args=Dict{Symbol,Any}(), kwargs...)
+
+    if electron && neutral
+        error("does not make sense to pass electron=true and neutral=true at the same "
+              * "time")
+    end
+
     if input === nothing
         if neutral
             input = Dict_to_NamedTuple(input_dict_dfns["f_neutral"])
@@ -4073,7 +4099,7 @@ function plot_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, it=nothi
 
     if ax === nothing
         if title === nothing
-            title = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+            title = neutral ? L"f_{n,\mathrm{unnormalized}}" : electron ? L"f_{e,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
         end
         fig, ax, colorbar_place = get_2d_ax(; title=title, xlabel=L"v_\parallel",
                                             ylabel=L"z", axis_args...)
@@ -4093,10 +4119,12 @@ function plot_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, it=nothi
         vth = get_variable(run_info, "thermal_speed_neutral"; it=it, is=is, ir=input.ir0)
         vpa_grid = run_info.vz.grid
     else
-        f = get_variable(run_info, "f"; it=it, is=is, ir=input.ir0, ivperp=input.ivperp0)
-        density = get_variable(run_info, "density"; it=it, is=is, ir=input.ir0)
-        upar = get_variable(run_info, "parallel_flow"; it=it, is=is, ir=input.ir0)
-        vth = get_variable(run_info, "thermal_speed"; it=it, is=is, ir=input.ir0)
+        suffix = electron ? "_electron" : ""
+        prefix = electron ? "electron_" : ""
+        f = get_variable(run_info, "f$suffix"; it=it, is=is, ir=input.ir0, ivperp=input.ivperp0)
+        density = get_variable(run_info, "$(prefix)density"; it=it, is=is, ir=input.ir0)
+        upar = get_variable(run_info, "$(prefix)parallel_flow"; it=it, is=is, ir=input.ir0)
+        vth = get_variable(run_info, "$(prefix)thermal_speed"; it=it, is=is, ir=input.ir0)
         vpa_grid = run_info.vpa.grid
     end
 
@@ -4128,8 +4156,8 @@ function plot_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, it=nothi
 end
 
 """
-    animate_f_unnorm_vs_vpa(run_info; input=nothing, neutral=false, is=1, iz=nothing,
-                            fig=nothing, ax=nothing, frame_index=nothing,
+    animate_f_unnorm_vs_vpa(run_info; input=nothing, electron=false, neutral=false, is=1,
+                            iz=nothing, fig=nothing, ax=nothing, frame_index=nothing,
                             outfile=nothing, yscale=identity, transform=identity,
                             axis_args=Dict{Symbol,Any}(), kwargs...)
 
@@ -4142,8 +4170,9 @@ The information for the runs to animate is passed in `run_info` (as returned by
 [`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where plots
 from the different runs are overlayed on the same axis.
 
-By default animates the ion distribution function. If `neutrals=true` is passed, animates
-the neutral distribution function instead.
+By default animates the ion distribution function. If `electron=true` is passed, animates
+the electron distribution function instead. If `neutral=true` is passed, animates the
+neutral distribution function instead.
 
 `is` selects which species to analyse.
 
@@ -4178,14 +4207,15 @@ to handle time-varying coordinates so cannot use [`animate_1d`](@ref)).
 """
 function animate_f_unnorm_vs_vpa end
 
-function animate_f_unnorm_vs_vpa(run_info::Tuple; f_over_vpa2=false, neutral=false,
-                                 outfile=nothing, axis_args=Dict{Symbol,Any}(), kwargs...)
+function animate_f_unnorm_vs_vpa(run_info::Tuple; f_over_vpa2=false, electron=false,
+                                 neutral=false, outfile=nothing,
+                                 axis_args=Dict{Symbol,Any}(), kwargs...)
     try
         n_runs = length(run_info)
 
         frame_index = Observable(1)
 
-        species_label = neutral ? "n" : "i"
+        species_label = neutral ? "n" : electron ? "e" : "i"
         divide_by = f_over_vpa2 ? L"/v_\parallel^2" : ""
         ylabel = L"f_{%$species_label,\mathrm{unnormalized}}%$divide_by"
         if length(run_info) == 1 || all(all(isapprox.(ri.time, run_info[1].time)) for ri ∈ run_info[2:end])
@@ -4200,8 +4230,9 @@ function animate_f_unnorm_vs_vpa(run_info::Tuple; f_over_vpa2=false, neutral=fal
                             axis_args...)
 
         for ri ∈ run_info
-            animate_f_unnorm_vs_vpa(ri; f_over_vpa2=f_over_vpa2, neutral=neutral, ax=ax,
-                                    frame_index=frame_index, kwargs...)
+            animate_f_unnorm_vs_vpa(ri; f_over_vpa2=f_over_vpa2, electron=electron,
+                                    neutral=neutral, ax=ax, frame_index=frame_index,
+                                    kwargs...)
         end
 
         if n_runs > 1
@@ -4222,10 +4253,16 @@ function animate_f_unnorm_vs_vpa(run_info::Tuple; f_over_vpa2=false, neutral=fal
 end
 
 function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
-                                 neutral=false, is=1, iz=nothing, fig=nothing, ax=nothing,
-                                 frame_index=nothing, outfile=nothing, yscale=nothing,
-                                 transform=identity, axis_args=Dict{Symbol,Any}(),
-                                 kwargs...)
+                                 electron=false, neutral=false, is=1, iz=nothing,
+                                 fig=nothing, ax=nothing, frame_index=nothing,
+                                 outfile=nothing, yscale=nothing, transform=identity,
+                                 axis_args=Dict{Symbol,Any}(), kwargs...)
+
+    if electron && neutral
+        error("does not make sense to pass electron=true and neutral=true at the same "
+              * "time")
+    end
+
     if input === nothing
         if neutral
             input = Dict_to_NamedTuple(input_dict_dfns["f_neutral"])
@@ -4262,12 +4299,14 @@ function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
         vth = get_variable(run_info, "thermal_speed_neutral"; is=is, ir=input.ir0, iz=iz)
         vcoord = run_info.vz
     else
-        f = VariableCache(run_info, "f", chunk_size_2d; it=nothing, is=is, ir=input.ir0, iz=iz,
-                          ivperp=input.ivperp0, ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                          ivz=nothing)
-        density = get_variable(run_info, "density"; is=is, ir=input.ir0, iz=iz)
-        upar = get_variable(run_info, "parallel_flow"; is=is, ir=input.ir0, iz=iz)
-        vth = get_variable(run_info, "thermal_speed"; is=is, ir=input.ir0, iz=iz)
+        suffix = electron ? "_electron" : ""
+        prefix = electron ? "electron_" : ""
+        f = VariableCache(run_info, "f$suffix", chunk_size_2d; it=nothing, is=is,
+                          ir=input.ir0, iz=iz, ivperp=input.ivperp0, ivpa=nothing,
+                          ivzeta=nothing, ivr=nothing, ivz=nothing)
+        density = get_variable(run_info, "$(prefix)density"; is=is, ir=input.ir0, iz=iz)
+        upar = get_variable(run_info, "$(prefix)parallel_flow"; is=is, ir=input.ir0, iz=iz)
+        vth = get_variable(run_info, "$(prefix)thermal_speed"; is=is, ir=input.ir0, iz=iz)
         vcoord = run_info.vpa
     end
 
@@ -4351,8 +4390,8 @@ function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
 end
 
 """
-    animate_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, is=1,
-                              fig=nothing, ax=nothing, frame_index=nothing,
+    animate_f_unnorm_vs_vpa_z(run_info; input=nothing, electron=false, neutral=false,
+                              is=1, fig=nothing, ax=nothing, frame_index=nothing,
                               outfile=nothing, yscale=identity, transform=identity,
                               axis_args=Dict{Symbol,Any}(), kwargs...)
 
@@ -4365,8 +4404,9 @@ The information for the runs to plot is passed in `run_info` (as returned by
 [`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where plots
 from the different runs are displayed in a horizontal row.
 
-By default animates the ion distribution function. If `neutrals=true` is passed, animates
-the neutral distribution function instead.
+By default animates the ion distribution function. If `electron=true` is passed, animates
+the electron distribution function instead. If `neutral=true` is passed, animates the
+neutral distribution function instead.
 
 `is` selects which species to analyse.
 
@@ -4398,14 +4438,15 @@ we have to handle time-varying coordinates so cannot use [`animate_2d`](@ref)).
 """
 function animate_f_unnorm_vs_vpa_z end
 
-function animate_f_unnorm_vs_vpa_z(run_info::Tuple; neutral=false, outfile=nothing,
-                                   axis_args=Dict{Symbol,Any}(), kwargs...)
+function animate_f_unnorm_vs_vpa_z(run_info::Tuple; electron=false, neutral=false,
+                                   outfile=nothing, axis_args=Dict{Symbol,Any}(),
+                                   kwargs...)
     try
         n_runs = length(run_info)
 
         frame_index = Observable(1)
 
-        var_name = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        var_name = neutral ? L"f_{n,\mathrm{unnormalized}}" : electron ? L"f_{e,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
         if length(run_info) > 1
             title = var_name
             subtitles = (lift(i->LaTeXString(string(ri.run_name, "\nt = ", ri.time[i])),
@@ -4422,7 +4463,7 @@ function animate_f_unnorm_vs_vpa_z(run_info::Tuple; neutral=false, outfile=nothi
                                                axis_args...)
 
         for (ri, ax, colorbar_place) ∈ zip(run_info, axes, colorbar_places)
-            animate_f_unnorm_vs_vpa_z(ri; neutral=neutral, ax=ax,
+            animate_f_unnorm_vs_vpa_z(ri; electron=electron, neutral=neutral, ax=ax,
                                       colorbar_place=colorbar_place, frame_index=frame_index,
                                       kwargs...)
         end
@@ -4440,11 +4481,17 @@ function animate_f_unnorm_vs_vpa_z(run_info::Tuple; neutral=false, outfile=nothi
     end
 end
 
-function animate_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, is=1,
-                                   fig=nothing, ax=nothing, colorbar_place=nothing,
+function animate_f_unnorm_vs_vpa_z(run_info; input=nothing, electron=false, neutral=false,
+                                   is=1, fig=nothing, ax=nothing, colorbar_place=nothing,
                                    frame_index=nothing, outfile=nothing,
                                    transform=identity, axis_args=Dict{Symbol,Any}(),
                                    kwargs...)
+
+    if electron && neutral
+        error("does not make sense to pass electron=true and neutral=true at the same "
+              * "time")
+    end
+
     if input === nothing
         if neutral
             input = Dict_to_NamedTuple(input_dict_dfns["f_neutral"])
@@ -4482,17 +4529,19 @@ function animate_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, is=1,
                             ivzeta=nothing, ivr=nothing, ivz=nothing)
         vpa_grid = run_info.vz.grid
     else
-        f = VariableCache(run_info, "f", chunk_size_2d; it=nothing, is=is, ir=input.ir0,
-                          iz=nothing, ivperp=input.ivperp0, ivpa=nothing, ivzeta=nothing,
-                          ivr=nothing, ivz=nothing)
-        density = VariableCache(run_info, "density", chunk_size_1d; it=nothing, is=is,
-                                ir=input.ir0, iz=nothing, ivperp=nothing, ivpa=nothing,
-                                ivzeta=nothing, ivr=nothing, ivz=nothing)
-        upar = VariableCache(run_info, "parallel_flow", chunk_size_1d; it=nothing, is=is,
-                             ir=input.ir0, iz=nothing, ivperp=nothing, ivpa=nothing,
-                             ivzeta=nothing, ivr=nothing, ivz=nothing)
-        vth = VariableCache(run_info, "thermal_speed", chunk_size_1d; it=nothing, is=is,
-                            ir=input.ir0, iz=nothing, ivperp=nothing, ivpa=nothing,
+        suffix = electron ? "_electron" : ""
+        prefix = electron ? "electron_" : ""
+        f = VariableCache(run_info, "f$suffix", chunk_size_2d; it=nothing, is=is,
+                          ir=input.ir0, iz=nothing, ivperp=input.ivperp0, ivpa=nothing,
+                          ivzeta=nothing, ivr=nothing, ivz=nothing)
+        density = VariableCache(run_info, "$(prefix)density", chunk_size_1d; it=nothing,
+                                is=is, ir=input.ir0, iz=nothing, ivperp=nothing,
+                                ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing)
+        upar = VariableCache(run_info, "$(prefix)parallel_flow", chunk_size_1d;
+                             it=nothing, is=is, ir=input.ir0, iz=nothing, ivperp=nothing,
+                             ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing)
+        vth = VariableCache(run_info, "$(prefix)thermal_speed", chunk_size_1d; it=nothing,
+                            is=is, ir=input.ir0, iz=nothing, ivperp=nothing, ivpa=nothing,
                             ivzeta=nothing, ivr=nothing, ivz=nothing)
         vpa_grid = run_info.vpa.grid
     end
