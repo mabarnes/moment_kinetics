@@ -8358,6 +8358,7 @@ function collisionality_plots(run_info, plot_prefix=nothing)
         L_n = get_variable(run_info, "L_n")
         L_upar = get_variable(run_info, "L_upar")
 
+        # write function to check that mfp[ri][1, 1, 1, :] is the same length (i.e. nt) for all ri 
         if input.plot_mfp_vs_z
             variable_name = "mean_free_path"
             variable = mfp
@@ -8644,7 +8645,7 @@ function collisionality_plots(run_info, plot_prefix=nothing)
                 end
                 if get(run_info[ri].input["composition"], "ion_physics", "") !== braginskii_ions
                     plot_1d(run_info[ri].z.grid, braginskii_q[ri][:,1,1,end], xlabel="z",
-                            ylabel="values", label=run_label*"braginskii_q", ax=ax[1], title = "Braginskii heat flux overlay")
+                            ylabel="values", label=run_label*"braginskii_q_overlay", ax=ax[1], title = "Braginskii heat flux overlay")
                 end
                 plot_1d(run_info[ri].z.grid, original_q[ri][:,1,1,end], label=run_label*"original_q", ax=ax[1])
             end
@@ -8670,7 +8671,7 @@ function collisionality_plots(run_info, plot_prefix=nothing)
                 if get(run_info[ri].input["composition"], "ion_physics", "") !== braginskii_ions
                     animate_1d(run_info[ri].z.grid, braginskii_q[ri][:,1,1,:],
                             frame_index=frame_index, xlabel="z", ylabel="values",
-                            label=run_label*"braginskii_q", ax=ax[1], title = "Braginskii heat flux overlay")
+                            label=run_label*"braginskii_q_overlay", ax=ax[1], title = "Braginskii heat flux overlay")
                 end
                 animate_1d(run_info[ri].z.grid, original_q[ri][:,1,1,:],
                         frame_index=frame_index, xlabel="z", ylabel="values",
