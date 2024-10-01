@@ -279,6 +279,8 @@ Base.@kwdef struct species_composition
     # gyrokinetic_ions = true -> use gyroaveraged fields at fixed guiding centre and moments of the pdf computed at fixed r
     # gyrokinetic_ions = false -> use drift kinetic approximation
     gyrokinetic_ions::Bool
+    # zero_electric_field = true -> force Ez = Er = 0
+    zero_electric_field::Bool
     # array of structs of parameters for each ion species
     ion::Vector{ion_species_parameters}
     # array of structs of parameters for each neutral species
