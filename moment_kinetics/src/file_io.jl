@@ -1322,13 +1322,13 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
     io_ppar = create_dynamic_variable!(dynamic, "parallel_pressure", mk_float, z, r,
                                        n_ion_species_coord; parallel_io=parallel_io,
                                        description="ion species parallel pressure",
-                                       units="n_ref*T_ref")
+                                       units="n_ref*m_ref*c_ref^2")
     if write_error_diagnostics
         io_ppar_loworder =
             create_dynamic_variable!(dynamic, "parallel_pressure_loworder", mk_float, z, r,
                                      n_ion_species_coord; parallel_io=parallel_io,
                                      description="low-order approximation to ion species parallel pressure, used to diagnose timestepping error",
-                                     units="n_ref*T_ref")
+                                     units="n_ref*m_ref*c_ref^2")
     else
         io_ppar_loworder = nothing
     end
@@ -1338,7 +1338,7 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
                                      mk_float, z, r, n_ion_species_coord;
                                      parallel_io=parallel_io,
                                      description="ion species parallel pressure at the start of the last timestep before output, used to measure steady state residual",
-                                     units="n_ref*T_ref")
+                                     units="n_ref*m_ref*c_ref^2")
     else
         io_ppar_start_last_timestep = nothing
     end
@@ -1347,13 +1347,13 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
     io_pperp = create_dynamic_variable!(dynamic, "perpendicular_pressure", mk_float, z, r,
                                         n_ion_species_coord; parallel_io=parallel_io,
                                         description="ion species perpendicular pressure",
-                                        units="n_ref*T_ref")
+                                        units="n_ref*m_ref*c_ref^2")
     if write_error_diagnostics
         io_pperp_loworder =
             create_dynamic_variable!(dynamic, "perpendicular_pressure_loworder", mk_float,
                                      z, r, n_ion_species_coord; parallel_io=parallel_io,
                                      description="low-order approximation to ion species perpendicular pressure, used to diagnose timestepping error",
-                                     units="n_ref*T_ref")
+                                     units="n_ref*m_ref*c_ref^2")
     else
         io_pperp_loworder = nothing
     end
@@ -1363,7 +1363,7 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
                                      mk_float, z, r, n_ion_species_coord;
                                      parallel_io=parallel_io,
                                      description="ion species perpendicular pressure at the start of the last timestep before output, used to measure steady state residual",
-                                     units="n_ref*T_ref")
+                                     units="n_ref*m_ref*c_ref^2")
     else
         io_pperp_start_last_timestep = nothing
     end
