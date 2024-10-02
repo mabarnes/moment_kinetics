@@ -1011,6 +1011,60 @@ function calculate_electron_moment_derivatives!(moments, scratch, scratch_dummy,
 end
 
 """
+Calculate spatial derivatives of the electron moments.
+
+This version, for use in implicit solvers for electrons, works with a single point in `r`,
+given by `ir`.
+"""
+function calculate_electron_moment_derivatives_no_r!(moments, scratch, scratch_dummy, z,
+                                                     z_spectral, electron_mom_diss_coeff,
+                                                     ir)
+    begin_serial_region()
+
+    dens = @view scratch.electron_density[:,ir]
+    upar = @view scratch.electron_upar[:,ir]
+    ppar = @view scratch.electron_ppar[:,ir]
+    qpar = @view moments.electron.qpar[:,ir]
+    vth = @view moments.electron.vth[:,ir]
+    dummy_z = @view scratch_dummy.dummy_zrs[:,ir,1]
+    buffer_1 = @view scratch_dummy.buffer_rs_1[ir,1]
+    buffer_2 = @view scratch_dummy.buffer_rs_2[ir,1]
+    buffer_3 = @view scratch_dummy.buffer_rs_3[ir,1]
+    buffer_4 = @view scratch_dummy.buffer_rs_4[ir,1]
+
+    @views derivative_z!(moments.electron.dupar_dz[:,ir], upar, buffer_1, buffer_2,
+                         buffer_3, buffer_4, z_spectral, z)
+
+    # centred second derivative for dissipation
+    if electron_mom_diss_coeff > 0.0
+        derivative_z!(dummy_z, ppar, buffer_1, buffer_2, buffer_3, buffer_4,
+                      z_spectral, z)
+        @views derivative_z!(moments.electron.d2ppar_dz2[:,ir], dummy_z, buffer_1,
+                             buffer_2, buffer_3, buffer_4, z_spectral, z)
+    end
+
+    @views derivative_z!(moments.electron.ddens_dz[:,ir], dens, buffer_1, buffer_2,
+                         buffer_3, buffer_4, z_spectral, z)
+    @views derivative_z!(moments.electron.dppar_dz[:,ir], ppar, buffer_1, buffer_2,
+                         buffer_3, buffer_4, z_spectral, z)
+    @views derivative_z!(moments.electron.dqpar_dz[:,ir], qpar, buffer_1, buffer_2,
+                         buffer_3, buffer_4, z_spectral, z)
+    @views derivative_z!(moments.electron.dvth_dz[:,ir], vth, buffer_1, buffer_2,
+                         buffer_3, buffer_4, z_spectral, z)
+    # calculate the zed derivative of the electron temperature
+    begin_z_region()
+    @loop_z iz begin
+        # store the temperature in dummy_zr
+        dummy_z[iz] = 2*ppar[iz,ir]/dens[iz,ir]
+    end
+    begin_serial_region()
+    @views derivative_z!(moments.electron.dT_dz[:,ir], dummy_z, buffer_1, buffer_2,
+                         buffer_3, buffer_4, z_spectral, z)
+    @views derivative_z!(moments.electron.dvth_dz[:,ir], moments.electron.vth[:,ir],
+                         buffer_1, buffer_2, buffer_3, buffer_4, z_spectral, z)
+end
+
+"""
 update velocity moments of the evolved neutral pdf
 """
 function update_moments_neutral!(moments, pdf, vz, vr, vzeta, z, r, composition)

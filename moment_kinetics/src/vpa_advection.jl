@@ -140,7 +140,9 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, z_advect, vpa_
             f_old = vpa.scratch7 .= f_old_no_bc
             apply_bc!(f_old)
 
-            #if nl_solver_params.stage_counter[] % nl_solver_params.preconditioner_update_interval == 0
+            #if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
+            #    nl_solver_params.solves_since_precon_update[] = 0
+
             #    advection_matrix = allocate_float(vpa.n, vpa.n)
             #    advection_matrix .= 0.0
             #    for i ∈ 1:vpa.nelement_local
@@ -308,8 +310,6 @@ function implicit_vpa_advection!(f_out, fvec_in, fields, moments, z_advect, vpa_
             end
         end
     end
-
-    nl_solver_params.stage_counter[] += 1
 
     return true
 end

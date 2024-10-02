@@ -200,6 +200,70 @@ function setup_runge_kutta_coefficients!(type, input_CFL_prefactor, split_operat
         else
             CFL_prefactor = input_CFL_prefactor
         end
+    elseif type == "PareschiRusso2(2,2,2)"
+        # 2nd-order, 2-stage IMEX method 'IMEX-SSP2(2,2,2)' from Pareschi & Russo 2005, Table II
+        # (https://doi.org/10.1007/s10915-004-4636-4)
+        rk_coefs = mk_float[-0.4142135623730950488016887242096980785696718753769480731766797379907324784621711 -0.5                                                                             ;
+                             0.9999999999999999999999999999999999999999999999999999999999999999999999999999827 -1.207106781186547524400844362104849039284835937688474036588339868995366239231094;
+                            -0.0                                                                                0.5                                                                             ]
+        rk_coefs_implicit = mk_float[ 0.2928932188134524755991556378951509607151640623115259634116601310046337607689404 0.4142135623730950488016887242096980785696718753769480731766797379907324784621883 1.0;
+                                     -0.0                                                                               0.2928932188134524755991556378951509607151640623115259634116601310046337607689404 1.207106781186547524400844362104849039284835937688474036588339868995366239231094]
+        implicit_coefficient_is_zero = Bool[false, false]
+        n_rk_stages = 2
+        rk_order = 2
+        adaptive = false
+        low_storage = false
+        CFL_prefactor = NaN
+    elseif type == "PareschiRusso2(3,2,2)"
+# 2nd-order, 3-stage IMEX method 'IMEX-SSP2(3,2,2)' from Pareschi & Russo 2005, Table III
+# (https://doi.org/10.1007/s10915-004-4636-4)
+        rk_coefs = mk_float[2 -1 -1//2;
+                            0  0  0   ;
+                            0  1 -1//2;
+                            0  0  1//2]
+        rk_coefs_implicit = mk_float[1//2 -1    1    1//2;
+                                     0     1//2 0    1//2;
+                                     0     0    1//2 1//2]
+        implicit_coefficient_is_zero = Bool[false, false, false]
+        n_rk_stages = 3
+        rk_order = 2
+        adaptive = false
+        low_storage = false
+        CFL_prefactor = NaN
+    elseif type == "PareschiRusso2(3,3,2)"
+        # 2nd-order, 3-stage IMEX method 'IMEX-SSP2(3,2,2)' from Pareschi & Russo 2005, Table III
+        # (https://doi.org/10.1007/s10915-004-4636-4)
+        rk_coefs = mk_float[1    -4//3 -1//9;
+                            1//2 -1//3 -4//9;
+                            0     1//2 -1//3;
+                            0     0     1//3]
+        rk_coefs_implicit = mk_float[1//4 -1//2 4//3 4//9;
+                                     0     1//4 5//6 4//9;
+                                     0     0    1//3 2//3]
+        implicit_coefficient_is_zero = Bool[false, false, false]
+        n_rk_stages = 3
+        rk_order = 2
+        adaptive = false
+        low_storage = false
+        CFL_prefactor = NaN
+    elseif type == "PareschiRusso3(4,3,3)"
+        # 3rd-order, 4-stage IMEX method 'IMEX-SSP3(4,3,3)' from Pareschi & Russo 2005, Table VI
+        # (https://doi.org/10.1007/s10915-004-4636-4)
+        rk_coefs = mk_float[ 2.0 -5.27491721763532  0.9999999999999688     -0.1666666666666453;
+                            -0.0  0.0               1.4589197899688663e-17  0.0               ;
+                            -0.0  1.0              -0.0343646522044047     -0.500000000000007 ;
+                            -0.0 -0.0               0.25                   -2.091639072545107 ;
+                            -0.0 -0.0              -0.0                     0.6666666666666664]
+        rk_coefs_implicit = mk_float[ 0.24169426078821 -1.0               3.13745860881766  1.0436096431476471e-14 0.16666666666665975;
+                                     -0.0               0.24169426078821  2.13745860881766 -0.24999999999997924    0.3333333333333193 ;
+                                     -0.0              -0.0               0.24169426078821  0.034364652204404655   0.500000000000007  ;
+                                     -0.0              -0.0              -0.0               0.24169426078821       2.0916390725451066 ]
+        implicit_coefficient_is_zero = Bool[false, false, false, false]
+        n_rk_stages = 4
+        rk_order = 3
+        adaptive = false
+        low_storage = false
+        CFL_prefactor = NaN
     elseif type == "SSPRK4"
         n_rk_stages = 4
         rk_coefs = allocate_float(3, n_rk_stages)
@@ -993,51 +1057,53 @@ end
 
 """
     adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
-                                       total_points, current_dt, error_norm_method,
-                                       success, nl_max_its_fraction)
+                                       total_points, error_norm_method, success,
+                                       nl_max_its_fraction, composition;
+                                       electron=false, local_max_dt::mk_float=Inf)
 
 Use the calculated `CFL_limits` and `error_norms` to update the timestep in `t_params`.
 """
 function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
-                                            total_points, current_dt, error_norm_method,
-                                            success, nl_max_its_fraction, composition;
+                                            total_points, error_norm_method, success,
+                                            nl_max_its_fraction, composition;
                                             electron=false, local_max_dt::mk_float=Inf)
     # Get global minimum of CFL limits
-    CFL_limit = nothing
+    CFL_limit = Ref(0.0)
     this_limit_caused_by = nothing
     @serial_region begin
         # Get maximum error over all blocks
         CFL_limits = MPI.Allreduce(CFL_limits, min, comm_inter_block[])
         CFL_limit_caused_by = argmin(CFL_limits)
-        CFL_limit = CFL_limits[CFL_limit_caused_by]
+        CFL_limit[] = CFL_limits[CFL_limit_caused_by]
         # Reserve first four entries of t_params.limit_caused_by for max_increase_factor,
         # max_increase_factor_near_fail, minimum_dt, maximum_dt limits and
         # high_nl_iterations, then the next `n_variables` for RK accuracy limits.
         this_limit_caused_by = CFL_limit_caused_by + 5 + t_params.n_variables
     end
+    MPI.Bcast!(CFL_limit, comm_block[])
 
     if error_norm_method == "Linf"
         # Get overall maximum error on the shared-memory block
-        error_norms = MPI.Reduce(error_norms, max, comm_block[]; root=0)
+        MPI.Reduce!(error_norms, max, comm_block[]; root=0)
 
-        error_norm = nothing
+        error_norm = Ref{mk_float}(0.0)
         max_error_variable_index = -1
         @serial_region begin
             # Get maximum error over all blocks
-            error_norms = MPI.Allreduce(error_norms, max, comm_inter_block[])
+            MPI.Allreduce!(error_norms, max, comm_inter_block[])
             max_error_variable_index = argmax(error_norms)
-            error_norm = error_norms[max_error_variable_index]
+            error_norm[] = error_norms[max_error_variable_index]
         end
-        error_norm = MPI.bcast(error_norm, 0, comm_block[])
+        MPI.Bcast!(error_norm, 0, comm_block[])
     elseif error_norm_method == "L2"
         # Get overall maximum error on the shared-memory block
-        error_norms = MPI.Reduce(error_norms, +, comm_block[]; root=0)
+        MPI.Reduce!(error_norms, +, comm_block[]; root=0)
 
-        error_norm = nothing
+        error_norm = Ref{mk_float}(0.0)
         max_error_variable_index = -1
         @serial_region begin
             # Get maximum error over all blocks
-            error_norms = MPI.Allreduce(error_norms, +, comm_inter_block[])
+            MPI.Allreduce!(error_norms, +, comm_inter_block[])
 
             # So far `error_norms` is the sum of squares of the errors. Now that summation
             # is finished, need to divide by total number of points and take square-root.
@@ -1046,13 +1112,13 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
             # Weight the error from each variable equally by taking the mean, so the
             # larger number of points in the distribution functions does not mean that
             # error on the moments is ignored.
-            error_norm = mean(error_norms)
+            error_norm[] = mean(error_norms)
 
             # Record which variable had the maximum error
             max_error_variable_index = argmax(error_norms)
         end
 
-        error_norm = MPI.bcast(error_norm, 0, comm_block[])
+        MPI.Bcast!(error_norm, 0, comm_block[])
     else
         error("Unrecognized error_norm_method '$method'")
     end
@@ -1060,240 +1126,240 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
     if success != ""
         # Iteration failed in implicit part of timestep try decreasing timestep
 
-        @serial_region begin
-            t_params.failure_counter[] += 1
+        t_params.failure_counter[] += 1
 
-            if t_params.previous_dt[] > 0.0
-                # If previous_dt=0, the previous step was also a failure so only update
-                # dt_before_last_fail when previous_dt>0
-                t_params.dt_before_last_fail[] = t_params.previous_dt[]
-            end
-
-            # Decrease timestep by 1/2 - this factor should probably be settable!
-            # Note when nonlinear solve iteration fails, we do not enforce
-            # minimum_dt, as the timesolver must error if we do not decrease dt.
-            if t_params.dt[] > t_params.minimum_dt
-                # ...but try decreasing just to minimum_dt first, if the dt is still
-                # bigger than this.
-                t_params.dt[] = max(t_params.dt[] / 2.0, t_params.minimum_dt)
-            else
-                t_params.dt[] = t_params.dt[] / 2.0
-            end
-
-            # Don't update the simulation time, as this step failed
-            t_params.previous_dt[] = 0.0
-
-            # Call the 'cause' of the timestep failure the variable that has the biggest
-            # error norm here.
-            # Could do with a better way to sort the different possible types of
-            # convergence failure...
-            if t_params.rk_coefs_implicit !== nothing &&
-                    composition.electron_physics ∈ (kinetic_electrons,
-                                                    kinetic_electrons_with_temperature_equation)
-                if success == "nonlinear-solver"
-                    t_params.failure_caused_by[end-1] += 1
-                elseif success == "kinetic-electrons"
-                    t_params.failure_caused_by[end] += 1
-                else
-                    error("Unrecognised cause of convergence failure: \"$success\"")
-                end
-            else
-                t_params.failure_caused_by[end] += 1
-            end
-
-            # If we were trying to take a step to the output timestep, dt will be smaller on
-            # the re-try, so will not reach the output time.
-            t_params.step_to_moments_output[] = false
-            t_params.step_to_dfns_output[] = false
+        if t_params.previous_dt[] > 0.0
+            # If previous_dt=0, the previous step was also a failure so only update
+            # dt_before_last_fail when previous_dt>0
+            t_params.dt_before_last_fail[] = t_params.previous_dt[]
         end
-    elseif (error_norm > 1.0 || isnan(error_norm)) && current_dt > t_params.minimum_dt * (1.0 + 1.0e-13)
+
+        # Decrease timestep by 1/2 - this factor should probably be settable!
+        # Note when nonlinear solve iteration fails, we do not enforce
+        # minimum_dt, as the timesolver must error if we do not decrease dt.
+        if t_params.dt[] > t_params.minimum_dt
+            # ...but try decreasing just to minimum_dt first, if the dt is still
+            # bigger than this.
+            t_params.dt[] = max(t_params.dt[] / 2.0, t_params.minimum_dt)
+        else
+            t_params.dt[] = t_params.dt[] / 2.0
+        end
+
+        # Don't update the simulation time, as this step failed
+        t_params.previous_dt[] = 0.0
+
+        # Call the 'cause' of the timestep failure the variable that has the biggest
+        # error norm here.
+        # Could do with a better way to sort the different possible types of
+        # convergence failure...
+        if t_params.rk_coefs_implicit !== nothing &&
+                composition.electron_physics ∈ (kinetic_electrons,
+                                                kinetic_electrons_with_temperature_equation)
+            if success == "nonlinear-solver"
+                t_params.failure_caused_by[end-1] += 1
+            elseif success == "kinetic-electrons"
+                t_params.failure_caused_by[end] += 1
+            else
+                error("Unrecognised cause of convergence failure: \"$success\"")
+            end
+        else
+            t_params.failure_caused_by[end] += 1
+        end
+
+        # If we were trying to take a step to the output timestep, dt will be smaller on
+        # the re-try, so will not reach the output time.
+        t_params.step_to_moments_output[] = false
+        t_params.step_to_dfns_output[] = false
+    elseif (error_norm[] > 1.0 || isnan(error_norm[])) && t_params.dt[] > t_params.minimum_dt * (1.0 + 1.0e-13)
         # (1.0 + 1.0e-13) fudge factor accounts for possible rounding errors when
         # t+dt=next_output_time.
-        # Use current_dt instead of t_params.dt[] here because we are about to write to
-        # the shared-memory variable t_params.dt[] below, and we do not want to add an
-        # extra _block_synchronize() call after reading it here.
         #
         # Timestep failed, reduce timestep and re-try
 
-        @serial_region begin
-            t_params.failure_counter[] += 1
+        t_params.failure_counter[] += 1
 
-            if t_params.previous_dt[] > 0.0
-                # If previous_dt=0, the previous step was also a failure so only update
-                # dt_before_last_fail when previous_dt>0
-                t_params.dt_before_last_fail[] = t_params.previous_dt[]
+        if t_params.previous_dt[] > 0.0
+            # If previous_dt=0, the previous step was also a failure so only update
+            # dt_before_last_fail when previous_dt>0
+            t_params.dt_before_last_fail[] = t_params.previous_dt[]
+        end
+
+        # Get new timestep estimate using same formula as for a successful step, but
+        # limit decrease to factor 1/2 - this factor should probably be settable!
+        t_params.dt[] = max(t_params.dt[] / 2.0,
+                            t_params.dt[] * t_params.step_update_prefactor * error_norm[]^(-1.0/t_params.rk_order))
+        t_params.dt[] = max(t_params.dt[], t_params.minimum_dt)
+
+        # Don't update the simulation time, as this step failed
+        t_params.previous_dt[] = 0.0
+
+        # Call the 'cause' of the timestep failure the variable that has the biggest
+        # error norm here
+        @serial_region begin
+            t_params.failure_caused_by[max_error_variable_index] += 1
+        end
+
+        # If we were trying to take a step to the output timestep, dt will be smaller on
+        # the re-try, so will not reach the output time.
+        t_params.step_to_moments_output[] = false
+        t_params.step_to_dfns_output[] = false
+
+        #println("t=$t, timestep failed, error_norm=$(error_norm[]), error_norms=$error_norms, decreasing timestep to ", t_params.dt[])
+    else
+        # Save the timestep used to complete this step, this is used to update the
+        # simulation time.
+        t_params.previous_dt[] = t_params.dt[]
+
+        if t_params.step_to_moments_output[] || t_params.step_to_dfns_output[]
+            # Completed an output step, reset dt to what it was before it was reduced to reach
+            # the output time
+            t_params.dt[] = t_params.dt_before_output[]
+
+            if t_params.step_to_moments_output[]
+                t_params.step_to_moments_output[] = false
+                t_params.write_moments_output[] = true
+            end
+            if t_params.step_to_dfns_output[]
+                t_params.step_to_dfns_output[] = false
+                t_params.write_dfns_output[] = true
             end
 
-            # Get new timestep estimate using same formula as for a successful step, but
-            # limit decrease to factor 1/2 - this factor should probably be settable!
-            t_params.dt[] = max(t_params.dt[] / 2.0,
-                                t_params.dt[] * t_params.step_update_prefactor * error_norm^(-1.0/t_params.rk_order))
-            t_params.dt[] = max(t_params.dt[], t_params.minimum_dt)
+            if t_params.dt[] > CFL_limit[]
+                t_params.dt[] = CFL_limit[]
+            end
+        else
+            # Adjust timestep according to Fehlberg's suggestion
+            # (https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method).
+            # `step_update_prefactor` is a constant numerical factor to make the estimate
+            # of a good value for the next timestep slightly conservative. It defaults to
+            # 0.9.
+            t_params.dt[] *= t_params.step_update_prefactor * error_norm[]^(-1.0/t_params.rk_order)
 
-            # Don't update the simulation time, as this step failed
-            t_params.previous_dt[] = 0.0
-
-            # Call the 'cause' of the timestep failure the variable that has the biggest
-            # error norm here
-            t_params.failure_caused_by[max_error_variable_index] += 1
-
-            # If we were trying to take a step to the output timestep, dt will be smaller on
-            # the re-try, so will not reach the output time.
-            t_params.step_to_moments_output[] = false
-            t_params.step_to_dfns_output[] = false
-
-            #println("t=$t, timestep failed, error_norm=$error_norm, error_norms=$error_norms, decreasing timestep to ", t_params.dt[])
-        end
-    else
-        @serial_region begin
-            # Save the timestep used to complete this step, this is used to update the
-            # simulation time.
-            t_params.previous_dt[] = t_params.dt[]
-
-            if t_params.step_to_moments_output[] || t_params.step_to_dfns_output[]
-                # Completed an output step, reset dt to what it was before it was reduced to reach
-                # the output time
-                t_params.dt[] = t_params.dt_before_output[]
-
-                if t_params.step_to_moments_output[]
-                    t_params.step_to_moments_output[] = false
-                    t_params.write_moments_output[] = true
-                end
-                if t_params.step_to_dfns_output[]
-                    t_params.step_to_dfns_output[] = false
-                    t_params.write_dfns_output[] = true
-                end
-
-                if t_params.dt[] > CFL_limit
-                    t_params.dt[] = CFL_limit
-                end
+            if t_params.dt[] > CFL_limit[]
+                t_params.dt[] = CFL_limit[]
             else
-                # Adjust timestep according to Fehlberg's suggestion
-                # (https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method).
-                # `step_update_prefactor` is a constant numerical factor to make the estimate
-                # of a good value for the next timestep slightly conservative. It defaults to
-                # 0.9.
-                t_params.dt[] *= t_params.step_update_prefactor * error_norm^(-1.0/t_params.rk_order)
-
-                if t_params.dt[] > CFL_limit
-                    t_params.dt[] = CFL_limit
-                else
-                    # Reserve first four entries of t_params.limit_caused_by for
-                    # max_increase_factor, max_increase_factor_near_fail, minimum_dt and
-                    # maximum_dt limits, high_nl_iterations.
+                # Reserve first four entries of t_params.limit_caused_by for
+                # max_increase_factor, max_increase_factor_near_fail, minimum_dt and
+                # maximum_dt limits, high_nl_iterations.
+                @serial_region begin
                     this_limit_caused_by = 5 + max_error_variable_index
                 end
+            end
 
-                # Limit so timestep cannot increase by a large factor, which might lead to
-                # numerical instability in some cases.
-                max_cap_limit_caused_by = 1
-                if isinf(t_params.max_increase_factor_near_last_fail)
-                    # Not using special timestep limiting near last failed dt value
-                    max_cap = t_params.max_increase_factor * t_params.previous_dt[]
-                else
-                    max_cap = t_params.max_increase_factor * t_params.previous_dt[]
-                    slow_increase_threshold = t_params.dt_before_last_fail[] / t_params.last_fail_proximity_factor
-                    if t_params.previous_dt[] > t_params.dt_before_last_fail[] * t_params.last_fail_proximity_factor
-                        # dt has successfully exceeded the last failed value, so allow it
-                        # to increase more quickly again
-                        t_params.dt_before_last_fail[] = Inf
-                    elseif max_cap > slow_increase_threshold
-                        # dt is getting close to last failed value, so increase more
-                        # slowly
-                        max_cap = max(slow_increase_threshold,
-                                      t_params.max_increase_factor_near_last_fail *
-                                      t_params.previous_dt[])
-                        max_cap_limit_caused_by = 2
-                    end
+            # Limit so timestep cannot increase by a large factor, which might lead to
+            # numerical instability in some cases.
+            max_cap_limit_caused_by = 1
+            if isinf(t_params.max_increase_factor_near_last_fail)
+                # Not using special timestep limiting near last failed dt value
+                max_cap = t_params.max_increase_factor * t_params.previous_dt[]
+            else
+                max_cap = t_params.max_increase_factor * t_params.previous_dt[]
+                slow_increase_threshold = t_params.dt_before_last_fail[] / t_params.last_fail_proximity_factor
+                if t_params.previous_dt[] > t_params.dt_before_last_fail[] * t_params.last_fail_proximity_factor
+                    # dt has successfully exceeded the last failed value, so allow it
+                    # to increase more quickly again
+                    t_params.dt_before_last_fail[] = Inf
+                elseif max_cap > slow_increase_threshold
+                    # dt is getting close to last failed value, so increase more
+                    # slowly
+                    max_cap = max(slow_increase_threshold,
+                                  t_params.max_increase_factor_near_last_fail *
+                                  t_params.previous_dt[])
+                    max_cap_limit_caused_by = 2
                 end
-                if t_params.dt[] > max_cap
-                    t_params.dt[] = max_cap
+            end
+            if t_params.dt[] > max_cap
+                t_params.dt[] = max_cap
+                @serial_region begin
                     this_limit_caused_by = max_cap_limit_caused_by
                 end
+            end
 
-                # Prevent timestep from going below minimum_dt
-                if t_params.dt[] < t_params.minimum_dt
-                    t_params.dt[] = t_params.minimum_dt
+            # Prevent timestep from going below minimum_dt
+            if t_params.dt[] < t_params.minimum_dt
+                t_params.dt[] = t_params.minimum_dt
+                @serial_region begin
                     this_limit_caused_by = 3
                 end
+            end
 
-                # Prevent timestep from going above maximum_dt
-                max_dt = min(t_params.maximum_dt, local_max_dt)
-                if t_params.dt[] > max_dt
-                    t_params.dt[] = max_dt
+            # Prevent timestep from going above maximum_dt
+            max_dt = min(t_params.maximum_dt, local_max_dt)
+            if t_params.dt[] > max_dt
+                t_params.dt[] = max_dt
+                @serial_region begin
                     this_limit_caused_by = 4
                 end
+            end
 
-                if nl_max_its_fraction > 0.5 && t_params.previous_dt[] > 0.0
-                    # The last step took many nonlinear iterations, so do not allow the
-                    # timestep to increase.
-                    # If t_params.previous_dt[]==0.0, then the previous step failed so
-                    # timestep will not be increasing, so do not need this check.
-                    if t_params.dt[] > t_params.previous_dt[]
-                        t_params.dt[] = t_params.previous_dt[]
+            if nl_max_its_fraction > 0.5 && t_params.previous_dt[] > 0.0
+                # The last step took many nonlinear iterations, so do not allow the
+                # timestep to increase.
+                # If t_params.previous_dt[]==0.0, then the previous step failed so
+                # timestep will not be increasing, so do not need this check.
+                if t_params.dt[] > t_params.previous_dt[]
+                    t_params.dt[] = t_params.previous_dt[]
+                    @serial_region begin
                         this_limit_caused_by = 5
                     end
                 end
+            end
 
+            @serial_region begin
                 t_params.limit_caused_by[this_limit_caused_by] += 1
+            end
 
-                if (t_params.step_counter[] % 1000 == 0) && global_rank[] == 0
-                    prefix = electron ? "electron" : "ion"
-                    println("$prefix step ", t_params.step_counter[], ": t=",
-                            round(t_params.t[], sigdigits=6), ", nfail=",
-                            t_params.failure_counter[], ", dt=", t_params.dt[])
-                end
+            if (t_params.step_counter[] % 1000 == 0) && global_rank[] == 0
+                prefix = electron ? "electron" : "ion"
+                println("$prefix step ", t_params.step_counter[], ": t=",
+                        round(t_params.t[], sigdigits=6), ", nfail=",
+                        t_params.failure_counter[], ", dt=", t_params.dt[])
             end
         end
     end
 
-    @serial_region begin
-        minimum_dt = 1.e-14
-        if t_params.dt[] < minimum_dt
-            println("Time advance failed: trying to set dt=$(t_params.dt[]) less than "
-                    * "$minimum_dt at t=$(t_params.t[]). Ending run.")
-            # Set dt negative to signal an error
-            t_params.dt[] = -1.0
-        end
-
-        current_time = t_params.t[] + t_params.previous_dt[]
-        # Store here to ensure dt_before_output is set correctly when both moments and
-        # dfns are written at the same time.
-        current_dt = t_params.dt[]
-        if (!t_params.write_after_fixed_step_count
-            && !t_params.write_moments_output[]
-            && length(t_params.moments_output_times) > 0
-            && (t_params.moments_output_counter[] ≤ length(t_params.moments_output_times))
-            && (current_time + t_params.dt[] >= t_params.moments_output_times[t_params.moments_output_counter[]]))
-
-            t_params.dt_before_output[] = current_dt
-            t_params.dt[] = t_params.moments_output_times[t_params.moments_output_counter[]] - current_time
-            t_params.step_to_moments_output[] = true
-
-            if t_params.dt[] < 0.0
-                error("When trying to step to next output time, made negative timestep "
-                      * "dt=$(t_params.dt[])")
-            end
-        end
-        if (!t_params.write_after_fixed_step_count
-            && !t_params.write_dfns_output[]
-            && length(t_params.dfns_output_times) > 0
-            && (t_params.dfns_output_counter[] ≤ length(t_params.dfns_output_times))
-            && (current_time + t_params.dt[] >= t_params.dfns_output_times[t_params.dfns_output_counter[]]))
-
-            t_params.dt_before_output[] = current_dt
-            t_params.dt[] = t_params.dfns_output_times[t_params.dfns_output_counter[]] - current_time
-            t_params.step_to_dfns_output[] = true
-
-            if t_params.dt[] < 0.0
-                error("When trying to step to next output time, made negative timestep "
-                      * "dt=$(t_params.dt[])")
-            end
-        end
+    minimum_dt = 1.e-14
+    if t_params.dt[] < minimum_dt
+        println("Time advance failed: trying to set dt=$(t_params.dt[]) less than "
+                * "$minimum_dt at t=$(t_params.t[]). Ending run.")
+        # Set dt negative to signal an error
+        t_params.dt[] = -1.0
     end
 
-    # Shared-memory variables have been updated, so synchronize
-    _block_synchronize()
+    current_time = t_params.t[] + t_params.previous_dt[]
+    # Store here to ensure dt_before_output is set correctly when both moments and
+    # dfns are written at the same time.
+    current_dt = t_params.dt[]
+    if (!t_params.write_after_fixed_step_count
+        && !t_params.write_moments_output[]
+        && length(t_params.moments_output_times) > 0
+        && (t_params.moments_output_counter[] ≤ length(t_params.moments_output_times))
+        && (current_time + t_params.dt[] >= t_params.moments_output_times[t_params.moments_output_counter[]]))
+
+        t_params.dt_before_output[] = current_dt
+        t_params.dt[] = t_params.moments_output_times[t_params.moments_output_counter[]] - current_time
+        t_params.step_to_moments_output[] = true
+
+        if t_params.dt[] < 0.0
+            error("When trying to step to next output time, made negative timestep "
+                  * "dt=$(t_params.dt[])")
+        end
+    end
+    if (!t_params.write_after_fixed_step_count
+        && !t_params.write_dfns_output[]
+        && length(t_params.dfns_output_times) > 0
+        && (t_params.dfns_output_counter[] ≤ length(t_params.dfns_output_times))
+        && (current_time + t_params.dt[] >= t_params.dfns_output_times[t_params.dfns_output_counter[]]))
+
+        t_params.dt_before_output[] = current_dt
+        t_params.dt[] = t_params.dfns_output_times[t_params.dfns_output_counter[]] - current_time
+        t_params.step_to_dfns_output[] = true
+
+        if t_params.dt[] < 0.0
+            error("When trying to step to next output time, made negative timestep "
+                  * "dt=$(t_params.dt[])")
+        end
+    end
 
     return nothing
 end

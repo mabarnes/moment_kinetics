@@ -25,6 +25,7 @@ using FastGaussQuadrature
 using LegendrePolynomials: Pl, dnPl
 using LinearAlgebra: mul!, lu, LU
 using SparseArrays: sparse, AbstractSparseArray
+using SparseMatricesCSR
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 import ..calculus: elementwise_derivative!, mass_matrix_solve!
@@ -82,7 +83,7 @@ struct gausslegendre_base_info
     Y31::Array{mk_float,3}
 end
 
-struct gausslegendre_info{TSparse, TLU, TLmat, TLmatLU} <: weak_discretization_info
+struct gausslegendre_info{TSparse, TSparseCSR, TLU, TLmat, TLmatLU} <: weak_discretization_info
     lobatto::gausslegendre_base_info
     radau::gausslegendre_base_info
     # global (1D) mass matrix
@@ -94,6 +95,13 @@ struct gausslegendre_info{TSparse, TLU, TLmat, TLmatLU} <: weak_discretization_i
     K_matrix::TSparse
     # global (1D) weak Laplacian derivative matrix
     L_matrix::TSparse
+    # global (1D) strong first derivative matrix
+    D_matrix::TSparse
+    # global (1D) strong first derivative matrix in Compressed Sparse Row (CSR) format
+    D_matrix_csr::TSparseCSR
+    # global (1D) weak second derivative matrix, with inverse mass matrix included (so
+    # matrix is dense)
+    dense_second_deriv_matrix::Array{mk_float,2}
     # global (1D) weak Laplacian derivative matrix with boundary conditions - might be
     # `nothing` if boundary conditions are not supported
     L_matrix_with_bc::TLmat
@@ -119,12 +127,15 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
     mass_matrix = allocate_float(coord.n,coord.n)
     K_matrix = allocate_float(coord.n,coord.n)
     L_matrix = allocate_float(coord.n,coord.n)
+    D_matrix = allocate_float(coord.n,coord.n)
 
     dirichlet_bc = (coord.bc in ["zero", "constant"]) # and further options in future
     periodic_bc = (coord.bc == "periodic")
     setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M"; periodic_bc=periodic_bc)
     setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms"; periodic_bc=periodic_bc)
     setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms")
+    setup_global_strong_form_matrix!(D_matrix, lobatto, radau, coord, "D"; periodic_bc=periodic_bc)
+    dense_second_deriv_matrix = inv(mass_matrix) * K_matrix
     mass_matrix_lu = lu(sparse(mass_matrix))
     if dirichlet_bc || periodic_bc
         L_matrix_with_bc = allocate_float(coord.n,coord.n)
@@ -138,7 +149,7 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
 
     Qmat = allocate_float(coord.ngrid,coord.ngrid)
 
-    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),sparse(K_matrix),sparse(L_matrix),L_matrix_with_bc,
+    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),sparse(K_matrix),sparse(L_matrix),sparse(D_matrix),convert(SparseMatrixCSR{1,mk_float,mk_int},D_matrix),dense_second_deriv_matrix,L_matrix_with_bc,
                               mass_matrix_lu,L_matrix_lu,Qmat)
 end
 
@@ -898,7 +909,7 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
         @. QQ_global[iminl:imaxl,iminl:imaxl] += QQ_j[:,:]
         k = 1
     end
-    
+
     if dirichlet_bc
         # Make matrix diagonal for first/last grid points so it does not change the values
         # there
@@ -940,6 +951,79 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
     return nothing
 end
 
+"""
+A function that assigns the local matrices to
+a global array QQ_global for later evaluating strong form of required 1D equation.
+
+The 'option' variable is a flag for
+choosing the type of matrix to be constructed.
+Currently the function is set up to assemble the
+elemental matrices without imposing boundary conditions on the
+first and final rows of the matrix. This means that
+the operators constructed from this function can only be used
+for differentiation, and not solving 1D ODEs.
+The shared points in the element assembly are
+averaged (instead of simply added) to be consistent with the
+derivative_elements_to_full_grid!() function in calculus.jl.
+"""
+function setup_global_strong_form_matrix!(QQ_global::Array{mk_float,2},
+                                          lobatto::gausslegendre_base_info,
+                                          radau::gausslegendre_base_info, 
+                                          coord,option; periodic_bc=false)
+    QQ_j = allocate_float(coord.ngrid,coord.ngrid)
+    QQ_jp1 = allocate_float(coord.ngrid,coord.ngrid)
+
+    ngrid = coord.ngrid
+    imin = coord.imin
+    imax = coord.imax
+    @. QQ_global = 0.0
+
+    # fill in first element
+    j = 1
+    # N.B. QQ varies with ielement for vperp, but not vpa
+    # a radau element is used for the vperp grid (see get_QQ_local!())
+    get_QQ_local!(QQ_j,j,lobatto,radau,coord,option)
+    if periodic_bc && coord.nrank != 1
+        error("periodic boundary conditions not supported when dimension is distributed")
+    end
+    if periodic_bc && coord.nrank == 1
+        QQ_global[imax[end], imin[j]:imax[j]] .+= QQ_j[1,:] ./ 2.0
+        QQ_global[1,1] += 1.0
+        QQ_global[1,end] += -1.0
+    else
+        QQ_global[imin[j],imin[j]:imax[j]] .+= QQ_j[1,:]
+    end
+    for k in 2:imax[j]-imin[j] 
+        QQ_global[k,imin[j]:imax[j]] .+= QQ_j[k,:]
+    end
+    if coord.nelement_local > 1
+        QQ_global[imax[j],imin[j]:imax[j]] .+= QQ_j[ngrid,:]./2.0
+    else
+        QQ_global[imax[j],imin[j]:imax[j]] .+= QQ_j[ngrid,:]
+    end
+    # remaining elements recalling definitions of imax and imin
+    for j in 2:coord.nelement_local
+        get_QQ_local!(QQ_j,j,lobatto,radau,coord,option)
+        #lower boundary assembly on element
+        QQ_global[imin[j]-1,imin[j]-1:imax[j]] .+= QQ_j[1,:]./2.0
+        for k in 2:imax[j]-imin[j]+1
+            QQ_global[k+imin[j]-2,imin[j]-1:imax[j]] .+= QQ_j[k,:]
+        end
+        # upper boundary assembly on element
+        if j == coord.nelement_local
+            if periodic_bc && coord.nrank == 1
+                QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:] / 2.0
+            else
+                QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]
+            end
+        else
+            QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]./2.0
+        end
+    end
+
+    return nothing
+end
+
 function get_QQ_local!(QQ::Array{mk_float,2},ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -967,6 +1051,8 @@ function get_QQ_local!(QQ::Array{mk_float,2},ielement,
             get_LL_local!(QQ,ielement,lobatto,radau,coord)
         elseif option == "L_with_BC_terms"
             get_LL_local!(QQ,ielement,lobatto,radau,coord,explicit_BC_terms=true)
+        elseif option == "D"
+            get_DD_local!(QQ,ielement,lobatto,radau,coord)
         end
         return nothing
 end
@@ -1134,6 +1220,18 @@ function get_LL_local!(QQ,ielement,
             end
         end
         return nothing
+end
+
+# Strong-form differentiation matrix
+function get_DD_local!(QQ, ielement, lobatto::gausslegendre_base_info,
+                       radau::gausslegendre_base_info, coord)
+    scale_factor = coord.element_scale[ielement]
+    if coord.name == "vperp" && ielement == 1 && coord.irank == 0
+        @. QQ = radau.Dmat / scale_factor
+    else
+        @. QQ = lobatto.Dmat / scale_factor
+    end
+    return nothing
 end
 
 # mass matrix without vperp factor (matrix N)

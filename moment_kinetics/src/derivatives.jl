@@ -11,9 +11,13 @@ module derivatives
 export derivative_r!, derivative_r_chrg!, derivative_r_ntrl!
 export derivative_z!, derivative_z_chrg!, derivative_z_ntrl!
 
-using ..calculus: derivative!, second_derivative!, reconcile_element_boundaries_MPI!
+using ..calculus: derivative!, second_derivative!, reconcile_element_boundaries_MPI!,
+                  reconcile_element_boundaries_MPI_z_pdf_vpavperpz!, apply_adv_fac!
+using ..communication
 using ..type_definitions: mk_float
 using ..looping
+
+using MPI
 
 """
 Centered derivatives
@@ -238,6 +242,32 @@ function derivative_z!(dfdz::AbstractArray{mk_float,3}, f::AbstractArray{mk_floa
 		 dfdz_lower_endpoints,dfdz_upper_endpoints,
 		 z_send_buffer, z_receive_buffer, z)
 	end
+    end
+end
+
+# df/dz
+# 3D version for f[vpa,vperp,z]. Uses modified function name to avoid clash with 'standard'
+# 3D version for ion/neutral moments.
+function derivative_z_pdf_vpavperpz!(dfdz::AbstractArray{mk_float,3}, f::AbstractArray{mk_float,3},
+        dfdz_lower_endpoints::AbstractArray{mk_float,2},
+        dfdz_upper_endpoints::AbstractArray{mk_float,2},
+        z_receive_buffer1::AbstractArray{mk_float,2},
+        z_receive_buffer2::AbstractArray{mk_float,2}, z_spectral, z)
+
+    # differentiate f w.r.t z
+    @loop_vperp_vpa ivperp ivpa begin
+        @views derivative!(dfdz[ivpa,ivperp,:], f[ivpa,ivperp,:], z, z_spectral)
+        # get external endpoints to reconcile via MPI
+        dfdz_lower_endpoints[ivpa,ivperp] = z.scratch_2d[1,1]
+        dfdz_upper_endpoints[ivpa,ivperp] = z.scratch_2d[end,end]
+    end
+
+    # now reconcile element boundaries across
+    # processes with large message
+    if z.nelement_local < z.nelement_global
+        reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(
+            dfdz, dfdz_lower_endpoints, dfdz_upper_endpoints, z_receive_buffer1,
+            z_receive_buffer2, z)
     end
 end
 
@@ -787,6 +817,36 @@ function derivative_z!(dfdz::AbstractArray{mk_float,3}, f::AbstractArray{mk_floa
                 dfdz, adv_fac_lower_buffer, adv_fac_upper_buffer,
                 dfdz_lower_endpoints,dfdz_upper_endpoints, z_send_buffer, z_receive_buffer, z)
         end
+    end
+end
+
+# df/dz
+# 3D version for f[vpa,vperp,z]. Uses modified function name to avoid clash with 'standard'
+# 3D version for ion/neutral moments.
+function derivative_z_pdf_vpavperpz!(dfdz::AbstractArray{mk_float,3}, f::AbstractArray{mk_float,3},
+        adv_fac, adv_fac_lower_buffer::AbstractArray{mk_float,2},
+        adv_fac_upper_buffer::AbstractArray{mk_float,2},
+        dfdz_lower_endpoints::AbstractArray{mk_float,2},
+        dfdz_upper_endpoints::AbstractArray{mk_float,2},
+        z_receive_buffer1::AbstractArray{mk_float,2},
+        z_receive_buffer2::AbstractArray{mk_float,2}, z_spectral, z)
+
+    # differentiate f w.r.t z
+    @loop_vperp_vpa ivperp ivpa begin
+        @views derivative!(dfdz[ivpa,ivperp,:], f[ivpa,ivperp,:], z, adv_fac[:,ivpa,ivperp], z_spectral)
+        # get external endpoints to reconcile via MPI
+        dfdz_lower_endpoints[ivpa,ivperp] = z.scratch_2d[1,1]
+        dfdz_upper_endpoints[ivpa,ivperp] = z.scratch_2d[end,end]
+        adv_fac_lower_buffer[ivpa,ivperp] = adv_fac[1,ivpa,ivperp]
+        adv_fac_upper_buffer[ivpa,ivperp] = adv_fac[end,ivpa,ivperp]
+    end
+
+    # now reconcile element boundaries across
+    # processes with large message
+    if z.nelement_local < z.nelement_global
+        reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(
+            dfdz, adv_fac_lower_buffer, adv_fac_upper_buffer, dfdz_lower_endpoints,
+            dfdz_upper_endpoints, z_receive_buffer1, z_receive_buffer2, z)
     end
 end
 

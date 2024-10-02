@@ -3,6 +3,7 @@ using moment_kinetics.time_advance: time_advance!
 using moment_kinetics.communication
 using moment_kinetics.looping: all_dimensions, dimension_combinations,
                                anyv_dimension_combinations
+using moment_kinetics.type_definitions: OptionsDict
 using moment_kinetics.Glob
 using moment_kinetics.Primes
 
@@ -60,8 +61,9 @@ function runtests(; restart=false)
         n_factors = length(factor(Vector, global_size[]))
 
         for input ∈ test_input_list, debug_loop_type ∈ dimension_combinations_to_test
-            if :sn ∈ debug_loop_type && "n_neutral_species" ∈ keys(input) &&
-                    input["n_neutral_species"] <= 0
+            composition_section = get(input, "composition", OptionsDict())
+            if :sn ∈ debug_loop_type && "n_neutral_species" ∈ keys(composition_section) &&
+                    composition_section["n_neutral_species"] <= 0
                 # Skip neutral dimension parallelisation options if the number of neutral
                 # species is zero, as these would just be equivalent to running in serial
                 continue
@@ -73,24 +75,19 @@ function runtests(; restart=false)
                 dims_to_test = debug_loop_type
             end
             for d ∈ all_dimensions
-                nelement_name = "$(d)_nelement"
-                if nelement_name ∈ keys(input)
-                    nelement = input[nelement_name]
-                elseif d ∈ (:vperp, :vzeta, :vr)
-                    nelement = 1
+                dim_section = get(input, "$d", OptionsDict())
+                if "nelement" ∈ keys(dim_section)
+                    nelement = dim_section["nelement"]
                 else
                     # Dummy value, here it only matters if this is 1 or greater than 1
-                    nelement = 2
+                    nelement = 1
                 end
 
-                ngrid_name = "$(d)_ngrid"
-                if ngrid_name ∈ keys(input)
-                    ngrid = input[ngrid_name]
-                elseif d ∈ (:vperp, :vzeta, :vr)
-                    ngrid = 1
+                if "ngrid" ∈ keys(dim_section)
+                    ngrid = dim_section["ngrid"]
                 else
                     # Dummy value, here it only matters if this is 1 or greater than 1
-                    ngrid = 2
+                    ngrid = 1
                 end
 
                 if nelement == 1 && ngrid == 1

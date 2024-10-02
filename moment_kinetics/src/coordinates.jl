@@ -100,6 +100,9 @@ struct coordinate{T <: AbstractVector{mk_float},Tbparams}
     # scratch_shared2 is a shared-memory array used for intermediate calculations requiring
     # n entries
     scratch_shared2::T
+    # scratch_shared3 is a shared-memory array used for intermediate calculations requiring
+    # n entries
+    scratch_shared3::T
     # scratch_2d and scratch2_2d are arrays used for intermediate calculations requiring
     # ngrid x nelement entries
     scratch_2d::Array{mk_float,2}
@@ -306,15 +309,18 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     if ignore_MPI
         scratch_shared = allocate_float(n_local)
         scratch_shared2 = allocate_float(n_local)
+        scratch_shared3 = allocate_float(n_local)
     else
         scratch_shared = allocate_shared_float(n_local)
         scratch_shared2 = allocate_shared_float(n_local)
+        scratch_shared3 = allocate_shared_float(n_local)
     end
-    # Initialise scratch_shared and scratch_shared2 so that the debug checks do not
-    # complain when they get printed by `println(io, all_inputs)` in mk_input().
+    # Initialise scratch_shared* so that the debug checks do not complain when they get
+    # printed by `println(io, all_inputs)` in mk_input().
     if block_rank[] == 0
         scratch_shared .= NaN
         scratch_shared2 .= NaN
+        scratch_shared3 .= NaN
     end
     if !ignore_MPI
         _block_synchronize()
@@ -380,10 +386,11 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         coord_input.cheb_option, coord_input.bc, coord_input.boundary_parameters, wgts,
         uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
         copy(scratch), copy(scratch), copy(scratch), copy(scratch), copy(scratch),
-        copy(scratch), scratch_shared, scratch_shared2, scratch_2d, copy(scratch_2d),
-        advection, send_buffer, receive_buffer, comm, local_io_range, global_io_range,
-        element_scale, element_shift, coord_input.element_spacing_option,
-        element_boundaries, radau_first_element, other_nodes, one_over_denominator)
+        copy(scratch), scratch_shared, scratch_shared2, scratch_shared3, scratch_2d,
+        copy(scratch_2d), advection, send_buffer, receive_buffer, comm, local_io_range,
+        global_io_range, element_scale, element_shift,
+        coord_input.element_spacing_option, element_boundaries, radau_first_element,
+        other_nodes, one_over_denominator)
 
     if coord.n == 1 && occursin("v", coord.name)
         spectral = null_velocity_dimension_info()
@@ -465,6 +472,95 @@ function set_element_boundaries(nelement_global, L, element_spacing_option, coor
         end
         for j in 1:nsqrt
             element_boundaries[(nelement_global+1)+ 1 - j] = (L/2.0) - fac*(L/2.0)*((j-1)/(nsqrt-1))^2
+        end
+    elseif startswith(element_spacing_option, "compressed")
+        element_spacing_option_split = split(element_spacing_option, "_")
+        if length(element_spacing_option_split) == 1
+            compression_factor = 4.0
+        else
+            compression_factor = parse(mk_float, element_spacing_option_split[2])
+        end
+
+        #shifted_inds = collect(mk_float, 0:nelement_global) .- 0.5 .* nelement_global
+        ## Choose element boundary positions to be given by
+        ##   s = A*shifted_inds + B*shifted_inds^3
+        ## Choose A and B so that, with simin=-nelement_global/2:
+        ##   s(simin) = -L/2
+        ##   s(simin+1) = -L/2 + L/nelement_global/compression_factor
+        ## i.e. so that the grid spacing of the element nearest the wall is
+        ## compression_factor smaller than the elements in a uniformly spaced grid.
+        ##   simin*A + simin^3*B = -L/2
+        ##   A = -(L/2 + simin^3*B)/simin
+        ##
+        ##   (simin+1)*A + (simin+1)^3*B = -L/2 + L/nelement_global/compression_factor
+        ##   -(simin+1)*(L/2 + simin^3*B)/simin + (simin+1)^3*B = -L/2 + L/nelement_global/compression_factor
+        ##   -(simin+1)*simin^3*B/simin + (simin+1)^3*B = -L/2 + L/nelement_global/compression_factor + (simin+1)*L/2/simin
+        ##   (simin+1)*simin^2*B - (simin+1)^3*B = L/2 - L/nelement_global/compression_factor - (simin+1)*L/2/simin
+        ##   B = (L/2 - L/nelement_global/compression_factor - (simin+1)*L/2/simin) / ((simin+1)*simin^2 - (simin+1)^3)
+
+        #simin = -nelement_global / 2.0
+        #B = (L/2.0 - L/nelement_global/compression_factor - (simin+1.0)*L/2.0/simin) / ((simin+1.0)*simin^2 - (simin+1.0)^3)
+        #A = -(L/2.0 + simin^3*B)/simin
+
+        #@. element_boundaries = A*shifted_inds + B*shifted_inds^3
+
+        # To have the grid spacing change as little as possible from one element to the
+        # next, the function that defines the element boundary positions should have
+        # constant curvature. The curvature has to change sign at the mid-point of the
+        # domain, so this means that the function must be defined piecewise - one piece
+        # for the lower half and one for the upper half.
+        # An apparently ideal way to do this would be to use a quadratic function, which
+        # would mean that the ratio of the sizes of adjacent elements is the same
+        # throughout the grid. However, a quadratic would mean a maximum compression
+        # factor of 2 before the function becomes non-monotonic, see next:
+        # We define the quadratic by making the gradient at the boundaries
+        # `compression_factor` larger than the gradient L of the linear function that
+        # would give a uniform grid.
+        #   s(a) = A*a + B*a*|a|
+        # where -0.5≤a≤0.5, and
+        #   s(0.5) = L/2
+        #   s'(0.5) = compression_factor*L
+        # so
+        #   A/2 + B/4 = L/2
+        #   A + B = compression_factor*L
+        # ⇒
+        #   B = 2*(compression_factor - 1)*L
+        #   A = L - B/2 = L - (compression_factor-1)*L = (2 - compression_factor)*L
+        #
+        # Therefore instead we choose a circular arc which can be monotonic while reaching
+        # any gradient. To make a circle sensible, normalise s by L for this version.
+        #   (s-s0)^2 + (a-a0)^2 = r^2
+        # where -0.5≤a≤0.5, and
+        #   s(0) = 0
+        #   s(a) = 1/2
+        #   s'(a) = 1/compression_factor
+        # and for a>0, a0<0 and s0>0 while for a<0, a0>0 and s0<0. This gives
+        #   s0^2 + a0^2 = r^2
+        #   (1/2-s0)^2 + (1/2-a0)^2 = r^2 = s0^2 + a0^2
+        #   2*(1/2-s0)/compression_factor + 2*(1/2-a0) = 0
+        # solving these
+        #   a0 = (1/2-s0)/compression_factor + 1/2
+        #   1/4 - s0 + s0^2 + 1/4 - a0 + a0^2 = s0^2 + a0^2
+        #   1/2 - s0 - a0 = 0
+        #   s0 = 1/2 - a0 = 1/2 - (1/2-s0)/compression_factor - 1/2
+        #   (1 - 1/compression_factor)*s0 = -1/compression_factor/2
+        #   s0 = 1/compression_factor/2/(1/compression_factor-1)
+        if abs(compression_factor - 1.0) < 1.0e-12
+            # compression_factor is too close to 1, which would be a singular value where
+            # s0=∞ and a0=-∞, so just use constant spacing.
+            for j in 1:nelement_global+1
+                element_boundaries[j] = L*((j-1)/(nelement_global) - 0.5)
+            end
+        else
+            s0 = 1.0 / compression_factor / 2.0 / (1.0 / compression_factor - 1.0)
+            a0 = (0.5 - s0)/compression_factor + 0.5
+            a = collect(0:nelement_global) ./ nelement_global .- 0.5
+            mid_ind_plus = (nelement_global + 1) ÷ 2 + 1
+            mid_ind_minus = nelement_global ÷ 2 + 1
+            @. element_boundaries[1:mid_ind_minus] =
+                -L * (sqrt(s0^2 + a0^2 - (a[1:mid_ind_minus]+a0)^2) + s0)
+            @. element_boundaries[mid_ind_plus:end] =
+                L * (sqrt(s0^2 + a0^2 - (a[mid_ind_plus:end]-a0)^2) + s0)
         end
     elseif element_spacing_option == "coarse_tails"
         # Element boundaries at

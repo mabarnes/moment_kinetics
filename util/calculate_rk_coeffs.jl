@@ -459,12 +459,11 @@ function convert_butcher_tableau_for_moment_kinetics(a::Matrix{Rational{Int64}},
 end
 
 function convert_rk_coefs_to_butcher_tableau(rk_coefs::AbstractArray{T,N},
-                                             adaptive,
+                                             adaptive, low_storage,
                                              rk_coefs_implicit=zeros(T, size(rk_coefs, 1) - 1, size(rk_coefs, 2) + 1),
                                              implicit_coefficient_is_zero=nothing
                                             ) where {T,N}
     using_rationals = eltype(rk_coefs) <: Rational || eltype(rk_coefs_implicit) <: Rational
-    low_storage = size(rk_coefs, 1) == 3
     if adaptive
         n_rk_stages = size(rk_coefs, 2) - 1
     else
@@ -654,7 +653,7 @@ function convert_and_check_butcher_tableau(name, a, b,
 
     # Consistency check: converting back should give the original a, b.
     a_check, b_check, a_check_implicit, b_check_implicit =
-        convert_rk_coefs_to_butcher_tableau(rk_coefs, adaptive, rk_coefs_implicit, implicit_coefficient_is_zero)
+        convert_rk_coefs_to_butcher_tableau(rk_coefs, adaptive, low_storage, rk_coefs_implicit, implicit_coefficient_is_zero)
 
     if eltype(a) == Rational
         if a_check != a
@@ -704,7 +703,7 @@ function convert_and_check_butcher_tableau(name, a, b,
     end
 end
 
-function convert_and_check_rk_coefs(name, rk_coefs, adaptive=false,
+function convert_and_check_rk_coefs(name, rk_coefs, adaptive=false, low_storage=true,
                                     rk_coefs_implicit=zeros(eltype(rk_coefs),
                                                             size(rk_coefs, 1),
                                                             size(rk_coefs, 2) + 1),
@@ -717,7 +716,7 @@ function convert_and_check_rk_coefs(name, rk_coefs, adaptive=false,
     if imex
         print("rk_coefs_implicit="); display(rk_coefs_implicit)
     end
-    a, b, a_implicit, b_implicit = convert_rk_coefs_to_butcher_tableau(rk_coefs, adaptive, rk_coefs_implicit, implicit_coefficient_is_zero)
+    a, b, a_implicit, b_implicit = convert_rk_coefs_to_butcher_tableau(rk_coefs, adaptive, low_storage, rk_coefs_implicit, implicit_coefficient_is_zero)
     print("a="); display(a)
     print("b="); display(b)
     if imex
@@ -1065,4 +1064,72 @@ convert_and_check_butcher_tableau(
                     ],
     Rational{BigInt}[1471266399579//7840856788654  -4482444167858//7529755066697   11266239266428//11593286722821 1767732205903//4055673282236;
                      2756255671327//12835298489170 -10771552573575//22201958757719 9247589265047//10645013368117  2193209047091//5459859503100],
+    ; low_storage=false)
+
+# 2nd-order, 2-stage IMEX method 'IMEX-SSP2(2,2,2)' from Pareschi & Russo 2005, Table II
+# (https://doi.org/10.1007/s10915-004-4636-4)
+gamma = 1 - 1 / sqrt(BigFloat(2))
+convert_and_check_butcher_tableau(
+    "PareschiRusso2(2,2,2)",
+    BigFloat[0 0;
+             1 0;
+            ],
+    BigFloat[1//2 1//2],
+    BigFloat[gamma     0    ;
+             1-2*gamma gamma;
+            ],
+    BigFloat[1//2 1//2],
+    ; low_storage=false)
+
+# 2nd-order, 3-stage IMEX method 'IMEX-SSP2(3,2,2)' from Pareschi & Russo 2005, Table III
+# (https://doi.org/10.1007/s10915-004-4636-4)
+convert_and_check_butcher_tableau(
+    "PareschiRusso2(3,2,2)",
+    Rational{Int64}[0 0 0;
+                    0 0 0;
+                    0 1 0;
+            ],
+    Rational{Int64}[0 1//2 1//2],
+    Rational{Int64}[ 1//2 0    0   ;
+                    -1//2 1//2 0   ;
+                     0    1//2 1//2;
+            ],
+    Rational{Int64}[0 1//2 1//2],
+    ; low_storage=false)
+
+# 2nd-order, 3-stage IMEX method 'IMEX-SSP2(3,3,2)' from Pareschi & Russo 2005, Table IV
+# (https://doi.org/10.1007/s10915-004-4636-4)
+convert_and_check_butcher_tableau(
+    "PareschiRusso2(3,3,2)",
+    Rational{Int64}[0    0    0;
+                    1//2 0    0;
+                    1//2 1//2 0;
+            ],
+    Rational{Int64}[1//3 1//3 1//3],
+    Rational{Int64}[1//4 0    0   ;
+                    0    1//4 0   ;
+                    1//3 1//3 1//3;
+            ],
+    Rational{Int64}[1//3 1//3 1//3],
+    ; low_storage=false)
+
+# 3rd-order, 4-stage IMEX method 'IMEX-SSP3(4,3,3)' from Pareschi & Russo 2005, Table VI
+# (https://doi.org/10.1007/s10915-004-4636-4)
+alpha = 0.24169426078821
+beta = 0.06042356519705
+eta = 0.12915286960590
+convert_and_check_butcher_tableau(
+    "PareschiRusso3(4,3,3)",
+    typeof(alpha)[0 0    0    0;
+                  0 0    0    0;
+                  0 1    0    0;
+                  0 1//4 1//4 0;
+                 ],
+    typeof(alpha)[0 1//6 1//6 2//3],
+    typeof(alpha)[alpha  0       0                   0    ;
+                  -alpha alpha   0                   0    ;
+                  0      1-alpha alpha               0    ;
+                  beta   eta     1//2-beta-eta-alpha alpha;
+                 ],
+    typeof(alpha)[0 1//6 1//6 2//3],
     ; low_storage=false)

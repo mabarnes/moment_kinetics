@@ -2,9 +2,6 @@
 charge_exchange_frequency = 0.75
 ionization_frequency = 0.0
 
-[electron_fluid_collisions]
-nu_ei = 1000.0
-
 [evolve_moments]
 density = true
 parallel_flow = true

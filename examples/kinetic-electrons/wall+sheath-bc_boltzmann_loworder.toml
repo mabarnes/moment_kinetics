@@ -5,9 +5,6 @@ ionization_frequency = 2.0
 #electron_ionization_frequency = 2.0
 #ionization_energy = 1.0
 
-[electron_fluid_collisions]
-nu_ei = 0.0
-
 [evolve_moments]
 density = false
 parallel_flow = false
