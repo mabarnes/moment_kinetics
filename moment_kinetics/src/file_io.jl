@@ -1372,7 +1372,7 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
     io_qpar = create_dynamic_variable!(dynamic, "parallel_heat_flux", mk_float, z, r,
                                        n_ion_species_coord; parallel_io=parallel_io,
                                        description="ion species parallel heat flux",
-                                       units="n_ref*T_ref*c_ref")
+                                       units="n_ref*m_ref*c_ref^3")
 
     # io_vth is the handle for the ion thermal speed
     io_vth = create_dynamic_variable!(dynamic, "thermal_speed", mk_float, z, r,
@@ -1588,7 +1588,7 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
     io_electron_qpar = create_dynamic_variable!(dynamic, "electron_parallel_heat_flux", mk_float, z, r;
                                                 parallel_io=parallel_io,
                                                 description="electron species parallel heat flux",
-                                                units="n_ref*T_ref*c_ref")
+                                                units="n_ref*m_ref*c_ref^3")
 
     # io_electron_vth is the handle for the electron thermal speed
     io_electron_vth = create_dynamic_variable!(dynamic, "electron_thermal_speed", mk_float, z, r;
@@ -1793,7 +1793,7 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
                                              n_neutral_species_coord;
                                              parallel_io=parallel_io,
                                              description="neutral species z heat flux",
-                                             units="n_ref*T_ref*c_ref")
+                                             units="n_ref*m_ref*c_ref^3")
 
     # io_thermal_speed_neutral is the handle for the neutral thermal speed
     io_thermal_speed_neutral = create_dynamic_variable!(
