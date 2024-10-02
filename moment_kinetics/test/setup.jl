@@ -90,7 +90,13 @@ Get a single temporary directory that is the same on all MPI ranks
 """
 function get_MPI_tempdir()
     if global_rank[] == 0
-        test_output_directory = tempname()
+        if get_options()["ci"]
+            runs_dir = abspath("runs/")
+            mkpath(runs_dir)
+            test_output_directory = tempname(runs_dir)
+        else
+            test_output_directory = tempname()
+        end
         mkpath(test_output_directory)
     else
         test_output_directory = ""
