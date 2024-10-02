@@ -11,6 +11,7 @@ using ..communication
 using ..looping
 using ..moment_constraints: hard_force_moment_constraints!,
                             moment_constraints_on_residual!
+using ..timer_utils
 using ..moment_kinetics_structs: scratch_pdf, weak_discretization_info
 using ..nonlinear_solvers: newton_solve!
 using ..velocity_moments: update_derived_moments!, calculate_ion_moment_derivatives!
@@ -23,8 +24,10 @@ using SparseArrays
 
 """
 """
-function vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, vperp, z, r, dt, t,
-                        vpa_spectral, composition, collisions, ion_source_settings, geometry)
+@timeit global_timer vpa_advection!(
+                         f_out, fvec_in, fields, moments, advect, vpa, vperp, z, r, dt, t,
+                         vpa_spectral, composition, collisions, ion_source_settings,
+                         geometry) = begin
 
     begin_s_r_z_vperp_region()
 
@@ -44,11 +47,12 @@ end
 
 """
 """
-function implicit_vpa_advection!(f_out, fvec_in, fields, moments, z_advect, vpa_advect,
-                                 vpa, vperp, z, r, dt, t, r_spectral, z_spectral,
-                                 vpa_spectral, composition, collisions,
-                                 ion_source_settings, geometry, nl_solver_params,
-                                 vpa_diffusion, num_diss_params, gyroavs, scratch_dummy)
+@timeit global_timer implicit_vpa_advection!(
+                         f_out, fvec_in, fields, moments, z_advect, vpa_advect, vpa,
+                         vperp, z, r, dt, t, r_spectral, z_spectral, vpa_spectral,
+                         composition, collisions, ion_source_settings, geometry,
+                         nl_solver_params, vpa_diffusion, num_diss_params, gyroavs,
+                         scratch_dummy) = begin
     if vperp.n > 1 && (moments.evolve_density || moments.evolve_upar || moments.evolve_ppar)
         error("Moment constraints in implicit_vpa_advection!() do not support 2V runs yet")
     end

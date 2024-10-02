@@ -14,6 +14,7 @@ using ..coordinates: coordinate
 using ..debugging
 using ..input_structs
 using ..looping
+using ..timer_utils
 using ..moment_kinetics_structs: scratch_pdf, em_fields_struct
 using ..type_definitions: mk_float, mk_int
 
@@ -49,6 +50,7 @@ Base.@kwdef struct io_input_struct
     write_steady_state_diagnostics::Bool
     write_electron_error_diagnostics::Bool
     write_electron_steady_state_diagnostics::Bool
+    display_timing_info::Bool
 end
 
 """
@@ -344,6 +346,7 @@ function setup_io_input(input_dict, timestepping_section; ignore_MPI=false)
         ascii_output=false,
         binary_format=hdf5,
         parallel_io="",
+        display_timing_info=true,
        )
     if io_settings["run_name"] == ""
         error("When passing a Dict directly for input, it is required to set `run_name` "
@@ -2400,10 +2403,10 @@ end
 write time-dependent moments data for ions, electrons and neutrals to the binary output
 file
 """
-function write_all_moments_data_to_binary(scratch, moments, fields, n_ion_species,
-                                          n_neutral_species, io_or_file_info_moments,
-                                          t_idx, time_for_run, t_params, nl_solver_params,
-                                          r, z)
+@timeit global_timer write_all_moments_data_to_binary(
+                         scratch, moments, fields, n_ion_species, n_neutral_species,
+                         io_or_file_info_moments, t_idx, time_for_run, t_params,
+                         nl_solver_params, r, z) = begin
 
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -2823,11 +2826,11 @@ end
 write time-dependent distribution function data for ions, electrons and neutrals to the
 binary output file
 """
-function write_all_dfns_data_to_binary(scratch, scratch_electron, moments, fields,
-                                       n_ion_species, n_neutral_species,
-                                       io_or_file_info_dfns, t_idx, time_for_run,
-                                       t_params, nl_solver_params, r, z, vperp, vpa,
-                                       vzeta, vr, vz)
+@timeit global_timer write_all_dfns_data_to_binary(
+                         scratch, scratch_electron, moments, fields, n_ion_species,
+                         n_neutral_species, io_or_file_info_dfns, t_idx, time_for_run,
+                         t_params, nl_solver_params, r, z, vperp, vpa, vzeta, vr,
+                         vz) = begin
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -3048,9 +3051,9 @@ include("file_io_hdf5.jl")
 
 """
 """
-function write_data_to_ascii(pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r, t,
-                             n_ion_species, n_neutral_species,
-                             ascii_io::Union{ascii_ios,Nothing})
+@timeit global_timer write_data_to_ascii(pdf, moments, fields, vz, vr, vzeta, vpa, vperp,
+                                         z, r, t, n_ion_species, n_neutral_species,
+                                         ascii_io::Union{ascii_ios,Nothing}) = begin
     if ascii_io === nothing || ascii_io.moments_ion === nothing
         # ascii I/O is disabled
         return nothing

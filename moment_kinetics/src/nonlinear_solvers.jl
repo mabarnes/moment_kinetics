@@ -34,6 +34,7 @@ using ..communication
 using ..coordinates: coordinate
 using ..input_structs
 using ..looping
+using ..timer_utils
 using ..type_definitions: mk_float, mk_int
 
 using LinearAlgebra
@@ -301,9 +302,10 @@ iteration is therefore
 As the GMRES solve is only used to get the right `direction' for the next Newton step, it
 is not necessary to have a very tight `linear_rtol` for the GMRES solve.
 """
-function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
-                       nl_solver_params; left_preconditioner=nothing,
-                       right_preconditioner=nothing, coords)
+@timeit global_timer newton_solve!(
+                         x, residual_func!, residual, delta_x, rhs_delta, v, w,
+                         nl_solver_params; left_preconditioner=nothing,
+                         right_preconditioner=nothing, coords) = begin
     # This wrapper function constructs the `solver_type` from coords, so that the body of
     # the inner `newton_solve!()` can be fully type-stable
     solver_type = Val(Symbol((c for c ∈ keys(coords))...))
@@ -1101,10 +1103,11 @@ which allows conveniently finding the residual at each step, and computing the f
 solution, without calculating a least-squares minimisation at each step. See 'algorithm 2
 MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
 """
-function linear_solve!(x, residual_func!, residual0, delta_x, v, w, solver_type::Val,
-                       norm_params; coords, rtol, atol, restart, max_restarts,
-                       left_preconditioner, right_preconditioner, H, c, s, g, V,
-                       rhs_delta, initial_guess, serial_solve)
+@timeit global_timer linear_solve!(
+                         x, residual_func!, residual0, delta_x, v, w, solver_type::Val,
+                         norm_params; coords, rtol, atol, restart, max_restarts,
+                         left_preconditioner, right_preconditioner, H, c, s, g, V,
+                         rhs_delta, initial_guess, serial_solve) = begin
     # Solve (approximately?):
     #   J δx = residual0
 

@@ -16,6 +16,7 @@ using ..calculus: derivative!, second_derivative!, laplacian_derivative!
 using ..derivatives: derivative_r!, derivative_z!, second_derivative_r!,
                      second_derivative_z!
 using ..input_structs
+using ..timer_utils
 using ..type_definitions: mk_float
 
 # define individual structs for each species with their particular parameters
@@ -104,7 +105,8 @@ The damping rate is set in the input TOML file by the parameter
 vpa_boundary_buffer_damping_rate = 0.1
 ```
 """
-function vpa_boundary_buffer_decay!(f_out, fvec_in, moments, vpa, dt, damping_rate_prefactor)
+@timeit global_timer vpa_boundary_buffer_decay!(
+                         f_out, fvec_in, moments, vpa, dt, damping_rate_prefactor) = begin
 
     if damping_rate_prefactor <= 0.0
         return nothing
@@ -201,7 +203,9 @@ The maximum diffusion rate in the buffer is set in the input TOML file by the pa
 vpa_boundary_buffer_diffusion_coefficient = 0.1
 ```
 """
-function vpa_boundary_buffer_diffusion!(f_out, fvec_in, vpa, vpa_spectral, dt, diffusion_prefactor)
+@timeit global_timer vpa_boundary_buffer_diffusion!(
+                         f_out, fvec_in, vpa, vpa_spectral, dt,
+                         diffusion_prefactor) = begin
 
     if diffusion_prefactor <= 0.0
         return nothing
@@ -253,7 +257,7 @@ the boundaries, so this should be an OK thing to force.
 
 Note: not currently used.
 """
-function vpa_boundary_force_decreasing!(f_out, vpa)
+@timeit global_timer vpa_boundary_force_decreasing!(f_out, vpa) = begin
     begin_s_r_z_region()
 
     ngrid = vpa.ngrid
@@ -288,8 +292,8 @@ The diffusion coefficient is set in the input TOML file by the parameter
 vpa_dissipation_coefficient = 0.1
 ```
 """
-function vpa_dissipation!(f_out, f_in, vpa, spectral::T_spectral, dt,
-                          diffusion_coefficient) where T_spectral
+@timeit global_timer vpa_dissipation!(
+                         f_out, f_in, vpa, spectral, dt, diffusion_coefficient) = begin
 
     if diffusion_coefficient <= 0.0 || vpa.n == 1
         return nothing
@@ -349,8 +353,8 @@ The diffusion coefficient is set in the input TOML file by the parameter
 vperp_dissipation_coefficient = 0.1
 ```
 """
-function vperp_dissipation!(f_out, f_in, vperp, spectral::T_spectral, dt,
-                            diffusion_coefficient) where T_spectral
+@timeit global_timer vperp_dissipation!(
+                         f_out, f_in, vperp, spectral, dt, diffusion_coefficient) = begin
     
     begin_s_r_z_vpa_region()
 
@@ -382,8 +386,9 @@ implementation does not impose a penalisation term
 on internal or external element boundaries
 
 """
-function z_dissipation!(f_out, f_in, z, z_spectral::T_spectral, dt,
-                        diffusion_coefficient, scratch_dummy) where T_spectral
+@timeit global_timer z_dissipation!(
+                         f_out, f_in, z, z_spectral, dt, diffusion_coefficient,
+                         scratch_dummy) = begin
 
     if diffusion_coefficient <= 0.0 || z.n == 1
         return nothing
@@ -422,8 +427,9 @@ implementation does not impose a penalisation term
 on internal or external element boundaries
 
 """
-function r_dissipation!(f_out, f_in, r, r_spectral::T_spectral, dt,
-                        diffusion_coefficient, scratch_dummy) where T_spectral
+@timeit global_timer r_dissipation!(
+                         f_out, f_in, r, r_spectral, dt, diffusion_coefficient,
+                         scratch_dummy) = begin
 
     if diffusion_coefficient <= 0.0 || r.n == 1
         return nothing
@@ -456,8 +462,8 @@ The diffusion coefficient is set in the input TOML file by the parameter
 vz_dissipation_coefficient = 0.1
 ```
 """
-function vz_dissipation_neutral!(f_out, f_in, vz, spectral::T_spectral, dt,
-                                 diffusion_coefficient) where T_spectral
+@timeit global_timer vz_dissipation_neutral!(
+                         f_out, f_in, vz, spectral, dt, diffusion_coefficient) = begin
 
     if diffusion_coefficient <= 0.0
         return nothing
@@ -489,8 +495,9 @@ implementation does not impose a penalisation term
 on internal or external element boundaries
 
 """
-function z_dissipation_neutral!(f_out, f_in, z, z_spectral::T_spectral, dt,
-                                diffusion_coefficient, scratch_dummy) where T_spectral
+@timeit global_timer z_dissipation_neutral!(
+                         f_out, f_in, z, z_spectral, dt, diffusion_coefficient,
+                         scratch_dummy) = begin
 
     if diffusion_coefficient <= 0.0
         return nothing
@@ -529,8 +536,9 @@ implementation does not impose a penalisation term
 on internal or external element boundaries
 
 """
-function r_dissipation_neutral!(f_out, f_in, r, r_spectral::T_spectral, dt,
-                                diffusion_coefficient, scratch_dummy) where T_spectral
+@timeit global_timer r_dissipation_neutral!(
+                         f_out, f_in, r, r_spectral, dt, diffusion_coefficient,
+                         scratch_dummy) = begin
 
     if diffusion_coefficient <= 0.0 || r.n == 1
         return nothing
@@ -562,7 +570,7 @@ set to the minimum. By default, no minimum is applied. The minimum value can be 
 force_minimum_pdf_value = 0.0
 ```
 """
-function force_minimum_pdf_value!(f, minval)
+@timeit global_timer force_minimum_pdf_value!(f, minval) = begin
 
     if minval == -Inf
         return nothing
@@ -587,7 +595,7 @@ are set to the minimum. By default, no minimum is applied. The minimum value can
 force_minimum_pdf_value = 0.0
 ```
 """
-function force_minimum_pdf_value_neutral!(f, minval)
+@timeit global_timer force_minimum_pdf_value_neutral!(f, minval) = begin
 
     if minval === nothing
         return nothing

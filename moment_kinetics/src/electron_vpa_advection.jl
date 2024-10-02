@@ -10,14 +10,16 @@ using ..looping
 using ..boundary_conditions: skip_f_electron_bc_points_in_Jacobian
 using ..calculus: derivative!, second_derivative!
 using ..gauss_legendre: gausslegendre_info
+using ..timer_utils
 
 """
 calculate the wpa-advection term for the electron kinetic equation 
 = (vthe / 2 ppare * dppare/dz + wpa / 2 ppare * dqpare/dz - wpa^2 * dvthe/dz) * df/dwpa
 """
-function electron_vpa_advection!(pdf_out, pdf_in, density, upar, ppar, moments, advect,
-                                 vpa, spectral, scratch_dummy, dt,
-                                 electron_source_settings, ir)
+@timeit global_timer electron_vpa_advection!(
+                         pdf_out, pdf_in, density, upar, ppar, moments, advect, vpa,
+                         spectral, scratch_dummy, dt, electron_source_settings,
+                         ir) = begin
     begin_z_vperp_region()
 
     # create a reference to a scratch_dummy array to store the wpa-derivative of the electron pdf

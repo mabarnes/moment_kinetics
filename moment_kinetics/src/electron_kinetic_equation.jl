@@ -41,6 +41,7 @@ using ..file_io: get_electron_io_info, write_electron_state, finish_electron_io
 using ..krook_collisions: electron_krook_collisions!, get_collision_frequency_ee,
                           get_collision_frequency_ei,
                           add_electron_krook_collisions_to_Jacobian!
+using ..timer_utils
 using ..moment_constraints: hard_force_moment_constraints!,
                             moment_constraints_on_residual!,
                             electron_implicit_constraint_forcing!,
@@ -86,12 +87,15 @@ The electron kinetic equation is:
 OUTPUT:
     pdf = updated (modified) electron pdf
 """
-function update_electron_pdf!(scratch, pdf, moments, phi, r, z, vperp, vpa, z_spectral,
-        vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy, t_params,
-        collisions, composition, external_source_settings, num_diss_params,
-        nl_solver_params, max_electron_pdf_iterations, max_electron_sim_time;
-        io_electron=nothing, initial_time=nothing, residual_tolerance=nothing,
-        evolve_ppar=false, ion_dt=nothing, solution_method="backward_euler")
+@timeit global_timer update_electron_pdf!(
+                         scratch, pdf, moments, phi, r, z, vperp, vpa, z_spectral,
+                         vperp_spectral, vpa_spectral, z_advect, vpa_advect,
+                         scratch_dummy, t_params, collisions, composition,
+                         external_source_settings, num_diss_params, nl_solver_params,
+                         max_electron_pdf_iterations, max_electron_sim_time;
+                         io_electron=nothing, initial_time=nothing,
+                         residual_tolerance=nothing, evolve_ppar=false, ion_dt=nothing,
+                         solution_method="backward_euler") = begin
 
     # set the method to use to solve the electron kinetic equation
     #solution_method = "artificial_time_derivative"
@@ -1564,12 +1568,12 @@ nonlinear solve being parallelised over {z,vperp,vpa}. More efficient might be t
 equivalent to the 'anyv' parallelisation used for the collision operator (e.g. 'anyzv'?)
 to allow the outer r-loop to be parallelised.
 """
-function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, moments,
-                                    fields, collisions, composition, geometry,
-                                    external_source_settings, num_diss_params, r, z,
-                                    vperp, vpa, r_spectral, z_spectral, vperp_spectral,
-                                    vpa_spectral, z_advect, vpa_advect, gyroavs,
-                                    scratch_dummy, t_params, ion_dt, nl_solver_params)
+@timeit global_timer implicit_electron_advance!(
+                         fvec_out, fvec_in, pdf, scratch_electron, moments, fields,
+                         collisions, composition, geometry, external_source_settings,
+                         num_diss_params, r, z, vperp, vpa, r_spectral, z_spectral,
+                         vperp_spectral, vpa_spectral, z_advect, vpa_advect, gyroavs,
+                         scratch_dummy, t_params, ion_dt, nl_solver_params) = begin
 
     electron_ppar_out = fvec_out.electron_ppar
     # Store the solved-for pdf in n_rk_stages+1, because this was the version that gets
@@ -1885,10 +1889,10 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, z, vp
     end
 end
 
-function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vperp, vpa,
-                                                     vperp_spectral, vpa_spectral,
-                                                     vpa_adv, moments, vpa_diffusion,
-                                                     me_over_mi; bc_constraints=true)
+@timeit global_timer enforce_boundary_condition_on_electron_pdf!(
+                         pdf, phi, vthe, upar, z, vperp, vpa, vperp_spectral,
+                         vpa_spectral, vpa_adv, moments, vpa_diffusion, me_over_mi;
+                         bc_constraints=true) = begin
 
     newton_tol = 1.0e-13
 
@@ -2522,11 +2526,11 @@ end
 Check the error estimate for the embedded RK method and adjust the timestep if
 appropriate.
 """
-function electron_adaptive_timestep_update!(scratch, t, t_params, moments, phi, z_advect,
-                                            vpa_advect, composition, r, z, vperp, vpa,
-                                            vperp_spectral, vpa_spectral,
-                                            external_source_settings, num_diss_params;
-                                            evolve_ppar=false, local_max_dt=Inf)
+@timeit global_timer electron_adaptive_timestep_update!(
+                         scratch, t, t_params, moments, phi, z_advect, vpa_advect,
+                         composition, r, z, vperp, vpa, vperp_spectral, vpa_spectral,
+                         external_source_settings, num_diss_params; evolve_ppar=false,
+                         local_max_dt=Inf) = begin
     #error_norm_method = "Linf"
     error_norm_method = "L2"
 
@@ -2848,14 +2852,12 @@ When `evolve_ppar=true` is passed, also updates the electron parallel pressure.
 Note that this function operates on a single point in `r`, given by `ir`, and `f_out`,
 `ppar_out`, `f_in`, and `ppar_in` should have no r-dimension.
 """
-function electron_kinetic_equation_euler_update!(f_out, ppar_out, f_in, ppar_in, moments,
-                                                 z, vperp, vpa, z_spectral, vpa_spectral,
-                                                 z_advect, vpa_advect, scratch_dummy,
-                                                 collisions, composition,
-                                                 external_source_settings,
-                                                 num_diss_params, t_params, ir;
-                                                 evolve_ppar=false, ion_dt=nothing,
-                                                 soft_force_constraints=false)
+@timeit global_timer electron_kinetic_equation_euler_update!(
+                         f_out, ppar_out, f_in, ppar_in, moments, z, vperp, vpa,
+                         z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                         collisions, composition, external_source_settings,
+                         num_diss_params, t_params, ir; evolve_ppar=false, ion_dt=nothing,
+                         soft_force_constraints=false) = begin
     dt = t_params.dt[]
 
     # add the contribution from the z advection term
@@ -2941,13 +2943,11 @@ end
 Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equation and (if
 `evolve_ppar=true`) the electron energy equation.
 """
-function fill_electron_kinetic_equation_Jacobian!(jacobian_matrix, f, ppar, moments,
-                                                  collisions, composition, z, vperp, vpa,
-                                                  z_spectral, vperp_spectral,
-                                                  vpa_spectral, z_advect, vpa_advect,
-                                                  scratch_dummy, external_source_settings,
-                                                  num_diss_params, t_params, ion_dt, ir,
-                                                  evolve_ppar)
+@timeit global_timer fill_electron_kinetic_equation_Jacobian!(
+                         jacobian_matrix, f, ppar, moments, collisions, composition, z,
+                         vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
+                         vpa_advect, scratch_dummy, external_source_settings,
+                         num_diss_params, t_params, ion_dt, ir, evolve_ppar) = begin
     dt = t_params.dt[]
 
     buffer_1 = @view scratch_dummy.buffer_rs_1[ir,1]

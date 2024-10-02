@@ -51,6 +51,7 @@ using ..communication
 using ..velocity_moments: integrate_over_vspace
 using ..velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_qpar, get_pressure, get_rmom
 using ..looping
+using ..timer_utils
 using ..input_structs: fkpl_collisions_input, set_defaults_and_check_section!
 using ..reference_parameters: get_reference_collision_frequency_ii
 using ..fokker_planck_calculus: init_Rosenbluth_potential_integration_weights!
@@ -239,10 +240,11 @@ Function for advancing with the explicit, weak-form, self-collision operator
 using the existing method for computing the Rosenbluth potentials, with
 the addition of cross-species collisions against fixed Maxwellian distribution functions
 """
-function explicit_fp_collisions_weak_form_Maxwellian_cross_species!(pdf_out,pdf_in,dSdt,composition,collisions,dt,
-                                             fkpl_arrays::fokkerplanck_weakform_arrays_struct,
-                                             r, z, vperp, vpa, vperp_spectral, vpa_spectral;
-                                             diagnose_entropy_production=false)
+@timeit global_timer explicit_fp_collisions_weak_form_Maxwellian_cross_species!(
+                         pdf_out, pdf_in, dSdt, composition, collisions, dt,
+                         fkpl_arrays::fokkerplanck_weakform_arrays_struct, r, z, vperp,
+                         vpa, vperp_spectral, vpa_spectral;
+                         diagnose_entropy_production=false) = begin
     # N.B. only self-collisions are currently supported
     # This can be modified by adding a loop over s' below
     n_ion_species = composition.n_ion_species
@@ -305,11 +307,12 @@ end
 """
 Function for advancing with the explicit, weak-form, self-collision operator
 """
-function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,dSdt,composition,collisions,dt,
-                                             fkpl_arrays::fokkerplanck_weakform_arrays_struct,
-                                             r, z, vperp, vpa, vperp_spectral, vpa_spectral, scratch_dummy;
-                                             test_assembly_serial=false,impose_zero_gradient_BC=false,
-                                             diagnose_entropy_production=false)
+@timeit global_timer explicit_fokker_planck_collisions_weak_form!(
+                         pdf_out, pdf_in, dSdt, composition, collisions, dt,
+                         fkpl_arrays::fokkerplanck_weakform_arrays_struct, r, z, vperp,
+                         vpa, vperp_spectral, vpa_spectral, scratch_dummy;
+                         test_assembly_serial=false, impose_zero_gradient_BC=false,
+                         diagnose_entropy_production=false) = begin
     # N.B. only self-collisions are currently supported
     # This can be modified by adding a loop over s' below
     n_ion_species = composition.n_ion_species
@@ -387,15 +390,14 @@ The input parameter to this code is
 with \$\\gamma_\\mathrm{ref} = 2 \\pi e^4 \\ln \\Lambda_{ii} / (4 \\pi
 \\epsilon_0)^2\$. This means that \$\\tilde{\\nu}_{ss'} = (Z_s Z_{s'})^2\\tilde{\\nu}_\\mathrm{ref}\$ and this conversion is handled explicitly in the code with the charge number input provided by the user.
 """
-function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp,
-                                             fkpl_arrays::fokkerplanck_weakform_arrays_struct,
-                                             vperp, vpa, vperp_spectral, vpa_spectral;
-                                             test_assembly_serial=false,
-                                             use_Maxwellian_Rosenbluth_coefficients=false,
-                                             use_Maxwellian_field_particle_distribution=false,
-                                             algebraic_solve_for_d2Gdvperp2 = false,
-                                             calculate_GG=false,
-                                             calculate_dGdvperp=false)
+@timeit global_timer fokker_planck_collision_operator_weak_form!(
+                         ffs_in, ffsp_in, ms, msp, nussp,
+                         fkpl_arrays::fokkerplanck_weakform_arrays_struct, vperp, vpa,
+                         vperp_spectral, vpa_spectral; test_assembly_serial=false,
+                         use_Maxwellian_Rosenbluth_coefficients=false,
+                         use_Maxwellian_field_particle_distribution=false,
+                         algebraic_solve_for_d2Gdvperp2 = false, calculate_GG=false,
+                         calculate_dGdvperp=false) = begin
     @boundscheck vpa.n == size(ffsp_in,1) || throw(BoundsError(ffsp_in))
     @boundscheck vperp.n == size(ffsp_in,2) || throw(BoundsError(ffsp_in))
     @boundscheck vpa.n == size(ffs_in,1) || throw(BoundsError(ffs_in))
@@ -507,13 +509,13 @@ F_{s^\\prime}
 ```
 is an analytically specified Maxwellian distribution
 """
-function fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!(ffs_in,
-                                             nuref::mk_float,ms::mk_float,Zs::mk_float,
-                                             msp::Array{mk_float,1},Zsp::Array{mk_float,1}, 
-                                             densp::Array{mk_float,1},
-                                             uparsp::Array{mk_float,1},vthsp::Array{mk_float,1},
-                                             fkpl_arrays::fokkerplanck_weakform_arrays_struct,
-                                             vperp, vpa, vperp_spectral, vpa_spectral)
+@timeit global_timer fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!(
+                         ffs_in, nuref::mk_float, ms::mk_float, Zs::mk_float,
+                         msp::Array{mk_float,1}, Zsp::Array{mk_float,1},
+                         densp::Array{mk_float,1}, uparsp::Array{mk_float,1},
+                         vthsp::Array{mk_float,1},
+                         fkpl_arrays::fokkerplanck_weakform_arrays_struct, vperp, vpa,
+                         vperp_spectral, vpa_spectral) = begin
     @boundscheck vpa.n == size(ffs_in,1) || throw(BoundsError(ffs_in))
     @boundscheck vperp.n == size(ffs_in,2) || throw(BoundsError(ffs_in))
     

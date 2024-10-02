@@ -9,9 +9,11 @@ export neutral_ionization_collisions_3V!
 
 using ..interpolation: interpolate_to_grid_vpa!
 using ..looping
+using ..timer_utils
 
-function ion_ionization_collisions_1V!(f_out, fvec_in, vz, vpa, vperp, z, r, vz_spectral,
-                                       moments, composition, collisions, dt)
+@timeit global_timer ion_ionization_collisions_1V!(
+                         f_out, fvec_in, vz, vpa, vperp, z, r, vz_spectral, moments,
+                         composition, collisions, dt) = begin
     # This routine assumes a 1D model with:
     # nvz = nvpa and identical vz and vpa grids 
     # nvperp = nvr = nveta = 1
@@ -101,8 +103,9 @@ function ion_ionization_collisions_1V!(f_out, fvec_in, vz, vpa, vperp, z, r, vz_
     end
 end
 
-function neutral_ionization_collisions_1V!(f_neutral_out, fvec_in, vz, vpa, vperp, z, r,
-                                           vz_spectral, moments, composition, collisions, dt)
+@timeit global_timer neutral_ionization_collisions_1V!(
+                         f_neutral_out, fvec_in, vz, vpa, vperp, z, r, vz_spectral,
+                         moments, composition, collisions, dt) = begin
     # This routine assumes a 1D model with:
     # nvperp = nvr = nveta = 1
     # constant charge_exchange_frequency independent of species
@@ -132,7 +135,9 @@ function neutral_ionization_collisions_1V!(f_neutral_out, fvec_in, vz, vpa, vper
     end
 end
 
-function ion_ionization_collisions_3V!(f_out, f_neutral_gav_in, fvec_in, composition, vz, vr, vzeta, vpa, vperp, z, r, collisions, dt)
+@timeit global_timer ion_ionization_collisions_3V!(
+                         f_out, f_neutral_gav_in, fvec_in, composition, vz, vr, vzeta,
+                         vpa, vperp, z, r, collisions, dt) = begin
     # This routine assumes a 3V model with:
     @boundscheck vpa.n == size(f_out,1) || throw(BoundsError(f_out))
     @boundscheck vperp.n == size(f_out,2) || throw(BoundsError(f_out))
@@ -164,7 +169,9 @@ function ion_ionization_collisions_3V!(f_out, f_neutral_gav_in, fvec_in, composi
     end
 end
 
-function neutral_ionization_collisions_3V!(f_neutral_out, fvec_in, composition, vz, vr, vzeta, vpa, vperp, z, r, collisions, dt)
+@timeit global_timer neutral_ionization_collisions_3V!(
+                         f_neutral_out, fvec_in, composition, vz, vr, vzeta, vpa, vperp,
+                         z, r, collisions, dt) = begin
     # This routine assumes a 3V model with:
     @boundscheck vz.n == size(f_neutral_out,1) || throw(BoundsError(f_neutral_out))
     @boundscheck vr.n == size(f_neutral_out,2) || throw(BoundsError(f_neutral_out))
