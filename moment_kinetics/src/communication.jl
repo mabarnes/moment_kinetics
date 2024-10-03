@@ -27,6 +27,7 @@ using SHA
 # Import moment_kinetics so that we can refer to it in docstrings
 import moment_kinetics
 using ..debugging
+using ..timer_utils
 using ..type_definitions: mk_float, mk_int
 
 """
@@ -820,7 +821,7 @@ block, it is called simultaneously on all blocks. It seems likely that this will
 be true, but if it ever changes (i.e. different blocks doing totally different work),
 the debugging routines need to be updated.
 """
-function _block_synchronize()
+@timeit_debug global_timer _block_synchronize() = begin
     MPI.Barrier(comm_block[])
 
     @debug_block_synchronize begin

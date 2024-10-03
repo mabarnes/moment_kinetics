@@ -3,9 +3,24 @@ Utilities for timing functions or blocks of code
 """
 module timer_utils
 
-export global_timer, @timeit, format_global_timer
+export global_timer, @timeit, @timeit_debug, format_global_timer, timeit_debug_enabled
 
 using TimerOutputs
+
+"""
+    timeit_debug_enabled()
+
+`@timeit_debug` uses a function defined in the enclosing module called
+`timeit_debug_enabled()` to decide whether to include debug timers (included if this
+function returns `true`, or not - with zero overhead - if it returns `false`).
+
+To control the debug timers in `moment_kinetics` we define this function once, in
+[`timer_utils`](@ref), and import it from there into any other modules that use
+@timeit_debug.
+
+To activate debug timers, edit this function so that it returns `true`.
+"""
+timeit_debug_enabled() = false
 
 """
 Global object used to collect timings of various parts of the code

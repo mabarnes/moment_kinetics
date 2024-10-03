@@ -8,6 +8,7 @@ export integral
 
 using ..moment_kinetics_structs: discretization_info, null_spatial_dimension_info,
                                  null_velocity_dimension_info, weak_discretization_info
+using ..timer_utils
 using ..type_definitions: mk_float, mk_int
 using MPI
 using ..communication: block_rank
@@ -478,9 +479,13 @@ function assign_endpoint!(df1d::AbstractArray{mk_float,Ndims},
     end
 end
 
-function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
-	dfdx_lower_endpoints::AbstractArray{mk_float,Mdims}, dfdx_upper_endpoints::AbstractArray{mk_float,Mdims},
-	receive_buffer1::AbstractArray{mk_float,Mdims}, receive_buffer2::AbstractArray{mk_float,Mdims}, coord) where {Ndims,Mdims}
+@timeit_debug global_timer reconcile_element_boundaries_MPI!(
+                  df1d::AbstractArray{mk_float,Ndims},
+                  dfdx_lower_endpoints::AbstractArray{mk_float,Mdims},
+                  dfdx_upper_endpoints::AbstractArray{mk_float,Mdims},
+                  receive_buffer1::AbstractArray{mk_float,Mdims},
+                  receive_buffer2::AbstractArray{mk_float,Mdims},
+                  coord) where {Ndims,Mdims} = begin
 	
     # synchronize buffers
     # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
@@ -572,10 +577,15 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,Ndims},adv_fac::AbstractA
 		
 	end
 	
-function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
-	adv_fac_lower_endpoints::AbstractArray{mk_float,Mdims}, adv_fac_upper_endpoints::AbstractArray{mk_float,Mdims},
-	dfdx_lower_endpoints::AbstractArray{mk_float,Mdims}, dfdx_upper_endpoints::AbstractArray{mk_float,Mdims},
-	receive_buffer1::AbstractArray{mk_float,Mdims}, receive_buffer2::AbstractArray{mk_float,Mdims}, coord) where {Ndims,Mdims}
+@timeit_debug global_timer reconcile_element_boundaries_MPI!(
+                  df1d::AbstractArray{mk_float,Ndims},
+                  adv_fac_lower_endpoints::AbstractArray{mk_float,Mdims},
+                  adv_fac_upper_endpoints::AbstractArray{mk_float,Mdims},
+                  dfdx_lower_endpoints::AbstractArray{mk_float,Mdims},
+                  dfdx_upper_endpoints::AbstractArray{mk_float,Mdims},
+                  receive_buffer1::AbstractArray{mk_float,Mdims},
+                  receive_buffer2::AbstractArray{mk_float,Mdims},
+                  coord) where {Ndims,Mdims} = begin
 	
     # synchronize buffers
     # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
@@ -649,9 +659,12 @@ end
 
 # Special version for pdf_electron with no r-dimension, which has the same number of
 # dimensions as an ion/neutral moment variable, but different dimensions.
-function reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(df1d::AbstractArray{mk_float,3},
-	dfdx_lower_endpoints::AbstractArray{mk_float,2}, dfdx_upper_endpoints::AbstractArray{mk_float,2},
-	receive_buffer1::AbstractArray{mk_float,2}, receive_buffer2::AbstractArray{mk_float,2}, coord)
+@timeit_debug global_timer reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(
+                  df1d::AbstractArray{mk_float,3},
+                  dfdx_lower_endpoints::AbstractArray{mk_float,2},
+                  dfdx_upper_endpoints::AbstractArray{mk_float,2},
+                  receive_buffer1::AbstractArray{mk_float,2},
+                  receive_buffer2::AbstractArray{mk_float,2}, coord) = begin
 	
     # synchronize buffers
     # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
@@ -724,10 +737,14 @@ end
 
 # Special version for pdf_electron with no r-dimension, which has the same number of
 # dimensions as an ion/neutral moment variable, but different dimensions.
-function reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(df1d::AbstractArray{mk_float,3},
-	adv_fac_lower_endpoints::AbstractArray{mk_float,2}, adv_fac_upper_endpoints::AbstractArray{mk_float,2},
-	dfdx_lower_endpoints::AbstractArray{mk_float,2}, dfdx_upper_endpoints::AbstractArray{mk_float,2},
-	receive_buffer1::AbstractArray{mk_float,2}, receive_buffer2::AbstractArray{mk_float,2}, coord)
+@timeit_debug global_timer reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(
+                  df1d::AbstractArray{mk_float,3},
+                  adv_fac_lower_endpoints::AbstractArray{mk_float,2},
+                  adv_fac_upper_endpoints::AbstractArray{mk_float,2},
+                  dfdx_lower_endpoints::AbstractArray{mk_float,2},
+                  dfdx_upper_endpoints::AbstractArray{mk_float,2},
+                  receive_buffer1::AbstractArray{mk_float,2},
+                  receive_buffer2::AbstractArray{mk_float,2}, coord) = begin
 	
     # synchronize buffers
     # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop

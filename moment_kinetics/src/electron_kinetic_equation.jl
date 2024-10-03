@@ -500,7 +500,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                 end
                 electron_pdf_converged = abs(residual) < residual_tolerance
             end
-            electron_pdf_converged = MPI.Bcast(electron_pdf_converged, 0, comm_world)
+            @timeit_debug global_timer "MPI.Bcast comm_world" electron_pdf_converged = MPI.Bcast(electron_pdf_converged, 0, comm_world)
         end
 
         if text_output
@@ -894,7 +894,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                             end
                         end
 
-                        nl_solver_params.preconditioners.z[ivpa,ivperp,ir] = lu(sparse(z_matrix))
+                        @timeit_debug global_timer "lu" nl_solver_params.preconditioners.z[ivpa,ivperp,ir] = lu(sparse(z_matrix))
                     end
 
                     if z.irank == 0
@@ -986,7 +986,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                   * "supported in preconditioner")
                         end
 
-                        nl_solver_params.preconditioners.ppar[ir] = lu(sparse(ppar_matrix))
+                        @timeit_debug global_timer "lu" nl_solver_params.preconditioners.ppar[ir] = lu(sparse(ppar_matrix))
                     else
                         ppar_matrix = allocate_float(0, 0)
                         ppar_matrix[] = 1.0
@@ -1001,7 +1001,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                         z_precon_matrix = nl_solver_params.preconditioners.z[ivpa,ivperp,ir]
                         f_slice = @view precon_f[ivpa,ivperp,:]
                         @views z.scratch .= f_slice
-                        ldiv!(z.scratch2, z_precon_matrix, z.scratch)
+                        @timeit_debug global_timer "ldiv!" ldiv!(z.scratch2, z_precon_matrix, z.scratch)
                         f_slice .= z.scratch2
                     end
 
@@ -1013,7 +1013,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
 
                     begin_serial_region()
                     @serial_region begin
-                        ldiv!(precon_ppar, ppar_precon_matrix, z.scratch)
+                        @timeit_debug global_timer "ldiv!" ldiv!(precon_ppar, ppar_precon_matrix, z.scratch)
                     end
                 end
 
@@ -1048,7 +1048,7 @@ println("recalculating precon")
                         if size(orig_lu) == (1, 1)
                             # Have not properly created the LU decomposition before, so
                             # cannot reuse it.
-                            nl_solver_params.preconditioners[ir] =
+                            @timeit_debug global_timer "lu" nl_solver_params.preconditioners[ir] =
                                 (lu(sparse(precon_matrix)), precon_matrix, input_buffer,
                                  output_buffer)
                         else
@@ -1056,14 +1056,14 @@ println("recalculating precon")
                             # has the same sparsity pattern, so by using `lu!()` we can
                             # reuse some setup.
                             try
-                                lu!(orig_lu, sparse(precon_matrix); check=false)
+                                @timeit_debug global_timer "lu!" lu!(orig_lu, sparse(precon_matrix); check=false)
                             catch e
                                 if !isa(e, ArgumentError)
                                     rethrow(e)
                                 end
                                 println("Sparsity pattern of matrix changed, rebuilding "
                                         * " LU from scratch")
-                                orig_lu = lu(sparse(precon_matrix))
+                                @timeit_debug global_timer "lu" orig_lu = lu(sparse(precon_matrix))
                             end
                             nl_solver_params.preconditioners[ir] =
                                 (orig_lu, precon_matrix, input_buffer, output_buffer)
@@ -1094,7 +1094,7 @@ println("recalculating precon")
 
                     begin_serial_region()
                     @serial_region begin
-                        ldiv!(output_buffer, precon_lu, input_buffer)
+                        @timeit_debug global_timer "ldiv!" ldiv!(output_buffer, precon_lu, input_buffer)
                     end
 
                     begin_serial_region()
@@ -1447,7 +1447,7 @@ println("recalculating precon")
                     end
                     electron_pdf_converged = abs(residual) < residual_tolerance
                 end
-                electron_pdf_converged = MPI.Bcast(electron_pdf_converged, 0, comm_world)
+                @timeit_debug global_timer "MPI.Bcast comm_world" electron_pdf_converged = MPI.Bcast(electron_pdf_converged, 0, comm_world)
             end
 
             if (mod(t_params.step_counter[] - initial_step_counter,100) == 0)
@@ -3644,9 +3644,9 @@ function get_electron_critical_velocities(phi, vthe, me_over_mi, z)
         crit_speed_zmin = 0.0
     end
     @serial_region begin
-        crit_speed_zmin = MPI.Bcast(crit_speed_zmin, 0, z.comm)
+        @timeit_debug global_timer "MPI.Bcast z.comm" crit_speed_zmin = MPI.Bcast(crit_speed_zmin, 0, z.comm)
     end
-    crit_speed_zmin = MPI.Bcast(crit_speed_zmin, 0, comm_block[])
+    @timeit_debug global_timer "MPI.Bcast comm_block" crit_speed_zmin = MPI.Bcast(crit_speed_zmin, 0, comm_block[])
 
     if z.irank == z.nrank - 1 && block_rank[] == 0
         crit_speed_zmax = -sqrt(max(phi[end, 1],0.0) / (me_over_mi * vthe[end, 1]^2))
@@ -3654,9 +3654,9 @@ function get_electron_critical_velocities(phi, vthe, me_over_mi, z)
         crit_speed_zmin = 0.0
     end
     @serial_region begin
-        crit_speed_zmax = MPI.Bcast(crit_speed_zmax, z.nrank-1, z.comm)
+        @timeit_debug global_timer "MPI.Bcast z.comm" crit_speed_zmax = MPI.Bcast(crit_speed_zmax, z.nrank-1, z.comm)
     end
-    crit_speed_zmax = MPI.Bcast(crit_speed_zmax, 0, comm_block[])
+    @timeit_debug global_timer "MPI.Bcast comm_block" crit_speed_zmax = MPI.Bcast(crit_speed_zmax, 0, comm_block[])
 
     return crit_speed_zmin, crit_speed_zmax
 end
@@ -3699,7 +3699,7 @@ function check_electron_pdf_convergence(residual, pdf, upar, vthe, z, vpa)
             sum_pdf += sum(abs.(@view pdf[iv0_start:iv0_end,ivperp,iz,ir]) * vthe[iz,ir])
         end
     end
-    sum_residual, sum_pdf = MPI.Allreduce([sum_residual, sum_pdf], +, comm_world)
+    @timeit_debug global_timer "MPI.Allreduce comm_world" sum_residual, sum_pdf = MPI.Allreduce([sum_residual, sum_pdf], +, comm_world)
 
     average_residual = sum_residual / sum_pdf
 
@@ -3714,7 +3714,7 @@ function check_electron_pdf_convergence(residual)
     @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
         sum_residual += abs.(residual[ivpa,ivperp,iz,ir])
     end
-    sum_residual, sum_length = MPI.Allreduce((sum_residual, length(residual) / block_size[]), +, comm_world)
+    @timeit_debug global_timer "MPI.Allreduce comm_world" sum_residual, sum_length = MPI.Allreduce((sum_residual, length(residual) / block_size[]), +, comm_world)
     average_residual = sum_residual / sum_length
     electron_pdf_converged = (average_residual < 1e-3)
     return average_residual, electron_pdf_converged

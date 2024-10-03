@@ -227,7 +227,7 @@ each process already represents the global count. Where each solve uses only a s
 processes, the counters from different solves need to be added together to get the global
 total.
 """
-function gather_nonlinear_solver_counters!(nl_solver_params)
+@timeit_debug global_timer gather_nonlinear_solver_counters!(nl_solver_params) = begin
     if nl_solver_params.ion_advance !== nothing
         # Solve runs in parallel on all processes, so no need to collect here
         nl_solver_params.ion_advance.global_n_solves[] = nl_solver_params.ion_advance.n_solves[]
@@ -236,9 +236,9 @@ function gather_nonlinear_solver_counters!(nl_solver_params)
     end
     if nl_solver_params.vpa_advection !== nothing
         # Solves are run in serial on separate processes, so need a global Allreduce
-        MPI.Allreduce!(nl_solver_params.vpa_advection.n_solves[], +, comm_world)
-        MPI.Allreduce!(nl_solver_params.vpa_advection.nonlinear_iterations[], +, comm_world)
-        MPI.Allreduce!(nl_solver_params.vpa_advection.linear_iterations[], +, comm_world)
+        @timeit_debug global_timer "MPI.Allreduce! comm_world" MPI.Allreduce!(nl_solver_params.vpa_advection.n_solves[], +, comm_world)
+        @timeit_debug global_timer "MPI.Allreduce! comm_world" MPI.Allreduce!(nl_solver_params.vpa_advection.nonlinear_iterations[], +, comm_world)
+        @timeit_debug global_timer "MPI.Allreduce! comm_world" MPI.Allreduce!(nl_solver_params.vpa_advection.linear_iterations[], +, comm_world)
     end
 end
 
@@ -453,8 +453,9 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
     return success
 end
 
-function distributed_norm(::Val{:z}, residual::AbstractArray{mk_float, 1}, coords, rtol,
-                          atol, x)
+@timeit_debug global_timer distributed_norm(
+                               ::Val{:z}, residual::AbstractArray{mk_float, 1}, coords,
+                               rtol, atol, x) = begin
     z = coords.z
 
     begin_z_region()
@@ -476,20 +477,21 @@ function distributed_norm(::Val{:z}, residual::AbstractArray{mk_float, 1}, coord
 
     _block_synchronize()
     global_norm = Ref(local_norm)
-    MPI.Reduce!(global_norm, +, comm_block[]) # global_norm is the norm_square for the block
+    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_norm, +, comm_block[]) # global_norm is the norm_square for the block
 
     if block_rank[] == 0
-        MPI.Allreduce!(global_norm, +, comm_inter_block[]) # global_norm is the norm_square for the whole grid
+        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_norm, +, comm_inter_block[]) # global_norm is the norm_square for the whole grid
         global_norm[] = sqrt(global_norm[] / z.n_global)
     end
     _block_synchronize()
-    MPI.Bcast!(global_norm, comm_block[]; root=0)
+    @timeit_debug global_timer "MPI.Bcast! comm_block" MPI.Bcast!(global_norm, comm_block[]; root=0)
 
     return global_norm[]
 end
 
-function distributed_norm(::Val{:vpa}, residual::AbstractArray{mk_float, 1}, coords, rtol,
-                          atol, x)
+@timeit_debug global_timer distributed_norm(
+                               ::Val{:vpa}, residual::AbstractArray{mk_float, 1}, coords,
+                               rtol, atol, x) = begin
     # No parallelism needed when the implicit solve is over vpa - assume that this will be
     # called inside a parallelised s_r_z_vperp loop.
     residual_norm = 0.0
@@ -502,9 +504,10 @@ function distributed_norm(::Val{:vpa}, residual::AbstractArray{mk_float, 1}, coo
     return residual_norm
 end
 
-function distributed_norm(::Val{:zvperpvpa},
-                          residual::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}},
-                          coords, rtol, atol, x)
+@timeit_debug global_timer distributed_norm(
+                               ::Val{:zvperpvpa},
+                               residual::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}},
+                               coords, rtol, atol, x) = begin
     ppar_residual, pdf_residual = residual
     x_ppar, x_pdf = x
     z = coords.z
@@ -529,10 +532,10 @@ function distributed_norm(::Val{:zvperpvpa},
 
     _block_synchronize()
     global_norm_ppar = Ref(ppar_local_norm_square) # global_norm_ppar is the norm_square for ppar in the block
-    MPI.Reduce!(global_norm_ppar, +, comm_block[])
+    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_norm_ppar, +, comm_block[])
 
     if block_rank[] == 0
-        MPI.Allreduce!(global_norm_ppar, +, comm_inter_block[]) # global_norm_ppar is the norm_square for ppar in the whole grid
+        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_norm_ppar, +, comm_inter_block[]) # global_norm_ppar is the norm_square for ppar in the whole grid
         global_norm_ppar[] = global_norm_ppar[] / z.n_global
     end
 
@@ -550,23 +553,24 @@ function distributed_norm(::Val{:zvperpvpa},
 
     _block_synchronize()
     global_norm = Ref(pdf_local_norm_square)
-    MPI.Reduce!(global_norm, +, comm_block[]) # global_norm is the norm_square for the block
+    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_norm, +, comm_block[]) # global_norm is the norm_square for the block
 
     if block_rank[] == 0
-        MPI.Allreduce!(global_norm, +, comm_inter_block[]) # global_norm is the norm_square for the whole grid
+        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_norm, +, comm_inter_block[]) # global_norm is the norm_square for the whole grid
         global_norm[] = global_norm[] / (z.n_global * vperp.n_global * vpa.n_global)
 
         global_norm[] = sqrt(mean((global_norm_ppar[], global_norm[])))
     end
     _block_synchronize()
 
-    MPI.Bcast!(global_norm, comm_block[]; root=0)
+    @timeit_debug global_timer "MPI.Bcast! comm_block" MPI.Bcast!(global_norm, comm_block[]; root=0)
 
     return global_norm[]
 end
 
-function distributed_norm(::Val{:srzvperpvpa}, residual::AbstractArray{mk_float, 5},
-                          coords, rtol, atol, x)
+@timeit_debug global_timer distributed_norm(
+                  ::Val{:srzvperpvpa}, residual::AbstractArray{mk_float, 5}, coords, rtol,
+                  atol, x) = begin
     n_ion_species = coords.s
     r = coords.r
     z = coords.z
@@ -597,20 +601,21 @@ function distributed_norm(::Val{:srzvperpvpa}, residual::AbstractArray{mk_float,
 
     _block_synchronize()
     global_norm = Ref(local_norm)
-    MPI.Reduce!(global_norm, +, comm_block[]) # global_norm is the norm_square for the block
+    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_norm, +, comm_block[]) # global_norm is the norm_square for the block
 
     if block_rank[] == 0
-        MPI.Allreduce!(global_norm, +, comm_inter_block[]) # global_norm is the norm_square for the whole grid
+        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_norm, +, comm_inter_block[]) # global_norm is the norm_square for the whole grid
         global_norm[] = sqrt(global_norm[] / (n_ion_species * r.n_global * z.n_global * vperp.n_global * vpa.n_global))
     end
     _block_synchronize()
-    MPI.Bcast!(global_norm, comm_block[]; root=0)
+    @timeit_debug global_timer "MPI.Bcast! comm_block" MPI.Bcast!(global_norm, comm_block[]; root=0)
 
     return global_norm[]
 end
 
-function distributed_dot(::Val{:z}, v::AbstractArray{mk_float, 1},
-                         w::AbstractArray{mk_float, 1}, coords, rtol, atol, x)
+@timeit_debug global_timer distributed_dot(
+                  ::Val{:z}, v::AbstractArray{mk_float, 1}, w::AbstractArray{mk_float, 1},
+                  coords, rtol, atol, x) = begin
 
     z = coords.z
 
@@ -635,18 +640,19 @@ function distributed_dot(::Val{:z}, v::AbstractArray{mk_float, 1},
 
     _block_synchronize()
     global_dot = Ref(local_dot)
-    MPI.Reduce!(global_dot, +, comm_block[]) # global_dot is the dot for the block
+    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_dot, +, comm_block[]) # global_dot is the dot for the block
 
     if block_rank[] == 0
-        MPI.Allreduce!(global_dot, +, comm_inter_block[]) # global_dot is the dot for the whole grid
+        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_dot, +, comm_inter_block[]) # global_dot is the dot for the whole grid
         global_dot[] = global_dot[] / z.n_global
     end
 
     return global_dot[]
 end
 
-function distributed_dot(::Val{:vpa}, v::AbstractArray{mk_float, 1},
-                         w::AbstractArray{mk_float, 1}, coords, rtol, atol, x)
+@timeit_debug global_timer distributed_dot(
+                  ::Val{:vpa}, v::AbstractArray{mk_float, 1}, w::AbstractArray{mk_float, 1}, coords,
+                  rtol, atol, x) = begin
     # No parallelism needed when the implicit solve is over vpa - assume that this will be
     # called inside a parallelised s_r_z_vperp loop.
     local_dot = 0.0
@@ -657,10 +663,10 @@ function distributed_dot(::Val{:vpa}, v::AbstractArray{mk_float, 1},
     return local_dot
 end
 
-function distributed_dot(::Val{:zvperpvpa},
-                         v::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}},
-                         w::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}},
-                         coords, rtol, atol, x)
+@timeit_debug global_timer distributed_dot(
+                  ::Val{:zvperpvpa}, v::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}},
+                  w::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}}, coords,
+                  rtol, atol, x) = begin
     v_ppar, v_pdf = v
     w_ppar, w_pdf = w
     x_ppar, x_pdf = x
@@ -687,10 +693,10 @@ function distributed_dot(::Val{:zvperpvpa},
 
     _block_synchronize()
     ppar_global_dot = Ref(ppar_local_dot)
-    MPI.Reduce!(ppar_global_dot, +, comm_block[]) # ppar_global_dot is the ppar_dot for the block
+    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(ppar_global_dot, +, comm_block[]) # ppar_global_dot is the ppar_dot for the block
 
     if block_rank[] == 0
-        MPI.Allreduce!(ppar_global_dot, +, comm_inter_block[]) # ppar_global_dot is the ppar_dot for the whole grid
+        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(ppar_global_dot, +, comm_inter_block[]) # ppar_global_dot is the ppar_dot for the whole grid
         ppar_global_dot[] = ppar_global_dot[] / z.n_global
     end
 
@@ -706,10 +712,10 @@ function distributed_dot(::Val{:zvperpvpa},
 
     _block_synchronize()
     global_dot = Ref(pdf_local_dot)
-    MPI.Reduce!(global_dot, +, comm_block[]) # global_dot is the dot for the block
+    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_dot, +, comm_block[]) # global_dot is the dot for the block
 
     if block_rank[] == 0
-        MPI.Allreduce!(global_dot, +, comm_inter_block[]) # global_dot is the dot for the whole grid
+        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_dot, +, comm_inter_block[]) # global_dot is the dot for the whole grid
         global_dot[] = global_dot[] / (z.n_global * vperp.n_global * vpa.n_global)
 
         global_dot[] = mean((ppar_global_dot[], global_dot[]))
@@ -718,8 +724,9 @@ function distributed_dot(::Val{:zvperpvpa},
     return global_dot[]
 end
 
-function distributed_dot(::Val{:srzvperpvpa}, v::AbstractArray{mk_float, 5},
-                         w::AbstractArray{mk_float, 5}, coords, rtol, atol, x)
+@timeit_debug global_timer distributed_dot(
+                  ::Val{:srzvperpvpa}, v::AbstractArray{mk_float, 5},
+                  w::AbstractArray{mk_float, 5}, coords, rtol, atol, x) = begin
     n_ion_species = coords.s
     r = coords.r
     z = coords.z
@@ -749,10 +756,10 @@ function distributed_dot(::Val{:srzvperpvpa}, v::AbstractArray{mk_float, 5},
 
     _block_synchronize()
     global_dot = Ref(local_dot)
-    MPI.Reduce!(global_dot, +, comm_block[]) # global_dot is the dot for the block
+    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_dot, +, comm_block[]) # global_dot is the dot for the block
 
     if block_rank[] == 0
-        MPI.Allreduce!(global_dot, +, comm_inter_block[]) # global_dot is the dot for the whole grid
+        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_dot, +, comm_inter_block[]) # global_dot is the dot for the whole grid
         global_dot[] = global_dot[] / (n_ion_species * r.n_global * z.n_global * vperp.n_global * vpa.n_global)
     end
 
@@ -762,7 +769,8 @@ end
 # Separate versions for different numbers of arguments as generator expressions result in
 # slow code
 
-function parallel_map(::Val{:z}, func, result::AbstractArray{mk_float, 1})
+@timeit_debug global_timer parallel_map(
+                  ::Val{:z}, func, result::AbstractArray{mk_float, 1}) = begin
 
     begin_z_region()
 
@@ -772,7 +780,8 @@ function parallel_map(::Val{:z}, func, result::AbstractArray{mk_float, 1})
 
     return nothing
 end
-function parallel_map(::Val{:z}, func, result::AbstractArray{mk_float, 1}, x1)
+@timeit_debug global_timer parallel_map(
+                  ::Val{:z}, func, result::AbstractArray{mk_float, 1}, x1) = begin
 
     begin_z_region()
 
@@ -782,7 +791,8 @@ function parallel_map(::Val{:z}, func, result::AbstractArray{mk_float, 1}, x1)
 
     return nothing
 end
-function parallel_map(::Val{:z}, func, result::AbstractArray{mk_float, 1}, x1, x2)
+@timeit_debug global_timer parallel_map(
+                  ::Val{:z}, func, result::AbstractArray{mk_float, 1}, x1, x2) = begin
 
     begin_z_region()
 
@@ -798,7 +808,8 @@ function parallel_map(::Val{:z}, func, result::AbstractArray{mk_float, 1}, x1, x
 
     return nothing
 end
-function parallel_map(::Val{:z}, func, result::AbstractArray{mk_float, 1}, x1, x2, x3)
+@timeit_debug global_timer parallel_map(
+                  ::Val{:z}, func, result::AbstractArray{mk_float, 1}, x1, x2, x3) = begin
 
     begin_z_region()
 
@@ -815,7 +826,8 @@ function parallel_map(::Val{:z}, func, result::AbstractArray{mk_float, 1}, x1, x
     return nothing
 end
 
-function parallel_map(::Val{:vpa}, func, result::AbstractArray{mk_float, 1})
+@timeit_debug global_timer parallel_map(
+                  ::Val{:vpa}, func, result::AbstractArray{mk_float, 1}) = begin
     # No parallelism needed when the implicit solve is over vpa - assume that this will be
     # called inside a parallelised s_r_z_vperp loop.
     for i ∈ eachindex(result)
@@ -823,7 +835,8 @@ function parallel_map(::Val{:vpa}, func, result::AbstractArray{mk_float, 1})
     end
     return nothing
 end
-function parallel_map(::Val{:vpa}, func, result::AbstractArray{mk_float, 1}, x1)
+@timeit_debug global_timer parallel_map(
+                  ::Val{:vpa}, func, result::AbstractArray{mk_float, 1}, x1) = begin
     # No parallelism needed when the implicit solve is over vpa - assume that this will be
     # called inside a parallelised s_r_z_vperp loop.
     for i ∈ eachindex(result)
@@ -831,7 +844,8 @@ function parallel_map(::Val{:vpa}, func, result::AbstractArray{mk_float, 1}, x1)
     end
     return nothing
 end
-function parallel_map(::Val{:vpa}, func, result::AbstractArray{mk_float, 1}, x1, x2)
+@timeit_debug global_timer parallel_map(
+                  ::Val{:vpa}, func, result::AbstractArray{mk_float, 1}, x1, x2) = begin
     # No parallelism needed when the implicit solve is over vpa - assume that this will be
     # called inside a parallelised s_r_z_vperp loop.
     if isa(x2, AbstractArray)
@@ -845,7 +859,8 @@ function parallel_map(::Val{:vpa}, func, result::AbstractArray{mk_float, 1}, x1,
     end
     return nothing
 end
-function parallel_map(::Val{:vpa}, func, result::AbstractArray{mk_float, 1}, x1, x2, x3)
+@timeit_debug global_timer parallel_map(
+                  ::Val{:vpa}, func, result::AbstractArray{mk_float, 1}, x1, x2, x3) = begin
     # No parallelism needed when the implicit solve is over vpa - assume that this will be
     # called inside a parallelised s_r_z_vperp loop.
     if isa(x3, AbstractArray)
@@ -860,7 +875,8 @@ function parallel_map(::Val{:vpa}, func, result::AbstractArray{mk_float, 1}, x1,
     return nothing
 end
 
-function parallel_map(::Val{:zvperpvpa}, func, result::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}})
+@timeit_debug global_timer parallel_map(
+                  ::Val{:zvperpvpa}, func, result::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}}) = begin
 
     result_ppar, result_pdf = result
 
@@ -878,7 +894,9 @@ function parallel_map(::Val{:zvperpvpa}, func, result::Tuple{AbstractArray{mk_fl
 
     return nothing
 end
-function parallel_map(::Val{:zvperpvpa}, func, result::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}}, x1)
+@timeit_debug global_timer parallel_map(
+                  ::Val{:zvperpvpa}, func, result::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}},
+                  x1) = begin
 
     result_ppar, result_pdf = result
     x1_ppar, x1_pdf = x1
@@ -897,7 +915,9 @@ function parallel_map(::Val{:zvperpvpa}, func, result::Tuple{AbstractArray{mk_fl
 
     return nothing
 end
-function parallel_map(::Val{:zvperpvpa}, func, result::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}}, x1, x2)
+@timeit_debug global_timer parallel_map(
+                  ::Val{:zvperpvpa}, func, result::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}},
+                  x1, x2) = begin
 
     result_ppar, result_pdf = result
     x1_ppar, x1_pdf = x1
@@ -931,7 +951,9 @@ function parallel_map(::Val{:zvperpvpa}, func, result::Tuple{AbstractArray{mk_fl
 
     return nothing
 end
-function parallel_map(::Val{:zvperpvpa}, func, result::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}}, x1, x2, x3)
+@timeit_debug global_timer parallel_map(
+                  ::Val{:zvperpvpa}, func, result::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}},
+                  x1, x2, x3) = begin
 
     result_ppar, result_pdf = result
     x1_ppar, x1_pdf = x1
@@ -967,7 +989,8 @@ function parallel_map(::Val{:zvperpvpa}, func, result::Tuple{AbstractArray{mk_fl
     return nothing
 end
 
-function parallel_map(::Val{:srzvperpvpa}, func, result::AbstractArray{mk_float, 5})
+@timeit_debug global_timer parallel_map(
+                  ::Val{:srzvperpvpa}, func, result::AbstractArray{mk_float, 5}) = begin
 
     begin_s_r_z_vperp_vpa_region()
 
@@ -977,7 +1000,8 @@ function parallel_map(::Val{:srzvperpvpa}, func, result::AbstractArray{mk_float,
 
     return nothing
 end
-function parallel_map(::Val{:srzvperpvpa}, func, result::AbstractArray{mk_float, 5}, x1)
+@timeit_debug global_timer parallel_map(
+                  ::Val{:srzvperpvpa}, func, result::AbstractArray{mk_float, 5}, x1) = begin
 
     begin_s_r_z_vperp_vpa_region()
 
@@ -987,7 +1011,8 @@ function parallel_map(::Val{:srzvperpvpa}, func, result::AbstractArray{mk_float,
 
     return nothing
 end
-function parallel_map(::Val{:srzvperpvpa}, func, result::AbstractArray{mk_float, 5}, x1, x2)
+@timeit_debug global_timer parallel_map(
+                  ::Val{:srzvperpvpa}, func, result::AbstractArray{mk_float, 5}, x1, x2) = begin
 
     begin_s_r_z_vperp_vpa_region()
 
@@ -1003,7 +1028,9 @@ function parallel_map(::Val{:srzvperpvpa}, func, result::AbstractArray{mk_float,
 
     return nothing
 end
-function parallel_map(::Val{:srzvperpvpa}, func, result::AbstractArray{mk_float, 5}, x1, x2, x3)
+@timeit_debug global_timer parallel_map(
+                  ::Val{:srzvperpvpa}, func, result::AbstractArray{mk_float, 5}, x1, x2,
+                  x3) = begin
 
     begin_s_r_z_vperp_vpa_region()
 
@@ -1020,7 +1047,8 @@ function parallel_map(::Val{:srzvperpvpa}, func, result::AbstractArray{mk_float,
     return nothing
 end
 
-function parallel_delta_x_calc(::Val{:z}, delta_x::AbstractArray{mk_float, 1}, V, y)
+@timeit_debug global_timer parallel_delta_x_calc(
+                  ::Val{:z}, delta_x::AbstractArray{mk_float, 1}, V, y) = begin
 
     begin_z_region()
 
@@ -1034,7 +1062,8 @@ function parallel_delta_x_calc(::Val{:z}, delta_x::AbstractArray{mk_float, 1}, V
     return nothing
 end
 
-function parallel_delta_x_calc(::Val{:vpa}, delta_x::AbstractArray{mk_float, 1}, V, y)
+@timeit_debug global_timer parallel_delta_x_calc(
+                  ::Val{:vpa}, delta_x::AbstractArray{mk_float, 1}, V, y) = begin
     # No parallelism needed when the implicit solve is over vpa - assume that this will be
     # called inside a parallelised s_r_z_vperp loop.
     ny = length(y)
@@ -1046,7 +1075,9 @@ function parallel_delta_x_calc(::Val{:vpa}, delta_x::AbstractArray{mk_float, 1},
     return nothing
 end
 
-function parallel_delta_x_calc(::Val{:zvperpvpa}, delta_x::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}}, V, y)
+@timeit_debug global_timer parallel_delta_x_calc(
+                  ::Val{:zvperpvpa}, delta_x::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}}, V,
+                  y) = begin
 
     delta_x_ppar, delta_x_pdf = delta_x
     V_ppar, V_pdf = V
@@ -1072,7 +1103,8 @@ function parallel_delta_x_calc(::Val{:zvperpvpa}, delta_x::Tuple{AbstractArray{m
     return nothing
 end
 
-function parallel_delta_x_calc(::Val{:srzvperpvpa}, delta_x::AbstractArray{mk_float, 5}, V, y)
+@timeit_debug global_timer parallel_delta_x_calc(
+                  ::Val{:srzvperpvpa}, delta_x::AbstractArray{mk_float, 5}, V, y) = begin
 
     begin_s_r_z_vperp_vpa_region()
 
