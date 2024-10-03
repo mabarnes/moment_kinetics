@@ -2588,7 +2588,6 @@ function write_ion_moments_data_to_binary(scratch, moments, n_ion_species, t_par
                 append_to_dynamic_var(io_moments.external_source_controller_integral,
                                       moments.ion.external_source_controller_integral,
                                       t_idx, parallel_io, 1, 1, n_sources)
-                println("moments.ion.external_source_controller_integral = ", moments.ion.external_source_controller_integral)
             else
                 append_to_dynamic_var(io_moments.external_source_controller_integral,
                                       moments.ion.external_source_controller_integral,
