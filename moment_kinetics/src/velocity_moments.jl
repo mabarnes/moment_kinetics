@@ -767,8 +767,8 @@ function update_ion_qpar_species!(qpar, density, upar, vth, dT_dz, ff, vpa, vper
     if ion_physics ∈ (drift_kinetic_ions, gyrokinetic_ions)
         calculate_ion_qpar_from_pdf!(qpar, density, upar, vth, ff, vpa, vperp, z, r, evolve_density,
                                      evolve_upar, evolve_ppar)
-    elseif ion_physics == braginskii_ions
-        calculate_ion_qpar_from_braginskii!(qpar, density, upar, vth, dT_dz, z, r, collisions, evolve_density, 
+    elseif ion_physics == coll_krook_ions
+        calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z, r, collisions, evolve_density, 
                                             evolve_upar, evolve_ppar)
     else
         throw(ArgumentError("ion model $ion_physics not implemented for qpar calculation"))
@@ -818,15 +818,15 @@ function calculate_ion_qpar_from_pdf!(qpar, density, upar, vth, ff, vpa, vperp, 
     return nothing
 end
 """
-calculate parallel heat flux if ion composition flag is Braginskii fluid ions
+calculate parallel heat flux if ion composition flag is coll_krook fluid ions
 """
-function calculate_ion_qpar_from_braginskii!(qpar, density, upar, vth, dT_dz, z, r, collisions, evolve_density, evolve_upar, evolve_ppar)
+function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z, r, collisions, evolve_density, evolve_upar, evolve_ppar)
     # Note that this is a braginskii heat flux for ions using the krook operator. The full Fokker-Planck operator
     # Braginskii heat flux is different! This also assumes one ion species, and so no friction between ions.
     @boundscheck r.n == size(qpar, 2) || throw(BoundsError(qpar))
     @boundscheck z.n == size(qpar, 1) || throw(BoundsError(qpar))
 
-    # calculate braginskii heat flux. Currently only works for one ion species! (hence the 1 in dT_dz[iz,ir,1])
+    # calculate coll_krook heat flux. Currently only works for one ion species! (hence the 1 in dT_dz[iz,ir,1])
     if evolve_density && evolve_upar && evolve_ppar
         begin_r_z_region()
         @loop_r_z ir iz begin
@@ -834,7 +834,7 @@ function calculate_ion_qpar_from_braginskii!(qpar, density, upar, vth, dT_dz, z,
             qpar[iz,ir] = -(1/2) * 5/4 * density[iz,ir] * vth[iz,ir]^2 /nu_ii * dT_dz[iz,ir,1]
         end
     else
-        throw(ArgumentError("Braginskii heat flux simulation requires evolve_density, 
+        throw(ArgumentError("coll_krook heat flux simulation requires evolve_density, 
               evolve_upar and evolve_ppar to be true, since it is a purely fluid simulation"))
     end
 

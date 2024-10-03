@@ -35,9 +35,9 @@ function get_species_input(toml_input)
         # If ion_physics=gyrokinetic_ions, the ion distribution function is
         # advanced in time using gyroaveraged fields at fixed guiding centre and moments of the
         # pdf computed at fixed r
-        # If ion_physics=braginskii_ions, there is no need for a shape function to evolve, and the code 
+        # If ion_physics=coll_krook_ions, there is no need for a shape function to evolve, and the code 
         # only evolves ions in a fluid sense (i.e. all evolve_moments are set to true), with a 
-        # Braginskii closure for the ion heat flux.
+        # coll_krook closure for the ion heat flux.
         ion_physics = drift_kinetic_ions,
         # initial Tₑ = 1
         T_e = 1.0,

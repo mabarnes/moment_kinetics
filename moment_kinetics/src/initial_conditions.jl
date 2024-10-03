@@ -200,7 +200,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
                         vpa, vzeta, vr, vz, vpa_spectral, vz_spectral, species)
 
         begin_s_r_z_region()
-        # calculate the initial parallel heat flux from the initial un-normalised pdf. Even if Braginskii fluid is being
+        # calculate the initial parallel heat flux from the initial un-normalised pdf. Even if coll_krook fluid is being
         # advanced, initialised ion_qpar uses the pdf 
         update_ion_qpar!(moments.ion.qpar, moments.ion.qpar_updated,
                      moments.ion.dens, moments.ion.upar, moments.ion.vth, moments.ion.dT_dz,

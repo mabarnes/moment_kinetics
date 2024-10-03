@@ -4222,7 +4222,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         # flat points in temperature have diverging Lupar, so ignore those with NaN
         # using a hard coded 10.0 tolerance for now
         variable[variable .> 10.0] .= NaN
-    elseif variable_name == "braginskii_heat_flux"
+    elseif variable_name == "coll_krook_heat_flux"
         n = get_variable(run_info, "density"; kwargs...)
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         dT_dz = get_variable(run_info, "dT_dz"; kwargs...)

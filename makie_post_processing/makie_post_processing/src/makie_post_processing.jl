@@ -830,8 +830,8 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         animate_Lupar_mfp_vs_z = false,
         plot_Lupar_Ln_LT_mfp_vs_z = false,
         animate_Lupar_Ln_LT_mfp_vs_z = false,
-        plot_overlay_braginskii_heat_flux = false,
-        animate_overlay_braginskii_heat_flux = false,
+        plot_overlay_coll_krook_heat_flux = false,
+        animate_overlay_coll_krook_heat_flux = false,
         animation_ext = "gif"
        )
 
@@ -8632,9 +8632,9 @@ function collisionality_plots(run_info, plot_prefix=nothing)
             save_animation(fig, frame_index, nt, outfile)
         end
 
-        if input.plot_overlay_braginskii_heat_flux
-            variable_prefix = plot_prefix * "braginskii_vs_original_heat_flux"
-            braginskii_q = get_variable(run_info, "braginskii_heat_flux")
+        if input.plot_overlay_coll_krook_heat_flux
+            variable_prefix = plot_prefix * "coll_krook_vs_original_heat_flux"
+            coll_krook_q = get_variable(run_info, "coll_krook_heat_flux")
             original_q = get_variable(run_info, "parallel_heat_flux")
             fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
             for ri ∈ eachindex(run_info)
@@ -8643,9 +8643,9 @@ function collisionality_plots(run_info, plot_prefix=nothing)
                 else
                     run_label = " "
                 end
-                if get(run_info[ri].input["composition"], "ion_physics", "") !== braginskii_ions
-                    plot_1d(run_info[ri].z.grid, braginskii_q[ri][:,1,1,end], xlabel="z",
-                            ylabel="values", label=run_label*"braginskii_q_overlay", ax=ax[1], title = "Braginskii heat flux overlay")
+                if get(run_info[ri].input["composition"], "ion_physics", "") !== coll_krook_ions
+                    plot_1d(run_info[ri].z.grid, coll_krook_q[ri][:,1,1,end], xlabel="z",
+                            ylabel="values", label=run_label*"coll_krook_q_overlay", ax=ax[1], title = "coll_krook heat flux overlay")
                 end
                 plot_1d(run_info[ri].z.grid, original_q[ri][:,1,1,end], label=run_label*"original_q", ax=ax[1])
             end
@@ -8655,10 +8655,10 @@ function collisionality_plots(run_info, plot_prefix=nothing)
             save(outfile, fig)
         end
 
-        if input.animate_overlay_braginskii_heat_flux 
+        if input.animate_overlay_coll_krook_heat_flux 
             nt = length(mfp[1][1,1,1,:])
-            variable_prefix = plot_prefix * "braginskii_vs_original_heat_flux"
-            braginskii_q = get_variable(run_info, "braginskii_heat_flux")
+            variable_prefix = plot_prefix * "coll_krook_vs_original_heat_flux"
+            coll_krook_q = get_variable(run_info, "coll_krook_heat_flux")
             original_q = get_variable(run_info, "parallel_heat_flux")
             fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
             frame_index = Observable(1)
@@ -8668,10 +8668,10 @@ function collisionality_plots(run_info, plot_prefix=nothing)
                 else
                     run_label = " "
                 end
-                if get(run_info[ri].input["composition"], "ion_physics", "") !== braginskii_ions
-                    animate_1d(run_info[ri].z.grid, braginskii_q[ri][:,1,1,:],
+                if get(run_info[ri].input["composition"], "ion_physics", "") !== coll_krook_ions
+                    animate_1d(run_info[ri].z.grid, coll_krook_q[ri][:,1,1,:],
                             frame_index=frame_index, xlabel="z", ylabel="values",
-                            label=run_label*"braginskii_q_overlay", ax=ax[1], title = "Braginskii heat flux overlay")
+                            label=run_label*"coll_krook_q_overlay", ax=ax[1], title = "coll_krook heat flux overlay")
                 end
                 animate_1d(run_info[ri].z.grid, original_q[ri][:,1,1,:],
                         frame_index=frame_index, xlabel="z", ylabel="values",

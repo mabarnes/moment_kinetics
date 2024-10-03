@@ -163,12 +163,12 @@ export kinetic_electrons_with_temperature_equation
 @enum ion_physics_type begin
     gyrokinetic_ions
     drift_kinetic_ions
-    braginskii_ions
+    coll_krook_ions
 end
 export ion_physics_type
 export gyrokinetic_ions
 export drift_kinetic_ions
-export braginskii_ions
+export coll_krook_ions
 """
 """
 Base.@kwdef struct spatial_initial_condition_input
@@ -268,7 +268,7 @@ Base.@kwdef struct species_composition
     #   density is fixed to be Nₑ*(eϕ/T_e) and N_e is calculated using a current
     #   condition at the wall
     electron_physics::electron_physics_type
-    # ion physics can be drift_kinetic_ions, gyrokinetic_ions and braginskii_ions
+    # ion physics can be drift_kinetic_ions, gyrokinetic_ions and coll_krook_ions
     # gyrokinetic_ions (originally gyrokinetic_ions = true) -> use gyroaveraged fields at fixed guiding 
     # centre and moments of the pdf computed at fixed r
     # drift_kinetic_ions (originally gyrokinetic_ions = false) -> use drift kinetic approximation
