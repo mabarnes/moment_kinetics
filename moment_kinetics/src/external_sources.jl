@@ -719,7 +719,7 @@ function external_ion_source!(pdf, fvec, moments, ion_source, index, vperp, vpa,
     end
     vpa_grid = vpa.grid
     vperp_grid = vperp.grid
-    if source_type in ("Maxwellian","energy")
+    if source_type in ("Maxwellian","energy","density_midpoint_control","density_profile_control")
         begin_s_r_z_vperp_region()
         if moments.evolve_ppar && moments.evolve_upar && moments.evolve_density
             vth = moments.ion.vth
@@ -1180,7 +1180,7 @@ function external_ion_source_controller!(fvec_in, moments, ion_source_settings, 
                     dt * ion_source_settings.PI_density_controller_I * n_error
 
                 # Only want a source, so never allow amplitude to be negative
-                amplitude = max(
+                amplitude = max(ion_source_settings.source_strength +
                     ion_source_settings.PI_density_controller_P * n_error +
                     ion_moments.external_source_controller_integral[1,1,index],
                     0)
