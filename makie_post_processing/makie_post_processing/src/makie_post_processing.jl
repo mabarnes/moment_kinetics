@@ -8357,6 +8357,12 @@ function collisionality_plots(run_info, plot_prefix=nothing)
         L_T = get_variable(run_info, "L_T")
         L_n = get_variable(run_info, "L_n")
         L_upar = get_variable(run_info, "L_upar")
+        nt = minimum(length(mfp[ri][1,1,1,:]) for ri in eachindex(run_info))
+        # print warning if the lengths of all the mfp[ri][1,1,1,:] are not the same
+        if any(length(mfp[ri][1,1,1,:]) != nt for ri in eachindex(run_info))
+            println("Warning: The number of timesteps of some simulations are different, " *
+                    "so only the first common timesteps will be animated.")
+        end
 
         # write function to check that mfp[ri][1, 1, 1, :] is the same length (i.e. nt) for all ri 
         if input.plot_mfp_vs_z
@@ -8473,7 +8479,6 @@ function collisionality_plots(run_info, plot_prefix=nothing)
 
         if input.animate_LT_mfp_vs_z
             variable_prefix = plot_prefix * "LT_mfp"
-            nt = length(mfp[1][1,1,1,:])
             fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
             frame_index = Observable(1)
             for ri ∈ eachindex(run_info)
@@ -8516,7 +8521,6 @@ function collisionality_plots(run_info, plot_prefix=nothing)
 
         if input.animate_Ln_mfp_vs_z
             variable_prefix = plot_prefix * "Ln_mfp"
-            nt = length(mfp[1][1,1,1,:])
             fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
             frame_index = Observable(1)
             for ri ∈ eachindex(run_info)
@@ -8560,7 +8564,6 @@ function collisionality_plots(run_info, plot_prefix=nothing)
         if input.animate_Lupar_mfp_vs_z
             variable_prefix = plot_prefix * "Lupar_mfp"
             fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
-            nt = length(mfp[1][1,1,1,:])
             frame_index = Observable(1)
             for ri ∈ eachindex(run_info)
                 if length(run_info) > 1
@@ -8603,7 +8606,6 @@ function collisionality_plots(run_info, plot_prefix=nothing)
         end
 
         if input.animate_Lupar_Ln_LT_mfp_vs_z
-            nt = length(mfp[1][1,1,1,:])
             variable_prefix = plot_prefix * "Lupar_Ln_LT_mfp"
             fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
             frame_index = Observable(1)
@@ -8655,8 +8657,7 @@ function collisionality_plots(run_info, plot_prefix=nothing)
             save(outfile, fig)
         end
 
-        if input.animate_overlay_coll_krook_heat_flux 
-            nt = length(mfp[1][1,1,1,:])
+        if input.animate_overlay_coll_krook_heat_flux
             variable_prefix = plot_prefix * "coll_krook_vs_original_heat_flux"
             coll_krook_q = get_variable(run_info, "coll_krook_heat_flux")
             original_q = get_variable(run_info, "parallel_heat_flux")
