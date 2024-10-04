@@ -2796,14 +2796,15 @@ function write_neutral_moments_data_to_binary(scratch, moments, n_neutral_specie
             end
         end
         if io_moments.external_source_neutral_controller_integral !== nothing
-            if size(moments.neutral.external_source_neutral_controller_integral) == (1,1)
+            n_sources = size(moments.neutral.external_source_amplitude)[3]
+            if size(moments.neutral.external_source_neutral_controller_integral) == (1,1, n_sources)
                 append_to_dynamic_var(io_moments.external_source_neutral_controller_integral,
                                       moments.neutral.external_source_controller_integral,
-                                      t_idx, parallel_io)
+                                      t_idx, parallel_io, 1, 1, n_sources)
             else
                 append_to_dynamic_var(io_moments.external_source_neutral_controller_integral,
                                       moments.neutral.external_source_controller_integral,
-                                      t_idx, parallel_io, z, r)
+                                      t_idx, parallel_io, z, r, n_sources)
             end
         end
         if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
