@@ -3601,6 +3601,9 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         # Don't keep open files as read_distributed_zr_data!(), etc. open the files
         # themselves
         files = run_prefixes
+        for f ∈ fids0
+            close(f)
+        end
     end
 
     run_info = (run_name=run_name, run_prefix=base_prefix, parallel_io=parallel_io,
