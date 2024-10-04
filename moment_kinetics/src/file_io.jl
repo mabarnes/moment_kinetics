@@ -752,6 +752,12 @@ function write_overview!(fid, composition, collisions, parallel_io, evolve_densi
         write_single_value!(overview, "evolve_ppar", evolve_ppar,
                             parallel_io=parallel_io,
                             description="is parallel pressure evolved separately from the distribution function?")
+        write_single_value!(overview, "nrank", global_size[],
+                            parallel_io=parallel_io,
+                            description="Number of MPI ranks used for run.")
+        write_single_value!(overview, "block_size", block_size[],
+                            parallel_io=parallel_io,
+                            description="Number of MPI ranks in each shared-memory block.")
         write_single_value!(overview, "parallel_io", parallel_io,
                             parallel_io=parallel_io,
                             description="is parallel I/O being used?")
