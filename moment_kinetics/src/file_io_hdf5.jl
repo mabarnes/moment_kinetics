@@ -260,10 +260,10 @@ function extend_time_index!(h5, t_idx)
 end
 
 function append_to_dynamic_var(io_var::HDF5.Dataset,
-                               data::Union{Number,AbstractArray{T,N}}, t_idx,
+                               data::Union{Nothing,Number,AbstractArray{T,N}}, t_idx,
                                parallel_io::Bool,
                                coords::Union{coordinate,Integer}...;
-                               only_root=false) where {T,N}
+                               only_root=false, write_from_this_rank=nothing) where {T,N}
     # Extend time dimension for this variable
     dims = size(io_var)
     dims_mod = (dims[1:end-1]..., t_idx)
@@ -276,13 +276,19 @@ function append_to_dynamic_var(io_var::HDF5.Dataset,
         # output file
         return nothing
     end
+    if write_from_this_rank === false
+        # The variable is only written from another rank, not this one.
+        return nothing
+    end
 
     if isa(data, Number)
-        if !parallel_io || global_rank[] == 0
+        if !parallel_io || write_from_this_rank === true ||
+                (write_from_this_rank === nothing && global_rank[] == 0)
             # A scalar value is required to be the same on all processes, so when using
             # parallel I/O, only write from one process to avoid overwriting (which would
             # mean processes having to wait, and make which process wrote the final value
-            # random).
+            # random). An exception is if `write_from_this_rank=true` was passed - this
+            # should only be passed on one process.
             io_var[t_idx] = data
         end
     elseif N == 1

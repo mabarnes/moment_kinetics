@@ -10,12 +10,12 @@ using MPI
 # Note that order of includes matters - things used in one module must already
 # be defined
 include("../../machines/shared/machine_setup.jl") # Included so Documenter.jl can find its docs
-include("timer_utils.jl")
 include("check_so_newer_than_code.jl")
+include("type_definitions.jl")
+include("timer_utils.jl")
 include("command_line_options.jl")
 include("constants.jl")
 include("debugging.jl")
-include("type_definitions.jl")
 include("communication.jl")
 include("moment_kinetics_structs.jl")
 include("looping.jl")
@@ -85,7 +85,8 @@ using Primes
 
 using .file_io: setup_file_io, finish_file_io
 using .file_io: write_data_to_ascii
-using .file_io: write_all_moments_data_to_binary, write_all_dfns_data_to_binary
+using .file_io: write_all_moments_data_to_binary, write_all_dfns_data_to_binary,
+                write_final_timing_data_to_binary
 using .command_line_options: get_options
 using .communication
 using .communication: _block_synchronize
@@ -124,8 +125,8 @@ function run_moment_kinetics(input_dict::OptionsDict; restart=false, restart_tim
 
     mk_state = nothing
     try
-        # Reset global_timer in case a previous run was timed
-        reset_timer!(global_timer)
+        # Reset timers in case a previous run was timed
+        reset_mk_timers!()
 
         @timeit global_timer "moment_kinetics" begin
             # set up all the structs, etc. needed for a run
@@ -140,6 +141,7 @@ function run_moment_kinetics(input_dict::OptionsDict; restart=false, restart_tim
             # Print the timing information
             format_global_timer(; show_output=true)
         end
+        write_final_timing_data_to_binary(mk_state[end-1:end]...)
 
         # clean up i/o and communications
         # last 3 elements of mk_state are ascii_io, io_moments, and io_dfns

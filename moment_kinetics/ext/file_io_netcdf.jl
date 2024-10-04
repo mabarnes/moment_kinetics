@@ -209,9 +209,10 @@ function create_dynamic_variable!(file_or_group::NCDataset, name, type,
 end
 
 function append_to_dynamic_var(io_var::NCDatasets.CFVariable,
-                               data::Union{Number,AbstractArray{T,N}}, t_idx,
+                               data::Union{Nothing,Number,AbstractArray{T,N}}, t_idx,
                                parallel_io::Bool,
-                               coords...; only_root=false) where {T,N}
+                               coords...; only_root=false,
+                               write_from_this_rank=nothing) where {T,N}
     if only_root && parallel_io && global_rank[] != 0
         # Variable should only be written from root, and this process is not root for the
         # output file
