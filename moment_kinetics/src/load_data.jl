@@ -3595,6 +3595,17 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         evolving_variables = Tuple(evolving_variables)
     end
 
+    timing_variable_names = Dict{mk_int, Vector{String}}()
+    for fid ∈ fids0
+        timing_group = get_group(fid, "timing_data")
+        timing_rank_names = collect(k for k in keys(timing_group) if startswith(k, "rank"))
+        for group_name ∈ timing_rank_names
+            rank_group = get_group(timing_group, group_name)
+            irank = parse(mk_int, split(group_name, "rank")[2])
+            timing_variable_names[irank] = collect(keys(rank_group))
+        end
+    end
+
     if parallel_io
         files = fids0
     else
@@ -3628,7 +3639,7 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
                 vzeta_chunk_size=vzeta_chunk_size, vr_chunk_size=vr_chunk_size,
                 vz_chunk_size=vz_chunk_size, variable_names=variable_names,
                 evolving_variables=evolving_variables,
-                dfns=dfns)
+                timing_variable_names=timing_variable_names, dfns=dfns)
 
     return run_info
 end
@@ -4177,7 +4188,8 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
 
     # Get a 'per step' value from a saved 'cumulative' value. E.g. 'iterations per step'
     # from a saved 'cumulative total iterations'
-    function get_per_step_from_cumulative_variable(run_info, varname::String; kwargs...)
+    function get_per_step_from_cumulative_variable(run_info, varname::AbstractString;
+                                                   kwargs...)
         variable = get_variable(run_info, varname; kwargs...)
         tdim = ndims(variable)
         for i ∈ size(variable, tdim):-1:2
@@ -5023,6 +5035,13 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         nl_linear_iterations = get_per_step_from_cumulative_variable(
             run_info, "$(prefix)_linear_iterations"; kwargs...)
         variable = nl_linear_iterations ./ nl_iterations
+    elseif endswith(variable_name, "_per_step") && variable_name ∉ run_info.variable_names
+        # If "_per_step" is appended to a variable name, assume it is a cumulative
+        # variable, and get the per-step version.
+        variable =
+            get_per_step_from_cumulative_variable(run_info,
+                                                  split(variable_name, "_per_step")[1];
+                                                  kwargs...)
     else
         variable = postproc_load_variable(run_info, variable_name; kwargs...)
     end

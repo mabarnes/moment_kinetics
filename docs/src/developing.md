@@ -82,7 +82,20 @@ $ h5dump -d /timing_data/global_timer_string my_output_file.moments.h5
 ```
 
 More detailed timing information is saved for each MPI rank into subgroups
-`rank<i>` of the `timing_data` group in the output file.
+`rank<i>` of the `timing_data` group in the output file. This information can
+be plotted using [`makie_post_processing.timing_data`](@ref). The plots contain
+many curves. Filtering out the ones you are not interested in (using the
+`include_patterns`, `exclude_patterns`, and/or `ranks` arguments) can help, but
+it still may be useful to have interactive plots which show the label and MPI
+rank when you hover over a curve. For example
+```julia
+julia> using makie_post_processing, GLMakie
+julia> ri = get_run_info("runs/my_example_run/")
+julia> timing_data(ri; interactive_figs=:times);
+```
+Here `using GLMakie` selects the `Makie` backend that provides interactive
+plots, and the `interactive_figs` argument specifies that `timing_data()`
+should make an interactive plot (in this case for the execution times).
 
 Lower level timing data, for example timing MPI and linear-algebra calls, can
 be enabled by activating 'debug timing'. This can be done by re-defining the
