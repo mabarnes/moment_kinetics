@@ -89,8 +89,12 @@ end
 function write_single_value!(file_or_group::HDF5.H5DataStore, name,
                              data::Union{Number, AbstractString, AbstractArray{T,N}},
                              coords::Union{coordinate,mk_int,NamedTuple}...; parallel_io,
-                             description=nothing, units=nothing) where {T,N}
+                             description=nothing, units=nothing,
+                             overwrite=false) where {T,N}
     if isa(data, Union{Number, AbstractString})
+        if overwrite && name ∈ keys(file_or_group)
+            delete_object(file_or_group, name)
+        end
         file_or_group[name] = data
         if description !== nothing
             add_attribute!(file_or_group[name], "description", description)
@@ -110,7 +114,11 @@ function write_single_value!(file_or_group::HDF5.H5DataStore, name,
     end
 
     dim_sizes, chunk_sizes = hdf5_get_fixed_dim_sizes(coords, parallel_io)
-    io_var = create_dataset(file_or_group, name, T, dim_sizes, chunk=chunk_sizes)
+    if overwrite && name ∈ keys(file_or_group)
+        io_var = file_or_group(name)
+    else
+        io_var = create_dataset(file_or_group, name, T, dim_sizes, chunk=chunk_sizes)
+    end
     local_ranges = Tuple(isa(c, mk_int) ? (1:c) : isa(c, coordinate) ? c.local_io_range : c.n for c ∈ coords)
     global_ranges = Tuple(isa(c, mk_int) ? (1:c) : isa(c, coordinate) ? c.global_io_range : c.n for c ∈ coords)
 

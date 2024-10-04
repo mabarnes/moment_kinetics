@@ -98,7 +98,8 @@ end
 function write_single_value!(file_or_group::NCDataset, name,
                              value::Union{Number, AbstractString, AbstractArray{T,N}},
                              coords::Union{coordinate,NamedTuple}...; parallel_io,
-                             description=nothing, units=nothing) where {T,N}
+                             description=nothing, units=nothing,
+                             overwrite=false) where {T,N}
 
     if any(c.n < 0 for c ∈ coords)
         error("Got a negative `n` in $coords")
@@ -141,10 +142,18 @@ function write_single_value!(file_or_group::NCDataset, name,
     if isa(value, Bool)
         # As a hack, write bools to NetCDF as Char, as NetCDF does not support bools (?),
         # and we do not use Char for anything else
-        var = defVar(file_or_group, name, Char, dims, attrib=attributes)
+        if overwrite && name ∈ keys(file_or_group)
+            var = file_or_group[name]
+        else
+            var = defVar(file_or_group, name, Char, dims, attrib=attributes)
+        end
         var[:] = Char(value)
     else
-        var = defVar(file_or_group, name, type, dims, attrib=attributes)
+        if overwrite && name ∈ keys(file_or_group)
+            var = file_or_group[name]
+        else
+            var = defVar(file_or_group, name, type, dims, attrib=attributes)
+        end
         var[:] = value
     end
 

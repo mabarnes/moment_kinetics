@@ -667,10 +667,13 @@ function get_variable_keys end
     write_single_value!(file_or_group, name,
                         data::Union{Number, AbstractString, AbstractArray{T,N}},
                         coords::Union{coordinate,mk_int,NamedTuple}...; parallel_io,
-                        description=nothing, units=nothing) where {T,N}
+                        description=nothing, units=nothing,
+                        overwrite=false) where {T,N}
 
 Write a single variable to a file or group. If a description or units are passed, add as
 attributes of the variable.
+
+If `overwrite=true` is passed, overwrite the variable if it already exists in the file.
 """
 function write_single_value! end
 
