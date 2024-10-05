@@ -1043,15 +1043,18 @@ end
 
 """
     create_dynamic_variable!(file_or_group, name, type,
-                             coords::{coordinate,NamedTuple}...;
+                             coords::Union{coordinate,NamedTuple}...; parallel_io,
                              description=nothing, units=nothing)
 
-Create a time-evolving variable in `file_or_group` named `name` of type `type`. `coords`
-are the coordinates corresponding to the dimensions of the array, in the order of the
-array dimensions - they may be either `coordinate` structs or `NamedTuple`s that contain
-at least the fields `name`, `n`. The species dimension does not have a `coordinate`, so
-the number of species is passed as `nspecies`. A description and/or units can be added
-with the keyword arguments.
+Create a time-evolving variable in `file_or_group` named `name` of type `type`.
+
+`coords` are the coordinates corresponding to the dimensions of the array, in the order of
+the array dimensions - they may be either `coordinate` structs or `NamedTuple`s that
+contain at least the fields `name`, `n`.
+
+A description and/or units can be added with the keyword arguments.
+
+`parallel_io` is a Bool specifying whether parallel I/O is being used.
 """
 function create_dynamic_variable! end
 
