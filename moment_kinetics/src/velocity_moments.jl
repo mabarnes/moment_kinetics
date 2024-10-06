@@ -867,8 +867,11 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
             particle_flux = this_dens * this_upar
             T_i = vth[iz,ir]^2
 
-            # Stangeby paragraph after (2.92)
-            gamma_i = 2.0
+            # Stangeby (2.92) suggests a factor of 5.0 for this gamma_i value, but
+            # then suggests in the next paragraph that a factor of 2.0 is possibly 
+            # more accurate. 2.0 gives unstable results at high densities, so for
+            # now I'm using 4.0.
+            gamma_i = 4.0
 
             # Stangeby (2.92)
             total_heat_flux = gamma_i * T_i * particle_flux

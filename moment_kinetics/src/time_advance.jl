@@ -2350,8 +2350,13 @@ function apply_all_bcs_constraints_update_moments!(
     # Note these may be needed for the boundary condition on the neutrals, so must be
     # calculated before that is applied. Also may be needed to calculate advection speeds
     # for for CFL stability limit calculations in adaptive_timestep_update!().
-    update_derived_moments!(this_scratch, moments, vpa, vperp, z, r, composition,
-        r_spectral, geometry, gyroavs, scratch_dummy, z_advect, collisions, diagnostic_moments)
+    if composition.ion_physics ∈ (drift_kinetic_ions, gyrokinetic_ions)
+        update_derived_moments!(this_scratch, moments, vpa, vperp, z, r, composition,
+            r_spectral, geometry, gyroavs, scratch_dummy, z_advect, collisions, diagnostic_moments)
+    else
+        update_derived_moments!(this_scratch, moments, vpa, vperp, z, r, composition,
+            r_spectral, geometry, gyroavs, scratch_dummy, z_advect, collisions, false)
+    end
 
     calculate_ion_moment_derivatives!(moments, this_scratch, scratch_dummy, z, z_spectral,
                                       num_diss_params.ion.moment_dissipation_coefficient)
