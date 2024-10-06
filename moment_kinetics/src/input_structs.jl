@@ -34,21 +34,22 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     n_variables::mk_int
     nstep::mk_int
     end_time::mk_float
-    t::MPISharedArray{mk_float,1}
-    dt::MPISharedArray{mk_float,1}
-    previous_dt::MPISharedArray{mk_float,1}
-    next_output_time::MPISharedArray{mk_float,1}
-    dt_before_output::MPISharedArray{mk_float,1}
-    dt_before_last_fail::MPISharedArray{mk_float,1}
+    t::Base.RefValue{mk_float}
+    dt::Base.RefValue{mk_float}
+    previous_dt::Base.RefValue{mk_float}
+    dt_before_output::Base.RefValue{mk_float}
+    dt_before_last_fail::Base.RefValue{mk_float}
     CFL_prefactor::mk_float
-    step_to_moments_output::MPISharedArray{Bool,1}
-    step_to_dfns_output::MPISharedArray{Bool,1}
-    write_moments_output::MPISharedArray{Bool,1}
-    write_dfns_output::MPISharedArray{Bool,1}
-    step_counter::Ref{mk_int}
-    moments_output_counter::Ref{mk_int}
-    dfns_output_counter::Ref{mk_int}
-    failure_counter::Ref{mk_int}
+    step_to_moments_output::Base.RefValue{Bool}
+    step_to_dfns_output::Base.RefValue{Bool}
+    write_moments_output::Base.RefValue{Bool}
+    write_dfns_output::Base.RefValue{Bool}
+    step_counter::Base.RefValue{mk_int}
+    max_step_count_this_ion_step::Base.RefValue{mk_int}
+    max_t_increment_this_ion_step::Base.RefValue{mk_float}
+    moments_output_counter::Base.RefValue{mk_int}
+    dfns_output_counter::Base.RefValue{mk_int}
+    failure_counter::Base.RefValue{mk_int}
     failure_caused_by::Vector{mk_int}
     limit_caused_by::Vector{mk_int}
     nwrite_moments::mk_int
@@ -77,6 +78,10 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     implicit_ion_advance::Bool
     implicit_vpa_advection::Bool
     implicit_electron_ppar::Bool
+    constraint_forcing_rate::mk_float
+    decrease_dt_iteration_threshold::mk_int
+    increase_dt_iteration_threshold::mk_int
+    cap_factor_ion_dt::mk_float
     write_after_fixed_step_count::Bool
     error_sum_zero::Terrorsum
     split_operators::Bool
@@ -90,7 +95,7 @@ end
 
 """
 """
-mutable struct advance_info
+struct advance_info
     vpa_advection::Bool
     vperp_advection::Bool
     z_advection::Bool

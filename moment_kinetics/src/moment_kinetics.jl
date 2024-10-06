@@ -40,6 +40,7 @@ include("gyroaverages.jl")
 include("krook_collisions.jl")
 include("velocity_moments.jl")
 include("velocity_grid_transforms.jl")
+include("boundary_conditions.jl")
 include("electron_fluid_equations.jl")
 include("em_fields.jl")
 include("bgk.jl")
@@ -49,7 +50,6 @@ include("moment_constraints.jl")
 include("fokker_planck_test.jl")
 include("fokker_planck_calculus.jl")
 include("fokker_planck.jl")
-include("boundary_conditions.jl")
 include("advection.jl")
 include("vpa_advection.jl")
 include("z_advection.jl")
@@ -214,7 +214,8 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
 function setup_moment_kinetics(input_dict::AbstractDict;
         restart::Union{Bool,AbstractString}=false, restart_time_index::mk_int=-1,
         debug_loop_type::Union{Nothing,NTuple{N,Symbol} where N}=nothing,
-        debug_loop_parallel_dims::Union{Nothing,NTuple{N,Symbol} where N}=nothing)
+        debug_loop_parallel_dims::Union{Nothing,NTuple{N,Symbol} where N}=nothing,
+        skip_electron_solve::Bool=false)
 
     setup_start_time = now()
 
@@ -348,7 +349,8 @@ function setup_moment_kinetics(input_dict::AbstractDict;
             dt_before_last_fail, electron_dt, electron_dt_before_last_fail, collisions,
             species, geometry, boundary_distributions, external_source_settings,
             num_diss_params, manufactured_solns_input, advection_structs, io_input,
-            restarting, restart_electron_physics, input_dict)
+            restarting, restart_electron_physics, input_dict;
+            skip_electron_solve=skip_electron_solve)
 
     # This is the closest we can get to the end time of the setup before writing it to the
     # output file

@@ -2,11 +2,8 @@
 charge_exchange_frequency = 2.0
 electron_charge_exchange_frequency = 0.0
 ionization_frequency = 2.0
-electron_ionization_frequency = 2.0
+#electron_ionization_frequency = 2.0
 ionization_energy = 1.0
-
-[electron_fluid_collisions]
-nu_ei = 0.0
 
 [evolve_moments]
 density = false
@@ -20,28 +17,31 @@ nelement = 1
 
 [z]
 ngrid = 5
-#nelement = 32
-nelement = 64
+nelement = 32
+#nelement = 64
 #nelement = 128
 bc = "wall"
-discretization = "chebyshev_pseudospectral"
+discretization = "gausslegendre_pseudospectral"
 element_spacing_option = "sqrt"
 
 [vpa]
 ngrid = 5
+nelement = 31
 #nelement = 40
-nelement = 80
+#nelement = 80
 L = 12.0 #8.0
 bc = "zero"
-discretization = "chebyshev_pseudospectral"
+discretization = "gausslegendre_pseudospectral"
 #discretization = "gausslegendre_pseudospectral"
 
 [vz]
 ngrid = 5
-nelement = 80
+nelement = 31
+#nelement = 40
+#nelement = 80
 L = 8.0
 bc = "zero"
-discretization = "chebyshev_pseudospectral"
+discretization = "gausslegendre_pseudospectral"
 
 [composition]
 n_ion_species = 1

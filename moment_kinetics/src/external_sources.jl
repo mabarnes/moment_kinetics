@@ -15,11 +15,13 @@ export setup_external_sources!, external_ion_source!, external_neutral_source!,
        external_ion_source_controller!, external_neutral_source_controller!,
        initialize_external_source_amplitude!,
        initialize_external_source_controller_integral!,
+       add_external_electron_source_to_Jacobian!,
        total_external_ion_sources!, total_external_neutral_sources!,
        total_external_ion_source_controllers!, total_external_neutral_source_controllers!,
        external_electron_source!, total_external_electron_sources!
 
 using ..array_allocation: allocate_float, allocate_shared_float
+using ..boundary_conditions: skip_f_electron_bc_points_in_Jacobian
 using ..calculus
 using ..communication
 using ..coordinates
@@ -315,13 +317,13 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
                 PI_controller_amplitude, controller_source_profile,
                 PI_density_target_ir, PI_density_target_iz, PI_density_target_rank)
     end
-    function get_settings_electrons(ion_settings)
+    function get_settings_electrons(i, ion_settings)
         # Note most settings for the electron source are copied from the ion source,
         # because we require that the particle sources are the same for ions and
         # electrons. `source_T` can be set independently, and when using
         # `source_type="energy"`, the `source_strength` could also be set.
         input = set_defaults_and_check_section!(
-                     input_dict, "electron_source";
+                     input_dict, "electron_source_$i";
                      source_strength=ion_settings.source_strength,
                      source_T=ion_settings.source_T,
                     )
@@ -337,8 +339,8 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
             input["source_strength"] = ion_settings.source_strength
         end
         return electron_source_data(input["source_strength"], input["source_T"],
-                                       ion_settings.active, ion_settings.r_amplitude, 
-                                       ion_settings.z_amplitude, ion_settings.source_type)
+                                    ion_settings.active, ion_settings.r_amplitude,
+                                    ion_settings.z_amplitude, ion_settings.source_type)
     end
 
     # put all ion sources into ion_source_data struct vector
@@ -359,9 +361,9 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
     electron_sources = electron_source_data[]
     if electron_physics ∈ (braginskii_fluid, kinetic_electrons,
                            kinetic_electrons_with_temperature_equation)
-        electron_sources = [get_settings_electrons(this_source) for this_source ∈ ion_sources]
+        electron_sources = [get_settings_electrons(i, this_source) for (i,this_source) ∈ enumerate(ion_sources)]
     else
-        electron_sources = [get_settings_electrons(get_settings_ions(1, false))]
+        electron_sources = [get_settings_electrons(1, get_settings_ions(1, false))]
     end
 
     # put all neutral sources into neutral_source_data struct vector
@@ -923,18 +925,20 @@ function external_ion_source!(pdf, fvec, moments, ion_source, index, vperp, vpa,
 end
 
 """
-    total_external_electron_sources!(pdf, fvec, moments, electron_sources, vperp, vpa, dt, scratch_dummy)
+    total_external_electron_sources!(pdf_out, pdf_in, electron_density, electron_upar,
+                                     moments, composition, electron_sources, vperp,
+                                     vpa, dt, ir)
 
 Contribute all of the electron sources to the electron pdf, one by one.
 """
 function total_external_electron_sources!(pdf_out, pdf_in, electron_density, electron_upar,
                                           moments, composition, electron_sources, vperp,
-                                          vpa, dt)
+                                          vpa, dt, ir)
     for index ∈ eachindex(electron_sources)
         if electron_sources[index].active
             external_electron_source!(pdf_out, pdf_in, electron_density, electron_upar,
                                       moments, composition, electron_sources[index], index,
-                                      vperp, vpa, dt)
+                                      vperp, vpa, dt, ir)
         end
     end
     return nothing
@@ -943,18 +947,21 @@ end
 """
     external_electron_source!(pdf_out, pdf_in, electron_density, electron_upar,
                               moments, composition, electron_source, index, vperp,
-                              vpa, dt)
+                              vpa, dt, ir)
 
 Add external source term to the electron kinetic equation.
+
+Note that this function operates on a single point in `r`, given by `ir`, and `pdf_out`,
+`pdf_in`, `electron_density`, and `electron_upar` should have no r-dimension.
 """
 function external_electron_source!(pdf_out, pdf_in, electron_density, electron_upar,
-                                   moments, composition, electron_source, index, vperp,
-                                   vpa, dt)
-    begin_r_z_vperp_region()
+                                   moments, composition, electron_source, index,
+                                   vperp, vpa, dt, ir)
+    begin_z_vperp_region()
 
     me_over_mi = composition.me_over_mi
 
-    @views source_amplitude = moments.electron.external_source_amplitude[:, :, index]
+    @views source_amplitude = moments.electron.external_source_amplitude[:,ir,index]
     source_T = electron_source.source_T
     if vperp.n == 1
         vth_factor = 1.0 / sqrt(source_T / me_over_mi)
@@ -964,18 +971,18 @@ function external_electron_source!(pdf_out, pdf_in, electron_density, electron_u
     vpa_grid = vpa.grid
     vperp_grid = vperp.grid
 
-    vth = moments.electron.vth
-    @loop_r_z ir iz begin
-        this_vth = vth[iz,ir]
-        this_upar = electron_upar[iz,ir]
-        this_prefactor = dt * this_vth / electron_density[iz,ir] * vth_factor *
-                         source_amplitude[iz,ir]
+    vth = @view moments.electron.vth[:,ir]
+    @loop_z iz begin
+        this_vth = vth[iz]
+        this_upar = electron_upar[iz]
+        this_prefactor = dt * this_vth / electron_density[iz] * vth_factor *
+                         source_amplitude[iz]
         @loop_vperp_vpa ivperp ivpa begin
             # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
             # normalisation of F
             vperp_unnorm = vperp_grid[ivperp] * this_vth
             vpa_unnorm = vpa_grid[ivpa] * this_vth + this_upar
-            pdf_out[ivpa,ivperp,iz,ir] +=
+            pdf_out[ivpa,ivperp,iz] +=
                 this_prefactor *
                 exp(-(vperp_unnorm^2 + vpa_unnorm^2) * me_over_mi / source_T)
         end
@@ -983,32 +990,97 @@ function external_electron_source!(pdf_out, pdf_in, electron_density, electron_u
 
     if electron_source.source_type == "energy"
         # Take particles out of pdf so source does not change density
-        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-            pdf_out[ivpa,ivperp,iz,ir] -= dt * source_amplitude[iz,ir] *
-                                             pdf_in[ivpa,ivperp,iz,ir]
+        @loop_z_vperp_vpa iz ivperp ivpa begin
+            pdf_out[ivpa,ivperp,iz] -= dt * source_amplitude[iz] *
+                                            pdf_in[ivpa,ivperp,iz]
         end
     end
 
     return nothing
 end
 
-
-"""
-    total_external_neutral_sources!(pdf, fvec, moments, neutral_sources, vperp, vpa, dt, scratch_dummy)
-
-Contribute all of the neutral sources to the neutral pdf, one by one.
-"""
-function total_external_neutral_sources!(pdf, fvec, moments, neutral_sources, 
-                                         vzeta, vr, vz, dt)
-    for index ∈ eachindex(neutral_sources)
-        if neutral_sources[index].active
-            external_neutral_source!(pdf, fvec, moments, neutral_sources[index], 
-                                     index, vzeta, vr, vz, dt)
-        end
+function add_total_external_electron_source_to_Jacobian!(
+        jacobian_matrix, f, moments, me, z_speed, electron_sources, z, vperp, vpa, dt, ir;
+        f_offset=0, ppar_offset=0)
+    for index ∈ eachindex(electron_sources)
+        add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments, me,
+                                                  z_speed, electron_sources[index], index,
+                                                  z, vperp, vpa, dt, ir;
+                                                  f_offset=f_offset,
+                                                  ppar_offset=ppar_offset)
     end
-    return nothing
 end
 
+function add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments, me,
+                                                   z_speed, electron_source, index, z,
+                                                   vperp, vpa, dt, ir; f_offset=0,
+                                                   ppar_offset=0)
+    if f_offset == ppar_offset
+        error("Got f_offset=$f_offset the same as ppar_offset=$ppar_offset. f and ppar "
+              * "cannot be in same place in state vector.")
+    end
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2)
+    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n
+    @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n
+
+    if !electron_source.active
+        return nothing
+    end
+
+    source_amplitude = @view moments.electron.external_source_amplitude[:,ir,index]
+    source_T = electron_source.source_T
+    dens = @view moments.electron.dens[:,ir]
+    upar = @view moments.electron.upar[:,ir]
+    ppar = @view moments.electron.ppar[:,ir]
+    vth = @view moments.electron.vth[:,ir]
+    if vperp.n == 1
+        vth_factor = 1.0 / sqrt(source_T / me)
+    else
+        vth_factor = 1.0 / sqrt(source_T / me)^1.5
+    end
+    vperp_grid = vperp.grid
+    vpa_grid = vpa.grid
+    v_size = vperp.n * vpa.n
+
+    begin_z_vperp_vpa_region()
+    if electron_source.source_type == "energy"
+        @loop_z_vperp_vpa iz ivperp ivpa begin
+            if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa,
+                                                     z_speed)
+                continue
+            end
+
+            # Rows corresponding to pdf_electron
+            row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa + f_offset
+
+            # Contribution from `external_electron_source!()`
+            jacobian_matrix[row,row] += dt * source_amplitude[iz]
+        end
+    end
+    @loop_z_vperp_vpa iz ivperp ivpa begin
+        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
+            continue
+        end
+
+        # Rows corresponding to pdf_electron
+        row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa + f_offset
+
+        # Contributions from
+        #   -vth/n*vth_factor*source_amplitude*exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T)
+        # Using
+        #   d(vth[irowz])/d(ppar[icolz]) = 1/2*vth/ppar * delta(irowz,icolz)
+        #
+        #   d(exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T)[irowz])/d(ppar[icolz])
+        #     = -2*(w_⟂^2+(w_∥*vth+u)*w_∥)*me/source_T * 1/2*vth/ppar * exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T) * delta(irowz,icolz)
+        #     = -(w_⟂^2+(w_∥*vth+u)*w_∥)*me/source_T * vth/ppar * exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T) * delta(irowz,icolz)
+        jacobian_matrix[row,ppar_offset+iz] +=
+            -dt * vth[iz] / dens[iz] * vth_factor * source_amplitude[iz] *
+                  (0.5/ppar[iz] - (vperp_grid[ivperp]^2 + (vpa_grid[ivpa]*vth[iz] + upar[iz])*vpa_grid[ivpa])*me/source_T*vth[iz]/ppar[iz]) *
+                  exp(-((vperp_grid[ivperp]*vth[iz])^2 + (vpa_grid[ivpa]*vth[iz] + upar[iz])^2) * me / source_T)
+    end
+
+    return nothing
+end
 
 """
     external_neutral_source!(pdf, fvec, moments, neutral_source_settings, vzeta, vr,

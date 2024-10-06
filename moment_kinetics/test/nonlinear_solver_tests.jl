@@ -58,7 +58,7 @@ function linear_test()
                                zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
-                               zeros(mk_float, 0),
+                               zeros(mk_float, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0, 0), zeros(mk_float, 0, 0),
                                advection_input("", 0.0, 0.0, 0.0), zeros(mk_float, 0),
                                zeros(mk_float, 0), MPI.COMM_NULL, 1:n, 1:n,
@@ -171,7 +171,7 @@ function nonlinear_test()
                                zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
-                               zeros(mk_float, 0),
+                               zeros(mk_float, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0, 0), zeros(mk_float, 0, 0),
                                advection_input("", 0.0, 0.0, 0.0), zeros(mk_float, 0),
                                zeros(mk_float, 0), MPI.COMM_NULL, 1:n, 1:n,
@@ -272,18 +272,10 @@ function nonlinear_test()
 end
 
 function runtests()
-    if Sys.isapple()
-        @testset_skip "MINPACK is broken on macOS (https://github.com/sglyon/MINPACK.jl/issues/18)" "non-linear solvers" begin
-            println("non-linear solver tests")
-            linear_test()
-            nonlinear_test()
-        end
-    else
-        @testset "non-linear solvers" begin
-            println("non-linear solver tests")
-            linear_test()
-            nonlinear_test()
-        end
+    @testset "non-linear solvers" begin
+        println("non-linear solver tests")
+        linear_test()
+        nonlinear_test()
     end
 end
 

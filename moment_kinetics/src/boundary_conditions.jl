@@ -146,16 +146,40 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, phi, moments, b
         density_offset = 1.0
         vwidth = 1.0
         if z.irank == 0
-            @loop_s_r_vperp_vpa is ir ivperp ivpa begin
-                if adv[is].speed[ivpa,1,ir] > 0.0
-                    pdf[ivpa,ivperp,1,ir,is] = density_offset * exp(-(vpa.grid[ivpa]^2 + vperp.grid[ivperp]^2)/vwidth^2) / sqrt(pi)
+            @loop_s is begin
+                speed = adv[is].speed
+                @loop_r ir begin
+                    prefactor = density_offset
+                    if moments.evolve_density
+                        prefactor /= density[1,ir,is]
+                    end
+                    if moments.evolve_ppar
+                        prefactor *= moments.ion.vth[1,ir,is]
+                    end
+                    @loop_vperp_vpa ivperp ivpa begin
+                        if speed[1,ivpa,ivperp,ir] > 0.0
+                            pdf[ivpa,ivperp,1,ir,is] = prefactor * exp(-(speed[1,ivpa,ivperp,ir]^2 + vperp.grid[ivperp]^2)/vwidth^2)
+                        end
+                    end
                 end
             end
         end
         if z.irank == z.nrank - 1
-            @loop_s_r_vperp_vpa is ir ivperp ivpa begin
-                if adv[is].speed[ivpa,end,ir] > 0.0
-                    pdf[ivpa,ivperp,end,ir,is] = density_offset * exp(-(vpa.grid[ivpa]^2 + vperp.grid[ivperp]^2)/vwidth^2) / sqrt(pi)
+            @loop_s is begin
+                speed = adv[is].speed
+                @loop_r ir begin
+                    prefactor = density_offset
+                    if moments.evolve_density
+                        prefactor /= density[end,ir,is]
+                    end
+                    if moments.evolve_ppar
+                        prefactor *= moments.ion.vth[end,ir,is]
+                    end
+                    @loop_vperp_vpa ivperp ivpa begin
+                        if speed[end,ivpa,ivperp,ir] > 0.0
+                            pdf[ivpa,ivperp,end,ir,is] = prefactor * exp(-(speed[end,ivpa,ivperp,ir]^2 + vperp.grid[ivperp]^2)/vwidth^2)
+                        end
+                    end
                 end
             end
         end
@@ -330,20 +354,42 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
         density_offset = 1.0
         vwidth = 1.0
         if z.irank == 0
-            @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
-                if adv[isn].speed[ivz,ivr,ivzeta,1,ir] > 0.0
-                    pdf[ivz,ivr,ivzeta,1,ir,is] = density_offset *
-                        exp(-(vzeta.grid[ivzeta]^2 + vr.grid[ivr] + vz.grid[ivz])/vwidth^2) /
-                        sqrt(pi)
+            @loop_sn isn begin
+                speed = adv[isn].speed
+                @loop_r ir begin
+                    prefactor = density_offset
+                    if moments.evolve_density
+                        density_offset /= density[1,ir,isn]
+                    end
+                    if moments.evolve_ppar
+                        density_offset *= moments.neutral.vth[1,ir,isn]
+                    end
+                    @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                        if speed[1,ivz,ivr,ivzeta,ir] > 0.0
+                            pdf[ivz,ivr,ivzeta,1,ir,isn] = prefactor *
+                                exp(-(speed[1,ivz,ivr,ivzeta,ir]^2 + vr.grid[ivr] + vz.grid[ivz])/vwidth^2)
+                        end
+                    end
                 end
             end
         end
         if z.irank == z.nrank - 1
-            @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
-                if adv[isn].speed[ivz,ivr,ivzeta,end,ir] > 0.0
-                    pdf[ivz,ivr,ivzeta,end,ir,is] = density_offset *
-                        exp(-(vzeta.grid[ivzeta]^2 + vr.grid[ivr] + vz.grid[ivz])/vwidth^2) /
-                        sqrt(pi)
+            @loop_sn isn begin
+                speed = adv[isn].speed
+                @loop_r ir begin
+                    prefactor = density_offset
+                    if moments.evolve_density
+                        density_offset /= density[end,ir,isn]
+                    end
+                    if moments.evolve_ppar
+                        density_offset *= moments.neutral.vth[end,ir,isn]
+                    end
+                    @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                        if speed[end,ivz,ivr,ivzeta,ir] > 0.0
+                            pdf[ivz,ivr,ivzeta,end,ir,isn] = prefactor *
+                                exp(-(speed[end,ivz,ivr,ivzeta,ir][ivzeta]^2 + vr.grid[ivr] + vz.grid[ivz])/vwidth^2)
+                        end
+                    end
                 end
             end
         end
@@ -1003,24 +1049,33 @@ function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,5}, bc, vpe
 end
 
 function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,4}, bc, vperp, vperp_spectral, vperp_advect, diffusion)
+    @loop_r ir begin
+        @views enforce_vperp_boundary_condition!(f[:,:,:,ir], bc, vperp, vperp_spectral,
+                                                 vperp_advect, diffusion, ir)
+    end
+    return nothing
+end
+
+function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,3}, bc, vperp,
+                                           vperp_spectral, vperp_advect, diffusion, ir)
     if bc == "zero" || bc == "zero-impose-regularity"
         nvperp = vperp.n
         ngrid = vperp.ngrid
         # set zero boundary condition
-        @loop_r_z_vpa ir iz ivpa begin
+        @loop_z_vpa iz ivpa begin
             if diffusion || vperp_advect.speed[nvperp,ivpa,iz,ir] < 0.0
-                f[ivpa,nvperp,iz,ir] = 0.0
+                f[ivpa,nvperp,iz] = 0.0
             end
         end
         # set regularity condition d F / d vperp = 0 at vperp = 0
         if bc == "zero-impose-regularity" && (vperp.discretization == "gausslegendre_pseudospectral" || vperp.discretization == "chebyshev_pseudospectral")
             D0 = vperp_spectral.radau.D0
             buffer = @view vperp.scratch[1:ngrid-1]
-            @loop_r_z_vpa ir iz ivpa begin
+            @loop_z_vpa iz ivpa begin
                 if diffusion || vperp_advect.speed[1,ivpa,iz,ir] > 0.0
                     # adjust F(vperp = 0) so that d F / d vperp = 0 at vperp = 0
-                    @views @. buffer = D0[2:ngrid] * f[ivpa,2:ngrid,iz,ir]
-                    f[ivpa,1,iz,ir] = -sum(buffer)/D0[1]
+                    @views @. buffer = D0[2:ngrid] * f[ivpa,2:ngrid,iz]
+                    f[ivpa,1,iz] = -sum(buffer)/D0[1]
                 end
             end
         elseif bc == "zero"
@@ -1034,6 +1089,41 @@ function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,4}, bc, vpe
     else
         error("Unsupported boundary condition option '$bc' for vperp")
     end
+end
+
+"""
+    skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa)
+
+This function returns `true` when the grid point specified by `iz`, `ivperp`, `ivpa` would
+be set by the boundary conditions on the electron distribution function. When this
+happens, the corresponding row should be skipped when adding contributions to the Jacobian
+matrix, so that the row remains the same as a row of the identity matrix, so that the
+Jacobian matrix does not modify those points. Returns `false` otherwise.
+"""
+function skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
+    # z boundary condition
+    # Treat as if using Dirichlet boundary condition for incoming part of the distribution
+    # function on the block boundary, regardless of the actual boundary condition and
+    # whether this is an internal boundary or an actual domain boundary. This prevents the
+    # matrix evaluated for a single block (without coupling to neighbouring blocks) from
+    # becoming singular
+    if iz == 1 && z_speed[iz,ivpa,ivperp] ≥ 0.0
+        return true
+    end
+    if iz == z.n && z_speed[iz,ivpa,ivperp] ≤ 0.0
+        return true
+    end
+
+    # vperp boundary condition
+    if vperp.n > 1 && ivperp == vperp.n
+        return true
+    end
+
+    if ivpa == 1 || ivpa == vpa.n
+        return true
+    end
+
+    return false
 end
 
 end # boundary_conditions

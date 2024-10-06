@@ -632,10 +632,10 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                                  restart_prefix_iblock, time_index, composition, geometry,
                                  r, z, vpa, vperp, vzeta, vr, vz)
     code_time = 0.0
-    dt = nothing
-    dt_before_last_fail = nothing
-    electron_dt = nothing
-    electron_dt_before_last_fail = nothing
+    dt = Ref(-Inf)
+    dt_before_last_fail = Ref(Inf)
+    electron_dt = Ref(-Inf)
+    electron_dt_before_last_fail = Ref(Inf)
     previous_runs_info = nothing
     restart_electron_physics = nothing
     begin_serial_region()
@@ -701,17 +701,14 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                                               r_range, z_range, restart_r,
                                               restart_r_spectral, restart_z,
                                               restart_z_spectral, interpolation_needed)
-            moments.ion.dens_updated .= true
             moments.ion.upar .= reload_moment("parallel_flow", dynamic, time_index, r, z,
                                               r_range, z_range, restart_r,
                                               restart_r_spectral, restart_z,
                                               restart_z_spectral, interpolation_needed)
-            moments.ion.upar_updated .= true
             moments.ion.ppar .= reload_moment("parallel_pressure", dynamic, time_index, r,
                                               z, r_range, z_range, restart_r,
                                               restart_r_spectral, restart_z,
                                               restart_z_spectral, interpolation_needed)
-            moments.ion.ppar_updated .= true
             moments.ion.pperp .= reload_moment("perpendicular_pressure", dynamic,
                                                time_index, r, z, r_range, z_range,
                                                restart_r, restart_r_spectral, restart_z,
@@ -720,7 +717,6 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                                               r, z, r_range, z_range, restart_r,
                                               restart_r_spectral, restart_z,
                                               restart_z_spectral, interpolation_needed)
-            moments.ion.qpar_updated .= true
             moments.ion.vth .= reload_moment("thermal_speed", dynamic, time_index, r, z,
                                              r_range, z_range, restart_r,
                                              restart_r_spectral, restart_z,
@@ -775,17 +771,18 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                 end
             end
 
-            if "external_source_controller_integral" ∈ get_variable_keys(dynamic) &&
-                    length(moments.ion.external_source_controller_integral) == 1
-                moments.ion.external_source_controller_integral .=
-                    load_slice(dynamic, "external_source_controller_integral", time_index)
+            if "external_source_controller_integral" ∈ get_variable_keys(dynamic)
+                if length(moments.ion.external_source_controller_integral) == 1
+                    moments.ion.external_source_controller_integral .=
+                        load_slice(dynamic, "external_source_controller_integral", time_index)
             elseif size(moments.ion.external_source_controller_integral)[1] > 1 ||
                     size(moments.ion.external_source_controller_integral)[2] > 1 
-                moments.ion.external_source_controller_integral .=
-                    reload_moment("external_source_controller_integral", dynamic,
-                                  time_index, r, z, r_range, z_range, restart_r,
-                                  restart_r_spectral, restart_z, restart_z_spectral,
-                                  interpolation_needed)
+                    moments.ion.external_source_controller_integral .=
+                        reload_moment("external_source_controller_integral", dynamic,
+                                      time_index, r, z, r_range, z_range, restart_r,
+                                      restart_r_spectral, restart_z, restart_z_spectral,
+                                      interpolation_needed)
+                end
             end
 
             pdf.ion.norm .= reload_ion_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_range,
@@ -823,28 +820,24 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                                                             restart_r_spectral, restart_z,
                                                             restart_z_spectral,
                                                             interpolation_needed)
-            moments.electron.dens_updated[] = true
             moments.electron.upar .= reload_electron_moment("electron_parallel_flow",
                                                             dynamic, time_index, r, z,
                                                             r_range, z_range, restart_r,
                                                             restart_r_spectral, restart_z,
                                                             restart_z_spectral,
                                                             interpolation_needed)
-            moments.electron.upar_updated[] = true
             moments.electron.ppar .= reload_electron_moment("electron_parallel_pressure",
                                                             dynamic, time_index, r, z,
                                                             r_range, z_range, restart_r,
                                                             restart_r_spectral, restart_z,
                                                             restart_z_spectral,
                                                             interpolation_needed)
-            moments.electron.ppar_updated[] = true
             moments.electron.qpar .= reload_electron_moment("electron_parallel_heat_flux",
                                                             dynamic, time_index, r, z,
                                                             r_range, z_range, restart_r,
                                                             restart_r_spectral, restart_z,
                                                             restart_z_spectral,
                                                             interpolation_needed)
-            moments.electron.qpar_updated[] = true
             moments.electron.vth .= reload_electron_moment("electron_thermal_speed",
                                                            dynamic, time_index, r, z,
                                                            r_range, z_range, restart_r,
@@ -884,12 +877,13 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                 restart_electron_evolve_ppar = true, true, true
             electron_evolve_density, electron_evolve_upar, electron_evolve_ppar =
                 true, true, true
-            if "electron_physics" ∈ keys(restart_input)
-                restart_electron_physics = enum_from_string(electron_physics_type,
-                                                            restart_input["electron_physics"])
-            else
-                restart_electron_physics = boltzmann_electron_response
-            end
+            # Input is written to output files with all defaults filled in, and
+            # restart_input is read from a previous output file.
+            # restart_input["composition"]["electron_physics"] should always exist, even
+            # if it was set from a default, so we do not have to check the keys to see
+            # whether it exists.
+            restart_electron_physics = enum_from_string(electron_physics_type,
+                                                        restart_input["composition"]["electron_physics"])
             if pdf.electron !== nothing &&
                     restart_electron_physics ∈ (kinetic_electrons,
                                                 kinetic_electrons_with_temperature_equation)
@@ -913,25 +907,21 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                                                       restart_r, restart_r_spectral,
                                                       restart_z, restart_z_spectral,
                                                       interpolation_needed)
-                moments.neutral.dens_updated .= true
                 moments.neutral.uz .= reload_moment("uz_neutral", dynamic, time_index, r,
                                                     z, r_range, z_range, restart_r,
                                                     restart_r_spectral, restart_z,
                                                     restart_z_spectral,
                                                     interpolation_needed)
-                moments.neutral.uz_updated .= true
                 moments.neutral.pz .= reload_moment("pz_neutral", dynamic, time_index, r,
                                                     z, r_range, z_range, restart_r,
                                                     restart_r_spectral, restart_z,
                                                     restart_z_spectral,
                                                     interpolation_needed)
-                moments.neutral.pz_updated .= true
                 moments.neutral.qz .= reload_moment("qz_neutral", dynamic, time_index, r,
                                                     z, r_range, z_range, restart_r,
                                                     restart_r_spectral, restart_z,
                                                     restart_z_spectral,
                                                     interpolation_needed)
-                moments.neutral.qz_updated .= true
                 moments.neutral.vth .= reload_moment("thermal_speed_neutral", dynamic,
                                                      time_index, r, z, r_range, z_range,
                                                      restart_r, restart_r_spectral,
@@ -1021,32 +1011,63 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                 # If "dt" is not present, the file being restarted from is an older
                 # one that did not have an adaptive timestep, so just leave the value
                 # of "dt" from the input file.
-                dt = load_slice(dynamic, "dt", time_index)
+                dt[] = load_slice(dynamic, "dt", time_index)
             end
             if "dt_before_last_fail" ∈ keys(dynamic)
                 # If "dt_before_last_fail" is not present, the file being
                 # restarted from is an older one that did not have an adaptive
                 # timestep, so just leave the value of "dt_before_last_fail" from
                 # the input file.
-                dt_before_last_fail = load_slice(dynamic, "dt_before_last_fail",
+                dt_before_last_fail[] = load_slice(dynamic, "dt_before_last_fail",
                                                 time_index)
             end
             if "electron_dt" ∈ keys(dynamic)
-                electron_dt = load_slice(dynamic, "electron_dt", time_index)
+                # The algorithm for electron pseudo-timestepping actually starts each
+                # solve using t_params.electron.previous_dt[], so "electron_previous_dt"
+                # is the thing to load.
+                electron_dt[] = load_slice(dynamic, "electron_previous_dt", time_index)
             end
             if "electron_dt_before_last_fail" ∈ keys(dynamic)
-                electron_dt_before_last_fail =
+                electron_dt_before_last_fail[] =
                     load_slice(dynamic, "electron_dt_before_last_fail", time_index)
             end
         finally
             close(fid)
         end
     end
+    moments.ion.dens_updated .= true
+    moments.ion.upar_updated .= true
+    moments.ion.ppar_updated .= true
+    moments.ion.qpar_updated .= true
+    moments.electron.dens_updated[] = true
+    moments.electron.upar_updated[] = true
+    moments.electron.ppar_updated[] = true
+    moments.electron.qpar_updated[] = true
+    moments.neutral.dens_updated .= true
+    moments.neutral.uz_updated .= true
+    moments.neutral.pz_updated .= true
+    moments.neutral.qz_updated .= true
 
     restart_electron_physics = MPI.bcast(restart_electron_physics, 0, comm_block[])
+    MPI.Bcast!(dt, comm_block[])
+    MPI.Bcast!(dt_before_last_fail, comm_block[])
+    MPI.Bcast!(electron_dt, comm_block[])
+    MPI.Bcast!(electron_dt_before_last_fail, comm_block[])
 
-    return code_time, dt, dt_before_last_fail, electron_dt, electron_dt_before_last_fail,
-           previous_runs_info, time_index, restart_electron_physics
+    if dt[] == -Inf
+        dt = nothing
+    else
+        dt = dt[]
+    end
+    if electron_dt[] == -Inf
+        electron_dt = nothing
+    else
+        electron_dt = electron_dt[]
+    end
+
+    return code_time, dt, dt_before_last_fail[], electron_dt,
+           electron_dt_before_last_fail[], previous_runs_info, time_index,
+           restart_electron_physics
 end
 
 """
@@ -4546,8 +4567,10 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             begin_serial_region()
             # Only need some struct with a 'speed' variable
             advect = (speed=@view(speed[:,:,:,:,it]),)
-            @views update_electron_speed_z!(advect, upar[:,:,it], vth[:,:,it],
-                                            run_info.vpa.grid)
+            for ir ∈ 1:run_info.r.n
+                @views update_electron_speed_z!(advect, upar[:,ir,it], vth[:,ir,it],
+                                                run_info.vpa.grid, ir)
+            end
         end
 
         # Horrible hack so that we can get the speed back without rearranging the
@@ -4626,9 +4649,12 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                                  external_source_density_amplitude=external_source_density_amplitude[:,:,:,it],
                                  external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,:,it],
                                  external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,:,it]),)
-            @views update_electron_speed_vpa!(advect, density[:,:,it], upar[:,:,it],
-                                              ppar[:,:,it], moments, run_info.vpa.grid,
-                                              run_info.external_source_settings.electron)
+            for ir ∈ 1:run_info.r.n
+                @views update_electron_speed_vpa!(advect, density[:,ir,it], upar[:,ir,it],
+                                                  ppar[:,ir,it], moments, run_info.vpa.grid,
+                                                  run_info.external_source_settings.electron,
+                                                  ir)
+            end
         end
 
         variable = speed
@@ -4820,7 +4846,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         electron_steps_per_output = get_variable(run_info, "electron_steps_per_output"; kwargs...)
         electron_failures_per_output = get_variable(run_info, "electron_failures_per_output"; kwargs...)
         electron_successful_steps_per_output = electron_steps_per_output - electron_failures_per_output
-        electron_pseudotime = get_variable("electron_cumulative_pseudotime"; kwargs...)
+        electron_pseudotime = get_variable(run_info, "electron_cumulative_pseudotime"; kwargs...)
 
         delta_t = copy(electron_pseudotime)
         for i ∈ length(delta_t):-1:2

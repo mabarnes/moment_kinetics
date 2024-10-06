@@ -42,6 +42,9 @@ const s = ArgParseSettings()
     "--verbose", "-v"
         help = "Print verbose output from tests."
         action = :store_true
+    "--ci"
+        help = "Indicates that tests are running on the CI server."
+        action = :store_true
     # Options for performance tests and plotting
     "--machine-name"
         help = "Which machine to plot for when using plot_performance.jl?"
