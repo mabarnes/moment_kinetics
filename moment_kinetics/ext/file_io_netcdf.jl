@@ -50,7 +50,16 @@ function get_group(file_or_group::NCDataset, name::String)
     # This overload deals with cases where fid is a NetCDF `Dataset` (which could be a
     # file or a group).
     try
-        return file_or_group.group[name]
+        if occursin("/", name)
+            split_names = split(name, "/")
+            this_group = file_or_group
+            for n ∈ split_names
+                this_group = this_group.group[n]
+            end
+            return this_group
+        else
+            return file_or_group.group[name]
+        end
     catch
         println("An error occured while opening the $name group")
         rethrow()
