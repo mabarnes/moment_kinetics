@@ -26,6 +26,8 @@ using ..file_io: check_io_implementation, get_group, get_subgroup_keys, get_vari
 using ..input_structs
 using ..interpolation: interpolate_to_grid_1d!
 using ..krook_collisions
+using ..collision_frequencies: get_collision_frequency_ii, get_collision_frequency_ee,
+                                get_collision_frequency_ei
 using ..looping
 using ..moment_kinetics_input: mk_input
 using ..neutral_vz_advection: update_speed_neutral_vz!

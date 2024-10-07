@@ -41,7 +41,7 @@ using ..derivatives: derivative_z!, second_derivative_z!
 using ..derivatives: derivative_r!, second_derivative_r!
 using ..looping
 using ..gyroaverages: gyro_operators, gyroaverage_pdf!
-using ..krook_collisions: get_collision_frequency_ii
+using ..collision_frequencies: get_collision_frequency_ii
 using ..input_structs
 using ..moment_kinetics_structs: moments_ion_substruct, moments_electron_substruct,
                                  moments_neutral_substruct

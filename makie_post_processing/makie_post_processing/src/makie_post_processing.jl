@@ -258,6 +258,12 @@ function makie_post_process(run_dir::Union{String,Tuple},
             mkpath(comparison_plot_dir)
             plot_prefix = joinpath(comparison_plot_dir, "compare_")
         end
+    else
+        if length(run_info) != 1
+            comparison_plot_dir = "comparison_plots_$plot_prefix"
+            mkpath(comparison_plot_dir)
+            plot_prefix = joinpath(comparison_plot_dir, "compare_")
+        end
     end
 
     timestep_diagnostics(run_info, run_info_dfns; plot_prefix=plot_prefix)
