@@ -7,7 +7,7 @@ export setup_krook_collisions_input, get_collision_frequency_ii, get_collision_f
        add_electron_krook_collisions_to_Jacobian!
 
 using ..looping
-using ..boundary_conditions: skip_f_electron_bc_points_in_Jacobian
+#using ..boundary_conditions: skip_f_electron_bc_points_in_Jacobian
 using ..input_structs: krook_collisions_input, set_defaults_and_check_section!
 using ..reference_parameters: get_reference_collision_frequency_ii,
                               get_reference_collision_frequency_ee,

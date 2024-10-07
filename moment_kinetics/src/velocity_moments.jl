@@ -871,7 +871,7 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
             # then suggests in the next paragraph that a factor of 2.0 is possibly 
             # more accurate. 2.0 gives unstable results at high densities, so for
             # now I'm using 4.0.
-            gamma_i = 4.0
+            gamma_i = 2.0
 
             # Stangeby (2.92)
             total_heat_flux = gamma_i * T_i * particle_flux
@@ -882,7 +882,7 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
             # (I don't have access to the book right now)
             # I can now see in the book that I was pretty much right here, though
             # I need to consider viscosity (in 1D, is it 0?)
-            conductive_heat_flux = total_heat_flux - 2.5 * this_ppar * this_upar - 
+            conductive_heat_flux = total_heat_flux - 1.5 * this_ppar * this_upar - 
                                                      0.5 * this_dens * this_upar^3
 
             qpar[iz,ir] = conductive_heat_flux
