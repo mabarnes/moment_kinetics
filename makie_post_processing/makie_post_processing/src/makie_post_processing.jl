@@ -8515,20 +8515,6 @@ function timing_data(run_info::Tuple; plot_prefix=nothing, threshold=nothing,
                     ncalls_ax=ncalls_ax, allocs_ax=allocs_ax, irun=irun, figsize=figsize)
     end
 
-    if plot_prefix !== nothing
-        put_legend_below(times_fig, times_ax; merge=true)
-        outfile = plot_prefix * "execution_times.pdf"
-        save(outfile, times_fig)
-
-        put_legend_below(ncalls_fig, ncalls_ax; merge=true)
-        outfile = plot_prefix * "ncalls.pdf"
-        save(outfile, ncalls_fig)
-
-        put_legend_below(allocs_fig, allocs_ax; merge=true)
-        outfile = plot_prefix * "allocations.pdf"
-        save(outfile, allocs_fig)
-    end
-
     if interactive_figs === nothing && string(Makie.current_backend()) == "GLMakie"
         # Can make interactive plots
 
@@ -8539,18 +8525,60 @@ function timing_data(run_info::Tuple; plot_prefix=nothing, threshold=nothing,
 
         for figtype ∈ interactive_figs
             if figtype == :times
+                if include_legend
+                    Legend(times_fig[2,1], times_ax; tellheight=true, tellwidth=false,
+                           merge=true)
+                end
                 DataInspector(times_fig)
                 display(backend.Screen(), times_fig)
             elseif figtype == :ncalls
+                if include_legend
+                    Legend(ncalls_fig[2,1], times_ax; tellheight=true, tellwidth=false,
+                           merge=true)
+                end
                 DataInspector(ncalls_fig)
                 display(backend.Screen(), ncalls_fig)
             elseif figtype == :allocs
+                if include_legend
+                    Legend(allocs_fig[2,1], times_ax; tellheight=true, tellwidth=false,
+                           merge=true)
+                end
                 DataInspector(allocs_fig)
                 display(backend.Screen(), allocs_fig)
             else
                 error("Got unrecognized entry $figtype in `interactive_figs`")
             end
         end
+    elseif plot_prefix !== nothing
+        if include_legend
+            Legend(times_fig[2,1], times_ax; tellheight=true, tellwidth=true, merge=true)
+        end
+        # Ensure the first row width is 3/4 of the column width so that the plot does not
+        # get squashed by the legend
+        rowsize!(times_fig.layout, 1, Aspect(1, 3/4))
+        resize_to_layout!(times_fig)
+        outfile = plot_prefix * "execution_times.pdf"
+        save(outfile, times_fig)
+
+        if include_legend
+            Legend(ncalls_fig[2,1], ncalls_ax; tellheight=true, tellwidth=true, merge=true)
+        end
+        # Ensure the first row width is 3/4 of the column width so that the plot does not
+        # get squashed by the legend
+        rowsize!(ncalls_fig.layout, 1, Aspect(1, 3/4))
+        resize_to_layout!(ncalls_fig)
+        outfile = plot_prefix * "ncalls.pdf"
+        save(outfile, ncalls_fig)
+
+        if include_legend
+            Legend(allocs_fig[2,1], allocs_ax; tellheight=true, tellwidth=true, merge=true)
+        end
+        # Ensure the first row width is 3/4 of the column width so that the plot does not
+        # get squashed by the legend
+        rowsize!(allocs_fig.layout, 1, Aspect(1, 3/4))
+        resize_to_layout!(allocs_fig)
+        outfile = plot_prefix * "allocations.pdf"
+        save(outfile, allocs_fig)
     end
 
     return times_fig, ncalls_fig, allocs_fig
@@ -8770,30 +8798,6 @@ function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
         end
     end
 
-    if times_fig !== nothing
-        put_legend_below(times_fig, times_ax; merge=true)
-        if plot_prefix !== nothing
-            outfile = plot_prefix * "execution_times.pdf"
-            save(outfile, times_fig)
-        end
-    end
-
-    if ncalls_fig !== nothing
-        put_legend_below(ncalls_fig, ncalls_ax; merge=true)
-        if plot_prefix !== nothing
-            outfile = plot_prefix * "ncalls.pdf"
-            save(outfile, ncalls_fig)
-        end
-    end
-
-    if allocs_fig !== nothing
-        put_legend_below(allocs_fig, allocs_ax; merge=true)
-        if plot_prefix !== nothing
-            outfile = plot_prefix * "allocations.pdf"
-            save(outfile, allocs_fig)
-        end
-    end
-
     if times_fig !== nothing && plot_prefix === nothing &&
             string(Makie.current_backend()) == "GLMakie"
 
@@ -8806,16 +8810,70 @@ function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
 
         for figtype ∈ interactive_figs
             if figtype == :times
+                if include_legend
+                    Legend(times_fig[2,1], times_ax; tellheight=true, tellwidth=false,
+                           merge=true)
+                end
                 DataInspector(times_fig)
                 display(backend.Screen(), times_fig)
             elseif figtype == :ncalls
+                if include_legend
+                    Legend(ncalls_fig[2,1], times_ax; tellheight=true, tellwidth=false,
+                           merge=true)
+                end
                 DataInspector(ncalls_fig)
                 display(backend.Screen(), ncalls_fig)
             elseif figtype == :allocs
+                if include_legend
+                    Legend(allocs_fig[2,1], times_ax; tellheight=true, tellwidth=false,
+                           merge=true)
+                end
                 DataInspector(allocs_fig)
                 display(backend.Screen(), allocs_fig)
             else
                 error("Got unrecognized entry $figtype in `interactive_figs`")
+            end
+        end
+    else
+        if times_fig !== nothing
+            if include_legend
+                Legend(times_fig[2,1], times_ax; tellheight=true, tellwidth=true, merge=true)
+            end
+            # Ensure the first row width is 3/4 of the column width so that the plot does not
+            # get squashed by the legend
+            rowsize!(times_fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(times_fig)
+            if plot_prefix !== nothing
+                outfile = plot_prefix * "execution_times.pdf"
+                save(outfile, times_fig)
+            end
+        end
+
+        if ncalls_fig !== nothing
+            if include_legend
+                Legend(ncalls_fig[2,1], ncalls_ax; tellheight=true, tellwidth=true, merge=true)
+            end
+            # Ensure the first row width is 3/4 of the column width so that the plot does not
+            # get squashed by the legend
+            rowsize!(ncalls_fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(ncalls_fig)
+            if plot_prefix !== nothing
+                outfile = plot_prefix * "ncalls.pdf"
+                save(outfile, ncalls_fig)
+            end
+        end
+
+        if allocs_fig !== nothing
+            if include_legend
+                Legend(allocs_fig[2,1], allocs_ax; tellheight=true, tellwidth=true, merge=true)
+            end
+            # Ensure the first row width is 3/4 of the column width so that the plot does not
+            # get squashed by the legend
+            rowsize!(allocs_fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(allocs_fig)
+            if plot_prefix !== nothing
+                outfile = plot_prefix * "allocations.pdf"
+                save(outfile, allocs_fig)
             end
         end
     end
