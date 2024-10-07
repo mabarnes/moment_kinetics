@@ -46,7 +46,9 @@ function get_species_input(toml_input)
         recycling_fraction = 1.0,
         # gyrokinetic_ions = True -> use gyroaveraged fields at fixed guiding centre and moments of the pdf computed at fixed r
         # gyrokinetic_ions = False -> use drift kinetic approximation
-        gyrokinetic_ions = false)
+        gyrokinetic_ions = false,
+        # if zero_electric_field = true, set Ez = Er = 0.
+        zero_electric_field = false)
 
     nspec_ion = composition_section["n_ion_species"]
     nspec_neutral = composition_section["n_neutral_species"]

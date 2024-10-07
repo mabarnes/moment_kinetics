@@ -156,6 +156,15 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
                     z_spectral,z)
         end
     end
+ 
+    # zero out electric field if user wishes to remove acceleration physics
+    zeroE = composition.zero_electric_field
+    if zeroE
+        @loop_r_z ir iz begin
+            fields.Ez[iz,ir] = 0.0
+            fields.Er[iz,ir] = 0.0
+        end
+    end
 
     # get gyroaveraged field arrays for distribution function advance
     gkions = composition.gyrokinetic_ions
