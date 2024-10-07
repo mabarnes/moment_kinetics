@@ -95,7 +95,21 @@ function write_single_value!(file_or_group::HDF5.H5DataStore, name,
         if overwrite && name ∈ keys(file_or_group)
             delete_object(file_or_group, name)
         end
-        file_or_group[name] = data
+        # When we write a scalar, and parallel_io=true, we need to create the variable on
+        # every process in `comm_inter_block[]` but we only want to actually write the
+        # data from one process (we choose `global_rank[]==0`) to avoid corruption due to
+        # the same data being written at the same time from different processes (HDF5
+        # might protect against this, but it must be at best inefficient).
+        # HDF5.jl's `create_dataset()` for a scalar `data` returns both the 'I/O variable'
+        # (the handle to the HDF5 'Dataset' for the variable) and the data type. For
+        # String data, the 'data type' is important, because it actually also contains the
+        # length of the string, so cannot be easily created by hand. Note that a String of
+        # the correct length must be passed from every process in `comm_inter_block[]`,
+        # but only the contents of the string on `global_rank[]==0` are actually written.
+        io_var, var_hdf5_type = create_dataset(file_or_group, name, data)
+        if !parallel_io || global_rank[] == 0
+            write_dataset(io_var, var_hdf5_type, data)
+        end
         if description !== nothing
             add_attribute!(file_or_group[name], "description", description)
         end
