@@ -1,6 +1,8 @@
 test_type = "sound_wave"
 using moment_kinetics.type_definitions: OptionsDict
 using moment_kinetics.utils: recursive_merge
+using moment_kinetics.file_io: io_has_implementation
+using moment_kinetics.input_structs: netcdf
 
 # default inputs for tests
 test_input_finite_difference_1D1V = OptionsDict("output" => OptionsDict("run_name" => "finite_difference_1D1V",
@@ -224,9 +226,13 @@ recursive_merge(test_input_chebyshev_1D1V_split_2_moments,
                 OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_1D1V_split_3_moments"),
                             "evolve_moments" => OptionsDict("parallel_pressure" => true)))
 
+# Use "netcdf" for a few tests to test the NetCDF I/O if it is available.
+const binary_format = io_has_implementation(netcdf) ? "netcdf" : "hdf5"
+
 test_input_chebyshev_cx0_1D1V =
 recursive_merge(test_input_chebyshev_1D1V,
-                OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_cx0_1D1V"),
+                OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_cx0_1D1V",
+                                                    "binary_format" => binary_format),
                             "reactions" => OptionsDict("charge_exchange_frequency" => 0.0)))
 
 test_input_chebyshev_cx0_1D1V_split_1_moment =
