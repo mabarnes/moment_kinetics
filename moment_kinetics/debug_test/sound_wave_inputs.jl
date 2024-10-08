@@ -210,7 +210,8 @@ recursive_merge(test_input_finite_difference_1D1V,
 
 test_input_chebyshev_1D1V_split_1_moment =
 recursive_merge(test_input_chebyshev_1D1V,
-                OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_1D1V_split_1_moment"),
+                OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_1D1V_split_1_moment",
+                                                    "parallel_io" => false),
                             "evolve_moments" => OptionsDict("density" => true)))
 
 test_input_chebyshev_1D1V_split_2_moments =
