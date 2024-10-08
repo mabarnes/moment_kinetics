@@ -23,7 +23,7 @@ jobs:
           touch Project.toml
           julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["MPI", "MPIPreferences"]); using MPIPreferences; MPIPreferences.use_jll_binary("OpenMPI_jll")'
           julia --project -O3 --check-bounds=no -e 'using MPI; MPI.install_mpiexecjl(; destdir=".")'
-          julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["Random", "SpecialFunctions", "StatsBase", "Test"]); Pkg.develop(path="moment_kinetics/")'
+          julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["NCDatasets", "Random", "SpecialFunctions", "StatsBase", "Test"]); Pkg.develop(path="moment_kinetics/")'
           julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.precompile()'
           # Need to use openmpi so that we can use `--oversubscribe` to allow using more MPI ranks than physical cores
           ./mpiexecjl -np 3 --oversubscribe julia --project -O3 --check-bounds=no moment_kinetics/test/runtests.jl --ci --debug 1
@@ -48,7 +48,7 @@ jobs:
           touch Project.toml
           julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["MPI", "MPIPreferences"]); using MPIPreferences; MPIPreferences.use_jll_binary("OpenMPI_jll")'
           julia --project -O3 --check-bounds=no -e 'using MPI; MPI.install_mpiexecjl(; destdir=".")'
-          julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["Random", "SpecialFunctions", "StatsBase", "Test"]); Pkg.develop(path="moment_kinetics/")'
+          julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["NCDatasets", "Random", "SpecialFunctions", "StatsBase", "Test"]); Pkg.develop(path="moment_kinetics/")'
           julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.precompile()'
           # Need to use openmpi so that we can use `--oversubscribe` to allow using more MPI ranks than physical cores
           ./mpiexecjl -np 4 --oversubscribe julia --project -O3 --check-bounds=no moment_kinetics/test/runtests.jl --ci --debug 1
