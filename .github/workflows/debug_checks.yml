@@ -29,7 +29,7 @@ jobs:
 
           touch Project.toml
           julia --project -O3 --check-bounds=yes -e 'using Pkg; Pkg.add(["MPI", "MPIPreferences", "PackageCompiler", "NCDatasets", "Symbolics"]); using MPIPreferences; MPIPreferences.use_jll_binary("OpenMPI_jll")'
-          julia --project -O3 --check-bounds=no -e 'using MPI; MPI.install_mpiexecjl(; destdir=".")'
+          julia --project -O3 --check-bounds=yes -e 'using MPI; MPI.install_mpiexecjl(; destdir=".")'
           julia --project -O3 --check-bounds=yes -e 'using Pkg; Pkg.develop(path="moment_kinetics/"); Pkg.precompile()'
           julia --project -O3 --check-bounds=yes precompile-with-check-bounds.jl --debug 2
 
