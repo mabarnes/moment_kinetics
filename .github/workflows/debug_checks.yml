@@ -28,7 +28,9 @@ jobs:
           sed -i -e "s/_debug_level = get_options.*/_debug_level = 2/" moment_kinetics/src/debugging.jl
 
           touch Project.toml
-          julia --project -O3 --check-bounds=yes -e 'using Pkg; Pkg.add(["MPI", "MPIPreferences", "PackageCompiler", "NCDatasets", "Symbolics"]); using MPIPreferences; MPIPreferences.use_jll_binary("OpenMPI_jll")'
+          # Not sure why installing "NCDatasets" fails at the moment (8/10/2024), but precompilation hangs for this job if it is included, so skip for now.
+          #julia --project -O3 --check-bounds=yes -e 'using Pkg; Pkg.add(["MPI", "MPIPreferences", "NCDatasets", "PackageCompiler", "Symbolics"]); using MPIPreferences; MPIPreferences.use_jll_binary("OpenMPI_jll")'
+          julia --project -O3 --check-bounds=yes -e 'using Pkg; Pkg.add(["MPI", "MPIPreferences", "PackageCompiler", "Symbolics"]); using MPIPreferences; MPIPreferences.use_jll_binary("OpenMPI_jll")'
           julia --project -O3 --check-bounds=yes -e 'using MPI; MPI.install_mpiexecjl(; destdir=".")'
           julia --project -O3 --check-bounds=yes -e 'using Pkg; Pkg.develop(path="moment_kinetics/"); Pkg.precompile()'
           julia --project -O3 --check-bounds=yes precompile-with-check-bounds.jl --debug 2
