@@ -362,6 +362,9 @@ Base.@kwdef struct ion_source_data
     PI_density_target_z_profile::String
     PI_density_target_z_width::mk_float
     PI_density_target_z_relative_minimum::mk_float
+    PI_temperature_controller_P::mk_float
+    PI_temperature_controller_I::mk_float
+    PI_temperature_target_amplitude::mk_float
     recycling_controller_fraction::mk_float
     # r_amplitude through the r coordinate (in 1D this can just be set to 1.0)
     r_amplitude::Vector{mk_float}
@@ -369,12 +372,16 @@ Base.@kwdef struct ion_source_data
     # constant profile, parabolic, etc..
     z_amplitude::Vector{mk_float}
     PI_density_target::Union{mk_float, Nothing, MPISharedArray{mk_float,2}}
+    PI_temperature_target::Union{mk_float, Nothing, MPISharedArray{mk_float,2}}
     PI_controller_amplitude::Union{Nothing, MPISharedArray{mk_float,1}}
     controller_source_profile::Union{Nothing, MPISharedArray{mk_float,2}, Array{mk_float, 2}}
     PI_density_target_ir::Union{mk_int, Nothing}
     PI_density_target_iz::Union{mk_int, Nothing}
     PI_density_target_rank::Union{mk_int, Nothing} #possibly this should have Int64 as well, 
     # in the event that the code is running with mk_int = Int32 but the rank is set to 0::Int64
+    PI_temperature_target_ir::Union{mk_int, Nothing}
+    PI_temperature_target_iz::Union{mk_int, Nothing}
+    PI_temperature_target_rank::Union{mk_int, Nothing}
 end
 
 Base.@kwdef struct electron_source_data

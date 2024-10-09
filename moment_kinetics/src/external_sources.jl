@@ -73,6 +73,9 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
                      PI_density_target_z_profile="constant",
                      PI_density_target_z_width=1.0,
                      PI_density_target_z_relative_minimum=0.0,
+                     PI_temperature_controller_P=0.0,
+                     PI_temperature_controller_I=0.0,
+                     PI_temperature_target_amplitude=1.0,
                      recycling_controller_fraction=0.0,
                     )
 
@@ -103,6 +106,10 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
             PI_density_target_ir = nothing
             PI_density_target_iz = nothing
             PI_density_target_rank = nothing
+            PI_temperature_target = nothing
+            PI_temperature_target_ir = nothing
+            PI_temperature_target_iz = nothing
+            PI_temperature_target_rank = nothing
         elseif input["source_type"] == "density_midpoint_control"
             PI_density_target = input["PI_density_target_amplitude"]
 
@@ -142,6 +149,53 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
             else
                 PI_density_target_rank = nothing
             end
+            PI_temperature_target = nothing
+            PI_temperature_target_ir = nothing
+            PI_temperature_target_iz = nothing
+            PI_temperature_target_rank = nothing
+        elseif input["source_type"] == "temperature_midpoint_control"
+            PI_temperature_target = input["PI_temperature_target_amplitude"]
+            PI_density_target = nothing
+            PI_density_target_ir = nothing
+            PI_density_target_iz = nothing
+            PI_density_target_rank = nothing
+
+            if comm_block[] != MPI.COMM_NULL
+                PI_controller_amplitude = allocate_shared_float(1)
+                controller_source_profile = allocate_shared_float(z.n, r.n)
+            else
+                PI_controller_amplitude = allocate_float(1)
+                controller_source_profile = allocate_float(z.n, r.n)
+            end
+            for ir ∈ 1:r.n, iz ∈ 1:z.n
+                controller_source_profile[iz,ir] = r_amplitude[ir] * z_amplitude[iz]
+            end
+
+            # Find the indices, and process rank of the point at r=0, z=0.
+            # The result of findfirst() will be `nothing` if the point was not found.
+            PI_temperature_target_ir = findfirst(x->abs(x)<1.e-14, r.grid)
+            PI_temperature_target_iz = findfirst(x->abs(x)<1.e-14, z.grid)
+            if block_rank[] == 0
+                # Only need to do communications from the root process of each
+                # shared-memory block
+                if PI_temperature_target_ir !== nothing && PI_temperature_target_iz !== nothing
+                    PI_temperature_target_rank = iblock_index[]
+                else
+                    PI_temperature_target_rank = 0
+                end
+                if comm_inter_block[] != MPI.COMM_NULL
+                    PI_temperature_target_rank = MPI.Allreduce(PI_temperature_target_rank, +,
+                                                           comm_inter_block[])
+                end
+                if PI_temperature_target_rank == 0 && iblock_index[] == 0 &&
+                        (PI_temperature_target_ir === nothing ||
+                         PI_temperature_target_iz === nothing)
+                    error("No grid point with r=0 and z=0 was found for the "
+                          * "'temperature_midpoint' controller.")
+                end
+            else
+                PI_temperature_target_rank = nothing
+            end
         elseif input["source_type"] ∈ ("Maxwellian", "energy", "alphas", "alphas-with-losses", "beam", "beam-with-losses")
             PI_density_target = nothing
             PI_controller_amplitude = nothing
@@ -149,16 +203,22 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
             PI_density_target_ir = nothing
             PI_density_target_iz = nothing
             PI_density_target_rank = nothing
+            PI_temperature_target = nothing
+            PI_temperature_target_ir = nothing
+            PI_temperature_target_iz = nothing
+            PI_temperature_target_rank = nothing
         else
             error("Unrecognised ion source_type=$(input["source_type"])."
                   * "Possible values are: Maxwellian, density_profile_control, "
-                  * "density_midpoint_control, energy, alphas, alphas-with-losses, "
-                  * "beam, beam-with-losses")
+                  * "density_midpoint_control, temperature_midpoint_control, energy, "
+                  * "alphas, alphas-with-losses, beam, beam-with-losses")
         end
         return ion_source_data(; Dict(Symbol(k)=>v for (k,v) ∈ input)..., r_amplitude,
                 z_amplitude=z_amplitude, PI_density_target=PI_density_target,
                 PI_controller_amplitude, controller_source_profile,
-                PI_density_target_ir, PI_density_target_iz, PI_density_target_rank)
+                PI_density_target_ir, PI_density_target_iz, PI_density_target_rank,
+                PI_temperature_target, PI_temperature_target_ir, PI_temperature_target_iz,
+                PI_temperature_target_rank)
     end
 
     function get_settings_neutrals(source_index, active_flag)
@@ -327,7 +387,7 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
                      source_strength=ion_settings.source_strength,
                      source_T=ion_settings.source_T,
                     )
-        if ion_settings.source_type != "energy"
+        if ion_settings.source_type != "energy" && ion_settings.source_type != "temperature_midpoint_control"
             # Need to keep same amplitude for ions and electrons so there is no charge
             # source.
             if input["source_strength"] != ion_settings.source_strength
@@ -449,7 +509,7 @@ function initialize_external_source_amplitude!(moments, external_source_settings
 
     for index ∈ eachindex(ion_source_settings)
         if ion_source_settings[index].active
-            if ion_source_settings[index].source_type == "energy"
+            if ion_source_settings[index].source_type ∈ ("energy", "temperature_midpoint_control")
                 @loop_r_z ir iz begin
                     moments.ion.external_source_amplitude[iz,ir,index] =
                         ion_source_settings[index].source_strength *
@@ -667,7 +727,7 @@ function initialize_external_source_controller_integral!(
         for index ∈ eachindex(ion_source_settings)
             if ion_source_settings[index].active && 
                ion_source_settings[index].PI_density_controller_I != 0.0 && 
-               ion_source_settings[index].source_type ∈ ("density_profile_control", "density_midpoint_control")
+               ion_source_settings[index].source_type ∈ ("density_profile_control", "density_midpoint_control", "temperature_midpoint_control")
                 moments.ion.external_source_controller_integral[:, :, index] .= 0.0
             end
         end
@@ -721,7 +781,7 @@ function external_ion_source!(pdf, fvec, moments, ion_source, index, vperp, vpa,
     end
     vpa_grid = vpa.grid
     vperp_grid = vperp.grid
-    if source_type in ("Maxwellian","energy","density_midpoint_control","density_profile_control")
+    if source_type in ("Maxwellian","energy","density_midpoint_control","density_profile_control","temperature_midpoint_control")
         begin_s_r_z_vperp_region()
         if moments.evolve_ppar && moments.evolve_upar && moments.evolve_density
             vth = moments.ion.vth
@@ -785,7 +845,7 @@ function external_ion_source!(pdf, fvec, moments, ion_source, index, vperp, vpa,
                   * "evolve_upar=$(moments.evolve_upar), evolve_ppar=$(moments.evolve_ppar)")
         end
 
-        if source_type == "energy"
+        if source_type ∈ ("energy", "temperature_midpoint_control")
             if moments.evolve_density
                 # Take particles out of pdf so source does not change density
                 @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
@@ -1281,6 +1341,71 @@ function external_ion_source_controller!(fvec_in, moments, ion_source_settings, 
             @loop_r_z ir iz begin
                 ion_moments.external_source_pressure_amplitude[iz,ir,index] =
                     (0.5 * ion_source_settings.source_T + upar[iz,ir,is]^2) *
+                    amplitude * ion_source_settings.controller_source_profile[iz,ir]
+            end
+        end
+    elseif ion_source_settings.source_type == "temperature_midpoint_control"
+        begin_serial_region()
+        temperature = 2 * ppar ./ density
+        # controller_amplitude error is a shared memory Vector of length 1
+        controller_amplitude = ion_source_settings.PI_controller_amplitude
+        @serial_region begin
+            if ion_source_settings.PI_temperature_target_ir !== nothing &&
+                    ion_source_settings.PI_temperature_target_iz !== nothing
+                # This process has the target point
+
+                T_mid = temperature[ion_source_settings.PI_temperature_target_iz,
+                                ion_source_settings.PI_temperature_target_ir, is]
+                T_error = ion_source_settings.PI_temperature_target - T_mid
+
+                ion_moments.external_source_controller_integral[1,1,index] +=
+                    dt * ion_source_settings.PI_temperature_controller_I * T_error
+
+                # Only want a source, so never allow amplitude to be negative
+                amplitude = max(ion_source_settings.source_strength +
+                    ion_source_settings.PI_temperature_controller_P * T_error +
+                    ion_moments.external_source_controller_integral[1,1,index],
+                    0)
+            else
+                amplitude = nothing
+            end
+            controller_amplitude[1] =
+                MPI.Bcast(amplitude, ion_source_settings.PI_temperature_target_rank,
+                          comm_inter_block[])
+        end
+
+        begin_r_z_region()
+
+        amplitude = controller_amplitude[1]
+        #println("amplitude is $amplitude")
+        #@loop_r_z ir iz begin
+        #    ion_moments.external_source_amplitude[iz,ir,index] =
+        #        amplitude * ion_source_settings.controller_source_profile[iz,ir]
+        #end
+        #if moments.evolve_density
+        #    @loop_r_z ir iz begin
+        #            amplitude * ion_source_settings.controller_source_profile[iz,ir]
+        #    end
+        #        ion_moments.external_source_density_amplitude[iz,ir,index] =
+        #end
+        #if moments.evolve_ppar
+        #    @loop_r_z ir iz begin
+        #        ion_moments.external_source_pressure_amplitude[iz,ir,index] =
+        #            (0.5 * ion_source_settings.source_T + upar[iz,ir,is]^2) *
+        #            amplitude * ion_source_settings.controller_source_profile[iz,ir]
+        #    end
+        #end
+        if moments.evolve_upar
+            @loop_r_z ir iz begin
+                ion_moments.external_source_momentum_amplitude[iz,ir,index] =
+                    - density[iz,ir] * upar[iz,ir] * amplitude *
+                    ion_source_settings.controller_source_profile[iz,ir]
+            end
+        end
+        if moments.evolve_ppar
+            @loop_r_z ir iz begin
+                ion_moments.external_source_pressure_amplitude[iz,ir,index] =
+                    (0.5 * ion_source_settings.source_T + upar[iz,ir]^2 - ppar[iz,ir]) *
                     amplitude * ion_source_settings.controller_source_profile[iz,ir]
             end
         end
