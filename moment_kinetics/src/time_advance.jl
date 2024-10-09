@@ -69,6 +69,7 @@ using ..fokker_planck: init_fokker_planck_collisions_weak_form, explicit_fokker_
 using ..fokker_planck: explicit_fp_collisions_weak_form_Maxwellian_cross_species!
 using ..gyroaverages: init_gyro_operators, gyroaverage_pdf!
 using ..manufactured_solns: manufactured_sources
+using ..timer_utils
 using ..advection: advection_info
 using ..runge_kutta: rk_update_evolved_moments!, rk_update_evolved_moments_neutral!,
                      rk_update_variable!, rk_loworder_solution!,
@@ -1714,13 +1715,13 @@ df/dt + δv⋅∂f/∂z = 0, with δv(z,t)=v(z,t)-v₀(z)
 for prudent choice of v₀, expect δv≪v so that explicit
 time integrator can be used without severe CFL condition
 """
-function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_params, vz,
-                       vr, vzeta, vpa, vperp, gyrophase, z, r, moments, fields,
-                       spectral_objects, advect_objects, composition, collisions,
-                       geometry, gyroavs, boundary_distributions,
-                       external_source_settings, num_diss_params, nl_solver_params,
-                       advance, advance_implicit, fp_arrays, scratch_dummy,
-                       manufactured_source_list, ascii_io, io_moments, io_dfns)
+function  time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_params, vz,
+                        vr, vzeta, vpa, vperp, gyrophase, z, r, moments, fields,
+                        spectral_objects, advect_objects, composition, collisions,
+                        geometry, gyroavs, boundary_distributions,
+                        external_source_settings, num_diss_params, nl_solver_params,
+                        advance, advance_implicit, fp_arrays, scratch_dummy,
+                        manufactured_source_list, ascii_io, io_moments, io_dfns)
 
     @debug_detect_redundant_block_synchronize begin
         # Only want to check for redundant _block_synchronize() calls during the
@@ -1761,271 +1762,272 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
         return nothing
     end
     while true
-        
-        if t_params.adaptive && !t_params.write_after_fixed_step_count
-            maybe_write_moments = t_params.step_to_moments_output[]
-            maybe_write_dfns = t_params.step_to_dfns_output[]
-        else
-            maybe_write_moments = (t_params.step_counter[] % t_params.nwrite_moments == 0
-                                   || t_params.step_counter[] >= t_params.nstep)
-            maybe_write_dfns = (t_params.step_counter[] % t_params.nwrite_dfns == 0
-                                || t_params.step_counter[] >= t_params.nstep)
-        end
-        diagnostic_checks = (maybe_write_moments || maybe_write_dfns)
-        
-        if t_params.split_operators
-            # MRH NOT SUPPORTED
-            time_advance_split_operators!(pdf, scratch, scratch_implicit,
-                                          scratch_electron, t_params, vpa, z,
-                                          vpa_spectral, z_spectral, moments, fields,
-                                          vpa_advect, z_advect, composition, collisions,
-                                          external_source_settings, num_diss_params,
-                                          nl_solver_params, advance, advance_implicit,
-                                          t_params.step_counter[])
-        else
-            time_advance_no_splitting!(pdf, scratch, scratch_implicit, scratch_electron,
-                                       t_params, vz, vr, vzeta, vpa, vperp, gyrophase,
-                                       z, r, moments, fields, spectral_objects,
-                                       advect_objects, composition, collisions, geometry,
-                                       gyroavs, boundary_distributions,
-                                       external_source_settings, num_diss_params,
-                                       nl_solver_params, advance, advance_implicit,
-                                       fp_arrays, scratch_dummy, manufactured_source_list,
-                                       diagnostic_checks, t_params.step_counter[])
-        end
-        # update the time
-        t_params.t[] += t_params.previous_dt[]
+        @timeit global_timer "time_advance! step" begin
+            if t_params.adaptive && !t_params.write_after_fixed_step_count
+                maybe_write_moments = t_params.step_to_moments_output[]
+                maybe_write_dfns = t_params.step_to_dfns_output[]
+            else
+                maybe_write_moments = (t_params.step_counter[] % t_params.nwrite_moments == 0
+                                       || t_params.step_counter[] >= t_params.nstep)
+                maybe_write_dfns = (t_params.step_counter[] % t_params.nwrite_dfns == 0
+                                    || t_params.step_counter[] >= t_params.nstep)
+            end
+            diagnostic_checks = (maybe_write_moments || maybe_write_dfns)
 
-        if t_params.t[] ≥ t_params.end_time - epsilon ||
-                (t_params.write_after_fixed_step_count &&
-                 t_params.step_counter[] >= t_params.nstep)
-            # Ensure all output is written at the final step
-            finish_now = true
-        elseif t_params.dt[] < 0.0 || isnan(t_params.dt[]) || isinf(t_params.dt[])
-            # Negative t_params.dt[] indicates the time stepping has failed, so stop and
-            # write output.
-            # t_params.dt[] should never be NaN or Inf, so if it is something has gone
-            # wrong.
-            println("dt=", t_params.dt[], " at t=", t_params.t[], ", terminating run.")
-            finish_now = true
-        end
+            if t_params.split_operators
+                # MRH NOT SUPPORTED
+                time_advance_split_operators!(pdf, scratch, scratch_implicit,
+                                              scratch_electron, t_params, vpa, z,
+                                              vpa_spectral, z_spectral, moments, fields,
+                                              vpa_advect, z_advect, composition, collisions,
+                                              external_source_settings, num_diss_params,
+                                              nl_solver_params, advance, advance_implicit,
+                                              t_params.step_counter[])
+            else
+                time_advance_no_splitting!(pdf, scratch, scratch_implicit, scratch_electron,
+                                           t_params, vz, vr, vzeta, vpa, vperp, gyrophase,
+                                           z, r, moments, fields, spectral_objects,
+                                           advect_objects, composition, collisions, geometry,
+                                           gyroavs, boundary_distributions,
+                                           external_source_settings, num_diss_params,
+                                           nl_solver_params, advance, advance_implicit,
+                                           fp_arrays, scratch_dummy, manufactured_source_list,
+                                           diagnostic_checks, t_params.step_counter[])
+            end
+            # update the time
+            t_params.t[] += t_params.previous_dt[]
 
-        if isfile(t_params.stopfile * "now")
-            # Stop cleanly if a file called 'stop' was created
-            println("Found 'stopnow' file $(t_params.stopfile * "now"), aborting run")
-            finish_now = true
-        end
-
-        if t_params.adaptive && !t_params.write_after_fixed_step_count
-            write_moments = t_params.write_moments_output[] || finish_now
-            write_dfns = t_params.write_dfns_output[] || finish_now
-
-            t_params.write_moments_output[] = false
-            t_params.write_dfns_output[] = false
-        else
-            write_moments = (t_params.step_counter[] % t_params.nwrite_moments == 0
-                             || t_params.step_counter[] >= t_params.nstep
-                             || finish_now)
-            write_dfns = (t_params.step_counter[] % t_params.nwrite_dfns == 0
-                          || t_params.step_counter[] >= t_params.nstep
-                          || finish_now)
-        end
-        if write_moments
-            t_params.moments_output_counter[] += 1
-        end
-        if write_dfns
-            t_params.dfns_output_counter[] += 1
-        end
-
-        if write_moments || write_dfns || finish_now
-            # Always synchronise here, regardless of if we changed region or not
-            begin_serial_region(no_synchronize=true)
-            _block_synchronize()
-
-            if isfile(t_params.stopfile)
-                # Stop cleanly if a file called 'stop' was created
-                println("Found 'stop' file $(t_params.stopfile), aborting run")
-                flush(stdout)
+            if t_params.t[] ≥ t_params.end_time - epsilon ||
+                    (t_params.write_after_fixed_step_count &&
+                     t_params.step_counter[] >= t_params.nstep)
+                # Ensure all output is written at the final step
+                finish_now = true
+            elseif t_params.dt[] < 0.0 || isnan(t_params.dt[]) || isinf(t_params.dt[])
+                # Negative t_params.dt[] indicates the time stepping has failed, so stop and
+                # write output.
+                # t_params.dt[] should never be NaN or Inf, so if it is something has gone
+                # wrong.
+                println("dt=", t_params.dt[], " at t=", t_params.t[], ", terminating run.")
                 finish_now = true
             end
 
-            # If NaNs are present, they should propagate into every field, so only need to
-            # check one. Choose phi because it is small (it has no species or velocity
-            # dimensions). If a NaN is found, stop the simulation.
-            if block_rank[] == 0
-                if any(isnan.(fields.phi))
-                    println("Found NaN, stopping simulation")
-                    found_nan = 1
+            if isfile(t_params.stopfile * "now")
+                # Stop cleanly if a file called 'stop' was created
+                println("Found 'stopnow' file $(t_params.stopfile * "now"), aborting run")
+                finish_now = true
+            end
+
+            if t_params.adaptive && !t_params.write_after_fixed_step_count
+                write_moments = t_params.write_moments_output[] || finish_now
+                write_dfns = t_params.write_dfns_output[] || finish_now
+
+                t_params.write_moments_output[] = false
+                t_params.write_dfns_output[] = false
+            else
+                write_moments = (t_params.step_counter[] % t_params.nwrite_moments == 0
+                                 || t_params.step_counter[] >= t_params.nstep
+                                 || finish_now)
+                write_dfns = (t_params.step_counter[] % t_params.nwrite_dfns == 0
+                              || t_params.step_counter[] >= t_params.nstep
+                              || finish_now)
+            end
+            if write_moments
+                t_params.moments_output_counter[] += 1
+            end
+            if write_dfns
+                t_params.dfns_output_counter[] += 1
+            end
+
+            if write_moments || write_dfns || finish_now
+                # Always synchronise here, regardless of if we changed region or not
+                begin_serial_region(no_synchronize=true)
+                _block_synchronize()
+
+                if isfile(t_params.stopfile)
+                    # Stop cleanly if a file called 'stop' was created
+                    println("Found 'stop' file $(t_params.stopfile), aborting run")
+                    flush(stdout)
+                    finish_now = true
+                end
+
+                # If NaNs are present, they should propagate into every field, so only need to
+                # check one. Choose phi because it is small (it has no species or velocity
+                # dimensions). If a NaN is found, stop the simulation.
+                if block_rank[] == 0
+                    if any(isnan.(fields.phi))
+                        println("Found NaN, stopping simulation")
+                        found_nan = 1
+                    else
+                        found_nan = 0
+                    end
+                    found_nan = MPI.Allreduce(found_nan, +, comm_inter_block[])
                 else
                     found_nan = 0
                 end
-                found_nan = MPI.Allreduce(found_nan, +, comm_inter_block[])
-            else
-                found_nan = 0
-            end
-            found_nan = MPI.Bcast(found_nan, 0, comm_block[])
-            if found_nan != 0
-                finish_now = true
-            end
-
-            # Do MPI communication to add up counters from different processes, where
-            # necessary.
-            gather_nonlinear_solver_counters!(nl_solver_params)
-
-            time_for_run = to_minutes(now() - start_time)
-        end
-        # write moments data to file
-        if write_moments || finish_now
-            @debug_detect_redundant_block_synchronize begin
-                # Skip check for redundant _block_synchronize() during file I/O because
-                # it only runs infrequently
-                debug_detect_redundant_is_active[] = false
-            end
-            begin_serial_region()
-            @serial_region begin
-                if global_rank[] == 0
-                    print("writing moments output ",
-                          rpad(string(t_params.moments_output_counter[]), 4), "  ",
-                          "t = ", rpad(string(round(t_params.t[], sigdigits=6)), 7), "  ",
-                          "nstep = ", rpad(string(t_params.step_counter[]), 7), "  ")
-                    if t_params.adaptive
-                        print("nfail = ", rpad(string(t_params.failure_counter[]), 7), "  ",
-                              "dt = ", rpad(string(t_params.dt_before_output[]), 7), "  ")
-                    end
-                    print(Dates.format(now(), dateformat"H:MM:SS"))
+                found_nan = MPI.Bcast(found_nan, 0, comm_block[])
+                if found_nan != 0
+                    finish_now = true
                 end
-            end
-            write_data_to_ascii(pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r,
-                                t_params.t[], composition.n_ion_species,
-                                composition.n_neutral_species, ascii_io)
-            write_all_moments_data_to_binary(scratch, moments, fields,
-                                             composition.n_ion_species,
-                                             composition.n_neutral_species, io_moments,
-                                             t_params.moments_output_counter[], time_for_run, t_params,
-                                             nl_solver_params, r, z)
 
-            if t_params.steady_state_residual
-                # Calculate some residuals to see how close simulation is to steady state
-                begin_r_z_region()
-                result_string = ""
-                all_residuals = Vector{mk_float}()
-                @loop_s is begin
-                    @views residual_ni =
-                        steady_state_residuals(scratch[t_params.n_rk_stages+1].density[:,:,is],
-                                               scratch[1].density[:,:,is], t_params.previous_dt[];
-                                               use_mpi=true, only_max_abs=true)
+                # Do MPI communication to add up counters from different processes, where
+                # necessary.
+                gather_nonlinear_solver_counters!(nl_solver_params)
+
+                time_for_run = to_minutes(now() - start_time)
+            end
+            # write moments data to file
+            if write_moments || finish_now
+                @debug_detect_redundant_block_synchronize begin
+                    # Skip check for redundant _block_synchronize() during file I/O because
+                    # it only runs infrequently
+                    debug_detect_redundant_is_active[] = false
+                end
+                begin_serial_region()
+                @serial_region begin
                     if global_rank[] == 0
-                        residual_ni = first(values(residual_ni))[1]
-                        push!(all_residuals, residual_ni)
-                        result_string *= "  density "
-                        result_string *= rpad(string(round(residual_ni; sigdigits=4)), 11)
+                        print("writing moments output ",
+                              rpad(string(t_params.moments_output_counter[]), 4), "  ",
+                              "t = ", rpad(string(round(t_params.t[], sigdigits=6)), 7), "  ",
+                              "nstep = ", rpad(string(t_params.step_counter[]), 7), "  ")
+                        if t_params.adaptive
+                            print("nfail = ", rpad(string(t_params.failure_counter[]), 7), "  ",
+                                  "dt = ", rpad(string(t_params.dt_before_output[]), 7), "  ")
+                        end
+                        print(Dates.format(now(), dateformat"H:MM:SS"))
                     end
                 end
-                if composition.n_neutral_species > 0
-                    @loop_sn isn begin
-                        residual_nn =
-                            steady_state_residuals(scratch[t_params.n_rk_stages+1].density_neutral[:,:,isn],
-                                                   scratch[1].density_neutral[:,:,isn],
-                                                   t_params.previous_dt[]; use_mpi=true,
-                                                   only_max_abs=true)
+                write_data_to_ascii(pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r,
+                                    t_params.t[], composition.n_ion_species,
+                                    composition.n_neutral_species, ascii_io)
+                write_all_moments_data_to_binary(scratch, moments, fields,
+                                                 composition.n_ion_species,
+                                                 composition.n_neutral_species, io_moments,
+                                                 t_params.moments_output_counter[], time_for_run, t_params,
+                                                 nl_solver_params, r, z)
+
+                if t_params.steady_state_residual
+                    # Calculate some residuals to see how close simulation is to steady state
+                    begin_r_z_region()
+                    result_string = ""
+                    all_residuals = Vector{mk_float}()
+                    @loop_s is begin
+                        @views residual_ni =
+                            steady_state_residuals(scratch[t_params.n_rk_stages+1].density[:,:,is],
+                                                   scratch[1].density[:,:,is], t_params.previous_dt[];
+                                                   use_mpi=true, only_max_abs=true)
                         if global_rank[] == 0
-                            residual_nn = first(values(residual_nn))[1]
-                            push!(all_residuals, residual_nn)
-                            result_string *= " density_neutral "
-                            result_string *= rpad(string(round(residual_nn; sigdigits=4)), 11)
+                            residual_ni = first(values(residual_ni))[1]
+                            push!(all_residuals, residual_ni)
+                            result_string *= "  density "
+                            result_string *= rpad(string(round(residual_ni; sigdigits=4)), 11)
                         end
                     end
-                end
-                if global_rank[] == 0
-                    println("    residuals:", result_string)
-                    flush(stdout)
-                end
-                if t_params.converged_residual_value > 0.0
+                    if composition.n_neutral_species > 0
+                        @loop_sn isn begin
+                            residual_nn =
+                                steady_state_residuals(scratch[t_params.n_rk_stages+1].density_neutral[:,:,isn],
+                                                       scratch[1].density_neutral[:,:,isn],
+                                                       t_params.previous_dt[]; use_mpi=true,
+                                                       only_max_abs=true)
+                            if global_rank[] == 0
+                                residual_nn = first(values(residual_nn))[1]
+                                push!(all_residuals, residual_nn)
+                                result_string *= " density_neutral "
+                                result_string *= rpad(string(round(residual_nn; sigdigits=4)), 11)
+                            end
+                        end
+                    end
                     if global_rank[] == 0
-                        if all(r < t_params.converged_residual_value for r ∈ all_residuals)
-                            println("Run converged! All tested residuals less than ",
-                                    t_params.converged_residual_value)
-                            flush(stdout)
-                            finish_now = true
-                        end
+                        println("    residuals:", result_string)
+                        flush(stdout)
                     end
-                    finish_now = MPI.Bcast(finish_now, 0, comm_world)
+                    if t_params.converged_residual_value > 0.0
+                        if global_rank[] == 0
+                            if all(r < t_params.converged_residual_value for r ∈ all_residuals)
+                                println("Run converged! All tested residuals less than ",
+                                        t_params.converged_residual_value)
+                                flush(stdout)
+                                finish_now = true
+                            end
+                        end
+                        finish_now = MPI.Bcast(finish_now, 0, comm_world)
+                    end
+                else
+                    if global_rank[] == 0
+                        println()
+                        flush(stdout)
+                    end
+                end
+
+                begin_s_r_z_vperp_region()
+                @debug_detect_redundant_block_synchronize begin
+                    # Reactivate check for redundant _block_synchronize()
+                    debug_detect_redundant_is_active[] = true
+                end
+            end
+            if write_dfns || finish_now
+                @debug_detect_redundant_block_synchronize begin
+                    # Skip check for redundant _block_synchronize() during file I/O because
+                    # it only runs infrequently
+                    debug_detect_redundant_is_active[] = false
+                end
+                begin_serial_region()
+                @serial_region begin
+                    if global_rank[] == 0
+                        println("writing distribution functions output ",
+                                rpad(string(t_params.dfns_output_counter[]), 4), "  ",
+                                "t = ", rpad(string(round(t_params.t[], sigdigits=6)), 7), "  ",
+                                "nstep = ", rpad(string(t_params.step_counter[]), 7), "  ",
+                                Dates.format(now(), dateformat"H:MM:SS"))
+                        flush(stdout)
+                    end
+                end
+                write_all_dfns_data_to_binary(scratch, scratch_electron, moments, fields,
+                                              composition.n_ion_species,
+                                              composition.n_neutral_species, io_dfns,
+                                              t_params.dfns_output_counter[], time_for_run,
+                                              t_params, nl_solver_params, r, z, vperp, vpa,
+                                              vzeta, vr, vz)
+                begin_s_r_z_vperp_region()
+                @debug_detect_redundant_block_synchronize begin
+                    # Reactivate check for redundant _block_synchronize()
+                    debug_detect_redundant_is_active[] = true
+                end
+            end
+
+            if t_params.previous_dt[] == 0.0
+                # Timestep failed, so reset  scratch[t_params.n_rk_stages+1] equal to
+                # scratch[1] to start the timestep over.
+                scratch_temp = scratch[t_params.n_rk_stages+1]
+                scratch[t_params.n_rk_stages+1] = scratch[1]
+                scratch[1] = scratch_temp
+
+                # Re-update remaining velocity moments that are calculable from the evolved
+                # pdf These need to be re-calculated because `scratch[istage+1]` is now the
+                # state at the beginning of the timestep, because the timestep failed
+                apply_all_bcs_constraints_update_moments!(
+                    scratch[t_params.n_rk_stages+1], pdf, moments, fields, nothing, nothing, vz,
+                    vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
+                    collisions, geometry, gyroavs, external_source_settings, num_diss_params,
+                    t_params, nl_solver_params, advance, scratch_dummy, false, 0, 0.0;
+                    pdf_bc_constraints=false, update_electrons=false)
+            end
+
+            if finish_now
+                break
+            end
+            if t_params.adaptive
+                if t_params.t[] >= t_params.end_time - epsilon
+                    break
                 end
             else
-                if global_rank[] == 0
-                    println()
-                    flush(stdout)
+                if t_params.step_counter[] >= t_params.nstep
+                    break
                 end
             end
 
-            begin_s_r_z_vperp_region()
-            @debug_detect_redundant_block_synchronize begin
-                # Reactivate check for redundant _block_synchronize()
-                debug_detect_redundant_is_active[] = true
-            end
+            t_params.step_counter[] += 1
         end
-        if write_dfns || finish_now
-            @debug_detect_redundant_block_synchronize begin
-                # Skip check for redundant _block_synchronize() during file I/O because
-                # it only runs infrequently
-                debug_detect_redundant_is_active[] = false
-            end
-            begin_serial_region()
-            @serial_region begin
-                if global_rank[] == 0
-                    println("writing distribution functions output ",
-                            rpad(string(t_params.dfns_output_counter[]), 4), "  ",
-                            "t = ", rpad(string(round(t_params.t[], sigdigits=6)), 7), "  ",
-                            "nstep = ", rpad(string(t_params.step_counter[]), 7), "  ",
-                            Dates.format(now(), dateformat"H:MM:SS"))
-                    flush(stdout)
-                end
-            end
-            write_all_dfns_data_to_binary(scratch, scratch_electron, moments, fields,
-                                          composition.n_ion_species,
-                                          composition.n_neutral_species, io_dfns,
-                                          t_params.dfns_output_counter[], time_for_run,
-                                          t_params, nl_solver_params, r, z, vperp, vpa,
-                                          vzeta, vr, vz)
-            begin_s_r_z_vperp_region()
-            @debug_detect_redundant_block_synchronize begin
-                # Reactivate check for redundant _block_synchronize()
-                debug_detect_redundant_is_active[] = true
-            end
-        end
-
-        if t_params.previous_dt[] == 0.0
-            # Timestep failed, so reset  scratch[t_params.n_rk_stages+1] equal to
-            # scratch[1] to start the timestep over.
-            scratch_temp = scratch[t_params.n_rk_stages+1]
-            scratch[t_params.n_rk_stages+1] = scratch[1]
-            scratch[1] = scratch_temp
-
-            # Re-update remaining velocity moments that are calculable from the evolved
-            # pdf These need to be re-calculated because `scratch[istage+1]` is now the
-            # state at the beginning of the timestep, because the timestep failed
-            apply_all_bcs_constraints_update_moments!(
-                scratch[t_params.n_rk_stages+1], pdf, moments, fields, nothing, nothing, vz,
-                vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
-                collisions, geometry, gyroavs, external_source_settings, num_diss_params,
-                t_params, nl_solver_params, advance, scratch_dummy, false, 0, 0.0;
-                pdf_bc_constraints=false, update_electrons=false)
-        end
-
-        if finish_now
-            break
-        end
-        if t_params.adaptive
-            if t_params.t[] >= t_params.end_time - epsilon
-                break
-            end
-        else
-            if t_params.step_counter[] >= t_params.nstep
-                break
-            end
-        end
-
-        t_params.step_counter[] += 1
     end
     return nothing
 end
@@ -2296,13 +2298,15 @@ end
 Apply boundary conditions and moment constraints to updated pdfs and calculate derived
 moments and moment derivatives
 """
-function apply_all_bcs_constraints_update_moments!(
-        this_scratch, pdf, moments, fields, boundary_distributions, scratch_electron, vz,
-        vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
-        collisions, geometry, gyroavs, external_source_settings, num_diss_params,
-        t_params, nl_solver_params, advance, scratch_dummy, diagnostic_moments,
-        max_electron_pdf_iterations, max_electron_sim_time; pdf_bc_constraints=true,
-        update_electrons=true)
+@timeit global_timer apply_all_bcs_constraints_update_moments!(
+                         this_scratch, pdf, moments, fields, boundary_distributions,
+                         scratch_electron, vz, vr, vzeta, vpa, vperp, z, r,
+                         spectral_objects, advect_objects, composition, collisions,
+                         geometry, gyroavs, external_source_settings, num_diss_params,
+                         t_params, nl_solver_params, advance, scratch_dummy,
+                         diagnostic_moments, max_electron_pdf_iterations,
+                         max_electron_sim_time; pdf_bc_constraints=true,
+                         update_electrons=true) = begin
 
     begin_s_r_z_region()
 
@@ -2492,13 +2496,13 @@ end
 Check the error estimate for the embedded RK method and adjust the timestep if
 appropriate.
 """
-function adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron,
-                                   t_params, pdf, moments, fields, boundary_distributions,
-                                   composition, collisions, geometry,
-                                   external_source_settings, spectral_objects,
-                                   advect_objects, gyroavs, num_diss_params,
-                                   nl_solver_params, advance, scratch_dummy, r, z, vperp,
-                                   vpa, vzeta, vr, vz, success, nl_max_its_fraction)
+@timeit global_timer adaptive_timestep_update!(
+                         scratch, scratch_implicit, scratch_electron, t_params, pdf,
+                         moments, fields, boundary_distributions, composition, collisions,
+                         geometry, external_source_settings, spectral_objects,
+                         advect_objects, gyroavs, num_diss_params, nl_solver_params,
+                         advance, scratch_dummy, r, z, vperp, vpa, vzeta, vr, vz, success,
+                         nl_max_its_fraction) = begin
     #error_norm_method = "Linf"
     error_norm_method = "L2"
 
@@ -2913,12 +2917,13 @@ end
 
 """
 """
-function ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t_params, vz, vr,
-                 vzeta, vpa, vperp, gyrophase, z, r, moments, fields, spectral_objects,
-                 advect_objects, composition, collisions, geometry, gyroavs,
-                 boundary_distributions, external_source_settings, num_diss_params,
-                 nl_solver_params, advance, advance_implicit, fp_arrays, scratch_dummy,
-                 manufactured_source_list,diagnostic_checks, istep)
+@timeit global_timer ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t_params,
+                             vz, vr, vzeta, vpa, vperp, gyrophase, z, r, moments, fields,
+                             spectral_objects, advect_objects, composition, collisions,
+                             geometry, gyroavs, boundary_distributions,
+                             external_source_settings, num_diss_params, nl_solver_params,
+                             advance, advance_implicit, fp_arrays, scratch_dummy,
+                             manufactured_source_list,diagnostic_checks, istep) = begin
 
     begin_s_r_z_region()
 
@@ -3226,10 +3231,12 @@ that includes the kinetic equation + any evolved moment equations
 using the forward Euler method: fvec_out = fvec_in + dt*fvec_in,
 with fvec_in an input and fvec_out the output
 """
-function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
-    advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t, dt,
-    spectral_objects, composition, collisions, geometry, scratch_dummy,
-    manufactured_source_list, external_source_settings, num_diss_params, advance, fp_arrays, istage)
+@timeit global_timer euler_time_advance!(
+                         fvec_out, fvec_in, pdf, fields, moments, advect_objects, vz, vr,
+                         vzeta, vpa, vperp, gyrophase, z, r, t, dt, spectral_objects,
+                         composition, collisions, geometry, scratch_dummy,
+                         manufactured_source_list, external_source_settings,
+                         num_diss_params, advance, fp_arrays, istage) = begin
 
     # define some abbreviated variables for tidiness
     n_ion_species = composition.n_ion_species
@@ -3493,12 +3500,13 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     return nothing
 end
 
-function backward_euler!(fvec_out, fvec_in, scratch_electron, pdf, fields, moments,
+@timeit global_timer backward_euler!(
+                         fvec_out, fvec_in, scratch_electron, pdf, fields, moments,
                          advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, dt,
                          t_params, spectral_objects, composition, collisions, geometry,
                          scratch_dummy, manufactured_source_list,
                          external_source_settings, num_diss_params, gyroavs,
-                         nl_solver_params, advance, fp_arrays, istage)
+                         nl_solver_params, advance, fp_arrays, istage) = begin
 
     vpa_spectral, vperp_spectral, r_spectral, z_spectral = spectral_objects.vpa_spectral, spectral_objects.vperp_spectral, spectral_objects.r_spectral, spectral_objects.z_spectral
     vz_spectral, vr_spectral, vzeta_spectral = spectral_objects.vz_spectral, spectral_objects.vr_spectral, spectral_objects.vzeta_spectral
@@ -3570,12 +3578,13 @@ end
 
 Do a backward-Euler timestep for all terms in the ion kinetic equation.
 """
-function implicit_ion_advance!(fvec_out, fvec_in, pdf, fields, moments, advect_objects,
-                               vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t, dt,
-                               spectral_objects, composition, collisions, geometry,
-                               scratch_dummy, manufactured_source_list,
-                               external_source_settings, num_diss_params, gyroavs,
-                               nl_solver_params, advance, fp_arrays, istage)
+@timeit global_timer implicit_ion_advance!(
+                         fvec_out, fvec_in, pdf, fields, moments, advect_objects, vz, vr,
+                         vzeta, vpa, vperp, gyrophase, z, r, t, dt, spectral_objects,
+                         composition, collisions, geometry, scratch_dummy,
+                         manufactured_source_list, external_source_settings,
+                         num_diss_params, gyroavs, nl_solver_params, advance, fp_arrays,
+                         istage) = begin
 
     vpa_spectral, vperp_spectral, r_spectral, z_spectral = spectral_objects.vpa_spectral, spectral_objects.vperp_spectral, spectral_objects.r_spectral, spectral_objects.z_spectral
     vpa_advect, vperp_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.vperp_advect, advect_objects.r_advect, advect_objects.z_advect

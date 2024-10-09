@@ -12,6 +12,7 @@ using ..calculus: reconcile_element_boundaries_MPI!
 using ..coordinates: coordinate
 using ..interpolation: interpolate_to_grid_1d!
 using ..looping
+using ..timer_utils
 using ..moment_kinetics_structs: scratch_pdf, em_fields_struct
 using ..type_definitions: mk_float, mk_int
 using ..velocity_moments: integrate_over_vspace, integrate_over_neutral_vspace,
@@ -21,9 +22,11 @@ using ..velocity_moments: integrate_over_vspace, integrate_over_neutral_vspace,
 enforce boundary conditions in vpa and z on the evolved pdf;
 also enforce boundary conditions in z on all separately evolved velocity space moments of the pdf
 """
-function enforce_boundary_conditions!(f, f_r_bc, density, upar, ppar, phi, moments, vpa_bc,
-        z_bc, r_bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral, vpa_adv, vperp_adv, z_adv, r_adv, composition, scratch_dummy,
-        r_diffusion, vpa_diffusion, vperp_diffusion)
+@timeit global_timer enforce_boundary_conditions!(
+                         f, f_r_bc, density, upar, ppar, phi, moments, vpa_bc, z_bc, r_bc,
+                         vpa, vperp, z, r, vpa_spectral, vperp_spectral, vpa_adv,
+                         vperp_adv, z_adv, r_adv, composition, scratch_dummy, r_diffusion,
+                         vpa_diffusion, vperp_diffusion) = begin
     if vpa.n > 1
         begin_s_r_z_vperp_region()
         @loop_s_r_z_vperp is ir iz ivperp begin
@@ -219,11 +222,12 @@ end
 """
 enforce boundary conditions on neutral particle distribution function
 """
-function enforce_neutral_boundary_conditions!(f_neutral, f_ion,
-        boundary_distributions, density_neutral, uz_neutral, pz_neutral, moments,
-        density_ion, upar_ion, Er, vzeta_spectral, vr_spectral, vz_spectral, r_adv, z_adv,
-        vzeta_adv, vr_adv, vz_adv, r, z, vzeta, vr, vz, composition, geometry,
-        scratch_dummy, r_diffusion, vz_diffusion)
+@timeit global_timer enforce_neutral_boundary_conditions!(
+                         f_neutral, f_ion, boundary_distributions, density_neutral,
+                         uz_neutral, pz_neutral, moments, density_ion, upar_ion, Er,
+                         vzeta_spectral, vr_spectral, vz_spectral, r_adv, z_adv,
+                         vzeta_adv, vr_adv, vz_adv, r, z, vzeta, vr, vz, composition,
+                         geometry, scratch_dummy, r_diffusion, vz_diffusion) = begin
 
     # without acceleration of neutrals bc on vz vr vzeta should not be required as no
     # advection or diffusion in these coordinates

@@ -8,9 +8,9 @@ export setup_krook_collisions_input, krook_collisions!, electron_krook_collision
 using ..looping
 using ..boundary_conditions: skip_f_electron_bc_points_in_Jacobian
 using ..input_structs: krook_collisions_input, set_defaults_and_check_section!
+using ..timer_utils 
 using ..collision_frequencies
 using ..reference_parameters
-
 """
 Function for reading Krook collision operator input parameters. 
 Structure the namelist as follows.
@@ -70,7 +70,9 @@ Add collision operator
 
 Currently Krook collisions
 """
-function krook_collisions!(pdf_out, fvec_in, moments, composition, collisions, vperp, vpa, dt)
+@timeit global_timer krook_collisions!(
+                         pdf_out, fvec_in, moments, composition, collisions, vperp, vpa,
+                         dt) = begin
     begin_s_r_z_region()
 
     if vperp.n > 1 && (moments.evolve_density || moments.evolve_upar || moments.evolve_ppar)
@@ -163,8 +165,9 @@ Add Krook collision operator for electrons
 Note that this function operates on a single point in `r`, so `pdf_out`, `pdf_in`,
 `dens_in`, `upar_in`, `upar_ion_in`, and `vth_in` should have no r-dimension.
 """
-function electron_krook_collisions!(pdf_out, pdf_in, dens_in, upar_in, upar_ion_in,
-                                    vth_in, collisions, vperp, vpa, dt)
+@timeit global_timer electron_krook_collisions!(
+                         pdf_out, pdf_in, dens_in, upar_in, upar_ion_in, vth_in,
+                         collisions, vperp, vpa, dt) = begin
     begin_z_region()
 
     # For now, electrons are always fully moment-kinetic

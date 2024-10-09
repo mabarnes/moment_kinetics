@@ -42,6 +42,7 @@ using ..collision_frequencies: get_collision_frequency_ee,
                                  get_collision_frequency_ei
 using ..krook_collisions: electron_krook_collisions!,
                           add_electron_krook_collisions_to_Jacobian!
+using ..timer_utils
 using ..moment_constraints: hard_force_moment_constraints!,
                             moment_constraints_on_residual!,
                             electron_implicit_constraint_forcing!,
@@ -87,12 +88,15 @@ The electron kinetic equation is:
 OUTPUT:
     pdf = updated (modified) electron pdf
 """
-function update_electron_pdf!(scratch, pdf, moments, phi, r, z, vperp, vpa, z_spectral,
-        vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy, t_params,
-        collisions, composition, external_source_settings, num_diss_params,
-        nl_solver_params, max_electron_pdf_iterations, max_electron_sim_time;
-        io_electron=nothing, initial_time=nothing, residual_tolerance=nothing,
-        evolve_ppar=false, ion_dt=nothing, solution_method="backward_euler")
+@timeit global_timer update_electron_pdf!(
+                         scratch, pdf, moments, phi, r, z, vperp, vpa, z_spectral,
+                         vperp_spectral, vpa_spectral, z_advect, vpa_advect,
+                         scratch_dummy, t_params, collisions, composition,
+                         external_source_settings, num_diss_params, nl_solver_params,
+                         max_electron_pdf_iterations, max_electron_sim_time;
+                         io_electron=nothing, initial_time=nothing,
+                         residual_tolerance=nothing, evolve_ppar=false, ion_dt=nothing,
+                         solution_method="backward_euler") = begin
 
     # set the method to use to solve the electron kinetic equation
     #solution_method = "artificial_time_derivative"
@@ -497,7 +501,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                 end
                 electron_pdf_converged = abs(residual) < residual_tolerance
             end
-            electron_pdf_converged = MPI.Bcast(electron_pdf_converged, 0, comm_world)
+            @timeit_debug global_timer "MPI.Bcast comm_world" electron_pdf_converged = MPI.Bcast(electron_pdf_converged, 0, comm_world)
         end
 
         if text_output
@@ -891,7 +895,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                             end
                         end
 
-                        nl_solver_params.preconditioners.z[ivpa,ivperp,ir] = lu(sparse(z_matrix))
+                        @timeit_debug global_timer "lu" nl_solver_params.preconditioners.z[ivpa,ivperp,ir] = lu(sparse(z_matrix))
                     end
 
                     if z.irank == 0
@@ -983,7 +987,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                   * "supported in preconditioner")
                         end
 
-                        nl_solver_params.preconditioners.ppar[ir] = lu(sparse(ppar_matrix))
+                        @timeit_debug global_timer "lu" nl_solver_params.preconditioners.ppar[ir] = lu(sparse(ppar_matrix))
                     else
                         ppar_matrix = allocate_float(0, 0)
                         ppar_matrix[] = 1.0
@@ -998,7 +1002,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                         z_precon_matrix = nl_solver_params.preconditioners.z[ivpa,ivperp,ir]
                         f_slice = @view precon_f[ivpa,ivperp,:]
                         @views z.scratch .= f_slice
-                        ldiv!(z.scratch2, z_precon_matrix, z.scratch)
+                        @timeit_debug global_timer "ldiv!" ldiv!(z.scratch2, z_precon_matrix, z.scratch)
                         f_slice .= z.scratch2
                     end
 
@@ -1010,7 +1014,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
 
                     begin_serial_region()
                     @serial_region begin
-                        ldiv!(precon_ppar, ppar_precon_matrix, z.scratch)
+                        @timeit_debug global_timer "ldiv!" ldiv!(precon_ppar, ppar_precon_matrix, z.scratch)
                     end
                 end
 
@@ -1045,7 +1049,7 @@ println("recalculating precon")
                         if size(orig_lu) == (1, 1)
                             # Have not properly created the LU decomposition before, so
                             # cannot reuse it.
-                            nl_solver_params.preconditioners[ir] =
+                            @timeit_debug global_timer "lu" nl_solver_params.preconditioners[ir] =
                                 (lu(sparse(precon_matrix)), precon_matrix, input_buffer,
                                  output_buffer)
                         else
@@ -1053,14 +1057,14 @@ println("recalculating precon")
                             # has the same sparsity pattern, so by using `lu!()` we can
                             # reuse some setup.
                             try
-                                lu!(orig_lu, sparse(precon_matrix); check=false)
+                                @timeit_debug global_timer "lu!" lu!(orig_lu, sparse(precon_matrix); check=false)
                             catch e
                                 if !isa(e, ArgumentError)
                                     rethrow(e)
                                 end
                                 println("Sparsity pattern of matrix changed, rebuilding "
                                         * " LU from scratch")
-                                orig_lu = lu(sparse(precon_matrix))
+                                @timeit_debug global_timer "lu" orig_lu = lu(sparse(precon_matrix))
                             end
                             nl_solver_params.preconditioners[ir] =
                                 (orig_lu, precon_matrix, input_buffer, output_buffer)
@@ -1091,7 +1095,7 @@ println("recalculating precon")
 
                     begin_serial_region()
                     @serial_region begin
-                        ldiv!(output_buffer, precon_lu, input_buffer)
+                        @timeit_debug global_timer "ldiv!" ldiv!(output_buffer, precon_lu, input_buffer)
                     end
 
                     begin_serial_region()
@@ -1444,7 +1448,7 @@ println("recalculating precon")
                     end
                     electron_pdf_converged = abs(residual) < residual_tolerance
                 end
-                electron_pdf_converged = MPI.Bcast(electron_pdf_converged, 0, comm_world)
+                @timeit_debug global_timer "MPI.Bcast comm_world" electron_pdf_converged = MPI.Bcast(electron_pdf_converged, 0, comm_world)
             end
 
             if (mod(t_params.step_counter[] - initial_step_counter,100) == 0)
@@ -1565,12 +1569,12 @@ nonlinear solve being parallelised over {z,vperp,vpa}. More efficient might be t
 equivalent to the 'anyv' parallelisation used for the collision operator (e.g. 'anyzv'?)
 to allow the outer r-loop to be parallelised.
 """
-function implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron, moments,
-                                    fields, collisions, composition, geometry,
-                                    external_source_settings, num_diss_params, r, z,
-                                    vperp, vpa, r_spectral, z_spectral, vperp_spectral,
-                                    vpa_spectral, z_advect, vpa_advect, gyroavs,
-                                    scratch_dummy, t_params, ion_dt, nl_solver_params)
+@timeit global_timer implicit_electron_advance!(
+                         fvec_out, fvec_in, pdf, scratch_electron, moments, fields,
+                         collisions, composition, geometry, external_source_settings,
+                         num_diss_params, r, z, vperp, vpa, r_spectral, z_spectral,
+                         vperp_spectral, vpa_spectral, z_advect, vpa_advect, gyroavs,
+                         scratch_dummy, t_params, ion_dt, nl_solver_params) = begin
 
     electron_ppar_out = fvec_out.electron_ppar
     # Store the solved-for pdf in n_rk_stages+1, because this was the version that gets
@@ -1886,10 +1890,10 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, z, vp
     end
 end
 
-function enforce_boundary_condition_on_electron_pdf!(pdf, phi, vthe, upar, z, vperp, vpa,
-                                                     vperp_spectral, vpa_spectral,
-                                                     vpa_adv, moments, vpa_diffusion,
-                                                     me_over_mi; bc_constraints=true)
+@timeit global_timer enforce_boundary_condition_on_electron_pdf!(
+                         pdf, phi, vthe, upar, z, vperp, vpa, vperp_spectral,
+                         vpa_spectral, vpa_adv, moments, vpa_diffusion, me_over_mi;
+                         bc_constraints=true) = begin
 
     newton_tol = 1.0e-13
 
@@ -2523,11 +2527,11 @@ end
 Check the error estimate for the embedded RK method and adjust the timestep if
 appropriate.
 """
-function electron_adaptive_timestep_update!(scratch, t, t_params, moments, phi, z_advect,
-                                            vpa_advect, composition, r, z, vperp, vpa,
-                                            vperp_spectral, vpa_spectral,
-                                            external_source_settings, num_diss_params;
-                                            evolve_ppar=false, local_max_dt=Inf)
+@timeit global_timer electron_adaptive_timestep_update!(
+                         scratch, t, t_params, moments, phi, z_advect, vpa_advect,
+                         composition, r, z, vperp, vpa, vperp_spectral, vpa_spectral,
+                         external_source_settings, num_diss_params; evolve_ppar=false,
+                         local_max_dt=Inf) = begin
     #error_norm_method = "Linf"
     error_norm_method = "L2"
 
@@ -2849,14 +2853,12 @@ When `evolve_ppar=true` is passed, also updates the electron parallel pressure.
 Note that this function operates on a single point in `r`, given by `ir`, and `f_out`,
 `ppar_out`, `f_in`, and `ppar_in` should have no r-dimension.
 """
-function electron_kinetic_equation_euler_update!(f_out, ppar_out, f_in, ppar_in, moments,
-                                                 z, vperp, vpa, z_spectral, vpa_spectral,
-                                                 z_advect, vpa_advect, scratch_dummy,
-                                                 collisions, composition,
-                                                 external_source_settings,
-                                                 num_diss_params, t_params, ir;
-                                                 evolve_ppar=false, ion_dt=nothing,
-                                                 soft_force_constraints=false)
+@timeit global_timer electron_kinetic_equation_euler_update!(
+                         f_out, ppar_out, f_in, ppar_in, moments, z, vperp, vpa,
+                         z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                         collisions, composition, external_source_settings,
+                         num_diss_params, t_params, ir; evolve_ppar=false, ion_dt=nothing,
+                         soft_force_constraints=false) = begin
     dt = t_params.dt[]
 
     # add the contribution from the z advection term
@@ -2942,13 +2944,11 @@ end
 Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equation and (if
 `evolve_ppar=true`) the electron energy equation.
 """
-function fill_electron_kinetic_equation_Jacobian!(jacobian_matrix, f, ppar, moments,
-                                                  collisions, composition, z, vperp, vpa,
-                                                  z_spectral, vperp_spectral,
-                                                  vpa_spectral, z_advect, vpa_advect,
-                                                  scratch_dummy, external_source_settings,
-                                                  num_diss_params, t_params, ion_dt, ir,
-                                                  evolve_ppar)
+@timeit global_timer fill_electron_kinetic_equation_Jacobian!(
+                         jacobian_matrix, f, ppar, moments, collisions, composition, z,
+                         vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
+                         vpa_advect, scratch_dummy, external_source_settings,
+                         num_diss_params, t_params, ion_dt, ir, evolve_ppar) = begin
     dt = t_params.dt[]
 
     buffer_1 = @view scratch_dummy.buffer_rs_1[ir,1]
@@ -3645,9 +3645,9 @@ function get_electron_critical_velocities(phi, vthe, me_over_mi, z)
         crit_speed_zmin = 0.0
     end
     @serial_region begin
-        crit_speed_zmin = MPI.Bcast(crit_speed_zmin, 0, z.comm)
+        @timeit_debug global_timer "MPI.Bcast z.comm" crit_speed_zmin = MPI.Bcast(crit_speed_zmin, 0, z.comm)
     end
-    crit_speed_zmin = MPI.Bcast(crit_speed_zmin, 0, comm_block[])
+    @timeit_debug global_timer "MPI.Bcast comm_block" crit_speed_zmin = MPI.Bcast(crit_speed_zmin, 0, comm_block[])
 
     if z.irank == z.nrank - 1 && block_rank[] == 0
         crit_speed_zmax = -sqrt(max(phi[end, 1],0.0) / (me_over_mi * vthe[end, 1]^2))
@@ -3655,9 +3655,9 @@ function get_electron_critical_velocities(phi, vthe, me_over_mi, z)
         crit_speed_zmin = 0.0
     end
     @serial_region begin
-        crit_speed_zmax = MPI.Bcast(crit_speed_zmax, z.nrank-1, z.comm)
+        @timeit_debug global_timer "MPI.Bcast z.comm" crit_speed_zmax = MPI.Bcast(crit_speed_zmax, z.nrank-1, z.comm)
     end
-    crit_speed_zmax = MPI.Bcast(crit_speed_zmax, 0, comm_block[])
+    @timeit_debug global_timer "MPI.Bcast comm_block" crit_speed_zmax = MPI.Bcast(crit_speed_zmax, 0, comm_block[])
 
     return crit_speed_zmin, crit_speed_zmax
 end
@@ -3700,7 +3700,7 @@ function check_electron_pdf_convergence(residual, pdf, upar, vthe, z, vpa)
             sum_pdf += sum(abs.(@view pdf[iv0_start:iv0_end,ivperp,iz,ir]) * vthe[iz,ir])
         end
     end
-    sum_residual, sum_pdf = MPI.Allreduce([sum_residual, sum_pdf], +, comm_world)
+    @timeit_debug global_timer "MPI.Allreduce comm_world" sum_residual, sum_pdf = MPI.Allreduce([sum_residual, sum_pdf], +, comm_world)
 
     average_residual = sum_residual / sum_pdf
 
@@ -3715,7 +3715,7 @@ function check_electron_pdf_convergence(residual)
     @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
         sum_residual += abs.(residual[ivpa,ivperp,iz,ir])
     end
-    sum_residual, sum_length = MPI.Allreduce((sum_residual, length(residual) / block_size[]), +, comm_world)
+    @timeit_debug global_timer "MPI.Allreduce comm_world" sum_residual, sum_length = MPI.Allreduce((sum_residual, length(residual) / block_size[]), +, comm_world)
     average_residual = sum_residual / sum_length
     electron_pdf_converged = (average_residual < 1e-3)
     return average_residual, electron_pdf_converged

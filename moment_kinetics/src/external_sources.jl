@@ -27,6 +27,7 @@ using ..communication
 using ..coordinates
 using ..input_structs
 using ..looping
+using ..timer_utils
 using ..velocity_moments: get_density
 
 using MPI
@@ -768,7 +769,9 @@ end
 
 Add external source term to the ion kinetic equation.
 """
-function external_ion_source!(pdf, fvec, moments, ion_source, index, vperp, vpa, dt, scratch_dummy)
+@timeit global_timer external_ion_source!(
+                         pdf, fvec, moments, ion_source, index, vperp, vpa, dt,
+                         scratch_dummy) = begin
     
     source_type = ion_source.source_type
     @views source_amplitude = moments.ion.external_source_amplitude[:,:,index]
@@ -1014,9 +1017,9 @@ Add external source term to the electron kinetic equation.
 Note that this function operates on a single point in `r`, given by `ir`, and `pdf_out`,
 `pdf_in`, `electron_density`, and `electron_upar` should have no r-dimension.
 """
-function external_electron_source!(pdf_out, pdf_in, electron_density, electron_upar,
-                                   moments, composition, electron_source, index,
-                                   vperp, vpa, dt, ir)
+@timeit global_timer external_electron_source!(
+                         pdf_out, pdf_in, electron_density, electron_upar, moments,
+                         composition, electron_source, index, vperp, vpa, dt, ir) = begin
     begin_z_vperp_region()
 
     me_over_mi = composition.me_over_mi
@@ -1148,8 +1151,9 @@ end
 
 Add external source term to the neutral kinetic equation.
 """
-function external_neutral_source!(pdf, fvec, moments, neutral_source, index, vzeta, vr,
-                                  vz, dt)
+@timeit global_timer external_neutral_source!(
+                         pdf, fvec, moments, neutral_source, index, vzeta, vr, vz,
+                         dt) = begin
     begin_sn_r_z_vzeta_vr_region()
 
     @views source_amplitude = moments.neutral.external_source_amplitude[:, :, index]
@@ -1258,7 +1262,8 @@ end
 Calculate the amplitude when using a PI controller for the density to set the external
 source amplitude.
 """
-function external_ion_source_controller!(fvec_in, moments, ion_source_settings, index, dt)
+@timeit global_timer external_ion_source_controller!(
+                         fvec_in, moments, ion_source_settings, index, dt) = begin
     begin_r_z_region()
 
     is = 1
@@ -1476,8 +1481,8 @@ operation) depends on the ion source, so [`external_ion_source_controller!`](@re
 called before this function is called so that `moments.ion.external_source_amplitude` is
 up to date.
 """
-function external_electron_source_controller!(fvec_in, moments, electron_source_settings,
-                                              index, dt)
+@timeit global_timer external_electron_source_controller!(
+                         fvec_in, moments, electron_source_settings, index, dt) = begin
     begin_r_z_region()
 
     is = 1
@@ -1555,8 +1560,9 @@ end
 Calculate the amplitude when using a PI controller for the density to set the external
 source amplitude.
 """
-function external_neutral_source_controller!(fvec_in, moments, neutral_source_settings, index, 
-                                             r, z, dt)
+@timeit global_timer external_neutral_source_controller!(
+                         fvec_in, moments, neutral_source_settings, index, r, z,
+                         dt) = begin
     begin_r_z_region()
 
     is = 1

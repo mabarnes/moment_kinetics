@@ -6,13 +6,15 @@ export continuity_equation!
 
 using ..calculus: derivative!
 using ..looping
+using ..timer_utils
 
 """
 use the continuity equation dn/dt + d(n*upar)/dz to update the density n for all ion
 species
 """
-function continuity_equation!(dens_out, fvec_in, moments, composition, dt, spectral,
-                              ionization, ion_source_settings, num_diss_params)
+@timeit global_timer continuity_equation!(
+                         dens_out, fvec_in, moments, composition, dt, spectral,
+                         ionization, ion_source_settings, num_diss_params) = begin
     begin_s_r_z_region()
 
     @loop_s_r_z is ir iz begin
@@ -53,9 +55,9 @@ end
 use the continuity equation dn/dt + d(n*upar)/dz to update the density n for all neutral
 species
 """
-function neutral_continuity_equation!(dens_out, fvec_in, moments, composition, dt,
-                                      spectral, ionization, neutral_source_settings,
-                                      num_diss_params)
+@timeit global_timer neutral_continuity_equation!(
+                         dens_out, fvec_in, moments, composition, dt, spectral,
+                         ionization, neutral_source_settings, num_diss_params) = begin
     begin_sn_r_z_region()
 
     @loop_sn_r_z isn ir iz begin

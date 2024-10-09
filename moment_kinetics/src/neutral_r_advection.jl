@@ -8,13 +8,15 @@ export update_speed_neutral_r!
 using ..advection: advance_f_df_precomputed!
 using ..chebyshev: chebyshev_info
 using ..looping
+using ..timer_utils
 using ..derivatives: derivative_r!
 
 """
 do a single stage time advance in r (potentially as part of a multi-stage RK scheme)
 """
-function neutral_advection_r!(f_out, fvec_in, advect, r, z, vzeta, vr, vz, dt,
-  r_spectral, composition, geometry, scratch_dummy)
+@timeit global_timer neutral_advection_r!(
+                         f_out, fvec_in, advect, r, z, vzeta, vr, vz, dt, r_spectral,
+                         composition, geometry, scratch_dummy) = begin
     
     begin_sn_z_vzeta_vr_vz_region()
     

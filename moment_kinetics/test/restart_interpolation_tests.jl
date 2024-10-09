@@ -104,8 +104,8 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
         name = string(name, "_", (stringify_arg(k, v) for (k, v) in args)...)
     end
     # Make sure name is not too long
-    if length(name) > 80
-        name = name[1:80]
+    if length(name) > 60
+        name = name[1:60]
     end
     if parallel_io
         name *= "parallel-io"

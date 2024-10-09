@@ -10,6 +10,7 @@ export manufactured_geometry
 using ..array_allocation: allocate_shared_float
 using ..input_structs
 using ..looping
+using ..timer_utils
 using ..type_definitions: mk_float, mk_int
 
 function manufactured_solutions end
@@ -67,9 +68,10 @@ end
 
 # This function is defined here rather than in the extension, because the looping macros
 # break if used outside the moment_kinetics module.
-function manufactured_sources(manufactured_solns_input, r_coord, z_coord, vperp_coord,
-            vpa_coord, vzeta_coord, vr_coord, vz_coord, composition, geometry, collisions,
-            num_diss_params, species)
+@timeit global_timer manufactured_sources(
+                         manufactured_solns_input, r_coord, z_coord, vperp_coord,
+                         vpa_coord, vzeta_coord, vr_coord, vz_coord, composition,
+                         geometry, collisions, num_diss_params, species) = begin
 
     time_independent_sources, Source_i_func, Source_n_func =
         manufactured_sources_setup(manufactured_solns_input, r_coord, z_coord,
