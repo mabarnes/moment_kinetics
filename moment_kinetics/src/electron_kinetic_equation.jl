@@ -2,6 +2,8 @@ module electron_kinetic_equation
 
 using LinearAlgebra
 using MPI
+using MUMPS
+using MUMPS: mumps_solve!, get_sol!
 using SparseArrays
 
 export get_electron_critical_velocities
@@ -1019,7 +1021,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
 
                 left_preconditioner = identity
                 right_preconditioner = split_precon!
-            elseif nl_solver_params.preconditioner_type == "electron_lu"
+            elseif nl_solver_params.preconditioner_type ∈ ("electron_lu", "electron_lu_mumps")
 
                 if t_params.dt[] > 1.5 * nl_solver_params.precon_dt[] ||
                         t_params.dt[] < 2.0/3.0 * nl_solver_params.precon_dt[]
@@ -1033,7 +1035,7 @@ println("recalculating precon")
                     nl_solver_params.solves_since_precon_update[] = 0
                     nl_solver_params.precon_dt[] = t_params.dt[]
 
-                    orig_lu, precon_matrix, input_buffer, output_buffer =
+                    orig_lu, precon_matrix, precon_matrix_sparse, input_buffer, output_buffer =
                         nl_solver_params.preconditioners[ir]
 
                     fill_electron_kinetic_equation_Jacobian!(
@@ -1044,41 +1046,69 @@ println("recalculating precon")
                         ir, evolve_ppar)
 
                     begin_serial_region()
-                    if block_rank[] == 0
-                        if size(orig_lu) == (1, 1)
-                            # Have not properly created the LU decomposition before, so
-                            # cannot reuse it.
-                            @timeit_debug global_timer "lu" nl_solver_params.preconditioners[ir] =
-                                (lu(sparse(precon_matrix)), precon_matrix, input_buffer,
-                                 output_buffer)
-                        else
-                            # LU decomposition was previously created. The Jacobian always
-                            # has the same sparsity pattern, so by using `lu!()` we can
-                            # reuse some setup.
-                            try
-                                @timeit_debug global_timer "lu!" lu!(orig_lu, sparse(precon_matrix); check=false)
-                            catch e
-                                if !isa(e, ArgumentError)
-                                    rethrow(e)
+                    if nl_solver_params.preconditioner_type == "electron_lu"
+                        if block_rank[] == 0
+                            precon_matrix_sparse = sparse(precon_matrix)
+                            if size(orig_lu) == (1, 1)
+                                # Have not properly created the LU decomposition before, so
+                                # cannot reuse it.
+                                @timeit_debug global_timer "lu" nl_solver_params.preconditioners[ir] =
+                                    (lu(precon_matrix_sparse), precon_matrix,
+                                     precon_matrix_sparse, input_buffer, output_buffer)
+                            else
+                                # LU decomposition was previously created. The Jacobian always
+                                # has the same sparsity pattern, so by using `lu!()` we can
+                                # reuse some setup.
+                                try
+                                    @timeit_debug global_timer "lu!" lu!(orig_lu, precon_matrix_sparse; check=false)
+                                catch e
+                                    if !isa(e, ArgumentError)
+                                        rethrow(e)
+                                    end
+                                    println("Sparsity pattern of matrix changed, rebuilding "
+                                            * " LU from scratch")
+                                    @timeit_debug global_timer "lu" orig_lu = lu(precon_matrix_sparse)
                                 end
-                                println("Sparsity pattern of matrix changed, rebuilding "
-                                        * " LU from scratch")
-                                @timeit_debug global_timer "lu" orig_lu = lu(sparse(precon_matrix))
+                                nl_solver_params.preconditioners[ir] =
+                                    (orig_lu, precon_matrix, precon_matrix_sparse,
+                                     input_buffer, output_buffer)
+                            end
+                        else
+                            nl_solver_params.preconditioners[ir] =
+                                (orig_lu, precon_matrix, precon_matrix_sparse,
+                                 input_buffer, output_buffer)
+                        end
+                    elseif nl_solver_params.preconditioner_type == "electron_lu_mumps"
+                        if block_rank[] == 0
+                            new_sparse = sparse(precon_matrix)
+                            if true || !(length(precon_matrix_sparse.rowval) == length(new_sparse.rowval) &&
+                                 precon_matrix_sparse.rowval == new_sparse.rowval)
+                                # LU decomposition has not been set up, or sparsity
+                                # pattern has changed, so start MUMPS's LU process from
+                                # scratch.
+                                precon_matrix_sparse = new_sparse
+                                @timeit_debug global_timer "MUMPS_associate_matrix!" associate_matrix!(orig_lu, precon_matrix_sparse; unsafe=true)
+                                associate_rhs!(orig_lu, input_buffer; unsafe=true)
+                            else
+                                # Just have to copy new sparse-matrix values into existing
+                                # sparse matrix object.
+                                precon_matrix_sparse.nzval .= new_sparse.nzval
                             end
                             nl_solver_params.preconditioners[ir] =
-                                (orig_lu, precon_matrix, input_buffer, output_buffer)
+                                (orig_lu, precon_matrix, precon_matrix_sparse,
+                                 input_buffer, output_buffer)
                         end
+                        orig_lu.job = -1
+                        @timeit_debug global_timer "MUMPS_factorize!" factorize!(orig_lu)
                     else
-                        nl_solver_params.preconditioners[ir] =
-                            (orig_lu, precon_matrix, input_buffer, output_buffer)
+                        error("Unexpected preconditioner_type $(nl_solver_params.preconditioner_type)")
                     end
                 end
-
 
                 function lu_precon!(x)
                     precon_ppar, precon_f = x
 
-                    precon_lu, _, input_buffer, output_buffer =
+                    precon_lu, _, _, input_buffer, output_buffer =
                         nl_solver_params.preconditioners[ir]
 
                     begin_serial_region()
@@ -1092,9 +1122,20 @@ println("recalculating precon")
                         counter += 1
                     end
 
-                    begin_serial_region()
-                    @serial_region begin
-                        @timeit_debug global_timer "ldiv!" ldiv!(output_buffer, precon_lu, input_buffer)
+                    if nl_solver_params.preconditioner_type == "electron_lu"
+                        begin_serial_region()
+                        @serial_region begin
+                            @timeit_debug global_timer "ldiv!" ldiv!(output_buffer, precon_lu, input_buffer)
+                        end
+                    elseif nl_solver_params.preconditioner_type == "electron_lu_mumps"
+                        _block_synchronize()
+                        precon_lu.job = 4
+                        @timeit_debug global_timer "MUMPS_solve!" mumps_solve!(precon_lu)
+                        @serial_region begin
+                            get_sol!(output_buffer, precon_lu)
+                        end
+                    else
+                        error("Unexpected preconditioner_type $(nl_solver_params.preconditioner_type)")
                     end
 
                     begin_serial_region()
