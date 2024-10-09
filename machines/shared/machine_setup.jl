@@ -22,6 +22,7 @@ default_settings["base"] = Dict("account"=>"",
                                 "use_makie"=>"n",
                                 "use_plots"=>"n",
                                 "separate_postproc_projects"=>"n",
+                                "use_system_mpi"=>"y",
                                 "use_netcdf"=>"n",
                                 "enable_mms"=>"n",
                                 "use_revise"=>"n")
@@ -232,6 +233,15 @@ function machine_setup_moment_kinetics(machine::String; no_force_exit::Bool=fals
                     * "post-processing for example)?",
                     machine, mk_preferences, ["y", "n"])
     end
+    get_setting("use_system_mpi",
+                "Normally you probably want to use the system-provided MPI library. However\n"
+                * "occasionally it can be useful to use the Julia-provided MPI instead. If you\n"
+                * "choose the Julia-provided MPI, a link to `mpiexecjl` will be installed to the\n"
+                * "project directory, which you should use instead of `mpirun`/`mpiexec` when\n"
+                * "you want to run an MPI job - i.e. use `./mpiexecjl -np 4 julia ...` instead\n"
+                * "of `mpirun -np 4 julia ...`.\n"
+                * "Do you want to use the system-provided MPI?",
+                machine, mk_preferences, ["y", "n"])
     get_setting("use_netcdf",
                 "Would you like to enable optional NetCDF I/O (warning: using NetCDF sometimes\n"
                 * "causes errors when using a local or system install of HDF5)?",
