@@ -8,11 +8,14 @@ export update_speed_neutral_vz!
 using ..advection: advance_f_local!
 using ..communication
 using ..looping
+using ..timer_utils
 
 """
 """
-function neutral_advection_vz!(f_out, fvec_in, fields, moments, advect, vz, vr, vzeta, z,
-        r, dt, vz_spectral, composition, collisions, neutral_source_settings)
+@timeit global_timer neutral_advection_vz!(
+                         f_out, fvec_in, fields, moments, advect, vz, vr, vzeta, z, r, dt,
+                         vz_spectral, composition, collisions, neutral_source_settings) =
+begin
 
     # only have a parallel acceleration term for neutrals if using the peculiar velocity
     # wpar = vpar - upar as a variable; i.e., d(wpar)/dt /=0 for neutrals even though d(vpar)/dt = 0.

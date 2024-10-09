@@ -7,12 +7,14 @@ export neutral_energy_equation!
 
 using ..calculus: derivative!
 using ..looping
+using ..timer_utils
 
 """
 evolve the parallel pressure by solving the energy equation
 """
-function energy_equation!(ppar, fvec, moments, collisions, dt, spectral, composition,
-                          ion_source_settings, num_diss_params)
+@timeit global_timer energy_equation!(
+                         ppar, fvec, moments, collisions, dt, spectral, composition,
+                         ion_source_settings, num_diss_params) = begin
 
     begin_s_r_z_region()
 
@@ -68,8 +70,9 @@ end
 """
 evolve the neutral parallel pressure by solving the energy equation
 """
-function neutral_energy_equation!(pz, fvec, moments, collisions, dt, spectral,
-                                  composition, neutral_source_settings, num_diss_params)
+@timeit global_timer neutral_energy_equation!(
+                         pz, fvec, moments, collisions, dt, spectral, composition,
+                         neutral_source_settings, num_diss_params) = begin
 
     begin_sn_r_z_region()
 

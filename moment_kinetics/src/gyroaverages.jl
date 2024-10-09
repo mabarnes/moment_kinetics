@@ -14,6 +14,7 @@ using ..array_allocation: allocate_float, allocate_shared_float
 using ..array_allocation: allocate_int, allocate_shared_int
 using ..lagrange_polynomials: lagrange_poly
 using ..looping
+using ..timer_utils
 using ..communication: MPISharedArray, comm_block, _block_synchronize
 
 struct gyro_operators
@@ -251,7 +252,8 @@ end
 function for gyroaveraging a field of shape (z,r)
 and filling the result into an array of shape (vperp,z,r,s)
 """
-function gyroaverage_field!(gfield_out,field_in,gyro,vperp,z,r,composition)
+@timeit global_timer gyroaverage_field!(
+                         gfield_out,field_in,gyro,vperp,z,r,composition) = begin
     @boundscheck z.n == size(field_in, 1) || throw(BoundsError(field_in))
     @boundscheck r.n == size(field_in, 2) || throw(BoundsError(field_in))
     @boundscheck vperp.n == size(gfield_out, 1) || throw(BoundsError(gfield))
@@ -288,7 +290,8 @@ end
 function for gyroaveraging a charge particle pdf of shape (vpa,vperp,z,r,s)
 and filling the result into an of the same shape
 """
-function gyroaverage_pdf!(gpdf_out,pdf_in,gyro,vpa,vperp,z,r,composition)
+@timeit global_timer gyroaverage_pdf!(
+                         gpdf_out,pdf_in,gyro,vpa,vperp,z,r,composition) = begin
     @boundscheck vpa.n == size(pdf_in, 1) || throw(BoundsError(pdf_in))
     @boundscheck vperp.n == size(pdf_in, 2) || throw(BoundsError(pdf_in))
     @boundscheck z.n == size(pdf_in, 3) || throw(BoundsError(pdf_in))

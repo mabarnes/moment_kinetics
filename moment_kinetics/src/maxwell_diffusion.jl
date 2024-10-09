@@ -18,6 +18,7 @@ export setup_mxwl_diff_collisions_input, ion_vpa_maxwell_diffusion!, neutral_vz_
 using ..looping
 using ..input_structs: mxwl_diff_collisions_input, set_defaults_and_check_section!
 using ..calculus: second_derivative!
+using ..timer_utils
 using ..reference_parameters: get_reference_collision_frequency_ii, setup_reference_parameters
 
 """
@@ -72,8 +73,9 @@ Calculate the Maxwellian associated with the current ion pdf moments, and then
 subtract this from current pdf. Then take second derivative of this function
 to act as the diffusion operator. 
 """
-function ion_vpa_maxwell_diffusion!(f_out, f_in, moments, vpa, vperp, spectral::T_spectral, 
-                                       dt, diffusion_coefficient) where T_spectral
+@timeit global_timer ion_vpa_maxwell_diffusion!(
+                         f_out, f_in, moments, vpa, vperp, spectral::T_spectral, dt,
+                         diffusion_coefficient) where T_spectral = begin
     
     # If negative input (should be -1.0), then none of this diffusion will happen. 
     # This number can be put in as some parameter in the input file called something
@@ -182,8 +184,9 @@ Calculate the Maxwellian associated with the current neutral pdf moments, and th
 subtract this from current pdf. Then take second derivative of this function
 to act as the diffusion operator. 
 """
-function neutral_vz_maxwell_diffusion!(f_out, f_in, moments, vzeta, vr, vz, spectral::T_spectral, 
-                                       dt, diffusion_coefficient) where T_spectral
+@timeit global_timer neutral_vz_maxwell_diffusion!(
+                         f_out, f_in, moments, vzeta, vr, vz, spectral::T_spectral, dt,
+                         diffusion_coefficient) where T_spectral = begin
     
     # If negative input (should be -1.0), then none of this diffusion will happen. 
     # This number can be put in as some parameter in the input file called something

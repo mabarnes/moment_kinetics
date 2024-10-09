@@ -50,7 +50,16 @@ function get_group(file_or_group::NCDataset, name::String)
     # This overload deals with cases where fid is a NetCDF `Dataset` (which could be a
     # file or a group).
     try
-        return file_or_group.group[name]
+        if occursin("/", name)
+            split_names = split(name, "/")
+            this_group = file_or_group
+            for n ∈ split_names
+                this_group = this_group.group[n]
+            end
+            return this_group
+        else
+            return file_or_group.group[name]
+        end
     catch
         println("An error occured while opening the $name group")
         rethrow()
@@ -98,7 +107,8 @@ end
 function write_single_value!(file_or_group::NCDataset, name,
                              value::Union{Number, AbstractString, AbstractArray{T,N}},
                              coords::Union{coordinate,NamedTuple}...; parallel_io,
-                             description=nothing, units=nothing) where {T,N}
+                             description=nothing, units=nothing,
+                             overwrite=false) where {T,N}
 
     if any(c.n < 0 for c ∈ coords)
         error("Got a negative `n` in $coords")
@@ -141,10 +151,18 @@ function write_single_value!(file_or_group::NCDataset, name,
     if isa(value, Bool)
         # As a hack, write bools to NetCDF as Char, as NetCDF does not support bools (?),
         # and we do not use Char for anything else
-        var = defVar(file_or_group, name, Char, dims, attrib=attributes)
+        if overwrite && name ∈ keys(file_or_group)
+            var = file_or_group[name]
+        else
+            var = defVar(file_or_group, name, Char, dims, attrib=attributes)
+        end
         var[:] = Char(value)
     else
-        var = defVar(file_or_group, name, type, dims, attrib=attributes)
+        if overwrite && name ∈ keys(file_or_group)
+            var = file_or_group[name]
+        else
+            var = defVar(file_or_group, name, type, dims, attrib=attributes)
+        end
         var[:] = value
     end
 
@@ -191,9 +209,10 @@ function create_dynamic_variable!(file_or_group::NCDataset, name, type,
 end
 
 function append_to_dynamic_var(io_var::NCDatasets.CFVariable,
-                               data::Union{Number,AbstractArray{T,N}}, t_idx,
+                               data::Union{Nothing,Number,AbstractArray{T,N}}, t_idx,
                                parallel_io::Bool,
-                               coords...; only_root=false) where {T,N}
+                               coords...; only_root=false,
+                               write_from_this_rank=nothing) where {T,N}
     if only_root && parallel_io && global_rank[] != 0
         # Variable should only be written from root, and this process is not root for the
         # output file

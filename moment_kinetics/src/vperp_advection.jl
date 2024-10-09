@@ -6,13 +6,15 @@ export update_speed_vperp!
 using ..advection: advance_f_local!
 using ..chebyshev: chebyshev_info
 using ..looping
+using ..timer_utils
 using ..z_advection: update_speed_z!
 using ..r_advection: update_speed_r!
 
 # do a single stage time advance (potentially as part of a multi-stage RK scheme)
-function vperp_advection!(f_out, fvec_in, vperp_advect, r, z, vperp, vpa,
-                      dt, vperp_spectral, composition, z_advect, r_advect, geometry,
-                      moments, fields, t)
+@timeit global_timer vperp_advection!(
+                         f_out, fvec_in, vperp_advect, r, z, vperp, vpa, dt,
+                         vperp_spectral, composition, z_advect, r_advect, geometry,
+                         moments, fields, t) = begin
     
     # if appropriate, update z and r speeds
     update_z_r_speeds!(z_advect, r_advect, fvec_in, moments, fields,

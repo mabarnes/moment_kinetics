@@ -7,14 +7,15 @@ export charge_exchange_collisions_1V!
 
 using ..looping
 using ..interpolation: interpolate_to_grid_vpa!
+using ..timer_utils
 
 """
 update the evolved pdf for each ion species to account for charge exchange collisions
 between ions and neutrals
 """
-function ion_charge_exchange_collisions_1V!(f_out, fvec_in, moments, composition, vpa, vz,
-                                            charge_exchange_frequency, vpa_spectral,
-                                            vz_spectral, dt)
+@timeit global_timer ion_charge_exchange_collisions_1V!(
+                         f_out, fvec_in, moments, composition, vpa, vz,
+                         charge_exchange_frequency, vpa_spectral, vz_spectral, dt) = begin
     # This routine assumes a 1D model with:
     # nvz = nvpa and identical vz and vpa grids 
 
@@ -58,10 +59,9 @@ end
 update the evolved pdf for each neutral species to account for charge exchange collisions
 between ions and neutrals
 """
-function neutral_charge_exchange_collisions_1V!(f_neutral_out, fvec_in, moments,
-                                                composition, vpa, vz,
-                                                charge_exchange_frequency, vpa_spectral,
-                                                vz_spectral, dt)
+@timeit global_timer neutral_charge_exchange_collisions_1V!(
+                         f_neutral_out, fvec_in, moments, composition, vpa, vz,
+                         charge_exchange_frequency, vpa_spectral, vz_spectral, dt) = begin
     # This routine assumes a 1D model with:
     # nvz = nvpa and identical vz and vpa grids
 
@@ -166,9 +166,9 @@ function charge_exchange_collisions_single_species!(f_out, pdf_in, pdf_other,
     end
 end
 
-function ion_charge_exchange_collisions_3V!(f_out, f_neutral_gav_in, fvec_in, composition,
-                                            vz, vr, vzeta, vpa, vperp, z, r,
-                                            charge_exchange_frequency, dt)
+@timeit global_timer ion_charge_exchange_collisions_3V!(
+                         f_out, f_neutral_gav_in, fvec_in, composition, vz, vr, vzeta,
+                         vpa, vperp, z, r, charge_exchange_frequency, dt) = begin
     # This routine assumes a 3V model with:
     @boundscheck vpa.n == size(f_out,1) || throw(BoundsError(f_out))
     @boundscheck vperp.n == size(f_out,2) || throw(BoundsError(f_out))
@@ -195,10 +195,9 @@ function ion_charge_exchange_collisions_3V!(f_out, f_neutral_gav_in, fvec_in, co
     end
 end
 
-function neutral_charge_exchange_collisions_3V!(f_neutral_out, f_ion_vrvzvzeta_in,
-                                                fvec_in, composition, vz, vr, vzeta, vpa,
-                                                vperp, z, r, charge_exchange_frequency,
-                                                dt)
+@timeit global_timer neutral_charge_exchange_collisions_3V!(
+                         f_neutral_out, f_ion_vrvzvzeta_in, fvec_in, composition, vz, vr,
+                         vzeta, vpa, vperp, z, r, charge_exchange_frequency, dt) = begin
     # This routine assumes a 3V model with:
     @boundscheck vz.n == size(f_neutral_out,1) || throw(BoundsError(f_neutral_out))
     @boundscheck vr.n == size(f_neutral_out,2) || throw(BoundsError(f_neutral_out))

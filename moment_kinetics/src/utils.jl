@@ -13,6 +13,9 @@ using ..looping
 using ..moment_kinetics_input: mk_input
 using ..reference_parameters
 
+# Import moment_kinetics so we can refer to it in docstrings
+import ..moment_kinetics
+
 using Dates
 using Glob
 using MPI

@@ -8,6 +8,7 @@ module moment_constraints
 using ..boundary_conditions: skip_f_electron_bc_points_in_Jacobian
 using ..communication: _block_synchronize
 using ..looping
+using ..timer_utils
 using ..type_definitions: mk_float
 using ..velocity_moments: integrate_over_vspace, update_qpar!
 
@@ -89,7 +90,8 @@ function hard_force_moment_constraints!(f, moments, vpa)
 
     return A, B, C
 end
-function hard_force_moment_constraints!(f::AbstractArray{mk_float,4}, moments, vpa)
+@timeit global_timer hard_force_moment_constraints!(
+                         f::AbstractArray{mk_float,4}, moments, vpa) = begin
     A = moments.electron.constraints_A_coefficient
     B = moments.electron.constraints_B_coefficient
     C = moments.electron.constraints_C_coefficient
@@ -99,7 +101,8 @@ function hard_force_moment_constraints!(f::AbstractArray{mk_float,4}, moments, v
             hard_force_moment_constraints!(@view(f[:,:,iz,ir]), moments, vpa)
     end
 end
-function hard_force_moment_constraints!(f::AbstractArray{mk_float,5}, moments, vpa)
+@timeit global_timer hard_force_moment_constraints!(
+                         f::AbstractArray{mk_float,5}, moments, vpa) = begin
     A = moments.ion.constraints_A_coefficient
     B = moments.ion.constraints_B_coefficient
     C = moments.ion.constraints_C_coefficient
@@ -163,7 +166,8 @@ function hard_force_moment_constraints_neutral!(f, moments, vz)
 
     return A, B, C
 end
-function hard_force_moment_constraints_neutral!(f::AbstractArray{mk_float,6}, moments, vz)
+@timeit global_timer hard_force_moment_constraints_neutral!(
+                         f::AbstractArray{mk_float,6}, moments, vz) = begin
     A = moments.neutral.constraints_A_coefficient
     B = moments.neutral.constraints_B_coefficient
     C = moments.neutral.constraints_C_coefficient
@@ -250,8 +254,8 @@ Add terms to the electron kinetic equation that force the moment constraints to 
 approximately satisfied. Needed to avoid large errors when taking large, implicit
 timesteps that do not guarantee accurate time evolution.
 """
-function electron_implicit_constraint_forcing!(f_out, f_in, constraint_forcing_rate, vpa,
-                                               dt, ir)
+@timeit global_timer electron_implicit_constraint_forcing!(
+                         f_out, f_in, constraint_forcing_rate, vpa, dt, ir) = begin
     begin_z_region()
     vpa_grid = vpa.grid
     @loop_z iz begin

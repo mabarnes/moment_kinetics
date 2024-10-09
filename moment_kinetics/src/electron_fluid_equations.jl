@@ -15,6 +15,7 @@ using ..communication
 using ..derivatives: derivative_z!
 using ..looping
 using ..input_structs
+using ..timer_utils
 using ..moment_kinetics_structs: electron_pdf_substruct, moments_electron_substruct
 using ..nonlinear_solvers
 using ..type_definitions: mk_float
@@ -180,12 +181,11 @@ function electron_energy_equation!(ppar_out, ppar_in, electron_density, electron
     return nothing
 end
 
-function electron_energy_equation_no_r!(ppar_out, ppar_in, electron_density,
-                                        electron_upar, ion_density, ion_upar, ion_ppar,
-                                        density_neutral, uz_neutral, pz_neutral, moments,
-                                        collisions, dt, composition,
-                                        electron_source_settings, num_diss_params, z, ir;
-                                        conduction=true)
+@timeit global_timer electron_energy_equation_no_r!(
+                         ppar_out, ppar_in, electron_density, electron_upar, ion_density,
+                         ion_upar, ion_ppar, density_neutral, uz_neutral, pz_neutral,
+                         moments, collisions, dt, composition, electron_source_settings,
+                         num_diss_params, z, ir; conduction=true) = begin
     if composition.electron_physics == kinetic_electrons_with_temperature_equation
         # Hacky way to implement temperature equation:
         #  - convert ppar to T by dividing by density
@@ -541,9 +541,9 @@ function electron_braginskii_conduction!(ppar_out::AbstractVector{mk_float},
     return nothing
 end
 
-function implicit_braginskii_conduction!(fvec_out, fvec_in, moments, z, r, dt, z_spectral,
-                                         composition, collisions, scratch_dummy,
-                                         nl_solver_params)
+@timeit global_timer implicit_braginskii_conduction!(
+                         fvec_out, fvec_in, moments, z, r, dt, z_spectral, composition,
+                         collisions, scratch_dummy, nl_solver_params) = begin
     begin_z_region()
 
     for ir ∈ 1:r.n
