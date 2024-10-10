@@ -3,7 +3,7 @@ module electron_kinetic_equation
 using LinearAlgebra
 using MPI
 using MUMPS
-using MUMPS: mumps_solve!
+using MUMPS: mumps_solve!, get_sol!
 using SparseArrays
 
 export get_electron_critical_velocities
@@ -1127,7 +1127,13 @@ println("recalculating precon")
                         end
                     elseif nl_solver_params.preconditioner_type == "electron_lu_mumps"
                         _block_synchronize()
-                        @timeit_debug global_timer "MUMPS_solve!" mumps_solve!(output_buffer, precon_lu, input_buffer)
+                        @serial_region begin
+                            associate_rhs!(precon_lu, input_buffer)
+                        end
+                        @timeit_debug global_timer "MUMPS_solve!" mumps_solve!(precon_lu)
+                        @serial_region begin
+                            get_sol!(output_buffer, precon_lu)
+                        end
                     else
                         error("Unexpected preconditioner_type $(nl_solver_params.preconditioner_type)")
                     end
