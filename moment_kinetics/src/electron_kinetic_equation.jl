@@ -1112,28 +1112,13 @@ println("recalculating precon")
 
                     begin_serial_region()
                     counter = 1
-                    if nl_solver_params.preconditioner_type == "electron_lu_mumps"
-                        # MUMPS version uses a sparse matrix for `input_buffer` to work
-                        # around a memory leak in MUMPS.jl when a Vector or Matrix is used
-                        # for the rhs, but `input_buffer` is actually dense, so we can
-                        # just assign to nzval directly.
-                        @loop_z_vperp_vpa iz ivperp ivpa begin
-                            input_buffer.nzval[counter] = precon_f[ivpa,ivperp,iz]
-                            counter += 1
-                        end
-                        @loop_z iz begin
-                            input_buffer.nzval[counter] = precon_ppar[iz]
-                            counter += 1
-                        end
-                    else
-                        @loop_z_vperp_vpa iz ivperp ivpa begin
-                            input_buffer[counter] = precon_f[ivpa,ivperp,iz]
-                            counter += 1
-                        end
-                        @loop_z iz begin
-                            input_buffer[counter] = precon_ppar[iz]
-                            counter += 1
-                        end
+                    @loop_z_vperp_vpa iz ivperp ivpa begin
+                        input_buffer[counter] = precon_f[ivpa,ivperp,iz]
+                        counter += 1
+                    end
+                    @loop_z iz begin
+                        input_buffer[counter] = precon_ppar[iz]
+                        counter += 1
                     end
 
                     if nl_solver_params.preconditioner_type == "electron_lu"

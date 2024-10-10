@@ -186,7 +186,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
         preconditioners = fill((get_mumps_instance(comm_block[]),
                                 allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size),
                                 sparse_matrix,
-                                sparse(ones(pdf_plus_ppar_size,1)),
+                                allocate_shared_float(pdf_plus_ppar_size),
                                 allocate_shared_float(pdf_plus_ppar_size),
                                ),
                                reverse(outer_coord_sizes))
