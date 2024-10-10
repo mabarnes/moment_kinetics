@@ -3,7 +3,7 @@ module electron_kinetic_equation
 using LinearAlgebra
 using MPI
 using MUMPS
-using MUMPS: get_sol!
+using MUMPS: mumps_solve!
 using SparseArrays
 
 export get_electron_critical_velocities
@@ -1081,7 +1081,6 @@ println("recalculating precon")
                     elseif nl_solver_params.preconditioner_type == "electron_lu_mumps"
                         if block_rank[] == 0
                             new_sparse = sparse(precon_matrix)
-                            precon_matrix_sparse = sparse(precon_matrix)
                             if !(length(precon_matrix_sparse.rowval) == length(new_sparse.rowval) &&
                                  precon_matrix_sparse.rowval == new_sparse.rowval)
                                 # LU decomposition has not been set up, or sparsity
@@ -1089,7 +1088,6 @@ println("recalculating precon")
                                 # scratch.
                                 precon_matrix_sparse = new_sparse
                                 @timeit_debug global_timer "MUMPS_associate_matrix!" associate_matrix!(orig_lu, precon_matrix_sparse)
-                                @timeit_debug global_timer "MUMPS_associate_rhs!" associate_rhs!(orig_lu, input_buffer)
                             else
                                 # Just have to copy new sparse-matrix values into existing
                                 # sparse matrix object.
@@ -1099,7 +1097,7 @@ println("recalculating precon")
                                 (orig_lu, precon_matrix, precon_matrix_sparse,
                                  input_buffer, output_buffer)
                         end
-                        @timeit_debug global_timer "MUMPS_factorize!" factorize!(orig_lu)
+                        @timeit_debug global_timer "MUMPS_factorize!" factorize!(orig_lu, precon_matrix_sparse)
                     else
                         error("Unexpected preconditioner_type $(nl_solver_params.preconditioner_type)")
                     end
@@ -1129,10 +1127,7 @@ println("recalculating precon")
                         end
                     elseif nl_solver_params.preconditioner_type == "electron_lu_mumps"
                         _block_synchronize()
-                        @timeit_debug global_timer "MUMPS_solve!" solve!(precon_lu)
-                        @serial_region begin
-                            get_sol!(output_buffer, precon_lu)
-                        end
+                        @timeit_debug global_timer "MUMPS_solve!" mumps_solve!(output_buffer, precon_lu, input_buffer)
                     else
                         error("Unexpected preconditioner_type $(nl_solver_params.preconditioner_type)")
                     end

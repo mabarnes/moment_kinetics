@@ -1077,7 +1077,7 @@ the instances and clean them up, similar to how we do for shared-memory arrays.
 The other arguments are passed to the `Mumps{mk_float}()` constructor. The defaults are an
 unsymmetric matrix and MUMPS.jl defaults for the control parameters.
 """
-function get_mumps_instance(comm, matrix_type=mumps_unsymmetric, icntl=default_icntl,
+function get_mumps_instance(comm, matrix_type=mumps_unsymmetric, icntl=get_icntl(),
                             cntl64=default_cntl64)
 
     # MUMPS is written in Fortran and wants a 'Fortran communicator', so we use the
