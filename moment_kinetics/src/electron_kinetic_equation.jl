@@ -1088,6 +1088,7 @@ println("recalculating precon")
                                 # scratch.
                                 precon_matrix_sparse = new_sparse
                                 @timeit_debug global_timer "MUMPS_associate_matrix!" associate_matrix!(orig_lu, precon_matrix_sparse)
+                                associate_rhs!(orig_lu, input_buffer)
                             else
                                 # Just have to copy new sparse-matrix values into existing
                                 # sparse matrix object.
@@ -1111,13 +1112,28 @@ println("recalculating precon")
 
                     begin_serial_region()
                     counter = 1
-                    @loop_z_vperp_vpa iz ivperp ivpa begin
-                        input_buffer[counter] = precon_f[ivpa,ivperp,iz]
-                        counter += 1
-                    end
-                    @loop_z iz begin
-                        input_buffer[counter] = precon_ppar[iz]
-                        counter += 1
+                    if nl_solver_params.preconditioner_type == "electron_lu_mumps"
+                        # MUMPS version uses a sparse matrix for `input_buffer` to work
+                        # around a memory leak in MUMPS.jl when a Vector or Matrix is used
+                        # for the rhs, but `input_buffer` is actually dense, so we can
+                        # just assign to nzval directly.
+                        @loop_z_vperp_vpa iz ivperp ivpa begin
+                            input_buffer.nzval[counter] = precon_f[ivpa,ivperp,iz]
+                            counter += 1
+                        end
+                        @loop_z iz begin
+                            input_buffer.nzval[counter] = precon_ppar[iz]
+                            counter += 1
+                        end
+                    else
+                        @loop_z_vperp_vpa iz ivperp ivpa begin
+                            input_buffer[counter] = precon_f[ivpa,ivperp,iz]
+                            counter += 1
+                        end
+                        @loop_z iz begin
+                            input_buffer[counter] = precon_ppar[iz]
+                            counter += 1
+                        end
                     end
 
                     if nl_solver_params.preconditioner_type == "electron_lu"
@@ -1127,9 +1143,6 @@ println("recalculating precon")
                         end
                     elseif nl_solver_params.preconditioner_type == "electron_lu_mumps"
                         _block_synchronize()
-                        @serial_region begin
-                            associate_rhs!(precon_lu, input_buffer)
-                        end
                         @timeit_debug global_timer "MUMPS_solve!" mumps_solve!(precon_lu)
                         @serial_region begin
                             get_sol!(output_buffer, precon_lu)
