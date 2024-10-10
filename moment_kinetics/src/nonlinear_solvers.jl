@@ -346,7 +346,12 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
 
         # Solve (approximately?):
         #   J δx = -RHS(x)
-        parallel_map(solver_type, ()->0.0, delta_x)
+        if true
+            parallel_map(solver_type, ()->0.0, delta_x)
+            zero_initial_guess = true
+        else
+            zero_initial_guess = false
+        end
         linear_its = linear_solve!(x, residual_func!, residual, delta_x, v, w,
                                    solver_type, norm_params; coords=coords,
                                    rtol=nl_solver_params.linear_rtol,
@@ -359,7 +364,8 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
                                    s=nl_solver_params.s, g=nl_solver_params.g,
                                    V=nl_solver_params.V, rhs_delta=rhs_delta,
                                    initial_guess=nl_solver_params.linear_initial_guess,
-                                   serial_solve=nl_solver_params.serial_solve)
+                                   serial_solve=nl_solver_params.serial_solve,
+                                   zero_initial_guess=zero_initial_guess)
         linear_counter += linear_its
 
         # If the residual does not decrease, we will do a line search to find an update
@@ -1139,7 +1145,8 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                          x, residual_func!, residual0, delta_x, v, w, solver_type::Val,
                          norm_params; coords, rtol, atol, restart, max_restarts,
                          left_preconditioner, right_preconditioner, H, c, s, g, V,
-                         rhs_delta, initial_guess, serial_solve) = begin
+                         rhs_delta, initial_guess, serial_solve,
+                         zero_initial_guess) = begin
     # Solve (approximately?):
     #   J δx = residual0
 
@@ -1172,7 +1179,11 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
     parallel_map(solver_type, (delta_x) -> delta_x, v, delta_x)
     left_preconditioner(residual0)
     # This function transforms the data stored in 'v' from δx to ≈J.δx
-    approximate_Jacobian_vector_product!(v)
+    if !zero_initial_guess
+        # If the initial guess is just all-zeros, the result would be all-zeros, so no
+        # need to do this.
+        approximate_Jacobian_vector_product!(v)
+    end
     # Now we actually set 'w' as the first Krylov vector, and normalise it.
     parallel_map(solver_type, (residual0, v) -> -residual0 - v, w, residual0, v)
     beta = distributed_norm(solver_type, w, norm_params...)
