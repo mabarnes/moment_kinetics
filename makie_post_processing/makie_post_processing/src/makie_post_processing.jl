@@ -826,7 +826,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         include_patterns=String[],
         exclude_patterns=String[],
         ranks=mk_int[],
-        figsize=(600,800)
+        figsize=[600,800]
        )
 
     # We allow top-level options in the post-processing input file
@@ -8492,7 +8492,7 @@ function timing_data(run_info::Tuple; plot_prefix=nothing, threshold=nothing,
 
     if figsize === nothing
         if input !== nothing
-            figsize = input.figsize
+            figsize = Tuple(input.figsize)
         else
             figsize = (600,800)
         end
@@ -8602,7 +8602,7 @@ function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
 
     if figsize === nothing
         if input !== nothing
-            figsize = input.figsize
+            figsize = Tuple(input.figsize)
         else
             figsize = (600,800)
         end
