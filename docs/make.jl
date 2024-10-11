@@ -9,19 +9,10 @@ Pkg.instantiate()
 using Documenter
 using moment_kinetics, makie_post_processing, plots_post_processing
 
-if get(ENV, "CI", nothing) == "true"
-    # On the CI, run in strict mode to turn warnings into errors, so that we don't deploy
-    # documentation with formatting bugs.
-    strict = true
-else
-    strict = false
-end
-
 makedocs(
     sitename = "moment_kinetics",
     format = Documenter.HTML(prettyurls = get(ENV, "CI", nothing) == "true"),
     modules = [moment_kinetics, makie_post_processing, plots_post_processing],
-    strict = strict,
 )
 
 if get(ENV, "CI", nothing) == "true"
