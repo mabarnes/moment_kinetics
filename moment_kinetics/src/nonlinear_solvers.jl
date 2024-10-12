@@ -37,6 +37,7 @@ using ..looping
 using ..timer_utils
 using ..type_definitions: mk_float, mk_int
 
+using ILUZero
 using LinearAlgebra
 using MPI
 using SparseArrays
@@ -184,6 +185,16 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
         pdf_plus_ppar_size = total_size_coords + coords.z.n
         sparse_matrix = sparse(1.0*I, 1, 1)
         preconditioners = fill((get_mumps_instance(comm_block[]),
+                                allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size),
+                                sparse_matrix,
+                                allocate_shared_float(pdf_plus_ppar_size),
+                                allocate_shared_float(pdf_plus_ppar_size),
+                               ),
+                               reverse(outer_coord_sizes))
+    elseif preconditioner_type == "electron_iluzero"
+        pdf_plus_ppar_size = total_size_coords + coords.z.n
+        sparse_matrix = sparse(1.0*I, 1, 1)
+        preconditioners = fill((ilu0(sparse_matrix),
                                 allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size),
                                 sparse_matrix,
                                 allocate_shared_float(pdf_plus_ppar_size),
