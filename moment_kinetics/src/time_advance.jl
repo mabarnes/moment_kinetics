@@ -672,7 +672,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                               default_atol=t_params.atol / 10.0,
                               electron_ppar_pdf_solve=true,
                               #preconditioner_type="electron_lu")
-                              preconditioner_type="electron_lu_mumps")
+                              #preconditioner_type="electron_lu_mumps")
+                              preconditioner_type="electron_iluzero")
     nl_solver_ion_advance_params =
         setup_nonlinear_solve(t_params.implicit_ion_advance, input_dict,
                               (s=composition.n_ion_species, r=r, z=z, vperp=vperp,

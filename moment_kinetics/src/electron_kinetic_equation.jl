@@ -1,5 +1,6 @@
 module electron_kinetic_equation
 
+using ILUZero
 using LinearAlgebra
 using MPI
 using MUMPS
@@ -1021,7 +1022,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
 
                 left_preconditioner = identity
                 right_preconditioner = split_precon!
-            elseif nl_solver_params.preconditioner_type ∈ ("electron_lu", "electron_lu_mumps")
+            elseif nl_solver_params.preconditioner_type ∈ ("electron_lu", "electron_lu_mumps", "electron_iluzero")
 
                 if t_params.dt[] > 1.5 * nl_solver_params.precon_dt[] ||
                         t_params.dt[] < 2.0/3.0 * nl_solver_params.precon_dt[]
@@ -1100,6 +1101,30 @@ println("recalculating precon")
                         end
                         orig_lu.job = -1
                         @timeit_debug global_timer "MUMPS_factorize!" factorize!(orig_lu)
+                    elseif nl_solver_params.preconditioner_type == "electron_iluzero"
+                        if block_rank[] == 0
+                            new_sparse = sparse(precon_matrix)
+                            if !(length(precon_matrix_sparse.rowval) == length(new_sparse.rowval) &&
+                                 precon_matrix_sparse.rowval == new_sparse.rowval)
+                                # Have not properly created the LU decomposition before, so
+                                # cannot reuse it.
+                                @timeit_debug global_timer "lu" nl_solver_params.preconditioners[ir] =
+                                    (ilu0(new_sparse), precon_matrix,
+                                     new_sparse, input_buffer, output_buffer)
+                            else
+                                # LU decomposition was previously created. The Jacobian
+                                # has the same sparsity pattern, so by using `ilu0!()` we
+                                # can reuse some setup.
+                                @timeit_debug global_timer "ilu0!" ilu0!(orig_lu, new_sparse)
+                                nl_solver_params.preconditioners[ir] =
+                                    (orig_lu, precon_matrix, new_sparse,
+                                     input_buffer, output_buffer)
+                            end
+                        else
+                            nl_solver_params.preconditioners[ir] =
+                                (orig_lu, precon_matrix, precon_matrix_sparse,
+                                 input_buffer, output_buffer)
+                        end
                     else
                         error("Unexpected preconditioner_type $(nl_solver_params.preconditioner_type)")
                     end
@@ -1122,7 +1147,7 @@ println("recalculating precon")
                         counter += 1
                     end
 
-                    if nl_solver_params.preconditioner_type == "electron_lu"
+                    if nl_solver_params.preconditioner_type ∈ ("electron_lu", "electron_iluzero")
                         begin_serial_region()
                         @serial_region begin
                             @timeit_debug global_timer "ldiv!" ldiv!(output_buffer, precon_lu, input_buffer)
