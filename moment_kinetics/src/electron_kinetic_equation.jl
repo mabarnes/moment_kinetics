@@ -1081,14 +1081,14 @@ println("recalculating precon")
                     elseif nl_solver_params.preconditioner_type == "electron_lu_mumps"
                         if block_rank[] == 0
                             new_sparse = sparse(precon_matrix)
-                            if !(length(precon_matrix_sparse.rowval) == length(new_sparse.rowval) &&
+                            if true || !(length(precon_matrix_sparse.rowval) == length(new_sparse.rowval) &&
                                  precon_matrix_sparse.rowval == new_sparse.rowval)
                                 # LU decomposition has not been set up, or sparsity
                                 # pattern has changed, so start MUMPS's LU process from
                                 # scratch.
                                 precon_matrix_sparse = new_sparse
-                                @timeit_debug global_timer "MUMPS_associate_matrix!" associate_matrix!(orig_lu, precon_matrix_sparse)
-                                associate_rhs!(orig_lu, input_buffer)
+                                @timeit_debug global_timer "MUMPS_associate_matrix!" associate_matrix!(orig_lu, precon_matrix_sparse; unsafe=true)
+                                associate_rhs!(orig_lu, input_buffer; unsafe=true)
                             else
                                 # Just have to copy new sparse-matrix values into existing
                                 # sparse matrix object.
@@ -1098,7 +1098,8 @@ println("recalculating precon")
                                 (orig_lu, precon_matrix, precon_matrix_sparse,
                                  input_buffer, output_buffer)
                         end
-                        @timeit_debug global_timer "MUMPS_factorize!" factorize!(orig_lu, precon_matrix_sparse)
+                        orig_lu.job = -1
+                        @timeit_debug global_timer "MUMPS_factorize!" factorize!(orig_lu)
                     else
                         error("Unexpected preconditioner_type $(nl_solver_params.preconditioner_type)")
                     end
@@ -1128,6 +1129,7 @@ println("recalculating precon")
                         end
                     elseif nl_solver_params.preconditioner_type == "electron_lu_mumps"
                         _block_synchronize()
+                        precon_lu.job = 4
                         @timeit_debug global_timer "MUMPS_solve!" mumps_solve!(precon_lu)
                         @serial_region begin
                             get_sol!(output_buffer, precon_lu)
