@@ -204,9 +204,9 @@ function sparse_lu(A::Union{SparseMatrixCSC{mk_float,mk_int},Nothing})
                             forward_substitution_ranges, backward_substitution_ranges)
 end
 
-function sparse_lu!(F::ParallelSparseLU, A::SparseMatrixCSC{mk_float,mk_int})
-    lu!(F.lu_object, A)
+function sparse_lu!(F::ParallelSparseLU, A::Union{SparseMatrixCSC{mk_float,mk_int},Nothing})
     @serial_region begin
+        lu!(F.lu_object, A)
         new_L = F.lu_object.L
         F.L.nzval .= new_L.nzval
 

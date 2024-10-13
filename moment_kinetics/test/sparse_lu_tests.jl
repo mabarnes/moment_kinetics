@@ -8,6 +8,7 @@ using moment_kinetics.looping
 using moment_kinetics.sparse_lu_solver
 
 using LinearAlgebra
+using MPI
 using SparseArrays
 
 # Get a sparse test matrix with a structure similar to a finite element derivative
@@ -35,6 +36,7 @@ function runtests()
 
         @testset "dense matrix" begin
             n = 42
+
             if block_rank[] == 0
                 A = rand(n,n)
                 A_sparse = sparse(A)
@@ -110,8 +112,15 @@ function runtests()
                 A = nothing
             end
 
-            n = size(A, 1)
-            
+            this_length = Ref(0)
+            if block_rank[] == 0
+                this_length[] = size(A, 1)
+                MPI.Bcast!(this_length, comm_block[])
+            else
+                MPI.Bcast!(this_length, comm_block[])
+            end
+            n = this_length[]
+
             A_lu = sparse_lu(A)
 
             # Create rhs
