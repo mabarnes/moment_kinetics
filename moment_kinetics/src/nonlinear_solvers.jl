@@ -183,15 +183,22 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                                ),
                                reverse(outer_coord_sizes))
     elseif preconditioner_type == "electron_lu_mumps"
-        pdf_plus_ppar_size = total_size_coords + coords.z.n
-        sparse_matrix = sparse(1.0*I, 1, 1)
-        preconditioners = fill((get_mumps_instance(comm_block[]),
-                                allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size),
-                                sparse_matrix,
-                                allocate_shared_float(pdf_plus_ppar_size),
-                                allocate_shared_float(pdf_plus_ppar_size),
-                               ),
-                               reverse(outer_coord_sizes))
+        mumps_lu_ext = Base.get_extension(@__MODULE__, :mumps_lu_ext)
+        if mumps_lu_ext !== nothing
+            pdf_plus_ppar_size = total_size_coords + coords.z.n
+            sparse_matrix = sparse(1.0*I, 1, 1)
+            preconditioners = fill((get_mumps_instance(comm_block[]),
+                                    allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size),
+                                    sparse_matrix,
+                                    allocate_shared_float(pdf_plus_ppar_size),
+                                    allocate_shared_float(pdf_plus_ppar_size),
+                                   ),
+                                   reverse(outer_coord_sizes))
+        else
+            error("`mumps_lu_ext` extension is required to use `preconditioner_type = "
+                  * "\"electron_lu_mumps\"` but is not loaded - install the `MUMPS` "
+                  * "package to activate.")
+        end
     elseif preconditioner_type == "electron_iluzero"
         pdf_plus_ppar_size = total_size_coords + coords.z.n
         sparse_matrix = sparse(1.0*I, 1, 1)

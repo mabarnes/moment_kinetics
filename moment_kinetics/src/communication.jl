@@ -23,7 +23,6 @@ export get_mumps_instance
 
 using LinearAlgebra
 using MPI
-using MUMPS
 using SHA
 
 # Import moment_kinetics so that we can refer to it in docstrings
@@ -117,10 +116,6 @@ const n_blocks = Ref{mk_int}()
 """
 """
 const global_Win_store = Vector{MPI.Win}(undef, 0)
-
-"""
-"""
-const global_mumps_store = Mumps{mk_float}[]
 
 """
 """
@@ -1069,29 +1064,16 @@ end
     get_mumps_instance(comm, matrix_type=mumps_unsymmetric, icntl=default_icntl,
                        cntl64=default_cntl64)
 
-Get a `Mumps` object (See MUMPS.jl). Using this getter function so we can keep track of
-the instances and clean them up, similar to how we do for shared-memory arrays.
+Get a `Mumps` object (See MUMPS.jl), if the `mumps_lu_ext` extension is loaded. Using this
+getter function so we can keep track of the instances and clean them up, similar to how we
+do for shared-memory arrays.
 
 `comm` is the MPI communicator to use.
 
 The other arguments are passed to the `Mumps{mk_float}()` constructor. The defaults are an
 unsymmetric matrix and MUMPS.jl defaults for the control parameters.
 """
-function get_mumps_instance(comm, matrix_type=mumps_unsymmetric, icntl=get_icntl(),
-                            cntl64=default_cntl64)
-
-    # MUMPS is written in Fortran and wants a 'Fortran communicator', so we use the
-    # low-level function MPI_Comm_f2c() to get one. This function was only recently added
-    # to MPI.jl (https://github.com/JuliaParallel/MPI.jl/pull/798), and the addition of
-    # 'Fortran conversions' may not be complete yet
-    # (https://github.com/JuliaParallel/MPI.jl/issues/784), so watch out for API changes
-    # in MPI.jl that might affect this!
-    fortran_comm = MPI.API.MPI_Comm_f2c(comm.val)
-
-    m = Mumps{mk_float}(matrix_type, icntl, cntl64; comm=fortran_comm)
-    push!(global_mumps_store, m)
-    return m
-end
+function get_mumps_instance end
 
 """
 Set up communications
@@ -1105,7 +1087,10 @@ function initialize_comms!()
     if length(global_Win_store) > 0
         free_shared_arrays()
     end
-    cleanup_mumps_instances()
+    mumps_lu_ext = Base.get_extension(@__MODULE__, :mumps_lu_ext)
+    if mumps_lu_ext !== nothing
+        cleanup_mumps_instances()
+    end
 
     @debug_detect_redundant_block_synchronize begin
         debug_detect_redundant_is_active[] = false
@@ -1124,7 +1109,10 @@ can be done in a single Julia session.
 Frees any shared-memory arrays.
 """
 function finalize_comms!()
-    cleanup_mumps_instances()
+    mumps_lu_ext = Base.get_extension(@__MODULE__, :mumps_lu_ext)
+    if mumps_lu_ext !== nothing
+        cleanup_mumps_instances()
+    end
     free_shared_arrays()
 
     return nothing
@@ -1146,12 +1134,6 @@ end
 
 """
 """
-function cleanup_mumps_instances()
-    while length(global_mumps_store) > 0
-        m = pop!(global_mumps_store)
-        finalize(m)
-    end
-    return nothing
-end
+function cleanup_mumps_instances end
 
 end # communication
