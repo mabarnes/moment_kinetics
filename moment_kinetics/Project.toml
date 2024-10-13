@@ -12,7 +12,6 @@ FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
 FastGaussQuadrature = "442a2c76-b920-505d-bb47-c5924d526838"
 Glob = "c27321d9-0574-5035-807b-f59d2c89b15c"
 HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
-ILUZero = "88f59080-6952-5380-9ea5-54057fb9a43f"
 Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
 LegendrePolynomials = "3db4a2ba-fc88-11e8-3e01-49c72059a882"
 LibGit2 = "76f85450-5226-5b5a-8eaa-529ad045b433"
@@ -42,6 +41,7 @@ UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [weakdeps]
+ILUZero = "88f59080-6952-5380-9ea5-54057fb9a43f"
 IfElse = "615f187c-cbe4-4ef1-ba3b-2fcf58d6d173"
 MUMPS = "55d2b088-9f4e-11e9-26c0-150b02ea6a46"
 NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
@@ -49,6 +49,7 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
 [extensions]
 file_io_netcdf = "NCDatasets"
+iluzero_ext = "ILUZero"
 manufactured_solns_ext = ["Symbolics", "IfElse"]
 mumps_lu_ext = "MUMPS"
 

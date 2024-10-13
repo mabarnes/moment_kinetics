@@ -38,11 +38,15 @@ using ..sharedmem_lu_solver
 using ..timer_utils
 using ..type_definitions: mk_float, mk_int
 
-using ILUZero
 using LinearAlgebra
 using MPI
 using SparseArrays
 using StatsBase: mean
+
+iluzero_ext = Base.get_extension(@__MODULE__, :iluzero_ext)
+if iluzero_ext !== nothing
+    using ILUZero
+end
 
 struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon}
     rtol::mk_float

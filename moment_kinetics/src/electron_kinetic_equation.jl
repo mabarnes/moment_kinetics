@@ -1,6 +1,5 @@
 module electron_kinetic_equation
 
-using ILUZero
 using LinearAlgebra
 using MPI
 using SparseArrays
@@ -9,6 +8,11 @@ mumps_lu_ext = Base.get_extension(@__MODULE__, :mumps_lu_ext)
 if mumps_lu_ext !== nothing
     using MUMPS
     using MUMPS: mumps_solve!, get_sol!
+end
+
+iluzero_ext = Base.get_extension(@__MODULE__, :iluzero_ext)
+if iluzero_ext !== nothing
+    using ILUZero
 end
 
 export get_electron_critical_velocities
