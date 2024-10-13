@@ -34,6 +34,7 @@ using ..communication
 using ..coordinates: coordinate
 using ..input_structs
 using ..looping
+using ..sharedmem_lu_solver
 using ..timer_utils
 using ..type_definitions: mk_float, mk_int
 
@@ -195,6 +196,16 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
         pdf_plus_ppar_size = total_size_coords + coords.z.n
         sparse_matrix = sparse(1.0*I, 1, 1)
         preconditioners = fill((ilu0(sparse_matrix),
+                                allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size),
+                                sparse_matrix,
+                                allocate_shared_float(pdf_plus_ppar_size),
+                                allocate_shared_float(pdf_plus_ppar_size),
+                               ),
+                               reverse(outer_coord_sizes))
+    elseif preconditioner_type == "electron_sharedmem_lu"
+        pdf_plus_ppar_size = total_size_coords + coords.z.n
+        sparse_matrix = sparse(1.0*I, 1, 1)
+        preconditioners = fill((sharedmem_lu(sparse_matrix),
                                 allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size),
                                 sparse_matrix,
                                 allocate_shared_float(pdf_plus_ppar_size),

@@ -44,6 +44,7 @@ using ..file_io: get_electron_io_info, write_electron_state, finish_electron_io
 using ..krook_collisions: electron_krook_collisions!, get_collision_frequency_ee,
                           get_collision_frequency_ei,
                           add_electron_krook_collisions_to_Jacobian!
+using ..sharedmem_lu_solver
 using ..timer_utils
 using ..moment_constraints: hard_force_moment_constraints!,
                             moment_constraints_on_residual!,
@@ -1022,7 +1023,10 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
 
                 left_preconditioner = identity
                 right_preconditioner = split_precon!
-            elseif nl_solver_params.preconditioner_type ∈ ("electron_lu", "electron_lu_mumps", "electron_iluzero")
+            elseif nl_solver_params.preconditioner_type ∈ ("electron_lu",
+                                                           "electron_lu_mumps",
+                                                           "electron_iluzero",
+                                                           "electron_sharedmem_lu")
 
                 if t_params.dt[] > 1.5 * nl_solver_params.precon_dt[] ||
                         t_params.dt[] < 2.0/3.0 * nl_solver_params.precon_dt[]
@@ -1125,6 +1129,31 @@ println("recalculating precon")
                                 (orig_lu, precon_matrix, precon_matrix_sparse,
                                  input_buffer, output_buffer)
                         end
+                    elseif nl_solver_params.preconditioner_type == "electron_sharedmem_lu"
+                        recreate = Ref(false)
+                        if block_rank[] == 0
+                            new_sparse = sparse(precon_matrix)
+                            if !(length(precon_matrix_sparse.rowval) == length(new_sparse.rowval) &&
+                                 precon_matrix_sparse.rowval == new_sparse.rowval)
+                                recreate[] = true
+                            end
+                        else
+                            new_sparse = precon_matrix_sparse
+                        end
+                        MPI.Bcast!(recreate, comm_block[]; root=0)
+                        if recreate[]
+                            # Have not properly created the LU decomposition before, so
+                            # cannot reuse it.
+                            @timeit_debug global_timer "sharedmem_lu" orig_lu = sharedmem_lu(new_sparse)
+                        else
+                            # LU decomposition was previously created. The Jacobian
+                            # has the same sparsity pattern, so by using `ilu0!()` we
+                            # can reuse some setup.
+                            @timeit_debug global_timer "sharedmem_lu!" sharedmem_lu!(orig_lu, new_sparse)
+                        end
+                        nl_solver_params.preconditioners[ir] =
+                            (orig_lu, precon_matrix, new_sparse,
+                             input_buffer, output_buffer)
                     else
                         error("Unexpected preconditioner_type $(nl_solver_params.preconditioner_type)")
                     end
@@ -1147,7 +1176,7 @@ println("recalculating precon")
                         counter += 1
                     end
 
-                    if nl_solver_params.preconditioner_type ∈ ("electron_lu", "electron_iluzero")
+                    if nl_solver_params.preconditioner_type ∈ ("electron_lu", "electron_iluzero", "electron_sharedmem_lu")
                         begin_serial_region()
                         @serial_region begin
                             @timeit_debug global_timer "ldiv!" ldiv!(output_buffer, precon_lu, input_buffer)
