@@ -161,7 +161,7 @@ function sparse_lu(A::Union{SparseMatrixCSC{mk_float,mk_int},Nothing})
     wrk = allocate_shared_float(m)
 
     # Get a sub-range for this process to calculate from a global index range
-    function get_range(global_range)
+    function get_range(global_range, include_last=false)
         irank = block_rank[]
         nrank = block_size[]
         range_length = length(global_range)
@@ -173,11 +173,24 @@ function sparse_lu(A::Union{SparseMatrixCSC{mk_float,mk_int},Nothing})
         first_ind = first(global_range)
         last_ind = last(global_range)
 
-        imin = irank * chunk_size + first_ind
-        imax = min((irank + 1) * chunk_size + first_ind - 1, last_ind)
-        if imin > last_ind
-            return 1:0
+        if include_last
+            # Build up chunks from the last rank, so that the last rank always includes
+            # the last point in the range.
+            imax = last_ind - (nrank - irank - 1) * chunk_size
+            imin = max(last_ind - (nrank - irank) * chunk_size + 1, first_ind)
+
+            if imax < first_ind
+                return 1:0
+            end
+        else
+            imin = irank * chunk_size + first_ind
+            imax = min((irank + 1) * chunk_size + first_ind - 1, last_ind)
+
+            if imin > last_ind
+                return 1:0
+            end
         end
+
         return imin:imax
     end
     _block_synchronize()
@@ -197,7 +210,7 @@ function sparse_lu(A::Union{SparseMatrixCSC{mk_float,mk_int},Nothing})
     backward_substitution_ranges = Vector{UnitRange{Int64}}(undef, n)
     u_colptr = U.colptr
     for i ∈ n:-1:1
-        backward_substitution_ranges[i] = get_range(u_colptr[i]:u_colptr[i + 1] - 2)
+        backward_substitution_ranges[i] = get_range(u_colptr[i]:u_colptr[i + 1] - 2, true)
     end
 
     return ParallelSparseLU(m, n, L, U, wrk, lu_object, zero_wrk_range,
@@ -258,14 +271,18 @@ function ldiv!(x::MPISharedArray{mk_float,1}, F::ParallelSparseLU,
     end
     _block_synchronize()
     @inbounds for i ∈ n:-1:1
-        @serial_region begin
+        if block_rank[] == block_size[] - 1
             x[i] = u_nzval[u_colptr[i + 1] - 1] \ wrk[i]
         end
         _block_synchronize()
         for j ∈ backward_substitution_ranges[i]
             wrk[u_rowval[j]] -= u_nzval[j] * x[i]
         end
-        _block_synchronize()
+        # The following synchronization should not be needed because although the loop
+        # just before might modify wrk[i+1], the `block_size[]-1` process will always get
+        # the last element of the range, and is also the process that will do the `x[i] =
+        # u_nzval[u_colptr[i + 1] - 1] \ wrk[i]` on the next step of the loop.
+        #_block_synchronize()
     end
     return x
 end
