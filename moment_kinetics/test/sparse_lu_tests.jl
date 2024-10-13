@@ -2,6 +2,7 @@ module SparseLUTests
 
 include("setup.jl")
 
+using moment_kinetics.array_allocation: allocate_shared_float
 using moment_kinetics.communication
 using moment_kinetics.looping
 using moment_kinetics.sparse_lu_solver
@@ -36,43 +37,70 @@ function runtests()
             n = 42
             if block_rank[] == 0
                 A = rand(n,n)
+                A_sparse = sparse(A)
             else
                 A = nothing
+                A_sparse = nothing
             end
-            A_lu = sparse_lu(sparse(A))
+            A_lu = sparse_lu(A_sparse)
 
             # Create rhs
-            b = rand(n)
-            x = similar(b)
+            b = allocate_shared_float(n)
+            @serial_region begin
+                b .= rand(n)
+            end
+            x = allocate_shared_float(n)
+            _block_synchronize()
 
             ldiv!(x, A_lu, b)
 
-            @test isapprox(x, A \ b, atol=atol)
+            @serial_region begin
+                @test isapprox(x, A \ b, atol=atol)
+            end
 
             # Check we can update the rhs
-            b = rand(n)
+            @serial_region begin
+                b .= rand(n)
+            end
+            _block_synchronize()
+
             ldiv!(x, A_lu, b)
-            @test isapprox(x, A \ b, atol=atol)
+            @serial_region begin
+                @test isapprox(x, A \ b, atol=atol)
+            end
 
             # Check we can update the matrix
             if block_rank[] == 0
                 A = rand(n,n)
+                A_sparse = sparse(A)
             else
                 A = nothing
+                A_sparse = nothing
             end
-            sparse_lu!(A_lu, sparse(A))
+            sparse_lu!(A_lu, A_sparse)
 
             # Create rhs
-            b = rand(n)
+            @serial_region begin
+                b .= rand(n)
+            end
+            _block_synchronize()
 
             ldiv!(x, A_lu, b)
 
-            @test isapprox(x, A \ b, atol=atol)
+            @serial_region begin
+                @test isapprox(x, A \ b, atol=atol)
+            end
 
             # Check we can update the rhs again
-            b = rand(n)
+            @serial_region begin
+                b .= rand(n)
+            end
+            _block_synchronize()
+
             ldiv!(x, A_lu, b)
-            @test isapprox(x, A \ b, atol=atol)
+            @serial_region begin
+                @test isapprox(x, A \ b, atol=atol)
+            end
         end
 
         @testset "sparse matrix" begin
@@ -87,17 +115,29 @@ function runtests()
             A_lu = sparse_lu(A)
 
             # Create rhs
-            b = rand(n)
-            x = similar(b)
+            b = allocate_shared_float(n)
+            @serial_region begin
+                b .= rand(n)
+            end
+            x = allocate_shared_float(n)
+            _block_synchronize()
 
             ldiv!(x, A_lu, b)
 
-            @test isapprox(x, A \ b, atol=atol)
+            @serial_region begin
+                @test isapprox(x, A \ b, atol=atol)
+            end
 
             # Check we can update the rhs
-            b = rand(n)
+            @serial_region begin
+                b .= rand(n)
+            end
+            _block_synchronize()
+
             ldiv!(x, A_lu, b)
-            @test isapprox(x, A \ b, atol=atol)
+            @serial_region begin
+                @test isapprox(x, A \ b, atol=atol)
+            end
 
             # Check we can update the matrix
             if block_rank[] == 0
@@ -108,16 +148,27 @@ function runtests()
             sparse_lu!(A_lu, A)
 
             # Create rhs
-            b = rand(n)
+            @serial_region begin
+                b .= rand(n)
+            end
+            _block_synchronize()
 
             ldiv!(x, A_lu, b)
 
-            @test isapprox(x, A \ b, atol=atol)
+            @serial_region begin
+                @test isapprox(x, A \ b, atol=atol)
+            end
 
             # Check we can update the rhs again
-            b = rand(n)
+            @serial_region begin
+                b .= rand(n)
+            end
+            _block_synchronize()
+
             ldiv!(x, A_lu, b)
-            @test isapprox(x, A \ b, atol=atol)
+            @serial_region begin
+                @test isapprox(x, A \ b, atol=atol)
+            end
         end
     end
 end

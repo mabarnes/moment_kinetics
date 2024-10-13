@@ -86,12 +86,24 @@ function sparse_lu(A::Union{SparseMatrixCSC{mk_float,mk_int},Nothing})
         U_serial = lu_object.U
     end
 
-    m, n = size(A)
+    this_length = Ref(0)
+
+    if block_rank[] == 0
+        m, n = size(A)
+        this_length[] = m
+        MPI.Bcast!(this_length, comm_block[])
+        this_length[] = n
+        MPI.Bcast!(this_length, comm_block[])
+    else
+        MPI.Bcast!(this_length, comm_block[])
+        m = this_length[]
+        MPI.Bcast!(this_length, comm_block[])
+        n = this_length[]
+    end
 
     # Allocate and fill the L SparseMatrixCSCShared object
     ######################################################
 
-    this_length = Ref(0)
     if block_rank[] == 0
         this_length[] = length(L_serial.colptr)
         MPI.Bcast!(this_length, comm_block[])
@@ -107,7 +119,7 @@ function sparse_lu(A::Union{SparseMatrixCSC{mk_float,mk_int},Nothing})
         MPI.Bcast!(this_length, comm_block[])
     end
     L_rowval = allocate_shared_int(this_length[])
-    L_nzval = allocate_shared_int(this_length[])
+    L_nzval = allocate_shared_float(this_length[])
 
     L = SparseMatrixCSCShared(m, n, L_colptr, L_rowval, L_nzval)
 
@@ -136,7 +148,7 @@ function sparse_lu(A::Union{SparseMatrixCSC{mk_float,mk_int},Nothing})
         MPI.Bcast!(this_length, comm_block[])
     end
     U_rowval = allocate_shared_int(this_length[])
-    U_nzval = allocate_shared_int(this_length[])
+    U_nzval = allocate_shared_float(this_length[])
 
     U = SparseMatrixCSCShared(m, n, U_colptr, U_rowval, U_nzval)
 
@@ -168,6 +180,7 @@ function sparse_lu(A::Union{SparseMatrixCSC{mk_float,mk_int},Nothing})
         end
         return imin:imax
     end
+    _block_synchronize()
 
     zero_wrk_range = get_range(1:m)
 
@@ -204,7 +217,12 @@ function sparse_lu!(F::ParallelSparseLU, A::SparseMatrixCSC{mk_float,mk_int})
     return nothing
 end
 
-# Solves F\b overwriting x
+"""
+    ldiv!(x::MPISharedArray{mk_float,1}, F::ParallelSparseLU,
+          b::MPISharedArray{mk_float,1})
+
+Solves `F\\b` overwriting `x`.
+"""
 function ldiv!(x::MPISharedArray{mk_float,1}, F::ParallelSparseLU,
                b::MPISharedArray{mk_float,1})
     @boundscheck (length(b) == F.n) || throw(DimensionMismatch())
@@ -232,8 +250,13 @@ function ldiv!(x::MPISharedArray{mk_float,1}, F::ParallelSparseLU,
         for j ∈ forward_substitution_ranges[i]
             wrk[l_rowval[j]] -= l_nzval[j] * wrk[i]
         end
-        _block_synchronize()
+        # The following synchronization should not be needed because although the loop
+        # just before might modify wrk[i+1], the root process will always get the first
+        # element of the range, and is also the process that will do the `wrk[i] += b[i]`
+        # on the next step of the loop.
+        #_block_synchronize()
     end
+    _block_synchronize()
     @inbounds for i ∈ n:-1:1
         @serial_region begin
             x[i] = u_nzval[u_colptr[i + 1] - 1] \ wrk[i]
