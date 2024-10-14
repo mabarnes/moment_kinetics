@@ -34,7 +34,8 @@ using ..communication
 using ..coordinates: coordinate
 using ..input_structs
 using ..looping
-using ..sharedmem_lu_solver
+#using ..sharedmem_lu_solver
+using SharedMemSparseLU
 using ..timer_utils
 using ..type_definitions: mk_float, mk_int
 

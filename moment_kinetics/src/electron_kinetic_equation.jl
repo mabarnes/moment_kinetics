@@ -52,7 +52,8 @@ using ..file_io: get_electron_io_info, write_electron_state, finish_electron_io
 using ..krook_collisions: electron_krook_collisions!, get_collision_frequency_ee,
                           get_collision_frequency_ei,
                           add_electron_krook_collisions_to_Jacobian!
-using ..sharedmem_lu_solver
+#using ..sharedmem_lu_solver
+using SharedMemSparseLU
 using ..timer_utils
 using ..moment_constraints: hard_force_moment_constraints!,
                             moment_constraints_on_residual!,
@@ -1152,12 +1153,16 @@ println("recalculating precon")
                         if recreate[]
                             # Have not properly created the LU decomposition before, so
                             # cannot reuse it.
+@serial_region begin # not actually shared-memory yet!
                             @timeit_debug global_timer "sharedmem_lu" orig_lu = sharedmem_lu(new_sparse)
+end
                         else
                             # LU decomposition was previously created. The Jacobian
                             # has the same sparsity pattern, so by using `ilu0!()` we
                             # can reuse some setup.
+@serial_region begin # not actually shared-memory yet!
                             @timeit_debug global_timer "sharedmem_lu!" sharedmem_lu!(orig_lu, new_sparse)
+end
                         end
                         nl_solver_params.preconditioners[ir] =
                             (orig_lu, precon_matrix, new_sparse,
