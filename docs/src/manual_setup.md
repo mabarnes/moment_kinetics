@@ -63,6 +63,36 @@ file is named something other than `libmpi.so`, you might have to pass some
 keyword arguments to `use_system_binary()` - see
 <https://juliaparallel.org/MPI.jl/stable/reference/mpipreferences/#MPIPreferences.use_system_binary>.
 
+## Using the native Julia MPI
+
+As an alternative, you can also use the MPI that is shipped with Julia.
+```julia
+julia> using MPI; MPI.install_mpiexecjl(force=true)
+julia> using MPIPreferences; MPIPreferences.use_jll_binary()
+```
+The executable for the Julia MPI can be called from the root folder of the project with
+```
+.julia/bin/mpiexecjl --project=./ -n N julia --project -O3 run_your_script.jl
+```
+where `N` is the number of cores used.
+
+## Miscellaneous required packages
+
+For full functionality, including precompilation with
+```
+$ julia --project -O3 precompile.jl
+```
+and running of tests by
+```
+$ julia --project -O3 -e 'include("moment_kinetics/test/runtests.jl")'
+```
+we require to install the following packages
+```
+$ julia --project -O3
+julia> ]
+pkg> add PackageCompiler StatsBase SpecialFunctions Test 
+```
+
 ## Link HDF5
 
 To enable parallel I/O, you need to get HDF5.jl to use the system HDF5 library
@@ -124,3 +154,54 @@ system-provided Python) - to do so:
   julia> ENV["PYTHON"]="/your/python/location"
   julia> using Pkg; Pkg.build("PyCall")
   ```
+## An example manual setup script
+
+We include an example manual setup script below to show the process
+of carrying out the above steps together, for a case where no post processing is required,
+and we only desire to verify the install with an MPI test. We use the 
+native Julia MPI, and do not link to HDF5.
+```
+#!/bin/bash
+# simple moment_kinetics install script
+# not supporting parallel HDF5
+# not supporting diagnostics
+
+# first time use, uncomment this
+# otherwise, use from the moment_kinetics_install (root) folder 
+git clone https://github.com/mabarnes/moment_kinetics.git moment_kinetics_test_install
+cd moment_kinetics_test_install
+
+# set up modules and environment variables
+# need this everytime you use Julia
+# e.g. module load julia/1.10.2
+# this will be specific to your system
+# JULIA_DEPOT_PATH must be set to be the same for each use of a specific install
+export JULIA_DEPOT_PATH=$(pwd)/.julia
+
+# develop moment_kinetics, no plots, no symbolic function tests
+touch Project.toml
+julia --project -O3 -e 'using Pkg; Pkg.develop(path="./moment_kinetics")'
+julia --project -O3 -e 'using Pkg; Pkg.add("MPIPreferences")'
+julia --project -O3 -e 'using Pkg; Pkg.add("MPI")'
+julia --project -O3 -e 'using Pkg; Pkg.add("Test")'
+julia --project -O3 -e 'using Pkg; Pkg.add("SpecialFunctions")'
+julia --project -O3 -e 'using Pkg; Pkg.add("PackageCompiler")'
+julia --project -O3 -e 'using Pkg; Pkg.add("StatsBase")'
+
+# setup MPI preferences and binary
+julia --project -O3 -e 'using Pkg; Pkg.instantiate()'
+julia --project -O3 -e 'using Pkg; Pkg.resolve()'
+julia --project -O3 -e 'using MPI; MPI.install_mpiexecjl(force=true)'
+julia --project -O3 -e 'using MPIPreferences; MPIPreferences.use_jll_binary()
+julia --project -O3 -e 'using Pkg; Pkg.instantiate()'
+julia --project -O3 -e 'using Pkg; Pkg.resolve()'
+
+# generate moment_kinetics.so
+julia --project -O3 precompile.jl
+
+# check install with tests
+echo "MPI test with precompiled moment_kinetics.so"
+.julia/bin/mpiexecjl --project=./ -n 2 julia --project -O3 -Jmoment_kinetics.so -e 'include("moment_kinetics/test/runtests.jl")'
+```
+
+
