@@ -768,7 +768,7 @@ function update_ion_qpar_species!(qpar, density, upar, vth, dT_dz, ff, vpa, vper
         calculate_ion_qpar_from_pdf!(qpar, density, upar, vth, ff, vpa, vperp, z, r, evolve_density,
                                      evolve_upar, evolve_ppar)
     elseif ion_physics == coll_krook_ions
-        calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z, r, collisions, evolve_density, 
+        calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z, r, vperp, collisions, evolve_density, 
                                             evolve_upar, evolve_ppar)
     else
         throw(ArgumentError("ion model $ion_physics not implemented for qpar calculation"))
@@ -820,7 +820,7 @@ end
 """
 calculate parallel heat flux if ion composition flag is coll_krook fluid ions
 """
-function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z, r, collisions, evolve_density, evolve_upar, evolve_ppar)
+function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z, r, vperp, collisions, evolve_density, evolve_upar, evolve_ppar)
     # Note that this is a braginskii heat flux for ions using the krook operator. The full Fokker-Planck operator
     # Braginskii heat flux is different! This also assumes one ion species, and so no friction between ions.
     @boundscheck r.n == size(qpar, 2) || throw(BoundsError(qpar))
@@ -858,7 +858,20 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
     else
         return nothing
     end
+    # Stangeby (25.2) suggests that, when including kinetic effects, a value
+    # for gamma_i of around 2.5 is sensible.
+    # However, maybe for the purposes of this coll_krook scan, at very high
+    # collisionality we expect the distribution function of the ions at the
+    # sheath entrance to be close to a drifting maxwellian, in which case
+    # the original Stangeby (2.92) would be more appropriate. However, this
+    # also depends on whether we're 1V or 2V - as in 1V gamma_i = 2.5, 
+    # in 2V gamma_i = 3.5.
 
+    if vperp.n == 1
+        gamma_i = 2.5
+    else
+        gamma_i = 3.5
+    end
     @loop_r ir begin
         for iz ∈ z_indices
             this_ppar = vth[iz,ir]^2 * density[iz,ir]/2.0
@@ -866,9 +879,6 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
             this_dens = density[iz,ir]
             particle_flux = this_dens * this_upar
             T_i = vth[iz,ir]^2
-
-            # Stangeby (25.2)
-            gamma_i = 2.5
 
             # Stangeby (2.92)
             total_heat_flux = gamma_i * T_i * particle_flux

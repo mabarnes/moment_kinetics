@@ -95,7 +95,7 @@ struct moments_ion_substruct
     qpar_updated::Vector{Bool}
     # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
     vth::MPISharedArray{mk_float,3}
-    # this is the temperature, calculated from 2ppar/dens (the comment below may be out of date?)
+    # this is the temperature, calculated from 2ppar/dens (the comment above may be out of date?)
     temp::MPISharedArray{mk_float,3}
     # generalised Chodura integrals for the lower and upper plates
     chodura_integral_lower::MPISharedArray{mk_float,2}

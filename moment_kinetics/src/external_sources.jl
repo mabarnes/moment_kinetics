@@ -1351,7 +1351,7 @@ source amplitude.
         end
     elseif ion_source_settings.source_type == "temperature_midpoint_control"
         begin_serial_region()
-        temperature = 2 * ppar ./ density
+        ion_moments.temp .= 2 .* ppar ./ density
         # controller_amplitude error is a shared memory Vector of length 1
         controller_amplitude = ion_source_settings.PI_controller_amplitude
         @serial_region begin
@@ -1359,7 +1359,7 @@ source amplitude.
                     ion_source_settings.PI_temperature_target_iz !== nothing
                 # This process has the target point
 
-                T_mid = temperature[ion_source_settings.PI_temperature_target_iz,
+                T_mid = ion_moments.temp[ion_source_settings.PI_temperature_target_iz,
                                 ion_source_settings.PI_temperature_target_ir, is]
                 T_error = ion_source_settings.PI_temperature_target - T_mid
 
@@ -1382,24 +1382,11 @@ source amplitude.
         begin_r_z_region()
 
         amplitude = controller_amplitude[1]
-        #println("amplitude is $amplitude")
-        #@loop_r_z ir iz begin
-        #    ion_moments.external_source_amplitude[iz,ir,index] =
-        #        amplitude * ion_source_settings.controller_source_profile[iz,ir]
-        #end
-        #if moments.evolve_density
-        #    @loop_r_z ir iz begin
-        #            amplitude * ion_source_settings.controller_source_profile[iz,ir]
-        #    end
-        #        ion_moments.external_source_density_amplitude[iz,ir,index] =
-        #end
-        #if moments.evolve_ppar
-        #    @loop_r_z ir iz begin
-        #        ion_moments.external_source_pressure_amplitude[iz,ir,index] =
-        #            (0.5 * ion_source_settings.source_T + upar[iz,ir,is]^2) *
-        #            amplitude * ion_source_settings.controller_source_profile[iz,ir]
-        #    end
-        #end
+        @loop_r_z ir iz begin
+            ion_moments.external_source_amplitude[iz,ir,index] =
+                amplitude * ion_source_settings.controller_source_profile[iz,ir]
+        end
+
         if moments.evolve_upar
             @loop_r_z ir iz begin
                 ion_moments.external_source_momentum_amplitude[iz,ir,index] =
@@ -1410,10 +1397,17 @@ source amplitude.
         if moments.evolve_ppar
             @loop_r_z ir iz begin
                 ion_moments.external_source_pressure_amplitude[iz,ir,index] =
-                    (0.5 * ion_source_settings.source_T + upar[iz,ir]^2 - ppar[iz,ir]) *
-                    amplitude * ion_source_settings.controller_source_profile[iz,ir]
+                    ((0.5 * ion_source_settings.source_T + 2 * upar[iz,ir]^2) *
+                    amplitude) * ion_source_settings.controller_source_profile[iz,ir]
             end
         end
+        #if moments.evolve_ppar
+        #    @loop_r_z ir iz begin
+        #        ion_moments.external_source_pressure_amplitude[iz,ir,index] =
+        #            (0.5 * ion_source_settings.source_T + upar[iz,ir]^2 - ppar[iz,ir]) *
+        #            amplitude * ion_source_settings.controller_source_profile[iz,ir]
+        #    end
+        #end
     elseif ion_source_settings.source_type == "density_profile_control"
         begin_r_z_region()
 
