@@ -13,6 +13,7 @@ using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..array_allocation: allocate_int, allocate_shared_int
 using ..lagrange_polynomials: lagrange_poly
+using ..input_structs: gyrokinetic_ions
 using ..looping
 using ..timer_utils
 using ..communication: MPISharedArray, comm_block, _block_synchronize
@@ -40,7 +41,7 @@ other nonzero boundary conditions for the z and r domains.
 """
 
 function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition;print_info=false)
-    gkions = composition.gyrokinetic_ions
+    gkions = composition.ion_physics == gyrokinetic_ions
     if !gkions
         gyromatrix =  allocate_shared_float(1,1,1,1,1,1)
         gyroloopsizes = allocate_shared_int(1,1,1,1)
