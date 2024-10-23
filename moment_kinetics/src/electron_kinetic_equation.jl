@@ -800,7 +800,6 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                 if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
                     nl_solver_params.solves_since_precon_update[] = 0
 
-                    dt = t_params.dt[]
                     vth = @view moments.electron.vth[:,ir]
                     me = composition.me_over_mi
                     dens = @view moments.electron.dens[:,ir]
@@ -825,171 +824,16 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                     begin_vperp_vpa_region()
                     update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
                     @loop_vperp_vpa ivperp ivpa begin
-                        z_matrix = allocate_float(z.n, z.n)
-                        z_matrix .= 0.0
-
-                        z_speed = @view z_advect[1].speed[:,ivpa,ivperp,ir]
-                        for ielement ∈ 1:z.nelement_local
-                            imin = z.imin[ielement] - (ielement != 1)
-                            imax = z.imax[ielement]
-                            if ielement == 1
-                                z_matrix[imin,imin:imax] .+= z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement]
-                            else
-                                if z_speed[imin] < 0.0
-                                    z_matrix[imin,imin:imax] .+= z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement]
-                                elseif z_speed[imin] > 0.0
-                                    # Do nothing
-                                else
-                                    z_matrix[imin,imin:imax] .+= 0.5 .* z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement]
-                                end
-                            end
-                            z_matrix[imin+1:imax-1,imin:imax] .+= z_spectral.lobatto.Dmat[2:end-1,:] ./ z.element_scale[ielement]
-                            if ielement == z.nelement_local
-                                z_matrix[imax,imin:imax] .+= z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement]
-                            else
-                                if z_speed[imax] < 0.0
-                                    # Do nothing
-                                elseif z_speed[imax] > 0.0
-                                    z_matrix[imax,imin:imax] .+= z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement]
-                                else
-                                    z_matrix[imax,imin:imax] .+= 0.5 .* z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement]
-                                end
-                            end
-                        end
-                        # Multiply by advection speed
-                        for row ∈ 1:z.n
-                            z_matrix[row,:] .*= dt * z_speed[row]
-                        end
-
-                        # Diagonal entries
-                        for row ∈ 1:z.n
-                            z_matrix[row,row] += 1.0
-
-                            # Terms from `add_contribution_from_pdf_term!()`
-                            z_matrix[row,row] += dt * (0.5 * dqpar_dz[row] / ppar[row]
-                                                       + vpa.grid[ivpa] * vth[row] * (ddens_dz[row] / dens[row]
-                                                                                      - dvth_dz[row] / vth[row]))
-                        end
-                        if external_source_settings.electron.active
-                            for row ∈ 1:z.n
-                                # Source terms from `add_contribution_from_pdf_term!()`
-                                z_matrix[row,row] += dt * (1.5 * source_density_amplitude[row] / dens[row]
-                                                           - (0.5 * source_pressure_amplitude[row]
-                                                              + source_momentum_amplitude[row]) / ppar[row]
-                                                          )
-                            end
-                            if external_source_settings.electron.source_type == "energy"
-                                for row ∈ 1:z.n
-                                    # Contribution from `external_electron_source!()`
-                                    z_matrix[row,row] += dt * source_amplitude[row]
-                                end
-                            end
-                        end
-                        if collisions.krook.nuee0 > 0.0 || collisions.krook.nuei0 > 0.0
-                            for row ∈ 1:z.n
-                                # Contribution from electron_krook_collisions!()
-                                nu_ee = get_collision_frequency_ee(collisions, dens[row], vth[row])
-                                nu_ei = get_collision_frequency_ei(collisions, dens[row], vth[row])
-                                z_matrix[row,row] += dt * (nu_ee + nu_ei)
-                            end
-                        end
-
+                        z_matrix, ppar_matrix = get_electron_split_Jacobians!(
+                             ivperp, ivpa, ppar, moments, collisions, composition, z,
+                             vperp, vpa, z_spectral, vperp_spectral, vpa_spectral,
+                             z_advect, vpa_advect, scratch_dummy,
+                             external_source_settings, num_diss_params, t_params, ion_dt,
+                             ir, evolve_ppar)
                         @timeit_debug global_timer "lu" nl_solver_params.preconditioners.z[ivpa,ivperp,ir] = lu(sparse(z_matrix))
-                    end
-
-                    if z.irank == 0
-                        ppar_matrix = allocate_float(z.n, z.n)
-                        ppar_matrix .= 0.0
-
-                        if composition.electron_physics == kinetic_electrons_with_temperature_equation
-                            error("kinetic_electrons_with_temperature_equation not "
-                                  * "supported yet in preconditioner")
-                        elseif composition.electron_physics != kinetic_electrons
-                            error("Unsupported electron_physics=$(composition.electron_physics) "
-                                  * "in electron_backward_euler!() preconditioner.")
+                        if ivperp == 1 && ivpa == 1
+                            @timeit_debug global_timer "lu" nl_solver_params.preconditioners.ppar[ir] = lu(sparse(ppar_matrix))
                         end
-
-                        # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
-                        @views third_moment = @. 0.5 * moments.electron.qpar[:,ir] / electron_ppar_new / vth
-
-                        # Note that as
-                        #   qpar = 2 * ppar * vth * third_moment
-                        #        = 2 * ppar^(3/2) / dens^(1/2) / me^(1/2) * third_moment
-                        # we have that
-                        #   d(qpar)/dz = 2 * ppar^(3/2) / dens^(1/2) / me^(1/2) * d(third_moment)/dz
-                        #                - ppar^(3/2) / dens^(3/2) / me^(1/2) * third_moment * d(dens)/dz
-                        #                + 3 * ppar^(1/2) / dens^(1/2) / me^(1/2) * third_moment * d(ppar)/dz
-                        # so for the Jacobian
-                        #   d[d(qpar)/dz)]/d[ppar]
-                        #     = 3 * ppar^(1/2) / dens^(1/2) / me^(1/2) * d(third_moment)/dz
-                        #       - 3/2 * ppar^(1/2) / dens^(3/2) / me^(1/2) * third_moment * d(dens)/dz
-                        #       + 3/2 / ppar^(1/2) / dens^(1/2) / me^(1/2) * third_moment * d(ppar)/dz
-                        #       + 3 * ppar^(1/2) / dens^(1/2) / me^(1/2) * third_moment * d(.)/dz
-                        dthird_moment_dz = z.scratch2
-                        derivative_z!(z.scratch2, third_moment, buffer_1, buffer_2,
-                                      buffer_3, buffer_4, z_spectral, z)
-
-                        # Diagonal terms
-                        for row ∈ 1:z.n
-                            ppar_matrix[row,row] = 1.0
-
-                            # 3*ppar*dupar_dz
-                            ppar_matrix[row,row] += 3.0 * dt * dupar_dz[row]
-
-                            # terms from d(qpar)/dz
-                            ppar_matrix[row,row] +=
-                                dt * (3.0 * sqrt(electron_ppar_new[row] / dens[row] / me) * dthird_moment_dz[row]
-                                      - 1.5 * sqrt(electron_ppar_new[row] / me) / dens[row]^1.5 * third_moment[row] * ddens_dz[row]
-                                      + 1.5 / sqrt(electron_ppar_new[row] / dens[row] / me) * third_moment[row] * dppar_dz[row])
-                        end
-                        if ion_dt !== nothing
-                            # Backward-Euler forcing term
-                            for row ∈ 1:z.n
-                                ppar_matrix[row,row] += dt / ion_dt 
-                            end
-                        end
-
-
-                        # d(.)/dz terms
-                        # Note that the z-derivative matrix is local to this block, and
-                        # for the preconditioner we do not include any distributed-MPI
-                        # communication (we rely on the JFNK iteration to sort out the
-                        # coupling between blocks).
-                        if !isa(z_spectral, gausslegendre_info)
-                            error("Only gausslegendre_pseudospectral coordinate type is "
-                                  * "supported by electron_backward_euler!() "
-                                  * "preconditioner because we need differentiation"
-                                  * "matrices.")
-                        end
-                        z_deriv_matrix = z_spectral.D_matrix
-                        for row ∈ 1:z.n
-                            @. ppar_matrix[row,:] +=
-                                dt * (upar[row]
-                                      + 3.0 * sqrt(electron_ppar_new[row] / dens[row] / me) * third_moment[row]) *
-                                z_deriv_matrix[row,:]
-                        end
-
-                        if num_diss_params.electron.moment_dissipation_coefficient > 0.0
-                            error("z-diffusion of electron_ppar not yet supported in "
-                                  * "preconditioner")
-                        end
-                        if collisions.nu_ei > 0.0
-                            error("electron-ion collision terms for electron_ppar not yet "
-                                  * "supported in preconditioner")
-                        end
-                        if composition.n_neutral_species > 0 && collisions.charge_exchange_electron > 0.0
-                            error("electron 'charge exchange' terms for electron_ppar not yet "
-                                  * "supported in preconditioner")
-                        end
-                        if composition.n_neutral_species > 0 && collisions.ionization_electron > 0.0
-                            error("electron ionization terms for electron_ppar not yet "
-                                  * "supported in preconditioner")
-                        end
-
-                        @timeit_debug global_timer "lu" nl_solver_params.preconditioners.ppar[ir] = lu(sparse(ppar_matrix))
-                    else
-                        ppar_matrix = allocate_float(0, 0)
-                        ppar_matrix[] = 1.0
                     end
                 end
 
@@ -3038,6 +2882,188 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
     end
 
     return nothing
+end
+
+"""
+    get_electron_split_Jacobians!(ivperp, ivpa, ppar, moments, collisions, composition,
+                                  z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral,
+                                  z_advect, vpa_advect, scratch_dummy,
+                                  external_source_settings, num_diss_params, t_params,
+                                  ion_dt, ir, evolve_ppar
+
+Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equation and (if
+`evolve_ppar=true`) the electron energy equation.
+"""
+@timeit global_timer get_electron_split_Jacobians!(
+                         ivperp, ivpa, ppar, moments, collisions, composition, z,
+                         vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
+                         vpa_advect, scratch_dummy, external_source_settings,
+                         num_diss_params, t_params, ion_dt, ir, evolve_ppar) = begin
+
+    dt = t_params.dt[]
+
+    z_matrix = allocate_float(z.n, z.n)
+    z_matrix .= 0.0
+
+    z_speed = @view z_advect[1].speed[:,ivpa,ivperp,ir]
+    for ielement ∈ 1:z.nelement_local
+        imin = z.imin[ielement] - (ielement != 1)
+        imax = z.imax[ielement]
+        if ielement == 1
+            z_matrix[imin,imin:imax] .+= z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement]
+        else
+            if z_speed[imin] < 0.0
+                z_matrix[imin,imin:imax] .+= z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement]
+            elseif z_speed[imin] > 0.0
+                # Do nothing
+            else
+                z_matrix[imin,imin:imax] .+= 0.5 .* z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement]
+            end
+        end
+        z_matrix[imin+1:imax-1,imin:imax] .+= z_spectral.lobatto.Dmat[2:end-1,:] ./ z.element_scale[ielement]
+        if ielement == z.nelement_local
+            z_matrix[imax,imin:imax] .+= z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement]
+        else
+            if z_speed[imax] < 0.0
+                # Do nothing
+            elseif z_speed[imax] > 0.0
+                z_matrix[imax,imin:imax] .+= z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement]
+            else
+                z_matrix[imax,imin:imax] .+= 0.5 .* z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement]
+            end
+        end
+    end
+    # Multiply by advection speed
+    for row ∈ 1:z.n
+        z_matrix[row,:] .*= dt * z_speed[row]
+    end
+
+    # Diagonal entries
+    for row ∈ 1:z.n
+        z_matrix[row,row] += 1.0
+
+        # Terms from `add_contribution_from_pdf_term!()`
+        z_matrix[row,row] += dt * (0.5 * dqpar_dz[row] / ppar[row]
+                                   + vpa.grid[ivpa] * vth[row] * (ddens_dz[row] / dens[row]
+                                                                  - dvth_dz[row] / vth[row]))
+    end
+    if external_source_settings.electron.active
+        for row ∈ 1:z.n
+            # Source terms from `add_contribution_from_pdf_term!()`
+            z_matrix[row,row] += dt * (1.5 * source_density_amplitude[row] / dens[row]
+                                       - (0.5 * source_pressure_amplitude[row]
+                                          + source_momentum_amplitude[row]) / ppar[row]
+                                      )
+        end
+        if external_source_settings.electron.source_type == "energy"
+            for row ∈ 1:z.n
+                # Contribution from `external_electron_source!()`
+                z_matrix[row,row] += dt * source_amplitude[row]
+            end
+        end
+    end
+    if collisions.krook.nuee0 > 0.0 || collisions.krook.nuei0 > 0.0
+        for row ∈ 1:z.n
+            # Contribution from electron_krook_collisions!()
+            nu_ee = get_collision_frequency_ee(collisions, dens[row], vth[row])
+            nu_ei = get_collision_frequency_ei(collisions, dens[row], vth[row])
+            z_matrix[row,row] += dt * (nu_ee + nu_ei)
+        end
+    end
+
+    if z.irank == 0 && ivperp == 1 && ivpa == 1
+        ppar_matrix = allocate_float(z.n, z.n)
+        ppar_matrix .= 0.0
+
+        if composition.electron_physics == kinetic_electrons_with_temperature_equation
+            error("kinetic_electrons_with_temperature_equation not "
+                  * "supported yet in preconditioner")
+        elseif composition.electron_physics != kinetic_electrons
+            error("Unsupported electron_physics=$(composition.electron_physics) "
+                  * "in electron_backward_euler!() preconditioner.")
+        end
+
+        # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
+        @views third_moment = @. 0.5 * moments.electron.qpar[:,ir] / electron_ppar_new / vth
+
+        # Note that as
+        #   qpar = 2 * ppar * vth * third_moment
+        #        = 2 * ppar^(3/2) / dens^(1/2) / me^(1/2) * third_moment
+        # we have that
+        #   d(qpar)/dz = 2 * ppar^(3/2) / dens^(1/2) / me^(1/2) * d(third_moment)/dz
+        #                - ppar^(3/2) / dens^(3/2) / me^(1/2) * third_moment * d(dens)/dz
+        #                + 3 * ppar^(1/2) / dens^(1/2) / me^(1/2) * third_moment * d(ppar)/dz
+        # so for the Jacobian
+        #   d[d(qpar)/dz)]/d[ppar]
+        #     = 3 * ppar^(1/2) / dens^(1/2) / me^(1/2) * d(third_moment)/dz
+        #       - 3/2 * ppar^(1/2) / dens^(3/2) / me^(1/2) * third_moment * d(dens)/dz
+        #       + 3/2 / ppar^(1/2) / dens^(1/2) / me^(1/2) * third_moment * d(ppar)/dz
+        #       + 3 * ppar^(1/2) / dens^(1/2) / me^(1/2) * third_moment * d(.)/dz
+        dthird_moment_dz = z.scratch2
+        derivative_z!(z.scratch2, third_moment, buffer_1, buffer_2,
+                      buffer_3, buffer_4, z_spectral, z)
+
+        # Diagonal terms
+        for row ∈ 1:z.n
+            ppar_matrix[row,row] = 1.0
+
+            # 3*ppar*dupar_dz
+            ppar_matrix[row,row] += 3.0 * dt * dupar_dz[row]
+
+            # terms from d(qpar)/dz
+            ppar_matrix[row,row] +=
+                dt * (3.0 * sqrt(electron_ppar_new[row] / dens[row] / me) * dthird_moment_dz[row]
+                      - 1.5 * sqrt(electron_ppar_new[row] / me) / dens[row]^1.5 * third_moment[row] * ddens_dz[row]
+                      + 1.5 / sqrt(electron_ppar_new[row] / dens[row] / me) * third_moment[row] * dppar_dz[row])
+        end
+        if ion_dt !== nothing
+            # Backward-Euler forcing term
+            for row ∈ 1:z.n
+                ppar_matrix[row,row] += dt / ion_dt
+            end
+        end
+
+        # d(.)/dz terms
+        # Note that the z-derivative matrix is local to this block, and
+        # for the preconditioner we do not include any distributed-MPI
+        # communication (we rely on the JFNK iteration to sort out the
+        # coupling between blocks).
+        if !isa(z_spectral, gausslegendre_info)
+            error("Only gausslegendre_pseudospectral coordinate type is "
+                  * "supported by electron_backward_euler!() "
+                  * "preconditioner because we need differentiation"
+                  * "matrices.")
+        end
+        z_deriv_matrix = z_spectral.D_matrix
+        for row ∈ 1:z.n
+            @. ppar_matrix[row,:] +=
+                dt * (upar[row]
+                      + 3.0 * sqrt(electron_ppar_new[row] / dens[row] / me) * third_moment[row]) *
+                z_deriv_matrix[row,:]
+        end
+
+        if num_diss_params.electron.moment_dissipation_coefficient > 0.0
+            error("z-diffusion of electron_ppar not yet supported in "
+                  * "preconditioner")
+        end
+        if collisions.nu_ei > 0.0
+            error("electron-ion collision terms for electron_ppar not yet "
+                  * "supported in preconditioner")
+        end
+        if composition.n_neutral_species > 0 && collisions.charge_exchange_electron > 0.0
+            error("electron 'charge exchange' terms for electron_ppar not yet "
+                  * "supported in preconditioner")
+        end
+        if composition.n_neutral_species > 0 && collisions.ionization_electron > 0.0
+            error("electron ionization terms for electron_ppar not yet "
+                  * "supported in preconditioner")
+        end
+    else
+        ppar_matrix = allocate_float(0, 0)
+        ppar_matrix[] = 1.0
+    end
+
+    return z_matrix, ppar_matrix
 end
 
 #"""
