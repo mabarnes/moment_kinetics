@@ -125,7 +125,7 @@ struct moments_ion_substruct{n_moment,n_moment_wall}
     dqpar_dz::Union{MPISharedArray{mk_float,n_moment},Nothing}
     # this is the z-derivative of the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
     dvth_dz::Union{MPISharedArray{mk_float,n_moment},Nothing}
-    # this is the entropy production dS/dt = - int (ln f sum_s' C_ss' [f_s,f_s']) d^n_moment v
+    # this is the entropy production dS/dt = - int (ln f sum_s' C_ss' [f_s,f_s']) d^3 v
     dSdt::MPISharedArray{mk_float,n_moment}
     # Spatially varying amplitude of the external source term (third index is for different sources)
     external_source_amplitude::MPISharedArray{mk_float,n_moment}
@@ -174,7 +174,7 @@ struct moments_electron_substruct{n_moment_electron,n_moment_electron_source}
     qpar::MPISharedArray{mk_float,n_moment_electron}
     # flag that keeps track of whether or not qpar needs updating before use
     qpar_updated::Base.RefValue{Bool}
-    # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(n_moment_electron*Tpar/m)
+    # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
     vth::MPISharedArray{mk_float,n_moment_electron}
     # this is the parallel friction force between ions and electrons
     parallel_friction::MPISharedArray{mk_float,n_moment_electron}
@@ -202,14 +202,14 @@ struct moments_electron_substruct{n_moment_electron,n_moment_electron_source}
     # this is the upwinded z-derivative of the parallel pressure
     dppar_dz_upwind::Union{MPISharedArray{mk_float,n_moment_electron},Nothing}
     # this is the second-z-derivative of the parallel pressure
-    dn_moment_electronppar_dzn_moment_electron::Union{MPISharedArray{mk_float,n_moment_electron},Nothing}
+    d2ppar_dz2::Union{MPISharedArray{mk_float,n_moment_electron},Nothing}
     # this is the z-derivative of the parallel heat flux
     dqpar_dz::Union{MPISharedArray{mk_float,n_moment_electron},Nothing}
     # this is the z-derivative of the parallel temperature Tpar = ppar/dens
     dT_dz::Union{MPISharedArray{mk_float,n_moment_electron},Nothing}
     # this is the upwinded z-derivative of the temperature Tpar = ppar/dens
     dT_dz_upwind::Union{MPISharedArray{mk_float,n_moment_electron},Nothing}
-    # this is the z-derivative of the electron thermal speed vth = sqrt(n_moment_electron*Tpar/m)
+    # this is the z-derivative of the electron thermal speed vth = sqrt(2*Tpar/m)
     dvth_dz::Union{MPISharedArray{mk_float,n_moment_electron},Nothing}
     # Store coefficient 'A' from applying moment constraints so we can write it out as a
     # diagnostic
