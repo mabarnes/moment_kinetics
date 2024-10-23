@@ -1,0 +1,152 @@
+[evolve_moments]
+parallel_pressure = true
+density = true
+moments_conservation = true
+parallel_flow = true
+
+[reactions]
+electron_ionization_frequency = 0.0
+ionization_frequency = 0.5
+charge_exchange_frequency = 0.75
+
+[r]
+ngrid = 1
+nelement = 1
+
+[z]
+ngrid = 5
+discretization = "gausslegendre_pseudospectral"
+nelement = 32
+#nelement_local = 4
+bc = "periodic"
+element_spacing_option = "compressed_4"
+
+[vpa]
+ngrid = 6
+discretization = "gausslegendre_pseudospectral"
+nelement = 31
+L = 30.0
+element_spacing_option = "coarse_tails"
+bc = "zero"
+
+[vz]
+ngrid = 6
+discretization = "gausslegendre_pseudospectral"
+nelement = 31
+L = 36.0
+element_spacing_option = "coarse_tails"
+bc = "zero"
+
+[composition]
+T_e = 0.2
+electron_physics = "kinetic_electrons"
+n_ion_species = 1
+n_neutral_species = 1
+
+[ion_species_1]
+initial_temperature = 0.2
+initial_density = 1.0
+
+[z_IC_ion_species_1]
+initialization_option = "sinusoid"
+density_amplitude = 0.0 #0.2
+temperature_amplitude = 0.3
+density_phase = 0.0
+upar_amplitude = 0.0 #0.1
+temperature_phase = 1.0
+upar_phase = 2.0
+
+[vpa_IC_ion_species_1]
+initialization_option = "gaussian"
+density_amplitude = 1.0
+temperature_amplitude = 0.0
+density_phase = 0.0
+upar_amplitude = 0.0
+temperature_phase = 0.0
+upar_phase = 0.0
+
+[neutral_species_1]
+initial_temperature = 0.2
+initial_density = 1.0
+
+[z_IC_neutral_species_1]
+initialization_option = "sinusoid"
+temperature_amplitude = 0.0
+density_amplitude = 0.0
+density_phase = 0.0
+upar_amplitude = 0.0
+temperature_phase = 0.0
+upar_phase = 0.0
+
+[vz_IC_neutral_species_1]
+initialization_option = "gaussian"
+density_amplitude = 1.0
+temperature_amplitude = 0.0
+density_phase = 0.0
+upar_amplitude = 0.0
+temperature_phase = 0.0
+upar_phase = 0.0
+
+[krook_collisions]
+use_krook = true
+
+[timestepping]
+type = "PareschiRusso2(2,2,2)"
+implicit_electron_advance = false
+implicit_electron_ppar = true
+implicit_ion_advance = false
+implicit_vpa_advection = false
+nstep = 100000
+dt = 1.0e-5
+nwrite = 1000
+nwrite_dfns = 1000
+steady_state_residual = true
+converged_residual_value = 1.0e-3
+
+#write_after_fixed_step_count = true
+#nstep = 1
+#nwrite = 1
+#nwrite_dfns = 1
+
+[electron_timestepping]
+nstep = 5000000
+#nstep = 1
+dt = 2.0e-8
+#maximum_dt = 1.0e-8
+nwrite = 10 #10000
+nwrite_dfns = 10 #100000
+#type = "SSPRK4"
+type = "Fekete4(3)"
+rtol = 1.0e-3
+atol = 1.0e-14
+minimum_dt = 1.0e-9
+decrease_dt_iteration_threshold = 100
+increase_dt_iteration_threshold = 20
+cap_factor_ion_dt = 5.0
+initialization_residual_value = 2.5
+converged_residual_value = 1.0e-2
+
+#debug_io = 1
+
+[nonlinear_solver]
+nonlinear_max_iterations = 100
+rtol = 1.0e-6 #1.0e-8
+atol = 1.0e-14 #1.0e-16
+linear_restart = 5
+preconditioner_update_interval = 100
+
+[ion_numerical_dissipation]
+#vpa_dissipation_coefficient = 1.0e-1
+#vpa_dissipation_coefficient = 1.0e-2
+#vpa_dissipation_coefficient = 1.0e-3
+force_minimum_pdf_value = 0.0
+
+[electron_numerical_dissipation]
+#vpa_dissipation_coefficient = 2.0
+force_minimum_pdf_value = 0.0
+
+[neutral_numerical_dissipation]
+#vz_dissipation_coefficient = 1.0e-1
+#vz_dissipation_coefficient = 1.0e-2
+#vz_dissipation_coefficient = 1.0e-3
+force_minimum_pdf_value = 0.0
