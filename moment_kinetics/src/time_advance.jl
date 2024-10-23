@@ -671,7 +671,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                               default_rtol=t_params.rtol / 10.0,
                               default_atol=t_params.atol / 10.0,
                               electron_ppar_pdf_solve=true,
-                              preconditioner_type="electron_lu")
+                              preconditioner_type=Val(:electron_lu))
     nl_solver_ion_advance_params =
         setup_nonlinear_solve(t_params.implicit_ion_advance, input_dict,
                               (s=composition.n_ion_species, r=r, z=z, vperp=vperp,
@@ -679,7 +679,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                               ();
                               default_rtol=t_params.rtol / 10.0,
                               default_atol=t_params.atol / 10.0,
-                              preconditioner_type="lu")
+                              preconditioner_type=Val(:lu))
     # Implicit solve for vpa_advection term should be done in serial, as it will be called
     # within a parallelised s_r_z_vperp loop.
     nl_solver_vpa_advection_params =
@@ -687,7 +687,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                               (composition.n_ion_species, r, z, vperp);
                               default_rtol=t_params.rtol / 10.0,
                               default_atol=t_params.atol / 10.0,
-                              serial_solve=true, preconditioner_type="lu")
+                              serial_solve=true, preconditioner_type=Val(:lu))
     if nl_solver_ion_advance_params !== nothing &&
             nl_solver_vpa_advection_params !== nothing
         error("Cannot use implicit_ion_advance and implicit_vpa_advection at the same "

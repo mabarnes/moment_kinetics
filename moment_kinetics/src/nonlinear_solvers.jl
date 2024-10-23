@@ -42,7 +42,7 @@ using MPI
 using SparseArrays
 using StatsBase: mean
 
-struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon}
+struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon,Tpretype}
     rtol::mk_float
     atol::mk_float
     nonlinear_max_iterations::mk_int
@@ -67,7 +67,7 @@ struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon}
     serial_solve::Bool
     max_nonlinear_iterations_this_step::Base.RefValue{mk_int}
     max_linear_iterations_this_step::Base.RefValue{mk_int}
-    preconditioner_type::String
+    preconditioner_type::Tpretype
     preconditioner_update_interval::mk_int
     preconditioners::Tprecon
 end
@@ -83,7 +83,7 @@ for example a preconditioner object for each point in that outer loop.
 """
 function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); default_rtol=1.0e-5,
                                default_atol=1.0e-12, serial_solve=false,
-                               electron_ppar_pdf_solve=false, preconditioner_type="none")
+                               electron_ppar_pdf_solve=false, preconditioner_type=Val(:none))
     nl_solver_section = set_defaults_and_check_section!(
         input_dict, "nonlinear_solver";
         rtol=default_rtol,
@@ -157,12 +157,12 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
         end
     end
 
-    if preconditioner_type == "lu"
+    if preconditioner_type === Val(:lu)
         # Create dummy LU solver objects so we can create an array for preconditioners.
         # These will be calculated properly within the time loop.
         preconditioners = fill(lu(sparse(1.0*I, total_size_coords, total_size_coords)),
                                reverse(outer_coord_sizes))
-    elseif preconditioner_type == "electron_split_lu"
+    elseif preconditioner_type === Val(:electron_split_lu)
         preconditioners = (z=fill(lu(sparse(1.0*I, coords.z.n, coords.z.n)),
                                   tuple(coords.vpa.n, reverse(outer_coord_sizes)...)),
                            vpa=fill(lu(sparse(1.0*I, coords.vpa.n, coords.vpa.n)),
@@ -170,7 +170,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                            ppar=fill(lu(sparse(1.0*I, coords.z.n, coords.z.n)),
                                      reverse(outer_coord_sizes)),
                           )
-    elseif preconditioner_type == "electron_lu"
+    elseif preconditioner_type === Val(:electron_lu)
         pdf_plus_ppar_size = total_size_coords + coords.z.n
         preconditioners = fill((lu(sparse(1.0*I, 1, 1)),
                                 allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size),
@@ -178,7 +178,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                                 allocate_shared_float(pdf_plus_ppar_size),
                                ),
                                reverse(outer_coord_sizes))
-    elseif preconditioner_type == "none"
+    elseif preconditioner_type === Val(:none)
         preconditioners = nothing
     else
         error("Unrecognised preconditioner_type=$preconditioner_type")
