@@ -7,6 +7,21 @@ module moment_kinetics_structs
 using ..communication
 using ..type_definitions: mk_float
 
+export ndim_pdf_ion, ndim_pdf_neutral, ndim_pdf_electron
+export ndim_field, ndim_moment, ndim_moment_electron
+export ndim_v, ndim_v_neutral
+
+# variables to define the number of dimensions in arrays
+const ndim_pdf_ion = 5 #(vpa + vperp + z + r + s)
+const ndim_pdf_neutral = 6 #(vz + vr + vzeta + z + r + s)
+const ndim_pdf_electron = 4 #(vpa + vperp + z + r)
+const ndim_field = 2 #(z + r)
+const ndim_moment = 3 #(z + r + s)
+const ndim_moment_electron = 2 #(z + r)
+const ndim_v = 2 #(vpa + vperp)
+const ndim_v_neutral = 3 #(vz + vr + vzeta)
+
+
 """
 """
 struct scratch_pdf{ndim_distribution_ion, ndim_moment, ndim_moment_electron,
@@ -334,11 +349,11 @@ end
 """
 struct pdf_struct
     #ion particles: s + r + z + vperp + vpa
-    ion::pdf_substruct{5}
+    ion::pdf_substruct{ndim_pdf_ion}
     # electron particles: r + z + vperp + vpa
-    electron::Union{electron_pdf_substruct{4},Nothing}
+    electron::Union{electron_pdf_substruct{ndim_pdf_electron},Nothing}
     #neutral particles: s + r + z + vzeta + vr + vz
-    neutral::pdf_substruct{6}
+    neutral::pdf_substruct{ndim_pdf_neutral}
 end
 
 """
@@ -365,11 +380,11 @@ end
 """
 struct boundary_distributions_struct
     # knudsen cosine distribution for imposing the neutral wall boundary condition
-    knudsen::MPISharedArray{mk_float,3}
+    knudsen::MPISharedArray{mk_float,ndim_v_neutral}
     # ion particle r boundary values (vpa,vperp,z,r,s)
-    pdf_rboundary_ion::MPISharedArray{mk_float,5}
+    pdf_rboundary_ion::MPISharedArray{mk_float,ndim_pdf_ion}
     # neutral particle r boundary values (vz,vr,vzeta,z,r,s)
-    pdf_rboundary_neutral::MPISharedArray{mk_float,6}
+    pdf_rboundary_neutral::MPISharedArray{mk_float,ndim_pdf_neutral}
 end
 
 """
