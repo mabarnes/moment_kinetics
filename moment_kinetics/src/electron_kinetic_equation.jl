@@ -2852,12 +2852,25 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
 
     z_speed = @view z_advect[1].speed[:,:,:,ir]
 
+    dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
+    begin_z_vperp_region()
+    update_electron_speed_vpa!(vpa_advect[1], dens, upar, ppar, moments, vpa.grid,
+                               external_source_settings.electron, ir)
+    @loop_z_vperp iz ivperp begin
+        @views @. vpa_advect[1].adv_fac[:,ivperp,iz,ir] = -vpa_advect[1].speed[:,ivperp,iz,ir]
+    end
+    #calculate the upwind derivative of the electron pdf w.r.t. wpa
+    @loop_z_vperp iz ivperp begin
+        @views derivative!(dpdf_dvpa[:,ivperp,iz], f[:,ivperp,iz], vpa,
+                           vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+    end
+
     add_electron_z_advection_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, me, z, vperp, vpa, z_spectral,
         z_advect, scratch_dummy, dt, ir; ppar_offset=pdf_size)
     add_electron_vpa_advection_to_Jacobian!(
-        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
-        dthird_moment_dz, moments, me, z, vperp, vpa, z_spectral, vpa_spectral,
+        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, dpdf_dvpa, ddens_dz,
+        dppar_dz, dthird_moment_dz, moments, me, z, vperp, vpa, z_spectral, vpa_spectral,
         vpa_advect, z_speed, scratch_dummy, external_source_settings, dt, ir;
         ppar_offset=pdf_size)
     add_contribution_from_electron_pdf_term_to_Jacobian!(
