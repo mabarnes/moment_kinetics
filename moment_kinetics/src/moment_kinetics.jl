@@ -101,7 +101,7 @@ using .looping: debug_setup_loop_ranges_split_one_combination!
 using .moment_kinetics_input: mk_input, read_input_file
 using .time_advance: setup_time_advance!, time_advance!
 using .timer_utils
-using .type_definitions: mk_int, OptionsDict
+using .type_definitions: mk_float, mk_int, OptionsDict
 using .utils: to_minutes, get_default_restart_filename,
               get_prefix_iblock_and_move_existing_file
 using .em_fields: setup_em_fields
@@ -327,7 +327,7 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
 
     # Broadcast code_time from the root process of each shared-memory block (on which it
     # might have been loaded from a restart file).
-    code_time = MPI.Bcast(code_time, 0, comm_block[])
+    code_time = MPI.Bcast(code_time, 0, comm_block[])::mk_float
 
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
