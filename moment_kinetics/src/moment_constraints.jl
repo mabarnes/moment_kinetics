@@ -288,6 +288,9 @@ function add_electron_implicit_constraint_forcing_to_Jacobian!(jacobian_matrix, 
                                                                z_speed, z, vperp, vpa,
                                                                constraint_forcing_rate,
                                                                dt, ir; f_offset=0)
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
+
     vpa_grid = vpa.grid
     vpa_wgts = vpa.wgts
     v_size = vperp.n * vpa.n
