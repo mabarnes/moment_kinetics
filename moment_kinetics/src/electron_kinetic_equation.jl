@@ -665,7 +665,9 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
 
     reduced_by_ion_dt = false
     if ion_dt !== nothing
-        evolve_ppar = true
+        if !evolve_ppar
+            error("evolve_ppar must be `true` when `ion_dt` is passed. ion_dt=$ion_dt")
+        end
 
         # Use forward-Euler step (with `ion_dt` as the timestep) as initial guess for
         # updated electron_ppar
@@ -742,7 +744,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                  t_params.moments_output_counter[], r, z, vperp, vpa)
         end
     end
-    electron_pdf_converged = false
+    electron_pdf_converged = Ref(false)
     # No paralleism in r for now - will need to add a specially adapted shared-memory
     # parallelism scheme to allow it for 2D1V or 2D2V simulations.
     for ir ∈ 1:r.n
@@ -753,11 +755,11 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
         buffer_4 = @view scratch_dummy.buffer_rs_4[ir,1]
 
         # initialise the electron pdf convergence flag to false
-        electron_pdf_converged = false
+        electron_pdf_converged[] = false
 
         first_step = true
         # evolve (artificially) in time until the residual is less than the tolerance
-        while (!electron_pdf_converged
+        while (!electron_pdf_converged[]
                && ((max_electron_pdf_iterations !== nothing && t_params.step_counter[] - initial_step_counter < max_electron_pdf_iterations)
                    || (max_electron_sim_time !== nothing && t_params.t[] - initial_time < max_electron_sim_time))
                && t_params.dt[] > 0.0 && !isnan(t_params.dt[]))
@@ -922,33 +924,33 @@ global_rank[] == 0 && println("recalculating precon")
                 function lu_precon!(x)
                     precon_ppar, precon_f = x
 
-                    precon_lu, _, input_buffer, output_buffer =
+                    precon_lu, _, this_input_buffer, this_output_buffer =
                         nl_solver_params.preconditioners[ir]
 
                     begin_serial_region()
                     counter = 1
                     @loop_z_vperp_vpa iz ivperp ivpa begin
-                        input_buffer[counter] = precon_f[ivpa,ivperp,iz]
+                        this_input_buffer[counter] = precon_f[ivpa,ivperp,iz]
                         counter += 1
                     end
                     @loop_z iz begin
-                        input_buffer[counter] = precon_ppar[iz]
+                        this_input_buffer[counter] = precon_ppar[iz]
                         counter += 1
                     end
 
                     begin_serial_region()
                     @serial_region begin
-                        @timeit_debug global_timer "ldiv!" ldiv!(output_buffer, precon_lu, input_buffer)
+                        @timeit_debug global_timer "ldiv!" ldiv!(this_output_buffer, precon_lu, this_input_buffer)
                     end
 
                     begin_serial_region()
                     counter = 1
                     @loop_z_vperp_vpa iz ivperp ivpa begin
-                        precon_f[ivpa,ivperp,iz] = output_buffer[counter]
+                        precon_f[ivpa,ivperp,iz] = this_output_buffer[counter]
                         counter += 1
                     end
                     @loop_z iz begin
-                        precon_ppar[iz] = output_buffer[counter]
+                        precon_ppar[iz] = this_output_buffer[counter]
                         counter += 1
                     end
 
@@ -1003,8 +1005,8 @@ global_rank[] == 0 && println("recalculating precon")
 
             # Do a backward-Euler update of the electron pdf, and (if evove_ppar=true) the
             # electron parallel pressure.
-            function residual_func!(residual, new_variables)
-                electron_ppar_residual, f_electron_residual = residual
+            function residual_func!(this_residual, new_variables)
+                electron_ppar_residual, f_electron_residual = this_residual
                 electron_ppar_newvar, f_electron_newvar = new_variables
 
                 # enforce the boundary condition(s) on the electron pdf
@@ -1259,48 +1261,53 @@ global_rank[] == 0 && println("recalculating precon")
                                      buffer_3, buffer_4, z_spectral, z)
             end
 
-            residual = -1.0
+            residual_norm = -1.0
             if newton_success
                 # Calculate residuals to decide if iteration is converged.
-                # Might want an option to calculate the residual only after a certain number
-                # of iterations (especially during initialization when there are likely to be
-                # a large number of iterations required) to avoid the expense, and especially
-                # the global MPI.Bcast()?
+                # Might want an option to calculate the r_normesidual only after a certain
+                # number of iterations (especially during initialization when there are
+                # likely to be a large number of iterations required) to avoid the
+                # expense, and especially the global MPI.Bcast()?
                 begin_z_vperp_vpa_region()
-                residual = steady_state_residuals(new_scratch.pdf_electron,
-                                                  old_scratch.pdf_electron,
-                                                  t_params.dt[]; use_mpi=true,
-                                                  only_max_abs=true)
                 if global_rank[] == 0
-                    residual = first(values(residual))[1]
+                    ss_residual_norms = steady_state_residuals(new_scratch.pdf_electron,
+                                                               old_scratch.pdf_electron,
+                                                               t_params.dt[]; use_mpi=true,
+                                                               only_max_abs=true)
+                    residual_norm = first(values(ss_residual_norms))[1]::mk_float
+                else
+                    ss_residual_norms = steady_state_residuals(new_scratch.pdf_electron,
+                                                               old_scratch.pdf_electron,
+                                                               t_params.dt[]; use_mpi=true,
+                                                               only_max_abs=true)
                 end
                 if evolve_ppar
-                    ppar_residual =
+                    ss_ppar_residual_norms =
                         steady_state_residuals(new_scratch.electron_ppar,
                                                old_scratch.electron_ppar,
                                                t_params.dt[]; use_mpi=true,
                                                only_max_abs=true)
                     if global_rank[] == 0
-                        ppar_residual = first(values(ppar_residual))[1]
-                        residual = max(residual, ppar_residual)
+                        ppar_residual = first(values(ss_ppar_residual_norms))[1]::mk_float
+                        residual_norm = max(residual_norm, ppar_residual)
                     end
                 end
                 if global_rank[] == 0
                     if residual_tolerance === nothing
                         residual_tolerance = t_params.converged_residual_value
                     end
-                    electron_pdf_converged = abs(residual) < residual_tolerance
+                    electron_pdf_converged[] = abs(residual_norm) < residual_tolerance
                 end
-                @timeit_debug global_timer "MPI.Bcast comm_world" electron_pdf_converged = MPI.Bcast(electron_pdf_converged, 0, comm_world)
+                @timeit_debug global_timer "MPI.Bcast! comm_world" MPI.Bcast!(electron_pdf_converged, 0, comm_world)
             end
 
             if (mod(t_params.step_counter[] - initial_step_counter,100) == 0)
                 begin_serial_region()
                 @serial_region begin
                     if z.irank == 0 && z.irank == z.nrank - 1
-                        println("iteration: ", t_params.step_counter[] - initial_step_counter, " time: ", t_params.t[], " dt_electron: ", t_params.dt[], " phi_boundary: ", phi[[1,end],1], " residual: ", residual)
+                        println("iteration: ", t_params.step_counter[] - initial_step_counter, " time: ", t_params.t[], " dt_electron: ", t_params.dt[], " phi_boundary: ", phi[[1,end],1], " residual_norm: ", residual_norm)
                     elseif z.irank == 0
-                        println("iteration: ", t_params.step_counter[] - initial_step_counter, " time: ", t_params.t[], " dt_electron: ", t_params.dt[], " phi_boundary_lower: ", phi[1,1], " residual: ", residual)
+                        println("iteration: ", t_params.step_counter[] - initial_step_counter, " time: ", t_params.t[], " dt_electron: ", t_params.dt[], " phi_boundary_lower: ", phi[1,1], " residual_norm: ", residual_norm)
                     end
                 end
             end
@@ -1327,11 +1334,11 @@ global_rank[] == 0 && println("recalculating precon")
             reset_nonlinear_per_stage_counters!(nl_solver_params)
 
             t_params.step_counter[] += 1
-            if electron_pdf_converged
+            if electron_pdf_converged[]
                 break
             end
         end
-        if !electron_pdf_converged
+        if !electron_pdf_converged[]
             # If electron solve failed to converge for some `ir`, the failure will be
             # handled by restarting the ion timestep with a smaller dt, so no need to try
             # to solve for further `ir` values.
@@ -1355,7 +1362,7 @@ global_rank[] == 0 && println("recalculating precon")
     end
     begin_serial_region()
     @serial_region begin
-        if !electron_pdf_converged || do_debug_io
+        if !electron_pdf_converged[] || do_debug_io
             if io_electron !== nothing && io_electron !== true
                 t_params.moments_output_counter[] += 1
                 write_electron_state(scratch, moments, t_params, io_electron,
@@ -1390,7 +1397,7 @@ global_rank[] == 0 && println("recalculating precon")
         # Reset dt in case it was reduced to be less than 0.5*ion_dt
         t_params.dt[] = t_params.previous_dt[]
     end
-    if !electron_pdf_converged
+    if !electron_pdf_converged[]
         success = "kinetic-electrons"
     else
         success = ""
