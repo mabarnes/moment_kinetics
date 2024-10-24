@@ -3529,7 +3529,8 @@ end
                                                 external_source_settings, num_diss_params,
                                                 nl_solver_params.electron_advance,
                                                 max_electron_pdf_iterations,
-                                                max_electron_sim_time; ion_dt=dt)
+                                                max_electron_sim_time; evolve_ppar=true,
+                                                ion_dt=dt)
 
         # Update `fvec_out.electron_ppar` with the new electron pressure
         begin_r_z_region()
