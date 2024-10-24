@@ -254,9 +254,9 @@ function run_test()
             println("data tested would be: vthe=", vthe)
             @test false
         else
-            println("expected = ", expected_vth)
-            println("vth = ", vth)
-            println("extrema = ", extrema(vth .- expected_vth))
+            println("expected = ", expected_vthe)
+            println("vthe = ", vthe)
+            println("extrema = ", extrema(vthe .- expected_vthe))
             @test isapprox(vthe, expected_vthe, rtol=1.0e-6, atol=0.0)
         end
 
