@@ -1031,9 +1031,9 @@ function add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments, 
         error("Got f_offset=$f_offset the same as ppar_offset=$ppar_offset. f and ppar "
               * "cannot be in same place in state vector.")
     end
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2)
-    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n
-    @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
+    @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n || error("ppar_offset=$ppar_offset is too big")
 
     if !electron_source.active
         return nothing

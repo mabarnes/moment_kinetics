@@ -3257,8 +3257,8 @@ end
 function add_electron_dissipation_term_to_Jacobian!(jacobian_matrix, f, num_diss_params,
                                                     z, vperp, vpa, vpa_spectral, z_speed,
                                                     dt, ir; f_offset=0)
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2)
-    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
 
     vpa_dissipation_coefficient = num_diss_params.electron.vpa_dissipation_coefficient
 
@@ -3537,9 +3537,9 @@ function add_contribution_from_electron_pdf_term_to_Jacobian!(
         error("Got f_offset=$f_offset the same as ppar_offset=$ppar_offset. f and ppar "
               * "cannot be in same place in state vector.")
     end
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2)
-    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n
-    @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
+    @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n || error("ppar_offset=$ppar_offset is too big")
 
     source_density_amplitude = moments.electron.external_source_density_amplitude
     source_momentum_amplitude = moments.electron.external_source_momentum_amplitude
@@ -3641,8 +3641,8 @@ end
 
 function add_ion_dt_forcing_of_electron_ppar_to_Jacobian!(jacobian_matrix, z, dt, ion_dt,
                                                           ir; ppar_offset=0)
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2)
-    @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n || error("ppar_offset=$ppar_offset is too big")
 
     begin_z_region()
     @loop_z iz begin
