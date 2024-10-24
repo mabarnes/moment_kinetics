@@ -1012,12 +1012,12 @@ Note that this function operates on a single point in `r`, given by `ir`, and `p
 end
 
 function add_total_external_electron_source_to_Jacobian!(
-        jacobian_matrix, f, moments, me, z_speed, electron_sources, z, vperp, vpa, dt, ir;
-        f_offset=0, ppar_offset=0)
+        jacobian_matrix, f, moments, me, z_speed, electron_sources, z, vperp, vpa, dt, ir,
+        include=:all; f_offset=0, ppar_offset=0)
     for index ∈ eachindex(electron_sources)
         add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments, me,
                                                   z_speed, electron_sources[index], index,
-                                                  z, vperp, vpa, dt, ir;
+                                                  z, vperp, vpa, dt, ir, include;
                                                   f_offset=f_offset,
                                                   ppar_offset=ppar_offset)
     end
@@ -1025,8 +1025,8 @@ end
 
 function add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments, me,
                                                    z_speed, electron_source, index, z,
-                                                   vperp, vpa, dt, ir; f_offset=0,
-                                                   ppar_offset=0)
+                                                   vperp, vpa, dt, ir, include=:all;
+                                                   f_offset=0, ppar_offset=0)
     if f_offset == ppar_offset
         error("Got f_offset=$f_offset the same as ppar_offset=$ppar_offset. f and ppar "
               * "cannot be in same place in state vector.")
@@ -1034,6 +1034,7 @@ function add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments, 
     @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
     @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
     @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n || error("ppar_offset=$ppar_offset is too big")
+    @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
     if !electron_source.active
         return nothing
@@ -1055,7 +1056,7 @@ function add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments, 
     v_size = vperp.n * vpa.n
 
     begin_z_vperp_vpa_region()
-    if electron_source.source_type == "energy"
+    if electron_source.source_type == "energy" && include === :all
         @loop_z_vperp_vpa iz ivperp ivpa begin
             if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa,
                                                      z_speed)
@@ -1069,26 +1070,136 @@ function add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments, 
             jacobian_matrix[row,row] += dt * source_amplitude[iz]
         end
     end
-    @loop_z_vperp_vpa iz ivperp ivpa begin
+    if include ∈ (:all, :explicit_v)
+        @loop_z_vperp_vpa iz ivperp ivpa begin
+            if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
+                continue
+            end
+
+            # Rows corresponding to pdf_electron
+            row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa + f_offset
+
+            # Contributions from
+            #   -vth/n*vth_factor*source_amplitude*exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T)
+            # Using
+            #   d(vth[irowz])/d(ppar[icolz]) = 1/2*vth/ppar * delta(irowz,icolz)
+            #
+            #   d(exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T)[irowz])/d(ppar[icolz])
+            #     = -2*(w_⟂^2+(w_∥*vth+u)*w_∥)*me/source_T * 1/2*vth/ppar * exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T) * delta(irowz,icolz)
+            #     = -(w_⟂^2+(w_∥*vth+u)*w_∥)*me/source_T * vth/ppar * exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T) * delta(irowz,icolz)
+            jacobian_matrix[row,ppar_offset+iz] +=
+                -dt * vth[iz] / dens[iz] * vth_factor * source_amplitude[iz] *
+                      (0.5/ppar[iz] - (vperp_grid[ivperp]^2 + (vpa_grid[ivpa]*vth[iz] + upar[iz])*vpa_grid[ivpa])*me/source_T*vth[iz]/ppar[iz]) *
+                      exp(-((vperp_grid[ivperp]*vth[iz])^2 + (vpa_grid[ivpa]*vth[iz] + upar[iz])^2) * me / source_T)
+        end
+    end
+
+    return nothing
+end
+
+function add_total_external_electron_source_to_z_only_Jacobian!(
+        jacobian_matrix, f, moments, me, z_speed, electron_sources, z, vperp, vpa, dt, ir,
+        ivperp, ivpa)
+    for index ∈ eachindex(electron_sources)
+        add_external_electron_source_to_z_only_Jacobian!(
+            jacobian_matrix, f, moments, me, z_speed, electron_sources[index], index, z,
+            vperp, vpa, dt, ir, ivperp, ivpa)
+    end
+end
+
+function add_external_electron_source_to_z_only_Jacobian!(
+        jacobian_matrix, f, moments, me, z_speed, electron_source, index, z, vperp, vpa,
+        dt, ir, ivperp, ivpa)
+
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
+
+    if !electron_source.active
+        return nothing
+    end
+
+    if electron_source.source_type == "energy"
+        source_amplitude = @view moments.electron.external_source_amplitude[:,ir,index]
+
+        @loop_z iz begin
+            if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa,
+                                                     z_speed)
+                continue
+            end
+
+            # Rows corresponding to pdf_electron
+            row = iz
+
+            # Contribution from `external_electron_source!()`
+            jacobian_matrix[row,row] += dt * source_amplitude[iz]
+        end
+    end
+
+    return nothing
+end
+
+function add_total_external_electron_source_to_v_only_Jacobian!(
+        jacobian_matrix, f, moments, me, z_speed, electron_sources, z, vperp, vpa, dt, ir,
+        iz)
+    for index ∈ eachindex(electron_sources)
+        add_external_electron_source_to_v_only_Jacobian!(
+            jacobian_matrix, f, moments, me, z_speed, electron_sources[index], index, z,
+            vperp, vpa, dt, ir, iz)
+    end
+end
+
+function add_external_electron_source_to_v_only_Jacobian!(
+        jacobian_matrix, f, moments, me, z_speed, electron_source, index, z, vperp, vpa,
+        dt, ir, iz)
+
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
+
+    if !electron_source.active
+        return nothing
+    end
+
+    source_amplitude = moments.electron.external_source_amplitude[iz,ir,index]
+    source_T = electron_source.source_T
+    dens = moments.electron.dens[iz,ir]
+    upar = moments.electron.upar[iz,ir]
+    ppar = moments.electron.ppar[iz,ir]
+    vth = moments.electron.vth[iz,ir]
+    if vperp.n == 1
+        vth_factor = 1.0 / sqrt(source_T / me)
+    else
+        vth_factor = 1.0 / sqrt(source_T / me)^1.5
+    end
+    vperp_grid = vperp.grid
+    vpa_grid = vpa.grid
+    v_size = vperp.n * vpa.n
+
+    if electron_source.source_type == "energy"
+        @loop_vperp_vpa ivperp ivpa begin
+            if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa,
+                                                     z_speed)
+                continue
+            end
+
+            # Rows corresponding to pdf_electron
+            row = (ivperp - 1) * vpa.n + ivpa
+
+            # Contribution from `external_electron_source!()`
+            jacobian_matrix[row,row] += dt * source_amplitude
+        end
+    end
+    @loop_vperp_vpa ivperp ivpa begin
         if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
             continue
         end
 
         # Rows corresponding to pdf_electron
-        row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa + f_offset
+        row = (ivperp - 1) * vpa.n + ivpa
 
-        # Contributions from
-        #   -vth/n*vth_factor*source_amplitude*exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T)
-        # Using
-        #   d(vth[irowz])/d(ppar[icolz]) = 1/2*vth/ppar * delta(irowz,icolz)
-        #
-        #   d(exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T)[irowz])/d(ppar[icolz])
-        #     = -2*(w_⟂^2+(w_∥*vth+u)*w_∥)*me/source_T * 1/2*vth/ppar * exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T) * delta(irowz,icolz)
-        #     = -(w_⟂^2+(w_∥*vth+u)*w_∥)*me/source_T * vth/ppar * exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T) * delta(irowz,icolz)
-        jacobian_matrix[row,ppar_offset+iz] +=
-            -dt * vth[iz] / dens[iz] * vth_factor * source_amplitude[iz] *
-                  (0.5/ppar[iz] - (vperp_grid[ivperp]^2 + (vpa_grid[ivpa]*vth[iz] + upar[iz])*vpa_grid[ivpa])*me/source_T*vth[iz]/ppar[iz]) *
-                  exp(-((vperp_grid[ivperp]*vth[iz])^2 + (vpa_grid[ivpa]*vth[iz] + upar[iz])^2) * me / source_T)
+        jacobian_matrix[row,end] +=
+            -dt * vth / dens * vth_factor * source_amplitude *
+                  (0.5/ppar - (vperp_grid[ivperp]^2 + (vpa_grid[ivpa]*vth + upar)*vpa_grid[ivpa])*me/source_T*vth/ppar) *
+                  exp(-((vperp_grid[ivperp]*vth)^2 + (vpa_grid[ivpa]*vth + upar)^2) * me / source_T)
     end
 
     return nothing

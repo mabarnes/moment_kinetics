@@ -29,23 +29,34 @@ using ..electron_fluid_equations: calculate_electron_moments!,
 using ..electron_fluid_equations: electron_energy_equation!,
                                   electron_energy_equation_no_r!,
                                   add_electron_energy_equation_to_Jacobian!,
+                                  add_electron_energy_equation_to_v_only_Jacobian!,
+                                  add_electron_energy_equation_to_z_only_Jacobian!,
                                   electron_energy_residual!
 using ..electron_z_advection: electron_z_advection!, update_electron_speed_z!,
-                              add_electron_z_advection_to_Jacobian!
+                              add_electron_z_advection_to_Jacobian!,
+                              add_electron_z_advection_to_v_only_Jacobian!,
+                              add_electron_z_advection_to_z_only_Jacobian!
 using ..electron_vpa_advection: electron_vpa_advection!, update_electron_speed_vpa!,
-                                add_electron_vpa_advection_to_Jacobian!
+                                add_electron_vpa_advection_to_Jacobian!,
+                                add_electron_vpa_advection_to_v_only_Jacobian!
 using ..em_fields: update_phi!
 using ..external_sources: total_external_electron_sources!,
-                          add_total_external_electron_source_to_Jacobian!
+                          add_total_external_electron_source_to_Jacobian!,
+                          add_total_external_electron_source_to_v_only_Jacobian!,
+                          add_total_external_electron_source_to_z_only_Jacobian!
 using ..file_io: get_electron_io_info, write_electron_state, finish_electron_io
 using ..krook_collisions: electron_krook_collisions!, get_collision_frequency_ee,
                           get_collision_frequency_ei,
-                          add_electron_krook_collisions_to_Jacobian!
+                          add_electron_krook_collisions_to_Jacobian!,
+                          add_electron_krook_collisions_to_v_only_Jacobian!,
+                          add_electron_krook_collisions_to_z_only_Jacobian!
 using ..timer_utils
 using ..moment_constraints: hard_force_moment_constraints!,
                             moment_constraints_on_residual!,
                             electron_implicit_constraint_forcing!,
-                            add_electron_implicit_constraint_forcing_to_Jacobian!
+                            add_electron_implicit_constraint_forcing_to_Jacobian!,
+                            add_electron_implicit_constraint_forcing_to_v_only_Jacobian!,
+                            add_electron_implicit_constraint_forcing_to_z_only_Jacobian!
 using ..moment_kinetics_structs: scratch_pdf, scratch_electron_pdf, electron_pdf_substruct
 using ..nonlinear_solvers
 using ..runge_kutta: rk_update_variable!, rk_loworder_solution!, local_error_norm,
@@ -2788,7 +2799,7 @@ end
                                              vpa_spectral, z_advect, vpa_advect,
                                              scratch_dummy, external_source_settings,
                                              num_diss_params, t_params, ion_dt,
-                                             ir, evolve_ppar)
+                                             ir, evolve_ppar, include=:all)
 
 Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equation and (if
 `evolve_ppar=true`) the electron energy equation.
@@ -2797,7 +2808,8 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
                          jacobian_matrix, f, ppar, moments, collisions, composition, z,
                          vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
                          vpa_advect, scratch_dummy, external_source_settings,
-                         num_diss_params, t_params, ion_dt, ir, evolve_ppar) = begin
+                         num_diss_params, t_params, ion_dt, ir, evolve_ppar,
+                         include=:all) = begin
     dt = t_params.dt[]
 
     buffer_1 = @view scratch_dummy.buffer_rs_1[ir,1]
@@ -2836,10 +2848,11 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
     @loop_z_vperp_vpa iz ivperp ivpa begin
         # Rows corresponding to pdf_electron
         row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa
-        v_remainder = (ivperp - 1) * vpa.n + ivpa
 
         jacobian_matrix[row,:] .= 0.0
-        jacobian_matrix[row,row] += 1.0
+        if include === :all
+            jacobian_matrix[row,row] += 1.0
+        end
     end
     begin_z_region()
     @loop_z iz begin
@@ -2847,44 +2860,286 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
         row = pdf_size + iz
 
         jacobian_matrix[row,:] .= 0.0
-        jacobian_matrix[row,row] += 1.0
+        if include === :all
+            jacobian_matrix[row,row] += 1.0
+        end
     end
 
     z_speed = @view z_advect[1].speed[:,:,:,ir]
 
+    if include ∈ (:all, :explicit_v)
+        dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
+        begin_vperp_vpa_region()
+        update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
+        @loop_vperp_vpa ivperp ivpa begin
+            @views z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_speed[:,ivpa,ivperp]
+        end
+        #calculate the upwind derivative
+        @views derivative_z_pdf_vpavperpz!(dpdf_dz, f, z_advect[1].adv_fac[:,:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_1[:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_2[:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_3[:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_4[:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_5[:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_6[:,:,ir],
+                                           z_spectral, z)
+    else
+        dpdf_dz = nothing
+    end
+
+    dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
+    begin_z_vperp_region()
+    update_electron_speed_vpa!(vpa_advect[1], dens, upar, ppar, moments, vpa.grid,
+                               external_source_settings.electron, ir)
+    @loop_z_vperp iz ivperp begin
+        @views @. vpa_advect[1].adv_fac[:,ivperp,iz,ir] = -vpa_advect[1].speed[:,ivperp,iz,ir]
+    end
+    #calculate the upwind derivative of the electron pdf w.r.t. wpa
+    @loop_z_vperp iz ivperp begin
+        @views derivative!(dpdf_dvpa[:,ivperp,iz], f[:,ivperp,iz], vpa,
+                           vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+    end
+
+    zeroth_moment = z.scratch_shared
+    first_moment = z.scratch_shared2
+    second_moment = z.scratch_shared3
+    begin_z_region()
+    vpa_grid = vpa.grid
+    vpa_wgts = vpa.wgts
+    @loop_z iz begin
+        @views zeroth_moment[iz] = integrate_over_vspace(f[:,1,iz], vpa_wgts)
+        @views first_moment[iz] = integrate_over_vspace(f[:,1,iz], vpa_grid, vpa_wgts)
+        @views second_moment[iz] = integrate_over_vspace(f[:,1,iz], vpa_grid, 2, vpa_wgts)
+    end
+
     add_electron_z_advection_to_Jacobian!(
-        jacobian_matrix, f, dens, upar, ppar, vth, me, z, vperp, vpa, z_spectral,
-        z_advect, scratch_dummy, dt, ir; ppar_offset=pdf_size)
+        jacobian_matrix, f, dens, upar, ppar, vth, dpdf_dz, me, z, vperp, vpa, z_spectral,
+        z_advect, z_speed, scratch_dummy, dt, ir, include; ppar_offset=pdf_size)
     add_electron_vpa_advection_to_Jacobian!(
-        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
-        dthird_moment_dz, moments, me, z, vperp, vpa, z_spectral, vpa_spectral,
-        vpa_advect, z_speed, scratch_dummy, external_source_settings, dt, ir;
+        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, dpdf_dvpa, ddens_dz,
+        dppar_dz, dthird_moment_dz, moments, me, z, vperp, vpa, z_spectral, vpa_spectral,
+        vpa_advect, z_speed, scratch_dummy, external_source_settings, dt, ir, include;
         ppar_offset=pdf_size)
     add_contribution_from_electron_pdf_term_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
         dvth_dz, dqpar_dz, dthird_moment_dz, moments, me, external_source_settings, z,
-        vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir; ppar_offset=pdf_size)
+        vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir, include;
+        ppar_offset=pdf_size)
     add_electron_dissipation_term_to_Jacobian!(
-        jacobian_matrix, f, num_diss_params, z, vperp, vpa, vpa_spectral, z_speed, dt, ir)
+        jacobian_matrix, f, num_diss_params, z, vperp, vpa, vpa_spectral, z_speed, dt, ir,
+        include)
     add_electron_krook_collisions_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, upar_ion, collisions, z, vperp, vpa,
-        z_speed, dt, ir; ppar_offset=pdf_size)
+        z_speed, dt, ir, include; ppar_offset=pdf_size)
     add_total_external_electron_source_to_Jacobian!(
         jacobian_matrix, f, moments, me, z_speed, external_source_settings.electron, z,
-        vperp, vpa, dt, ir; ppar_offset=pdf_size)
+        vperp, vpa, dt, ir, include; ppar_offset=pdf_size)
     add_electron_implicit_constraint_forcing_to_Jacobian!(
-        jacobian_matrix, f, z_speed, z, vperp, vpa, t_params.constraint_forcing_rate, dt,
-        ir)
+        jacobian_matrix, f, zeroth_moment, first_moment, second_moment, z_speed, z, vperp,
+        vpa, t_params.constraint_forcing_rate, dt, ir, include)
     # Always add the electron energy equation term, even if evolve_ppar=false, so that the
     # Jacobian matrix always has the same shape, meaning that we can always reuse the LU
     # factorization struct.
     add_electron_energy_equation_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dupar_dz,
         dppar_dz, dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
-        num_diss_params, dt, ir; ppar_offset=pdf_size)
+        num_diss_params, dt, ir, include; ppar_offset=pdf_size)
     if ion_dt !== nothing
         add_ion_dt_forcing_of_electron_ppar_to_Jacobian!(
-            jacobian_matrix, z, dt, ion_dt, ir; ppar_offset=pdf_size)
+            jacobian_matrix, z, dt, ion_dt, ir, include; ppar_offset=pdf_size)
+    end
+
+    return nothing
+end
+
+"""
+    fill_electron_kinetic_equation_v_only_Jacobian!(jacobian_matrix, f, ppar, moments,
+                                                    collisions, composition, z, vperp,
+                                                    vpa, z_spectral, vperp_specral,
+                                                    vpa_spectral, z_advect, vpa_advect,
+                                                    scratch_dummy,
+                                                    external_source_settings,
+                                                    num_diss_params, t_params, ion_dt, ir,
+                                                    iz, evolve_ppar, include=:all)
+
+Fill a pre-allocated matrix with the Jacobian matrix for a velocity-space solve part of
+the ADI method for electron kinetic equation and (if `evolve_ppar=true`) the electron
+energy equation.
+"""
+@timeit global_timer fill_electron_kinetic_equation_v_only_Jacobian!(
+                         jacobian_matrix, f, ppar, dpdf_dz, dpdf_dvpa, z_speed, moments,
+                         zeroth_moment, first_moment, second_moment, third_moment,
+                         dthird_moment_dz, collisions, composition, z, vperp, vpa,
+                         z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
+                         scratch_dummy, external_source_settings, num_diss_params,
+                         t_params, ion_dt, ir, iz, evolve_ppar) = begin
+    dt = t_params.dt[]
+
+    vth = moments.electron.vth[iz,ir]
+    me = composition.me_over_mi
+    dens = moments.electron.dens[iz,ir]
+    upar = moments.electron.upar[iz,ir]
+    qpar = moments.electron.qpar[iz,ir]
+    ddens_dz = moments.electron.ddens_dz[iz,ir]
+    dupar_dz = moments.electron.dupar_dz[iz,ir]
+    dppar_dz = moments.electron.dppar_dz[iz,ir]
+    dvth_dz = moments.electron.dvth_dz[iz,ir]
+    dqpar_dz = moments.electron.dqpar_dz[iz,ir]
+
+    upar_ion = moments.ion.upar[iz,ir,1]
+
+    pdf_size = z.n * vperp.n * vpa.n
+    v_size = vperp.n * vpa.n
+
+    # Initialise jacobian_matrix to the identity
+    for row ∈ 1:size(jacobian_matrix, 1)
+        jacobian_matrix[row,:] .= 0.0
+        jacobian_matrix[row,row] += 1.0
+    end
+
+    add_electron_z_advection_to_v_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, dpdf_dz, me, z, vperp, vpa, z_spectral,
+        z_advect, z_speed, scratch_dummy, dt, ir, iz)
+    add_electron_vpa_advection_to_v_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, dpdf_dvpa, ddens_dz,
+        dppar_dz, dthird_moment_dz, moments, me, z, vperp, vpa, z_spectral, vpa_spectral,
+        vpa_advect, z_speed, scratch_dummy, external_source_settings, dt, ir, iz)
+    add_contribution_from_electron_pdf_term_to_v_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
+        dvth_dz, dqpar_dz, dthird_moment_dz, moments, me, external_source_settings, z,
+        vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir, iz)
+    add_electron_dissipation_term_to_v_only_Jacobian!(
+        jacobian_matrix, f, num_diss_params, z, vperp, vpa, vpa_spectral, z_speed, dt, ir,
+        iz)
+    add_electron_krook_collisions_to_v_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, upar_ion, collisions, z, vperp, vpa,
+        z_speed, dt, ir, iz)
+    add_total_external_electron_source_to_v_only_Jacobian!(
+        jacobian_matrix, f, moments, me, z_speed, external_source_settings.electron, z,
+        vperp, vpa, dt, ir, iz)
+    add_electron_implicit_constraint_forcing_to_v_only_Jacobian!(
+        jacobian_matrix, f, zeroth_moment, first_moment, second_moment, z_speed, z, vperp,
+        vpa, t_params.constraint_forcing_rate, dt, ir, iz)
+    # Always add the electron energy equation term, even if evolve_ppar=false, so that the
+    # Jacobian matrix always has the same shape, meaning that we can always reuse the LU
+    # factorization struct.
+    add_electron_energy_equation_to_v_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dupar_dz,
+        dppar_dz, dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
+        num_diss_params, dt, ir, iz)
+    if ion_dt !== nothing
+        add_ion_dt_forcing_of_electron_ppar_to_v_only_Jacobian!(
+            jacobian_matrix, z, dt, ion_dt, ir, iz)
+    end
+
+    return nothing
+end
+
+"""
+    fill_electron_kinetic_equation_z_only_Jacobian_f!(
+        jacobian_matrix, f, ppar, dpdf_dz, dpdf_dvpa, z_speed, moments, zeroth_moment,
+        first_moment, second_moment, third_moment, dthird_moment_dz, collisions,
+        composition, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
+        vpa_advect, scratch_dummy, external_source_settings, num_diss_params, t_params,
+        ion_dt, ir, ivperp, ivpa, evolve_ppar)
+
+Fill a pre-allocated matrix with the Jacobian matrix for a z-direction solve part of the
+ADI method for electron kinetic equation and (if `evolve_ppar=true`) the electron energy
+equation.
+"""
+@timeit global_timer fill_electron_kinetic_equation_z_only_Jacobian_f!(
+                         jacobian_matrix, f, ppar, dpdf_dz, dpdf_dvpa, z_speed, moments,
+                         zeroth_moment, first_moment, second_moment, third_moment,
+                         dthird_moment_dz, collisions, composition, z, vperp, vpa,
+                         z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
+                         scratch_dummy, external_source_settings, num_diss_params,
+                         t_params, ion_dt, ir, ivperp, ivpa, evolve_ppar) = begin
+    dt = t_params.dt[]
+
+    vth = @view moments.electron.vth[:,ir]
+    me = composition.me_over_mi
+    dens = @view moments.electron.dens[:,ir]
+    upar = @view moments.electron.upar[:,ir]
+    qpar = @view moments.electron.qpar[:,ir]
+    ddens_dz = @view moments.electron.ddens_dz[:,ir]
+    dupar_dz = @view moments.electron.dupar_dz[:,ir]
+    dppar_dz = @view moments.electron.dppar_dz[:,ir]
+    dvth_dz = @view moments.electron.dvth_dz[:,ir]
+    dqpar_dz = @view moments.electron.dqpar_dz[:,ir]
+
+    upar_ion = @view moments.ion.upar[:,ir,1]
+
+    pdf_size = z.n * vperp.n * vpa.n
+    v_size = vperp.n * vpa.n
+
+    # Initialise jacobian_matrix to the identity
+    for row ∈ 1:size(jacobian_matrix, 1)
+        jacobian_matrix[row,:] .= 0.0
+        jacobian_matrix[row,row] += 1.0
+    end
+
+    add_electron_z_advection_to_z_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, dpdf_dz, me, z, vperp, vpa, z_spectral,
+        z_advect, z_speed, scratch_dummy, dt, ir, ivperp, ivpa)
+    add_contribution_from_electron_pdf_term_to_z_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
+        dvth_dz, dqpar_dz, dthird_moment_dz, moments, me, external_source_settings, z,
+        vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir, ivperp, ivpa)
+    add_electron_krook_collisions_to_z_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, upar_ion, collisions, z, vperp, vpa,
+        z_speed, dt, ir, ivperp, ivpa)
+    add_total_external_electron_source_to_z_only_Jacobian!(
+        jacobian_matrix, f, moments, me, z_speed, external_source_settings.electron, z,
+        vperp, vpa, dt, ir, ivperp, ivpa)
+    add_electron_implicit_constraint_forcing_to_z_only_Jacobian!(
+        jacobian_matrix, f, zeroth_moment, first_moment, second_moment, z_speed, z, vperp,
+        vpa, t_params.constraint_forcing_rate, dt, ir, ivperp, ivpa)
+
+    return nothing
+end
+
+"""
+    fill_electron_kinetic_equation_z_only_Jacobian_ppar!(
+        jacobian_matrix, ppar, moments, zeroth_moment, first_moment, second_moment,
+        third_moment, dthird_moment_dz, collisions, composition, z, vperp, vpa,
+        z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+        external_source_settings, num_diss_params, t_params, ion_dt, ir, evolve_ppar)
+
+Fill a pre-allocated matrix with the Jacobian matrix for a z-direction solve part of the
+ADI method for electron kinetic equation and (if `evolve_ppar=true`) the electron energy
+equation.
+"""
+@timeit global_timer fill_electron_kinetic_equation_z_only_Jacobian_ppar!(
+                         jacobian_matrix, ppar, moments, zeroth_moment, first_moment,
+                         second_moment, third_moment, dthird_moment_dz, collisions,
+                         composition, z, vperp, vpa, z_spectral, vperp_spectral,
+                         vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                         external_source_settings, num_diss_params, t_params, ion_dt, ir,
+                         evolve_ppar) = begin
+    dt = t_params.dt[]
+
+    vth = @view moments.electron.vth[:,ir]
+    dens = @view moments.electron.dens[:,ir]
+    upar = @view moments.electron.upar[:,ir]
+    ddens_dz = @view moments.electron.ddens_dz[:,ir]
+    dupar_dz = @view moments.electron.dupar_dz[:,ir]
+    dppar_dz = @view moments.electron.dppar_dz[:,ir]
+
+    pdf_size = z.n * vperp.n * vpa.n
+
+    # Initialise jacobian_matrix to the identity
+    for row ∈ 1:size(jacobian_matrix, 1)
+        jacobian_matrix[row,:] .= 0.0
+        jacobian_matrix[row,row] += 1.0
+    end
+
+    add_electron_energy_equation_to_z_only_Jacobian!(
+        jacobian_matrix, dens, upar, ppar, vth, third_moment, ddens_dz, dupar_dz,
+        dppar_dz, dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
+        num_diss_params, dt, ir)
+    if ion_dt !== nothing
+        add_ion_dt_forcing_of_electron_ppar_to_z_only_Jacobian!(
+            jacobian_matrix, z, dt, ion_dt, ir)
     end
 
     return nothing
@@ -3256,9 +3511,10 @@ end
 
 function add_electron_dissipation_term_to_Jacobian!(jacobian_matrix, f, num_diss_params,
                                                     z, vperp, vpa, vpa_spectral, z_speed,
-                                                    dt, ir; f_offset=0)
+                                                    dt, ir, include=:all; f_offset=0)
     @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
     @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
+    @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
     vpa_dissipation_coefficient = num_diss_params.electron.vpa_dissipation_coefficient
 
@@ -3279,8 +3535,43 @@ function add_electron_dissipation_term_to_Jacobian!(jacobian_matrix, f, num_diss
         row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa + f_offset
 
         # Terms from add_dissipation_term!()
+        if include ∈ (:all, :explicit_v)
+            for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+                col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+                jacobian_matrix[row,col] -= dt * vpa_dissipation_coefficient * vpa_dense_second_deriv_matrix[ivpa,icolvpa]
+            end
+        end
+    end
+
+    return nothing
+end
+
+function add_electron_dissipation_term_to_v_only_Jacobian!(
+        jacobian_matrix, f, num_diss_params, z, vperp, vpa, vpa_spectral, z_speed, dt, ir,
+        iz)
+
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
+
+    vpa_dissipation_coefficient = num_diss_params.electron.vpa_dissipation_coefficient
+
+    if vpa_dissipation_coefficient ≤ 0.0
+        return nothing
+    end
+
+    vpa_dense_second_deriv_matrix = vpa_spectral.dense_second_deriv_matrix
+
+    @loop_vperp_vpa ivperp ivpa begin
+        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
+            continue
+        end
+
+        # Rows corresponding to pdf_electron
+        row = (ivperp - 1) * vpa.n + ivpa
+
+        # Terms from add_dissipation_term!()
         for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-            col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+            col = (icolvperp - 1) * vpa.n + icolvpa
             jacobian_matrix[row,col] -= dt * vpa_dissipation_coefficient * vpa_dense_second_deriv_matrix[ivpa,icolvpa]
         end
     end
@@ -3531,7 +3822,8 @@ end
 function add_contribution_from_electron_pdf_term_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
         dvth_dz, dqpar_dz, dthird_moment_dz, moments, me, external_source_settings, z,
-        vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir; f_offset=0, ppar_offset=0)
+        vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir, include=:all; f_offset=0,
+        ppar_offset=0)
 
     if f_offset == ppar_offset
         error("Got f_offset=$f_offset the same as ppar_offset=$ppar_offset. f and ppar "
@@ -3540,6 +3832,7 @@ function add_contribution_from_electron_pdf_term_to_Jacobian!(
     @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
     @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
     @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n || error("ppar_offset=$ppar_offset is too big")
+    @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
     source_density_amplitude = moments.electron.external_source_density_amplitude
     source_momentum_amplitude = moments.electron.external_source_momentum_amplitude
@@ -3591,15 +3884,19 @@ function add_contribution_from_electron_pdf_term_to_Jacobian!(
         #   (3/4*sqrt(2/me)/p^(1/2)/n^(3/2)*dn/dz + 1/2/sqrt(2*n*me)/p^(3/2)*dp/dz)[irowz] * delta(irowz,icolz)
         #   -1/sqrt(2*p*n*me)[irowz] * z_deriv_matrix[irowz,icolz]
         #
-        jacobian_matrix[row,row] += dt * (0.5 * dqpar_dz[iz] / ppar[iz]
-                                          + vpa.grid[ivpa] * vth[iz] * (ddens_dz[iz] / dens[iz]
-                                                                        - dvth_dz[iz] / vth[iz]))
-        for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-            col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
-            jacobian_matrix[row,col] +=
-                dt * f[ivpa,ivperp,iz] *
-                (1.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*dppar_dz[iz] - 0.5*sqrt(2.0*ppar[iz]/me)/dens[iz]^1.5*ddens_dz[iz]) *
-                vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
+        if include === :all
+            jacobian_matrix[row,row] += dt * (0.5 * dqpar_dz[iz] / ppar[iz]
+                                              + vpa.grid[ivpa] * vth[iz] * (ddens_dz[iz] / dens[iz]
+                                                                            - dvth_dz[iz] / vth[iz]))
+        end
+        if include ∈ (:all, :explicit_v)
+            for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+                col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+                jacobian_matrix[row,col] +=
+                    dt * f[ivpa,ivperp,iz] *
+                    (1.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*dppar_dz[iz] - 0.5*sqrt(2.0*ppar[iz]/me)/dens[iz]^1.5*ddens_dz[iz]) *
+                    vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
+            end
         end
         z_deriv_row_startind = z_deriv_matrix.rowptr[iz]
         z_deriv_row_endind = z_deriv_matrix.rowptr[iz+1] - 1
@@ -3611,23 +3908,27 @@ function add_contribution_from_electron_pdf_term_to_Jacobian!(
                 dt * f[ivpa,ivperp,iz] * vth[iz] *
                 vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_entry
         end
-        for index ∈ eachindex(external_source_settings.electron)
-            electron_source = external_source_settings.electron[index]
-            if electron_source.active
-                # Source terms from `add_contribution_from_pdf_term!()`
-                jacobian_matrix[row,row] += dt * (1.5 * source_density_amplitude[iz,ir,index] / dens[iz]
-                                                  - (0.5 * source_pressure_amplitude[iz,ir,index]
-                                                     + source_momentum_amplitude[iz,ir,index]) / ppar[iz]
-                                                 )
+        if include === :all
+            for index ∈ eachindex(external_source_settings.electron)
+                electron_source = external_source_settings.electron[index]
+                if electron_source.active
+                    # Source terms from `add_contribution_from_pdf_term!()`
+                    jacobian_matrix[row,row] += dt * (1.5 * source_density_amplitude[iz,ir,index] / dens[iz]
+                                                      - (0.5 * source_pressure_amplitude[iz,ir,index]
+                                                         + source_momentum_amplitude[iz,ir,index]) / ppar[iz]
+                                                     )
+                end
             end
         end
-        jacobian_matrix[row,ppar_offset+iz] +=
-            dt * f[ivpa,ivperp,iz] *
-            (-0.75*sqrt(2.0/dens[iz]/me)/ppar[iz]^1.5*third_moment[iz]*dppar_dz[iz]
-             - 0.25*sqrt(2.0/ppar[iz]/me)/dens[iz]^1.5*third_moment[iz]*ddens_dz[iz]
-             + 0.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*dthird_moment_dz[iz]
-             + vpa.grid[ivpa] * (0.75*sqrt(2.0/me/ppar[iz])/dens[iz]^1.5*ddens_dz[iz]
-                                 + 0.5/sqrt(2.0*dens[iz]*me)/ppar[iz]^1.5*dppar_dz[iz]))
+        if include ∈ (:all, :explicit_v)
+            jacobian_matrix[row,ppar_offset+iz] +=
+                dt * f[ivpa,ivperp,iz] *
+                (-0.75*sqrt(2.0/dens[iz]/me)/ppar[iz]^1.5*third_moment[iz]*dppar_dz[iz]
+                 - 0.25*sqrt(2.0/ppar[iz]/me)/dens[iz]^1.5*third_moment[iz]*ddens_dz[iz]
+                 + 0.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*dthird_moment_dz[iz]
+                 + vpa.grid[ivpa] * (0.75*sqrt(2.0/me/ppar[iz])/dens[iz]^1.5*ddens_dz[iz]
+                                     + 0.5/sqrt(2.0*dens[iz]*me)/ppar[iz]^1.5*dppar_dz[iz]))
+        end
         for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros)
             col = ppar_offset + icolz
             jacobian_matrix[row,col] += dt * f[ivpa,ivperp,iz] *
@@ -3639,19 +3940,141 @@ function add_contribution_from_electron_pdf_term_to_Jacobian!(
     return nothing
 end
 
+function add_contribution_from_electron_pdf_term_to_z_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
+        dvth_dz, dqpar_dz, dthird_moment_dz, moments, me, external_source_settings, z,
+        vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir, ivperp, ivpa)
+
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
+
+    source_density_amplitude = moments.electron.external_source_density_amplitude
+    source_momentum_amplitude = moments.electron.external_source_momentum_amplitude
+    source_pressure_amplitude = moments.electron.external_source_pressure_amplitude
+
+    @loop_z iz begin
+        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
+            continue
+        end
+
+        # Rows corresponding to pdf_electron
+        row = iz
+
+        jacobian_matrix[row,row] += dt * (0.5 * dqpar_dz[iz] / ppar[iz]
+                                          + vpa.grid[ivpa] * vth[iz] * (ddens_dz[iz] / dens[iz]
+                                                                        - dvth_dz[iz] / vth[iz]))
+        for index ∈ eachindex(external_source_settings.electron)
+            electron_source = external_source_settings.electron[index]
+            if electron_source.active
+                # Source terms from `add_contribution_from_pdf_term!()`
+                jacobian_matrix[row,row] += dt * (1.5 * source_density_amplitude[iz,ir,index] / dens[iz]
+                                                  - (0.5 * source_pressure_amplitude[iz,ir,index]
+                                                     + source_momentum_amplitude[iz,ir,index]) / ppar[iz]
+                                                 )
+            end
+        end
+    end
+
+    return nothing
+end
+
+function add_contribution_from_electron_pdf_term_to_v_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
+        dvth_dz, dqpar_dz, dthird_moment_dz, moments, me, external_source_settings, z,
+        vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir, iz)
+
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
+
+    source_density_amplitude = moments.electron.external_source_density_amplitude
+    source_momentum_amplitude = moments.electron.external_source_momentum_amplitude
+    source_pressure_amplitude = moments.electron.external_source_pressure_amplitude
+    z_deriv_matrix = z_spectral.D_matrix_csr
+    v_size = vperp.n * vpa.n
+
+    @loop_vperp_vpa ivperp ivpa begin
+        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
+            continue
+        end
+
+        # Rows corresponding to pdf_electron
+        row = (ivperp - 1) * vpa.n + ivpa
+
+        jacobian_matrix[row,row] += dt * (0.5 * dqpar_dz / ppar
+                                          + vpa.grid[ivpa] * vth * (ddens_dz / dens
+                                                                    - dvth_dz / vth))
+        for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+            col = (icolvperp - 1) * vpa.n + icolvpa
+            jacobian_matrix[row,col] +=
+                dt * f[ivpa,ivperp] *
+                (1.5*sqrt(2.0/ppar/dens/me)*dppar_dz - 0.5*sqrt(2.0*ppar/me)/dens^1.5*ddens_dz) *
+                vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
+        end
+        for index ∈ eachindex(external_source_settings.electron)
+            electron_source = external_source_settings.electron[index]
+            if electron_source.active
+                # Source terms from `add_contribution_from_pdf_term!()`
+                jacobian_matrix[row,row] += dt * (1.5 * source_density_amplitude[iz,ir,index] / dens
+                                                  - (0.5 * source_pressure_amplitude[iz,ir,index]
+                                                     + source_momentum_amplitude[iz,ir,index]) / ppar
+                                                 )
+            end
+        end
+        jacobian_matrix[row,end] +=
+            dt * f[ivpa,ivperp] *
+            (-0.75*sqrt(2.0/dens/me)/ppar^1.5*third_moment*dppar_dz
+             - 0.25*sqrt(2.0/ppar/me)/dens^1.5*third_moment*ddens_dz
+             + 0.5*sqrt(2.0/ppar/dens/me)*dthird_moment_dz
+             + vpa.grid[ivpa] * (0.75*sqrt(2.0/me/ppar)/dens^1.5*ddens_dz
+                                 + 0.5/sqrt(2.0*dens*me)/ppar^1.5*dppar_dz))
+    end
+
+    return nothing
+end
+
 function add_ion_dt_forcing_of_electron_ppar_to_Jacobian!(jacobian_matrix, z, dt, ion_dt,
-                                                          ir; ppar_offset=0)
+                                                          ir, include=:all; ppar_offset=0)
     @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
     @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n || error("ppar_offset=$ppar_offset is too big")
+    @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
-    begin_z_region()
+    if include === :all
+        begin_z_region()
+        @loop_z iz begin
+            # Rows corresponding to electron_ppar
+            row = ppar_offset + iz
+
+            # Backward-Euler forcing term
+            jacobian_matrix[row,row] += dt / ion_dt
+        end
+    end
+
+    return nothing
+end
+
+function add_ion_dt_forcing_of_electron_ppar_to_z_only_Jacobian!(jacobian_matrix, z, dt,
+                                                                 ion_dt, ir)
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
+
     @loop_z iz begin
         # Rows corresponding to electron_ppar
-        row = ppar_offset + iz
+        row = iz
 
         # Backward-Euler forcing term
         jacobian_matrix[row,row] += dt / ion_dt
     end
+
+    return nothing
+end
+
+function add_ion_dt_forcing_of_electron_ppar_to_v_only_Jacobian!(jacobian_matrix, z, dt,
+                                                                 ion_dt, ir, iz)
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    #@boundscheck size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
+
+    # Backward-Euler forcing term
+    jacobian_matrix[end,end] += dt / ion_dt
 
     return nothing
 end
