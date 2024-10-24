@@ -817,7 +817,7 @@ function steady_state_square_residuals(variable, variable_at_previous_time, dt;
 
         if only_max_abs
             absolute_residual =
-                _steady_state_residual(variable, variable_at_previous_time, reshaped_dt)
+                _steady_state_absolute_residual(variable, variable_at_previous_time, reshaped_dt)
             # Need to wrap the maximum(...) in a call to vec(...) so that we return a
             # Vector, not an N-dimensional array where the first (N-1) dimensions all have
             # size 1.
