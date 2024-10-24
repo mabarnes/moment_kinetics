@@ -9,324 +9,324 @@ using ..type_definitions: mk_float
 
 """
 """
-struct scratch_pdf{n_distribution_ion, n_moment, n_moment_electron,
-                   n_distribution_neutral, n_moment_neutral}
+struct scratch_pdf{ndim_distribution_ion, ndim_moment, ndim_moment_electron,
+                   ndim_distribution_neutral, ndim_moment_neutral}
     # ions
-    pdf::MPISharedArray{mk_float, n_distribution_ion}
-    density::MPISharedArray{mk_float, n_moment}
-    upar::MPISharedArray{mk_float, n_moment}
-    ppar::MPISharedArray{mk_float, n_moment}
-    pperp::MPISharedArray{mk_float, n_moment}
-    temp_z_s::MPISharedArray{mk_float, n_moment}
+    pdf::MPISharedArray{mk_float, ndim_distribution_ion}
+    density::MPISharedArray{mk_float, ndim_moment}
+    upar::MPISharedArray{mk_float, ndim_moment}
+    ppar::MPISharedArray{mk_float, ndim_moment}
+    pperp::MPISharedArray{mk_float, ndim_moment}
+    temp_z_s::MPISharedArray{mk_float, ndim_moment}
     # electrons
-    electron_density::MPISharedArray{mk_float, n_moment_electron}
-    electron_upar::MPISharedArray{mk_float, n_moment_electron}
-    electron_ppar::MPISharedArray{mk_float, n_moment_electron}
-    electron_pperp::MPISharedArray{mk_float, n_moment_electron}
-    electron_temp::MPISharedArray{mk_float, n_moment_electron}
+    electron_density::MPISharedArray{mk_float, ndim_moment_electron}
+    electron_upar::MPISharedArray{mk_float, ndim_moment_electron}
+    electron_ppar::MPISharedArray{mk_float, ndim_moment_electron}
+    electron_pperp::MPISharedArray{mk_float, ndim_moment_electron}
+    electron_temp::MPISharedArray{mk_float, ndim_moment_electron}
     # neutral particles 
-    pdf_neutral::MPISharedArray{mk_float, n_distribution_neutral}
-    density_neutral::MPISharedArray{mk_float, n_moment_neutral}
-    uz_neutral::MPISharedArray{mk_float, n_moment_neutral}
-    pz_neutral::MPISharedArray{mk_float, n_moment_neutral}
+    pdf_neutral::MPISharedArray{mk_float, ndim_distribution_neutral}
+    density_neutral::MPISharedArray{mk_float, ndim_moment_neutral}
+    uz_neutral::MPISharedArray{mk_float, ndim_moment_neutral}
+    pz_neutral::MPISharedArray{mk_float, ndim_moment_neutral}
 end
 
 """
 """
-struct scratch_electron_pdf{n_distribution_electron, n_moment_electron}
+struct scratch_electron_pdf{ndim_distribution_electron, ndim_moment_electron}
     # electrons
-    pdf_electron::MPISharedArray{mk_float, n_distribution_electron}
-    electron_ppar::MPISharedArray{mk_float, n_moment_electron}
+    pdf_electron::MPISharedArray{mk_float, ndim_distribution_electron}
+    electron_ppar::MPISharedArray{mk_float, ndim_moment_electron}
 end
 
 """
 """
-struct em_fields_struct{n_field, n_gyrofield}
+struct em_fields_struct{ndim_field, ndim_gyrofield}
     # phi is the electrostatic potential
-    phi::MPISharedArray{mk_float,n_field}
+    phi::MPISharedArray{mk_float,ndim_field}
     # phi0 is the initial electrostatic potential
-    phi0::MPISharedArray{mk_float,n_field}
+    phi0::MPISharedArray{mk_float,ndim_field}
     # Er is the radial electric field
-    Er::MPISharedArray{mk_float,n_field}
+    Er::MPISharedArray{mk_float,ndim_field}
     # Ez is the parallel electric field
-    Ez::MPISharedArray{mk_float,n_field}
+    Ez::MPISharedArray{mk_float,ndim_field}
     # gphi is the gyroaveraged electrostatic potential
-    gphi::MPISharedArray{mk_float,n_gyrofield}
+    gphi::MPISharedArray{mk_float,ndim_gyrofield}
     # gEr is the gyroaveraged radial electric field
-    gEr::MPISharedArray{mk_float,n_gyrofield}
+    gEr::MPISharedArray{mk_float,ndim_gyrofield}
     # gEz is the gyroaveraged parallel electric field
-    gEz::MPISharedArray{mk_float,n_gyrofield}
+    gEz::MPISharedArray{mk_float,ndim_gyrofield}
     # if true, force Er = 0 at wall plates
     force_Er_zero_at_wall::Bool
 end
 
 """
 """
-struct moments_ion_substruct{n_moment,n_moment_wall}
+struct moments_ion_substruct{ndim_moment,ndim_moment_wall}
     # this is the particle density
-    dens::MPISharedArray{mk_float,n_moment}
+    dens::MPISharedArray{mk_float,ndim_moment}
     # flag that keeps track of if the density needs updating before use
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means dens_update does
     # not need to be a shared memory array.
     dens_updated::Vector{Bool}
     # this is the parallel flow
-    upar::MPISharedArray{mk_float,n_moment}
+    upar::MPISharedArray{mk_float,ndim_moment}
     # flag that keeps track of whether or not upar needs updating before use
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means upar_update does
     # not need to be a shared memory array.
     upar_updated::Vector{Bool}
     # this is the parallel pressure
-    ppar::MPISharedArray{mk_float,n_moment}
+    ppar::MPISharedArray{mk_float,ndim_moment}
     # flag that keeps track of whether or not ppar needs updating before use
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means ppar_update does
     # not need to be a shared memory array.
     ppar_updated::Vector{Bool}
     # this is the perpendicular pressure
-    pperp::MPISharedArray{mk_float,n_moment}
+    pperp::MPISharedArray{mk_float,ndim_moment}
     # this is the parallel heat flux
-    qpar::MPISharedArray{mk_float,n_moment}
+    qpar::MPISharedArray{mk_float,ndim_moment}
     # flag that keeps track of whether or not qpar needs updating before use
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means qpar_update does
     # not need to be a shared memory array.
     qpar_updated::Vector{Bool}
     # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
-    vth::MPISharedArray{mk_float,n_moment}
+    vth::MPISharedArray{mk_float,ndim_moment}
     # generalised Chodura integrals for the lower and upper plates
-    chodura_integral_lower::MPISharedArray{mk_float,n_moment_wall}
-    chodura_integral_upper::MPISharedArray{mk_float,n_moment_wall}
+    chodura_integral_lower::MPISharedArray{mk_float,ndim_moment_wall}
+    chodura_integral_upper::MPISharedArray{mk_float,ndim_moment_wall}
     # if evolve_ppar = true, then the velocity variable is (vpa - upa)/vth, which introduces
     # a factor of vth for each power of wpa in velocity space integrals.
     # v_norm_fac accounts for this: it is vth if using the above definition for the parallel velocity,
     # and it is one otherwise
-    v_norm_fac::Union{MPISharedArray{mk_float,n_moment},Nothing}
+    v_norm_fac::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the z-derivative of the particle density
-    ddens_dz::Union{MPISharedArray{mk_float,n_moment},Nothing}
+    ddens_dz::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the upwinded z-derivative of the particle density
-    ddens_dz_upwind::Union{MPISharedArray{mk_float,n_moment},Nothing}
+    ddens_dz_upwind::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the second-z-derivative of the particle density
-    d2dens_dz2::Union{MPISharedArray{mk_float,n_moment},Nothing}
+    d2dens_dz2::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the z-derivative of the parallel flow
-    dupar_dz::Union{MPISharedArray{mk_float,n_moment},Nothing}
+    dupar_dz::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the upwinded z-derivative of the parallel flow
-    dupar_dz_upwind::Union{MPISharedArray{mk_float,n_moment},Nothing}
+    dupar_dz_upwind::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the second-z-derivative of the parallel flow
-    d2upar_dz2::Union{MPISharedArray{mk_float,n_moment},Nothing}
+    d2upar_dz2::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the z-derivative of the parallel pressure
-    dppar_dz::Union{MPISharedArray{mk_float,n_moment},Nothing}
+    dppar_dz::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the upwinded z-derivative of the parallel pressure
-    dppar_dz_upwind::Union{MPISharedArray{mk_float,n_moment},Nothing}
+    dppar_dz_upwind::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the second-z-derivative of the parallel pressure
-    d2ppar_dz2::Union{MPISharedArray{mk_float,n_moment},Nothing}
+    d2ppar_dz2::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the z-derivative of the parallel heat flux
-    dqpar_dz::Union{MPISharedArray{mk_float,n_moment},Nothing}
+    dqpar_dz::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the z-derivative of the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
-    dvth_dz::Union{MPISharedArray{mk_float,n_moment},Nothing}
+    dvth_dz::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the entropy production dS/dt = - int (ln f sum_s' C_ss' [f_s,f_s']) d^3 v
-    dSdt::MPISharedArray{mk_float,n_moment}
+    dSdt::MPISharedArray{mk_float,ndim_moment}
     # Spatially varying amplitude of the external source term (third index is for different sources)
-    external_source_amplitude::MPISharedArray{mk_float,n_moment}
+    external_source_amplitude::MPISharedArray{mk_float,ndim_moment}
     # Spatially varying amplitude of the density moment of the external source term
-    external_source_density_amplitude::MPISharedArray{mk_float,n_moment}
+    external_source_density_amplitude::MPISharedArray{mk_float,ndim_moment}
     # Spatially varying amplitude of the parallel momentum moment of the external source
     # term
-    external_source_momentum_amplitude::MPISharedArray{mk_float,n_moment}
+    external_source_momentum_amplitude::MPISharedArray{mk_float,ndim_moment}
     # Spatially varying amplitude of the parallel pressure moment of the external source
     # term
-    external_source_pressure_amplitude::MPISharedArray{mk_float,n_moment}
+    external_source_pressure_amplitude::MPISharedArray{mk_float,ndim_moment}
     # Integral term for the PID controller of the external source term
-    external_source_controller_integral::MPISharedArray{mk_float,n_moment}
+    external_source_controller_integral::MPISharedArray{mk_float,ndim_moment}
     # Store coefficient 'A' from applying moment constraints so we can write it out as a
     # diagnostic
-    constraints_A_coefficient::Union{MPISharedArray{mk_float,n_moment},Nothing}
+    constraints_A_coefficient::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # Store coefficient 'B' from applying moment constraints so we can write it out as a
     # diagnostic
-    constraints_B_coefficient::Union{MPISharedArray{mk_float,n_moment},Nothing}
+    constraints_B_coefficient::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # Store coefficient 'C' from applying moment constraints so we can write it out as a
     # diagnostic
-    constraints_C_coefficient::Union{MPISharedArray{mk_float,n_moment},Nothing}
+    constraints_C_coefficient::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
 end
 
 """
 moments_electron_substruct is a struct that contains moment information for electrons
 """
-struct moments_electron_substruct{n_moment_electron,n_moment_electron_source}
+struct moments_electron_substruct{ndim_moment_electron,ndim_moment_electron_source}
     # this is the particle density
-    dens::MPISharedArray{mk_float,n_moment_electron}
+    dens::MPISharedArray{mk_float,ndim_moment_electron}
     # flag that keeps track of if the density needs updating before use
     dens_updated::Base.RefValue{Bool}
     # this is the parallel flow
-    upar::MPISharedArray{mk_float,n_moment_electron}
+    upar::MPISharedArray{mk_float,ndim_moment_electron}
     # flag that keeps track of whether or not upar needs updating before use
     upar_updated::Base.RefValue{Bool}
     # this is the parallel pressure
-    ppar::MPISharedArray{mk_float,n_moment_electron}
+    ppar::MPISharedArray{mk_float,ndim_moment_electron}
     # flag that keeps track of whether or not ppar needs updating before use
     ppar_updated::Base.RefValue{Bool}
     # this is the temperature
-    temp::MPISharedArray{mk_float,n_moment_electron}
+    temp::MPISharedArray{mk_float,ndim_moment_electron}
     # flag that keeps track of whether or not temp needs updating before use
     temp_updated::Base.RefValue{Bool}
     # this is the parallel heat flux
-    qpar::MPISharedArray{mk_float,n_moment_electron}
+    qpar::MPISharedArray{mk_float,ndim_moment_electron}
     # flag that keeps track of whether or not qpar needs updating before use
     qpar_updated::Base.RefValue{Bool}
     # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
-    vth::MPISharedArray{mk_float,n_moment_electron}
+    vth::MPISharedArray{mk_float,ndim_moment_electron}
     # this is the parallel friction force between ions and electrons
-    parallel_friction::MPISharedArray{mk_float,n_moment_electron}
+    parallel_friction::MPISharedArray{mk_float,ndim_moment_electron}
     # Spatially varying amplitude of the external source term
-    external_source_amplitude::MPISharedArray{mk_float,n_moment_electron_source}
+    external_source_amplitude::MPISharedArray{mk_float,ndim_moment_electron_source}
     # Spatially varying amplitude of the density moment of the external source term
-    external_source_density_amplitude::MPISharedArray{mk_float,n_moment_electron_source}
+    external_source_density_amplitude::MPISharedArray{mk_float,ndim_moment_electron_source}
     # Spatially varying amplitude of the parallel momentum moment of the external source
     # term
-    external_source_momentum_amplitude::MPISharedArray{mk_float,n_moment_electron_source}
+    external_source_momentum_amplitude::MPISharedArray{mk_float,ndim_moment_electron_source}
     # Spatially varying amplitude of the parallel pressure moment of the external source
     # term
-    external_source_pressure_amplitude::MPISharedArray{mk_float,n_moment_electron_source}
+    external_source_pressure_amplitude::MPISharedArray{mk_float,ndim_moment_electron_source}
     # if evolve_ppar = true, then the velocity variable is (vpa - upa)/vth, which introduces
     # a factor of vth for each power of wpa in velocity space integrals.
     # v_norm_fac accounts for this: it is vth if using the above definition for the parallel velocity,
     # and it is one otherwise
-    v_norm_fac::Union{MPISharedArray{mk_float,n_moment_electron},Nothing}
+    v_norm_fac::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
     # this is the z-derivative of the particle density
-    ddens_dz::Union{MPISharedArray{mk_float,n_moment_electron},Nothing}
+    ddens_dz::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
     # this is the z-derivative of the parallel flow
-    dupar_dz::Union{MPISharedArray{mk_float,n_moment_electron},Nothing}
+    dupar_dz::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
     # this is the z-derivative of the parallel pressure
-    dppar_dz::Union{MPISharedArray{mk_float,n_moment_electron},Nothing}
+    dppar_dz::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
     # this is the upwinded z-derivative of the parallel pressure
-    dppar_dz_upwind::Union{MPISharedArray{mk_float,n_moment_electron},Nothing}
+    dppar_dz_upwind::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
     # this is the second-z-derivative of the parallel pressure
-    d2ppar_dz2::Union{MPISharedArray{mk_float,n_moment_electron},Nothing}
+    d2ppar_dz2::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
     # this is the z-derivative of the parallel heat flux
-    dqpar_dz::Union{MPISharedArray{mk_float,n_moment_electron},Nothing}
+    dqpar_dz::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
     # this is the z-derivative of the parallel temperature Tpar = ppar/dens
-    dT_dz::Union{MPISharedArray{mk_float,n_moment_electron},Nothing}
+    dT_dz::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
     # this is the upwinded z-derivative of the temperature Tpar = ppar/dens
-    dT_dz_upwind::Union{MPISharedArray{mk_float,n_moment_electron},Nothing}
+    dT_dz_upwind::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
     # this is the z-derivative of the electron thermal speed vth = sqrt(2*Tpar/m)
-    dvth_dz::Union{MPISharedArray{mk_float,n_moment_electron},Nothing}
+    dvth_dz::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
     # Store coefficient 'A' from applying moment constraints so we can write it out as a
     # diagnostic
-    constraints_A_coefficient::Union{MPISharedArray{mk_float,n_moment_electron},Nothing}
+    constraints_A_coefficient::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
     # Store coefficient 'B' from applying moment constraints so we can write it out as a
     # diagnostic
-    constraints_B_coefficient::Union{MPISharedArray{mk_float,n_moment_electron},Nothing}
+    constraints_B_coefficient::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
     # Store coefficient 'C' from applying moment constraints so we can write it out as a
     # diagnostic
-    constraints_C_coefficient::Union{MPISharedArray{mk_float,n_moment_electron},Nothing}
+    constraints_C_coefficient::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
 end
 
 """
 """
-struct moments_neutral_substruct{n_moment_neutral}
+struct moments_neutral_substruct{ndim_moment_neutral}
     # this is the particle density
-    dens::MPISharedArray{mk_float,n_moment_neutral}
+    dens::MPISharedArray{mk_float,ndim_moment_neutral}
     # flag that keeps track of if the density needs updating before use
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means dens_update does
     # not need to be a shared memory array.
     dens_updated::Vector{Bool}
     # this is the particle mean velocity in z
-    uz::MPISharedArray{mk_float,n_moment_neutral}
+    uz::MPISharedArray{mk_float,ndim_moment_neutral}
     # flag that keeps track of if uz needs updating before use
     uz_updated::Vector{Bool}
     # this is the particle mean velocity in r
-    ur::MPISharedArray{mk_float,n_moment_neutral}
+    ur::MPISharedArray{mk_float,ndim_moment_neutral}
     # flag that keeps track of if ur needs updating before use
     ur_updated::Vector{Bool}
     # this is the particle mean velocity in zeta
-    uzeta::MPISharedArray{mk_float,n_moment_neutral}
+    uzeta::MPISharedArray{mk_float,ndim_moment_neutral}
     # flag that keeps track of if uzeta needs updating before use
     uzeta_updated::Vector{Bool}
     # this is the zz particle pressure tensor component
-    pz::MPISharedArray{mk_float,n_moment_neutral}
+    pz::MPISharedArray{mk_float,ndim_moment_neutral}
     # flag that keeps track of if pz needs updating before use
     pz_updated::Vector{Bool}
     # this is the rr particle pressure tensor component
-    pr::MPISharedArray{mk_float,n_moment_neutral}
+    pr::MPISharedArray{mk_float,ndim_moment_neutral}
     # flag that keeps track of if pr needs updating before use
     pr_updated::Vector{Bool}
     # this is the zetazeta particle pressure tensor component
-    pzeta::MPISharedArray{mk_float,n_moment_neutral}
+    pzeta::MPISharedArray{mk_float,ndim_moment_neutral}
     # flag that keeps track of if pzeta needs updating before use
     pzeta_updated::Vector{Bool}
     # this is the total (isotropic) particle pressure
-    ptot::MPISharedArray{mk_float,n_moment_neutral}
+    ptot::MPISharedArray{mk_float,ndim_moment_neutral}
     # this is the heat flux along z
-    qz::MPISharedArray{mk_float,n_moment_neutral}
+    qz::MPISharedArray{mk_float,ndim_moment_neutral}
     # flag that keeps track of if qz needs updating before use
     qz_updated::Vector{Bool}
     # this is the thermal speed based on the temperature T = ptot/dens: vth = sqrt(2*T/m)
-    vth::MPISharedArray{mk_float,n_moment_neutral}
+    vth::MPISharedArray{mk_float,ndim_moment_neutral}
     # if evolve_ppar = true, then the velocity variable is (vz - uz)/vth, which introduces
     # a factor of vth for each power of wz in velocity space integrals.
     # v_norm_fac accounts for this: it is vth if using the above definition for the parallel velocity,
     # and it is one otherwise
-    v_norm_fac::MPISharedArray{mk_float,n_moment_neutral}
+    v_norm_fac::MPISharedArray{mk_float,ndim_moment_neutral}
     # this is the z-derivative of the particle density
-    ddens_dz::Union{MPISharedArray{mk_float,n_moment_neutral},Nothing}
+    ddens_dz::Union{MPISharedArray{mk_float,ndim_moment_neutral},Nothing}
     # this is the z-derivative of the particle density
-    ddens_dz_upwind::Union{MPISharedArray{mk_float,n_moment_neutral},Nothing}
+    ddens_dz_upwind::Union{MPISharedArray{mk_float,ndim_moment_neutral},Nothing}
     # this is the second-z-derivative of the particle density
-    d2dens_dz2::Union{MPISharedArray{mk_float,n_moment_neutral},Nothing}
+    d2dens_dz2::Union{MPISharedArray{mk_float,ndim_moment_neutral},Nothing}
     # this is the z-derivative of the particle mean velocity in z
-    duz_dz::Union{MPISharedArray{mk_float,n_moment_neutral},Nothing}
+    duz_dz::Union{MPISharedArray{mk_float,ndim_moment_neutral},Nothing}
     # this is the upwinded z-derivative of the particle mean velocity in z
-    duz_dz_upwind::Union{MPISharedArray{mk_float,n_moment_neutral},Nothing}
+    duz_dz_upwind::Union{MPISharedArray{mk_float,ndim_moment_neutral},Nothing}
     # this is the second-z-derivative of the particle mean velocity in z
-    d2uz_dz2::Union{MPISharedArray{mk_float,n_moment_neutral},Nothing}
+    d2uz_dz2::Union{MPISharedArray{mk_float,ndim_moment_neutral},Nothing}
     # this is the z-derivative of the zz particle pressure tensor component
-    dpz_dz::Union{MPISharedArray{mk_float,n_moment_neutral},Nothing}
+    dpz_dz::Union{MPISharedArray{mk_float,ndim_moment_neutral},Nothing}
     # this is the upwinded z-derivative of the zz particle pressure tensor component
-    dpz_dz_upwind::Union{MPISharedArray{mk_float,n_moment_neutral},Nothing}
+    dpz_dz_upwind::Union{MPISharedArray{mk_float,ndim_moment_neutral},Nothing}
     # this is the second-z-derivative of the zz particle pressure tensor component
-    d2pz_dz2::Union{MPISharedArray{mk_float,n_moment_neutral},Nothing}
+    d2pz_dz2::Union{MPISharedArray{mk_float,ndim_moment_neutral},Nothing}
     # this is the z-derivative of the thermal speed based on the temperature T = ptot/dens: vth = sqrt(2*T/m)
-    dvth_dz::Union{MPISharedArray{mk_float,n_moment_neutral},Nothing}
+    dvth_dz::Union{MPISharedArray{mk_float,ndim_moment_neutral},Nothing}
     # this is the z-derivative of the heat flux along z
-    dqz_dz::Union{MPISharedArray{mk_float,n_moment_neutral},Nothing}
+    dqz_dz::Union{MPISharedArray{mk_float,ndim_moment_neutral},Nothing}
     # Spatially varying amplitude of the external source term
-    external_source_amplitude::MPISharedArray{mk_float,n_moment_neutral}
+    external_source_amplitude::MPISharedArray{mk_float,ndim_moment_neutral}
     # Spatially varying amplitude of the density moment of the external source term
-    external_source_density_amplitude::MPISharedArray{mk_float,n_moment_neutral}
+    external_source_density_amplitude::MPISharedArray{mk_float,ndim_moment_neutral}
     # Spatially varying amplitude of the parallel momentum moment of the external source
     # term
-    external_source_momentum_amplitude::MPISharedArray{mk_float,n_moment_neutral}
+    external_source_momentum_amplitude::MPISharedArray{mk_float,ndim_moment_neutral}
     # Spatially varying amplitude of the parallel pressure moment of the external source
     # term
-    external_source_pressure_amplitude::MPISharedArray{mk_float,n_moment_neutral}
+    external_source_pressure_amplitude::MPISharedArray{mk_float,ndim_moment_neutral}
     # Integral term for the PID controller of the external source term
-    external_source_controller_integral::MPISharedArray{mk_float,n_moment_neutral}
+    external_source_controller_integral::MPISharedArray{mk_float,ndim_moment_neutral}
     # Store coefficient 'A' from applying moment constraints so we can write it out as a
     # diagnostic
-    constraints_A_coefficient::Union{MPISharedArray{mk_float,n_moment_neutral},Nothing}
+    constraints_A_coefficient::Union{MPISharedArray{mk_float,ndim_moment_neutral},Nothing}
     # Store coefficient 'B' from applying moment constraints so we can write it out as a
     # diagnostic
-    constraints_B_coefficient::Union{MPISharedArray{mk_float,n_moment_neutral},Nothing}
+    constraints_B_coefficient::Union{MPISharedArray{mk_float,ndim_moment_neutral},Nothing}
     # Store coefficient 'C' from applying moment constraints so we can write it out as a
     # diagnostic
-    constraints_C_coefficient::Union{MPISharedArray{mk_float,n_moment_neutral},Nothing}
+    constraints_C_coefficient::Union{MPISharedArray{mk_float,ndim_moment_neutral},Nothing}
 end
 
 """
 """
-struct pdf_substruct{n_distribution}
-    norm::MPISharedArray{mk_float,n_distribution}
-    buffer::MPISharedArray{mk_float,n_distribution} # for collision operator terms when pdfs must be interpolated onto different velocity space grids, and for gyroaveraging
+struct pdf_substruct{ndim_distribution}
+    norm::MPISharedArray{mk_float,ndim_distribution}
+    buffer::MPISharedArray{mk_float,ndim_distribution} # for collision operator terms when pdfs must be interpolated onto different velocity space grids, and for gyroaveraging
 end
 
 """
 """
-struct electron_pdf_substruct{n_distribution}
-    norm::MPISharedArray{mk_float,n_distribution}
-    buffer::MPISharedArray{mk_float,n_distribution} # for collision operator terms when pdfs must be interpolated onto different velocity space grids
-    pdf_before_ion_timestep::MPISharedArray{mk_float,n_distribution}
+struct electron_pdf_substruct{ndim_distribution}
+    norm::MPISharedArray{mk_float,ndim_distribution}
+    buffer::MPISharedArray{mk_float,ndim_distribution} # for collision operator terms when pdfs must be interpolated onto different velocity space grids
+    pdf_before_ion_timestep::MPISharedArray{mk_float,ndim_distribution}
 end
 
 # struct of structs neatly contains i+n info?
