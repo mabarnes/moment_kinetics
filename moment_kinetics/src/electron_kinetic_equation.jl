@@ -1270,26 +1270,25 @@ global_rank[] == 0 && println("recalculating precon")
                 # expense, and especially the global MPI.Bcast()?
                 begin_z_vperp_vpa_region()
                 if global_rank[] == 0
-                    ss_residual_norms = steady_state_residuals(new_scratch.pdf_electron,
-                                                               old_scratch.pdf_electron,
-                                                               t_params.dt[]; use_mpi=true,
-                                                               only_max_abs=true)
-                    residual_norm = first(values(ss_residual_norms))[1]::mk_float
+                    residual_norm = steady_state_residuals(new_scratch.pdf_electron,
+                                                           old_scratch.pdf_electron,
+                                                           t_params.dt[], true, true)[1]
                 else
-                    ss_residual_norms = steady_state_residuals(new_scratch.pdf_electron,
-                                                               old_scratch.pdf_electron,
-                                                               t_params.dt[]; use_mpi=true,
-                                                               only_max_abs=true)
+                    steady_state_residuals(new_scratch.pdf_electron,
+                                           old_scratch.pdf_electron, t_params.dt[], true,
+                                           true)
                 end
                 if evolve_ppar
-                    ss_ppar_residual_norms =
+                    if global_rank[] == 0
+                        ppar_residual =
+                            steady_state_residuals(new_scratch.electron_ppar,
+                                                   old_scratch.electron_ppar,
+                                                   t_params.dt[], true, true)[1]
+                        residual_norm = max(residual_norm, ppar_residual)
+                    else
                         steady_state_residuals(new_scratch.electron_ppar,
                                                old_scratch.electron_ppar,
-                                               t_params.dt[]; use_mpi=true,
-                                               only_max_abs=true)
-                    if global_rank[] == 0
-                        ppar_residual = first(values(ss_ppar_residual_norms))[1]::mk_float
-                        residual_norm = max(residual_norm, ppar_residual)
+                                               t_params.dt[], true, true)
                     end
                 end
                 if global_rank[] == 0
