@@ -1208,6 +1208,17 @@ function get_SS_local!(QQ,ielement,
         return nothing
 end
 
+"""
+If called for `coord.name = vperp` elemental matrix `KK` on the \$i^{th}\$ element is
+```math
+ K_{jk} = -\\int^{v_\\perp^U}_{v_\\perp^L} \\left(v_\\perp \\frac{\\partial\\varphi_j(v_\\perp)}{\\partial v_\\perp} + \\varphi_j(v_\\perp) \\right)
+ \\frac{\\partial\\varphi_k(v_\\perp)}{\\partial v_\\perp} d v_\\perp
+ = -\\int^1_{-1} ((c_i + x s_i)l_j^\\prime(x) + l_j(x))l_k^\\prime(x) d x /s_i
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `KK` is the same as `LL` (see `get_LL_local!()).
+If `explicit_BC_terms = true`, boundary terms arising from integration by parts are included at the extreme boundary points.
+"""
 function get_KK_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -1252,8 +1263,15 @@ function get_KK_local!(QQ,ielement,
         return nothing
 end
 
-# second derivative matrix with vperp^2 Jacobian factor if 
-# coord is vperp. Not useful for the vpa coordinate
+"""
+If called for `coord.name = vperp` elemental matrix `KJ` on the \$i^{th}\$ element is
+```math
+ (KJ)_{jk} = -\\int^{v_\\perp^U}_{v_\\perp^L} \\frac{\\partial\\varphi_j(v_\\perp)}{\\partial v_\\perp}\\frac{\\partial\\varphi_k(v_\\perp)}{\\partial v_\\perp} v_\\perp^2 d v_\\perp
+ = -\\int^1_{-1} (c_i + x s_i)^2l_j^\\prime(x)l_k^\\prime(x) d x /s_i
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `KJ` is the same as `LL` (see `get_LL_local()!`).
+"""
 function get_KJ_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -1278,6 +1296,20 @@ function get_KJ_local!(QQ,ielement,
         return nothing
 end
 
+"""
+If called for `coord.name = vperp` elemental matrix `LL` on the \$i^{th}\$ element is
+```math
+ L_{jk} = -\\int^{v_\\perp^U}_{v_\\perp^L} \\frac{\\partial\\varphi_j(v_\\perp)}{\\partial v_\\perp}\\frac{\\partial\\varphi_k(v_\\perp)}{\\partial v_\\perp} v_\\perp d v_\\perp
+ = -\\int^1_{-1} (c_i + x s_i)l_j^\\prime(x)l_k^\\prime(x) d x /s_i
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `LL` is 
+```math
+ L_{jk} = -\\int^{v_\\|^U}_{v_\\|^L}  \\frac{\\partial\\varphi_j(v_\\|)}{\\partial v_\\|}\\frac{\\partial\\varphi_k(v_\\|)}{\\partial v_\\|} d v_\\| =
+ -\\int^1_{-1} l_j^\\prime(x)l_k^\\prime(x) d x /s_i.
+```
+If `explicit_BC_terms = true`, boundary terms arising from integration by parts are included at the extreme boundary points.
+"""
 function get_LL_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -1334,8 +1366,14 @@ function get_DD_local!(QQ, ielement, lobatto::gausslegendre_base_info,
     return nothing
 end
 
-# mass matrix without vperp factor (matrix N)
-# only useful for the vperp coordinate
+"""
+If called for `coord.name = vperp` elemental matrix `MN` on the \$i^{th}\$ element is
+```math
+ (MN)_{jk} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\varphi_k(v_\\perp) d v_\\perp = \\int^1_{-1} l_j(x)l_k(x) s_i d x 
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `MN` is the same as `MM` (see `get_MM_local!()`).
+"""
 function get_MN_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -1355,8 +1393,14 @@ function get_MN_local!(QQ,ielement,
         return nothing
 end
 
-# mass matrix with vperp^2 factor (matrix R)
-# only useful for the vperp coordinate
+"""
+If called for `coord.name = vperp` elemental matrix `MR` on the \$i^{th}\$ element is
+```math
+ (MR)_{jk} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\varphi_k(v_\\perp) v_\\perp^2 d v_\\perp = \\int^1_{-1} (c_i + s_i x)^2 l_j(x)l_k(x) s_i d x 
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `MR` is the same as `MM` (see `get_MM_local!()`).
+"""
 function get_MR_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -1381,8 +1425,18 @@ function get_MR_local!(QQ,ielement,
         return nothing
 end
 
-# derivative matrix (matrix P, no integration by parts)
-# with vperp Jacobian factor if coord is vperp (matrix P)
+"""
+If called for `coord.name = vperp` elemental matrix `PP` on the \$i^{th}\$ element is
+```math
+ P_{jk} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\frac{\\partial\\varphi_k(v_\\perp)}{\\partial v_\\perp} v_\\perp d v_\\perp
+ = \\int^1_{-1} (c_i + x s_i)l_j(x)l_k^\\prime(x) d x 
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `PP` is 
+```math
+ P_{jk} = \\int^{v_\\|^U}_{v_\\|^L}  \\varphi_j(v_\\|)\\frac{\\partial\\varphi_k(v_\\|)}{\\partial v_\\|} d v_\\| = \\int^1_{-1} l_j(x)l_k^\\prime(x) d x.
+```
+"""
 function get_PP_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -1403,9 +1457,15 @@ function get_PP_local!(QQ,ielement,
         return nothing
 end
 
-# derivative matrix (matrix P, no integration by parts)
-# with vperp^2 Jacobian factor if coord is vperp (matrix U)
-# not useful for vpa coordinate
+"""
+If called for `coord.name = vperp` elemental matrix `PP` on the \$i^{th}\$ element is
+```math
+ (PU)_{jk} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\frac{\\partial\\varphi_k(v_\\perp)}{\\partial v_\\perp} v_\\perp^2 d v_\\perp
+ = \\int^1_{-1} (c_i + x s_i)^2l_j(x)l_k^\\prime(x) d x 
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `PU` is the same as `PP` see `get_PP_local!()`.
+"""
 function get_PU_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -1451,6 +1511,19 @@ function get_QQ_local!(QQ::AbstractArray{mk_float,3},
         return nothing
 end
 
+"""
+If called for `coord.name = vperp` elemental matrix `YY0` on the \$i^{th}\$ element is
+```math
+ (YY0)_{jkm} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\varphi_k(v_\\perp)\\varphi_m(v_\\perp) v_\\perp d v_\\perp
+ = \\int^1_{-1} (c_i + x s_i)l_j(x)l_k(x)l_m(x) s_i d x 
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `YY0` is 
+```math
+ (YY0)_{jkm} = \\int^{v_\\|^U}_{v_\\|^L}  \\varphi_j(v_\\|)\\varphi_k(v_\\|)\\varphi_m(v_\\|) d v_\\|
+ = \\int^1_{-1} l_j(x)l_k(x)l_m(x) s_i d x.
+```
+"""
 function get_YY0_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -1471,6 +1544,19 @@ function get_YY0_local!(QQ,ielement,
         return nothing
 end
 
+"""
+If called for `coord.name = vperp` elemental matrix `YY1` on the \$i^{th}\$ element is
+```math
+ (YY1)_{jkm} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\varphi_k(v_\\perp)\\frac{\\partial\\varphi_m(v_\\perp)}{\\partial v_\\perp} v_\\perp d v_\\perp
+ = \\int^1_{-1} (c_i + x s_i)l_j(x)l_k(x)l_m^\\prime(x) d x 
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `YY1` is 
+```math
+ (YY1)_{jkm} = \\int^{v_\\|^U}_{v_\\|^L}  \\varphi_j(v_\\|)\\varphi_k(v_\\|)\\frac{\\partial\\varphi_m(v_\\|)}{\\partial v_\\|} d v_\\|
+ = \\int^1_{-1} l_j(x)l_k(x)l_m^\\prime(x) d x.
+```
+"""
 function get_YY1_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -1491,6 +1577,19 @@ function get_YY1_local!(QQ,ielement,
         return nothing
 end
 
+"""
+If called for `coord.name = vperp` elemental matrix `YY2` on the \$i^{th}\$ element is
+```math
+ (YY2)_{jkm} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\frac{\\partial\\varphi_k(v_\\|)}{\\partial v_\\|}\\frac{\\partial\\varphi_m(v_\\perp)}{\\partial v_\\perp} v_\\perp d v_\\perp
+ = \\int^1_{-1} (c_i + x s_i)l_j(x)l_k^\\prime(x)l_m^\\prime(x) d x/s_i 
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `YY2` is 
+```math
+ (YY2)_{jkm} = \\int^{v_\\|^U}_{v_\\|^L}  \\varphi_j(v_\\|)\\frac{\\partial\\varphi_k(v_\\|)}{\\partial v_\\|}\\frac{\\partial\\varphi_m(v_\\|)}{\\partial v_\\|} d v_\\|
+ = \\int^1_{-1} l_j(x)l_k^\\prime(x)l_m^\\prime(x) d x /s_i.
+```
+"""
 function get_YY2_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -1511,6 +1610,19 @@ function get_YY2_local!(QQ,ielement,
         return nothing
 end
 
+"""
+If called for `coord.name = vperp` elemental matrix `YY3` on the \$i^{th}\$ element is
+```math
+ (YY3)_{jkm} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\frac{\\partial\\varphi_k(v_\\|)}{\\partial v_\\|}\\varphi_m(v_\\perp) v_\\perp d v_\\perp
+ = \\int^1_{-1} (c_i + x s_i)l_j(x)l_k^\\prime(x)l_m(x) d x 
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `YY3` is 
+```math
+ (YY3)_{jkm} = \\int^{v_\\|^U}_{v_\\|^L}  \\varphi_j(v_\\|)\\frac{\\partial\\varphi_k(v_\\|)}{\\partial v_\\|}\\varphi_m(v_\\|) d v_\\|
+ = \\int^1_{-1} l_j(x)l_k^\\prime(x)l_m(x) d x.
+```
+"""
 function get_YY3_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
