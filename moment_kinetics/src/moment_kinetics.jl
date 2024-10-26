@@ -275,7 +275,7 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
                               manufactured_solns_input, t_input, num_diss_params,
                               advection_structs, io_input, input_dict)
         # initialize time variable
-        code_time = 0.
+        code_time = mk_float(0.0)
         dt = nothing
         dt_before_last_fail = nothing
         electron_dt = nothing

@@ -313,10 +313,11 @@ the returned `time_info`.
 function setup_time_info(t_input, n_variables, code_time, dt_reload,
                          dt_before_last_fail_reload, composition,
                          manufactured_solns_input, io_input, input_dict; electron=nothing)
+    code_time = mk_float(code_time)
     rk_coefs, rk_coefs_implicit, implicit_coefficient_is_zero, n_rk_stages, rk_order,
     adaptive, low_storage, CFL_prefactor =
         setup_runge_kutta_coefficients!(t_input["type"],
-                                        t_input["CFL_prefactor"],
+                                        mk_float(t_input["CFL_prefactor"]),
                                         t_input["split_operators"])
 
     if !adaptive
@@ -343,16 +344,16 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
     end
 
     t = Ref(code_time)
-    dt = Ref(dt_reload === nothing ? t_input["dt"] : dt_reload)
+    dt = Ref(dt_reload === nothing ? mk_float(t_input["dt"]) : dt_reload)
     previous_dt = Ref(dt[])
     dt_before_output = Ref(dt[])
-    dt_before_last_fail = Ref(dt_before_last_fail_reload === nothing ? Inf : dt_before_last_fail_reload)
+    dt_before_last_fail = Ref(dt_before_last_fail_reload === nothing ? mk_float(Inf) : dt_before_last_fail_reload)
     step_to_moments_output = Ref(false)
     step_to_dfns_output = Ref(false)
     write_moments_output = Ref(false)
     write_dfns_output = Ref(false)
 
-    end_time = code_time + t_input["dt"] * t_input["nstep"]
+    end_time = mk_float(code_time + t_input["dt"] * t_input["nstep"])
     epsilon = 1.e-11
     if adaptive || t_input["write_after_fixed_step_count"]
         if t_input["nwrite"] == 0
@@ -423,7 +424,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         end
         decrease_dt_iteration_threshold = t_input["decrease_dt_iteration_threshold"]
         increase_dt_iteration_threshold = t_input["increase_dt_iteration_threshold"]
-        cap_factor_ion_dt = t_input["cap_factor_ion_dt"]
+        cap_factor_ion_dt = mk_float(t_input["cap_factor_ion_dt"])
         electron_t_params = nothing
     elseif electron === false
         debug_io = nothing
@@ -439,28 +440,31 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         electron_t_params = electron
     end
     return time_info(n_variables, t_input["nstep"], end_time, t, dt, previous_dt,
-                     dt_before_output, dt_before_last_fail, CFL_prefactor,
+                     dt_before_output, dt_before_last_fail, mk_float(CFL_prefactor),
                      step_to_moments_output, step_to_dfns_output, write_moments_output,
                      write_dfns_output, Ref(0), Ref(0), Ref{mk_float}(0.0), Ref(0),
                      Ref(0), Ref(0), mk_int[], mk_int[], t_input["nwrite"],
                      t_input["nwrite_dfns"], moments_output_times, dfns_output_times,
                      t_input["type"], rk_coefs, rk_coefs_implicit,
                      implicit_coefficient_is_zero, n_rk_stages, rk_order, adaptive,
-                     low_storage, t_input["rtol"], t_input["atol"], t_input["atol_upar"],
-                     t_input["step_update_prefactor"], t_input["max_increase_factor"],
-                     t_input["max_increase_factor_near_last_fail"],
-                     t_input["last_fail_proximity_factor"], t_input["minimum_dt"],
-                     t_input["maximum_dt"],
+                     low_storage, mk_float(t_input["rtol"]), mk_float(t_input["atol"]),
+                     mk_float(t_input["atol_upar"]),
+                     mk_float(t_input["step_update_prefactor"]),
+                     mk_float(t_input["max_increase_factor"]),
+                     mk_float(t_input["max_increase_factor_near_last_fail"]),
+                     mk_float(t_input["last_fail_proximity_factor"]),
+                     mk_float(t_input["minimum_dt"]), mk_float(t_input["maximum_dt"]),
                      electron !== nothing && t_input["implicit_braginskii_conduction"],
                      electron !== nothing && t_input["implicit_electron_advance"],
                      electron !== nothing && t_input["implicit_ion_advance"],
                      electron !== nothing && t_input["implicit_vpa_advection"],
                      electron !== nothing && t_input["implicit_electron_ppar"],
-                     t_input["constraint_forcing_rate"], decrease_dt_iteration_threshold,
-                     increase_dt_iteration_threshold, cap_factor_ion_dt,
-                     t_input["write_after_fixed_step_count"], error_sum_zero,
-                     t_input["split_operators"], t_input["steady_state_residual"],
-                     t_input["converged_residual_value"],
+                     mk_float(t_input["constraint_forcing_rate"]),
+                     decrease_dt_iteration_threshold, increase_dt_iteration_threshold,
+                     mk_float(cap_factor_ion_dt), t_input["write_after_fixed_step_count"],
+                     error_sum_zero, t_input["split_operators"],
+                     t_input["steady_state_residual"],
+                     mk_float(t_input["converged_residual_value"]),
                      manufactured_solns_input.use_for_advance, t_input["stopfile_name"],
                      debug_io, electron_t_params)
 end

@@ -186,13 +186,15 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
 
     linear_initial_guess = zeros(linear_restart)
 
-    return nl_solver_info(nl_solver_input.rtol, nl_solver_input.atol,
+    return nl_solver_info(mk_float(nl_solver_input.rtol), mk_float(nl_solver_input.atol),
                           nl_solver_input.nonlinear_max_iterations,
-                          nl_solver_input.linear_rtol, nl_solver_input.linear_atol,
-                          linear_restart, nl_solver_input.linear_max_restarts, H, c, s, g,
-                          V, linear_initial_guess, Ref(0), Ref(0), Ref(0), Ref(0), Ref(0),
+                          mk_float(nl_solver_input.linear_rtol),
+                          mk_float(nl_solver_input.linear_atol), linear_restart,
+                          nl_solver_input.linear_max_restarts, H, c, s, g, V,
+                          linear_initial_guess, Ref(0), Ref(0), Ref(0), Ref(0), Ref(0),
                           Ref(0), Ref(nl_solver_input.preconditioner_update_interval),
-                          Ref(0.0), serial_solve, Ref(0), Ref(0), preconditioner_type,
+                          Ref(mk_float(0.0)), serial_solve, Ref(0), Ref(0),
+                          preconditioner_type,
                           nl_solver_input.preconditioner_update_interval, preconditioners)
 end
 
