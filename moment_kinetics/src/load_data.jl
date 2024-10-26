@@ -5033,6 +5033,13 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         nl_linear_iterations = get_per_step_from_cumulative_variable(
             run_info, "$(prefix)_linear_iterations"; kwargs...)
         variable = nl_linear_iterations ./ nl_iterations
+    elseif occursin("_precon_iterations_per_linear_iteration", variable_name)
+        prefix = split(variable_name, "_precon_iterations_per_linear_iteration")[1]
+        nl_linear_iterations = get_per_step_from_cumulative_variable(
+            run_info, "$(prefix)_linear_iterations"; kwargs...)
+        nl_precon_iterations = get_per_step_from_cumulative_variable(
+            run_info, "$(prefix)_precon_iterations"; kwargs...)
+        variable = nl_precon_iterations ./ nl_linear_iterations
     elseif endswith(variable_name, "_per_step") && variable_name ∉ run_info.variable_names
         # If "_per_step" is appended to a variable name, assume it is a cumulative
         # variable, and get the per-step version.

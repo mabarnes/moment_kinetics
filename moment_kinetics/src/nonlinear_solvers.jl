@@ -59,9 +59,11 @@ struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon,Tpretype}
     n_solves::Base.RefValue{mk_int}
     nonlinear_iterations::Base.RefValue{mk_int}
     linear_iterations::Base.RefValue{mk_int}
+    precon_iterations::Base.RefValue{mk_int}
     global_n_solves::Base.RefValue{mk_int}
     global_nonlinear_iterations::Base.RefValue{mk_int}
     global_linear_iterations::Base.RefValue{mk_int}
+    global_precon_iterations::Base.RefValue{mk_int}
     solves_since_precon_update::Base.RefValue{mk_int}
     precon_dt::Base.RefValue{mk_float}
     serial_solve::Bool
@@ -178,6 +180,73 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                                 allocate_shared_float(pdf_plus_ppar_size),
                                ),
                                reverse(outer_coord_sizes))
+    elseif preconditioner_type === Val(:electron_adi)
+        nz = coords.z.n
+        pdf_plus_ppar_size = total_size_coords + nz
+        nvperp = coords.vperp.n
+        nvpa = coords.vpa.n
+        v_size = nvperp * nvpa
+
+        function get_adi_precon_buffers()
+            v_solve_z_range = looping.loop_ranges_store[(:z,)].z
+            v_solve_global_inds = [[((iz - 1)*v_size+1 : iz*v_size)..., total_size_coords+iz] for iz ∈ v_solve_z_range]
+            v_solve_nsolve = length(v_solve_z_range)
+            # Plus one for the one point of ppar that is included in the 'v solve'.
+            v_solve_n = nvperp * nvpa + 1
+            v_solve_implicit_lus = Vector{SparseArrays.UMFPACK.UmfpackLU{mk_float, mk_int}}(undef, v_solve_nsolve)
+            v_solve_explicit_matrices = Vector{SparseMatrixCSC{mk_float, mk_int}}(undef, v_solve_nsolve)
+            # This buffer is not shared-memory, because it will be used for a serial LU solve.
+            v_solve_buffer = allocate_float(v_solve_n)
+            v_solve_buffer2 = allocate_float(v_solve_n)
+            v_solve_matrix_buffer = allocate_float(v_solve_n, v_solve_n)
+
+            z_solve_vperp_range = looping.loop_ranges_store[(:vperp,:vpa)].vperp
+            z_solve_vpa_range = looping.loop_ranges_store[(:vperp,:vpa)].vpa
+            z_solve_global_inds = vec([(ivperp-1)*nvpa+ivpa:v_size:(nz-1)*v_size+(ivperp-1)*nvpa+ivpa for ivperp ∈ z_solve_vperp_range, ivpa ∈ z_solve_vpa_range])
+            z_solve_nsolve = length(z_solve_vperp_range) * length(z_solve_vpa_range)
+            @serial_region begin
+                # Do the solve for ppar on the rank-0 process, which has the fewest grid
+                # points to handle if there are not an exactly equal number of points for each
+                # process.
+                push!(z_solve_global_inds, total_size_coords+1 : total_size_coords+nz)
+                z_solve_nsolve += 1
+            end
+            z_solve_n = nz
+            z_solve_implicit_lus = Vector{SparseArrays.UMFPACK.UmfpackLU{mk_float, mk_int}}(undef, z_solve_nsolve)
+            z_solve_explicit_matrices = Vector{SparseMatrixCSC{mk_float, mk_int}}(undef, z_solve_nsolve)
+            # This buffer is not shared-memory, because it will be used for a serial LU solve.
+            z_solve_buffer = allocate_float(z_solve_n)
+            z_solve_buffer2 = allocate_float(z_solve_n)
+            z_solve_matrix_buffer = allocate_float(z_solve_n, z_solve_n)
+
+            J_buffer = allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size)
+            input_buffer = allocate_shared_float(pdf_plus_ppar_size)
+            intermediate_buffer = allocate_shared_float(pdf_plus_ppar_size)
+            output_buffer = allocate_shared_float(pdf_plus_ppar_size)
+            error_buffer = allocate_shared_float(pdf_plus_ppar_size)
+
+            chunk_size = (pdf_plus_ppar_size + block_size[] - 1) ÷ block_size[]
+            # Set up so root process has fewest points, as root may have other work to do.
+            global_index_subrange = max(1, pdf_plus_ppar_size - (block_size[] - block_rank[]) * chunk_size + 1):(pdf_plus_ppar_size - (block_size[] - block_rank[] - 1) * chunk_size)
+
+            return (v_solve_global_inds=v_solve_global_inds,
+                    v_solve_nsolve=v_solve_nsolve,
+                    v_solve_implicit_lus=v_solve_implicit_lus,
+                    v_solve_explicit_matrices=v_solve_explicit_matrices,
+                    v_solve_buffer=v_solve_buffer, v_solve_buffer2=v_solve_buffer2,
+                    v_solve_matrix_buffer=v_solve_matrix_buffer,
+                    z_solve_global_inds=z_solve_global_inds,
+                    z_solve_nsolve=z_solve_nsolve,
+                    z_solve_implicit_lus=z_solve_implicit_lus,
+                    z_solve_explicit_matrices=z_solve_explicit_matrices,
+                    z_solve_buffer=z_solve_buffer, z_solve_buffer2=z_solve_buffer2,
+                    z_solve_matrix_buffer=z_solve_matrix_buffer, J_buffer=J_buffer,
+                    input_buffer=input_buffer, intermediate_buffer=intermediate_buffer,
+                    output_buffer=output_buffer,
+                    global_index_subrange=global_index_subrange)
+        end
+
+        preconditioners = fill(get_adi_precon_buffers(), reverse(outer_coord_sizes))
     elseif preconditioner_type === Val(:none)
         preconditioners = nothing
     else
@@ -192,7 +261,8 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                           mk_float(nl_solver_input.linear_atol), linear_restart,
                           nl_solver_input.linear_max_restarts, H, c, s, g, V,
                           linear_initial_guess, Ref(0), Ref(0), Ref(0), Ref(0), Ref(0),
-                          Ref(0), Ref(nl_solver_input.preconditioner_update_interval),
+                          Ref(0), Ref(0), Ref(0),
+                          Ref(nl_solver_input.preconditioner_update_interval),
                           Ref(mk_float(0.0)), serial_solve, Ref(0), Ref(0),
                           preconditioner_type,
                           nl_solver_input.preconditioner_update_interval, preconditioners)
@@ -235,12 +305,14 @@ total.
         nl_solver_params.ion_advance.global_n_solves[] = nl_solver_params.ion_advance.n_solves[]
         nl_solver_params.ion_advance.global_nonlinear_iterations[] = nl_solver_params.ion_advance.nonlinear_iterations[]
         nl_solver_params.ion_advance.global_linear_iterations[] = nl_solver_params.ion_advance.linear_iterations[]
+        nl_solver_params.ion_advance.global_precon_iterations[] = nl_solver_params.ion_advance.precon_iterations[]
     end
     if nl_solver_params.vpa_advection !== nothing
         # Solves are run in serial on separate processes, so need a global Allreduce
         @timeit_debug global_timer "MPI.Allreduce! comm_world" MPI.Allreduce!(nl_solver_params.vpa_advection.n_solves[], +, comm_world)
         @timeit_debug global_timer "MPI.Allreduce! comm_world" MPI.Allreduce!(nl_solver_params.vpa_advection.nonlinear_iterations[], +, comm_world)
         @timeit_debug global_timer "MPI.Allreduce! comm_world" MPI.Allreduce!(nl_solver_params.vpa_advection.linear_iterations[], +, comm_world)
+        @timeit_debug global_timer "MPI.Allreduce! comm_world" MPI.Allreduce!(nl_solver_params.vpa_advection.precon_iterations[], +, comm_world)
     end
 end
 
@@ -342,6 +414,7 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
     close_linear_counter = -1
     success = true
     previous_residual_norm = residual_norm
+old_precon_iterations = nl_solver_params.precon_iterations[]
     while (counter < 1 && residual_norm > 1.0e-8) || residual_norm > 1.0
         counter += 1
         #println("\nNewton ", counter)
@@ -446,6 +519,9 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
 #    println("Final residual: ", residual_norm)
 #    println("Total linear iterations: ", linear_counter)
 #    println("Linear iterations per Newton: ", linear_counter / counter)
+#    precon_count = nl_solver_params.precon_iterations[] - old_precon_iterations
+#    println("Total precon iterations: ", precon_count)
+#    println("Precon iterations per linear: ", precon_count / linear_counter)
 #
 #    println("Newton iterations after close: ", counter - close_counter)
 #    println("Total linear iterations after close: ", linear_counter - close_linear_counter)
