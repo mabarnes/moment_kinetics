@@ -1099,7 +1099,7 @@ global_rank[] == 0 && println("recalculating precon")
                         collisions, composition, z, vperp, vpa, z_spectral,
                         vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                         external_source_settings, num_diss_params, t_params, ion_dt, ir,
-                        evolve_ppar, :explicit_z)
+                        evolve_ppar, :explicit_z, false)
                     begin_z_region()
                     @loop_z iz begin
                         v_solve_counter += 1
@@ -1147,7 +1147,7 @@ global_rank[] == 0 && println("recalculating precon")
                         collisions, composition, z, vperp, vpa, z_spectral,
                         vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                         external_source_settings, num_diss_params, t_params, ion_dt, ir,
-                        evolve_ppar, :explicit_v)
+                        evolve_ppar, :explicit_v, false)
                     begin_vperp_vpa_region()
                     @loop_vperp_vpa ivperp ivpa begin
                         z_solve_counter += 1
@@ -3181,7 +3181,7 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
                          vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
                          vpa_advect, scratch_dummy, external_source_settings,
                          num_diss_params, t_params, ion_dt, ir, evolve_ppar,
-                         include=:all) = begin
+                         include=:all, include_qpar_integral_terms=true) = begin
     dt = t_params.dt[]
 
     buffer_1 = @view scratch_dummy.buffer_rs_1[ir,1]
@@ -3290,13 +3290,13 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
     add_electron_vpa_advection_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, third_moment, dpdf_dvpa, ddens_dz,
         dppar_dz, dthird_moment_dz, moments, me, z, vperp, vpa, z_spectral, vpa_spectral,
-        vpa_advect, z_speed, scratch_dummy, external_source_settings, dt, ir, include;
-        ppar_offset=pdf_size)
+        vpa_advect, z_speed, scratch_dummy, external_source_settings, dt, ir, include,
+        include_qpar_integral_terms; ppar_offset=pdf_size)
     add_contribution_from_electron_pdf_term_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
         dvth_dz, dqpar_dz, dthird_moment_dz, moments, me, external_source_settings, z,
-        vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir, include;
-        ppar_offset=pdf_size)
+        vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir, include,
+        include_qpar_integral_terms; ppar_offset=pdf_size)
     add_electron_dissipation_term_to_Jacobian!(
         jacobian_matrix, f, num_diss_params, z, vperp, vpa, vpa_spectral, z_speed, dt, ir,
         include)
@@ -4194,8 +4194,8 @@ end
 function add_contribution_from_electron_pdf_term_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
         dvth_dz, dqpar_dz, dthird_moment_dz, moments, me, external_source_settings, z,
-        vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir, include=:all; f_offset=0,
-        ppar_offset=0)
+        vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir, include=:all,
+        include_qpar_integral_terms=true; f_offset=0, ppar_offset=0)
 
     if f_offset == ppar_offset
         error("Got f_offset=$f_offset the same as ppar_offset=$ppar_offset. f and ppar "
@@ -4274,11 +4274,13 @@ function add_contribution_from_electron_pdf_term_to_Jacobian!(
         z_deriv_row_endind = z_deriv_matrix.rowptr[iz+1] - 1
         z_deriv_colinds = @view z_deriv_matrix.colval[z_deriv_row_startind:z_deriv_row_endind]
         z_deriv_row_nonzeros = @view z_deriv_matrix.nzval[z_deriv_row_startind:z_deriv_row_endind]
-        for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros), icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-            col = (icolz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
-            jacobian_matrix[row,col] +=
-                dt * f[ivpa,ivperp,iz] * vth[iz] *
-                vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_entry
+        if include_qpar_integral_terms
+            for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros), icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+                col = (icolz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+                jacobian_matrix[row,col] +=
+                    dt * f[ivpa,ivperp,iz] * vth[iz] *
+                    vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_entry
+            end
         end
         if include === :all
             for index ∈ eachindex(external_source_settings.electron)

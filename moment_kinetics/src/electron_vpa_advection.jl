@@ -100,7 +100,9 @@ function add_electron_vpa_advection_to_Jacobian!(jacobian_matrix, f, dens, upar,
                                                  z, vperp, vpa, z_spectral, vpa_spectral,
                                                  vpa_advect, z_speed, scratch_dummy,
                                                  external_source_settings, dt, ir,
-                                                 include=:all; f_offset=0, ppar_offset=0)
+                                                 include=:all,
+                                                 include_qpar_integral_terms=true;
+                                                 f_offset=0, ppar_offset=0)
     if f_offset == ppar_offset
         error("Got f_offset=$f_offset the same as ppar_offset=$ppar_offset. f and ppar "
               * "cannot be in same place in state vector.")
@@ -205,10 +207,12 @@ function add_electron_vpa_advection_to_Jacobian!(jacobian_matrix, f, dens, upar,
         z_deriv_row_endind = z_deriv_matrix.rowptr[iz+1] - 1
         z_deriv_colinds = @view z_deriv_matrix.colval[z_deriv_row_startind:z_deriv_row_endind]
         z_deriv_row_nonzeros = @view z_deriv_matrix.nzval[z_deriv_row_startind:z_deriv_row_endind]
-        for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros), icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-            col = (icolz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
-            jacobian_matrix[row,col] += dt * dpdf_dvpa[ivpa,ivperp,iz] *
-                vpa.grid[ivpa] * vth[iz] * vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_entry
+        if include_qpar_integral_terms
+            for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros), icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+                col = (icolz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+                jacobian_matrix[row,col] += dt * dpdf_dvpa[ivpa,ivperp,iz] *
+                    vpa.grid[ivpa] * vth[iz] * vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_entry
+            end
         end
         if include ∈ (:all, :explicit_v)
             jacobian_matrix[row,ppar_offset+iz] += dt * dpdf_dvpa[ivpa,ivperp,iz] * vpa.grid[ivpa] *
