@@ -408,7 +408,9 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
     counter = 0
     linear_counter = 0
 
-    parallel_map(solver_type, ()->0.0, delta_x)
+    # Would need this if delta_x was not set to zero within the Newton iteration loop
+    # below.
+    #parallel_map(solver_type, ()->0.0, delta_x)
 
     close_counter = -1
     close_linear_counter = -1
@@ -434,7 +436,8 @@ old_precon_iterations = nl_solver_params.precon_iterations[]
                                    s=nl_solver_params.s, g=nl_solver_params.g,
                                    V=nl_solver_params.V, rhs_delta=rhs_delta,
                                    initial_guess=nl_solver_params.linear_initial_guess,
-                                   serial_solve=nl_solver_params.serial_solve)
+                                   serial_solve=nl_solver_params.serial_solve,
+                                   initial_delta_x_is_zero=true)
         linear_counter += linear_its
 
         # If the residual does not decrease, we will do a line search to find an update
@@ -1217,7 +1220,8 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                          x, residual_func!, residual0, delta_x, v, w, solver_type::Val,
                          norm_params; coords, rtol, atol, restart, max_restarts,
                          left_preconditioner, right_preconditioner, H, c, s, g, V,
-                         rhs_delta, initial_guess, serial_solve) = begin
+                         rhs_delta, initial_guess, serial_solve,
+                         initial_delta_x_is_zero) = begin
     # Solve (approximately?):
     #   J δx = residual0
 
@@ -1234,8 +1238,10 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
     # by a large number `Jv_scale_factor` (in constrast to the small `epsilon` in the
     # 'usual' case where the norm does not include either reative or absolute tolerance)
     # to ensure that we get a reasonable estimate of J.v.
-    function approximate_Jacobian_vector_product!(v)
-        right_preconditioner(v)
+    function approximate_Jacobian_vector_product!(v, skip_first_precon::Bool=false)
+        if !skip_first_precon
+            right_preconditioner(v)
+        end
 
         parallel_map(solver_type, (x,v) -> x + Jv_scale_factor * v, v, x, v)
         residual_func!(rhs_delta, v)
@@ -1249,8 +1255,12 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
     # the left-preconditioner.
     parallel_map(solver_type, (delta_x) -> delta_x, v, delta_x)
     left_preconditioner(residual0)
+
     # This function transforms the data stored in 'v' from δx to ≈J.δx
-    approximate_Jacobian_vector_product!(v)
+    # If initial δx is all-zero, we can skip a right-preconditioner evaluation because it
+    # would just transform all-zero to all-zero.
+    approximate_Jacobian_vector_product!(v, initial_delta_x_is_zero)
+
     # Now we actually set 'w' as the first Krylov vector, and normalise it.
     parallel_map(solver_type, (residual0, v) -> -residual0 - v, w, residual0, v)
     beta = distributed_norm(solver_type, w, norm_params...)
