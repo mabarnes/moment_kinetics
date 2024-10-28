@@ -667,6 +667,13 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                                                     input_dict, (z=z,);
                                                                     default_rtol=t_params.rtol / 10.0,
                                                                     default_atol=t_params.atol / 10.0)
+    if block_size[] == 1
+        # No need to parallelise, so un-split LU solver should be most efficient.
+        electron_preconditioner_type = Val(:electron_lu)
+    else
+        # Want to parallelise preconditioner, so use ADI method.
+        electron_preconditioner_type = Val(:electron_adi)
+    end
     nl_solver_electron_advance_params =
         setup_nonlinear_solve(t_params.implicit_electron_advance || composition.electron_physics ∈ (kinetic_electrons, kinetic_electrons_with_temperature_equation),
                               input_dict,
@@ -675,8 +682,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                               default_rtol=t_params.rtol / 10.0,
                               default_atol=t_params.atol / 10.0,
                               electron_ppar_pdf_solve=true,
-                              #preconditioner_type=Val(:electron_lu))
-                              preconditioner_type=Val(:electron_adi))
+                              preconditioner_type=electron_preconditioner_type)
     nl_solver_ion_advance_params =
         setup_nonlinear_solve(t_params.implicit_ion_advance, input_dict,
                               (s=composition.n_ion_species, r=r, z=z, vperp=vperp,
