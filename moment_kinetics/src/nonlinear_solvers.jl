@@ -96,6 +96,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
         linear_restart=10,
         linear_max_restarts=0,
         preconditioner_update_interval=300,
+        adi_precon_iterations=1,
        )
 
     if !active
@@ -229,6 +230,12 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
             # Set up so root process has fewest points, as root may have other work to do.
             global_index_subrange = max(1, pdf_plus_ppar_size - (block_size[] - block_rank[]) * chunk_size + 1):(pdf_plus_ppar_size - (block_size[] - block_rank[] - 1) * chunk_size)
 
+            if nl_solver_input.adi_precon_iterations < 1
+                error("Setting adi_precon_iterations=$(nl_solver_input.adi_precon_iterations) "
+                      * "would mean the preconditioner does nothing.")
+            end
+            n_extra_iterations = nl_solver_input.adi_precon_iterations - 1
+
             return (v_solve_global_inds=v_solve_global_inds,
                     v_solve_nsolve=v_solve_nsolve,
                     v_solve_implicit_lus=v_solve_implicit_lus,
@@ -243,7 +250,8 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                     z_solve_matrix_buffer=z_solve_matrix_buffer, J_buffer=J_buffer,
                     input_buffer=input_buffer, intermediate_buffer=intermediate_buffer,
                     output_buffer=output_buffer,
-                    global_index_subrange=global_index_subrange)
+                    global_index_subrange=global_index_subrange,
+                    n_extra_iterations=n_extra_iterations)
         end
 
         preconditioners = fill(get_adi_precon_buffers(), reverse(outer_coord_sizes))

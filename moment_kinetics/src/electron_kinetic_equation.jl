@@ -1094,12 +1094,17 @@ global_rank[] == 0 && println("recalculating precon")
                     explicit_J = adi_info.J_buffer
                     # Get sparse matrix for explicit, right-hand-side part of the
                     # solve.
-                    fill_electron_kinetic_equation_Jacobian!(
-                        explicit_J, f_electron_new, electron_ppar_new, moments,
-                        collisions, composition, z, vperp, vpa, z_spectral,
-                        vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-                        external_source_settings, num_diss_params, t_params, ion_dt, ir,
-                        evolve_ppar, :explicit_z, false)
+                    if adi_info.n_extra_iterations > 0
+                        # If we only do one 'iteration' we don't need the 'explicit
+                        # matrix' for the first solve (the v-solve), because the initial
+                        # guess is zero,
+                        fill_electron_kinetic_equation_Jacobian!(
+                            explicit_J, f_electron_new, electron_ppar_new, moments,
+                            collisions, composition, z, vperp, vpa, z_spectral,
+                            vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                            external_source_settings, num_diss_params, t_params, ion_dt, ir,
+                            evolve_ppar, :explicit_z, false)
+                    end
                     begin_z_region()
                     @loop_z iz begin
                         v_solve_counter += 1
@@ -1132,7 +1137,12 @@ global_rank[] == 0 && println("recalculating precon")
                             end
                         end
 
-                        adi_info.v_solve_explicit_matrices[v_solve_counter] = sparse(@view(explicit_J[adi_info.v_solve_global_inds[v_solve_counter],:]))
+                        if adi_info.n_extra_iterations > 0
+                            # If we only do one 'iteration' we don't need the 'explicit
+                            # matrix' for the first solve (the v-solve), because the
+                            # initial guess is zero,
+                            adi_info.v_solve_explicit_matrices[v_solve_counter] = sparse(@view(explicit_J[adi_info.v_solve_global_inds[v_solve_counter],:]))
+                        end
                     end
                     @boundscheck v_solve_counter == adi_info.v_solve_nsolve || error("v_solve_counter($v_solve_counter) != v_solve_nsolve($(adi_info.v_solve_nsolve))")
 
@@ -1233,6 +1243,7 @@ global_rank[] == 0 && println("recalculating precon")
                     this_intermediate_buffer = adi_info.intermediate_buffer
                     this_output_buffer = adi_info.output_buffer
                     global_index_subrange = adi_info.global_index_subrange
+                    n_extra_iterations = adi_info.n_extra_iterations
 
                     v_size = vperp.n * vpa.n
                     pdf_size = z.n * v_size
@@ -1317,7 +1328,7 @@ global_rank[] == 0 && println("recalculating precon")
                     first_adi_v_solve!()
                     fill_intermediate_buffer!()
                     adi_z_solve!()
-                    for n ∈ 1:1
+                    for n ∈ 1:n_extra_iterations
                         precon_iterations[] += 1
                         fill_intermediate_buffer!()
                         adi_v_solve!()
