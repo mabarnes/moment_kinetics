@@ -332,9 +332,10 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
         # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
         # variables (vth, etc.).
 
+        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
             begin_serial_region()
             @serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
@@ -371,7 +372,6 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
 
         @testset "ADI Jacobians - implicit v" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
             begin_serial_region()
             @serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
@@ -675,9 +675,10 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
         # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
         # variables (vth, etc.).
 
+        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
             begin_serial_region()
             @serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
@@ -704,7 +705,6 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
 
         @testset "ADI Jacobians - implicit v" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
             begin_serial_region()
             @serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
@@ -1015,9 +1015,10 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
         # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
         # variables (vth, etc.).
 
+        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
             begin_serial_region()
             @serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
@@ -1055,7 +1056,6 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
 
         @testset "ADI Jacobians - implicit v" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
             begin_serial_region()
             @serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
@@ -1327,9 +1327,13 @@ function test_electron_dissipation_term(test_input; rtol=(3.0e0*epsilon)^2)
             jacobian_matrix, f, num_diss_params, z, vperp, vpa, vpa_spectral, z_speed, dt,
             ir)
 
+        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+        # variables (vth, etc.).
+
+        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
             begin_serial_region()
             @serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
@@ -1354,7 +1358,6 @@ function test_electron_dissipation_term(test_input; rtol=(3.0e0*epsilon)^2)
 
         @testset "ADI Jacobians - implicit v" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
             begin_serial_region()
             @serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
@@ -1625,9 +1628,13 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
             jacobian_matrix, f, dens, upar, ppar, vth, @view(moments.ion.upar[:,ir]),
             collisions, z, vperp, vpa, z_speed, dt, ir; ppar_offset=pdf_size)
 
+        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+        # variables (vth, etc.).
+
+        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
             begin_serial_region()
             @serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
@@ -1663,7 +1670,6 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
 
         @testset "ADI Jacobians - implicit v" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
             begin_serial_region()
             @serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
@@ -1950,9 +1956,13 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
             jacobian_matrix, f, moments, me, z_speed, external_source_settings.electron,
             z, vperp, vpa, dt, ir; ppar_offset=pdf_size)
 
+        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+        # variables (vth, etc.).
+
+        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
             begin_serial_region()
             @serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
@@ -1988,7 +1998,6 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
 
         @testset "ADI Jacobians - implicit v" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
             begin_serial_region()
             @serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
@@ -2291,9 +2300,13 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(1.5e0*epsil
             jacobian_matrix, f, zeroth_moment, first_moment, second_moment, z_speed, z,
             vperp, vpa, t_params.electron.constraint_forcing_rate, dt, ir)
 
+        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+        # variables (vth, etc.).
+
+        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
             begin_serial_region()
             @serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
@@ -2329,7 +2342,6 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(1.5e0*epsil
 
         @testset "ADI Jacobians - implicit v" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
             begin_serial_region()
             @serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
@@ -2620,9 +2632,13 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
             dppar_dz, dthird_moment_dz, collisions, composition, z, vperp, vpa,
             z_spectral, num_diss_params, dt, ir; ppar_offset=pdf_size)
 
+        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+        # variables (vth, etc.).
+
+        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
             begin_serial_region()
             @serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
@@ -2659,7 +2675,6 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
 
         @testset "ADI Jacobians - implicit v" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
             begin_serial_region()
             @serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
@@ -2885,9 +2900,13 @@ function test_ion_dt_forcing_of_electron_ppar(test_input; rtol=(1.5e1*epsilon)^2
         add_ion_dt_forcing_of_electron_ppar_to_Jacobian!(
             jacobian_matrix, z, dt, ion_dt, ir; ppar_offset=pdf_size)
 
+        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+        # variables (vth, etc.).
+
+        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
             begin_serial_region()
             @serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
@@ -2919,7 +2938,6 @@ function test_ion_dt_forcing_of_electron_ppar(test_input; rtol=(1.5e1*epsilon)^2
 
         @testset "ADI Jacobians - implicit v" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
             begin_serial_region()
             @serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
@@ -3133,20 +3151,15 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         total_size = pdf_size + p_size
 
         jacobian_matrix = allocate_shared_float(total_size, total_size)
-        begin_serial_region()
-        @serial_region begin
-            jacobian_matrix .= 0.0
-            for row ∈ 1:total_size
-                # Initialise identity matrix
-                jacobian_matrix[row,row] = 1.0
-            end
-        end
 
-        fill_electron_kinetic_equation_Jacobian!(
-            jacobian_matrix, f, ppar, moments, collisions, composition, z, vperp, vpa,
-            z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-            external_source_settings, num_diss_params, t_params.electron, ion_dt, ir,
-            true)
+        # Calculate this later, so that we can use `jacobian_matrix` as a temporary
+        # buffer, to avoid allocating too much shared memory for the Github Actions CI
+        # servers.
+        #fill_electron_kinetic_equation_Jacobian!(
+        #    jacobian_matrix, f, ppar, moments, collisions, composition, z, vperp, vpa,
+        #    z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+        #    external_source_settings, num_diss_params, t_params.electron, ion_dt, ir,
+        #    true)
 
         # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
         # variables (vth, etc.).
@@ -3208,19 +3221,22 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             @views second_moment[iz] = integrate_over_vspace(f[:,1,iz], vpa_grid, 2, vpa_wgts)
         end
 
+        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+        # variables (vth, etc.).
+
+        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+        begin_serial_region()
+        @serial_region begin
+            # Need to explicitly initialise because
+            # fill_electron_kinetic_equation_z_only_Jacobian_f!() and
+            # fill_electron_kinetic_equation_z_only_Jacobian_ppar!()
+            # only fill the diagonal-in-velocity-indices elements, so when applied to
+            # a full matrix they would not initialise every element.
+            jacobian_matrix_ADI_check .= 0.0
+        end
+
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
-
-            begin_serial_region()
-            @serial_region begin
-                # Need to explicitly initialise because
-                # fill_electron_kinetic_equation_z_only_Jacobian_f!() and
-                # fill_electron_kinetic_equation_z_only_Jacobian_ppar!()
-                # only fill the diagonal-in-velocity-indices elements, so when applied to
-                # a full matrix they would not initialise every element.
-                jacobian_matrix_ADI_check .= 0.0
-            end
 
             v_size = vperp.n * vpa.n
 
@@ -3251,16 +3267,25 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             end
 
             # Add 'explicit' contribution
-            jacobian_matrix_ADI_check_explicit = allocate_shared_float(total_size, total_size)
+            # Use jacobian_matrix as a temporary buffer here.
             fill_electron_kinetic_equation_Jacobian!(
-                jacobian_matrix_ADI_check_explicit, f, ppar, moments, collisions,
-                composition, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral,
-                z_advect, vpa_advect, scratch_dummy, external_source_settings,
-                num_diss_params, t_params.electron, ion_dt, ir, true, :explicit_v)
+                jacobian_matrix, f, ppar, moments, collisions, composition, z, vperp, vpa,
+                z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
+                scratch_dummy, external_source_settings, num_diss_params,
+                t_params.electron, ion_dt, ir, true, :explicit_v)
             begin_serial_region()
             @serial_region begin
-                jacobian_matrix_ADI_check .+= jacobian_matrix_ADI_check_explicit
+                jacobian_matrix_ADI_check .+= jacobian_matrix
+            end
 
+            fill_electron_kinetic_equation_Jacobian!(
+                jacobian_matrix, f, ppar, moments, collisions, composition, z, vperp, vpa,
+                z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                external_source_settings, num_diss_params, t_params.electron, ion_dt, ir,
+                true)
+
+            begin_serial_region()
+            @serial_region begin
                 # The settings for this test are a bit strange, due to trying to get the
                 # finite-difference approximation to the Jacobian to agree with the
                 # Jacobian matrix functions without being too messed up by floating-point
@@ -3270,9 +3295,18 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             end
         end
 
+        begin_serial_region()
+        @serial_region begin
+            # Need to explicitly initialise because
+            # fill_electron_kinetic_equation_z_only_Jacobian_f!() and
+            # fill_electron_kinetic_equation_z_only_Jacobian_ppar!()
+            # only fill the diagonal-in-velocity-indices elements, so when applied to
+            # a full matrix they would not initialise every element.
+            jacobian_matrix_ADI_check .= 0.0
+        end
+
         @testset "ADI Jacobians - implicit v" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
 
             v_size = vperp.n * vpa.n
 
@@ -3292,17 +3326,26 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             end
 
             # Add 'explicit' contribution
-            jacobian_matrix_ADI_check_explicit = allocate_shared_float(total_size, total_size)
+            # Use jacobian_matrix as a temporary buffer here.
             fill_electron_kinetic_equation_Jacobian!(
-                jacobian_matrix_ADI_check_explicit, f, ppar, moments, collisions,
-                composition, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral,
-                z_advect, vpa_advect, scratch_dummy, external_source_settings,
-                num_diss_params, t_params.electron, ion_dt, ir, true, :explicit_z)
+                jacobian_matrix, f, ppar, moments, collisions, composition, z, vperp, vpa,
+                z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
+                scratch_dummy, external_source_settings, num_diss_params,
+                t_params.electron, ion_dt, ir, true, :explicit_z)
 
             begin_serial_region()
             @serial_region begin
-                jacobian_matrix_ADI_check .+= jacobian_matrix_ADI_check_explicit
+                jacobian_matrix_ADI_check .+= jacobian_matrix
+            end
 
+            fill_electron_kinetic_equation_Jacobian!(
+                jacobian_matrix, f, ppar, moments, collisions, composition, z, vperp, vpa,
+                z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                external_source_settings, num_diss_params, t_params.electron, ion_dt, ir,
+                true)
+
+            begin_serial_region()
+            @serial_region begin
                 # The settings for this test are a bit strange, due to trying to get the
                 # finite-difference approximation to the Jacobian to agree with the
                 # Jacobian matrix functions without being too messed up by floating-point
