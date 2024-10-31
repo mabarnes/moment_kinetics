@@ -831,7 +831,7 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
         begin_r_z_region()
         @loop_r_z ir iz begin
             nu_ii = get_collision_frequency_ii(collisions, density[iz,ir], vth[iz,ir])
-            qpar[iz,ir] = -(1/2) * 5/4 * density[iz,ir] * vth[iz,ir]^2 /nu_ii * dT_dz[iz,ir,1]
+            qpar[iz,ir] = -(1/2) * 3/2 * density[iz,ir] * vth[iz,ir]^2 /nu_ii * dT_dz[iz,ir,1]
         end
     else
         throw(ArgumentError("coll_krook heat flux simulation requires evolve_density, 

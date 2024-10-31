@@ -1293,7 +1293,7 @@ source amplitude.
         if moments.evolve_ppar
             @loop_r_z ir iz begin
                 ion_moments.external_source_pressure_amplitude[iz,ir,index] =
-                    (0.5 * ion_source_settings.source_T + upar[iz,ir]^2 - ppar[iz,ir]) *
+                    (0.5 * ion_source_settings.source_T + upar[iz,ir]^2 - ppar[iz,ir]/density[iz,ir]) *
                     ion_source_settings.source_strength *
                     ion_source_settings.r_amplitude[ir] *
                     ion_source_settings.z_amplitude[iz]
@@ -1397,7 +1397,7 @@ source amplitude.
         if moments.evolve_ppar
             @loop_r_z ir iz begin
                 ion_moments.external_source_pressure_amplitude[iz,ir,index] =
-                    ((0.5 * ion_source_settings.source_T + 2 * upar[iz,ir]^2) *
+                    ((0.5 * ion_source_settings.source_T + 2 * upar[iz,ir]^2 - ppar[iz,ir]/density[iz,ir]) *
                     amplitude) * ion_source_settings.controller_source_profile[iz,ir]
             end
         end
