@@ -2584,7 +2584,11 @@ function write_timing_data(io_moments, t_idx, dfns=false)
         new_timer_names = String[]
         function get_names_inner(this_timer, timer_names_subdict, prefix)
             names_subdict_keys = keys(timer_names_subdict)
-            for k ∈ keys(this_timer.inner_timers)
+            inner_timers_keys = collect(keys(this_timer.inner_timers))
+            # Sort keys to ensure that the list created by this function has a
+            # deterministic order.
+            sort!(inner_timers_keys)
+            for k ∈ inner_timers_keys
                 this_name = prefix == "" ? k : prefix * ";" * k
                 if k ∉ names_subdict_keys
                     push!(new_timer_names, this_name)
@@ -2799,9 +2803,9 @@ function write_timing_data(io_moments, t_idx, dfns=false)
 
     # Collect the timing data onto the root process of each block
     if block_rank[] == 0
-        times_data = Dict{mk_int,Vector{mk_int}}()
-        ncalls_data = Dict{mk_int,Vector{mk_int}}()
-        allocs_data = Dict{mk_int,Vector{mk_int}}()
+        times_data = SortedDict{mk_int,Vector{mk_int}}()
+        ncalls_data = SortedDict{mk_int,Vector{mk_int}}()
+        allocs_data = SortedDict{mk_int,Vector{mk_int}}()
         times_data[0], ncalls_data[0], allocs_data[0] = get_data_from_timers()
         for irank ∈ 1:block_size[]-1
             this_global_rank = global_rank[] + irank

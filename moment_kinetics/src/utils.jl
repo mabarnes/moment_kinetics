@@ -30,14 +30,14 @@ function __init__()
 end
 
 """
-    get_unnormalized_parameters(input::Dict)
+    get_unnormalized_parameters(input::AbstractDict)
     get_unnormalized_parameters(input_filename::String)
 
 Get many parameters for the simulation setup given by `input` or in the file
 `input_filename`, in SI units and eV, returned as an OrderedDict.
 """
 function get_unnormalized_parameters end
-function get_unnormalized_parameters(input::Dict)
+function get_unnormalized_parameters(input::AbstractDict)
     io_input, evolve_moments, t_params, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
         vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
         vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
@@ -90,8 +90,8 @@ end
 """
     print_unnormalized_parameters(input)
 
-Print many parameters for the simulation setup given by `input` (a Dict of parameters or
-a String giving a filename), in SI units and eV.
+Print many parameters for the simulation setup given by `input` (an AbstractDict of
+parameters or a String giving a filename), in SI units and eV.
 """
 function print_unnormalized_parameters(args...; kwargs...)
 
@@ -325,10 +325,9 @@ function recursive_merge(a, b)
 end
 
 """
-Dict merge function for named keyword arguments
-for case when input Dict is a mixed Dict of Dicts
-and non-Dict float/int/string entries, and the
-keyword arguments are also a mix of Dicts and non-Dicts
+Dict merge function for named keyword arguments for case when input AbstractDict is a
+mixed AbstractDict of AbstractDicts and non-AbstractDict float/int/string entries, and
+the keyword arguments are also a mix of AbstractDicts and non-AbstractDicts
 """
 function merge_dict_with_kwargs!(dict_base; args...)
     for (k,v) in args

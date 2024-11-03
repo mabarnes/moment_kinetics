@@ -187,7 +187,7 @@ function run_moment_kinetics()
     end
     restart_time_index = options["restart-time-index"]
     if inputfile === nothing
-        this_input = Dict()
+        this_input = OptionsDict()
     else
         this_input = inputfile
     end

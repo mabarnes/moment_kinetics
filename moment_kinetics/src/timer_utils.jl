@@ -37,14 +37,14 @@ const TimerNamesDict = SortedDict{String,SortedDict,Base.Order.ForwardOrdering}
 TimerNamesDict() = TimerNamesDict(Base.Order.ForwardOrdering())
 
 """
-Nested Dict containting the names of all timers that have been created on each MPI rank
-and added to the moments output file.
+Nested SortedDict containting the names of all timers that have been created on each MPI
+rank and added to the moments output file.
 """
 const timer_names_per_rank_moments = SortedDict{mk_int,Tuple{TimerNamesDict,Ref{mk_int}}}()
 
 """
-Nested Dict containting the names of all timers that have been created on each MPI rank
-and added to the dfns output file.
+Nested SortedDict containting the names of all timers that have been created on each MPI
+rank and added to the dfns output file.
 """
 const timer_names_per_rank_dfns = SortedDict{mk_int,Tuple{TimerNamesDict,Ref{mk_int}}}()
 

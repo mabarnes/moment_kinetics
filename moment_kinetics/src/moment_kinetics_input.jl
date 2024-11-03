@@ -31,7 +31,7 @@ using TOML
 Read input from a TOML file
 """
 function read_input_file(input_filename::String)
-    input = TOML.parsefile(input_filename)
+    input = convert_to_sorted_nested_OptionsDict(TOML.parsefile(input_filename))
 
     # Use input_filename (without the extension) as default for "run_name"
     if !("output" ∈ keys(input) && "run_name" in keys(input["output"]))

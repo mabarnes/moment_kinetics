@@ -17,12 +17,15 @@ export io_input
 export pp_input
 export geometry_input
 export set_defaults_and_check_top_level!, set_defaults_and_check_section!,
-       check_sections!, options_to_TOML, Dict_to_NamedTuple
+       check_sections!, options_to_TOML, Dict_to_NamedTuple,
+       convert_to_sorted_nested_OptionsDict
 
 using ..communication
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions: mk_float, mk_int, OptionsDict
 
+using DataStructures: SortedDict
 using MPI
+using OrderedCollections: OrderedDict
 using TOML
 
 """
@@ -730,7 +733,7 @@ import Base: get
 Utility method for converting a string to an Enum when getting from a Dict, based on the
 type of the default value
 """
-function get(d::Dict, key, default::Enum)
+function get(d::OptionsDict, key, default::Enum)
     val_maybe_string = get(d, key, nothing)
     if val_maybe_string == nothing
         return default
@@ -750,14 +753,12 @@ end
 Set the defaults for options in the top level of the input, and check that there are not
 any unexpected options (i.e. options that have no default).
 
-Modifies the options[section_name]::Dict by adding defaults for any values that are not
-already present.
+Modifies the options[section_name]::OptionsDict by adding defaults for any values that
+are not already present.
 
 Ignores any sections, as these will be checked separately.
 """
-function set_defaults_and_check_top_level!(options::AbstractDict; kwargs...)
-    DictType = typeof(options)
-
+function set_defaults_and_check_top_level!(options::OptionsDict; kwargs...)
     # Check for any unexpected values in the options - all options that are set should be
     # present in the kwargs of this function call
     options_keys_symbols = keys(kwargs)
@@ -781,13 +782,12 @@ function set_defaults_and_check_top_level!(options::AbstractDict; kwargs...)
     return options
 end
 
-function _get_section_and_check_option_names(options, section_name, section_keys)
-
-    DictType = typeof(options)
+function _get_section_and_check_option_names(options::OptionsDict, section_name,
+                                             section_keys)
 
     if !(section_name ∈ keys(options))
         # If section is not present, create it
-        options[section_name] = DictType()
+        options[section_name] = OptionsDict()
     end
 
     if !isa(options[section_name], AbstractDict)
@@ -839,11 +839,10 @@ const _section_check_store_name = "_section_check_store"
 Set the defaults for options in a section, and check that there are not any unexpected
 options (i.e. options that have no default).
 
-Modifies the options[section_name]::Dict by adding defaults for any values that are not
-already present.
+Modifies the options[section_name]::OptionsDict by adding defaults for any values that
+are not already present.
 """
-function set_defaults_and_check_section!(options::AbstractDict, section_name;
-                                         kwargs...)
+function set_defaults_and_check_section!(options::OptionsDict, section_name; kwargs...)
 
     section_keys_symbols = keys(kwargs)
     section_keys = (String(k) for k ∈ section_keys_symbols)
@@ -865,7 +864,7 @@ function set_defaults_and_check_section!(options::AbstractDict, section_name;
 end
 
 """
-    set_defaults_and_check_section!(options::AbstractDict, struct_type::Type,
+    set_defaults_and_check_section!(options::OptionsDict, struct_type::Type,
                                     name::Union{String,Nothing}=nothing)
 
 Alternative form to be used when the options should be stored in a struct of type
@@ -874,15 +873,15 @@ Alternative form to be used when the options should be stored in a struct of typ
 The returned instance of `struct_type` is immutable, so if you need to modify the settings
 - e.g. to apply some logic to set defaults depending on other settings/parameters - then
 you should use the 'standard' version of [`set_defaults_and_check_section!`](@ref) that
-returns a `Dict` that can be modified, and then use that `Dict` to initialise the
-`struct_type`.
+returns a `OptionsDict` that can be modified, and then use that `OptionsDict` to
+initialise the `struct_type`.
 
 The name of the section in the options that will be read defaults to the name of
 `struct_type`, but can be set using the `section_name` argument.
 
 Returns an instance of `struct_type`.
 """
-function set_defaults_and_check_section!(options::AbstractDict, struct_type::Type,
+function set_defaults_and_check_section!(options::OptionsDict, struct_type::Type,
                                          section_name::Union{String,Nothing}=nothing)
 
     if section_name === nothing
@@ -910,12 +909,12 @@ function set_defaults_and_check_section!(options::AbstractDict, struct_type::Typ
 end
 
 """
-    check_sections!(options::AbstractDict)
+    check_sections!(options::OptionsDict)
 
 Check that there are no unexpected sections in `options`. The 'expected sections' are the
 ones that were defined with [`set_defaults_and_check_section!`](@ref).
 """
-function check_sections!(options::AbstractDict; check_no_top_level_options=true)
+function check_sections!(options::OptionsDict; check_no_top_level_options=true)
 
     expected_section_names = pop!(options, _section_check_store_name)
 
@@ -945,18 +944,38 @@ function check_sections!(options::AbstractDict; check_no_top_level_options=true)
 end
 
 """
-Convert a Dict whose keys are String or Symbol to a NamedTuple
+    convert_to_sorted_nested_OptionsDict(d::AbstractDict)
+
+To ensure consistency when writing options to an output file, the entries in the
+dictionary containing the options must be in a deterministic order. As TOML reads
+options into a nested `Dict`, the only way to guarantee this is to sort the options
+before storing them in an `OptionsDict`. `OptionsDict` is an alias for
+`OrderedDict{String,Any}` so it will preserve the order of entries as long as they were
+in a consistent order when it was created.
+"""
+function convert_to_sorted_nested_OptionsDict(d::AbstractDict)
+    sorted_d = SortedDict{String,Any}(d)
+    for (k,v) ∈ pairs(sorted_d)
+        if isa(v, AbstractDict)
+            sorted_d[k] = convert_to_sorted_nested_OptionsDict(v)
+        end
+    end
+    return OptionsDict(sorted_d)
+end
+
+"""
+Convert an OrderedDict whose keys are String or Symbol to a NamedTuple
 
 Useful as NamedTuple is immutable, so option values cannot be accidentally changed.
 """
-function Dict_to_NamedTuple(d)
+function Dict_to_NamedTuple(d::OrderedDict)
     return NamedTuple(Symbol(k)=>v for (k,v) ∈ d)
 end
 
 """
     options_to_toml(io::IO [=stdout], data::AbstractDict; sorted=false, by=identity)
 
-Convert `moment_kinetics` 'options' (in the form of a `Dict`) to TOML format.
+Convert `moment_kinetics` 'options' (in the form of an `AbstractDict`) to TOML format.
 
 This function is defined so that we can handle some extra types, for example `Enum`.
 
