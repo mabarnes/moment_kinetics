@@ -165,6 +165,7 @@ function format_global_timer(; show_output=false, threshold=1.0e-3, truncate_out
         # when we save the string to an HDF5 or NetCDF file. μ often appears because times
         # may be printed in microseconds.
         result = replace(result, "μ" => "u")
+        result = ascii(replace(result, !isascii=>' '))
     end
 end
 

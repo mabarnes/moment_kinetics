@@ -2959,6 +2959,9 @@ function write_timing_data(io_moments, t_idx, dfns=false)
         end
     end
 
+    # Pick a fixed size for "global_timer_string" so that we can overwrite the variable
+    # without needing to resize it.
+    global_timer_string_size = 10000 # 100 characters x 100 lines seems like a reasonable maximum size.
     if global_rank[] == 0 || (block_rank[] == 0 && !parallel_io)
         if t_idx > 1 || t_idx == -1
             if t_idx == -1
@@ -2966,6 +2969,17 @@ function write_timing_data(io_moments, t_idx, dfns=false)
             else
                 if "moment_kinetics" ∈ keys(timer_names_per_rank[global_rank[]])
                     top_level = ("moment_kinetics", "time_advance! step", "ssp_rk!")
+                    this_dict = timer_names_all_ranks
+
+                    # Check all the expected levels are present, otherwise just set
+                    # top_level=nothing.
+                    for n ∈ top_level
+                        if n ∉ keys(this_dict)
+                            top_level = nothing
+                            break
+                        end
+                        this_dict = this_dict[n]
+                    end
                 else
                     # If `time_advance!()` was called in a non-standard way (i.e. not by
                     # `run_moment_kinetics()`), the actual timers might be different. In
@@ -2977,10 +2991,15 @@ function write_timing_data(io_moments, t_idx, dfns=false)
             # was printed to the terminal, for a quick look.
             string_to_write = format_global_timer(; show_output=false,
                                                     top_level=top_level)
-            string_size = Ref(length(string_to_write))
-            if parallel_io
-                MPI.Bcast!(string_size, comm_inter_block[]; root=0)
-            end
+
+            # Ensure `string_to_write` is no longer than `global_timer_string_size`.
+            string_to_write = string_to_write[1:min(length(string_to_write), global_timer_string_size)]
+            # Ensure `string_to_write` is at least as long as `global_timer_string_size`.
+            # Do this way instead of using `rpad()` because `rpad()` measures the length
+            # using `textwidth()` rather than a raw character count, whereas we want a
+            # fixed number of ASCII characters to write to the output file.
+            string_to_write = string_to_write * ' '^(global_timer_string_size - length(string_to_write))
+
             write_single_value!(get_group(io_moments.fid, "timing_data"),
                                 "global_timer_string", string_to_write;
                                 parallel_io=parallel_io,
@@ -2991,15 +3010,11 @@ function write_timing_data(io_moments, t_idx, dfns=false)
         if t_idx > 1 || t_idx == -1
             # Although only global_rank[]==0 needs to write "global_timer_string" when we
             # are using parallel I/O, other ranks in `comm_inter_block[]` must also call
-            # `write_single_value!() so that the variable in the HDF5 file can be
-            # (re-)created.
-            # ???These other ranks do not actually write data though, so it does not
-            # matter what is passed to the `data` argument of `write_single_value!()` (as
-            # long as it is a scalar).
-            # ? Need to pass a string with the right length?
-            string_size = Ref(0)
-            MPI.Bcast!(string_size, comm_inter_block[]; root=0)
-            string_to_write = " " ^ string_size[]
+            # `write_single_value!() so that the variable in the HDF5 file can be created.
+            # These other ranks do not actually write data though, so it does not matter
+            # what is passed to the `data` argument of `write_single_value!()` (as
+            # long as it is a string with the right length).
+            string_to_write = " " ^ global_timer_string_size
             write_single_value!(get_group(io_moments.fid, "timing_data"),
                                 "global_timer_string", string_to_write;
                                 parallel_io=parallel_io, description="Formatted representation

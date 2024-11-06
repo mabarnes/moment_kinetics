@@ -125,9 +125,6 @@ function run_moment_kinetics(input_dict::OptionsDict; restart=false, restart_tim
 
     mk_state = nothing
     try
-        # Reset timers in case a previous run was timed
-        reset_mk_timers!()
-
         @timeit global_timer "moment_kinetics" begin
             # set up all the structs, etc. needed for a run
             mk_state = setup_moment_kinetics(input_dict; restart=restart,
@@ -403,6 +400,9 @@ function cleanup_moment_kinetics!(ascii_io, io_moments, io_dfns)
                Dates.format(now(), dateformat"H:MM:SS"))
         end
     end
+
+    # Reset timers
+    reset_mk_timers!()
 
     # clean up MPI objects
     finalize_comms!()
