@@ -92,9 +92,6 @@ function write_single_value!(file_or_group::HDF5.H5DataStore, name,
                              description=nothing, units=nothing,
                              overwrite=false) where {T,N}
     if isa(data, Union{Number, AbstractString})
-        if overwrite && name ∈ keys(file_or_group)
-            delete_object(file_or_group, name)
-        end
         # When we write a scalar, and parallel_io=true, we need to create the variable on
         # every process in `comm_inter_block[]` but we only want to actually write the
         # data from one process (we choose `global_rank[]==0`) to avoid corruption due to
@@ -106,15 +103,17 @@ function write_single_value!(file_or_group::HDF5.H5DataStore, name,
         # length of the string, so cannot be easily created by hand. Note that a String of
         # the correct length must be passed from every process in `comm_inter_block[]`,
         # but only the contents of the string on `global_rank[]==0` are actually written.
-        io_var, var_hdf5_type = create_dataset(file_or_group, name, data)
+        if !(overwrite && name ∈ keys(file_or_group))
+            create_dataset(file_or_group, name, data)
+            if description !== nothing
+                add_attribute!(file_or_group[name], "description", description)
+            end
+            if units !== nothing
+                add_attribute!(file_or_group[name], "units", units)
+            end
+        end
         if !parallel_io || global_rank[] == 0
-            write_dataset(io_var, var_hdf5_type, data)
-        end
-        if description !== nothing
-            add_attribute!(file_or_group[name], "description", description)
-        end
-        if units !== nothing
-            add_attribute!(file_or_group[name], "units", units)
+            write(file_or_group[name], data)
         end
         return nothing
     end

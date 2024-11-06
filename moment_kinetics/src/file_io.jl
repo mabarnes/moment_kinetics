@@ -711,6 +711,8 @@ Write a single variable to a file or group. If a description or units are passed
 attributes of the variable.
 
 If `overwrite=true` is passed, overwrite the variable if it already exists in the file.
+Note that when overwriting a `String` variable, the new `String` must have exactly the
+same length as the original `String`.
 """
 function write_single_value! end
 
