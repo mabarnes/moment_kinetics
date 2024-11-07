@@ -78,7 +78,8 @@ end
         use_Maxwellian_Rosenbluth_coefficients=false,
         use_Maxwellian_field_particle_distribution=false,
         test_numerical_conserving_terms=false,
-        algebraic_solve_for_d2Gdvperp2=false)
+        algebraic_solve_for_d2Gdvperp2=false,
+        use_multipole=false)
         # define inputs needed for the test
         #plot_test_output = false#true
         #test_parallelism = false#true
@@ -274,7 +275,7 @@ end
         calculate_rosenbluth_potentials_via_elliptic_solve!(fkpl_arrays.GG,fkpl_arrays.HH,fkpl_arrays.dHdvpa,fkpl_arrays.dHdvperp,
              fkpl_arrays.d2Gdvpa2,fkpl_arrays.dGdvperp,fkpl_arrays.d2Gdvperpdvpa,fkpl_arrays.d2Gdvperp2,F_M,
              vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays;
-             algebraic_solve_for_d2Gdvperp2=false,calculate_GG=true,calculate_dGdvperp=true)
+             algebraic_solve_for_d2Gdvperp2=false,calculate_GG=true,calculate_dGdvperp=true,multipole=use_multipole)
         # extract C[Fs,Fs'] result
         # and Rosenbluth potentials for testing
         begin_s_r_z_anyv_region()
@@ -389,7 +390,8 @@ end
         test_numerical_conserving_terms=false,
         algebraic_solve_for_d2Gdvperp2=false,
         test_self_operator = true,
-        Lvpa = 12.0, Lvperp = 6.0)
+        Lvpa = 12.0, Lvperp = 6.0,
+        use_multipole = false)
         initialize_comms!()
         #ngrid = 5
         #plot_scan = true
@@ -460,7 +462,7 @@ end
             use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution,
             test_numerical_conserving_terms=test_numerical_conserving_terms,
             algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2,
-            standalone=false, Lvpa=Lvpa, Lvperp=Lvperp)
+            standalone=false, Lvpa=Lvpa, Lvperp=Lvperp, use_multipole=use_multipole)
             max_C_err[iscan], L2_C_err[iscan] = fkerr.C_M.max ,fkerr.C_M.L2
             max_H_err[iscan], L2_H_err[iscan] = fkerr.H_M.max ,fkerr.H_M.L2
             max_dHdvpa_err[iscan], L2_dHdvpa_err[iscan] = fkerr.dHdvpa_M.max ,fkerr.dHdvpa_M.L2

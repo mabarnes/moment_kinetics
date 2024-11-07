@@ -17,6 +17,7 @@ export assemble_explicit_collision_operator_rhs_parallel!
 export assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!
 export YY_collision_operator_arrays, calculate_YY_arrays
 export calculate_rosenbluth_potential_boundary_data!
+export calculate_rosenbluth_potential_boundary_data_multipole!
 export elliptic_solve!, algebraic_solve!
 export fokkerplanck_arrays_direct_integration_struct
 export fokkerplanck_weakform_arrays_struct
@@ -40,6 +41,7 @@ using ..communication
 using ..communication: MPISharedArray, global_rank
 using ..lagrange_polynomials: lagrange_poly, lagrange_poly_optimised
 using ..looping
+using ..velocity_moments: integrate_over_vspace
 using moment_kinetics.gauss_legendre: get_QQ_local!
 using Dates
 using SpecialFunctions: ellipk, ellipe
@@ -48,6 +50,7 @@ using SuiteSparse
 using LinearAlgebra: ldiv!, mul!, LU
 using FastGaussQuadrature
 using Printf
+using MPI
 
 function print_matrix(matrix,name::String,n::mk_int,m::mk_int)
     println("\n ",name," \n")
@@ -1259,6 +1262,635 @@ function calculate_rosenbluth_potential_boundary_data!(rpbd::rosenbluth_potentia
     return nothing
 end
 
+function multipole_H(vpa::mk_float,vperp::mk_float,
+                   I00::mk_float, I10::mk_float, I20::mk_float, I30::mk_float, I40::mk_float, I50::mk_float, I60::mk_float, I70::mk_float, I80::mk_float, 
+                   I02::mk_float, I12::mk_float, I22::mk_float, I32::mk_float, I42::mk_float, I52::mk_float, I62::mk_float,
+                   I04::mk_float, I14::mk_float, I24::mk_float, I34::mk_float, I44::mk_float, I06::mk_float, I16::mk_float, I26::mk_float, I08::mk_float)
+   # sum up terms in the multipole series 
+   H_series = (I80*((128*vpa^8 - 1792*vpa^6*vperp^2 + 3360*vpa^4*vperp^4 - 1120*vpa^2*vperp^6 + 35*vperp^8)/(128*(vpa^2 + vperp^2)^8))
+             +I70*((vpa*(16*vpa^6 - 168*vpa^4*vperp^2 + 210*vpa^2*vperp^4 - 35*vperp^6))/(16*(vpa^2 + vperp^2)^7))
+             +I62*((-7*(128*vpa^8 - 1792*vpa^6*vperp^2 + 3360*vpa^4*vperp^4 - 1120*vpa^2*vperp^6 + 35*vperp^8))/(64*(vpa^2 + vperp^2)^8))
+             +I60*((16*vpa^6 - 120*vpa^4*vperp^2 + 90*vpa^2*vperp^4 - 5*vperp^6)/(16*(vpa^2 + vperp^2)^6))
+             +I52*((21*vpa*(-16*vpa^6 + 168*vpa^4*vperp^2 - 210*vpa^2*vperp^4 + 35*vperp^6))/(32*(vpa^2 + vperp^2)^7))
+             +I50*((8*vpa^5 - 40*vpa^3*vperp^2 + 15*vpa*vperp^4)/(8*(vpa^2 + vperp^2)^5))
+             +I44*((105*(128*vpa^8 - 1792*vpa^6*vperp^2 + 3360*vpa^4*vperp^4 - 1120*vpa^2*vperp^6 + 35*vperp^8))/(512*(vpa^2 + vperp^2)^8))
+             +I42*((-15*(16*vpa^6 - 120*vpa^4*vperp^2 + 90*vpa^2*vperp^4 - 5*vperp^6))/(32*(vpa^2 + vperp^2)^6))
+             +I40*((8*vpa^4 - 24*vpa^2*vperp^2 + 3*vperp^4)/(8*(vpa^2 + vperp^2)^4))
+             +I34*((105*vpa*(16*vpa^6 - 168*vpa^4*vperp^2 + 210*vpa^2*vperp^4 - 35*vperp^6))/(128*(vpa^2 + vperp^2)^7))
+             +I32*((-5*vpa*(8*vpa^4 - 40*vpa^2*vperp^2 + 15*vperp^4))/(8*(vpa^2 + vperp^2)^5))
+             +I30*((vpa*(2*vpa^2 - 3*vperp^2))/(2*(vpa^2 + vperp^2)^3))
+             +I26*((-35*(128*vpa^8 - 1792*vpa^6*vperp^2 + 3360*vpa^4*vperp^4 - 1120*vpa^2*vperp^6 + 35*vperp^8))/(512*(vpa^2 + vperp^2)^8))
+             +I24*((45*(16*vpa^6 - 120*vpa^4*vperp^2 + 90*vpa^2*vperp^4 - 5*vperp^6))/(128*(vpa^2 + vperp^2)^6))
+             +I22*((-3*(8*vpa^4 - 24*vpa^2*vperp^2 + 3*vperp^4))/(8*(vpa^2 + vperp^2)^4))
+             +I20*(-1/2*(-2*vpa^2 + vperp^2)/(vpa^2 + vperp^2)^2)
+             +I16*((-35*vpa*(16*vpa^6 - 168*vpa^4*vperp^2 + 210*vpa^2*vperp^4 - 35*vperp^6))/(256*(vpa^2 + vperp^2)^7))
+             +I14*((15*vpa*(8*vpa^4 - 40*vpa^2*vperp^2 + 15*vperp^4))/(64*(vpa^2 + vperp^2)^5))
+             +I12*((-6*vpa^3 + 9*vpa*vperp^2)/(4*(vpa^2 + vperp^2)^3))
+             +I10*(vpa/(vpa^2 + vperp^2))
+             +I08*((35*(128*vpa^8 - 1792*vpa^6*vperp^2 + 3360*vpa^4*vperp^4 - 1120*vpa^2*vperp^6 + 35*vperp^8))/(16384*(vpa^2 + vperp^2)^8))
+             +I06*((-5*(16*vpa^6 - 120*vpa^4*vperp^2 + 90*vpa^2*vperp^4 - 5*vperp^6))/(256*(vpa^2 + vperp^2)^6))
+             +I04*((3*(8*vpa^4 - 24*vpa^2*vperp^2 + 3*vperp^4))/(64*(vpa^2 + vperp^2)^4))
+             +I02*((-2*vpa^2 + vperp^2)/(4*(vpa^2 + vperp^2)^2))
+             +I00*(1))
+   # multiply by overall prefactor
+   H_series *= ((vpa^2 + vperp^2)^(-1/2))
+   return H_series
+end
+
+function multipole_dHdvpa(vpa::mk_float,vperp::mk_float,
+                   I00::mk_float, I10::mk_float, I20::mk_float, I30::mk_float, I40::mk_float, I50::mk_float, I60::mk_float, I70::mk_float, I80::mk_float, 
+                   I02::mk_float, I12::mk_float, I22::mk_float, I32::mk_float, I42::mk_float, I52::mk_float, I62::mk_float,
+                   I04::mk_float, I14::mk_float, I24::mk_float, I34::mk_float, I44::mk_float, I06::mk_float, I16::mk_float, I26::mk_float, I08::mk_float)
+   # sum up terms in the multipole series 
+   dHdvpa_series = (I80*((9*vpa*(128*vpa^8 - 2304*vpa^6*vperp^2 + 6048*vpa^4*vperp^4 - 3360*vpa^2*vperp^6 + 315*vperp^8))/(128*(vpa^2 + vperp^2)^8))
+                +I70*((128*vpa^8 - 1792*vpa^6*vperp^2 + 3360*vpa^4*vperp^4 - 1120*vpa^2*vperp^6 + 35*vperp^8)/(16*(vpa^2 + vperp^2)^7))
+                +I62*((-63*(128*vpa^9 - 2304*vpa^7*vperp^2 + 6048*vpa^5*vperp^4 - 3360*vpa^3*vperp^6 + 315*vpa*vperp^8))/(64*(vpa^2 + vperp^2)^8))
+                +I60*((7*vpa*(16*vpa^6 - 168*vpa^4*vperp^2 + 210*vpa^2*vperp^4 - 35*vperp^6))/(16*(vpa^2 + vperp^2)^6))
+                +I52*((-21*(128*vpa^8 - 1792*vpa^6*vperp^2 + 3360*vpa^4*vperp^4 - 1120*vpa^2*vperp^6 + 35*vperp^8))/(32*(vpa^2 + vperp^2)^7))
+                +I50*((3*(16*vpa^6 - 120*vpa^4*vperp^2 + 90*vpa^2*vperp^4 - 5*vperp^6))/(8*(vpa^2 + vperp^2)^5))
+                +I44*((945*vpa*(128*vpa^8 - 2304*vpa^6*vperp^2 + 6048*vpa^4*vperp^4 - 3360*vpa^2*vperp^6 + 315*vperp^8))/(512*(vpa^2 + vperp^2)^8))
+                +I42*((-105*vpa*(16*vpa^6 - 168*vpa^4*vperp^2 + 210*vpa^2*vperp^4 - 35*vperp^6))/(32*(vpa^2 + vperp^2)^6))
+                +I40*((5*vpa*(8*vpa^4 - 40*vpa^2*vperp^2 + 15*vperp^4))/(8*(vpa^2 + vperp^2)^4))
+                +I34*((105*(128*vpa^8 - 1792*vpa^6*vperp^2 + 3360*vpa^4*vperp^4 - 1120*vpa^2*vperp^6 + 35*vperp^8))/(128*(vpa^2 + vperp^2)^7))
+                +I32*((-15*(16*vpa^6 - 120*vpa^4*vperp^2 + 90*vpa^2*vperp^4 - 5*vperp^6))/(8*(vpa^2 + vperp^2)^5))
+                +I30*((8*vpa^4 - 24*vpa^2*vperp^2 + 3*vperp^4)/(2*(vpa^2 + vperp^2)^3))
+                +I26*((-315*vpa*(128*vpa^8 - 2304*vpa^6*vperp^2 + 6048*vpa^4*vperp^4 - 3360*vpa^2*vperp^6 + 315*vperp^8))/(512*(vpa^2 + vperp^2)^8))
+                +I24*((315*vpa*(16*vpa^6 - 168*vpa^4*vperp^2 + 210*vpa^2*vperp^4 - 35*vperp^6))/(128*(vpa^2 + vperp^2)^6))
+                +I22*((-15*vpa*(8*vpa^4 - 40*vpa^2*vperp^2 + 15*vperp^4))/(8*(vpa^2 + vperp^2)^4))
+                +I20*((3*vpa*(2*vpa^2 - 3*vperp^2))/(2*(vpa^2 + vperp^2)^2))
+                +I16*((-35*(128*vpa^8 - 1792*vpa^6*vperp^2 + 3360*vpa^4*vperp^4 - 1120*vpa^2*vperp^6 + 35*vperp^8))/(256*(vpa^2 + vperp^2)^7))
+                +I14*((45*(16*vpa^6 - 120*vpa^4*vperp^2 + 90*vpa^2*vperp^4 - 5*vperp^6))/(64*(vpa^2 + vperp^2)^5))
+                +I12*((-3*(8*vpa^4 - 24*vpa^2*vperp^2 + 3*vperp^4))/(4*(vpa^2 + vperp^2)^3))
+                +I10*(-1 + (3*vpa^2)/(vpa^2 + vperp^2))
+                +I08*((315*vpa*(128*vpa^8 - 2304*vpa^6*vperp^2 + 6048*vpa^4*vperp^4 - 3360*vpa^2*vperp^6 + 315*vperp^8))/(16384*(vpa^2 + vperp^2)^8))
+                +I06*((-35*vpa*(16*vpa^6 - 168*vpa^4*vperp^2 + 210*vpa^2*vperp^4 - 35*vperp^6))/(256*(vpa^2 + vperp^2)^6))
+                +I04*((15*vpa*(8*vpa^4 - 40*vpa^2*vperp^2 + 15*vperp^4))/(64*(vpa^2 + vperp^2)^4))
+                +I02*((-6*vpa^3 + 9*vpa*vperp^2)/(4*(vpa^2 + vperp^2)^2))
+                +I00*(vpa))
+   # multiply by overall prefactor
+   dHdvpa_series *= -((vpa^2 + vperp^2)^(-3/2))   
+   return dHdvpa_series
+end
+
+function multipole_dHdvperp(vpa::mk_float,vperp::mk_float,
+                   I00::mk_float, I10::mk_float, I20::mk_float, I30::mk_float, I40::mk_float, I50::mk_float, I60::mk_float, I70::mk_float, I80::mk_float, 
+                   I02::mk_float, I12::mk_float, I22::mk_float, I32::mk_float, I42::mk_float, I52::mk_float, I62::mk_float,
+                   I04::mk_float, I14::mk_float, I24::mk_float, I34::mk_float, I44::mk_float, I06::mk_float, I16::mk_float, I26::mk_float, I08::mk_float)
+   # sum up terms in the multipole series 
+   dHdvperp_series = (I80*((45*vperp*(128*vpa^8 - 896*vpa^6*vperp^2 + 1120*vpa^4*vperp^4 - 280*vpa^2*vperp^6 + 7*vperp^8))/(128*(vpa^2 + vperp^2)^8))
+                +I70*((9*vpa*vperp*(64*vpa^6 - 336*vpa^4*vperp^2 + 280*vpa^2*vperp^4 - 35*vperp^6))/(16*(vpa^2 + vperp^2)^7))
+                +I62*((-315*(128*vpa^8*vperp - 896*vpa^6*vperp^3 + 1120*vpa^4*vperp^5 - 280*vpa^2*vperp^7 + 7*vperp^9))/(64*(vpa^2 + vperp^2)^8))
+                +I60*((7*vperp*(64*vpa^6 - 240*vpa^4*vperp^2 + 120*vpa^2*vperp^4 - 5*vperp^6))/(16*(vpa^2 + vperp^2)^6))
+                +I52*((-189*vpa*vperp*(64*vpa^6 - 336*vpa^4*vperp^2 + 280*vpa^2*vperp^4 - 35*vperp^6))/(32*(vpa^2 + vperp^2)^7))
+                +I50*((21*vpa*vperp*(8*vpa^4 - 20*vpa^2*vperp^2 + 5*vperp^4))/(8*(vpa^2 + vperp^2)^5))
+                +I44*((4725*vperp*(128*vpa^8 - 896*vpa^6*vperp^2 + 1120*vpa^4*vperp^4 - 280*vpa^2*vperp^6 + 7*vperp^8))/(512*(vpa^2 + vperp^2)^8))
+                +I42*((105*vperp*(-64*vpa^6 + 240*vpa^4*vperp^2 - 120*vpa^2*vperp^4 + 5*vperp^6))/(32*(vpa^2 + vperp^2)^6))
+                +I40*((15*vperp*(8*vpa^4 - 12*vpa^2*vperp^2 + vperp^4))/(8*(vpa^2 + vperp^2)^4))
+                +I34*((945*vpa*vperp*(64*vpa^6 - 336*vpa^4*vperp^2 + 280*vpa^2*vperp^4 - 35*vperp^6))/(128*(vpa^2 + vperp^2)^7))
+                +I32*((-105*vpa*vperp*(8*vpa^4 - 20*vpa^2*vperp^2 + 5*vperp^4))/(8*(vpa^2 + vperp^2)^5))
+                +I30*((5*vpa*vperp*(4*vpa^2 - 3*vperp^2))/(2*(vpa^2 + vperp^2)^3))
+                +I26*((-1575*vperp*(128*vpa^8 - 896*vpa^6*vperp^2 + 1120*vpa^4*vperp^4 - 280*vpa^2*vperp^6 + 7*vperp^8))/(512*(vpa^2 + vperp^2)^8))
+                +I24*((315*vperp*(64*vpa^6 - 240*vpa^4*vperp^2 + 120*vpa^2*vperp^4 - 5*vperp^6))/(128*(vpa^2 + vperp^2)^6))
+                +I22*((-45*vperp*(8*vpa^4 - 12*vpa^2*vperp^2 + vperp^4))/(8*(vpa^2 + vperp^2)^4))
+                +I20*((-3*vperp*(-4*vpa^2 + vperp^2))/(2*(vpa^2 + vperp^2)^2))
+                +I16*((-315*vpa*vperp*(64*vpa^6 - 336*vpa^4*vperp^2 + 280*vpa^2*vperp^4 - 35*vperp^6))/(256*(vpa^2 + vperp^2)^7))
+                +I14*((315*vpa*vperp*(8*vpa^4 - 20*vpa^2*vperp^2 + 5*vperp^4))/(64*(vpa^2 + vperp^2)^5))
+                +I12*((-15*vpa*vperp*(4*vpa^2 - 3*vperp^2))/(4*(vpa^2 + vperp^2)^3))
+                +I10*((3*vpa*vperp)/(vpa^2 + vperp^2))
+                +I08*((1575*(128*vpa^8*vperp - 896*vpa^6*vperp^3 + 1120*vpa^4*vperp^5 - 280*vpa^2*vperp^7 + 7*vperp^9))/(16384*(vpa^2 + vperp^2)^8))
+                +I06*((-35*(64*vpa^6*vperp - 240*vpa^4*vperp^3 + 120*vpa^2*vperp^5 - 5*vperp^7))/(256*(vpa^2 + vperp^2)^6))
+                +I04*((45*(8*vpa^4*vperp - 12*vpa^2*vperp^3 + vperp^5))/(64*(vpa^2 + vperp^2)^4))
+                +I02*((3*vperp*(-4*vpa^2 + vperp^2))/(4*(vpa^2 + vperp^2)^2))
+                +I00*(vperp))
+   # multiply by overall prefactor
+   dHdvperp_series *= -((vpa^2 + vperp^2)^(-3/2))
+   return dHdvperp_series
+end
+
+function multipole_G(vpa::mk_float,vperp::mk_float,
+                   I00::mk_float, I10::mk_float, I20::mk_float, I30::mk_float, I40::mk_float, I50::mk_float, I60::mk_float, I70::mk_float, I80::mk_float, 
+                   I02::mk_float, I12::mk_float, I22::mk_float, I32::mk_float, I42::mk_float, I52::mk_float, I62::mk_float,
+                   I04::mk_float, I14::mk_float, I24::mk_float, I34::mk_float, I44::mk_float, I06::mk_float, I16::mk_float, I26::mk_float, I08::mk_float)
+   # sum up terms in the multipole series 
+   G_series = (I80*((64*vpa^6*vperp^2 - 240*vpa^4*vperp^4 + 120*vpa^2*vperp^6 - 5*vperp^8)/(128*(vpa^2 + vperp^2)^8))
+             +I70*((vpa*vperp^2*(8*vpa^4 - 20*vpa^2*vperp^2 + 5*vperp^4))/(16*(vpa^2 + vperp^2)^7))
+             +I62*((32*vpa^8 - 656*vpa^6*vperp^2 + 1620*vpa^4*vperp^4 - 670*vpa^2*vperp^6 + 25*vperp^8)/(64*(vpa^2 + vperp^2)^8))
+             +I60*((vperp^2*(8*vpa^4 - 12*vpa^2*vperp^2 + vperp^4))/(16*(vpa^2 + vperp^2)^6))
+             +I52*((vpa*(16*vpa^6 - 232*vpa^4*vperp^2 + 370*vpa^2*vperp^4 - 75*vperp^6))/(32*(vpa^2 + vperp^2)^7))
+             +I50*((vpa*vperp^2*(4*vpa^2 - 3*vperp^2))/(8*(vpa^2 + vperp^2)^5))
+             +I44*((-15*(64*vpa^8 - 864*vpa^6*vperp^2 + 1560*vpa^4*vperp^4 - 500*vpa^2*vperp^6 + 15*vperp^8))/(512*(vpa^2 + vperp^2)^8))
+             +I42*((16*vpa^6 - 152*vpa^4*vperp^2 + 138*vpa^2*vperp^4 - 9*vperp^6)/(32*(vpa^2 + vperp^2)^6))
+             +I40*(-1/8*(vperp^2*(-4*vpa^2 + vperp^2))/(vpa^2 + vperp^2)^4)
+             +I34*((5*vpa*(-32*vpa^6 + 296*vpa^4*vperp^2 - 320*vpa^2*vperp^4 + 45*vperp^6))/(128*(vpa^2 + vperp^2)^7))
+             +I32*((vpa*(4*vpa^4 - 22*vpa^2*vperp^2 + 9*vperp^4))/(8*(vpa^2 + vperp^2)^5))
+             +I30*((vpa*vperp^2)/(2*(vpa^2 + vperp^2)^3))
+             +I26*((5*(96*vpa^8 - 1072*vpa^6*vperp^2 + 1500*vpa^4*vperp^4 - 330*vpa^2*vperp^6 + 5*vperp^8))/(512*(vpa^2 + vperp^2)^8))
+             +I24*((3*(-32*vpa^6 + 184*vpa^4*vperp^2 - 96*vpa^2*vperp^4 + 3*vperp^6))/(128*(vpa^2 + vperp^2)^6))
+             +I22*((4*vpa^4 - 10*vpa^2*vperp^2 + vperp^4)/(8*(vpa^2 + vperp^2)^4))
+             +I20*(vperp^2/(2*(vpa^2 + vperp^2)^2))
+             +I16*((5*vpa*(16*vpa^6 - 120*vpa^4*vperp^2 + 90*vpa^2*vperp^4 - 5*vperp^6))/(256*(vpa^2 + vperp^2)^7))
+             +I14*((-3*vpa*(8*vpa^4 - 24*vpa^2*vperp^2 + 3*vperp^4))/(64*(vpa^2 + vperp^2)^5))
+             +I12*((vpa*(2*vpa^2 - vperp^2))/(4*(vpa^2 + vperp^2)^3))
+             +I10*(-(vpa/(vpa^2 + vperp^2)))
+             +I08*((5*(-128*vpa^8 + 1280*vpa^6*vperp^2 - 1440*vpa^4*vperp^4 + 160*vpa^2*vperp^6 + 5*vperp^8))/(16384*(vpa^2 + vperp^2)^8))
+             +I06*((16*vpa^6 - 72*vpa^4*vperp^2 + 18*vpa^2*vperp^4 + vperp^6)/(256*(vpa^2 + vperp^2)^6))
+             +I04*((-8*vpa^4 + 8*vpa^2*vperp^2 + vperp^4)/(64*(vpa^2 + vperp^2)^4))
+             +I02*((2*vpa^2 + vperp^2)/(4*(vpa^2 + vperp^2)^2))
+             +I00*(1))
+   # multiply by overall prefactor
+   G_series *= ((vpa^2 + vperp^2)^(1/2))   
+   return G_series
+end
+
+function multipole_dGdvperp(vpa::mk_float,vperp::mk_float,
+                   I00::mk_float, I10::mk_float, I20::mk_float, I30::mk_float, I40::mk_float, I50::mk_float, I60::mk_float, I70::mk_float, I80::mk_float, 
+                   I02::mk_float, I12::mk_float, I22::mk_float, I32::mk_float, I42::mk_float, I52::mk_float, I62::mk_float,
+                   I04::mk_float, I14::mk_float, I24::mk_float, I34::mk_float, I44::mk_float, I06::mk_float, I16::mk_float, I26::mk_float, I08::mk_float)
+   # sum up terms in the multipole series 
+   dGdvperp_series = (I80*((vperp*(128*vpa^8 - 1792*vpa^6*vperp^2 + 3360*vpa^4*vperp^4 - 1120*vpa^2*vperp^6 + 35*vperp^8))/(128*(vpa^2 + vperp^2)^8))
+                   +I70*((vpa*vperp*(16*vpa^6 - 168*vpa^4*vperp^2 + 210*vpa^2*vperp^4 - 35*vperp^6))/(16*(vpa^2 + vperp^2)^7))
+                   +I62*((-7*(256*vpa^8*vperp - 2144*vpa^6*vperp^3 + 3120*vpa^4*vperp^5 - 890*vpa^2*vperp^7 + 25*vperp^9))/(64*(vpa^2 + vperp^2)^8))
+                   +I60*((vperp*(16*vpa^6 - 120*vpa^4*vperp^2 + 90*vpa^2*vperp^4 - 5*vperp^6))/(16*(vpa^2 + vperp^2)^6))
+                   +I52*((21*vpa*vperp*(-32*vpa^6 + 192*vpa^4*vperp^2 - 180*vpa^2*vperp^4 + 25*vperp^6))/(32*(vpa^2 + vperp^2)^7))
+                   +I50*((8*vpa^5*vperp - 40*vpa^3*vperp^3 + 15*vpa*vperp^5)/(8*(vpa^2 + vperp^2)^5))
+                   +I44*((315*vperp*(128*vpa^8 - 832*vpa^6*vperp^2 + 960*vpa^4*vperp^4 - 220*vpa^2*vperp^6 + 5*vperp^8))/(512*(vpa^2 + vperp^2)^8))
+                   +I42*((15*vperp*(-32*vpa^6 + 128*vpa^4*vperp^2 - 68*vpa^2*vperp^4 + 3*vperp^6))/(32*(vpa^2 + vperp^2)^6))
+                   +I40*((vperp*(8*vpa^4 - 24*vpa^2*vperp^2 + 3*vperp^4))/(8*(vpa^2 + vperp^2)^4))
+                   +I34*((315*vpa*vperp*(16*vpa^6 - 72*vpa^4*vperp^2 + 50*vpa^2*vperp^4 - 5*vperp^6))/(128*(vpa^2 + vperp^2)^7))
+                   +I32*((-5*vpa*vperp*(16*vpa^4 - 38*vpa^2*vperp^2 + 9*vperp^4))/(8*(vpa^2 + vperp^2)^5))
+                   +I30*((vpa*vperp*(2*vpa^2 - 3*vperp^2))/(2*(vpa^2 + vperp^2)^3))
+                   +I26*((-35*vperp*(512*vpa^8 - 2848*vpa^6*vperp^2 + 2640*vpa^4*vperp^4 - 430*vpa^2*vperp^6 + 5*vperp^8))/(512*(vpa^2 + vperp^2)^8))
+                   +I24*((-45*vperp*(-48*vpa^6 + 136*vpa^4*vperp^2 - 46*vpa^2*vperp^4 + vperp^6))/(128*(vpa^2 + vperp^2)^6))
+                   +I22*((-3*vperp*(16*vpa^4 - 18*vpa^2*vperp^2 + vperp^4))/(8*(vpa^2 + vperp^2)^4))
+                   +I20*(-1/2*(vperp*(-2*vpa^2 + vperp^2))/(vpa^2 + vperp^2)^2)
+                   +I16*((-35*vpa*vperp*(64*vpa^6 - 240*vpa^4*vperp^2 + 120*vpa^2*vperp^4 - 5*vperp^6))/(256*(vpa^2 + vperp^2)^7))
+                   +I14*((45*vpa*vperp*(8*vpa^4 - 12*vpa^2*vperp^2 + vperp^4))/(64*(vpa^2 + vperp^2)^5))
+                   +I12*((3*vpa*vperp*(-4*vpa^2 + vperp^2))/(4*(vpa^2 + vperp^2)^3))
+                   +I10*((vpa*vperp)/(vpa^2 + vperp^2))
+                   +I08*((175*(128*vpa^8*vperp - 640*vpa^6*vperp^3 + 480*vpa^4*vperp^5 - 40*vpa^2*vperp^7 - vperp^9))/(16384*(vpa^2 + vperp^2)^8))
+                   +I06*((-5*(64*vpa^6*vperp - 144*vpa^4*vperp^3 + 24*vpa^2*vperp^5 + vperp^7))/(256*(vpa^2 + vperp^2)^6))
+                   +I04*((3*(24*vpa^4*vperp - 12*vpa^2*vperp^3 - vperp^5))/(64*(vpa^2 + vperp^2)^4))
+                   +I02*(-1/4*(vperp*(4*vpa^2 + vperp^2))/(vpa^2 + vperp^2)^2)
+                   +I00*(vperp))
+   # multiply by overall prefactor
+   dGdvperp_series *= ((vpa^2 + vperp^2)^(-1/2))
+   return dGdvperp_series
+end
+
+function multipole_d2Gdvperp2(vpa::mk_float,vperp::mk_float,
+                   I00::mk_float, I10::mk_float, I20::mk_float, I30::mk_float, I40::mk_float, I50::mk_float, I60::mk_float, I70::mk_float, I80::mk_float, 
+                   I02::mk_float, I12::mk_float, I22::mk_float, I32::mk_float, I42::mk_float, I52::mk_float, I62::mk_float,
+                   I04::mk_float, I14::mk_float, I24::mk_float, I34::mk_float, I44::mk_float, I06::mk_float, I16::mk_float, I26::mk_float, I08::mk_float)
+   # sum up terms in the multipole series 
+   d2Gdvperp2_series = (I80*((128*vpa^10 - 7424*vpa^8*vperp^2 + 41888*vpa^6*vperp^4 - 48160*vpa^4*vperp^6 + 11515*vpa^2*vperp^8 - 280*vperp^10)/(128*(vpa^2 + vperp^2)^8))
+                   +I70*((16*vpa^9 - 728*vpa^7*vperp^2 + 3066*vpa^5*vperp^4 - 2345*vpa^3*vperp^6 + 280*vpa*vperp^8)/(16*(vpa^2 + vperp^2)^7))
+                   +I62*((-7*(256*vpa^10 - 10528*vpa^8*vperp^2 + 45616*vpa^6*vperp^4 - 43670*vpa^4*vperp^6 + 9125*vpa^2*vperp^8 - 200*vperp^10))/(64*(vpa^2 + vperp^2)^8))
+                   +I60*((16*vpa^8 - 552*vpa^6*vperp^2 + 1650*vpa^4*vperp^4 - 755*vpa^2*vperp^6 + 30*vperp^8)/(16*(vpa^2 + vperp^2)^6))
+                   +I52*((-21*(32*vpa^9 - 1024*vpa^7*vperp^2 + 3204*vpa^5*vperp^4 - 1975*vpa^3*vperp^6 + 200*vpa*vperp^8))/(32*(vpa^2 + vperp^2)^7))
+                   +I50*((8*vpa^7 - 200*vpa^5*vperp^2 + 395*vpa^3*vperp^4 - 90*vpa*vperp^6)/(8*(vpa^2 + vperp^2)^5))
+                   +I44*((315*(128*vpa^10 - 4544*vpa^8*vperp^2 + 16448*vpa^6*vperp^4 - 13060*vpa^4*vperp^6 + 2245*vpa^2*vperp^8 - 40*vperp^10))/(512*(vpa^2 + vperp^2)^8))
+                   +I42*((-15*(32*vpa^8 - 768*vpa^6*vperp^2 + 1620*vpa^4*vperp^4 - 565*vpa^2*vperp^6 + 18*vperp^8))/(32*(vpa^2 + vperp^2)^6))
+                   +I40*((8*vpa^6 - 136*vpa^4*vperp^2 + 159*vpa^2*vperp^4 - 12*vperp^6)/(8*(vpa^2 + vperp^2)^4))
+                   +I34*((315*vpa*(16*vpa^8 - 440*vpa^6*vperp^2 + 1114*vpa^4*vperp^4 - 535*vpa^2*vperp^6 + 40*vperp^8))/(128*(vpa^2 + vperp^2)^7))
+                   +I32*((5*vpa*(-16*vpa^6 + 274*vpa^4*vperp^2 - 349*vpa^2*vperp^4 + 54*vperp^6))/(8*(vpa^2 + vperp^2)^5))
+                   +I30*((vpa*(2*vpa^4 - 21*vpa^2*vperp^2 + 12*vperp^4))/(2*(vpa^2 + vperp^2)^3))
+                   +I26*((-35*(512*vpa^10 - 16736*vpa^8*vperp^2 + 53072*vpa^6*vperp^4 - 34690*vpa^4*vperp^6 + 4345*vpa^2*vperp^8 - 40*vperp^10))/(512*(vpa^2 + vperp^2)^8))
+                   +I24*((135*(16*vpa^8 - 328*vpa^6*vperp^2 + 530*vpa^4*vperp^4 - 125*vpa^2*vperp^6 + 2*vperp^8))/(128*(vpa^2 + vperp^2)^6))
+                   +I22*((-3*(16*vpa^6 - 182*vpa^4*vperp^2 + 113*vpa^2*vperp^4 - 4*vperp^6))/(8*(vpa^2 + vperp^2)^4))
+                   +I20*((2*vpa^4 - 11*vpa^2*vperp^2 + 2*vperp^4)/(2*(vpa^2 + vperp^2)^2))
+                   +I16*((-35*vpa*(64*vpa^8 - 1616*vpa^6*vperp^2 + 3480*vpa^4*vperp^4 - 1235*vpa^2*vperp^6 + 40*vperp^8))/(256*(vpa^2 + vperp^2)^7))
+                   +I14*((45*vpa*(8*vpa^6 - 116*vpa^4*vperp^2 + 101*vpa^2*vperp^4 - 6*vperp^6))/(64*(vpa^2 + vperp^2)^5))
+                   +I12*((-3*vpa*(4*vpa^4 - 27*vpa^2*vperp^2 + 4*vperp^4))/(4*(vpa^2 + vperp^2)^3))
+                   +I10*(-2*vpa + (3*vpa^3)/(vpa^2 + vperp^2))
+                   +I08*((175*(128*vpa^10 - 3968*vpa^8*vperp^2 + 11360*vpa^6*vperp^4 - 6040*vpa^4*vperp^6 + 391*vpa^2*vperp^8 + 8*vperp^10))/(16384*(vpa^2 + vperp^2)^8))
+                   +I06*((-5*(64*vpa^8 - 1200*vpa^6*vperp^2 + 1560*vpa^4*vperp^4 - 185*vpa^2*vperp^6 - 6*vperp^8))/(256*(vpa^2 + vperp^2)^6))
+                   +I04*((3*(24*vpa^6 - 228*vpa^4*vperp^2 + 67*vpa^2*vperp^4 + 4*vperp^6))/(64*(vpa^2 + vperp^2)^4))
+                   +I02*((-4*vpa^4 + 13*vpa^2*vperp^2 + 2*vperp^4)/(4*(vpa^2 + vperp^2)^2))
+                   +I00*(vpa^2))
+   # multiply by overall prefactor
+   d2Gdvperp2_series *= ((vpa^2 + vperp^2)^(-3/2))   
+   return d2Gdvperp2_series
+end
+
+function multipole_d2Gdvperpdvpa(vpa::mk_float,vperp::mk_float,
+                   I00::mk_float, I10::mk_float, I20::mk_float, I30::mk_float, I40::mk_float, I50::mk_float, I60::mk_float, I70::mk_float, I80::mk_float, 
+                   I02::mk_float, I12::mk_float, I22::mk_float, I32::mk_float, I42::mk_float, I52::mk_float, I62::mk_float,
+                   I04::mk_float, I14::mk_float, I24::mk_float, I34::mk_float, I44::mk_float, I06::mk_float, I16::mk_float, I26::mk_float, I08::mk_float)
+   # sum up terms in the multipole series 
+   d2Gdvperpdvpa_series = (I80*((9*vpa*vperp*(128*vpa^8 - 2304*vpa^6*vperp^2 + 6048*vpa^4*vperp^4 - 3360*vpa^2*vperp^6 + 315*vperp^8))/(128*(vpa^2 + vperp^2)^8))
+                      +I70*((vperp*(128*vpa^8 - 1792*vpa^6*vperp^2 + 3360*vpa^4*vperp^4 - 1120*vpa^2*vperp^6 + 35*vperp^8))/(16*(vpa^2 + vperp^2)^7))
+                      +I62*((-63*(256*vpa^9*vperp - 2848*vpa^7*vperp^3 + 5936*vpa^5*vperp^5 - 2870*vpa^3*vperp^7 + 245*vpa*vperp^9))/(64*(vpa^2 + vperp^2)^8))
+                      +I60*((7*vpa*vperp*(16*vpa^6 - 168*vpa^4*vperp^2 + 210*vpa^2*vperp^4 - 35*vperp^6))/(16*(vpa^2 + vperp^2)^6))
+                      +I52*((-21*(256*vpa^8*vperp - 2144*vpa^6*vperp^3 + 3120*vpa^4*vperp^5 - 890*vpa^2*vperp^7 + 25*vperp^9))/(32*(vpa^2 + vperp^2)^7))
+                      +I50*((3*vperp*(16*vpa^6 - 120*vpa^4*vperp^2 + 90*vpa^2*vperp^4 - 5*vperp^6))/(8*(vpa^2 + vperp^2)^5))
+                      +I44*((945*vpa*vperp*(384*vpa^8 - 3392*vpa^6*vperp^2 + 5824*vpa^4*vperp^4 - 2380*vpa^2*vperp^6 + 175*vperp^8))/(512*(vpa^2 + vperp^2)^8))
+                      +I42*((-105*vpa*vperp*(32*vpa^6 - 192*vpa^4*vperp^2 + 180*vpa^2*vperp^4 - 25*vperp^6))/(32*(vpa^2 + vperp^2)^6))
+                      +I40*((5*vpa*vperp*(8*vpa^4 - 40*vpa^2*vperp^2 + 15*vperp^4))/(8*(vpa^2 + vperp^2)^4))
+                      +I34*((315*vperp*(128*vpa^8 - 832*vpa^6*vperp^2 + 960*vpa^4*vperp^4 - 220*vpa^2*vperp^6 + 5*vperp^8))/(128*(vpa^2 + vperp^2)^7))
+                      +I32*((15*vperp*(-32*vpa^6 + 128*vpa^4*vperp^2 - 68*vpa^2*vperp^4 + 3*vperp^6))/(8*(vpa^2 + vperp^2)^5))
+                      +I30*((vperp*(8*vpa^4 - 24*vpa^2*vperp^2 + 3*vperp^4))/(2*(vpa^2 + vperp^2)^3))
+                      +I26*((-315*vpa*vperp*(512*vpa^8 - 3936*vpa^6*vperp^2 + 5712*vpa^4*vperp^4 - 1890*vpa^2*vperp^6 + 105*vperp^8))/(512*(vpa^2 + vperp^2)^8))
+                      +I24*((945*vpa*vperp*(16*vpa^6 - 72*vpa^4*vperp^2 + 50*vpa^2*vperp^4 - 5*vperp^6))/(128*(vpa^2 + vperp^2)^6))
+                      +I22*((-15*vpa*vperp*(16*vpa^4 - 38*vpa^2*vperp^2 + 9*vperp^4))/(8*(vpa^2 + vperp^2)^4))
+                      +I20*((3*vpa*vperp*(2*vpa^2 - 3*vperp^2))/(2*(vpa^2 + vperp^2)^2))
+                      +I16*((-35*vperp*(512*vpa^8 - 2848*vpa^6*vperp^2 + 2640*vpa^4*vperp^4 - 430*vpa^2*vperp^6 + 5*vperp^8))/(256*(vpa^2 + vperp^2)^7))
+                      +I14*((-45*vperp*(-48*vpa^6 + 136*vpa^4*vperp^2 - 46*vpa^2*vperp^4 + vperp^6))/(64*(vpa^2 + vperp^2)^5))
+                      +I12*((-3*vperp*(16*vpa^4 - 18*vpa^2*vperp^2 + vperp^4))/(4*(vpa^2 + vperp^2)^3))
+                      +I10*(vperp*(-1 + (3*vpa^2)/(vpa^2 + vperp^2)))
+                      +I08*((1575*vpa*(128*vpa^8*vperp - 896*vpa^6*vperp^3 + 1120*vpa^4*vperp^5 - 280*vpa^2*vperp^7 + 7*vperp^9))/(16384*(vpa^2 + vperp^2)^8))
+                      +I06*((-35*vpa*(64*vpa^6*vperp - 240*vpa^4*vperp^3 + 120*vpa^2*vperp^5 - 5*vperp^7))/(256*(vpa^2 + vperp^2)^6))
+                      +I04*((45*vpa*(8*vpa^4*vperp - 12*vpa^2*vperp^3 + vperp^5))/(64*(vpa^2 + vperp^2)^4))
+                      +I02*((3*vpa*vperp*(-4*vpa^2 + vperp^2))/(4*(vpa^2 + vperp^2)^2))
+                      +I00*(vpa*vperp))
+   # multiply by overall prefactor
+   d2Gdvperpdvpa_series *= -((vpa^2 + vperp^2)^(-3/2))   
+   return d2Gdvperpdvpa_series
+end
+
+function multipole_d2Gdvpa2(vpa::mk_float,vperp::mk_float,
+                   I00::mk_float, I10::mk_float, I20::mk_float, I30::mk_float, I40::mk_float, I50::mk_float, I60::mk_float, I70::mk_float, I80::mk_float, 
+                   I02::mk_float, I12::mk_float, I22::mk_float, I32::mk_float, I42::mk_float, I52::mk_float, I62::mk_float,
+                   I04::mk_float, I14::mk_float, I24::mk_float, I34::mk_float, I44::mk_float, I06::mk_float, I16::mk_float, I26::mk_float, I08::mk_float)
+   # sum up terms in the multipole series 
+   d2Gdvpa2_series = (I80*((45*vperp^2*(128*vpa^8 - 896*vpa^6*vperp^2 + 1120*vpa^4*vperp^4 - 280*vpa^2*vperp^6 + 7*vperp^8))/(128*(vpa^2 + vperp^2)^8))
+                   +I70*((9*vpa*vperp^2*(64*vpa^6 - 336*vpa^4*vperp^2 + 280*vpa^2*vperp^4 - 35*vperp^6))/(16*(vpa^2 + vperp^2)^7))
+                   +I62*((7*(256*vpa^10 - 9088*vpa^8*vperp^2 + 43456*vpa^6*vperp^4 - 45920*vpa^4*vperp^6 + 10430*vpa^2*vperp^8 - 245*vperp^10))/(64*(vpa^2 + vperp^2)^8))
+                   +I60*((7*vperp^2*(64*vpa^6 - 240*vpa^4*vperp^2 + 120*vpa^2*vperp^4 - 5*vperp^6))/(16*(vpa^2 + vperp^2)^6))
+                   +I52*((21*vpa*(32*vpa^8 - 880*vpa^6*vperp^2 + 3108*vpa^4*vperp^4 - 2170*vpa^2*vperp^6 + 245*vperp^8))/(32*(vpa^2 + vperp^2)^7))
+                   +I50*((21*vpa*vperp^2*(8*vpa^4 - 20*vpa^2*vperp^2 + 5*vperp^4))/(8*(vpa^2 + vperp^2)^5))
+                   +I44*((105*(-512*vpa^10 + 12416*vpa^8*vperp^2 - 46592*vpa^6*vperp^4 + 41440*vpa^4*vperp^6 - 8260*vpa^2*vperp^8 + 175*vperp^10))/(512*(vpa^2 + vperp^2)^8))
+                   +I42*((15*(32*vpa^8 - 656*vpa^6*vperp^2 + 1620*vpa^4*vperp^4 - 670*vpa^2*vperp^6 + 25*vperp^8))/(32*(vpa^2 + vperp^2)^6))
+                   +I40*((15*vperp^2*(8*vpa^4 - 12*vpa^2*vperp^2 + vperp^4))/(8*(vpa^2 + vperp^2)^4))
+                   +I34*((-105*vpa*(64*vpa^8 - 1184*vpa^6*vperp^2 + 3192*vpa^4*vperp^4 - 1820*vpa^2*vperp^6 + 175*vperp^8))/(128*(vpa^2 + vperp^2)^7))
+                   +I32*((5*vpa*(16*vpa^6 - 232*vpa^4*vperp^2 + 370*vpa^2*vperp^4 - 75*vperp^6))/(8*(vpa^2 + vperp^2)^5))
+                   +I30*((5*vpa*vperp^2*(4*vpa^2 - 3*vperp^2))/(2*(vpa^2 + vperp^2)^3))
+                   +I26*((105*(256*vpa^10 - 5248*vpa^8*vperp^2 + 16576*vpa^6*vperp^4 - 12320*vpa^4*vperp^6 + 2030*vpa^2*vperp^8 - 35*vperp^10))/(512*(vpa^2 + vperp^2)^8))
+                   +I24*((-45*(64*vpa^8 - 864*vpa^6*vperp^2 + 1560*vpa^4*vperp^4 - 500*vpa^2*vperp^6 + 15*vperp^8))/(128*(vpa^2 + vperp^2)^6))
+                   +I22*((3*(16*vpa^6 - 152*vpa^4*vperp^2 + 138*vpa^2*vperp^4 - 9*vperp^6))/(8*(vpa^2 + vperp^2)^4))
+                   +I20*((-3*vperp^2*(-4*vpa^2 + vperp^2))/(2*(vpa^2 + vperp^2)^2))
+                   +I16*((105*vpa*(32*vpa^8 - 496*vpa^6*vperp^2 + 1092*vpa^4*vperp^4 - 490*vpa^2*vperp^6 + 35*vperp^8))/(256*(vpa^2 + vperp^2)^7))
+                   +I14*((15*vpa*(-32*vpa^6 + 296*vpa^4*vperp^2 - 320*vpa^2*vperp^4 + 45*vperp^6))/(64*(vpa^2 + vperp^2)^5))
+                   +I12*((3*vpa*(4*vpa^4 - 22*vpa^2*vperp^2 + 9*vperp^4))/(4*(vpa^2 + vperp^2)^3))
+                   +I10*((3*vpa*vperp^2)/(vpa^2 + vperp^2))
+                   +I08*((-35*(1024*vpa^10 - 19072*vpa^8*vperp^2 + 52864*vpa^6*vperp^4 - 32480*vpa^4*vperp^6 + 3920*vpa^2*vperp^8 - 35*vperp^10))/(16384*(vpa^2 + vperp^2)^8))
+                   +I06*((5*(96*vpa^8 - 1072*vpa^6*vperp^2 + 1500*vpa^4*vperp^4 - 330*vpa^2*vperp^6 + 5*vperp^8))/(256*(vpa^2 + vperp^2)^6))
+                   +I04*((-3*(32*vpa^6 - 184*vpa^4*vperp^2 + 96*vpa^2*vperp^4 - 3*vperp^6))/(64*(vpa^2 + vperp^2)^4))
+                   +I02*((4*vpa^4 - 10*vpa^2*vperp^2 + vperp^4)/(4*(vpa^2 + vperp^2)^2))
+                   +I00*(vperp^2))
+   # multiply by overall prefactor
+   d2Gdvpa2_series *= ((vpa^2 + vperp^2)^(-3/2))
+   return d2Gdvpa2_series
+end
+
+"""
+"""
+function calculate_boundary_data_multipole_H!(func_data::vpa_vperp_boundary_data,vpa,vperp,
+                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                     I02, I12, I22, I32, I42, I52, I62,
+                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    nvpa = vpa.n
+    nvperp = vperp.n
+    begin_anyv_vperp_region(no_synchronize=true)
+    @loop_vperp ivperp begin
+                func_data.lower_boundary_vpa[ivperp] = multipole_H(vpa.grid[1],vperp.grid[ivperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.upper_boundary_vpa[ivperp] = multipole_H(vpa.grid[nvpa],vperp.grid[ivperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    end
+    begin_anyv_vpa_region(no_synchronize=true)
+    @loop_vpa ivpa begin
+                func_data.upper_boundary_vperp[ivpa] = multipole_H(vpa.grid[ivpa],vperp.grid[nvperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    end
+    # return to serial parallelisation
+    return nothing
+end
+
+"""
+"""
+function calculate_boundary_data_multipole_dHdvpa!(func_data::vpa_vperp_boundary_data,vpa,vperp,
+                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                     I02, I12, I22, I32, I42, I52, I62,
+                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    nvpa = vpa.n
+    nvperp = vperp.n
+    begin_anyv_vperp_region(no_synchronize=true)
+    @loop_vperp ivperp begin
+                func_data.lower_boundary_vpa[ivperp] = multipole_dHdvpa(vpa.grid[1],vperp.grid[ivperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.upper_boundary_vpa[ivperp] = multipole_dHdvpa(vpa.grid[nvpa],vperp.grid[ivperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    end
+    begin_anyv_vpa_region(no_synchronize=true)
+    @loop_vpa ivpa begin
+                func_data.upper_boundary_vperp[ivpa] = multipole_dHdvpa(vpa.grid[ivpa],vperp.grid[nvperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    end
+    # return to serial parallelisation
+    return nothing
+end
+
+"""
+"""
+function calculate_boundary_data_multipole_dHdvperp!(func_data::vpa_vperp_boundary_data,vpa,vperp,
+                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                     I02, I12, I22, I32, I42, I52, I62,
+                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    nvpa = vpa.n
+    nvperp = vperp.n
+    begin_anyv_vperp_region(no_synchronize=true)
+    @loop_vperp ivperp begin
+                func_data.lower_boundary_vpa[ivperp] = multipole_dHdvperp(vpa.grid[1],vperp.grid[ivperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.upper_boundary_vpa[ivperp] = multipole_dHdvperp(vpa.grid[nvpa],vperp.grid[ivperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    end
+    begin_anyv_vpa_region(no_synchronize=true)
+    @loop_vpa ivpa begin
+                func_data.upper_boundary_vperp[ivpa] = multipole_dHdvperp(vpa.grid[ivpa],vperp.grid[nvperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    end
+    # return to serial parallelisation
+    return nothing
+end
+
+"""
+"""
+function calculate_boundary_data_multipole_G!(func_data::vpa_vperp_boundary_data,vpa,vperp,
+                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                     I02, I12, I22, I32, I42, I52, I62,
+                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    nvpa = vpa.n
+    nvperp = vperp.n
+    begin_anyv_vperp_region(no_synchronize=true)
+    @loop_vperp ivperp begin
+                func_data.lower_boundary_vpa[ivperp] = multipole_G(vpa.grid[1],vperp.grid[ivperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.upper_boundary_vpa[ivperp] = multipole_G(vpa.grid[nvpa],vperp.grid[ivperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    end
+    begin_anyv_vpa_region(no_synchronize=true)
+    @loop_vpa ivpa begin
+                func_data.upper_boundary_vperp[ivpa] = multipole_G(vpa.grid[ivpa],vperp.grid[nvperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    end
+    # return to serial parallelisation
+    return nothing
+end
+
+"""
+"""
+function calculate_boundary_data_multipole_dGdvperp!(func_data::vpa_vperp_boundary_data,vpa,vperp,
+                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                     I02, I12, I22, I32, I42, I52, I62,
+                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    nvpa = vpa.n
+    nvperp = vperp.n
+    begin_anyv_vperp_region(no_synchronize=true)
+    @loop_vperp ivperp begin
+                func_data.lower_boundary_vpa[ivperp] = multipole_dGdvperp(vpa.grid[1],vperp.grid[ivperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.upper_boundary_vpa[ivperp] = multipole_dGdvperp(vpa.grid[nvpa],vperp.grid[ivperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    end
+    begin_anyv_vpa_region(no_synchronize=true)
+    @loop_vpa ivpa begin
+                func_data.upper_boundary_vperp[ivpa] = multipole_dGdvperp(vpa.grid[ivpa],vperp.grid[nvperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    end
+    # return to serial parallelisation
+    return nothing
+end
+
+"""
+"""
+function calculate_boundary_data_multipole_d2Gdvperp2!(func_data::vpa_vperp_boundary_data,vpa,vperp,
+                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                     I02, I12, I22, I32, I42, I52, I62,
+                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    nvpa = vpa.n
+    nvperp = vperp.n
+    begin_anyv_vperp_region(no_synchronize=true)
+    @loop_vperp ivperp begin
+                func_data.lower_boundary_vpa[ivperp] = multipole_d2Gdvperp2(vpa.grid[1],vperp.grid[ivperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.upper_boundary_vpa[ivperp] = multipole_d2Gdvperp2(vpa.grid[nvpa],vperp.grid[ivperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    end
+    begin_anyv_vpa_region(no_synchronize=true)
+    @loop_vpa ivpa begin
+                func_data.upper_boundary_vperp[ivpa] = multipole_d2Gdvperp2(vpa.grid[ivpa],vperp.grid[nvperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    end
+    # return to serial parallelisation
+    return nothing
+end
+
+"""
+"""
+function calculate_boundary_data_multipole_d2Gdvperpdvpa!(func_data::vpa_vperp_boundary_data,vpa,vperp,
+                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                     I02, I12, I22, I32, I42, I52, I62,
+                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    nvpa = vpa.n
+    nvperp = vperp.n
+    begin_anyv_vperp_region(no_synchronize=true)
+    @loop_vperp ivperp begin
+                func_data.lower_boundary_vpa[ivperp] = multipole_d2Gdvperpdvpa(vpa.grid[1],vperp.grid[ivperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.upper_boundary_vpa[ivperp] = multipole_d2Gdvperpdvpa(vpa.grid[nvpa],vperp.grid[ivperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    end
+    begin_anyv_vpa_region(no_synchronize=true)
+    @loop_vpa ivpa begin
+                func_data.upper_boundary_vperp[ivpa] = multipole_d2Gdvperpdvpa(vpa.grid[ivpa],vperp.grid[nvperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    end
+    # return to serial parallelisation
+    return nothing
+end
+
+"""
+"""
+function calculate_boundary_data_multipole_d2Gdvpa2!(func_data::vpa_vperp_boundary_data,vpa,vperp,
+                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                     I02, I12, I22, I32, I42, I52, I62,
+                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    nvpa = vpa.n
+    nvperp = vperp.n
+    begin_anyv_vperp_region(no_synchronize=true)
+    @loop_vperp ivperp begin
+                func_data.lower_boundary_vpa[ivperp] = multipole_d2Gdvpa2(vpa.grid[1],vperp.grid[ivperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.upper_boundary_vpa[ivperp] = multipole_d2Gdvpa2(vpa.grid[nvpa],vperp.grid[ivperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    end
+    begin_anyv_vpa_region(no_synchronize=true)
+    @loop_vpa ivpa begin
+                func_data.upper_boundary_vperp[ivpa] = multipole_d2Gdvpa2(vpa.grid[ivpa],vperp.grid[nvperp],
+                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                                       I02, I12, I22, I32, I42, I52, I62,
+                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    end
+    # return to serial parallelisation
+    return nothing
+end
+
+"""
+Function to use the multipole expansion of the Rosenbluth potentials to calculate and
+assign boundary data to an instance of `rosenbluth_potential_boundary_data`, in place,
+without allocation.
+"""
+function calculate_rosenbluth_potential_boundary_data_multipole!(rpbd::rosenbluth_potential_boundary_data,
+    pdf,vpa,vperp,vpa_spectral,vperp_spectral;
+    calculate_GG=false,calculate_dGdvperp=false)
+    # get required moments of pdf
+    I00, I10, I20, I30, I40, I50, I60, I70, I80 = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    I02, I12, I22, I32, I42, I52, I62 = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    I04, I14, I24, I34, I44 = 0.0, 0.0, 0.0, 0.0, 0.0
+    I06, I16, I26 = 0.0, 0.0, 0.0
+    I08 = 0.0
+    
+    begin_anyv_region()
+    @anyv_serial_region begin
+       I00 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+       I10 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
+       I20 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)
+       I30 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 3, vpa.wgts, vperp.grid, 0, vperp.wgts)
+       I40 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 4, vpa.wgts, vperp.grid, 0, vperp.wgts)
+       I50 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 5, vpa.wgts, vperp.grid, 0, vperp.wgts)
+       I60 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 6, vpa.wgts, vperp.grid, 0, vperp.wgts)
+       I70 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 7, vpa.wgts, vperp.grid, 0, vperp.wgts)
+       I80 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 8, vpa.wgts, vperp.grid, 0, vperp.wgts)
+       
+       I02 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 2, vperp.wgts)
+       I12 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 1, vpa.wgts, vperp.grid, 2, vperp.wgts)
+       I22 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 2, vpa.wgts, vperp.grid, 2, vperp.wgts)
+       I32 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 3, vpa.wgts, vperp.grid, 2, vperp.wgts)
+       I42 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 4, vpa.wgts, vperp.grid, 2, vperp.wgts)
+       I52 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 5, vpa.wgts, vperp.grid, 2, vperp.wgts)
+       I62 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 6, vpa.wgts, vperp.grid, 2, vperp.wgts)
+       
+       I04 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 4, vperp.wgts)
+       I14 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 1, vpa.wgts, vperp.grid, 4, vperp.wgts)
+       I24 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 2, vpa.wgts, vperp.grid, 4, vperp.wgts)
+       I34 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 3, vpa.wgts, vperp.grid, 4, vperp.wgts)
+       I44 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 4, vpa.wgts, vperp.grid, 4, vperp.wgts)
+       
+       I06 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 6, vperp.wgts)
+       I16 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 1, vpa.wgts, vperp.grid, 6, vperp.wgts)
+       I26 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 2, vpa.wgts, vperp.grid, 6, vperp.wgts)
+       
+       I08 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 8, vperp.wgts)    
+    end
+    # Broadcast integrals to all processes in the 'anyv' subblock
+    param_vec = [I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                I02, I12, I22, I32, I42, I52, I62,
+                I04, I14, I24, I34, I44,
+                I06, I16, I26,
+                I08]
+    if comm_anyv_subblock[] != MPI.COMM_NULL
+        MPI.Bcast!(param_vec, 0, comm_anyv_subblock[])
+    end
+    (I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+     I02, I12, I22, I32, I42, I52, I62,
+     I04, I14, I24, I34, I44,
+     I06, I16, I26,
+     I08) = param_vec
+   # println(I00, " ", I10, " ", I20, " ", I30, " ", I40, " ", I50, " ", I60, " ", I70, " ", I80, " ", 
+   #        I02, " ", I12, " ", I22, " ", I32, " ", I42, " ", I52, " ", I62, " ",
+   #        I04, " ", I14, " ", I24, " ", I34, " ", I44, " ",
+   #        I06, " ", I16, " ", I26, " ",
+   #        I08)
+    # ensure data is synchronized
+    _anyv_subblock_synchronize()
+    # evaluate the multipole formulae 
+    calculate_boundary_data_multipole_H!(rpbd.H_data,vpa,vperp, 
+                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                     I02, I12, I22, I32, I42, I52, I62,
+                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    calculate_boundary_data_multipole_dHdvpa!(rpbd.dHdvpa_data,vpa,vperp,
+                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                     I02, I12, I22, I32, I42, I52, I62,
+                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    calculate_boundary_data_multipole_dHdvperp!(rpbd.dHdvperp_data,vpa,vperp,
+                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                     I02, I12, I22, I32, I42, I52, I62,
+                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    if calculate_GG
+        calculate_boundary_data_multipole_G!(rpbd.G_data,vpa,vperp,
+                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                     I02, I12, I22, I32, I42, I52, I62,
+                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    end
+    if calculate_dGdvperp
+        calculate_boundary_data_multipole_dGdvperp!(rpbd.dGdvperp_data,vpa,vperp,
+                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                     I02, I12, I22, I32, I42, I52, I62,
+                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    end
+    calculate_boundary_data_multipole_d2Gdvperp2!(rpbd.d2Gdvperp2_data,vpa,vperp,
+                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                     I02, I12, I22, I32, I42, I52, I62,
+                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    calculate_boundary_data_multipole_d2Gdvperpdvpa!(rpbd.d2Gdvperpdvpa_data,vpa,vperp,
+                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                     I02, I12, I22, I32, I42, I52, I62,
+                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    calculate_boundary_data_multipole_d2Gdvpa2!(rpbd.d2Gdvpa2_data,vpa,vperp,
+                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+                                     I02, I12, I22, I32, I42, I52, I62,
+                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    
+    return nothing
+end
+
 """
 Function to compare two instances of `rosenbluth_potential_boundary_data` --
 one assumed to contain exact results, and the other numerically computed results -- and compute
@@ -2281,7 +2913,8 @@ to solve the PDE matrix equations.
 function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvperp,
              d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,ffsp_in,
              vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays::fokkerplanck_weakform_arrays_struct;
-             algebraic_solve_for_d2Gdvperp2=false,calculate_GG=false,calculate_dGdvperp=false)
+             algebraic_solve_for_d2Gdvperp2=false,calculate_GG=false,calculate_dGdvperp=false,
+             multipole=false)
     
     # extract the necessary precalculated and buffer arrays from fokkerplanck_arrays
     MM2D_sparse = fkpl_arrays.MM2D_sparse
@@ -2310,8 +2943,13 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
     rhsvpavperp_copy3 = fkpl_arrays.rhsvpavperp_copy3
     
     # calculate the boundary data
-    calculate_rosenbluth_potential_boundary_data!(rpbd,bwgt,ffsp_in,vpa,vperp,vpa_spectral,vperp_spectral,
-      calculate_GG=calculate_GG,calculate_dGdvperp=(calculate_dGdvperp||algebraic_solve_for_d2Gdvperp2))
+    if multipole
+        calculate_rosenbluth_potential_boundary_data_multipole!(rpbd,ffsp_in,vpa,vperp,vpa_spectral,vperp_spectral,
+          calculate_GG=calculate_GG,calculate_dGdvperp=(calculate_dGdvperp||algebraic_solve_for_d2Gdvperp2))
+    else # use direct integration on the boundary
+        calculate_rosenbluth_potential_boundary_data!(rpbd,bwgt,ffsp_in,vpa,vperp,vpa_spectral,vperp_spectral,
+         calculate_GG=calculate_GG,calculate_dGdvperp=(calculate_dGdvperp||algebraic_solve_for_d2Gdvperp2))
+    end
     # carry out the elliptic solves required
     begin_anyv_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
