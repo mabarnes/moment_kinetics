@@ -489,6 +489,8 @@ Base.@kwdef struct fkpl_collisions_input
     self_collisions::Bool
     # option to determine if ad-hoc moment_kinetics-style conserving corrections are used
     use_conserving_corrections::Bool
+    # option to determine if multipole expansion is used to provide boundary data for Rosenbluth potential calculations.
+    multipole_boundary_data::Bool
     # option to determine if cross-collisions against fixed Maxwellians are used
     slowing_down_test::Bool
     # Setting to switch between different options for Fokker-Planck collision frequency input

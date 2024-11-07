@@ -2914,7 +2914,7 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
              d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,ffsp_in,
              vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays::fokkerplanck_weakform_arrays_struct;
              algebraic_solve_for_d2Gdvperp2=false,calculate_GG=false,calculate_dGdvperp=false,
-             multipole=false)
+             multipole_boundary_data=false)
     
     # extract the necessary precalculated and buffer arrays from fokkerplanck_arrays
     MM2D_sparse = fkpl_arrays.MM2D_sparse
@@ -2943,7 +2943,7 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
     rhsvpavperp_copy3 = fkpl_arrays.rhsvpavperp_copy3
     
     # calculate the boundary data
-    if multipole
+    if multipole_boundary_data
         calculate_rosenbluth_potential_boundary_data_multipole!(rpbd,ffsp_in,vpa,vperp,vpa_spectral,vperp_spectral,
           calculate_GG=calculate_GG,calculate_dGdvperp=(calculate_dGdvperp||algebraic_solve_for_d2Gdvperp2))
     else # use direct integration on the boundary

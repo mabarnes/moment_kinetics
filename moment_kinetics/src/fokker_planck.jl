@@ -94,6 +94,7 @@ function setup_fkpl_collisions_input(toml_input::Dict)
        frequency_option = "reference_parameters",
        self_collisions = true,
        use_conserving_corrections = true,
+       multipole_boundary_data = false,
        slowing_down_test = false,
        sd_density = 1.0,
        sd_temp = 0.01,
@@ -337,13 +338,15 @@ Function for advancing with the explicit, weak-form, self-collision operator.
     Zi = collisions.fkpl.Zi # generalise!
     nussp = nuref*(Zi^4) # include charge number factor for self collisions
     use_conserving_corrections = collisions.fkpl.use_conserving_corrections
+    multipole_boundary_data = collisions.fkpl.multipole_boundary_data
     # N.B. parallelisation using special 'anyv' region
     begin_s_r_z_anyv_region()
     @loop_s_r_z is ir iz begin
         # first argument is Fs, and second argument is Fs' in C[Fs,Fs'] 
         @views fokker_planck_collision_operator_weak_form!(
             pdf_in[:,:,iz,ir,is], pdf_in[:,:,iz,ir,is], ms, msp, nussp, fkpl_arrays,
-            vperp, vpa, vperp_spectral, vpa_spectral)
+            vperp, vpa, vperp_spectral, vpa_spectral, 
+            multipole_boundary_data = multipole_boundary_data)
         # enforce the boundary conditions on CC before it is used for timestepping
         enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
         # make ad-hoc conserving corrections
@@ -398,7 +401,8 @@ with \$\\gamma_\\mathrm{ref} = 2 \\pi e^4 \\ln \\Lambda_{ii} / (4 \\pi
                          use_Maxwellian_Rosenbluth_coefficients=false,
                          use_Maxwellian_field_particle_distribution=false,
                          algebraic_solve_for_d2Gdvperp2 = false, calculate_GG=false,
-                         calculate_dGdvperp=false) = begin
+                         calculate_dGdvperp=false,
+                         multipole_boundary_data=false) = begin
     @boundscheck vpa.n == size(ffsp_in,1) || throw(BoundsError(ffsp_in))
     @boundscheck vperp.n == size(ffsp_in,2) || throw(BoundsError(ffsp_in))
     @boundscheck vpa.n == size(ffs_in,1) || throw(BoundsError(ffs_in))
@@ -448,7 +452,8 @@ with \$\\gamma_\\mathrm{ref} = 2 \\pi e^4 \\ln \\Lambda_{ii} / (4 \\pi
              d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,ffsp_in,
              vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays,
              algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2,
-             calculate_GG=calculate_GG,calculate_dGdvperp=calculate_dGdvperp)
+             calculate_GG=calculate_GG,calculate_dGdvperp=calculate_dGdvperp,
+             multipole_boundary_data=multipole_boundary_data)
     end
     # assemble the RHS of the collision operator matrix eq
     if use_Maxwellian_field_particle_distribution

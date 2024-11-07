@@ -126,9 +126,9 @@ end
         nc_global = vpa.n*vperp.n
         begin_serial_region()
         start_init_time = now()
-        
+        precompute_weights = true && !(use_multipole)
         fkpl_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; 
-                           precompute_weights=true, test_dense_matrix_construction=test_dense_construction)
+                           precompute_weights=precompute_weights, test_dense_matrix_construction=test_dense_construction)
         KKpar2D_with_BC_terms_sparse = fkpl_arrays.KKpar2D_with_BC_terms_sparse
         KKperp2D_with_BC_terms_sparse = fkpl_arrays.KKperp2D_with_BC_terms_sparse
         lu_obj_MM = fkpl_arrays.lu_obj_MM
@@ -264,7 +264,8 @@ end
                                              use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients,
                                              use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution,
                                              algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2,
-                                             calculate_GG = false, calculate_dGdvperp=false)
+                                             calculate_GG = false, calculate_dGdvperp=false,
+                                             multipole_boundary_data=use_multipole)
         if test_numerical_conserving_terms && test_self_operator
             # enforce the boundary conditions on CC before it is used for timestepping
             enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
@@ -275,7 +276,7 @@ end
         calculate_rosenbluth_potentials_via_elliptic_solve!(fkpl_arrays.GG,fkpl_arrays.HH,fkpl_arrays.dHdvpa,fkpl_arrays.dHdvperp,
              fkpl_arrays.d2Gdvpa2,fkpl_arrays.dGdvperp,fkpl_arrays.d2Gdvperpdvpa,fkpl_arrays.d2Gdvperp2,F_M,
              vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays;
-             algebraic_solve_for_d2Gdvperp2=false,calculate_GG=true,calculate_dGdvperp=true,multipole=use_multipole)
+             algebraic_solve_for_d2Gdvperp2=false,calculate_GG=true,calculate_dGdvperp=true,multipole_boundary_data=use_multipole)
         # extract C[Fs,Fs'] result
         # and Rosenbluth potentials for testing
         begin_s_r_z_anyv_region()
