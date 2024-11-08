@@ -2962,6 +2962,7 @@ function write_timing_data(io_moments, t_idx, dfns=false)
     # Pick a fixed size for "global_timer_string" so that we can overwrite the variable
     # without needing to resize it.
     global_timer_string_size = 10000 # 100 characters x 100 lines seems like a reasonable maximum size.
+    global_timer_description = "Formatted representation of global_timer"
     if global_rank[] == 0 || (block_rank[] == 0 && !parallel_io)
         if t_idx > 1 || t_idx == -1
             if t_idx == -1
@@ -3003,7 +3004,7 @@ function write_timing_data(io_moments, t_idx, dfns=false)
             write_single_value!(get_group(io_moments.fid, "timing_data"),
                                 "global_timer_string", string_to_write;
                                 parallel_io=parallel_io,
-                                description="Formatted representation of global_timer",
+                                description=global_timer_description,
                                 overwrite=true)
         end
     elseif block_rank[] == 0
@@ -3017,8 +3018,9 @@ function write_timing_data(io_moments, t_idx, dfns=false)
             string_to_write = " " ^ global_timer_string_size
             write_single_value!(get_group(io_moments.fid, "timing_data"),
                                 "global_timer_string", string_to_write;
-                                parallel_io=parallel_io, description="Formatted representation
-                                of global_timer", overwrite=true)
+                                parallel_io=parallel_io,
+                                description=global_timer_description,
+                                overwrite=true)
         end
     end
 
