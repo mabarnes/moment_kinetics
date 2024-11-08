@@ -19,6 +19,11 @@ julia> makie_post_process("runs/example-run1/", "runs/example-run2/", "runs/exam
 What this function does is controlled by the settings in an input file, by
 default `post_processing_input.toml`.
 
+!!! note "Example input file"
+    You can generate an example input file, with all the options shown (with
+    their default values) but commented out, by running
+    `makie_post_processing.generate_example_input_file()`.
+
 To run from the command line
 ```julia
 julia --project run_makie_post_processing.jl dir1 [dir2 [dir3 ...]]

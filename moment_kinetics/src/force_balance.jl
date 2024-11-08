@@ -6,15 +6,17 @@ export force_balance!
 
 using ..calculus: derivative!
 using ..looping
+using ..timer_utils
 
 """
 use the force balance equation d(nu)/dt + d(ppar + n*upar*upar)/dz =
 -(dens/2)*dphi/dz + R*dens_i*dens_n*(upar_n-upar_i)
 to update the parallel particle flux dens*upar for each species
 """
-function force_balance!(pflx, density_out, fvec, moments, fields, collisions, dt,
-                        spectral, composition, geometry, ion_source_settings,
-                        num_diss_params)
+@timeit global_timer force_balance!(
+                         pflx, density_out, fvec, moments, fields, collisions, dt,
+                         spectral, composition, geometry, ion_source_settings,
+                         num_diss_params) = begin
 
     begin_s_r_z_region()
 
@@ -71,9 +73,10 @@ function force_balance!(pflx, density_out, fvec, moments, fields, collisions, dt
     end
 end
 
-function neutral_force_balance!(pflx, density_out, fvec, moments, fields, collisions, dt,
-                                spectral, composition, geometry, neutral_source_settings,
-                                num_diss_params)
+@timeit global_timer neutral_force_balance!(
+                         pflx, density_out, fvec, moments, fields, collisions, dt,
+                         spectral, composition, geometry, neutral_source_settings,
+                         num_diss_params) = begin
 
     begin_sn_r_z_region()
 

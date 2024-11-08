@@ -89,9 +89,27 @@ end
 function write_single_value!(file_or_group::HDF5.H5DataStore, name,
                              data::Union{Number, AbstractString, AbstractArray{T,N}},
                              coords::Union{coordinate,mk_int,NamedTuple}...; parallel_io,
-                             description=nothing, units=nothing) where {T,N}
+                             description=nothing, units=nothing,
+                             overwrite=false) where {T,N}
     if isa(data, Union{Number, AbstractString})
-        file_or_group[name] = data
+        if overwrite && name ∈ keys(file_or_group)
+            delete_object(file_or_group, name)
+        end
+        # When we write a scalar, and parallel_io=true, we need to create the variable on
+        # every process in `comm_inter_block[]` but we only want to actually write the
+        # data from one process (we choose `global_rank[]==0`) to avoid corruption due to
+        # the same data being written at the same time from different processes (HDF5
+        # might protect against this, but it must be at best inefficient).
+        # HDF5.jl's `create_dataset()` for a scalar `data` returns both the 'I/O variable'
+        # (the handle to the HDF5 'Dataset' for the variable) and the data type. For
+        # String data, the 'data type' is important, because it actually also contains the
+        # length of the string, so cannot be easily created by hand. Note that a String of
+        # the correct length must be passed from every process in `comm_inter_block[]`,
+        # but only the contents of the string on `global_rank[]==0` are actually written.
+        io_var, var_hdf5_type = create_dataset(file_or_group, name, data)
+        if !parallel_io || global_rank[] == 0
+            write_dataset(io_var, var_hdf5_type, data)
+        end
         if description !== nothing
             add_attribute!(file_or_group[name], "description", description)
         end
@@ -110,7 +128,11 @@ function write_single_value!(file_or_group::HDF5.H5DataStore, name,
     end
 
     dim_sizes, chunk_sizes = hdf5_get_fixed_dim_sizes(coords, parallel_io)
-    io_var = create_dataset(file_or_group, name, T, dim_sizes, chunk=chunk_sizes)
+    if overwrite && name ∈ keys(file_or_group)
+        io_var = file_or_group(name)
+    else
+        io_var = create_dataset(file_or_group, name, T, dim_sizes, chunk=chunk_sizes)
+    end
     local_ranges = Tuple(isa(c, mk_int) ? (1:c) : isa(c, coordinate) ? c.local_io_range : c.n for c ∈ coords)
     global_ranges = Tuple(isa(c, mk_int) ? (1:c) : isa(c, coordinate) ? c.global_io_range : c.n for c ∈ coords)
 
@@ -238,10 +260,10 @@ function extend_time_index!(h5, t_idx)
 end
 
 function append_to_dynamic_var(io_var::HDF5.Dataset,
-                               data::Union{Number,AbstractArray{T,N}}, t_idx,
+                               data::Union{Nothing,Number,AbstractArray{T,N}}, t_idx,
                                parallel_io::Bool,
                                coords::Union{coordinate,Integer}...;
-                               only_root=false) where {T,N}
+                               only_root=false, write_from_this_rank=nothing) where {T,N}
     # Extend time dimension for this variable
     dims = size(io_var)
     dims_mod = (dims[1:end-1]..., t_idx)
@@ -254,13 +276,19 @@ function append_to_dynamic_var(io_var::HDF5.Dataset,
         # output file
         return nothing
     end
+    if write_from_this_rank === false
+        # The variable is only written from another rank, not this one.
+        return nothing
+    end
 
     if isa(data, Number)
-        if !parallel_io || global_rank[] == 0
+        if !parallel_io || write_from_this_rank === true ||
+                (write_from_this_rank === nothing && global_rank[] == 0)
             # A scalar value is required to be the same on all processes, so when using
             # parallel I/O, only write from one process to avoid overwriting (which would
             # mean processes having to wait, and make which process wrote the final value
-            # random).
+            # random). An exception is if `write_from_this_rank=true` was passed - this
+            # should only be passed on one process.
             io_var[t_idx] = data
         end
     elseif N == 1

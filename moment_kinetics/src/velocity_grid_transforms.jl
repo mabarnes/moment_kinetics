@@ -7,10 +7,13 @@ export vpavperp_to_vzvrvzeta!
 
 using Interpolations
 using ..looping
+using ..timer_utils
 """
 """
 
-function vzvrvzeta_to_vpavperp!(f_out,f_in,vz,vr,vzeta,vpa,vperp,gyrophase,z,r,geometry,composition)
+@timeit global_timer vzvrvzeta_to_vpavperp!(
+                         f_out, f_in, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
+                         geometry, composition) = begin
     @boundscheck vz.n == size(f_in, 1) || throw(BoundsError(f_in))
     @boundscheck vr.n == size(f_in, 2) || throw(BoundsError(f_in))
     @boundscheck vzeta.n == size(f_in, 3) || throw(BoundsError(f_in))
@@ -33,7 +36,9 @@ function vzvrvzeta_to_vpavperp!(f_out,f_in,vz,vr,vzeta,vpa,vperp,gyrophase,z,r,g
 
 end
 
-function vzvrvzeta_to_vpavperp_species!(f_out,f_in,vz,vr,vzeta,vpa,vperp,gyrophase,bzed,bzeta)
+@timeit global_timer vzvrvzeta_to_vpavperp_species!(
+                         f_out, f_in, vz, vr, vzeta, vpa, vperp, gyrophase, bzed,
+                         bzeta) = begin
     @boundscheck vz.n == size(f_in, 1) || throw(BoundsError(f_in))
     @boundscheck vr.n == size(f_in, 2) || throw(BoundsError(f_in))
     @boundscheck vzeta.n == size(f_in, 3) || throw(BoundsError(f_in))
@@ -62,7 +67,9 @@ function vzvrvzeta_to_vpavperp_species!(f_out,f_in,vz,vr,vzeta,vpa,vperp,gyropha
     end
 end 
 
-function vpavperp_to_vzvrvzeta!(f_out,f_in,vz,vr,vzeta,vpa,vperp,z,r,geometry,composition)
+@timeit global_timer vpavperp_to_vzvrvzeta!(
+                         f_out, f_in, vz, vr, vzeta, vpa, vperp, z, r, geometry,
+                         composition) = begin
     @boundscheck vpa.n == size(f_in, 1) || throw(BoundsError(f_in))
     @boundscheck vperp.n == size(f_in, 2) || throw(BoundsError(f_in))
     @boundscheck z.n == size(f_in, 3) || throw(BoundsError(f_in))
@@ -86,7 +93,8 @@ function vpavperp_to_vzvrvzeta!(f_out,f_in,vz,vr,vzeta,vpa,vperp,z,r,geometry,co
 end
 
 
-function vpavperp_to_vzvrvzeta_species!(f_out,f_in,vz,vr,vzeta,vpa,vperp,bzed,bzeta)
+@timeit global_timer vpavperp_to_vzvrvzeta_species!(
+                         f_out, f_in, vz, vr, vzeta, vpa, vperp, bzed, bzeta) = begin
     @boundscheck vz.n == size(f_out, 1) || throw(BoundsError(f_out))
     @boundscheck vr.n == size(f_out, 2) || throw(BoundsError(f_out))
     @boundscheck vzeta.n == size(f_out, 3) || throw(BoundsError(f_out))

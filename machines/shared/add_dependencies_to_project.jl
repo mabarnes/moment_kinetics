@@ -154,6 +154,17 @@ end
 # HDF5 setup
 ############
 
+function get_hdf5_lib_names(dirname)
+    if Sys.isapple()
+        libhdf5_name = joinpath(dirname, "libhdf5.dylib")
+        libhdf5_hl_name = joinpath(dirname, "libhdf5_hl.dylib")
+    else
+        libhdf5_name = joinpath(dirname, "libhdf5.so")
+        libhdf5_hl_name = joinpath(dirname, "libhdf5_hl.so")
+    end
+    return libhdf5_name, libhdf5_hl_name
+end
+
 if mk_preferences["use_system_mpi"] == "y"
     # Only need to do this if using 'system MPI'. If we are using the Julia-provided MPI,
     # then the Julia-provided HDF5 is already MPI-enabled
@@ -162,14 +173,12 @@ if mk_preferences["use_system_mpi"] == "y"
     if machine_settings["hdf5_library_setting"] == "system"
         hdf5_dir = joinpath(ENV["HDF5_DIR"], "lib") # system hdf5
         using HDF5
-        HDF5.API.set_libraries!(joinpath(hdf5_dir, "libhdf5.so"),
-                                joinpath(hdf5_dir, "libhdf5_hl.so"))
+        HDF5.API.set_libraries!(get_hdf5_lib_names(hdf5_dir)...)
     elseif machine_settings["hdf5_library_setting"] == "download"
         artifact_dir = joinpath(repo_dir, "machines", "artifacts")
         hdf5_dir = joinpath(artifact_dir, "hdf5-build", "lib")
         using HDF5
-        HDF5.API.set_libraries!(joinpath(hdf5_dir, "libhdf5.so"),
-                                joinpath(hdf5_dir, "libhdf5_hl.so"))
+        HDF5.API.set_libraries!(get_hdf5_lib_names(hdf5_dir)...)
     elseif machine_settings["hdf5_library_setting"] == "prompt"
         # Prompt user to select what HDF5 to use
         if mk_preferences["build_hdf5"] == "y"
@@ -182,8 +191,7 @@ if mk_preferences["use_system_mpi"] == "y"
         elseif !prompt_for_lib_paths
             hdf5_dir = mk_preferences["hdf5_dir"]
             if hdf5_dir != "default"
-                hdf5_lib = joinpath(hdf5_dir, "libhdf5.so")
-                hdf5_lib_hl = joinpath(hdf5_dir, "libhdf5_hl.so")
+                hdf5_lib, hdf5_lib_hl = get_hdf5_lib_names(hdf5_dir)
             end
         else
             println("\n** Setting up to use system HDF5\n")

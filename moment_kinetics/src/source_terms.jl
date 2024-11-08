@@ -7,13 +7,15 @@ export source_terms_manufactured!
 
 using ..calculus: derivative!
 using ..looping
+using ..timer_utils
 
 """
 calculate the source terms due to redefinition of the pdf to split off density,
 flow and/or pressure, and use them to update the pdf
 """
-function source_terms!(pdf_out, fvec_in, moments, vpa, z, r, dt, spectral, composition,
-                       collisions, ion_source_settings)
+@timeit global_timer source_terms!(
+                         pdf_out, fvec_in, moments, vpa, z, r, dt, spectral, composition,
+                         collisions, ion_source_settings) = begin
 
     begin_s_r_z_vperp_vpa_region()
 
@@ -146,8 +148,9 @@ end
 calculate the source terms due to redefinition of the pdf to split off density,
 flow and/or pressure, and use them to update the pdf
 """
-function source_terms_neutral!(pdf_out, fvec_in, moments, vpa, z, r, dt, spectral,
-                               composition, collisions, neutral_source_settings)
+@timeit global_timer source_terms_neutral!(
+                         pdf_out, fvec_in, moments, vpa, z, r, dt, spectral, composition,
+                         collisions, neutral_source_settings) = begin
 
     begin_sn_r_z_vzeta_vr_vz_region()
 
@@ -273,7 +276,9 @@ end
 """
 advance the dfn with an arbitrary source function 
 """
-function source_terms_manufactured!(pdf_ion_out, pdf_neutral_out, vz, vr, vzeta, vpa, vperp, z, r, t, dt, composition, manufactured_source_list)
+@timeit global_timer source_terms_manufactured!(
+                         pdf_ion_out, pdf_neutral_out, vz, vr, vzeta, vpa, vperp, z, r, t,
+                         dt, composition, manufactured_source_list) = begin
     if manufactured_source_list.time_independent_sources
         # the (time-independent) manufactured source arrays
         Source_i = manufactured_source_list.Source_i_array

@@ -11,10 +11,11 @@ using MPI
 # be defined
 include("../../machines/shared/machine_setup.jl") # Included so Documenter.jl can find its docs
 include("check_so_newer_than_code.jl")
+include("type_definitions.jl")
+include("timer_utils.jl")
 include("command_line_options.jl")
 include("constants.jl")
 include("debugging.jl")
-include("type_definitions.jl")
 include("communication.jl")
 include("moment_kinetics_structs.jl")
 include("looping.jl")
@@ -78,14 +79,14 @@ include("initial_conditions.jl")
 include("parameter_scans.jl")
 include("time_advance.jl")
 
-using TimerOutputs
 using Dates
 using Glob
 using Primes
 
 using .file_io: setup_file_io, finish_file_io
 using .file_io: write_data_to_ascii
-using .file_io: write_all_moments_data_to_binary, write_all_dfns_data_to_binary
+using .file_io: write_all_moments_data_to_binary, write_all_dfns_data_to_binary,
+                write_final_timing_data_to_binary
 using .command_line_options: get_options
 using .communication
 using .communication: _block_synchronize
@@ -99,7 +100,8 @@ using .moment_constraints: hard_force_moment_constraints!
 using .looping: debug_setup_loop_ranges_split_one_combination!
 using .moment_kinetics_input: mk_input, read_input_file
 using .time_advance: setup_time_advance!, time_advance!
-using .type_definitions: mk_int
+using .timer_utils
+using .type_definitions: mk_int, OptionsDict
 using .utils: to_minutes, get_default_restart_filename,
               get_prefix_iblock_and_move_existing_file
 using .em_fields: setup_em_fields
@@ -110,8 +112,7 @@ using .time_advance: allocate_advection_structs
 """
 main function that contains all of the content of the program
 """
-function run_moment_kinetics(to::Union{TimerOutput,Nothing}, input_dict=Dict();
-                             restart=false, restart_time_index=-1)
+function run_moment_kinetics(input_dict::OptionsDict; restart=false, restart_time_index=-1)
 
     if global_rank[] == 0
         # Check that, if we are using a custom compiled system image that includes
@@ -124,26 +125,27 @@ function run_moment_kinetics(to::Union{TimerOutput,Nothing}, input_dict=Dict();
 
     mk_state = nothing
     try
-        # set up all the structs, etc. needed for a run
-        mk_state = setup_moment_kinetics(input_dict; restart=restart,
-                                         restart_time_index=restart_time_index)
+        # Reset timers in case a previous run was timed
+        reset_mk_timers!()
 
-        # solve the 1+1D kinetic equation to advance f in time by nstep time steps
-        if to === nothing
+        @timeit global_timer "moment_kinetics" begin
+            # set up all the structs, etc. needed for a run
+            mk_state = setup_moment_kinetics(input_dict; restart=restart,
+                                             restart_time_index=restart_time_index)
+
+            # solve the 1+1D kinetic equation to advance f in time by nstep time steps
             time_advance!(mk_state...)
-        else
-            @timeit to "time_advance" time_advance!(mk_state...)
         end
+
+        if global_rank[] == 0 && input_dict["output"]["display_timing_info"]
+            # Print the timing information
+            format_global_timer(; show_output=true)
+        end
+        write_final_timing_data_to_binary(mk_state[end-1:end]...)
 
         # clean up i/o and communications
         # last 3 elements of mk_state are ascii_io, io_moments, and io_dfns
         cleanup_moment_kinetics!(mk_state[end-2:end]...)
-
-        if global_rank[] == 0 && to !== nothing
-            # Print the timing information if this is a performance test
-            display(to)
-            println()
-        end
     catch e
         # Stop code from hanging when running on multiple processes if only one of them
         # throws an error
@@ -168,17 +170,8 @@ end
 """
 overload which takes a filename and loads input
 """
-function run_moment_kinetics(to::Union{TimerOutput,Nothing}, input_filename::String;
-                             restart=false, restart_time_index=-1)
-    return run_moment_kinetics(to, read_input_file(input_filename); restart=restart,
-                               restart_time_index=restart_time_index)
-end
-
-"""
-overload with no TimerOutput arguments
-"""
-function run_moment_kinetics(input; restart=false, restart_time_index=-1)
-    return run_moment_kinetics(nothing, input; restart=restart,
+function run_moment_kinetics(input_filename::String; restart=false, restart_time_index=-1)
+    return run_moment_kinetics(read_input_file(input_filename); restart=restart,
                                restart_time_index=restart_time_index)
 end
 
@@ -211,11 +204,13 @@ reload data from time index given by `restart_time_index` for a restart.
 `debug_loop_type` and `debug_loop_parallel_dims` are used to force specific set ups for
 parallel loop ranges, and are only used by the tests in `debug_test/`.
 """
-function setup_moment_kinetics(input_dict::AbstractDict;
-        restart::Union{Bool,AbstractString}=false, restart_time_index::mk_int=-1,
-        debug_loop_type::Union{Nothing,NTuple{N,Symbol} where N}=nothing,
-        debug_loop_parallel_dims::Union{Nothing,NTuple{N,Symbol} where N}=nothing,
-        skip_electron_solve::Bool=false)
+@timeit global_timer setup_moment_kinetics(
+                         input_dict::AbstractDict;
+                         restart::Union{Bool,AbstractString}=false,
+                         restart_time_index::mk_int=-1,
+                         debug_loop_type::Union{Nothing,NTuple{N,Symbol} where N}=nothing,
+                         debug_loop_parallel_dims::Union{Nothing,NTuple{N,Symbol} where N}=nothing,
+                         skip_electron_solve::Bool=false) = begin
 
     setup_start_time = now()
 

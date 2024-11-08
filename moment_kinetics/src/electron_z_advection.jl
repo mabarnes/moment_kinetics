@@ -11,14 +11,16 @@ using ..boundary_conditions: skip_f_electron_bc_points_in_Jacobian
 using ..chebyshev: chebyshev_info
 using ..gauss_legendre: gausslegendre_info
 using ..looping
+using ..timer_utils
 using ..derivatives: derivative_z_pdf_vpavperpz!
 using ..calculus: second_derivative!
 
 """
 calculate the z-advection term for the electron kinetic equation = wpa * vthe * df/dz
 """
-function electron_z_advection!(pdf_out, pdf_in, upar, vth, advect, z, vpa, spectral,
-                               scratch_dummy, dt, ir)
+@timeit global_timer electron_z_advection!(
+                         pdf_out, pdf_in, upar, vth, advect, z, vpa, spectral,
+                         scratch_dummy, dt, ir) = begin
     begin_vperp_vpa_region()
 
     # create a pointer to a scratch_dummy array to store the z-derivative of the electron pdf

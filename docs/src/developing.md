@@ -66,6 +66,44 @@ typed, which could impact performance by creating code that is not 'type
 stable' (i.e. all concrete types are known at compile time).
 
 
+## Timings
+
+Checking the timings of different parts of the code can be useful to check that
+performance problems are not introduced. Excessive allocations can also be a
+sign of type instability (or other problems) that could impact performance. To
+monitor these things, `moment_kinetics` uses a `TimerOutput` object
+[`moment_kinetics.timer_utils.global_timer`](@ref).
+
+The timings and allocation counts from the rank-0 MPI process are printed to
+the terminal at the end of a run. The same information is also saved to the
+output file as a string for quick reference - one way to view this is
+```bash
+$ h5dump -d /timing_data/global_timer_string my_output_file.moments.h5
+```
+
+More detailed timing information is saved for each MPI rank into subgroups
+`rank<i>` of the `timing_data` group in the output file. This information can
+be plotted using [`makie_post_processing.timing_data`](@ref). The plots contain
+many curves. Filtering out the ones you are not interested in (using the
+`include_patterns`, `exclude_patterns`, and/or `ranks` arguments) can help, but
+it still may be useful to have interactive plots which show the label and MPI
+rank when you hover over a curve. For example
+```julia
+julia> using makie_post_processing, GLMakie
+julia> ri = get_run_info("runs/my_example_run/")
+julia> timing_data(ri; interactive_figs=:times);
+```
+Here `using GLMakie` selects the `Makie` backend that provides interactive
+plots, and the `interactive_figs` argument specifies that `timing_data()`
+should make an interactive plot (in this case for the execution times).
+
+Lower level timing data, for example timing MPI and linear-algebra calls, can
+be enabled by activating 'debug timing'. This can be done by re-defining the
+function [`moment_kinetics.timer_utils.timeit_debug_enabled`](@ref) to return
+`true` - not the most user-friendly interface (!) but this feature is probably
+only needed while developing/profiling/debugging.
+
+
 ## Parallelization
 
 The code is parallelized at the moment using MPI and shared-memory arrays. Arrays representing the pdf, moments, etc. are shared between all processes. Using shared memory means, for example, we can take derivatives along one dimension while parallelising the other for any dimension without having to communicate to re-distribute the arrays. Using shared memory instead of (in future as well as) distributed memory parallelism has the advantage that it is easier to split up the points within each element between processors, giving a finer-grained parallelism which should let the code use larger numbers of processors efficiently.

@@ -3553,6 +3553,10 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         vz_chunk_size = 1
     end
 
+    overview = get_group(fids0[1], "overview")
+    nrank = load_variable(overview, "nrank")
+    block_size = load_variable(overview, "block_size")
+
     # Get variable names just from the first restart, for simplicity
     variable_names = get_variable_keys(get_group(fids0[1], "dynamic_data"))
     if initial_electron
@@ -3591,12 +3595,26 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         evolving_variables = Tuple(evolving_variables)
     end
 
+    timing_variable_names = Dict{mk_int, Vector{String}}()
+    for fid ∈ fids0
+        timing_group = get_group(fid, "timing_data")
+        timing_rank_names = collect(k for k in keys(timing_group) if startswith(k, "rank"))
+        for group_name ∈ timing_rank_names
+            rank_group = get_group(timing_group, group_name)
+            irank = parse(mk_int, split(group_name, "rank")[2])
+            timing_variable_names[irank] = collect(keys(rank_group))
+        end
+    end
+
     if parallel_io
         files = fids0
     else
         # Don't keep open files as read_distributed_zr_data!(), etc. open the files
         # themselves
         files = run_prefixes
+        for f ∈ fids0
+            close(f)
+        end
     end
 
     run_info = (run_name=run_name, run_prefix=base_prefix, parallel_io=parallel_io,
@@ -3615,12 +3633,13 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
                 z_local=z_local, r_spectral=r_spectral, z_spectral=z_spectral,
                 vperp_spectral=vperp_spectral, vpa_spectral=vpa_spectral,
                 vzeta_spectral=vzeta_spectral, vr_spectral=vr_spectral,
-                vz_spectral=vz_spectral, r_chunk_size=r_chunk_size,
-                z_chunk_size=z_chunk_size, vperp_chunk_size=vperp_chunk_size,
-                vpa_chunk_size=vpa_chunk_size, vzeta_chunk_size=vzeta_chunk_size,
-                vr_chunk_size=vr_chunk_size, vz_chunk_size=vz_chunk_size,
-                variable_names=variable_names, evolving_variables=evolving_variables,
-                dfns=dfns)
+                vz_spectral=vz_spectral, nrank=nrank, block_size=block_size,
+                r_chunk_size=r_chunk_size, z_chunk_size=z_chunk_size,
+                vperp_chunk_size=vperp_chunk_size, vpa_chunk_size=vpa_chunk_size,
+                vzeta_chunk_size=vzeta_chunk_size, vr_chunk_size=vr_chunk_size,
+                vz_chunk_size=vz_chunk_size, variable_names=variable_names,
+                evolving_variables=evolving_variables,
+                timing_variable_names=timing_variable_names, dfns=dfns)
 
     return run_info
 end
@@ -3649,7 +3668,7 @@ end
 """
     postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                            ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
-                           ivzeta=nothing, ivr=nothing, ivz=nothing)
+                           ivzeta=nothing, ivr=nothing, ivz=nothing, group=nothing)
 
 Load a variable
 
@@ -3663,10 +3682,14 @@ can be set to an integer or a range (e.g. `3:8` or `3:2:8`) to select subsets of
 Only the data for the subset requested will be loaded from the output file (mostly - when
 loading fields or moments from runs which used `parallel_io = false`, the full array will
 be loaded and then sliced).
+
+If a variable is found in a group other than "dynamic_data", the group name should be
+passed to the `group` argument.
 """
 function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                                 ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
-                                ivzeta=nothing, ivr=nothing, ivz=nothing)
+                                ivzeta=nothing, ivr=nothing, ivz=nothing, group=nothing)
+
     nt = run_info.nt
 
     if it === nothing
@@ -3778,8 +3801,12 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
     end
 
     if run_info.parallel_io
+        if group === nothing
+            group = "dynamic_data"
+        end
+
         # Get HDF5/NetCDF variables directly and load slices
-        variable = Tuple(get_group(f, "dynamic_data")[variable_name]
+        variable = Tuple(get_group(f, group)[variable_name]
                          for f ∈ run_info.files)
         nd = ndims(variable[1])
 
@@ -3976,15 +4003,19 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
         end
 
         if diagnostic_variable
+            if group === nothing
+                group = "dynamic_data"
+            end
             fid = open_readonly_output_file(run_info.files[1], run_info.ext, iblock=0)
-            group = get_group(fid, "dynamic_data")
-            result = load_variable(group, variable_name)
+            this_group = get_group(fid, group)
+            result = load_variable(this_group, variable_name)
             result = selectdim(result, ndims(result), it)
         elseif nd == 3
             result = allocate_float(run_info.z.n, run_info.r.n, run_info.nt)
             read_distributed_zr_data!(result, variable_name, run_info.files,
                                       run_info.ext, run_info.nblocks, run_info.z_local.n,
-                                      run_info.r_local.n, run_info.itime_skip)
+                                      run_info.r_local.n, run_info.itime_skip,
+                                      group=group)
             result = result[iz,ir,it]
         elseif nd == 4
             # If we ever have neutrals included but n_neutral_species != n_ion_species,
@@ -3995,9 +4026,14 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                                     run_info.nt)
             read_distributed_zr_data!(result, variable_name, run_info.files,
                                       run_info.ext, run_info.nblocks, run_info.z_local.n,
-                                      run_info.r_local.n, run_info.itime_skip)
+                                      run_info.r_local.n, run_info.itime_skip,
+                                      group=group)
             result = result[iz,ir,is,it]
         elseif nd === 5
+            if group !== nothing
+                error("group argument not supported when reading electron pdf with "
+                      * "parallel_io=false. Got group=$group")
+            end
             result = load_distributed_electron_pdf_slice(run_info.files, run_info.nblocks,
                                                          it, run_info.n_ion_species,
                                                          run_info.r_local,
@@ -4005,6 +4041,10 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                                                          run_info.vpa; ir=ir, iz=iz,
                                                          ivperp=ivperp, ivpa=ivpa)
         elseif nd === 6
+            if group !== nothing
+                error("group argument not supported when reading ion pdf with "
+                      * "parallel_io=false. Got group=$group")
+            end
             result = load_distributed_ion_pdf_slice(run_info.files, run_info.nblocks, it,
                                                     run_info.n_ion_species,
                                                     run_info.r_local, run_info.z_local,
@@ -4013,6 +4053,10 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                                                     ir=ir, iz=iz, ivperp=ivperp,
                                                     ivpa=ivpa)
         elseif nd === 7
+            if group !== nothing
+                error("group argument not supported when reading neutral pdf with "
+                      * "parallel_io=false. Got group=$group")
+            end
             result = load_distributed_neutral_pdf_slice(run_info.files, run_info.nblocks,
                                                         it, run_info.n_ion_species,
                                                         run_info.r_local,
@@ -4144,7 +4188,8 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
 
     # Get a 'per step' value from a saved 'cumulative' value. E.g. 'iterations per step'
     # from a saved 'cumulative total iterations'
-    function get_per_step_from_cumulative_variable(run_info, varname::String; kwargs...)
+    function get_per_step_from_cumulative_variable(run_info, varname::AbstractString;
+                                                   kwargs...)
         variable = get_variable(run_info, varname; kwargs...)
         tdim = ndims(variable)
         for i ∈ size(variable, tdim):-1:2
@@ -4990,6 +5035,13 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         nl_linear_iterations = get_per_step_from_cumulative_variable(
             run_info, "$(prefix)_linear_iterations"; kwargs...)
         variable = nl_linear_iterations ./ nl_iterations
+    elseif endswith(variable_name, "_per_step") && variable_name ∉ run_info.variable_names
+        # If "_per_step" is appended to a variable name, assume it is a cumulative
+        # variable, and get the per-step version.
+        variable =
+            get_per_step_from_cumulative_variable(run_info,
+                                                  split(variable_name, "_per_step")[1];
+                                                  kwargs...)
     else
         variable = postproc_load_variable(run_info, variable_name; kwargs...)
     end
@@ -5054,8 +5106,12 @@ restarts (which are sequential in time), so concatenate the data from each entry
 """
 function read_distributed_zr_data!(var::Array{mk_float,N}, var_name::String,
    run_names::Tuple, file_key::String, nblocks::Tuple,
-   nz_local::mk_int,nr_local::mk_int,iskip::mk_int) where N
+   nz_local::mk_int, nr_local::mk_int, iskip::mk_int; group=nothing) where N
     # dimension of var is [z,r,species,t]
+
+    if group === nothing
+        group = "dynamic_data"
+    end
 
     local_tind_start = 1
     local_tind_end = -1
@@ -5064,8 +5120,8 @@ function read_distributed_zr_data!(var::Array{mk_float,N}, var_name::String,
     for (run_name, nb) in zip(run_names, nblocks)
         for iblock in 0:nb-1
             fid = open_readonly_output_file(run_name,file_key,iblock=iblock,printout=false)
-            group = get_group(fid, "dynamic_data")
-            var_local = load_variable(group, var_name)
+            this_group = get_group(fid, group)
+            var_local = load_variable(this_group, var_name)
 
             ntime_local = size(var_local, N)
 

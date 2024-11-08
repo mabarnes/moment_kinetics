@@ -15,6 +15,12 @@ can be used to make the type represented by `MPISharedArray` depend on the debug
 """
 module debugging
 
+export maybe_activate_debug_timers, format_global_timer
+
+using ..timer_utils
+
+import ..moment_kinetics
+
 """
 """
 macronames = [
