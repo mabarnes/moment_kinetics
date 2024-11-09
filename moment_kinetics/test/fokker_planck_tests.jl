@@ -11,6 +11,7 @@ using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
+using moment_kinetics.input_structs: direct_integration, multipole_expansion
 
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form, fokker_planck_collision_operator_weak_form!
 using moment_kinetics.fokker_planck: conserving_corrections!, init_fokker_planck_collisions_direct_integration
@@ -207,16 +208,21 @@ function runtests()
 
         @testset "weak-form Rosenbluth potential calculation: elliptic solve" begin
             println("    - test weak-form Rosenbluth potential calculation: elliptic solve")
-            @testset "$multipole_boundary_data" for multipole_boundary_data in (true,false)
-                println("        -  multipole_boundary_data=$multipole_boundary_data")
+            @testset "$boundary_data_option" for boundary_data_option in (direct_integration,multipole_expansion)
+                println("        -  boundary_data_option=$boundary_data_option")
                 ngrid = 9
                 nelement_vpa = 8
                 nelement_vperp = 4
                 vpa, vpa_spectral, vperp, vperp_spectral = create_grids(ngrid,nelement_vpa,nelement_vperp,
                                                                             Lvpa=12.0,Lvperp=6.0)
                 begin_serial_region()
+                if boundary_data_option == direct_integration
+                    precompute_weights = true
+                else
+                    precompute_weights = false
+                end
                 fkpl_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral,
-                                                                      precompute_weights=(true &&!(multipole_boundary_data)),
+                                                                      precompute_weights=precompute_weights,
                                                                       print_to_screen=print_to_screen)
                 dummy_array = allocate_float(vpa.n,vperp.n)
                 F_M = allocate_float(vpa.n,vperp.n)
@@ -274,7 +280,7 @@ function runtests()
                      fkpl_arrays.d2Gdvperp2, F_M, vpa, vperp, vpa_spectral, vperp_spectral,
                      fkpl_arrays; algebraic_solve_for_d2Gdvperp2=false,
                      calculate_GG=true, calculate_dGdvperp=true,
-                     multipole_boundary_data=multipole_boundary_data)
+                     boundary_data_option=boundary_data_option)
                 # extract C[Fs,Fs'] result
                 # and Rosenbluth potentials for testing
                 begin_s_r_z_anyv_region()
@@ -296,7 +302,7 @@ function runtests()
                     max_dHdvperp_boundary_data_err, max_G_boundary_data_err,
                     max_dGdvperp_boundary_data_err, max_d2Gdvperp2_boundary_data_err,
                     max_d2Gdvperpdvpa_boundary_data_err, max_d2Gdvpa2_boundary_data_err = test_rosenbluth_potential_boundary_data(fkpl_arrays.rpbd,rpbd_exact,vpa,vperp,print_to_screen=print_to_screen)
-                    if multipole_boundary_data
+                    if boundary_data_option==multipole_expansion
                         atol_max_H = 5.0e-8
                         atol_max_dHdvpa = 5.0e-8
                         atol_max_dHdvperp = 5.0e-8
@@ -332,7 +338,7 @@ function runtests()
                     dGdvperp_M_max, dGdvperp_M_L2 = print_test_data(dGdvperp_M_exact,dGdvperp_M_num,dGdvperp_M_err,"dGdvperp_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
                     d2Gdvperpdvpa_M_max, d2Gdvperpdvpa_M_L2 = print_test_data(d2Gdvperpdvpa_M_exact,d2Gdvperpdvpa_M_num,d2Gdvperpdvpa_M_err,"d2Gdvperpdvpa_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
                     d2Gdvperp2_M_max, d2Gdvperp2_M_L2 = print_test_data(d2Gdvperp2_M_exact,d2Gdvperp2_M_num,d2Gdvperp2_M_err,"d2Gdvperp2_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
-                    if multipole_boundary_data
+                    if boundary_data_option==multipole_expansion
                         atol_max_H = 2.0e-7
                         atol_L2_H = 5.0e-9
                         atol_max_dHdvpa = 2.0e-6

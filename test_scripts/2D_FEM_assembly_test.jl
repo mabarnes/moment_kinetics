@@ -19,6 +19,7 @@ using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_ppe
 using moment_kinetics.communication
 using moment_kinetics.communication: MPISharedArray
 using moment_kinetics.looping
+using moment_kinetics.input_structs: direct_integration, multipole_expansion
 using SparseArrays: sparse
 using LinearAlgebra: mul!, lu, cholesky
 
@@ -79,7 +80,7 @@ end
         use_Maxwellian_field_particle_distribution=false,
         test_numerical_conserving_terms=false,
         algebraic_solve_for_d2Gdvperp2=false,
-        use_multipole=false)
+        boundary_data_option=direct_integration)
         # define inputs needed for the test
         #plot_test_output = false#true
         #test_parallelism = false#true
@@ -126,7 +127,11 @@ end
         nc_global = vpa.n*vperp.n
         begin_serial_region()
         start_init_time = now()
-        precompute_weights = true && !(use_multipole)
+        if boundary_data_option == direct_integration
+            precompute_weights = true
+        else
+            precompute_weights = false
+        end
         fkpl_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; 
                            precompute_weights=precompute_weights, test_dense_matrix_construction=test_dense_construction)
         KKpar2D_with_BC_terms_sparse = fkpl_arrays.KKpar2D_with_BC_terms_sparse
@@ -265,7 +270,7 @@ end
                                              use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution,
                                              algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2,
                                              calculate_GG = false, calculate_dGdvperp=false,
-                                             multipole_boundary_data=use_multipole)
+                                             boundary_data_option=boundary_data_option)
         if test_numerical_conserving_terms && test_self_operator
             # enforce the boundary conditions on CC before it is used for timestepping
             enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
@@ -276,7 +281,7 @@ end
         calculate_rosenbluth_potentials_via_elliptic_solve!(fkpl_arrays.GG,fkpl_arrays.HH,fkpl_arrays.dHdvpa,fkpl_arrays.dHdvperp,
              fkpl_arrays.d2Gdvpa2,fkpl_arrays.dGdvperp,fkpl_arrays.d2Gdvperpdvpa,fkpl_arrays.d2Gdvperp2,F_M,
              vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays;
-             algebraic_solve_for_d2Gdvperp2=false,calculate_GG=true,calculate_dGdvperp=true,multipole_boundary_data=use_multipole)
+             algebraic_solve_for_d2Gdvperp2=false,calculate_GG=true,calculate_dGdvperp=true,boundary_data_option=boundary_data_option)
         # extract C[Fs,Fs'] result
         # and Rosenbluth potentials for testing
         begin_s_r_z_anyv_region()
@@ -392,7 +397,7 @@ end
         algebraic_solve_for_d2Gdvperp2=false,
         test_self_operator = true,
         Lvpa = 12.0, Lvperp = 6.0,
-        use_multipole = false)
+        boundary_data_option = direct_integration)
         initialize_comms!()
         #ngrid = 5
         #plot_scan = true
@@ -463,7 +468,7 @@ end
             use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution,
             test_numerical_conserving_terms=test_numerical_conserving_terms,
             algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2,
-            standalone=false, Lvpa=Lvpa, Lvperp=Lvperp, use_multipole=use_multipole)
+            standalone=false, Lvpa=Lvpa, Lvperp=Lvperp, boundary_data_option=boundary_data_option)
             max_C_err[iscan], L2_C_err[iscan] = fkerr.C_M.max ,fkerr.C_M.L2
             max_H_err[iscan], L2_H_err[iscan] = fkerr.H_M.max ,fkerr.H_M.L2
             max_dHdvpa_err[iscan], L2_dHdvpa_err[iscan] = fkerr.dHdvpa_M.max ,fkerr.dHdvpa_M.L2
