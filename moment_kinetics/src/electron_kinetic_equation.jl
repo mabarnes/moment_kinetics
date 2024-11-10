@@ -2394,7 +2394,7 @@ end
                 pdf[plus_vcut_ind+1,1,1,ir] *= vcut_fraction - 0.5
             else
                 pdf[plus_vcut_ind+1,1,1,ir] = 0.0
-                pdf[plus_vcut_ind+1,1,1,ir] *= vcut_fraction + 0.5
+                pdf[plus_vcut_ind,1,1,ir] *= vcut_fraction + 0.5
             end
 
             # update the electrostatic potential at the boundary to be the value corresponding to the updated cutoff velocity
