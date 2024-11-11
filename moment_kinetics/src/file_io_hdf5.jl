@@ -261,14 +261,14 @@ end
 function append_to_dynamic_var(io_var::HDF5.Dataset,
                                data::Union{Nothing,Number,AbstractArray{T,N}}, t_idx,
                                parallel_io::Bool,
-                               coords::Union{coordinate,Integer}...;
+                               coords::Union{coordinate,NamedTuple,Integer}...;
                                only_root=false, write_from_this_rank=nothing) where {T,N}
     # Extend time dimension for this variable
     dims = size(io_var)
     dims_mod = (dims[1:end-1]..., t_idx)
     HDF5.set_extent_dims(io_var, dims_mod)
-    local_ranges = Tuple(isa(c, coordinate) ? c.local_io_range : 1:c for c ∈ coords)
-    global_ranges = Tuple(isa(c, coordinate) ? c.global_io_range : 1:c for c ∈ coords)
+    local_ranges = Tuple(isa(c, Integer) ? (1:c) : c.local_io_range for c ∈ coords)
+    global_ranges = Tuple(isa(c, Integer) ? (1:c) : c.global_io_range for c ∈ coords)
 
     if only_root && parallel_io && global_rank[] != 0
         # Variable should only be written from root, and this process is not root for the

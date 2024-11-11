@@ -37,16 +37,16 @@ const TimerNamesDict = SortedDict{String,SortedDict,Base.Order.ForwardOrdering}
 TimerNamesDict() = TimerNamesDict(Base.Order.ForwardOrdering())
 
 """
-Nested SortedDict containting the names of all timers that have been created on each MPI
-rank and added to the moments output file.
+Nested SortedDict with the names of all timers that have been created on any MPI rank
+and added to the moments output file.
 """
-const timer_names_per_rank_moments = SortedDict{mk_int,Tuple{TimerNamesDict,Ref{mk_int}}}()
+const timer_names_all_ranks_moments = TimerNamesDict()
 
 """
-Nested SortedDict containting the names of all timers that have been created on each MPI
-rank and added to the dfns output file.
+Nested SortedDict with the names of all timers that have been created on any MPI rank
+and added to the dfns output file.
 """
-const timer_names_per_rank_dfns = SortedDict{mk_int,Tuple{TimerNamesDict,Ref{mk_int}}}()
+const timer_names_all_ranks_dfns = TimerNamesDict()
 
 """
     format_global_timer(; show=true, truncate_output=true)
@@ -176,8 +176,8 @@ Reset all global state of timers.
 """
 function reset_mk_timers!()
     reset_timer!(global_timer)
-    empty!(timer_names_per_rank_moments)
-    empty!(timer_names_per_rank_dfns)
+    empty!(timer_names_all_ranks_moments)
+    empty!(timer_names_all_ranks_dfns)
 end
 
 end #timer_utils

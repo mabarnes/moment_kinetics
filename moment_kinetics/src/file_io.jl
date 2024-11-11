@@ -15,7 +15,7 @@ using ..debugging
 using ..input_structs
 using ..looping
 using ..timer_utils
-using ..timer_utils: timer_names_per_rank_moments, timer_names_per_rank_dfns,
+using ..timer_utils: timer_names_all_ranks_moments, timer_names_all_ranks_dfns,
                      TimerNamesDict, SortedDict
 using ..moment_kinetics_structs: scratch_pdf, em_fields_struct
 using ..type_definitions: mk_float, mk_int
@@ -433,29 +433,6 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
                        composition, collisions, evolve_density, evolve_upar, evolve_ppar,
                        external_source_settings, input_dict, restart_time_index,
                        previous_runs_info, time_for_setup, t_params, nl_solver_params)
-
-    # A Dict to store the names of timers that have been created on each MPI rank
-    if block_rank[] == 0
-        if io_input.parallel_io
-            # Need timer name for every rank, as variable creation and extension are
-            # collective operations.
-            for irank ∈ 0:global_size[]-1
-                timer_names_per_rank_moments[irank] = (TimerNamesDict(), Ref(0))
-                timer_names_per_rank_dfns[irank] = (TimerNamesDict(), Ref(0))
-            end
-        else
-            # Timers only written from their own block, so only names from this block are
-            # needed.
-            for irank_in_block ∈ 0:block_size[]-1
-                this_global_rank = global_rank[] + irank_in_block
-                timer_names_per_rank_moments[this_global_rank] = (TimerNamesDict(), Ref(0))
-                timer_names_per_rank_dfns[this_global_rank] = (TimerNamesDict(), Ref(0))
-            end
-        end
-    else
-        timer_names_per_rank_moments[global_rank[]] = (TimerNamesDict(), Ref(0))
-        timer_names_per_rank_dfns[global_rank[]] = (TimerNamesDict(), Ref(0))
-    end
 
     begin_serial_region()
     @serial_region begin
@@ -1116,9 +1093,6 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
         dynamic = create_io_group(fid, "dynamic_data", description="time evolving variables")
         timing = create_io_group(fid, "timing_data",
                                  description="timing data to check run-time performance")
-        for i ∈ 0:global_size[]-1
-            create_io_group(timing, "rank$i", description="timing data for MPI rank $i")
-        end
 
         io_time = create_dynamic_variable!(dynamic, "time", mk_float; parallel_io=parallel_io,
                                            description="simulation time")
@@ -2541,52 +2515,52 @@ function write_timing_data(io_moments, t_idx, dfns=false)
     # hard-coded list of every timer (which would make it inconvenient to add new timers
     # or debug timers).
     #
-    # As well, when using parallel I/O all processes (in the communicator that opens the
-    # output file) must create and extend variables, although it's OK for only one process
-    # to write a variable if the variable is a scalar.
+    # It is most convenient for every process in `comm_world` to know the complete list
+    # of timers that exist on any rank, so we have to gather this list. The list is
+    # stored in `timer_names_all_ranks_moments` and `timer_names_all_ranks_dfns`. We
+    # store two separate lists because moments and dfns might not be written at the same
+    # times, so some timers may be newly added in one but not the other, and so need to
+    # be tracked separately.
     #
-    # These two facts mean that every process in `comm_inter_block[]` needs to know the
-    # complete list of timers on every rank, so we have to gather this list. The list is
-    # stored in `timer_names_per_rank_moments` and `timer_names_per_rank_dfns`. We store
-    # two separate lists because moments and dfns might not be written at the same times,
-    # so some timers may be newly added in one but not the other, and so need to be
-    # tracked separately.
+    # In order to make sure that every process deals with the same variable at the same
+    # time, we store the variable names for each rank in a nested SortedDict (with the
+    # same nesting structure as the `global_timer` on each rank). The sort applied to
+    # the keys of a SortedDict means that we can be sure to iterate through the names in
+    # the same order on every process.
     #
-    # In order to make sure that every process in `comm_inter_block[]` deals with the same
-    # variable at the same time, we store the variable names for each rank in a nested
-    # SortedDict (with the same nesting structure as the `global_timer` on each rank). The
-    # sort applied to the keys of a SortedDict means that we can be sure to iterate
-    # through the names in the same order on every process. The names for every rank are
-    # collected onto each process in `comm_inter_block[]`, but on the rest of the
-    # processes, only the names from that individual process are collected (as 'the rest'
-    # do not write data, so do not need information from other processes).
-    #
-    # Only the process in the same shared-memory block as `irank` collects the timing data
-    # from `irank` and writes it to file.
+    # The timing data for every process in a shared-memory block is collected to the
+    # root process of the block to be written to file.
     #
     # In order to avoid communicating many strings at every output step, we first check
-    # how many timers there are on each rank, and compare that to the number in the
-    # collected list. The number of new variables is gathered, and if there are no new
-    # variables, no communication of variable names needs to be done. If communication is
-    # needed, only the names of the new variables need to be gathered.
+    # how new timers there are on each rank, that are not in the global list of timers.
+    # The number of new variables is gathered, and if there are no new variables, no
+    # communication of variable names needs to be done. If communication is needed, only
+    # the names of the new variables need to be gathered.
     #
     # Once the lists of variable names have been updated, the timing data is gathered onto
     # the root process of each shared-memory block. The data is communicated as vectors of
     # integers, with the order of the entries being determined by the order of the nested
     # SortedDict.
     #
-    # Each entry in `timer_names_per_rank_moments` and `timer_names_per_rank_dfns` is a
-    # SortedDict, even if it does not yet contain any other entries, because sub-timers
-    # might be added at any point.
+    # Each entry in `timer_names_all_ranks_moments` and `timer_names_all_ranks_dfns` is
+    # a SortedDict, even if it does not yet contain any other entries, because
+    # sub-timers might be added at any point.
 
     if dfns
-        timer_names_per_rank = timer_names_per_rank_dfns
+        timer_names_all_ranks = timer_names_all_ranks_dfns
     else
-        timer_names_per_rank = timer_names_per_rank_moments
+        timer_names_all_ranks = timer_names_all_ranks_moments
+    end
+
+    # Collect the names that have not been used on any rank before this call.
+    unique_new_names = String[]
+
+    if block_rank[] == 0
+        io_group = get_group(io_moments.fid, "timing_data")
     end
 
     # Find any new timer names on this process.
-    function get_new_timer_names(timer_names_dict)
+    function get_new_timer_names()
         new_timer_names = String[]
         function get_names_inner(this_timer, timer_names_subdict, prefix)
             names_subdict_keys = keys(timer_names_subdict)
@@ -2606,48 +2580,28 @@ function write_timing_data(io_moments, t_idx, dfns=false)
             end
             return nothing
         end
-        get_names_inner(global_timer, timer_names_dict, "")
+        get_names_inner(global_timer, timer_names_all_ranks, "")
         return new_timer_names
     end
 
-    # Calculate the total number of entries in a nested Dict. This is used to store the
-    # total size of each entry of `timer_names_per_rank_moments` and
-    # `timer_names_per_rank_dfns` so that we know the size of the arrays of data that need
-    # to be communicated.
-    function get_size_of_timer_dict(this_dict)
-        # One count for the timer represented by this_dict.
-        counter = 1
-
-        # Recursively iterate through all contained Dicts, and add them to the counter.
-        for sub_dict ∈ values(this_dict)
-            counter += get_size_of_timer_dict(sub_dict)
-        end
-        return counter
-    end
-
-    # Add the new timer names in to `timer_names_per_rank_moments` or
-    # `timer_names_per_rank_dfns`.
-    function add_new_timer_names!(timer_names, new_timer_names, irank=nothing)
+    # Add the new timer names in to `timer_names_all_ranks_moments` or
+    # `timer_names_all_ranks_dfns`. Note that there may be duplicate names in
+    # new_timer_names, and these will be ignored.
+    function add_new_timer_names!(new_timer_names)
         for n ∈ new_timer_names
-            if irank === nothing
-                this_rank, this_name = split(n, ":")
-                this_rank = parse(mk_int, this_rank)
-                this_dict, _ = timer_names_per_rank[this_rank]
-            else
-                this_name = n
-                this_dict, _ = timer_names_per_rank[irank]
-            end
-            split_name = split(this_name, ";")
-            for level ∈ split_name
-                if level ∉ keys(this_dict)
-                    this_dict[level] = TimerNamesDict()
+            this_dict_all_ranks = timer_names_all_ranks
+            split_name = split(n, ";")
+            n_levels = length(split_name)
+            for (i, level) ∈ enumerate(split_name)
+                if level ∉ keys(this_dict_all_ranks)
+                    this_dict_all_ranks[level] = TimerNamesDict()
+                    if i == n_levels
+                        # New variable that has not been used on any rank before.
+                        push!(unique_new_names, n)
+                    end
                 end
-                this_dict = this_dict[level]
+                this_dict_all_ranks = this_dict_all_ranks[level]
             end
-        end
-        for (timer_names_dict, timer_names_dict_size) ∈ values(timer_names_per_rank)
-            # Subtract 1 because we do not want to count the 'top level' as an entry.
-            timer_names_dict_size[] = get_size_of_timer_dict(timer_names_dict) - 1
         end
         return nothing
     end
@@ -2656,13 +2610,14 @@ function write_timing_data(io_moments, t_idx, dfns=false)
     # simultaneously by all processes in `comm_inter_block[]`.
     function create_new_timer_io_variables!(new_timer_names, timer_group, parallel_io)
         for n ∈ new_timer_names
-            this_rank, this_name = split(n, ":")
-            rank_group = get_group(timer_group, "rank$this_rank")
-            create_dynamic_variable!(rank_group, "time:" * this_name, mk_int;
+            create_dynamic_variable!(io_group, "time:" * n, mk_int,
+                                     (name="rank", n=global_size[]);
                                      parallel_io=parallel_io)
-            create_dynamic_variable!(rank_group, "ncalls:" * this_name, mk_int;
+            create_dynamic_variable!(io_group, "ncalls:" * n, mk_int,
+                                     (name="rank", n=global_size[]);
                                      parallel_io=parallel_io)
-            create_dynamic_variable!(rank_group, "allocs:" * this_name, mk_int;
+            create_dynamic_variable!(io_group, "allocs:" * n, mk_int,
+                                     (name="rank", n=global_size[]);
                                      parallel_io=parallel_io)
         end
         return nothing
@@ -2671,295 +2626,142 @@ function write_timing_data(io_moments, t_idx, dfns=false)
     # Once all the names are known, use this function to collect all the data from timers
     # on this process into arrays to be communicated.
     function get_data_from_timers()
-        sorted_timer_names = timer_names_per_rank[global_rank[]][1]
         times = mk_int[]
         ncalls = mk_int[]
         allocs = mk_int[]
         function walk_through_timers(names_dict, timer)
-            push!(times, timer.accumulated_data.time)
-            push!(ncalls, timer.accumulated_data.ncalls)
-            push!(allocs, timer.accumulated_data.allocs)
+            if timer === nothing
+                # Timer not found on this rank, so set to 0
+                push!(times, 0.0)
+                push!(ncalls, 0.0)
+                push!(allocs, 0.0)
+            else
+                push!(times, timer.accumulated_data.time)
+                push!(ncalls, timer.accumulated_data.ncalls)
+                push!(allocs, timer.accumulated_data.allocs)
+            end
 
             # Note that here we have to get the order of entries from names_dict (which is
             # a SortedDict) to ensure that the order of each list is consistent between
             # all different processes.
             for (sub_name, sub_dict) ∈ pairs(names_dict)
-                walk_through_timers(sub_dict, timer[sub_name])
+                if timer === nothing || sub_name ∉ keys(timer.inner_timers)
+                    walk_through_timers(sub_dict, nothing)
+                else
+                    walk_through_timers(sub_dict, timer[sub_name])
+                end
             end
         end
-        for name ∈ keys(sorted_timer_names)
-            walk_through_timers(sorted_timer_names[name], global_timer[name])
+        for name ∈ keys(timer_names_all_ranks)
+            walk_through_timers(timer_names_all_ranks[name], global_timer[name])
         end
         return times, ncalls, allocs
     end
 
-    if block_rank[] == 0
-        parallel_io = io_moments.io_input.parallel_io
-    end
-
-    # First count how many new timer names there are on all the processes in this block
-    if block_rank[] == 0
-        n_new_names = Vector{mk_int}(undef, block_size[])
-        new_names_iblock = get_new_timer_names(timer_names_per_rank[global_rank[]][1])
-        n_new_names[1] = length(new_names_iblock)
-        reqs = [MPI.Irecv!(@view(n_new_names[irank+1:irank+1]), comm_block[]; source=irank)
-                for irank ∈ 1:block_size[]-1]
-        MPI.Waitall(reqs)
-        block_total_new_names = sum(n_new_names)
+    parallel_io = io_moments.io_input.parallel_io
+    if parallel_io
+        comm = comm_world
+        comm_size = global_size[]
+        comm_rank = global_rank[]
     else
-        new_names_iblock = get_new_timer_names(timer_names_per_rank[global_rank[]][1])
-        add_new_timer_names!(timer_names_per_rank, new_names_iblock, global_rank[][1])
-        n_new_names_iblock = Ref(length(new_names_iblock))
-        MPI.Send(n_new_names_iblock, comm_block[]; dest=0)
+        comm = comm_block[]
+        comm_size = block_size[]
+        comm_rank = block_rank[]
     end
 
-    # Gather new names, from any processes in the block that have new names.
-    if block_rank[] == 0
-        if block_total_new_names > 0
-            new_names = SortedDict{mk_int,Vector{String}}()
-            if n_new_names[1] > 0
-                new_names[0] = new_names_iblock
-            else
-                new_names[0] = String[]
-            end
-            for iblock ∈ 1:block_size[]-1
-                if n_new_names[iblock+1] > 0
-                    names_length = Ref(0)
-                    MPI.Recv!(names_length, comm_block[]; source=iblock)
-                    names_char_vector = Vector{Char}(undef, names_length[])
-                    MPI.Recv!(names_char_vector, comm_block[]; source=iblock)
-                    new_names[iblock] = split(string(names_char_vector...), "&")
-                else
-                    new_names[iblock] = String[]
-                end
-            end
-        end
-    else
-        if n_new_names_iblock[] > 0
-            names_string = join(new_names_iblock, "&")
-            names_char_vector = [names_string...]
-            names_length = Ref(length(names_char_vector))
-            MPI.Send(names_length, comm_block[]; dest=0)
-            MPI.Send(names_char_vector, comm_block[]; dest=0)
-        end
-    end
+    # First count how many new timer names all processes
+    new_names_this_rank = get_new_timer_names()
+    n_new_names = Ref(length(new_names_this_rank))
+    MPI.Allreduce!(n_new_names, +, comm)
 
-    # Allgather new names onto all ranks in comm_inter_block[].
-    # If parallel_io=false, no need to communicate between different blocks, as each block
-    # writes output independently.
-    if block_rank[] == 0 && parallel_io
-        # Get total number of new names
-        global_total_new_names = MPI.Allreduce(block_total_new_names, +,
-                                               comm_inter_block[])
+    # Allgather new names onto all ranks - if parallel_io=true this is all ranks in
+    # comm_world, if parallel_io=false it is all ranks in comm_block[] (as each block
+    # writes output independently).
+    if n_new_names[] > 0
+        # Pack all new names into a single string for communication.
+        new_names_string = string((s * "&" for s ∈ new_names_this_rank)...)
 
-        if global_total_new_names > 0
-            # Pack all new names for a block into a single string for communication.
-            this_block_string = ""
-            for irank ∈ 0:block_size[]-1
-                this_global_rank = global_rank[] + irank
-                this_rank_string = string(("$this_global_rank:" * s * "&" for s ∈ new_names[irank])...)
-                this_block_string = join([this_block_string, this_rank_string])
-            end
+        # Get the sizes of the per-rank strings that need to be gathered
+        string_sizes = Vector{mk_int}(undef, comm_size)
+        string_sizes[comm_rank+1] = length(new_names_string)
+        string_buffer = MPI.UBuffer(string_sizes, 1)
+        MPI.Allgather!(string_buffer, comm)
 
-            # Get the sizes of the per-block strings that need to be gathered
-            string_sizes = Vector{mk_int}(undef, n_blocks[])
-            string_sizes[iblock_index[]+1] = length(this_block_string)
-            string_buffer = MPI.UBuffer(string_sizes, 1)
-            MPI.Allgather!(string_buffer, comm_inter_block[])
+        # Gather the strings
+        gathered_char_vector = Vector{Char}(undef, sum(string_sizes))
+        local_start_index = sum(string_sizes[1:comm_rank]) + 1
+        local_end_index = local_start_index - 1 + string_sizes[comm_rank+1]
+        gathered_char_vector[local_start_index:local_end_index] .= [new_names_string...]
+        gathered_buffer = MPI.VBuffer(gathered_char_vector, string_sizes)
+        MPI.Allgatherv!(gathered_buffer, comm)
 
-            # Gather the strings
-            gathered_char_vector = Vector{Char}(undef, sum(string_sizes))
-            local_start_index = sum(string_sizes[1:iblock_index[]]) + 1
-            local_end_index = local_start_index - 1 + string_sizes[iblock_index[]+1]
-            gathered_char_vector[local_start_index:local_end_index] .= [this_block_string...]
-            gathered_buffer = MPI.VBuffer(gathered_char_vector, string_sizes)
-            MPI.Allgatherv!(gathered_buffer, comm_inter_block[])
+        # The string will end with a "&", so we need to slice off the final element, which
+        # will be an empty string.
+        all_new_names = split(string(gathered_char_vector...), "&")[1:end-1]
 
-            # The string will end with a "&", so we need to slice off the final element, which
-            # will be an empty string.
-            all_new_names = split(string(gathered_char_vector...), "&")[1:end-1]
+        # Add the new names to timer_names_per_rank
+        add_new_timer_names!(all_new_names)
 
-            # Add the new names to timer_names_per_rank
-            add_new_timer_names!(timer_names_per_rank, all_new_names)
-
-            create_new_timer_io_variables!(all_new_names,
-                                           get_group(io_moments.fid, "timing_data"),
-                                           parallel_io)
-        end
-    elseif block_rank[] == 0
-        # This is the `parallel_io=false` case
-        if block_total_new_names > 0
-            # Put irank prefixes onto timer names
-            for irank ∈ 0:block_size[] - 1
-                this_global_rank = global_rank[] + irank
-                names_without_prefix = new_names[irank]
-                new_names[irank] = ["$this_global_rank:" * s for s ∈ names_without_prefix]
-            end
-
-            all_new_names = vcat((new_names[irank] for irank ∈ 0:block_size[]-1)...)
-
-            # Add the new names to timer_names_per_rank
-            add_new_timer_names!(timer_names_per_rank, all_new_names)
-
-            create_new_timer_io_variables!(all_new_names,
-                                           get_group(io_moments.fid, "timing_data"),
-                                           parallel_io)
+        if block_rank[] == 0
+            create_new_timer_io_variables!(unique_new_names, io_group, parallel_io)
         end
     end
 
     # Collect the timing data onto the root process of each block
-    if block_rank[] == 0
-        times_data = SortedDict{mk_int,Vector{mk_int}}()
-        ncalls_data = SortedDict{mk_int,Vector{mk_int}}()
-        allocs_data = SortedDict{mk_int,Vector{mk_int}}()
-        times_data[0], ncalls_data[0], allocs_data[0] = get_data_from_timers()
-        for irank ∈ 1:block_size[]-1
-            this_global_rank = global_rank[] + irank
-            times_data[irank] = zeros(mk_int, timer_names_per_rank[this_global_rank][2][])
-            ncalls_data[irank] = zeros(mk_int, timer_names_per_rank[this_global_rank][2][])
-            allocs_data[irank] = zeros(mk_int, timer_names_per_rank[this_global_rank][2][])
-        end
-        times_reqs = MPI.Request[MPI.Irecv!(times_data[irank], comm_block[]; source=irank)
-                                 for irank ∈ 1:block_size[]-1]
-        ncalls_reqs = MPI.Request[MPI.Irecv!(ncalls_data[irank], comm_block[]; source=irank)
-                                  for irank ∈ 1:block_size[]-1]
-        allocs_reqs = MPI.Request[MPI.Irecv!(allocs_data[irank], comm_block[]; source=irank)
-                                  for irank ∈ 1:block_size[]-1]
-        MPI.Waitall(MPI.Request[times_reqs..., ncalls_reqs..., allocs_reqs...])
-    else
-        times_data, ncalls_data, allocs_data = get_data_from_timers()
-        times_req = MPI.Isend(times_data, comm_block[]; dest=0)
-        ncalls_req = MPI.Isend(ncalls_data, comm_block[]; dest=0)
-        allocs_req = MPI.Isend(allocs_data, comm_block[]; dest=0)
-        MPI.Waitall([times_req, ncalls_req, allocs_req])
-    end
+    times_data, ncalls_data, allocs_data = get_data_from_timers()
+    n_timers = length(times_data)
+    gathered_times_data = MPI.Gather(times_data, comm_block[]; root=0)
+    gathered_ncalls_data = MPI.Gather(ncalls_data, comm_block[]; root=0)
+    gathered_allocs_data = MPI.Gather(allocs_data, comm_block[]; root=0)
 
     if block_rank[] == 0
+        gathered_times_data = reshape(gathered_times_data, n_timers, block_size[])
+        gathered_ncalls_data = reshape(gathered_ncalls_data, n_timers, block_size[])
+        gathered_allocs_data = reshape(gathered_allocs_data, n_timers, block_size[])
+
         # Write the timer variables
-        for irank ∈ keys(timer_names_per_rank)
-            this_rank_block = irank ÷ block_size[]
-            this_rank_rank = irank % block_size[]
-            this_rank_names, this_rank_nvars = timer_names_per_rank[irank]
 
-            # Only the process in the same shared-memory block as the data came from
-            # actually has the data, so this process is the one that writes it.
-            write_from_this_rank = (this_rank_block == iblock_index[])
+        # We iterate through the variables in the same order as they were packed into
+        # the array in `get_data_from_timers()`, so `counter` gets the corresponding
+        # data from the flattened array that was communicated.
+        counter = 1
 
-            # We iterate through the variables in the same order as they were packed into
-            # the array in `get_data_from_timers()`, so `counter` gets the corresponding
-            # data from the flattened array that was communicated.
-            counter = 1
-            io_group = get_group(io_moments.fid, "timing_data/rank$irank")
-
-            # For timers on the root process of each shared memory block, we do not need
-            # to communicate so we can write the data directly from the timers. This
-            # should help ensure that at least for these processes the timer data has the
-            # right name in the output file since no packing/unpacking of flattened arrays
-            # is needed. This verification (since times can then be compared to other
-            # processes with the expectation that most of them are similar) justifies the
-            # partial code duplication in having this function be separate from
-            # `write_for_irank()`.
-            function write_for_block_root(names_dict, this_name, this_timer,
-                                          this_top_level_name=this_name)
-                io_time = io_group["time:" * this_name]
-                io_ncalls = io_group["ncalls:" * this_name]
-                io_allocs = io_group["allocs:" * this_name]
-                if t_idx < 0
-                    # The top-level timer (usually "moment_kinetics" was probably the
-                    # first one created. It definitely exists, and should have been
-                    # written at each timestep.
-                    # If we got the length of `time:$this_name`, the variable might have
-                    # the wrong length (e.g. if it has only just been created and has
-                    # length 1).
-                    this_t_idx = length(io_group["time:" * this_top_level_name])
-                else
-                    this_t_idx = t_idx
-                end
-                if write_from_this_rank
-                    append_to_dynamic_var(io_time, this_timer.accumulated_data.time,
-                                          this_t_idx, parallel_io;
-                                          write_from_this_rank=true)
-                    append_to_dynamic_var(io_ncalls, this_timer.accumulated_data.ncalls,
-                                          this_t_idx, parallel_io;
-                                          write_from_this_rank=true)
-                    append_to_dynamic_var(io_allocs, this_timer.accumulated_data.allocs,
-                                          this_t_idx, parallel_io;
-                                          write_from_this_rank=true)
-                else
-                    append_to_dynamic_var(io_time, nothing, this_t_idx,
-                                          parallel_io; write_from_this_rank=false)
-                    append_to_dynamic_var(io_ncalls, nothing, this_t_idx,
-                                          parallel_io; write_from_this_rank=false)
-                    append_to_dynamic_var(io_allocs, nothing, this_t_idx,
-                                          parallel_io; write_from_this_rank=false)
-                end
-                counter += 1
-                for (sub_name, sub_dict) ∈ pairs(names_dict)
-                    write_for_block_root(sub_dict, this_name * ";" * sub_name,
-                                         this_timer === nothing ? nothing :
-                                         this_timer[sub_name], this_top_level_name)
-                end
+        # Write data for all processes in the shared memory block, which must be
+        # unpacked from the arrays that were communicated.
+        if t_idx < 0
+            # The top-level timer (usually "moment_kinetics" was probably the
+            # first one created. It definitely exists, and should have been
+            # written at each timestep.
+            # If we got the length of `time:$this_name`, the variable might have
+            # the wrong length (e.g. if it has only just been created and has
+            # length 1).
+            t_idx = length(io_group["time:" * first(keys(timer_names_all_ranks))])
+        end
+        if parallel_io
+            timer_coord = (local_io_range=1:block_size[],
+                           global_io_range=global_rank[]+1:global_rank[]+block_size[])
+        else
+            timer_coord = (local_io_range=1:block_size[],
+                           global_io_range=1:block_size[])
+        end
+        function write_level(names_dict, this_name)
+            io_time = io_group["time:" * this_name]
+            io_ncalls = io_group["ncalls:" * this_name]
+            io_allocs = io_group["allocs:" * this_name]
+            @views append_to_dynamic_var(io_time, gathered_times_data[counter,:], t_idx,
+                                         parallel_io, timer_coord)
+            @views append_to_dynamic_var(io_ncalls, gathered_ncalls_data[counter,:],
+                                         t_idx, parallel_io, timer_coord)
+            @views append_to_dynamic_var(io_allocs, gathered_allocs_data[counter,:],
+                                         t_idx, parallel_io, timer_coord)
+            counter += 1
+            for (sub_name, sub_dict) ∈ pairs(names_dict)
+                write_level(sub_dict, this_name * ";" * sub_name)
             end
+        end
 
-            # Write data for non-root processes in the shared memory block, which must be
-            # unpacked from the arrays that were communicated.
-            function write_for_irank(names_dict, this_name, this_top_level_name=this_name)
-                io_time = io_group["time:" * this_name]
-                io_ncalls = io_group["ncalls:" * this_name]
-                io_allocs = io_group["allocs:" * this_name]
-                if t_idx < 0
-                    # The top-level timer (usually "moment_kinetics" was probably the
-                    # first one created. It definitely exists, and should have been
-                    # written at each timestep.
-                    # If we got the length of `time:$this_name`, the variable might have
-                    # the wrong length (e.g. if it has only just been created and has
-                    # length 1).
-                    this_t_idx = length(io_group["time:" * this_top_level_name])
-                else
-                    this_t_idx = t_idx
-                end
-                if write_from_this_rank
-                    irank_in_block = irank % block_size[]
-                    append_to_dynamic_var(io_time, times_data[irank_in_block][counter],
-                                          this_t_idx, parallel_io,
-                                          write_from_this_rank=true)
-                    append_to_dynamic_var(io_ncalls, ncalls_data[irank_in_block][counter],
-                                          this_t_idx, parallel_io,
-                                          write_from_this_rank=true)
-                    append_to_dynamic_var(io_allocs, allocs_data[irank_in_block][counter],
-                                          this_t_idx, parallel_io,
-                                          write_from_this_rank=true)
-                else
-                    append_to_dynamic_var(io_time, nothing, this_t_idx,
-                                          parallel_io, write_from_this_rank=false)
-                    append_to_dynamic_var(io_ncalls, nothing, this_t_idx,
-                                          parallel_io, write_from_this_rank=false)
-                    append_to_dynamic_var(io_allocs, nothing, this_t_idx,
-                                          parallel_io, write_from_this_rank=false)
-                end
-                counter += 1
-                for (sub_name, sub_dict) ∈ pairs(names_dict)
-                    write_for_irank(sub_dict, this_name * ";" * sub_name, this_top_level_name)
-                end
-            end
-
-            if this_rank_rank == 0
-                # This was the data from the root process of a shared-memory block.
-                for top_level_name ∈ keys(this_rank_names)
-                    write_for_block_root(this_rank_names[top_level_name], top_level_name,
-                                         write_from_this_rank ? global_timer[top_level_name] : nothing)
-                end
-            else
-                # This was data from a process that is not the root of a shared-memory
-                # block, so had to be packed, communicated, and unpacked.
-                for top_level_name ∈ keys(this_rank_names)
-                    write_for_irank(this_rank_names[top_level_name], top_level_name)
-                end
-            end
-            if counter != this_rank_nvars[] + 1
-                error("Got wrong number of timers. Wrote $(counter-1) but should have "
-                      * "been $this_rank_nvars")
-            end
+        for top_level_name ∈ keys(timer_names_all_ranks)
+            write_level(timer_names_all_ranks[top_level_name], top_level_name)
         end
     end
 
@@ -2972,7 +2774,7 @@ function write_timing_data(io_moments, t_idx, dfns=false)
             if t_idx == -1
                 top_level = nothing
             else
-                if "moment_kinetics" ∈ keys(timer_names_per_rank[global_rank[]])
+                if "moment_kinetics" ∈ keys(timer_names_all_ranks)
                     top_level = ("moment_kinetics", "time_advance! step", "ssp_rk!")
                     this_dict = timer_names_all_ranks
 
@@ -3039,8 +2841,8 @@ file. Needs to be called after exiting from the `@timeit` block so that all time
 finalised properly.
 """
 function write_final_timing_data_to_binary(io_or_file_info_moments, io_or_file_info_dfns)
-    io_moments = nothing
-    io_dfns_moments = nothing
+    io_moments = io_or_file_info_moments
+    io_dfns_moments = io_or_file_info_dfns
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -3616,8 +3418,8 @@ end
 close all opened output files
 """
 function finish_file_io(ascii_io::Union{ascii_ios,Nothing},
-                        binary_moments::Union{io_moments_info,Tuple,Nothing},
-                        binary_dfns::Union{io_dfns_info,Tuple,Nothing})
+                        binary_moments::Union{io_moments_info,Tuple,NamedTuple,Nothing},
+                        binary_dfns::Union{io_dfns_info,Tuple,NamedTuple,Nothing})
     @serial_region begin
         # Only read/write from first process in each 'block'
 
