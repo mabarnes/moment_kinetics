@@ -494,8 +494,8 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
 
         return ascii, io_moments, io_dfns
     end
-    # For other processes in the block, return (nothing, nothing, nothing)
-    return nothing, nothing, nothing
+    # For other processes in the block, return objects with just the input.
+    return nothing, (io_input=io_input,), (io_input=io_input,)
 end
 
 """
@@ -605,8 +605,8 @@ function setup_electron_io(io_input, vpa, vperp, z, r, composition, collisions,
 
         return file_info
     end
-    # For other processes in the block, return nothing
-    return nothing
+    # For other processes in the block, return an object with just the input.
+    return (io_input=io_input,)
 end
 
 """
@@ -2152,8 +2152,9 @@ function setup_moments_io(prefix, io_input, vz, vr, vzeta, vpa, vperp, r, z,
         return file_info
     end
 
-    # For processes other than the root process of each shared-memory group...
-    return nothing
+    # Should not be called processes other than the root process of each shared-memory
+    # group...
+    error("setup_moments_io() called by non-block-root block_rank[]=$(block_rank[])")
 end
 
 """
@@ -2255,8 +2256,9 @@ function reopen_moments_io(file_info)
                                getvar("nl_solver_diagnostics"), io_input)
     end
 
-    # For processes other than the root process of each shared-memory group...
-    return nothing
+    # Should not be called processes other than the root process of each shared-memory
+    # group...
+    error("reopen_moments_io() called by non-block-root block_rank[]=$(block_rank[])")
 end
 
 """
@@ -2311,8 +2313,9 @@ function setup_dfns_io(prefix, io_input, boundary_distributions, r, z, vperp, vp
         return file_info
     end
 
-    # For processes other than the root process of each shared-memory group...
-    return nothing
+    # Should not be called processes other than the root process of each shared-memory
+    # group...
+    error("setup_dfns_io() called by non-block-root block_rank[]=$(block_rank[])")
 end
 
 """
@@ -2427,8 +2430,9 @@ function reopen_dfns_io(file_info)
                             getvar("f_neutral_start_last_timestep"), io_input, io_moments)
     end
 
-    # For processes other than the root process of each shared-memory group...
-    return nothing
+    # Should not be called processes other than the root process of each shared-memory
+    # group...
+    error("reopen_dfns_io() called by non-block-root block_rank[]=$(block_rank[])")
 end
 
 """
@@ -2466,7 +2470,7 @@ file
                          io_or_file_info_moments, t_idx, time_for_run, t_params,
                          nl_solver_params, r, z, dfns=false) = begin
 
-    io_moments = nothing
+    io_moments = io_or_file_info_moments
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -3434,7 +3438,7 @@ binary output file
                          t_params, nl_solver_params, r, z, vperp, vpa, vzeta, vr,
                          vz) = begin
     io_dfns = nothing
-    io_dfns_moments = nothing
+    io_dfns_moments = io_or_file_info_dfns
     closefile = true
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -3641,7 +3645,7 @@ end
 close output files for electron initialization
 """
 function finish_electron_io(
-        binary_initial_electron::Union{io_initial_electron_info,Tuple,Nothing,Bool})
+        binary_initial_electron::Union{io_initial_electron_info,Tuple,Nothing,Bool,NamedTuple})
 
     @serial_region begin
         # Only read/write from first process in each 'block'
