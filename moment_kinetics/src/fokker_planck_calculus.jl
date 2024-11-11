@@ -1263,10 +1263,12 @@ function calculate_rosenbluth_potential_boundary_data!(rpbd::rosenbluth_potentia
     return nothing
 end
 
-function multipole_H(vpa::mk_float,vperp::mk_float,
-                   I00::mk_float, I10::mk_float, I20::mk_float, I30::mk_float, I40::mk_float, I50::mk_float, I60::mk_float, I70::mk_float, I80::mk_float, 
-                   I02::mk_float, I12::mk_float, I22::mk_float, I32::mk_float, I42::mk_float, I52::mk_float, I62::mk_float,
-                   I04::mk_float, I14::mk_float, I24::mk_float, I34::mk_float, I44::mk_float, I06::mk_float, I16::mk_float, I26::mk_float, I08::mk_float)
+function multipole_H(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+   (I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+   I02, I12, I22, I32, I42, I52, I62,
+   I04, I14, I24, I34, I44,
+   I06, I16, I26,
+   I08) = Inn_vec
    # sum up terms in the multipole series 
    H_series = (I80*((128*vpa^8 - 1792*vpa^6*vperp^2 + 3360*vpa^4*vperp^4 - 1120*vpa^2*vperp^6 + 35*vperp^8)/(128*(vpa^2 + vperp^2)^8))
              +I70*((vpa*(16*vpa^6 - 168*vpa^4*vperp^2 + 210*vpa^2*vperp^4 - 35*vperp^6))/(16*(vpa^2 + vperp^2)^7))
@@ -1298,10 +1300,12 @@ function multipole_H(vpa::mk_float,vperp::mk_float,
    return H_series
 end
 
-function multipole_dHdvpa(vpa::mk_float,vperp::mk_float,
-                   I00::mk_float, I10::mk_float, I20::mk_float, I30::mk_float, I40::mk_float, I50::mk_float, I60::mk_float, I70::mk_float, I80::mk_float, 
-                   I02::mk_float, I12::mk_float, I22::mk_float, I32::mk_float, I42::mk_float, I52::mk_float, I62::mk_float,
-                   I04::mk_float, I14::mk_float, I24::mk_float, I34::mk_float, I44::mk_float, I06::mk_float, I16::mk_float, I26::mk_float, I08::mk_float)
+function multipole_dHdvpa(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+   (I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+   I02, I12, I22, I32, I42, I52, I62,
+   I04, I14, I24, I34, I44,
+   I06, I16, I26,
+   I08) = Inn_vec
    # sum up terms in the multipole series 
    dHdvpa_series = (I80*((9*vpa*(128*vpa^8 - 2304*vpa^6*vperp^2 + 6048*vpa^4*vperp^4 - 3360*vpa^2*vperp^6 + 315*vperp^8))/(128*(vpa^2 + vperp^2)^8))
                 +I70*((128*vpa^8 - 1792*vpa^6*vperp^2 + 3360*vpa^4*vperp^4 - 1120*vpa^2*vperp^6 + 35*vperp^8)/(16*(vpa^2 + vperp^2)^7))
@@ -1333,10 +1337,12 @@ function multipole_dHdvpa(vpa::mk_float,vperp::mk_float,
    return dHdvpa_series
 end
 
-function multipole_dHdvperp(vpa::mk_float,vperp::mk_float,
-                   I00::mk_float, I10::mk_float, I20::mk_float, I30::mk_float, I40::mk_float, I50::mk_float, I60::mk_float, I70::mk_float, I80::mk_float, 
-                   I02::mk_float, I12::mk_float, I22::mk_float, I32::mk_float, I42::mk_float, I52::mk_float, I62::mk_float,
-                   I04::mk_float, I14::mk_float, I24::mk_float, I34::mk_float, I44::mk_float, I06::mk_float, I16::mk_float, I26::mk_float, I08::mk_float)
+function multipole_dHdvperp(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+   (I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+   I02, I12, I22, I32, I42, I52, I62,
+   I04, I14, I24, I34, I44,
+   I06, I16, I26,
+   I08) = Inn_vec
    # sum up terms in the multipole series 
    dHdvperp_series = (I80*((45*vperp*(128*vpa^8 - 896*vpa^6*vperp^2 + 1120*vpa^4*vperp^4 - 280*vpa^2*vperp^6 + 7*vperp^8))/(128*(vpa^2 + vperp^2)^8))
                 +I70*((9*vpa*vperp*(64*vpa^6 - 336*vpa^4*vperp^2 + 280*vpa^2*vperp^4 - 35*vperp^6))/(16*(vpa^2 + vperp^2)^7))
@@ -1368,10 +1374,12 @@ function multipole_dHdvperp(vpa::mk_float,vperp::mk_float,
    return dHdvperp_series
 end
 
-function multipole_G(vpa::mk_float,vperp::mk_float,
-                   I00::mk_float, I10::mk_float, I20::mk_float, I30::mk_float, I40::mk_float, I50::mk_float, I60::mk_float, I70::mk_float, I80::mk_float, 
-                   I02::mk_float, I12::mk_float, I22::mk_float, I32::mk_float, I42::mk_float, I52::mk_float, I62::mk_float,
-                   I04::mk_float, I14::mk_float, I24::mk_float, I34::mk_float, I44::mk_float, I06::mk_float, I16::mk_float, I26::mk_float, I08::mk_float)
+function multipole_G(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+   (I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+   I02, I12, I22, I32, I42, I52, I62,
+   I04, I14, I24, I34, I44,
+   I06, I16, I26,
+   I08) = Inn_vec
    # sum up terms in the multipole series 
    G_series = (I80*((64*vpa^6*vperp^2 - 240*vpa^4*vperp^4 + 120*vpa^2*vperp^6 - 5*vperp^8)/(128*(vpa^2 + vperp^2)^8))
              +I70*((vpa*vperp^2*(8*vpa^4 - 20*vpa^2*vperp^2 + 5*vperp^4))/(16*(vpa^2 + vperp^2)^7))
@@ -1403,10 +1411,12 @@ function multipole_G(vpa::mk_float,vperp::mk_float,
    return G_series
 end
 
-function multipole_dGdvperp(vpa::mk_float,vperp::mk_float,
-                   I00::mk_float, I10::mk_float, I20::mk_float, I30::mk_float, I40::mk_float, I50::mk_float, I60::mk_float, I70::mk_float, I80::mk_float, 
-                   I02::mk_float, I12::mk_float, I22::mk_float, I32::mk_float, I42::mk_float, I52::mk_float, I62::mk_float,
-                   I04::mk_float, I14::mk_float, I24::mk_float, I34::mk_float, I44::mk_float, I06::mk_float, I16::mk_float, I26::mk_float, I08::mk_float)
+function multipole_dGdvperp(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+   (I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+   I02, I12, I22, I32, I42, I52, I62,
+   I04, I14, I24, I34, I44,
+   I06, I16, I26,
+   I08) = Inn_vec
    # sum up terms in the multipole series 
    dGdvperp_series = (I80*((vperp*(128*vpa^8 - 1792*vpa^6*vperp^2 + 3360*vpa^4*vperp^4 - 1120*vpa^2*vperp^6 + 35*vperp^8))/(128*(vpa^2 + vperp^2)^8))
                    +I70*((vpa*vperp*(16*vpa^6 - 168*vpa^4*vperp^2 + 210*vpa^2*vperp^4 - 35*vperp^6))/(16*(vpa^2 + vperp^2)^7))
@@ -1438,10 +1448,12 @@ function multipole_dGdvperp(vpa::mk_float,vperp::mk_float,
    return dGdvperp_series
 end
 
-function multipole_d2Gdvperp2(vpa::mk_float,vperp::mk_float,
-                   I00::mk_float, I10::mk_float, I20::mk_float, I30::mk_float, I40::mk_float, I50::mk_float, I60::mk_float, I70::mk_float, I80::mk_float, 
-                   I02::mk_float, I12::mk_float, I22::mk_float, I32::mk_float, I42::mk_float, I52::mk_float, I62::mk_float,
-                   I04::mk_float, I14::mk_float, I24::mk_float, I34::mk_float, I44::mk_float, I06::mk_float, I16::mk_float, I26::mk_float, I08::mk_float)
+function multipole_d2Gdvperp2(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+   (I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+   I02, I12, I22, I32, I42, I52, I62,
+   I04, I14, I24, I34, I44,
+   I06, I16, I26,
+   I08) = Inn_vec
    # sum up terms in the multipole series 
    d2Gdvperp2_series = (I80*((128*vpa^10 - 7424*vpa^8*vperp^2 + 41888*vpa^6*vperp^4 - 48160*vpa^4*vperp^6 + 11515*vpa^2*vperp^8 - 280*vperp^10)/(128*(vpa^2 + vperp^2)^8))
                    +I70*((16*vpa^9 - 728*vpa^7*vperp^2 + 3066*vpa^5*vperp^4 - 2345*vpa^3*vperp^6 + 280*vpa*vperp^8)/(16*(vpa^2 + vperp^2)^7))
@@ -1473,10 +1485,12 @@ function multipole_d2Gdvperp2(vpa::mk_float,vperp::mk_float,
    return d2Gdvperp2_series
 end
 
-function multipole_d2Gdvperpdvpa(vpa::mk_float,vperp::mk_float,
-                   I00::mk_float, I10::mk_float, I20::mk_float, I30::mk_float, I40::mk_float, I50::mk_float, I60::mk_float, I70::mk_float, I80::mk_float, 
-                   I02::mk_float, I12::mk_float, I22::mk_float, I32::mk_float, I42::mk_float, I52::mk_float, I62::mk_float,
-                   I04::mk_float, I14::mk_float, I24::mk_float, I34::mk_float, I44::mk_float, I06::mk_float, I16::mk_float, I26::mk_float, I08::mk_float)
+function multipole_d2Gdvperpdvpa(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+   (I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+   I02, I12, I22, I32, I42, I52, I62,
+   I04, I14, I24, I34, I44,
+   I06, I16, I26,
+   I08) = Inn_vec
    # sum up terms in the multipole series 
    d2Gdvperpdvpa_series = (I80*((9*vpa*vperp*(128*vpa^8 - 2304*vpa^6*vperp^2 + 6048*vpa^4*vperp^4 - 3360*vpa^2*vperp^6 + 315*vperp^8))/(128*(vpa^2 + vperp^2)^8))
                       +I70*((vperp*(128*vpa^8 - 1792*vpa^6*vperp^2 + 3360*vpa^4*vperp^4 - 1120*vpa^2*vperp^6 + 35*vperp^8))/(16*(vpa^2 + vperp^2)^7))
@@ -1508,10 +1522,12 @@ function multipole_d2Gdvperpdvpa(vpa::mk_float,vperp::mk_float,
    return d2Gdvperpdvpa_series
 end
 
-function multipole_d2Gdvpa2(vpa::mk_float,vperp::mk_float,
-                   I00::mk_float, I10::mk_float, I20::mk_float, I30::mk_float, I40::mk_float, I50::mk_float, I60::mk_float, I70::mk_float, I80::mk_float, 
-                   I02::mk_float, I12::mk_float, I22::mk_float, I32::mk_float, I42::mk_float, I52::mk_float, I62::mk_float,
-                   I04::mk_float, I14::mk_float, I24::mk_float, I34::mk_float, I44::mk_float, I06::mk_float, I16::mk_float, I26::mk_float, I08::mk_float)
+function multipole_d2Gdvpa2(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+   (I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+   I02, I12, I22, I32, I42, I52, I62,
+   I04, I14, I24, I34, I44,
+   I06, I16, I26,
+   I08) = Inn_vec 
    # sum up terms in the multipole series 
    d2Gdvpa2_series = (I80*((45*vperp^2*(128*vpa^8 - 896*vpa^6*vperp^2 + 1120*vpa^4*vperp^4 - 280*vpa^2*vperp^6 + 7*vperp^8))/(128*(vpa^2 + vperp^2)^8))
                    +I70*((9*vpa*vperp^2*(64*vpa^6 - 336*vpa^4*vperp^2 + 280*vpa^2*vperp^4 - 35*vperp^6))/(16*(vpa^2 + vperp^2)^7))
@@ -1546,28 +1562,17 @@ end
 """
 """
 function calculate_boundary_data_multipole_H!(func_data::vpa_vperp_boundary_data,vpa,vperp,
-                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                     I02, I12, I22, I32, I42, I52, I62,
-                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                                             Inn_vec)
     nvpa = vpa.n
     nvperp = vperp.n
     begin_anyv_vperp_region(no_synchronize=true)
     @loop_vperp ivperp begin
-                func_data.lower_boundary_vpa[ivperp] = multipole_H(vpa.grid[1],vperp.grid[ivperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
-                func_data.upper_boundary_vpa[ivperp] = multipole_H(vpa.grid[nvpa],vperp.grid[ivperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.lower_boundary_vpa[ivperp] = multipole_H(vpa.grid[1],vperp.grid[ivperp],Inn_vec)
+                func_data.upper_boundary_vpa[ivperp] = multipole_H(vpa.grid[nvpa],vperp.grid[ivperp],Inn_vec)
     end
     begin_anyv_vpa_region(no_synchronize=true)
     @loop_vpa ivpa begin
-                func_data.upper_boundary_vperp[ivpa] = multipole_H(vpa.grid[ivpa],vperp.grid[nvperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.upper_boundary_vperp[ivpa] = multipole_H(vpa.grid[ivpa],vperp.grid[nvperp],Inn_vec)
     end
     # return to serial parallelisation
     return nothing
@@ -1575,29 +1580,17 @@ end
 
 """
 """
-function calculate_boundary_data_multipole_dHdvpa!(func_data::vpa_vperp_boundary_data,vpa,vperp,
-                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                     I02, I12, I22, I32, I42, I52, I62,
-                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+function calculate_boundary_data_multipole_dHdvpa!(func_data::vpa_vperp_boundary_data,vpa,vperp,Inn_vec)
     nvpa = vpa.n
     nvperp = vperp.n
     begin_anyv_vperp_region(no_synchronize=true)
     @loop_vperp ivperp begin
-                func_data.lower_boundary_vpa[ivperp] = multipole_dHdvpa(vpa.grid[1],vperp.grid[ivperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
-                func_data.upper_boundary_vpa[ivperp] = multipole_dHdvpa(vpa.grid[nvpa],vperp.grid[ivperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.lower_boundary_vpa[ivperp] = multipole_dHdvpa(vpa.grid[1],vperp.grid[ivperp],Inn_vec)
+                func_data.upper_boundary_vpa[ivperp] = multipole_dHdvpa(vpa.grid[nvpa],vperp.grid[ivperp],Inn_vec)
     end
     begin_anyv_vpa_region(no_synchronize=true)
     @loop_vpa ivpa begin
-                func_data.upper_boundary_vperp[ivpa] = multipole_dHdvpa(vpa.grid[ivpa],vperp.grid[nvperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.upper_boundary_vperp[ivpa] = multipole_dHdvpa(vpa.grid[ivpa],vperp.grid[nvperp],Inn_vec)
     end
     # return to serial parallelisation
     return nothing
@@ -1605,29 +1598,17 @@ end
 
 """
 """
-function calculate_boundary_data_multipole_dHdvperp!(func_data::vpa_vperp_boundary_data,vpa,vperp,
-                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                     I02, I12, I22, I32, I42, I52, I62,
-                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+function calculate_boundary_data_multipole_dHdvperp!(func_data::vpa_vperp_boundary_data,vpa,vperp,Inn_vec)
     nvpa = vpa.n
     nvperp = vperp.n
     begin_anyv_vperp_region(no_synchronize=true)
     @loop_vperp ivperp begin
-                func_data.lower_boundary_vpa[ivperp] = multipole_dHdvperp(vpa.grid[1],vperp.grid[ivperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
-                func_data.upper_boundary_vpa[ivperp] = multipole_dHdvperp(vpa.grid[nvpa],vperp.grid[ivperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.lower_boundary_vpa[ivperp] = multipole_dHdvperp(vpa.grid[1],vperp.grid[ivperp],Inn_vec)
+                func_data.upper_boundary_vpa[ivperp] = multipole_dHdvperp(vpa.grid[nvpa],vperp.grid[ivperp],Inn_vec)
     end
     begin_anyv_vpa_region(no_synchronize=true)
     @loop_vpa ivpa begin
-                func_data.upper_boundary_vperp[ivpa] = multipole_dHdvperp(vpa.grid[ivpa],vperp.grid[nvperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.upper_boundary_vperp[ivpa] = multipole_dHdvperp(vpa.grid[ivpa],vperp.grid[nvperp],Inn_vec)
     end
     # return to serial parallelisation
     return nothing
@@ -1635,29 +1616,17 @@ end
 
 """
 """
-function calculate_boundary_data_multipole_G!(func_data::vpa_vperp_boundary_data,vpa,vperp,
-                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                     I02, I12, I22, I32, I42, I52, I62,
-                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+function calculate_boundary_data_multipole_G!(func_data::vpa_vperp_boundary_data,vpa,vperp,Inn_vec)
     nvpa = vpa.n
     nvperp = vperp.n
     begin_anyv_vperp_region(no_synchronize=true)
     @loop_vperp ivperp begin
-                func_data.lower_boundary_vpa[ivperp] = multipole_G(vpa.grid[1],vperp.grid[ivperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
-                func_data.upper_boundary_vpa[ivperp] = multipole_G(vpa.grid[nvpa],vperp.grid[ivperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.lower_boundary_vpa[ivperp] = multipole_G(vpa.grid[1],vperp.grid[ivperp],Inn_vec)
+                func_data.upper_boundary_vpa[ivperp] = multipole_G(vpa.grid[nvpa],vperp.grid[ivperp],Inn_vec)
     end
     begin_anyv_vpa_region(no_synchronize=true)
     @loop_vpa ivpa begin
-                func_data.upper_boundary_vperp[ivpa] = multipole_G(vpa.grid[ivpa],vperp.grid[nvperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.upper_boundary_vperp[ivpa] = multipole_G(vpa.grid[ivpa],vperp.grid[nvperp],Inn_vec)
     end
     # return to serial parallelisation
     return nothing
@@ -1665,29 +1634,17 @@ end
 
 """
 """
-function calculate_boundary_data_multipole_dGdvperp!(func_data::vpa_vperp_boundary_data,vpa,vperp,
-                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                     I02, I12, I22, I32, I42, I52, I62,
-                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+function calculate_boundary_data_multipole_dGdvperp!(func_data::vpa_vperp_boundary_data,vpa,vperp,Inn_vec)
     nvpa = vpa.n
     nvperp = vperp.n
     begin_anyv_vperp_region(no_synchronize=true)
     @loop_vperp ivperp begin
-                func_data.lower_boundary_vpa[ivperp] = multipole_dGdvperp(vpa.grid[1],vperp.grid[ivperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
-                func_data.upper_boundary_vpa[ivperp] = multipole_dGdvperp(vpa.grid[nvpa],vperp.grid[ivperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.lower_boundary_vpa[ivperp] = multipole_dGdvperp(vpa.grid[1],vperp.grid[ivperp],Inn_vec)
+                func_data.upper_boundary_vpa[ivperp] = multipole_dGdvperp(vpa.grid[nvpa],vperp.grid[ivperp],Inn_vec)
     end
     begin_anyv_vpa_region(no_synchronize=true)
     @loop_vpa ivpa begin
-                func_data.upper_boundary_vperp[ivpa] = multipole_dGdvperp(vpa.grid[ivpa],vperp.grid[nvperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.upper_boundary_vperp[ivpa] = multipole_dGdvperp(vpa.grid[ivpa],vperp.grid[nvperp],Inn_vec)
     end
     # return to serial parallelisation
     return nothing
@@ -1695,29 +1652,17 @@ end
 
 """
 """
-function calculate_boundary_data_multipole_d2Gdvperp2!(func_data::vpa_vperp_boundary_data,vpa,vperp,
-                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                     I02, I12, I22, I32, I42, I52, I62,
-                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+function calculate_boundary_data_multipole_d2Gdvperp2!(func_data::vpa_vperp_boundary_data,vpa,vperp,Inn_vec)
     nvpa = vpa.n
     nvperp = vperp.n
     begin_anyv_vperp_region(no_synchronize=true)
     @loop_vperp ivperp begin
-                func_data.lower_boundary_vpa[ivperp] = multipole_d2Gdvperp2(vpa.grid[1],vperp.grid[ivperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
-                func_data.upper_boundary_vpa[ivperp] = multipole_d2Gdvperp2(vpa.grid[nvpa],vperp.grid[ivperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.lower_boundary_vpa[ivperp] = multipole_d2Gdvperp2(vpa.grid[1],vperp.grid[ivperp],Inn_vec)
+                func_data.upper_boundary_vpa[ivperp] = multipole_d2Gdvperp2(vpa.grid[nvpa],vperp.grid[ivperp],Inn_vec)
     end
     begin_anyv_vpa_region(no_synchronize=true)
     @loop_vpa ivpa begin
-                func_data.upper_boundary_vperp[ivpa] = multipole_d2Gdvperp2(vpa.grid[ivpa],vperp.grid[nvperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.upper_boundary_vperp[ivpa] = multipole_d2Gdvperp2(vpa.grid[ivpa],vperp.grid[nvperp],Inn_vec)
     end
     # return to serial parallelisation
     return nothing
@@ -1725,29 +1670,17 @@ end
 
 """
 """
-function calculate_boundary_data_multipole_d2Gdvperpdvpa!(func_data::vpa_vperp_boundary_data,vpa,vperp,
-                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                     I02, I12, I22, I32, I42, I52, I62,
-                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+function calculate_boundary_data_multipole_d2Gdvperpdvpa!(func_data::vpa_vperp_boundary_data,vpa,vperp,Inn_vec)
     nvpa = vpa.n
     nvperp = vperp.n
     begin_anyv_vperp_region(no_synchronize=true)
     @loop_vperp ivperp begin
-                func_data.lower_boundary_vpa[ivperp] = multipole_d2Gdvperpdvpa(vpa.grid[1],vperp.grid[ivperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
-                func_data.upper_boundary_vpa[ivperp] = multipole_d2Gdvperpdvpa(vpa.grid[nvpa],vperp.grid[ivperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.lower_boundary_vpa[ivperp] = multipole_d2Gdvperpdvpa(vpa.grid[1],vperp.grid[ivperp],Inn_vec)
+                func_data.upper_boundary_vpa[ivperp] = multipole_d2Gdvperpdvpa(vpa.grid[nvpa],vperp.grid[ivperp],Inn_vec)
     end
     begin_anyv_vpa_region(no_synchronize=true)
     @loop_vpa ivpa begin
-                func_data.upper_boundary_vperp[ivpa] = multipole_d2Gdvperpdvpa(vpa.grid[ivpa],vperp.grid[nvperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.upper_boundary_vperp[ivpa] = multipole_d2Gdvperpdvpa(vpa.grid[ivpa],vperp.grid[nvperp],Inn_vec)
     end
     # return to serial parallelisation
     return nothing
@@ -1755,29 +1688,17 @@ end
 
 """
 """
-function calculate_boundary_data_multipole_d2Gdvpa2!(func_data::vpa_vperp_boundary_data,vpa,vperp,
-                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                     I02, I12, I22, I32, I42, I52, I62,
-                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+function calculate_boundary_data_multipole_d2Gdvpa2!(func_data::vpa_vperp_boundary_data,vpa,vperp,Inn_vec)
     nvpa = vpa.n
     nvperp = vperp.n
     begin_anyv_vperp_region(no_synchronize=true)
     @loop_vperp ivperp begin
-                func_data.lower_boundary_vpa[ivperp] = multipole_d2Gdvpa2(vpa.grid[1],vperp.grid[ivperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
-                func_data.upper_boundary_vpa[ivperp] = multipole_d2Gdvpa2(vpa.grid[nvpa],vperp.grid[ivperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.lower_boundary_vpa[ivperp] = multipole_d2Gdvpa2(vpa.grid[1],vperp.grid[ivperp],Inn_vec)
+                func_data.upper_boundary_vpa[ivperp] = multipole_d2Gdvpa2(vpa.grid[nvpa],vperp.grid[ivperp],Inn_vec)
     end
     begin_anyv_vpa_region(no_synchronize=true)
     @loop_vpa ivpa begin
-                func_data.upper_boundary_vperp[ivpa] = multipole_d2Gdvpa2(vpa.grid[ivpa],vperp.grid[nvperp],
-                                                       I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                                       I02, I12, I22, I32, I42, I52, I62,
-                                                       I04, I14, I24, I34, I44, I06, I16, I26, I08)
+                func_data.upper_boundary_vperp[ivpa] = multipole_d2Gdvpa2(vpa.grid[ivpa],vperp.grid[nvperp],Inn_vec)
     end
     # return to serial parallelisation
     return nothing
@@ -1831,63 +1752,29 @@ function calculate_rosenbluth_potential_boundary_data_multipole!(rpbd::rosenblut
        I08 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 8, vperp.wgts)    
     end
     # Broadcast integrals to all processes in the 'anyv' subblock
-    param_vec = [I00, I10, I20, I30, I40, I50, I60, I70, I80, 
+    Inn_vec = [I00, I10, I20, I30, I40, I50, I60, I70, I80, 
                 I02, I12, I22, I32, I42, I52, I62,
                 I04, I14, I24, I34, I44,
                 I06, I16, I26,
                 I08]
     if comm_anyv_subblock[] != MPI.COMM_NULL
-        MPI.Bcast!(param_vec, 0, comm_anyv_subblock[])
+        MPI.Bcast!(Inn_vec, 0, comm_anyv_subblock[])
     end
-    (I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-     I02, I12, I22, I32, I42, I52, I62,
-     I04, I14, I24, I34, I44,
-     I06, I16, I26,
-     I08) = param_vec
-   # println(I00, " ", I10, " ", I20, " ", I30, " ", I40, " ", I50, " ", I60, " ", I70, " ", I80, " ", 
-   #        I02, " ", I12, " ", I22, " ", I32, " ", I42, " ", I52, " ", I62, " ",
-   #        I04, " ", I14, " ", I24, " ", I34, " ", I44, " ",
-   #        I06, " ", I16, " ", I26, " ",
-   #        I08)
     # ensure data is synchronized
     _anyv_subblock_synchronize()
     # evaluate the multipole formulae 
-    calculate_boundary_data_multipole_H!(rpbd.H_data,vpa,vperp, 
-                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                     I02, I12, I22, I32, I42, I52, I62,
-                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
-    calculate_boundary_data_multipole_dHdvpa!(rpbd.dHdvpa_data,vpa,vperp,
-                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                     I02, I12, I22, I32, I42, I52, I62,
-                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
-    calculate_boundary_data_multipole_dHdvperp!(rpbd.dHdvperp_data,vpa,vperp,
-                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                     I02, I12, I22, I32, I42, I52, I62,
-                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    calculate_boundary_data_multipole_H!(rpbd.H_data,vpa,vperp,Inn_vec)
+    calculate_boundary_data_multipole_dHdvpa!(rpbd.dHdvpa_data,vpa,vperp,Inn_vec)
+    calculate_boundary_data_multipole_dHdvperp!(rpbd.dHdvperp_data,vpa,vperp,Inn_vec)
     if calculate_GG
-        calculate_boundary_data_multipole_G!(rpbd.G_data,vpa,vperp,
-                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                     I02, I12, I22, I32, I42, I52, I62,
-                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+        calculate_boundary_data_multipole_G!(rpbd.G_data,vpa,vperp,Inn_vec)
     end
     if calculate_dGdvperp
-        calculate_boundary_data_multipole_dGdvperp!(rpbd.dGdvperp_data,vpa,vperp,
-                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                     I02, I12, I22, I32, I42, I52, I62,
-                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+        calculate_boundary_data_multipole_dGdvperp!(rpbd.dGdvperp_data,vpa,vperp,Inn_vec)
     end
-    calculate_boundary_data_multipole_d2Gdvperp2!(rpbd.d2Gdvperp2_data,vpa,vperp,
-                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                     I02, I12, I22, I32, I42, I52, I62,
-                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
-    calculate_boundary_data_multipole_d2Gdvperpdvpa!(rpbd.d2Gdvperpdvpa_data,vpa,vperp,
-                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                     I02, I12, I22, I32, I42, I52, I62,
-                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
-    calculate_boundary_data_multipole_d2Gdvpa2!(rpbd.d2Gdvpa2_data,vpa,vperp,
-                                     I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                                     I02, I12, I22, I32, I42, I52, I62,
-                                     I04, I14, I24, I34, I44, I06, I16, I26, I08)
+    calculate_boundary_data_multipole_d2Gdvperp2!(rpbd.d2Gdvperp2_data,vpa,vperp,Inn_vec)
+    calculate_boundary_data_multipole_d2Gdvperpdvpa!(rpbd.d2Gdvperpdvpa_data,vpa,vperp,Inn_vec)
+    calculate_boundary_data_multipole_d2Gdvpa2!(rpbd.d2Gdvpa2_data,vpa,vperp,Inn_vec)
     
     return nothing
 end
