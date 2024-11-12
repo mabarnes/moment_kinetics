@@ -8429,7 +8429,7 @@ end
 """
     timing_data(run_info; plot_prefix=nothing, threshold=nothing,
                 include_patterns=nothing, exclude_patterns=nothing, ranks=nothing,
-                figsize=nothing, interactive_figs=nothing, include_legend=true)
+                figsize=nothing, include_legend=true)
 
 Plot timings from different parts of the `moment_kinetics` code. Only timings from
 function calls during the time evolution loop are included, not from the setup, because we
@@ -8463,11 +8463,11 @@ set in `this_input_dict`. When this function is called as part of
 the settings are read from the post processing input file (by default
 `post_processing_input.toml`). The function arguments take precedence, if they are given.
 
-If you load GLMakie (by doing `using GLMakie`) before running this function,
-`interactive_figs` can be passed one of, or a Vector of, `:times`, `:ncalls`, or `:allocs`
-to display an interactive window showing that figure. Multiple values can be passed, but
-the DataInspector (which displays information when you hover over the figure) will only
-work for the first one in the list (this may be a GLMakie bug?).
+If you load GLMakie by doing `using GLMakie` before running this function, but after
+calling `using makie_post_processing` (because `CairoMakie` is loaded when the module is
+loaded and would take over if you load `GLMakie` before `makie_post_processing`), the
+figures will be displayed in interactive windows. When you hover over a line some useful
+information will be displayed.
 
 Pass `include_legend=false` to remove legends from the figures. This is mostly useful for
 interactive figures where hovering over the lines can show what they are, so that the
@@ -8475,8 +8475,7 @@ legend is not needed.
 """
 function timing_data(run_info::Tuple; plot_prefix=nothing, threshold=nothing,
                      include_patterns=nothing, exclude_patterns=nothing, ranks=nothing,
-                     this_input_dict=nothing, figsize=nothing, interactive_figs=nothing,
-                     include_legend=true)
+                     this_input_dict=nothing, figsize=nothing, include_legend=true)
 
     if this_input_dict !== nothing
         input = Dict_to_NamedTuple(this_input_dict["timing_data"])
@@ -8515,40 +8514,31 @@ function timing_data(run_info::Tuple; plot_prefix=nothing, threshold=nothing,
                     ncalls_ax=ncalls_ax, allocs_ax=allocs_ax, irun=irun, figsize=figsize)
     end
 
-    if interactive_figs !== nothing && string(Makie.current_backend()) == "GLMakie"
+    if string(Makie.current_backend()) == "GLMakie"
         # Can make interactive plots
 
-        if isa(interactive_figs, Symbol)
-            interactive_figs = [interactive_figs]
-        end
         backend = Makie.current_backend()
 
-        for figtype ∈ interactive_figs
-            if figtype == :times
-                if include_legend
-                    Legend(times_fig[2,1], times_ax; tellheight=true, tellwidth=false,
-                           merge=true)
-                end
-                DataInspector(times_fig)
-                display(backend.Screen(), times_fig)
-            elseif figtype == :ncalls
-                if include_legend
-                    Legend(ncalls_fig[2,1], times_ax; tellheight=true, tellwidth=false,
-                           merge=true)
-                end
-                DataInspector(ncalls_fig)
-                display(backend.Screen(), ncalls_fig)
-            elseif figtype == :allocs
-                if include_legend
-                    Legend(allocs_fig[2,1], times_ax; tellheight=true, tellwidth=false,
-                           merge=true)
-                end
-                DataInspector(allocs_fig)
-                display(backend.Screen(), allocs_fig)
-            else
-                error("Got unrecognized entry $figtype in `interactive_figs`")
-            end
+        if include_legend
+            Legend(times_fig[2,1], times_ax; tellheight=true, tellwidth=false,
+                   merge=true)
         end
+        DataInspector(times_fig)
+        display(backend.Screen(), times_fig)
+
+        if include_legend
+            Legend(ncalls_fig[2,1], times_ax; tellheight=true, tellwidth=false,
+                   merge=true)
+        end
+        DataInspector(ncalls_fig)
+        display(backend.Screen(), ncalls_fig)
+
+        if include_legend
+            Legend(allocs_fig[2,1], times_ax; tellheight=true, tellwidth=false,
+                   merge=true)
+        end
+        DataInspector(allocs_fig)
+        display(backend.Screen(), allocs_fig)
     elseif plot_prefix !== nothing
         if include_legend
             Legend(times_fig[2,1], times_ax; tellheight=true, tellwidth=true, merge=true)
@@ -8587,7 +8577,7 @@ end
 function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
                      include_patterns=nothing, exclude_patterns=nothing, ranks=nothing,
                      this_input_dict=nothing, times_ax=nothing, ncalls_ax=nothing,
-                     allocs_ax=nothing, irun=1, figsize=nothing, interactive_figs=nothing,
+                     allocs_ax=nothing, irun=1, figsize=nothing,
                      include_legend=true)
 
     if this_input_dict !== nothing
@@ -8810,42 +8800,33 @@ function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
         end
     end
 
-    if interactive_figs !== nothing && times_fig !== nothing && plot_prefix === nothing &&
+    if times_fig !== nothing && plot_prefix === nothing &&
             string(Makie.current_backend()) == "GLMakie"
 
         # Can make interactive plots
 
-        if isa(interactive_figs, Symbol)
-            interactive_figs = [interactive_figs]
-        end
         backend = Makie.current_backend()
 
-        for figtype ∈ interactive_figs
-            if figtype == :times
-                if include_legend
-                    Legend(times_fig[2,1], times_ax; tellheight=true, tellwidth=false,
-                           merge=true)
-                end
-                DataInspector(times_fig)
-                display(backend.Screen(), times_fig)
-            elseif figtype == :ncalls
-                if include_legend
-                    Legend(ncalls_fig[2,1], times_ax; tellheight=true, tellwidth=false,
-                           merge=true)
-                end
-                DataInspector(ncalls_fig)
-                display(backend.Screen(), ncalls_fig)
-            elseif figtype == :allocs
-                if include_legend
-                    Legend(allocs_fig[2,1], times_ax; tellheight=true, tellwidth=false,
-                           merge=true)
-                end
-                DataInspector(allocs_fig)
-                display(backend.Screen(), allocs_fig)
-            else
-                error("Got unrecognized entry $figtype in `interactive_figs`")
-            end
+        if include_legend
+            Legend(times_fig[2,1], times_ax; tellheight=true, tellwidth=false,
+                   merge=true)
         end
+        DataInspector(times_fig)
+        display(backend.Screen(), times_fig)
+
+        if include_legend
+            Legend(ncalls_fig[2,1], times_ax; tellheight=true, tellwidth=false,
+                   merge=true)
+        end
+        DataInspector(ncalls_fig)
+        display(backend.Screen(), ncalls_fig)
+
+        if include_legend
+            Legend(allocs_fig[2,1], times_ax; tellheight=true, tellwidth=false,
+                   merge=true)
+        end
+        DataInspector(allocs_fig)
+        display(backend.Screen(), allocs_fig)
     else
         if times_fig !== nothing
             if include_legend
