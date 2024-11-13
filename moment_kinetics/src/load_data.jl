@@ -39,6 +39,7 @@ using ..z_advection: update_speed_z!
 using Glob
 using HDF5
 using MPI
+using OrderedCollections: OrderedDict
 
 const timestep_diagnostic_variables = ("time_for_run", "step_counter", "dt",
                                        "failure_counter", "failure_caused_by",
@@ -664,7 +665,7 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                                                                vzeta, vr, vz, parallel_io)
 
             # Test whether any interpolation is needed
-            interpolation_needed = Dict(
+            interpolation_needed = OrderedDict(
                 x.name => (restart_x !== nothing
                            && (x.n != restart_x.n
                                || !all(isapprox.(x.grid, restart_x.grid))))
@@ -1105,7 +1106,7 @@ function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, ti
                                                                vzeta, vr, vz, parallel_io)
 
             # Test whether any interpolation is needed
-            interpolation_needed = Dict(
+            interpolation_needed = OrderedDict(
                 x.name => x.n != restart_x.n || !all(isapprox.(x.grid, restart_x.grid))
                 for (x, restart_x) ∈ ((z, restart_z), (r, restart_r),
                                       (vperp, restart_vperp), (vpa, restart_vpa)))
@@ -3595,16 +3596,13 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         evolving_variables = Tuple(evolving_variables)
     end
 
-    timing_variable_names = Dict{mk_int, Vector{String}}()
-    for fid ∈ fids0
-        timing_group = get_group(fid, "timing_data")
-        timing_rank_names = collect(k for k in keys(timing_group) if startswith(k, "rank"))
-        for group_name ∈ timing_rank_names
-            rank_group = get_group(timing_group, group_name)
-            irank = parse(mk_int, split(group_name, "rank")[2])
-            timing_variable_names[irank] = collect(keys(rank_group))
-        end
-    end
+    # Assume the timing variables are the same in every restart - this may not always be
+    # true, and might cause errors if some variables are missing for restarts after the
+    # first.
+    timing_group = get_group(fids0[1], "timing_data")
+    timing_variable_names = collect(k for k in keys(timing_group)
+                                    if startswith(k, "time:") || startswith(k, "ncalls:") ||
+                                       startswith(k, "allocs:"))
 
     if parallel_io
         files = fids0

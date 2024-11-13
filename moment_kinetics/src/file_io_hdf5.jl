@@ -92,9 +92,6 @@ function write_single_value!(file_or_group::HDF5.H5DataStore, name,
                              description=nothing, units=nothing,
                              overwrite=false) where {T,N}
     if isa(data, Union{Number, AbstractString})
-        if overwrite && name ∈ keys(file_or_group)
-            delete_object(file_or_group, name)
-        end
         # When we write a scalar, and parallel_io=true, we need to create the variable on
         # every process in `comm_inter_block[]` but we only want to actually write the
         # data from one process (we choose `global_rank[]==0`) to avoid corruption due to
@@ -106,15 +103,17 @@ function write_single_value!(file_or_group::HDF5.H5DataStore, name,
         # length of the string, so cannot be easily created by hand. Note that a String of
         # the correct length must be passed from every process in `comm_inter_block[]`,
         # but only the contents of the string on `global_rank[]==0` are actually written.
-        io_var, var_hdf5_type = create_dataset(file_or_group, name, data)
+        if !(overwrite && name ∈ keys(file_or_group))
+            create_dataset(file_or_group, name, data)
+            if description !== nothing
+                add_attribute!(file_or_group[name], "description", description)
+            end
+            if units !== nothing
+                add_attribute!(file_or_group[name], "units", units)
+            end
+        end
         if !parallel_io || global_rank[] == 0
-            write_dataset(io_var, var_hdf5_type, data)
-        end
-        if description !== nothing
-            add_attribute!(file_or_group[name], "description", description)
-        end
-        if units !== nothing
-            add_attribute!(file_or_group[name], "units", units)
+            write(file_or_group[name], data)
         end
         return nothing
     end
@@ -262,14 +261,14 @@ end
 function append_to_dynamic_var(io_var::HDF5.Dataset,
                                data::Union{Nothing,Number,AbstractArray{T,N}}, t_idx,
                                parallel_io::Bool,
-                               coords::Union{coordinate,Integer}...;
+                               coords::Union{coordinate,NamedTuple,Integer}...;
                                only_root=false, write_from_this_rank=nothing) where {T,N}
     # Extend time dimension for this variable
     dims = size(io_var)
     dims_mod = (dims[1:end-1]..., t_idx)
     HDF5.set_extent_dims(io_var, dims_mod)
-    local_ranges = Tuple(isa(c, coordinate) ? c.local_io_range : 1:c for c ∈ coords)
-    global_ranges = Tuple(isa(c, coordinate) ? c.global_io_range : 1:c for c ∈ coords)
+    local_ranges = Tuple(isa(c, Integer) ? (1:c) : c.local_io_range for c ∈ coords)
+    global_ranges = Tuple(isa(c, Integer) ? (1:c) : c.global_io_range for c ∈ coords)
 
     if only_root && parallel_io && global_rank[] != 0
         # Variable should only be written from root, and this process is not root for the
