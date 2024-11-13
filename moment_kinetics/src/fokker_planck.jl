@@ -95,7 +95,7 @@ function setup_fkpl_collisions_input(toml_input::Dict)
        frequency_option = "reference_parameters",
        self_collisions = true,
        use_conserving_corrections = true,
-       boundary_data = direct_integration,
+       boundary_data_option = direct_integration,
        slowing_down_test = false,
        sd_density = 1.0,
        sd_temp = 0.01,
@@ -339,7 +339,7 @@ Function for advancing with the explicit, weak-form, self-collision operator.
     Zi = collisions.fkpl.Zi # generalise!
     nussp = nuref*(Zi^4) # include charge number factor for self collisions
     use_conserving_corrections = collisions.fkpl.use_conserving_corrections
-    boundary_data_option = collisions.fkpl.boundary_data
+    boundary_data_option = collisions.fkpl.boundary_data_option
     # N.B. parallelisation using special 'anyv' region
     begin_s_r_z_anyv_region()
     @loop_s_r_z is ir iz begin

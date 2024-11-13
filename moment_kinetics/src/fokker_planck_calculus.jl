@@ -18,6 +18,7 @@ export assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!
 export YY_collision_operator_arrays, calculate_YY_arrays
 export calculate_rosenbluth_potential_boundary_data!
 export calculate_rosenbluth_potential_boundary_data_multipole!
+export calculate_rosenbluth_potential_boundary_data_delta_f_multipole!
 export elliptic_solve!, algebraic_solve!
 export fokkerplanck_arrays_direct_integration_struct
 export fokkerplanck_weakform_arrays_struct
@@ -42,7 +43,10 @@ using ..communication: MPISharedArray, global_rank
 using ..lagrange_polynomials: lagrange_poly, lagrange_poly_optimised
 using ..looping
 using ..velocity_moments: integrate_over_vspace
-using ..input_structs: direct_integration, multipole_expansion
+using ..velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
+using ..input_structs: direct_integration, multipole_expansion, delta_f_multipole
+using ..fokker_planck_test: F_Maxwellian, G_Maxwellian, H_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian
+using ..fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperp2_Maxwellian, d2Gdvperpdvpa_Maxwellian, dGdvperp_Maxwellian
 using moment_kinetics.gauss_legendre: get_QQ_local!
 using Dates
 using SpecialFunctions: ellipk, ellipe
@@ -1780,6 +1784,88 @@ function calculate_rosenbluth_potential_boundary_data_multipole!(rpbd::rosenblut
 end
 
 """
+Function to use the multipole expansion of the Rosenbluth potentials to calculate and
+assign boundary data to an instance of `rosenbluth_potential_boundary_data`, in place,
+without allocation. Use the exact results for the part of F that can be described with 
+a Maxwellian, and the multipole expansion for the remainder.
+"""
+function calculate_rosenbluth_potential_boundary_data_delta_f_multipole!(rpbd::rosenbluth_potential_boundary_data,
+    pdf,dummy_vpavperp,vpa,vperp,vpa_spectral,vperp_spectral;
+    calculate_GG=false,calculate_dGdvperp=false)
+    
+    mass = 1.0
+    # first, compute the moments and delta f
+    begin_anyv_region()
+    @anyv_serial_region begin
+      dens =  get_density(pdf, vpa, vperp)
+      upar = get_upar(pdf, vpa, vperp, dens)
+      ppar = get_ppar(pdf, vpa, vperp, upar)
+      pperp = get_pperp(pdf, vpa, vperp)
+      pressure = get_pressure(ppar,pperp)
+      vth = sqrt(2.0*pressure/(dens*mass))
+      @loop_vperp_vpa ivperp ivpa begin
+          dummy_vpavperp[ivpa,ivperp] = pdf[ivpa,ivperp] - F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp) 
+      end
+    end
+    # ensure data is synchronized
+    _anyv_subblock_synchronize()
+    # now pass the delta f to the multipole function
+    calculate_rosenbluth_potential_boundary_data_multipole!(rpbd,dummy_vpavperp,
+      vpa,vperp,vpa_spectral,vperp_spectral,
+      calculate_GG=calculate_GG,calculate_dGdvperp=calculate_dGdvperp)
+    # now add on the contributions from the Maxwellian
+    nvpa = vpa.n
+    nvperp = vperp.n
+    begin_anyv_vperp_region()
+    @loop_vperp ivperp begin
+                rpbd.H_data.lower_boundary_vpa[ivperp] += H_Maxwellian(dens,upar,vth,vpa,vperp,1,ivperp)
+                rpbd.H_data.upper_boundary_vpa[ivperp] += H_Maxwellian(dens,upar,vth,vpa,vperp,nvpa,ivperp)
+                rpbd.dHdvpa_data.lower_boundary_vpa[ivperp] += dHdvpa_Maxwellian(dens,upar,vth,vpa,vperp,1,ivperp)
+                rpbd.dHdvpa_data.upper_boundary_vpa[ivperp] += dHdvpa_Maxwellian(dens,upar,vth,vpa,vperp,nvpa,ivperp)
+                rpbd.dHdvperp_data.lower_boundary_vpa[ivperp] += dHdvperp_Maxwellian(dens,upar,vth,vpa,vperp,1,ivperp)
+                rpbd.dHdvperp_data.upper_boundary_vpa[ivperp] += dHdvperp_Maxwellian(dens,upar,vth,vpa,vperp,nvpa,ivperp)
+                rpbd.d2Gdvpa2_data.lower_boundary_vpa[ivperp] += d2Gdvpa2_Maxwellian(dens,upar,vth,vpa,vperp,1,ivperp)
+                rpbd.d2Gdvpa2_data.upper_boundary_vpa[ivperp] += d2Gdvpa2_Maxwellian(dens,upar,vth,vpa,vperp,nvpa,ivperp)                
+                rpbd.d2Gdvperpdvpa_data.lower_boundary_vpa[ivperp] += d2Gdvperpdvpa_Maxwellian(dens,upar,vth,vpa,vperp,1,ivperp)
+                rpbd.d2Gdvperpdvpa_data.upper_boundary_vpa[ivperp] += d2Gdvperpdvpa_Maxwellian(dens,upar,vth,vpa,vperp,nvpa,ivperp)                
+                rpbd.d2Gdvperp2_data.lower_boundary_vpa[ivperp] += d2Gdvperp2_Maxwellian(dens,upar,vth,vpa,vperp,1,ivperp)
+                rpbd.d2Gdvperp2_data.upper_boundary_vpa[ivperp] += d2Gdvperp2_Maxwellian(dens,upar,vth,vpa,vperp,nvpa,ivperp)
+    end
+    begin_anyv_vpa_region()
+    @loop_vpa ivpa begin
+                rpbd.H_data.upper_boundary_vperp[ivpa] += H_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,nvperp)
+                rpbd.dHdvpa_data.upper_boundary_vperp[ivpa] += dHdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,nvperp)
+                rpbd.dHdvperp_data.upper_boundary_vperp[ivpa] += dHdvperp_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,nvperp)
+                rpbd.d2Gdvpa2_data.upper_boundary_vperp[ivpa] += d2Gdvpa2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,nvperp)
+                rpbd.d2Gdvperpdvpa_data.upper_boundary_vperp[ivpa] += d2Gdvperpdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,nvperp)
+                rpbd.d2Gdvperp2_data.upper_boundary_vperp[ivpa] += d2Gdvperp2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,nvperp)
+    end
+    if calculate_GG
+       begin_anyv_vperp_region()
+       @loop_vperp ivperp begin
+                   rpbd.G_data.lower_boundary_vpa[ivperp] += G_Maxwellian(dens,upar,vth,vpa,vperp,1,ivperp)
+                   rpbd.G_data.upper_boundary_vpa[ivperp] += G_Maxwellian(dens,upar,vth,vpa,vperp,nvpa,ivperp)
+       end
+       begin_anyv_vpa_region()
+       @loop_vpa ivpa begin
+                   rpbd.G_data.upper_boundary_vperp[ivpa] += G_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,nvperp)
+       end
+    end
+    if calculate_dGdvperp
+       begin_anyv_vperp_region()
+       @loop_vperp ivperp begin
+                   rpbd.dGdvperp_data.lower_boundary_vpa[ivperp] += dGdvperp_Maxwellian(dens,upar,vth,vpa,vperp,1,ivperp)
+                   rpbd.dGdvperp_data.upper_boundary_vpa[ivperp] += dGdvperp_Maxwellian(dens,upar,vth,vpa,vperp,nvpa,ivperp)
+       end
+       begin_anyv_vpa_region()
+       @loop_vpa ivpa begin
+                   rpbd.dGdvperp_data.upper_boundary_vperp[ivpa] += dGdvperp_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,nvperp)
+       end
+    end
+    return nothing
+end
+
+"""
 Function to compare two instances of `rosenbluth_potential_boundary_data` --
 one assumed to contain exact results, and the other numerically computed results -- and compute
 the maximum value of the error. Calls `test_boundary_data()`.
@@ -2834,9 +2920,17 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
     if boundary_data_option == multipole_expansion
         calculate_rosenbluth_potential_boundary_data_multipole!(rpbd,ffsp_in,vpa,vperp,vpa_spectral,vperp_spectral,
           calculate_GG=calculate_GG,calculate_dGdvperp=(calculate_dGdvperp||algebraic_solve_for_d2Gdvperp2))
-    else # use direct integration on the boundary
+    elseif boundary_data_option == delta_f_multipole # use a variant of the multipole method
+        calculate_rosenbluth_potential_boundary_data_delta_f_multipole!(rpbd,ffsp_in,S_dummy,vpa,vperp,vpa_spectral,vperp_spectral,
+          calculate_GG=calculate_GG,calculate_dGdvperp=(calculate_dGdvperp||algebraic_solve_for_d2Gdvperp2))
+    elseif boundary_data_option == direct_integration  # use direct integration on the boundary
         calculate_rosenbluth_potential_boundary_data!(rpbd,bwgt,ffsp_in,vpa,vperp,vpa_spectral,vperp_spectral,
          calculate_GG=calculate_GG,calculate_dGdvperp=(calculate_dGdvperp||algebraic_solve_for_d2Gdvperp2))
+    else
+        error("No valid boundary_data_option specified. \n 
+              Pick  boundary_data_option='$multipole_expansion' \n 
+              or  boundary_data_option='$delta_f_multipole' \n 
+              or boundary_data_option='$direct_integration'")
     end
     # carry out the elliptic solves required
     begin_anyv_vperp_vpa_region()

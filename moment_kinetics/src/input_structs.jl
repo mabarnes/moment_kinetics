@@ -482,10 +482,12 @@ end
 @enum boundary_data_type begin
     direct_integration
     multipole_expansion
+    delta_f_multipole
 end
 export boundary_data_type
 export direct_integration
 export multipole_expansion
+export delta_f_multipole
 
 Base.@kwdef struct fkpl_collisions_input
     # option to check if fokker planck frequency should be > 0
@@ -500,7 +502,7 @@ Base.@kwdef struct fkpl_collisions_input
     # option to determine if ad-hoc moment_kinetics-style conserving corrections are used
     use_conserving_corrections::Bool
     # enum option to determine which method is used to provide boundary data for Rosenbluth potential calculations.
-    boundary_data::boundary_data_type
+    boundary_data_option::boundary_data_type
     # option to determine if cross-collisions against fixed Maxwellians are used
     slowing_down_test::Bool
     # Setting to switch between different options for Fokker-Planck collision frequency input
