@@ -312,16 +312,20 @@ Merge two AbstractDicts `a` and `b`. Any elements that are AbstractDicts are als
 """
 function recursive_merge end
 function recursive_merge(a::AbstractDict, b::AbstractDict)
-    return mergewith(recursive_merge, a, b)
-end
-function recursive_merge(a::AbstractDict, b)
-    error("Cannot merge a Dict with a non-Dict, got $a and $b")
-end
-function recursive_merge(a, b::AbstractDict)
-    error("Cannot merge a Dict with a non-Dict, got $a and $b")
-end
-function recursive_merge(a, b)
-    return b
+    result = deepcopy(a)
+    a_keys = collect(keys(a))
+    for (k,v) ∈ pairs(b)
+        if k ∉ a_keys
+            result[k] = v
+        elseif isa(result[k], AbstractDict) && isa(v, AbstractDict)
+            result[k] = recursive_merge(result[k], v)
+        elseif isa(result[k], AbstractDict) || isa(v, AbstractDict)
+            error("Cannot merge a Dict with a non-Dict, got $(result[k]) and $v")
+        else
+            result[k] = v
+        end
+    end
+    return result
 end
 
 """
