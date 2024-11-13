@@ -1794,6 +1794,7 @@ function calculate_rosenbluth_potential_boundary_data_delta_f_multipole!(rpbd::r
     calculate_GG=false,calculate_dGdvperp=false)
     
     mass = 1.0
+    dens, upar, vth = 0.0, 0.0, 0.0
     # first, compute the moments and delta f
     begin_anyv_region()
     @anyv_serial_region begin
@@ -1807,6 +1808,12 @@ function calculate_rosenbluth_potential_boundary_data_delta_f_multipole!(rpbd::r
           dummy_vpavperp[ivpa,ivperp] = pdf[ivpa,ivperp] - F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp) 
       end
     end
+    # broadcast this information across cores
+    param_vec = [dens, upar, vth] 
+    if comm_anyv_subblock[] != MPI.COMM_NULL
+        MPI.Bcast!(param_vec, 0, comm_anyv_subblock[])
+    end
+    (dens, upar, vth) = param_vec
     # ensure data is synchronized
     _anyv_subblock_synchronize()
     # now pass the delta f to the multipole function
