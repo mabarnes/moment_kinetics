@@ -18,8 +18,8 @@ using ..calculus: derivative!, second_derivative!, integral,
 using ..communication
 using ..gauss_legendre: gausslegendre_info
 using ..input_structs
-using ..interpolation: interpolate_to_grid_1d!,
-                       interpolate_symmetric!
+using ..interpolation: interpolate_to_grid_1d!, fill_1d_interpolation_matrix!,
+                       interpolate_symmetric!, fill_interpolate_symmetric_matrix!
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 using ..electron_fluid_equations: calculate_electron_moments!,
@@ -895,7 +895,7 @@ global_rank[] == 0 && println("recalculating precon")
                         nl_solver_params.preconditioners[ir]
 
                     fill_electron_kinetic_equation_Jacobian!(
-                        precon_matrix, f_electron_new, electron_ppar_new, moments,
+                        precon_matrix, f_electron_new, electron_ppar_new, moments, phi,
                         collisions, composition, z, vperp, vpa, z_spectral,
                         vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                         external_source_settings, num_diss_params, t_params, ion_dt,
@@ -935,6 +935,11 @@ global_rank[] == 0 && println("recalculating precon")
 
                 @timeit_debug global_timer lu_precon!(x) = begin
                     precon_ppar, precon_f = x
+
+                    # Zero out the boundary points in the input to the preconditioner so
+                    # that the preconditioner matrix can have 1's on the diagonal to make
+                    # sure it is not singular.
+                    zero_z_boundary_condition_points(precon_f, z, vpa, moments, ir)
 
                     precon_lu, _, this_input_buffer, this_output_buffer =
                         nl_solver_params.preconditioners[ir]
@@ -1097,10 +1102,10 @@ global_rank[] == 0 && println("recalculating precon")
                         # guess is zero,
                         fill_electron_kinetic_equation_Jacobian!(
                             explicit_J, f_electron_new, electron_ppar_new, moments,
-                            collisions, composition, z, vperp, vpa, z_spectral,
-                            vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-                            external_source_settings, num_diss_params, t_params, ion_dt, ir,
-                            evolve_ppar, :explicit_z, false)
+                            phi, collisions, composition, z, vperp, vpa, z_spectral,
+                            vperp_spectral, vpa_spectral, z_advect, vpa_advect,
+                            scratch_dummy, external_source_settings, num_diss_params,
+                            t_params, ion_dt, ir, evolve_ppar, :explicit_z, false)
                     end
                     begin_z_region()
                     @loop_z iz begin
@@ -1150,7 +1155,7 @@ global_rank[] == 0 && println("recalculating precon")
                     # Get sparse matrix for explicit, right-hand-side part of the
                     # solve.
                     fill_electron_kinetic_equation_Jacobian!(
-                        explicit_J, f_electron_new, electron_ppar_new, moments,
+                        explicit_J, f_electron_new, electron_ppar_new, moments, phi,
                         collisions, composition, z, vperp, vpa, z_spectral,
                         vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                         external_source_settings, num_diss_params, t_params, ion_dt, ir,
@@ -1520,36 +1525,7 @@ global_rank[] == 0 && println("recalculating precon")
                                                       vperp, vperp_spectral, vperp_adv,
                                                       vperp_diffusion, ir)
                 end
-                if z.bc ∈ ("wall", "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
-                    # Boundary conditions on incoming part of distribution function. Note
-                    # that as density, upar, ppar do not change in this implicit step,
-                    # f_electron_newvar, f_old, and residual should all be zero at exactly
-                    # the same set of grid points, so it is reasonable to zero-out
-                    # `residual` to impose the boundary condition. We impose this after
-                    # subtracting f_old in case rounding errors, etc. mean that at some
-                    # point f_old had a different boundary condition cut-off index.
-                    begin_vperp_vpa_region()
-                    v_unnorm = vpa.scratch
-                    zero = 1.0e-14
-                    if z.irank == 0
-                        v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[1,ir],
-                                                    moments.electron.upar[1,ir], true, true)
-                        @loop_vperp_vpa ivperp ivpa begin
-                            if v_unnorm[ivpa] > -zero
-                                f_electron_residual[ivpa,ivperp,1] = 0.0
-                            end
-                        end
-                    end
-                    if z.irank == z.nrank - 1
-                        v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[end,ir],
-                                                    moments.electron.upar[end,ir], true, true)
-                        @loop_vperp_vpa ivperp ivpa begin
-                            if v_unnorm[ivpa] < zero
-                                f_electron_residual[ivpa,ivperp,end] = 0.0
-                            end
-                        end
-                    end
-                end
+                zero_z_boundary_condition_points(f_electron_residual, z, vpa, moments, ir)
 
                 return nothing
             end
@@ -1938,47 +1914,7 @@ to allow the outer r-loop to be parallelised.
                 enforce_vperp_boundary_condition!(f_electron_residual, vperp.bc, vperp, vperp_spectral,
                                                   vperp_adv, vperp_diffusion)
             end
-            if z.bc ∈ ("wall", "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
-                # Boundary conditions on incoming part of distribution function. Note that
-                # as density, upar, ppar do not change in this implicit step, f_new,
-                # f_old, and residual should all be zero at exactly the same set of grid
-                # points, so it is reasonable to zero-out `residual` to impose the
-                # boundary condition. We impose this after subtracting f_old in case
-                # rounding errors, etc. mean that at some point f_old had a different
-                # boundary condition cut-off index.
-                begin_vperp_vpa_region()
-                v_unnorm = vpa.scratch
-                zero = 1.0e-14
-                if z.irank == 0
-                    iz = 1
-                    v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[iz,ir],
-                                                fvec_in.electron_upar[iz,ir], true, true)
-                    @loop_vperp_vpa ivperp ivpa begin
-                        if v_unnorm[ivpa] > -zero
-                            f_electron_residual[ivpa,ivperp,iz,ir] = 0.0
-                        end
-                    end
-                end
-                if z.irank == z.nrank - 1
-                    iz = z.n
-                    v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[iz,ir],
-                                                fvec_in.electron_upar[iz,ir], true, true)
-                    @loop_vperp_vpa ivperp ivpa begin
-                        if v_unnorm[ivpa] < zero
-                            f_electron_residual[ivpa,ivperp,iz,ir] = 0.0
-                        end
-                    end
-                end
-            end
-            begin_z_region()
-            @loop_z iz begin
-                @views moment_constraints_on_residual!(f_electron_residual[:,:,iz],
-                                                       f_electron_new[:,:,iz],
-                                                       (evolve_density=true,
-                                                        evolve_upar=true,
-                                                        evolve_ppar=true),
-                                                       vpa)
-            end
+            zero_z_boundary_condition_points(f_electron_residual, z, vpa, moments, ir)
             return nothing
         end
 
@@ -2946,6 +2882,287 @@ end
     return nothing
 end
 
+# In several places it is useful to zero out (in residuals, etc.) the points that would be
+# set by the z boundary condition.
+function zero_z_boundary_condition_points(residual, z, vpa, moments, ir)
+    if z.bc ∈ ("wall", "constant",) && (z.irank == 0 || z.irank == z.nrank - 1)
+        # Boundary conditions on incoming part of distribution function. Note
+        # that as density, upar, ppar do not change in this implicit step,
+        # f_electron_newvar, f_old, and residual should all be zero at exactly
+        # the same set of grid points, so it is reasonable to zero-out
+        # `residual` to impose the boundary condition. We impose this after
+        # subtracting f_old in case rounding errors, etc. mean that at some
+        # point f_old had a different boundary condition cut-off index.
+        begin_vperp_vpa_region()
+        v_unnorm = vpa.scratch
+        zero = 1.0e-14
+        if z.irank == 0
+            v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[1,ir],
+                                        moments.electron.upar[1,ir], true, true)
+            @loop_vperp_vpa ivperp ivpa begin
+                if v_unnorm[ivpa] > -zero
+                    residual[ivpa,ivperp,1] = 0.0
+                end
+            end
+        end
+        if z.irank == z.nrank - 1
+            v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[end,ir],
+                                        moments.electron.upar[end,ir], true, true)
+            @loop_vperp_vpa ivperp ivpa begin
+                if v_unnorm[ivpa] < zero
+                    residual[ivpa,ivperp,end] = 0.0
+                end
+            end
+        end
+    end
+    return nothing
+end
+
+"""
+    add_wall_boundary_condition_to_Jacobian!(jacobian, phi, pdf, ppar, vthe, upar, z,
+                                             vperp, vpa, vperp_spectral, vpa_spectral,
+                                             vpa_adv, moments, vpa_diffusion, me_over_mi,
+                                             ir)
+"""
+@timeit global_timer add_wall_boundary_condition_to_Jacobian!(
+                         jacobian, phi, pdf, ppar, vthe, upar, z, vperp, vpa,
+                         vperp_spectral, vpa_spectral, vpa_adv, moments, vpa_diffusion,
+                         me_over_mi, ir; pdf_offset=0, ppar_offset=0) = begin
+    if z.bc != "wall"
+        return nothing
+    end
+
+    pdf_size = z.n * vperp.n * vpa.n
+
+    if z.irank == 0
+        begin_vperp_region()
+        @loop_vperp ivperp begin
+            # Skip velocity space boundary points.
+            if vperp.n > 1 && ivperp == vperp.n
+                continue
+            end
+
+            # Get matrix entries for the response of the sheath-edge boundary condition.
+            # Ignore constraints, as these are non-linear and also should be small
+            # corrections which should not matter much for a preconditioner.
+
+            jac_range = pdf_offset+(ivperp-1)*vpa.n+1 : pdf_offset+ivperp*vpa.n
+            jacobian_zbegin = @view jacobian[jac_range,jac_range]
+            jacobian_zbegin_ppar = @view jacobian[jac_range,ppar_offset+1]
+
+            vpa_unnorm, u_over_vt, vcut, minus_vcut_ind, sigma, sigma_ind, sigma_fraction,
+                element_with_zero, element_with_zero_boundary, last_point_near_zero,
+                reversed_wpa_of_minus_vpa = get_cutoff_params_lower(upar, vthe, phi,
+                                                                    me_over_mi, vpa, ir)
+
+            plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
+            # vcut_fraction is the fraction of the distance between plus_vcut_ind and
+            # plus_vcut_ind+1 where vcut is.
+            vcut_fraction = get_plus_vcut_fraction(vcut, plus_vcut_ind, vpa_unnorm)
+            if vcut_fraction > 0.5
+                last_nonzero_ind = plus_vcut_ind + 1
+            else
+                last_nonzero_ind = plus_vcut_ind
+            end
+
+            # Interpolate to the 'near zero' points
+            @views fill_interpolate_symmetric_matrix!(
+                       jacobian_zbegin[sigma_ind:last_point_near_zero,element_with_zero_boundary:sigma_ind-1],
+                       vpa_unnorm[sigma_ind:last_point_near_zero],
+                       vpa_unnorm[element_with_zero_boundary:sigma_ind-1])
+
+            # Interpolate to the 'far from zero' points
+            @views fill_1d_interpolation_matrix!(
+                       jacobian_zbegin[last_nonzero_ind:-1:last_point_near_zero+1,:],
+                       reversed_wpa_of_minus_vpa[vpa.n-last_nonzero_ind+1:vpa.n-last_point_near_zero],
+                       vpa, vpa_spectral)
+
+            if vcut_fraction > 0.5
+                jacobian_zbegin[last_nonzero_ind,:] .*= vcut_fraction - 0.5
+            else
+                jacobian_zbegin[last_nonzero_ind,:] .*= vcut_fraction + 0.5
+            end
+
+            # Fill in elements giving response to changes in electron_ppar
+            # A change to ppar results in a shift in the location of w_∥(v_∥=0).
+            # The interpolated values of g_e(w_∥) that are filled by the boundary
+            # condition are (dropping _∥ subscripts for the remaining comments in this
+            # if-clause)
+            #   g(w|v>0) = g(2*u/vth - w)
+            # So
+            #   δg(w|v>0) = dg/dw(2*u/vth - w) * (-2*u/vth^2) * δvth
+            #             = dg/dw(2*u/vth - w) * (-2*u/vth^2) * δ(sqrt(2*ppar/n)
+            #             = dg/dw(2*u/vth - w) * (-2*u/vth^2) * δppar * vth / (2*ppar)
+            #             = -u/vth/ppar * dg/dw(2*u/vth - w) * δppar
+
+            dpdfdv_near_zero = @view vpa.scratch[sigma_ind:last_point_near_zero]
+            @views interpolate_symmetric!(dpdfdv_near_zero,
+                                          vpa_unnorm[sigma_ind:last_point_near_zero],
+                                          pdf[element_with_zero_boundary:sigma_ind-1,ivperp,1,ir],
+                                          vpa_unnorm[element_with_zero_boundary:sigma_ind-1],
+                                          Val(1))
+            # The above call to interpolate_symmetric calculates dg/dv rather than dg/dw,
+            # so need to multiply by an extra factor of vthe.
+            #   δg(w|v>0) = -u/ppar * dg/dv(2*u/vth - w) * δppar
+            @. jacobian_zbegin_ppar[sigma_ind:last_point_near_zero] =
+                   -upar[1] / ppar[1] * dpdfdv_near_zero
+
+            reversed_dpdfdw_far_from_zero = @view vpa.scratch[last_point_near_zero+1:last_nonzero_ind]
+            @views interpolate_to_grid_1d!(reversed_dpdfdw_far_from_zero,
+                                           reversed_wpa_of_minus_vpa[vpa.n-last_nonzero_ind+1:vpa.n-last_point_near_zero],
+                                           pdf[:,ivperp,1,ir], vpa, vpa_spectral, Val(1))
+            reverse!(reversed_dpdfdw_far_from_zero)
+            # Note that because we calculated the derivative of the interpolating
+            # function, and then reversed the results, we need to multiply the derivative
+            # by -1.
+            @. jacobian_zbegin_ppar[last_point_near_zero+1:last_nonzero_ind] =
+                   upar[1] / vthe[1] / ppar[1] * reversed_dpdfdw_far_from_zero
+
+            # The change in electron_ppar also changes the position of
+            #     wcut = (vcut - upar)/vthe
+            # as vcut does not change (within the Krylov iteration where this
+            # preconditioner matrix is used), but vthe does because of the change in
+            # electron_ppar. We actually use vcut_fraction calculated from vpa_unnorm, so
+            # it is most convenient to consider:
+            #     v = vthe * w + upar
+            #     δv = δvthe * w
+            #        = δvthe * (v - upar)/vthe
+            #        = δppar * vthe / (2*ppar) * (v - upar)/vthe
+            #        = δppar * (v - upar) / 2 / ppar
+            # with vl and vu the values of v at the grid points below and above vcut
+            #     vcut_fraction = (vcut - vl) / (vu - vl)
+            #     δvcut_fraction = -(vcut - vl) / (vu - vl)^2 * (δvu - δvl) - δvl / (vu - vl)
+            #     δvcut_fraction = [-(vcut - vl) / (vu - vl)^2 * (vu - vl) - (vl - upar) / (vu - vl)] * δppar / 2 / ppar
+            #     δvcut_fraction = [-(vcut - vl) / (vu - vl) - (vl - upar) / (vu - vl)] * δppar / 2 / ppar
+            #     δvcut_fraction = -(vcut - upar) / (vu - vl) / 2 / ppar * δppar
+            interpolated_pdf_at_last_nonzero_ind = @view vpa.scratch[1:1]
+            reversed_last_nonzero_ind = vpa.n-last_nonzero_ind+1
+            @views interpolate_to_grid_1d!(interpolated_pdf_at_last_nonzero_ind,
+                                           reversed_wpa_of_minus_vpa[reversed_last_nonzero_ind:reversed_last_nonzero_ind],
+                                           pdf[:,ivperp,1,ir], vpa, vpa_spectral)
+
+            delta_vcut_fraction_over_delta_ppar = -(vcut - upar[1]) / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind]) / 2.0 / ppar[1]
+            jacobian_zbegin_ppar[last_nonzero_ind] += interpolated_pdf_at_last_nonzero_ind[] * delta_vcut_fraction_over_delta_ppar
+        end
+    end
+
+    if z.irank == z.nrank - 1
+        begin_vperp_region()
+        @loop_vperp ivperp begin
+            # Skip vperp boundary points.
+            if vperp.n > 1 && ivperp == vperp.n
+                continue
+            end
+
+            # Get matrix entries for the response of the sheath-edge boundary condition.
+            # Ignore constraints, as these are non-linear and also should be small
+            # corrections which should not matter much for a preconditioner.
+
+            jac_range = pdf_offset+pdf_size-vperp.n*vpa.n+(ivperp-1)*vpa.n+1 : pdf_offset+pdf_size-vperp.n*vpa.n+ivperp*vpa.n
+            jacobian_zend = @view jacobian[jac_range,jac_range]
+            jacobian_zend_ppar = @view jacobian[jac_range,ppar_offset+z.n]
+
+            vpa_unnorm, u_over_vt, vcut, plus_vcut_ind, sigma, sigma_ind, sigma_fraction,
+                element_with_zero, element_with_zero_boundary, first_point_near_zero,
+                reversed_wpa_of_minus_vpa = get_cutoff_params_upper(upar, vthe, phi,
+                                                                    me_over_mi, vpa, ir)
+
+            minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
+            # vcut_fraction is the fraction of the distance between minus_vcut_ind-1 and
+            # minus_vcut_ind where -vcut is.
+            vcut_fraction = get_minus_vcut_fraction(vcut, minus_vcut_ind, vpa_unnorm)
+
+            if vcut_fraction < 0.5
+                first_nonzero_ind = minus_vcut_ind - 1
+            else
+                first_nonzero_ind = minus_vcut_ind
+            end
+
+            # Interpolate to the 'near zero' points
+            @views fill_interpolate_symmetric_matrix!(
+                       jacobian_zend[first_point_near_zero:sigma_ind,sigma_ind+1:element_with_zero_boundary],
+                       vpa_unnorm[first_point_near_zero:sigma_ind],
+                       vpa_unnorm[sigma_ind+1:element_with_zero_boundary])
+
+            # Interpolate to the 'far from zero' points
+            @views fill_1d_interpolation_matrix!(
+                       jacobian_zend[first_point_near_zero-1:-1:first_nonzero_ind,:],
+                       reversed_wpa_of_minus_vpa[vpa.n-first_point_near_zero+2:vpa.n-first_nonzero_ind+1],
+                       vpa, vpa_spectral)
+
+            if vcut_fraction < 0.5
+                jacobian_zend[first_nonzero_ind,:] .*= 0.5 - vcut_fraction
+            else
+                jacobian_zend[first_nonzero_ind,:] .*= 1.5 - vcut_fraction
+            end
+
+            # Fill in elements giving response to changes in electron_ppar
+            # A change to ppar results in a shift in the location of w_∥(v_∥=0).
+            # The interpolated values of g_e(w_∥) that are filled by the boundary
+            # condition are (dropping _∥ subscripts for the remaining comments in this
+            # if-clause)
+            #   g(w|v<0) = g(2*u/vth - w)
+            # So
+            #   δg(w|v<0) = dg/dw(2*u/vth - w) * (-2*u/vth^2) * δvth
+            #             = dg/dw(2*u/vth - w) * (-2*u/vth^2) * δ(sqrt(2*ppar/n)
+            #             = dg/dw(2*u/vth - w) * (-2*u/vth^2) * δppar * vth / (2*ppar)
+            #             = -u/vth/ppar * dg/dw(2*u/vth - w) * δppar
+
+            dpdfdv_near_zero = @view vpa.scratch[first_point_near_zero:sigma_ind]
+            @views interpolate_symmetric!(dpdfdv_near_zero,
+                                          vpa_unnorm[first_point_near_zero:sigma_ind],
+                                          pdf[sigma_ind+1:element_with_zero_boundary,ivperp,end,ir],
+                                          vpa_unnorm[sigma_ind+1:element_with_zero_boundary],
+                                          Val(1))
+            # The above call to interpolate_symmetric calculates dg/dv rather than dg/dw,
+            # so need to multiply by an extra factor of vthe.
+            #   δg(w|v<0) = -u/ppar * dg/dv(2*u/vth - w) * δppar
+            @. jacobian_zend_ppar[first_point_near_zero:sigma_ind] =
+                   -upar[end] / ppar[end] * dpdfdv_near_zero
+
+            reversed_dpdfdw_far_from_zero = @view vpa.scratch[first_nonzero_ind:first_point_near_zero-1]
+            @views interpolate_to_grid_1d!(reversed_dpdfdw_far_from_zero,
+                                           reversed_wpa_of_minus_vpa[vpa.n-first_point_near_zero+2:vpa.n-first_nonzero_ind+1],
+                                           pdf[:,ivperp,end,ir], vpa, vpa_spectral, Val(1))
+            reverse!(reversed_dpdfdw_far_from_zero)
+            # Note that because we calculated the derivative of the interpolating
+            # function, and then reversed the results, we need to multiply the derivative
+            # by -1.
+            @. jacobian_zend_ppar[first_nonzero_ind:first_point_near_zero-1] =
+                   upar[end] / vthe[end] / ppar[end] * reversed_dpdfdw_far_from_zero
+
+            # The change in electron_ppar also changes the position of
+            #     wcut = (-vcut - upar)/vthe
+            # as vcut does not change (within the Krylov iteration where this
+            # preconditioner matrix is used), but vthe does because of the change in
+            # electron_ppar. We actually use vcut_fraction calculated from vpa_unnorm, so
+            # it is most convenient to consider:
+            #     v = vthe * w + upar
+            #     δv = δvthe * w
+            #        = δvthe * (v - upar)/vthe
+            #        = δppar * vthe / (2*ppar) * (v - upar)/vthe
+            #        = δppar * (v - upar) / 2 / ppar
+            # with vl and vu the values of v at the grid points below and above vcut
+            #     vcut_fraction = (-vcut - vl) / (vu - vl)
+            #     δvcut_fraction = -(-vcut - vl) / (vu - vl)^2 * (δvu - δvl) - δvl / (vu - vl)
+            #     δvcut_fraction = [-(-vcut - vl) / (vu - vl)^2 * (vu - vl) - (vl - upar) / (vu - vl)] * δppar / 2 / ppar
+            #     δvcut_fraction = [-(-vcut - vl) / (vu - vl) - (vl - upar) / (vu - vl)] * δppar / 2 / ppar
+            #     δvcut_fraction = -(-vcut - upar) / (vu - vl) / 2 / ppar * δppar
+            #     δvcut_fraction = (vcut + upar) / (vu - vl) / 2 / ppar * δppar
+            interpolated_pdf_at_first_nonzero_ind = @view vpa.scratch[1:1]
+            reversed_first_nonzero_ind = vpa.n-first_nonzero_ind+1
+            @views interpolate_to_grid_1d!(interpolated_pdf_at_first_nonzero_ind,
+                                           reversed_wpa_of_minus_vpa[reversed_first_nonzero_ind:reversed_first_nonzero_ind],
+                                           pdf[:,ivperp,end,ir], vpa, vpa_spectral)
+
+            delta_vcut_fraction_over_delta_ppar = (vcut + upar[end]) / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1]) / 2.0 / ppar[end]
+            # Note that pdf[first_nonzero_ind,ivperp,end,ir] depends on -vcut_fraction, so
+            # need a -'ve sign in the following line.
+            jacobian_zend_ppar[first_nonzero_ind] += -interpolated_pdf_at_first_nonzero_ind[] * delta_vcut_fraction_over_delta_ppar
+        end
+    end
+end
+
 """
     electron_adaptive_timestep_update!(scratch, t, t_params, moments, phi, z_advect,
                                        vpa_advect, composition, r, z, vperp, vpa,
@@ -3374,11 +3591,12 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
 `evolve_ppar=true`) the electron energy equation.
 """
 @timeit global_timer fill_electron_kinetic_equation_Jacobian!(
-                         jacobian_matrix, f, ppar, moments, collisions, composition, z,
-                         vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
-                         vpa_advect, scratch_dummy, external_source_settings,
-                         num_diss_params, t_params, ion_dt, ir, evolve_ppar,
-                         include=:all, include_qpar_integral_terms=true) = begin
+                         jacobian_matrix, f, ppar, moments, phi_global, collisions,
+                         composition, z, vperp, vpa, z_spectral, vperp_spectral,
+                         vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                         external_source_settings, num_diss_params, t_params, ion_dt, ir,
+                         evolve_ppar, include=:all,
+                         include_qpar_integral_terms=true) = begin
     dt = t_params.dt[]
 
     buffer_1 = @view scratch_dummy.buffer_rs_1[ir,1]
@@ -3396,6 +3614,7 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
     dppar_dz = @view moments.electron.dppar_dz[:,ir]
     dvth_dz = @view moments.electron.dvth_dz[:,ir]
     dqpar_dz = @view moments.electron.dqpar_dz[:,ir]
+    phi = @view phi_global[:,ir]
 
     upar_ion = @view moments.ion.upar[:,ir,1]
 
@@ -3517,6 +3736,11 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
         add_ion_dt_forcing_of_electron_ppar_to_Jacobian!(
             jacobian_matrix, z, dt, ion_dt, ir, include; ppar_offset=pdf_size)
     end
+    add_wall_boundary_condition_to_Jacobian!(
+        jacobian_matrix, phi, f, ppar, vth, upar, z, vperp, vpa, vperp_spectral,
+        vpa_spectral, vpa_advect, moments,
+        num_diss_params.electron.vpa_dissipation_coefficient, me, ir;
+            ppar_offset=pdf_size)
 
     return nothing
 end
