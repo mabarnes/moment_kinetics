@@ -2936,6 +2936,104 @@ end
 end
 
 """
+    add_wall_boundary_condition_to_Jacobian!(jacobian, phi, vthe, upar, z, vperp, vpa,
+                                             vperp_spectral, vpa_spectral, vpa_adv,
+                                             moments, vpa_diffusion, me_over_mi, ir)
+"""
+@timeit global_timer add_wall_boundary_condition_to_Jacobian!(
+                         jacobian, phi, vthe, upar, z, vperp, vpa, vperp_spectral,
+                         vpa_spectral, vpa_adv, moments, vpa_diffusion, me_over_mi,
+                         ir) = begin
+    if z.bc != "wall"
+        return nothing
+    end
+
+    if z.irank == 0
+        begin_vperp_region()
+        @loop_vperp ivperp begin
+            # Skip velocity space boundary points.
+            if vperp.n > 1 && ivperp == vperp.n
+                continue
+            end
+
+            # Get matrix entries for the response of the sheath-edge boundary condition.
+            # Ignore constraints, as these are non-linear and also should be small
+            # corrections which should not matter much for a preconditioner.
+
+            jac_range = (ivperp-1)*vpa.n+1 : ivperp*vpa.n
+            jacobian_zbegin = @view jacobian[jac_range,jac_range]
+
+            vpa_unnorm, vcut, minus_vcut_ind, sigma, sigma_ind, sigma_fraction,
+                reversed_wpa_of_minus_vpa = get_cutoff_params_lower(upar, vthe, phi, me_over_mi, vpa, ir)
+
+            plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
+            # vcut_fraction is the fraction of the distance between plus_vcut_ind and
+            # plus_vcut_ind+1 where vcut is.
+            vcut_fraction = (vcut - vpa_unnorm[plus_vcut_ind]) / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind])
+            if vcut_fraction > 0.5
+                last_nonzero_ind = plus_vcut_ind + 1
+            else
+                last_nonzero_ind = plus_vcut_ind
+            end
+
+            @views fill_1d_interpolation_matrix!(
+                       jacobian_zbegin[last_nonzero_ind:-1:sigma_ind,:],
+                       reversed_wpa_of_minus_vpa[vpa.n-last_nonzero_ind+1:vpa.n-sigma_ind+1],
+                       vpa, vpa_spectral)
+
+            if vcut_fraction > 0.5
+                jacobian_zbegin[last_nonzero_ind,:] .*= vcut_fraction - 0.5
+            else
+                jacobian_zbegin[last_nonzero_ind,:] .*= vcut_fraction + 0.5
+            end
+        end
+    end
+
+    if z.irank == z.nrank - 1
+        begin_vperp_region()
+        pdf_size = z.n * vperp.n * vpa.n
+        @loop_vperp ivperp begin
+            # Skip vperp boundary points.
+            if vperp.n > 1 && ivperp == vperp.n
+                continue
+            end
+
+            # Get matrix entries for the response of the sheath-edge boundary condition.
+            # Ignore constraints, as these are non-linear and also should be small
+            # corrections which should not matter much for a preconditioner.
+
+            jac_range = pdf_size-vperp.n*vpa.n+(ivperp-1)*vpa.n+1 : pdf_size-vperp.n*vpa.n+ivperp*vpa.n
+            jacobian_zend = @view jacobian[jac_range,jac_range]
+
+            vpa_unnorm, vcut, plus_vcut_ind, sigma, sigma_ind, sigma_fraction,
+                reversed_wpa_of_minus_vpa = get_cutoff_params_upper(upar, vthe, phi, me_over_mi, vpa, ir)
+
+            minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
+            # vcut_fraction is the fraction of the distance between minus_vcut_ind and
+            # minus_vcut_ind-1 where -vcut is.
+            vcut_fraction = (-vcut - vpa_unnorm[minus_vcut_ind]) / (vpa_unnorm[minus_vcut_ind-1] - vpa_unnorm[minus_vcut_ind])
+
+            if vcut_fraction > 0.5
+                first_nonzero_ind = minus_vcut_ind - 1
+            else
+                first_nonzero_ind = minus_vcut_ind
+            end
+
+            @views fill_1d_interpolation_matrix!(
+                       jacobian_zend[sigma_ind:-1:first_nonzero_ind,:],
+                       reversed_wpa_of_minus_vpa[vpa.n-sigma_ind+1:vpa.n-first_nonzero_ind+1],
+                       vpa, vpa_spectral)
+
+            if vcut_fraction > 0.5
+                jacobian_zend[first_nonzero_ind,:] .*= vcut_fraction - 0.5
+            else
+                jacobian_zend[first_nonzero_ind,:] .*= vcut_fraction + 0.5
+            end
+        end
+    end
+end
+
+"""
     electron_adaptive_timestep_update!(scratch, t, t_params, moments, phi, z_advect,
                                        vpa_advect, composition, r, z, vperp, vpa,
                                        vperp_spectral, vpa_spectral,

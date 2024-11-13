@@ -30,7 +30,8 @@ using moment_kinetics.electron_kinetic_equation: add_contribution_from_pdf_term!
                                                  fill_electron_kinetic_equation_Jacobian!,
                                                  fill_electron_kinetic_equation_v_only_Jacobian!,
                                                  fill_electron_kinetic_equation_z_only_Jacobian_f!,
-                                                 fill_electron_kinetic_equation_z_only_Jacobian_ppar!
+                                                 fill_electron_kinetic_equation_z_only_Jacobian_ppar!,
+                                                 add_wall_boundary_condition_to_Jacobian!
 using moment_kinetics.electron_vpa_advection: electron_vpa_advection!,
                                               update_electron_speed_vpa!,
                                               add_electron_vpa_advection_to_Jacobian!,
@@ -459,7 +460,9 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
                                                   vperp, vperp_spectral, vperp_adv,
                                                   vperp_diffusion, ir)
             end
-            if (z.bc == "wall" || z.bc == "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
+            if z.bc == "wall"
+                error("z_bc = \"wall\" not supported here yet.")
+            elseif (z.bc == "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
                 # Boundary conditions on incoming part of distribution function. Note
                 # that as density, upar, ppar do not change in this implicit step,
                 # f_electron_newvar, f_old, and residual should all be zero at exactly
@@ -796,7 +799,9 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
                                                   vperp, vperp_spectral, vperp_adv,
                                                   vperp_diffusion, ir)
             end
-            if (z.bc == "wall" || z.bc == "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
+            if z.bc == "wall"
+                error("z_bc = \"wall\" not supported here yet.")
+            elseif (z.bc == "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
                 # Boundary conditions on incoming part of distribution function. Note
                 # that as density, upar, ppar do not change in this implicit step,
                 # f_electron_newvar, f_old, and residual should all be zero at exactly
@@ -1147,7 +1152,9 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
                                                   vperp, vperp_spectral, vperp_adv,
                                                   vperp_diffusion, ir)
             end
-            if (z.bc == "wall" || z.bc == "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
+            if z.bc == "wall"
+                error("z_bc = \"wall\" not supported here yet.")
+            elseif (z.bc == "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
                 # Boundary conditions on incoming part of distribution function. Note
                 # that as density, upar, ppar do not change in this implicit step,
                 # f_electron_newvar, f_old, and residual should all be zero at exactly
@@ -1443,7 +1450,9 @@ function test_electron_dissipation_term(test_input; rtol=(3.0e0*epsilon)^2)
                                                   vperp, vperp_spectral, vperp_adv,
                                                   vperp_diffusion, ir)
             end
-            if (z.bc == "wall" || z.bc == "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
+            if z.bc == "wall"
+                error("z_bc = \"wall\" not supported here yet.")
+            elseif (z.bc == "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
                 # Boundary conditions on incoming part of distribution function. Note
                 # that as density, upar, ppar do not change in this implicit step,
                 # f_electron_newvar, f_old, and residual should all be zero at exactly
@@ -1758,7 +1767,9 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
                                                   vperp, vperp_spectral, vperp_adv,
                                                   vperp_diffusion, ir)
             end
-            if (z.bc == "wall" || z.bc == "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
+            if z.bc == "wall"
+                error("z_bc = \"wall\" not supported here yet.")
+            elseif (z.bc == "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
                 # Boundary conditions on incoming part of distribution function. Note
                 # that as density, upar, ppar do not change in this implicit step,
                 # f_electron_newvar, f_old, and residual should all be zero at exactly
@@ -2087,7 +2098,9 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
                                                   vperp, vperp_spectral, vperp_adv,
                                                   vperp_diffusion, ir)
             end
-            if (z.bc == "wall" || z.bc == "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
+            if z.bc == "wall"
+                error("z_bc = \"wall\" not supported here yet.")
+            elseif (z.bc == "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
                 # Boundary conditions on incoming part of distribution function. Note
                 # that as density, upar, ppar do not change in this implicit step,
                 # f_electron_newvar, f_old, and residual should all be zero at exactly
@@ -2430,7 +2443,9 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(1.5e0*epsil
                                                   vperp, vperp_spectral, vperp_adv,
                                                   vperp_diffusion, ir)
             end
-            if (z.bc == "wall" || z.bc == "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
+            if z.bc == "wall"
+                error("z_bc = \"wall\" not supported here yet.")
+            elseif (z.bc == "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
                 # Boundary conditions on incoming part of distribution function. Note
                 # that as density, upar, ppar do not change in this implicit step,
                 # f_electron_newvar, f_old, and residual should all be zero at exactly
@@ -3419,7 +3434,9 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                                                   vperp, vperp_spectral, vperp_adv,
                                                   vperp_diffusion, ir)
             end
-            if (z.bc == "wall" || z.bc == "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
+            if z.bc == "wall"
+                error("z_bc = \"wall\" not supported here yet.")
+            elseif (z.bc == "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
                 # Boundary conditions on incoming part of distribution function. Note
                 # that as density, upar, ppar do not change in this implicit step,
                 # f_electron_newvar, f_old, and residual should all be zero at exactly
@@ -3526,6 +3543,284 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                                            rtol=0.0, atol=rtol)
             end
         end
+
+        cleanup_mk_state!(ascii_io, io_moments, io_dfns)
+    end
+
+    return nothing
+end
+
+function test_electron_wall_bc(test_input; rtol=(epsilon)^2)
+    test_input = deepcopy(test_input)
+    test_input["output"]["run_name"] *= "_electron_wall_bc"
+    println("    - electron_wall_bc")
+
+    # This test only affects the end-points in z, so only include those points to avoid an
+    # over-optimistic error estimate due the time update matrix for all other z-indices
+    # just being the identity.
+    test_input["z"]["nelement"] = 1
+    test_input["z"]["ngrid"] = 2
+    test_input["z"]["bc"] = "wall"
+
+    @testset "electron_wall_bc" begin
+        # Suppress console output while running
+        pdf, scratch, scratch_implicit, scratch_electron, t_params, vz, vr, vzeta, vpa,
+            vperp, gyrophase, z, r, moments, fields, spectral_objects, advection_structs,
+            composition, collisions, geometry, gyroavs, boundary_distributions,
+            external_source_settings, num_diss_params, nl_solver_params, advance,
+            advance_implicit, fp_arrays, scratch_dummy, manufactured_source_list,
+            ascii_io, io_moments, io_dfns = get_mk_state(test_input)
+
+        dens = @view moments.electron.dens[:,ir]
+        upar = @view moments.electron.upar[:,ir]
+        ppar = @view moments.electron.ppar[:,ir]
+        vth = @view moments.electron.vth[:,ir]
+        qpar = @view moments.electron.qpar[:,ir]
+        ddens_dz = @view moments.electron.ddens_dz[:,ir]
+        dppar_dz = @view moments.electron.dppar_dz[:,ir]
+        phi = @view fields.phi[:,ir]
+        z_spectral = spectral_objects.z_spectral
+        vperp_spectral = spectral_objects.vperp_spectral
+        vpa_spectral = spectral_objects.vpa_spectral
+        z_advect = advection_structs.z_advect
+        vpa_advect = advection_structs.vpa_advect
+        me = composition.me_over_mi
+
+        buffer_1 = @view scratch_dummy.buffer_rs_1[ir,1]
+        buffer_2 = @view scratch_dummy.buffer_rs_2[ir,1]
+        buffer_3 = @view scratch_dummy.buffer_rs_3[ir,1]
+        buffer_4 = @view scratch_dummy.buffer_rs_4[ir,1]
+
+        # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
+        third_moment = scratch_dummy.buffer_z_1
+        dthird_moment_dz = scratch_dummy.buffer_z_2
+        begin_z_region()
+        @loop_z iz begin
+            third_moment[iz] = 0.5 * qpar[iz] / ppar[iz] / vth[iz]
+        end
+        derivative_z!(dthird_moment_dz, third_moment, buffer_1, buffer_2,
+                      buffer_3, buffer_4, z_spectral, z)
+
+        begin_vperp_vpa_region()
+        update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
+        z_speed = @view z_advect[1].speed[:,:,:,ir]
+
+        delta_p = allocate_shared_float(size(ppar)...)
+        p_amplitude = epsilon * maximum(ppar)
+        f = @view pdf.electron.norm[:,:,:,ir]
+        begin_serial_region()
+        @serial_region begin
+            @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
+
+            # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
+            # means f must have a non-Maxwellian part that varies in z.
+            f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        end
+        # Ensure initial electron distribution function obeys constraints
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
+        delta_f = allocate_shared_float(size(f)...)
+        f_amplitude = epsilon * maximum(f)
+        # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
+        # low-order moments vanish exactly.
+        begin_serial_region()
+        @serial_region begin
+            delta_f .= f_amplitude .*
+                       reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
+                       reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
+                       f
+        end
+
+        pdf_size = length(f)
+        p_size = length(ppar)
+        total_size = pdf_size + p_size
+
+        dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
+        begin_z_vperp_region()
+        update_electron_speed_vpa!(vpa_advect[1], dens, upar, ppar, moments, vpa.grid,
+                                   external_source_settings.electron, ir)
+        @loop_z_vperp iz ivperp begin
+            @views @. vpa_advect[1].adv_fac[:,ivperp,iz,ir] = -vpa_advect[1].speed[:,ivperp,iz,ir]
+        end
+        #calculate the upwind derivative of the electron pdf w.r.t. wpa
+        @loop_z_vperp iz ivperp begin
+            @views derivative!(dpdf_dvpa[:,ivperp,iz], f[:,ivperp,iz], vpa,
+                               vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+        end
+
+        jacobian_matrix = allocate_shared_float(total_size, total_size)
+        begin_serial_region()
+        @serial_region begin
+            jacobian_matrix .= 0.0
+            for row ∈ 1:total_size
+                # Initialise identity matrix
+                jacobian_matrix[row,row] = 1.0
+            end
+        end
+
+        add_wall_boundary_condition_to_Jacobian!(
+            jacobian_matrix, phi, vth, upar, z, vperp, vpa, vperp_spectral, vpa_spectral,
+            vpa_adv, moments, vpa_diffusion, me_over_mi, ir)
+
+#        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+#        # variables (vth, etc.).
+#
+#        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+#
+#        @testset "ADI Jacobians - implicit z" begin
+#            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+#            begin_serial_region()
+#            @serial_region begin
+#                jacobian_matrix_ADI_check .= 0.0
+#                for row ∈ 1:total_size
+#                    # Initialise identity matrix
+#                    jacobian_matrix_ADI_check[row,row] = 1.0
+#                end
+#            end
+#
+#            # There is no 'implicit z' contribution for vpa advection
+#
+#            # Add 'explicit' contribution
+#            add_electron_vpa_advection_to_Jacobian!(
+#                jacobian_matrix_ADI_check, f, dens, upar, ppar, vth, third_moment,
+#                dpdf_dvpa, ddens_dz, dppar_dz, dthird_moment_dz, moments, me, z, vperp,
+#                vpa, z_spectral, vpa_spectral, vpa_advect, z_speed, scratch_dummy,
+#                external_source_settings, dt, ir, :explicit_v; ppar_offset=pdf_size)
+#
+#            begin_serial_region()
+#            @serial_region begin
+#                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
+#            end
+#        end
+#
+#        @testset "ADI Jacobians - implicit v" begin
+#            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+#            begin_serial_region()
+#            @serial_region begin
+#                jacobian_matrix_ADI_check .= 0.0
+#                for row ∈ 1:total_size
+#                    # Initialise identity matrix
+#                    jacobian_matrix_ADI_check[row,row] = 1.0
+#                end
+#            end
+#
+#            v_size = vperp.n * vpa.n
+#
+#            # Add 'implicit' contribution
+#            begin_z_region()
+#            @loop_z iz begin
+#                this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
+#                push!(this_slice, iz + pdf_size)
+#                @views add_electron_vpa_advection_to_v_only_Jacobian!(
+#                    jacobian_matrix_ADI_check[this_slice,this_slice], f[:,:,iz], dens[iz],
+#                    upar[iz], ppar[iz], vth[iz], third_moment[iz], dpdf_dvpa[:,:,iz],
+#                    ddens_dz[iz], dppar_dz[iz], dthird_moment_dz[iz], moments, me, z,
+#                    vperp, vpa, z_spectral, vpa_spectral, vpa_advect, z_speed,
+#                    scratch_dummy, external_source_settings, dt, ir, iz)
+#            end
+#
+#            # Add 'explicit' contribution
+#            add_electron_vpa_advection_to_Jacobian!(
+#                jacobian_matrix_ADI_check, f, dens, upar, ppar, vth, third_moment,
+#                dpdf_dvpa, ddens_dz, dppar_dz, dthird_moment_dz, moments, me, z, vperp,
+#                vpa, z_spectral, vpa_spectral, vpa_advect, z_speed, scratch_dummy,
+#                external_source_settings, dt, ir, :explicit_z; ppar_offset=pdf_size)
+#
+#            begin_serial_region()
+#            @serial_region begin
+#                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
+#            end
+#        end
+
+        fcopy = allocate_shared_float(size(f)...)
+
+        @testset "f only" begin
+            begin_serial_region()
+            @serial_region begin
+                fcopy .= f
+            end
+
+            @views enforce_boundary_condition_on_electron_pdf!(
+                       fcopy, phi, vth, upar, z, vperp, vpa, vperp_spectral, vpa_spectral,
+                       vpa_advect, moments,
+                       num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
+                       composition.me_over_mi; bc_constraints=false)
+
+            begin_serial_region()
+            @serial_region begin
+                state = zeros(mk_float, total_size)
+                state[1:pdf_size] .= f
+                f_with_Jacobian = jacobian_matrix * delta_state
+
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           zeros(p_size); atol=1.0e-15)
+
+                # Divide out the z-average of the magnitude of perturbed_residual from the
+                # difference, so that different orders of magnitude at different w_∥ are all
+                # tested sensibly, but occasional small values of the residual do not make the
+                # test fail.
+                # Since we have already normalised, pass `rtol` to `atol` for the comparison.
+                norm_factor = generate_norm_factor(f)
+                @test elementwise_isapprox(f ./ norm_factor,
+                                           reshape(f_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                                           rtol=0.0, atol=rtol)
+            end
+        end
+
+#        @testset "δp only" begin
+#            residual_func!(original_residual, f, ppar)
+#            residual_func!(perturbed_residual, f, ppar .+ delta_p)
+#
+#            begin_serial_region()
+#            @serial_region begin
+#                delta_state = zeros(mk_float, total_size)
+#                delta_state[pdf_size+1:end] .= vec(delta_p)
+#                residual_update_with_Jacobian = jacobian_matrix * delta_state
+#                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+#
+#                # Check ppar did not get perturbed by the Jacobian
+#                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+#                                           delta_state[pdf_size+1:end]; atol=1.0e-15)
+#
+#                # Divide out the z-average of the magnitude of perturbed_residual from the
+#                # difference, so that different orders of magnitude at different w_∥ are all
+#                # tested sensibly, but occasional small values of the residual do not make the
+#                # test fail.
+#                # Since we have already normalised, pass `rtol` to `atol` for the comparison.
+#                norm_factor = generate_norm_factor(perturbed_residual)
+#                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+#                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+#                                           rtol=0.0, atol=rtol)
+#            end
+#        end
+#
+#        @testset "δf and δp" begin
+#            residual_func!(original_residual, f, ppar)
+#            residual_func!(perturbed_residual, f.+delta_f, ppar.+delta_p)
+#
+#            begin_serial_region()
+#            @serial_region begin
+#                delta_state = zeros(mk_float, total_size)
+#                delta_state[1:pdf_size] .= vec(delta_f)
+#                delta_state[pdf_size+1:end] .= vec(delta_p)
+#                residual_update_with_Jacobian = jacobian_matrix * delta_state
+#                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+#
+#                # Check ppar did not get perturbed by the Jacobian
+#                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+#                                           delta_state[pdf_size+1:end]; atol=1.0e-15)
+#
+#                # Divide out the z-average of the magnitude of perturbed_residual from the
+#                # difference, so that different orders of magnitude at different w_∥ are all
+#                # tested sensibly, but occasional small values of the residual do not make the
+#                # test fail.
+#                # Since we have already normalised, pass `rtol` to `atol` for the comparison.
+#                norm_factor = generate_norm_factor(perturbed_residual)
+#                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
+#                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+#                                           rtol=0.0, atol=rtol)
+#            end
+#        end
 
         cleanup_mk_state!(ascii_io, io_moments, io_dfns)
     end
