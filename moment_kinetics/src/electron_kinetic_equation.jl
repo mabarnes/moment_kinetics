@@ -1403,14 +1403,6 @@ global_rank[] == 0 && println("recalculating precon")
                 electron_ppar_residual, f_electron_residual = this_residual
                 electron_ppar_newvar, f_electron_newvar = new_variables
 
-                # enforce the boundary condition(s) on the electron pdf
-                @views enforce_boundary_condition_on_electron_pdf!(
-                           f_electron_newvar, phi, moments.electron.vth[:,ir],
-                           moments.electron.upar[:,ir], z, vperp, vpa, vperp_spectral,
-                           vpa_spectral, vpa_advect, moments,
-                           num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                           composition.me_over_mi; bc_constraints=false)
-
                 if evolve_ppar
                     this_dens = moments.electron.dens
                     this_upar = moments.electron.upar
@@ -1423,6 +1415,17 @@ global_rank[] == 0 && println("recalculating precon")
                                                    (this_dens[iz,ir] *
                                                     composition.me_over_mi)))
                     end
+                end
+
+                # enforce the boundary condition(s) on the electron pdf
+                @views enforce_boundary_condition_on_electron_pdf!(
+                           f_electron_newvar, phi, moments.electron.vth[:,ir],
+                           moments.electron.upar[:,ir], z, vperp, vpa, vperp_spectral,
+                           vpa_spectral, vpa_advect, moments,
+                           num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
+                           composition.me_over_mi; bc_constraints=false)
+
+                if evolve_ppar
                     # Calculate heat flux and derivatives using new_variables
                     @views calculate_electron_qpar_from_pdf_no_r!(moments.electron.qpar[:,ir],
                                                                   electron_ppar_newvar,
