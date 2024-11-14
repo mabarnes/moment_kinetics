@@ -18,7 +18,7 @@ using ..calculus: derivative!, second_derivative!, integral,
 using ..communication
 using ..gauss_legendre: gausslegendre_info
 using ..input_structs
-using ..interpolation: interpolate_to_grid_1d!,
+using ..interpolation: interpolate_to_grid_1d!, fill_1d_interpolation_matrix!,
                        interpolate_symmetric!
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
@@ -1509,7 +1509,7 @@ global_rank[] == 0 && println("recalculating precon")
                                                       vperp, vperp_spectral, vperp_adv,
                                                       vperp_diffusion, ir)
                 end
-                if z.bc ∈ ("wall", "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
+                if z.bc ∈ ("constant",) && (z.irank == 0 || z.irank == z.nrank - 1)
                     # Boundary conditions on incoming part of distribution function. Note
                     # that as density, upar, ppar do not change in this implicit step,
                     # f_electron_newvar, f_old, and residual should all be zero at exactly
@@ -2963,8 +2963,9 @@ end
             jac_range = (ivperp-1)*vpa.n+1 : ivperp*vpa.n
             jacobian_zbegin = @view jacobian[jac_range,jac_range]
 
-            vpa_unnorm, vcut, minus_vcut_ind, sigma, sigma_ind, sigma_fraction,
-                reversed_wpa_of_minus_vpa = get_cutoff_params_lower(upar, vthe, phi, me_over_mi, vpa, ir)
+            vpa_unnorm, u_over_vt, vcut, minus_vcut_ind, sigma, sigma_ind, sigma_fraction,
+                reversed_wpa_of_minus_vpa = get_cutoff_params_lower(upar, vthe, phi,
+                                                                    me_over_mi, vpa, ir)
 
             plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
             # vcut_fraction is the fraction of the distance between plus_vcut_ind and
@@ -3005,8 +3006,9 @@ end
             jac_range = pdf_size-vperp.n*vpa.n+(ivperp-1)*vpa.n+1 : pdf_size-vperp.n*vpa.n+ivperp*vpa.n
             jacobian_zend = @view jacobian[jac_range,jac_range]
 
-            vpa_unnorm, vcut, plus_vcut_ind, sigma, sigma_ind, sigma_fraction,
-                reversed_wpa_of_minus_vpa = get_cutoff_params_upper(upar, vthe, phi, me_over_mi, vpa, ir)
+            vpa_unnorm, u_over_vt, vcut, plus_vcut_ind, sigma, sigma_ind, sigma_fraction,
+                reversed_wpa_of_minus_vpa = get_cutoff_params_upper(upar, vthe, phi,
+                                                                    me_over_mi, vpa, ir)
 
             minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
             # vcut_fraction is the fraction of the distance between minus_vcut_ind and
