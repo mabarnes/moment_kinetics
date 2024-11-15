@@ -31,6 +31,7 @@ using ..timer_utils
 using ..velocity_moments: get_density
 
 using MPI
+using OrderedCollections: OrderedDict
 
 """
     setup_external_sources!(input_dict, r, z)
@@ -156,10 +157,14 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
                   * "density_midpoint_control, energy, alphas, alphas-with-losses, "
                   * "beam, beam-with-losses")
         end
-        return ion_source_data(; Dict(Symbol(k)=>v for (k,v) ∈ input)..., r_amplitude,
-                z_amplitude=z_amplitude, PI_density_target=PI_density_target,
-                PI_controller_amplitude, controller_source_profile,
-                PI_density_target_ir, PI_density_target_iz, PI_density_target_rank)
+        return ion_source_data(; OrderedDict(Symbol(k)=>v for (k,v) ∈ input)...,
+                r_amplitude=r_amplitude, z_amplitude=z_amplitude,
+                PI_density_target=PI_density_target,
+                PI_controller_amplitude=PI_controller_amplitude,
+                controller_source_profile=controller_source_profile,
+                PI_density_target_ir=PI_density_target_ir,
+                PI_density_target_iz=PI_density_target_iz,
+                PI_density_target_rank=PI_density_target_rank)
     end
 
     function get_settings_neutrals(source_index, active_flag)
@@ -313,10 +318,14 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
                   * "beam, beam-with-losses, recycling (for neutrals only)")
         end
 
-        return neutral_source_data(; Dict(Symbol(k)=>v for (k,v) ∈ input)..., r_amplitude,
-                z_amplitude=z_amplitude, PI_density_target=PI_density_target,
-                PI_controller_amplitude, controller_source_profile,
-                PI_density_target_ir, PI_density_target_iz, PI_density_target_rank)
+        return neutral_source_data(; OrderedDict(Symbol(k)=>v for (k,v) ∈ input)...,
+                r_amplitude=r_amplitude, z_amplitude=z_amplitude,
+                PI_density_target=PI_density_target,
+                PI_controller_amplitude=PI_controller_amplitude,
+                controller_source_profile=controller_source_profile,
+                PI_density_target_ir=PI_density_target_ir,
+                PI_density_target_iz=PI_density_target_iz,
+                PI_density_target_rank=PI_density_target_rank)
     end
     function get_settings_electrons(i, ion_settings)
         # Note most settings for the electron source are copied from the ion source,
@@ -339,9 +348,12 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
             end
             input["source_strength"] = ion_settings.source_strength
         end
-        return electron_source_data(input["source_strength"], input["source_T"],
-                                    ion_settings.active, ion_settings.r_amplitude,
-                                    ion_settings.z_amplitude, ion_settings.source_type)
+        return electron_source_data(source_strength=input["source_strength"],
+                                    source_T=input["source_T"],
+                                    active=ion_settings.active,
+                                    r_amplitude=ion_settings.r_amplitude,
+                                    z_amplitude=ion_settings.z_amplitude,
+                                    source_type=ion_settings.source_type)
     end
 
     # put all ion sources into ion_source_data struct vector

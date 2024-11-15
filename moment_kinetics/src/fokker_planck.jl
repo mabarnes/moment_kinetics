@@ -45,6 +45,7 @@ using FastGaussQuadrature
 using Dates
 using LinearAlgebra: lu, ldiv!
 using MPI
+using OrderedCollections: OrderedDict
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication
@@ -83,7 +84,7 @@ Structure the namelist as follows.
     nuii = 1.0
     frequency_option = "manual"
 """
-function setup_fkpl_collisions_input(toml_input::Dict)
+function setup_fkpl_collisions_input(toml_input::AbstractDict)
     reference_params = setup_reference_parameters(toml_input)
     # get reference collision frequency (note factor of 1/2 due to definition choices)
     nuii_fkpl_default = 0.5*get_reference_collision_frequency_ii(reference_params)
@@ -119,7 +120,7 @@ function setup_fkpl_collisions_input(toml_input::Dict)
     if !input_section["use_fokker_planck"]
         input_section["nuii"] = -1.0
     end
-    input = Dict(Symbol(k)=>v for (k,v) in input_section)
+    input = OrderedDict(Symbol(k)=>v for (k,v) in input_section)
     #println(input)
     if input_section["slowing_down_test"]
         # calculate nu_alphae and vc3 (critical speed of slowing down)

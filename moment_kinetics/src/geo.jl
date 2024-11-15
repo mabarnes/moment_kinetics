@@ -14,6 +14,8 @@ using ..array_allocation: allocate_float
 using ..type_definitions: mk_float, mk_int
 using ..reference_parameters: setup_reference_parameters
 
+using OrderedCollections: OrderedDict
+
 """
 struct containing the geometric data necessary for 
 non-trivial axisymmetric geometries, to be passed 
@@ -81,7 +83,7 @@ DeltaB = 0.0
 option = ""
 
 """
-function setup_geometry_input(toml_input::Dict)
+function setup_geometry_input(toml_input::AbstractDict)
 
     reference_params = setup_reference_parameters(toml_input)
     reference_rhostar = get_default_rhostar(reference_params)
@@ -105,7 +107,7 @@ function setup_geometry_input(toml_input::Dict)
         # constant for testing nonzero dBdr when nr = 1
         dBdr_constant = 0.0)
     
-    input = Dict(Symbol(k)=>v for (k,v) in input_section)
+    input = OrderedDict(Symbol(k)=>v for (k,v) in input_section)
     #println(input)
     return geometry_input(; input...)
 end
