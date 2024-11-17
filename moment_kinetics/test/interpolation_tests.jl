@@ -6,7 +6,7 @@ using moment_kinetics.array_allocation: allocate_float
 using moment_kinetics.coordinates: define_test_coordinate
 using moment_kinetics.interpolation:
     interpolate_to_grid_1d, fill_1d_interpolation_matrix!, interpolate_to_grid_z,
-    interpolate_to_grid_vpa, interpolate_symmetric!
+    interpolate_to_grid_vpa, interpolate_symmetric!, fill_interpolate_symmetric_matrix!
 
 using MPI
 
@@ -122,6 +122,17 @@ function runtests()
                                               x[1:first_positive_ind-1])
 
                 @test isapprox(result, expected; rtol=rtol, atol=1.0e-14)
+
+                @testset "matrix" begin
+                    interp_matrix = allocate_float(nx - first_positive_ind + 1,
+                                                   first_positive_ind - 1)
+                    fill_interpolate_symmetric_matrix!(interp_matrix,
+                                                       x[first_positive_ind:end],
+                                                       x[1:first_positive_ind-1])
+
+                    @test isapprox(interp_matrix * f[1:first_positive_ind-1], expected,
+                                   rtol=rtol, atol=1.0e-14)
+                end
             end
 
             @testset "upper to lower $nx" for nx ∈ 4:10
@@ -140,6 +151,17 @@ function runtests()
                                               x[first_positive_ind:end])
 
                 @test isapprox(result, expected; rtol=rtol, atol=1.0e-14)
+
+                @testset "matrix" begin
+                    interp_matrix = allocate_float(first_positive_ind - 1,
+                                                   nx - first_positive_ind + 1)
+                    fill_interpolate_symmetric_matrix!(interp_matrix,
+                                                       x[1:first_positive_ind-1],
+                                                       x[first_positive_ind:end])
+
+                    @test isapprox(interp_matrix * f[first_positive_ind:end], expected,
+                                   rtol=rtol, atol=1.0e-14)
+                end
             end
         end
     end

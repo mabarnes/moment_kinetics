@@ -5,7 +5,8 @@ Note these are not guaranteed to be highly optimized!
 """
 module interpolation
 
-export interpolate_to_grid_z, interpolate_to_grid_1d!, interpolate_symmetric!
+export interpolate_to_grid_z, interpolate_to_grid_1d!, interpolate_symmetric!,
+       fill_interpolate_symmetric_matrix!
 
 using ..array_allocation: allocate_float
 using ..moment_kinetics_structs: null_spatial_dimension_info, null_velocity_dimension_info
@@ -396,6 +397,27 @@ function interpolate_symmetric!(result, newgrid, f, oldgrid)
             this_f = f[j]
             for i ∈ 1:nnew
                 result[i] += this_f * prod((newgrid[i]^2 - oldgrid[k]^2) for k ∈ 1:nold if k ≠ j) * one_over_denominator
+            end
+        end
+    end
+
+    return nothing
+end
+
+function fill_interpolate_symmetric_matrix!(matrix_slice, newgrid, oldgrid)
+    nnew = length(newgrid)
+    nold = length(oldgrid)
+
+    @boundscheck size(matrix_slice) == (nnew, nold) || error("Dimensions of matrix_slice ($(size(matrix_slice))) are not the same as (nnew($nnew),nold($nold)).")
+
+    if nold == 1
+        # Interpolating 'polynomial' is just a constant
+        matrix_slice .= 1.0
+    else
+        for j ∈ 1:nold
+            one_over_denominator = 1.0 / prod((oldgrid[j]^2 - oldgrid[k]^2) for k ∈ 1:nold if k ≠ j)
+            for i ∈ 1:nnew
+                matrix_slice[i,j] = prod((newgrid[i]^2 - oldgrid[k]^2) for k ∈ 1:nold if k ≠ j) * one_over_denominator
             end
         end
     end
