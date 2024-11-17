@@ -2136,6 +2136,118 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, z, vp
     end
 end
 
+function get_cutoff_params_lower(upar, vthe, phi, me_over_mi, vpa, ir)
+    # Delete the upar contribution here if ignoring the 'upar shift'
+    vpa_unnorm = @. vpa.scratch2 = vthe[1,ir] * vpa.grid + upar[1,ir]
+
+    u_over_vt = upar[1,ir] / vthe[1,ir]
+
+    # Initial guess for cut-off velocity is result from previous RK stage (which
+    # might be the previous timestep if this is the first stage). Recalculate this
+    # value from phi.
+    vcut = sqrt(phi[1,ir] / me_over_mi)
+
+    # -vcut is between minus_vcut_ind-1 and minus_vcut_ind
+    minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
+    if minus_vcut_ind < 2
+        error("In lower-z electron bc, failed to find vpa=-vcut point, minus_vcut_ind=$minus_vcut_ind")
+    end
+    if minus_vcut_ind > vpa.n
+        error("In lower-z electron bc, failed to find vpa=-vcut point, minus_vcut_ind=$minus_vcut_ind")
+    end
+
+    # sigma is the location we use for w_∥(v_∥=0) - set to 0 to ignore the 'upar
+    # shift'
+    sigma = -u_over_vt
+
+    # sigma is between sigma_ind-1 and sigma_ind
+    sigma_ind = searchsortedfirst(vpa_unnorm, 0.0)
+    if sigma_ind < 2
+        error("In lower-z electron bc, failed to find vpa=0 point, sigma_ind=$sigma_ind")
+    end
+    if sigma_ind > vpa.n
+        error("In lower-z electron bc, failed to find vpa=0 point, sigma_ind=$sigma_ind")
+    end
+
+    # sigma_fraction is the fraction of the distance between sigma_ind-1 and
+    # sigma_ind where sigma is.
+    sigma_fraction = (sigma - vpa_unnorm[sigma_ind-1]) / (vpa_unnorm[sigma_ind] - vpa_unnorm[sigma_ind-1])
+
+    # Want to construct the w-grid corresponding to -vpa.
+    #   wpa(vpa) = (vpa - upar)/vth
+    #   ⇒ vpa = vth*wpa(vpa) + upar
+    #   wpa(-vpa) = (-vpa - upar)/vth
+    #             = (-(vth*wpa(vpa) + upar) - upar)/vth
+    #             = (-vth*wpa - 2*upar)/vth
+    #             = -wpa - 2*upar/vth
+    # [Note that `vpa.grid` is slightly mis-named here - it contains the values of
+    #  wpa(+vpa) as we are using a 'moment kinetic' approach.]
+    # Need to reverse vpa.grid because the grid passed as the second argument of
+    # interpolate_to_grid_1d!() needs to be sorted in increasing order.
+    reversed_wpa_of_minus_vpa = @. vpa.scratch3 = -vpa.grid + 2.0 * sigma
+    #reversed_wpa_of_minus_vpa = vpa.scratch3 .= .-vpa.grid
+    reverse!(reversed_wpa_of_minus_vpa)
+
+    return vpa_unnorm, u_over_vt, vcut, minus_vcut_ind, sigma, sigma_ind, sigma_fraction,
+           reversed_wpa_of_minus_vpa
+end
+
+function get_cutoff_params_upper(upar, vthe, phi, me_over_mi, vpa, ir)
+    # Delete the upar contribution here if ignoring the 'upar shift'
+    vpa_unnorm = @. vpa.scratch2 = vthe[end,ir] * vpa.grid + upar[end,ir]
+
+    u_over_vt = upar[end,ir] / vthe[end,ir]
+
+    # Initial guess for cut-off velocity is result from previous RK stage (which
+    # might be the previous timestep if this is the first stage). Recalculate this
+    # value from phi.
+    vcut = sqrt(phi[end,ir] / me_over_mi)
+
+    # vcut is between plus_vcut_ind and plus_vcut_ind+1
+    plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
+    if plus_vcut_ind < 1
+        error("In upper-z electron bc, failed to find vpa=vcut point, plus_vcut_ind=$plus_vcut_ind")
+    end
+    if plus_vcut_ind > vpa.n - 1
+        error("In upper-z electron bc, failed to find vpa=vcut point, plus_vcut_ind=$plus_vcut_ind")
+    end
+
+    # sigma is the location we use for w_∥(v_∥=0) - set to 0 to ignore the 'upar
+    # shift'
+    sigma = -u_over_vt
+
+    # sigma is between sigma_ind and sigma_ind+1
+    sigma_ind = searchsortedlast(vpa_unnorm, 0.0)
+    if sigma_ind < 1
+        error("In upper-z electron bc, failed to find vpa=0 point, sigma_ind=$sigma_ind")
+    end
+    if sigma_ind > vpa.n - 1
+        error("In upper-z electron bc, failed to find vpa=0 point, sigma_ind=$sigma_ind")
+    end
+
+    # sigma_fraction is the fraction of the distance between sigma_ind+1 and
+    # sigma_ind where sigma is.
+    sigma_fraction = (sigma - vpa_unnorm[sigma_ind+1]) / (vpa_unnorm[sigma_ind] - vpa_unnorm[sigma_ind+1])
+
+    # Want to construct the w-grid corresponding to -vpa.
+    #   wpa(vpa) = (vpa - upar)/vth
+    #   ⇒ vpa = vth*wpa(vpa) + upar
+    #   wpa(-vpa) = (-vpa - upar)/vth
+    #             = (-(vth*wpa(vpa) + upar) - upar)/vth
+    #             = (-vth*wpa - 2*upar)/vth
+    #             = -wpa - 2*upar/vth
+    # [Note that `vpa.grid` is slightly mis-named here - it contains the values of
+    #  wpa(+vpa) as we are using a 'moment kinetic' approach.]
+    # Need to reverse vpa.grid because the grid passed as the second argument of
+    # interpolate_to_grid_1d!() needs to be sorted in increasing order.
+    reversed_wpa_of_minus_vpa = @. vpa.scratch3 = -vpa.grid + 2.0 * sigma
+    #reversed_wpa_of_minus_vpa = vpa.scratch3 .= .-vpa.grid
+    reverse!(reversed_wpa_of_minus_vpa)
+
+    return vpa_unnorm, u_over_vt, vcut, plus_vcut_ind, sigma, sigma_ind, sigma_fraction,
+           reversed_wpa_of_minus_vpa
+end
+
 @timeit global_timer enforce_boundary_condition_on_electron_pdf!(
                          pdf, phi, vthe, upar, z, vperp, vpa, vperp_spectral,
                          vpa_spectral, vpa_adv, moments, vpa_diffusion, me_over_mi;
@@ -2241,56 +2353,9 @@ end
             # constraints and determining the cut-off velocity (and therefore the sheath
             # potential).
 
-            # Delete the upar contribution here if ignoring the 'upar shift'
-            vpa_unnorm = @. vpa.scratch2 = vthe[1,ir] * vpa.grid + upar[1,ir]
-
-            u_over_vt = upar[1,ir] / vthe[1,ir]
-
-            # Initial guess for cut-off velocity is result from previous RK stage (which
-            # might be the previous timestep if this is the first stage). Recalculate this
-            # value from phi.
-            vcut = sqrt(phi[1,ir] / me_over_mi)
-
-            # -vcut is between minus_vcut_ind-1 and minus_vcut_ind
-            minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
-            if minus_vcut_ind < 2
-                error("In lower-z electron bc, failed to find vpa=-vcut point, minus_vcut_ind=$minus_vcut_ind")
-            end
-            if minus_vcut_ind > vpa.n
-                error("In lower-z electron bc, failed to find vpa=-vcut point, minus_vcut_ind=$minus_vcut_ind")
-            end
-
-            # sigma is the location we use for w_∥(v_∥=0) - set to 0 to ignore the 'upar
-            # shift'
-            sigma = -u_over_vt
-
-            # sigma is between sigma_ind-1 and sigma_ind
-            sigma_ind = searchsortedfirst(vpa_unnorm, 0.0)
-            if sigma_ind < 2
-                error("In lower-z electron bc, failed to find vpa=0 point, sigma_ind=$sigma_ind")
-            end
-            if sigma_ind > vpa.n
-                error("In lower-z electron bc, failed to find vpa=0 point, sigma_ind=$sigma_ind")
-            end
-
-            # sigma_fraction is the fraction of the distance between sigma_ind-1 and
-            # sigma_ind where sigma is.
-            sigma_fraction = (sigma - vpa_unnorm[sigma_ind-1]) / (vpa_unnorm[sigma_ind] - vpa_unnorm[sigma_ind-1])
-
-            # Want to construct the w-grid corresponding to -vpa.
-            #   wpa(vpa) = (vpa - upar)/vth
-            #   ⇒ vpa = vth*wpa(vpa) + upar
-            #   wpa(-vpa) = (-vpa - upar)/vth
-            #             = (-(vth*wpa(vpa) + upar) - upar)/vth
-            #             = (-vth*wpa - 2*upar)/vth
-            #             = -wpa - 2*upar/vth
-            # [Note that `vpa.grid` is slightly mis-named here - it contains the values of
-            #  wpa(+vpa) as we are using a 'moment kinetic' approach.]
-            # Need to reverse vpa.grid because the grid passed as the second argument of
-            # interpolate_to_grid_1d!() needs to be sorted in increasing order.
-            reversed_wpa_of_minus_vpa = @. vpa.scratch3 = -vpa.grid + 2.0 * sigma
-            #reversed_wpa_of_minus_vpa = vpa.scratch3 .= .-vpa.grid
-            reverse!(reversed_wpa_of_minus_vpa)
+            vpa_unnorm, u_over_vt, vcut, minus_vcut_ind, sigma, sigma_ind, sigma_fraction,
+                reversed_wpa_of_minus_vpa = get_cutoff_params_lower(upar, vthe, phi,
+                                                                    me_over_mi, vpa, ir)
 
             # interpolate the pdf onto this grid
             #@views interpolate_to_grid_1d!(interpolated_pdf, wpa_values, pdf[:,1,1,ir], vpa, vpa_spectral)
@@ -2510,56 +2575,9 @@ end
             # constraints and determining the cut-off velocity (and therefore the sheath
             # potential).
 
-            # Delete the upar contribution here if ignoring the 'upar shift'
-            vpa_unnorm = @. vpa.scratch2 = vthe[end,ir] * vpa.grid + upar[end,ir]
-
-            u_over_vt = upar[end,ir] / vthe[end,ir]
-
-            # Initial guess for cut-off velocity is result from previous RK stage (which
-            # might be the previous timestep if this is the first stage). Recalculate this
-            # value from phi.
-            vcut = sqrt(phi[end,ir] / me_over_mi)
-
-            # vcut is between plus_vcut_ind and plus_vcut_ind+1
-            plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
-            if plus_vcut_ind < 1
-                error("In upper-z electron bc, failed to find vpa=vcut point, plus_vcut_ind=$plus_vcut_ind")
-            end
-            if plus_vcut_ind > vpa.n - 1
-                error("In upper-z electron bc, failed to find vpa=vcut point, plus_vcut_ind=$plus_vcut_ind")
-            end
-
-            # sigma is the location we use for w_∥(v_∥=0) - set to 0 to ignore the 'upar
-            # shift'
-            sigma = -u_over_vt
-
-            # sigma is between sigma_ind and sigma_ind+1
-            sigma_ind = searchsortedlast(vpa_unnorm, 0.0)
-            if sigma_ind < 1
-                error("In upper-z electron bc, failed to find vpa=0 point, sigma_ind=$sigma_ind")
-            end
-            if sigma_ind > vpa.n - 1
-                error("In upper-z electron bc, failed to find vpa=0 point, sigma_ind=$sigma_ind")
-            end
-
-            # sigma_fraction is the fraction of the distance between sigma_ind+1 and
-            # sigma_ind where sigma is.
-            sigma_fraction = (sigma - vpa_unnorm[sigma_ind+1]) / (vpa_unnorm[sigma_ind] - vpa_unnorm[sigma_ind+1])
-
-            # Want to construct the w-grid corresponding to -vpa.
-            #   wpa(vpa) = (vpa - upar)/vth
-            #   ⇒ vpa = vth*wpa(vpa) + upar
-            #   wpa(-vpa) = (-vpa - upar)/vth
-            #             = (-(vth*wpa(vpa) + upar) - upar)/vth
-            #             = (-vth*wpa - 2*upar)/vth
-            #             = -wpa - 2*upar/vth
-            # [Note that `vpa.grid` is slightly mis-named here - it contains the values of
-            #  wpa(+vpa) as we are using a 'moment kinetic' approach.]
-            # Need to reverse vpa.grid because the grid passed as the second argument of
-            # interpolate_to_grid_1d!() needs to be sorted in increasing order.
-            reversed_wpa_of_minus_vpa = @. vpa.scratch3 = -vpa.grid + 2.0 * sigma
-            #reversed_wpa_of_minus_vpa = vpa.scratch3 .= .-vpa.grid
-            reverse!(reversed_wpa_of_minus_vpa)
+            vpa_unnorm, u_over_vt, vcut, plus_vcut_ind, sigma, sigma_ind, sigma_fraction,
+                reversed_wpa_of_minus_vpa = get_cutoff_params_upper(upar, vthe, phi,
+                                                                    me_over_mi, vpa, ir)
 
             # interpolate the pdf onto this grid
             #@views interpolate_to_grid_1d!(interpolated_pdf, wpa_values, pdf[:,1,1,ir], vpa, vpa_spectral)
