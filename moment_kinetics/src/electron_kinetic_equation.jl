@@ -19,7 +19,7 @@ using ..communication
 using ..gauss_legendre: gausslegendre_info
 using ..input_structs
 using ..interpolation: interpolate_to_grid_1d!, fill_1d_interpolation_matrix!,
-                       interpolate_symmetric!
+                       interpolate_symmetric!, fill_interpolate_symmetric_matrix!
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 using ..electron_fluid_equations: calculate_electron_moments!,
@@ -2964,6 +2964,7 @@ end
             jacobian_zbegin = @view jacobian[jac_range,jac_range]
 
             vpa_unnorm, u_over_vt, vcut, minus_vcut_ind, sigma, sigma_ind, sigma_fraction,
+                element_with_zero, element_with_zero_boundary, last_point_near_zero,
                 reversed_wpa_of_minus_vpa = get_cutoff_params_lower(upar, vthe, phi,
                                                                     me_over_mi, vpa, ir)
 
@@ -2977,9 +2978,16 @@ end
                 last_nonzero_ind = plus_vcut_ind
             end
 
+            # Interpolate to the 'near zero' points
+            @views fill_interpolate_symmetric_matrix!(
+                       jacobian_zbegin[sigma_ind:last_point_near_zero,element_with_zero_boundary:sigma_ind-1],
+                       vpa_unnorm[sigma_ind:last_point_near_zero],
+                       vpa_unnorm[element_with_zero_boundary:sigma_ind-1])
+
+            # Interpolate to the 'far from zero' points
             @views fill_1d_interpolation_matrix!(
-                       jacobian_zbegin[last_nonzero_ind:-1:sigma_ind,:],
-                       reversed_wpa_of_minus_vpa[vpa.n-last_nonzero_ind+1:vpa.n-sigma_ind+1],
+                       jacobian_zbegin[last_nonzero_ind:-1:last_point_near_zero+1,:],
+                       reversed_wpa_of_minus_vpa[vpa.n-last_nonzero_ind+1:vpa.n-last_point_near_zero],
                        vpa, vpa_spectral)
 
             if vcut_fraction > 0.5
@@ -3007,6 +3015,7 @@ end
             jacobian_zend = @view jacobian[jac_range,jac_range]
 
             vpa_unnorm, u_over_vt, vcut, plus_vcut_ind, sigma, sigma_ind, sigma_fraction,
+                element_with_zero, element_with_zero_boundary, first_point_near_zero,
                 reversed_wpa_of_minus_vpa = get_cutoff_params_upper(upar, vthe, phi,
                                                                     me_over_mi, vpa, ir)
 
@@ -3021,9 +3030,16 @@ end
                 first_nonzero_ind = minus_vcut_ind
             end
 
+            # Interpolate to the 'near zero' points
+            @views fill_interpolate_symmetric_matrix!(
+                       jacobian_zend[first_point_near_zero:sigma_ind,sigma_ind+1:element_with_zero_boundary],
+                       vpa_unnorm[first_point_near_zero:sigma_ind],
+                       vpa_unnorm[sigma_ind+1:element_with_zero_boundary])
+
+            # Interpolate to the 'far from zero' points
             @views fill_1d_interpolation_matrix!(
-                       jacobian_zend[sigma_ind:-1:first_nonzero_ind,:],
-                       reversed_wpa_of_minus_vpa[vpa.n-sigma_ind+1:vpa.n-first_nonzero_ind+1],
+                       jacobian_zend[first_point_near_zero-1:-1:first_nonzero_ind,:],
+                       reversed_wpa_of_minus_vpa[vpa.n-first_point_near_zero+2:vpa.n-first_nonzero_ind+1],
                        vpa, vpa_spectral)
 
             if vcut_fraction > 0.5
