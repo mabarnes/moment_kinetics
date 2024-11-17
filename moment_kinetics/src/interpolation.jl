@@ -59,7 +59,7 @@ function interpolate_to_grid_1d!(result, newgrid, f, coord, spectral)
     # Assumes points in newgrid are sorted.
     # May not be the most efficient algorithm.
     # Find start/end points for each element, storing their indices in kstart
-    kstart = Vector{mk_int}(undef, nelement+1)
+    kstart = coord.scratch_int_nelement_plus_1
 
     # First element includes both boundary points, while all others have only one (to
     # avoid duplication), so calculate the first element outside the loop.
@@ -116,6 +116,95 @@ function interpolate_to_grid_1d!(result, newgrid, f, coord, spectral)
 
     for k ∈ kstart[nelement+1]:n_new
         result[k] = f[end] * exp(-(newgrid[k] - coord.grid[end])^2)
+    end
+
+    return nothing
+end
+
+"""
+    fill_single_element_interpolation_matrix!(
+        matrix_slice, newgrid, jelement, coord, spectral)
+
+Set `matrix_slice` equal to the interpolation matrix that interpolates values from the
+element `jelement` of the vector being multiplied onto the grid points given by `newgrid`
+(which must be contained within the physical space covered by element `jelement`).
+
+`coord` is the `coordinate` object for the dimension in which the interpolation is done,
+and `spectral` the discretization object corresponding to `jelement`.
+"""
+function fill_single_element_interpolation_matrix! end
+
+function fill_1d_interpolation_matrix!(matrix, newgrid, coord, spectral)
+    # define local variable nelement for convenience
+    nelement = coord.nelement_local
+
+    matrix .= 0.0
+
+    n_new = size(newgrid)[1]
+    # Find which points belong to which element.
+    # istart[j] contains the index of the first point in newgrid that is within element
+    # j, and istart[nelement+1] is n_new if the last point is within coord.grid, or the
+    # index of the first element outside coord.grid otherwise.
+    # Assumes points in newgrid are sorted.
+    # May not be the most efficient algorithm.
+    # Find start/end points for each element, storing their indices in istart
+    istart = coord.scratch_int_nelement_plus_1
+
+    # First element includes both boundary points, while all others have only one (to
+    # avoid duplication), so calculate the first element outside the loop.
+    if coord.radau_first_element && coord.irank == 0
+        first_element_spectral = spectral.radau
+        # For a grid with a Radau first element, the lower boundary of the first element
+        # is at coord=0, and the coordinate range is 0<coord<∞ so we will never need to to
+        # extrapolate to negative values, and points between coord=0 and coord.grid[1] are
+        # really within the first element, so the index for the first point greater than 0
+        # (the left boundary of the coordinate grid) in `newgrid` is always 1.
+        istart[1] = 1
+
+        # In a coordinate with a Radau first element, no point should be less than zero.
+        # If bounds checking is enabled, check that first `newgrid` point is ≥0.
+        @boundscheck newgrid[1] ≥ 0.0
+    else
+        first_element_spectral = spectral.lobatto
+        # set the starting index by finding the start of coord.grid
+        istart[1] = searchsortedfirst(newgrid, coord.grid[1])
+    end
+
+    # check to see if any of the newgrid points are to the left of the first grid point
+    for i ∈ 1:istart[1]-1
+        # if the new grid location is outside the bounds of the original grid,
+        # extrapolate f with Gaussian-like decay beyond the domain
+        matrix[i,1] = exp(-(coord.grid[1] - newgrid[j])^2)
+    end
+    @inbounds for j ∈ 1:nelement
+        # Search from istart[j] to try to speed up the sort, but means result of
+        # searchsortedfirst() is offset by istart[j]-1 from the beginning of newgrid.
+        istart[j+1] = istart[j] - 1 + @views searchsortedfirst(newgrid[istart[j]:end], coord.grid[coord.imax[j]])
+    end
+
+    if istart[1] < istart[2]
+        jmin = coord.imin[1]
+        jmax = coord.imax[1]
+        imin = istart[1]
+        imax = istart[2] - 1
+        @views fill_single_element_interpolation_matrix!(
+                   matrix[imin:imax,jmin:jmax], newgrid[imin:imax], 1, coord,
+                   first_element_spectral)
+    end
+    @inbounds for j ∈ 2:nelement
+        imin = istart[j]
+        imax = istart[j+1] - 1
+        if imin <= imax
+            jmin = coord.imin[j] - 1
+            jmax = coord.imax[j]
+            @views fill_single_element_interpolation_matrix!(
+                       matrix[imin:imax,jmin:jmax], newgrid[imin:imax], j, coord,
+                       spectral.lobatto)
+        end
+    end
+
+    for i ∈ istart[nelement+1]:n_new
+        matrix[i,end] = exp(-(newgrid[i] - coord.grid[end])^2)
     end
 
     return nothing

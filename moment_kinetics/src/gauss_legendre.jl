@@ -29,7 +29,8 @@ using SparseMatricesCSR
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 import ..calculus: elementwise_derivative!, mass_matrix_solve!
-import ..interpolation: single_element_interpolate!
+import ..interpolation: single_element_interpolate!,
+                        fill_single_element_interpolation_matrix!
 using ..lagrange_polynomials: lagrange_poly_optimised
 using ..moment_kinetics_structs: weak_discretization_info
 
@@ -367,6 +368,22 @@ function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, c
         this_f = f[i]
         for j ∈ 1:n_new
             result[j] += this_f * lagrange_poly_optimised(other_nodes, one_over_denominator, newgrid[j])
+        end
+    end
+
+    return nothing
+end
+
+function fill_single_element_interpolation_matrix!(
+             matrix_slice, newgrid, jelement, coord,
+             gausslegendre::gausslegendre_base_info)
+    n_new = length(newgrid)
+
+    for j ∈ 1:coord.ngrid
+        other_nodes = @view coord.other_nodes[:,j,jelement]
+        one_over_denominator = coord.one_over_denominator[j,jelement]
+        for i ∈ 1:n_new
+            matrix_slice[i,j] = lagrange_poly_optimised(other_nodes, one_over_denominator, newgrid[i])
         end
     end
 
