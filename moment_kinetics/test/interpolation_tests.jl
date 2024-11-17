@@ -2,9 +2,11 @@ module InterpolationTests
 
 include("setup.jl")
 
+using moment_kinetics.array_allocation: allocate_float
 using moment_kinetics.coordinates: define_test_coordinate
 using moment_kinetics.interpolation:
-    interpolate_to_grid_1d, interpolate_to_grid_z, interpolate_to_grid_vpa, interpolate_symmetric!
+    interpolate_to_grid_1d, fill_1d_interpolation_matrix!, interpolate_to_grid_z,
+    interpolate_to_grid_vpa, interpolate_symmetric!
 
 using MPI
 
@@ -55,6 +57,16 @@ function runtests()
 
                 @test isapprox(interpolate_to_grid_1d(test_grid, f, z, spectral),
                                expected, rtol=rtol, atol=1.e-14)
+
+                if discretization == "gausslegendre_pseudospectral"
+                    @testset "matrix" begin
+                        interp_matrix = allocate_float(length(test_grid), z.n)
+                        interp_matrix .= 0.0
+                        fill_1d_interpolation_matrix!(interp_matrix, test_grid, z, spectral)
+
+                        @test isapprox(interp_matrix * f, expected, rtol=rtol, atol=1.e-14)
+                    end
+                end
             end
 
             y = [y for y in range(5.0, 10.0, length=3)]
