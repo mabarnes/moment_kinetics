@@ -18,7 +18,8 @@ using ..calculus: derivative!, second_derivative!, integral,
 using ..communication
 using ..gauss_legendre: gausslegendre_info
 using ..input_structs
-using ..interpolation: interpolate_to_grid_1d!
+using ..interpolation: interpolate_to_grid_1d!,
+                       interpolate_symmetric!
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 using ..electron_fluid_equations: calculate_electron_moments!,
@@ -2178,6 +2179,18 @@ function get_cutoff_params_lower(upar, vthe, phi, me_over_mi, vpa, ir)
     # sigma_ind where sigma is.
     sigma_fraction = -vpa_unnorm[sigma_ind-1] / (vpa_unnorm[sigma_ind] - vpa_unnorm[sigma_ind-1])
 
+    # Want the element that contains the interval on the lower side of sigma_ind. For
+    # points on element boundaries, the `ielement` array contains the element on the lower
+    # side of the grid point, so just looking up the `ielement` of `sigma_ind` is what we
+    # want here.
+    element_with_zero = vpa.ielement[sigma_ind]
+    element_with_zero_boundary = element_with_zero == 1 ? vpa.imin[element_with_zero] :
+                                                          vpa.imin[element_with_zero] - 1
+    # This searchsortedlast() call finds the last point ≤ to the negative of v_∥
+    # at the lower boundary of the element containing zero.
+    last_point_near_zero = searchsortedlast(vpa_unnorm,
+                                            -vpa_unnorm[element_with_zero_boundary])
+
     # Want to construct the w-grid corresponding to -vpa.
     #   wpa(vpa) = (vpa - upar)/vth
     #   ⇒ vpa = vth*wpa(vpa) + upar
@@ -2194,6 +2207,7 @@ function get_cutoff_params_lower(upar, vthe, phi, me_over_mi, vpa, ir)
     reverse!(reversed_wpa_of_minus_vpa)
 
     return vpa_unnorm, u_over_vt, vcut, minus_vcut_ind, sigma, sigma_ind, sigma_fraction,
+           element_with_zero, element_with_zero_boundary, last_point_near_zero,
            reversed_wpa_of_minus_vpa
 end
 
@@ -2240,6 +2254,16 @@ function get_cutoff_params_upper(upar, vthe, phi, me_over_mi, vpa, ir)
     # sigma_ind where sigma is.
     sigma_fraction = -vpa_unnorm[sigma_ind+1] / (vpa_unnorm[sigma_ind] - vpa_unnorm[sigma_ind+1])
 
+    # Want the element that contains the interval on the upper side of sigma_ind. For
+    # points on element boundaries, the `ielement` array contains the element on the lower
+    # side of the grid point, we need the `ielement` of `sigma_ind+1` here.
+    element_with_zero = vpa.ielement[sigma_ind+1]
+    element_with_zero_boundary = vpa.imax[element_with_zero]
+    # This searchsortedfirst() call finds the first point ≥ to the negative of v_∥ at the
+    # upper boundary of the element containing zero.
+    first_point_near_zero = searchsortedfirst(vpa_unnorm,
+                                              -vpa_unnorm[element_with_zero_boundary])
+
     # Want to construct the w-grid corresponding to -vpa.
     #   wpa(vpa) = (vpa - upar)/vth
     #   ⇒ vpa = vth*wpa(vpa) + upar
@@ -2256,6 +2280,7 @@ function get_cutoff_params_upper(upar, vthe, phi, me_over_mi, vpa, ir)
     reverse!(reversed_wpa_of_minus_vpa)
 
     return vpa_unnorm, u_over_vt, vcut, plus_vcut_ind, sigma, sigma_ind, sigma_fraction,
+           element_with_zero, element_with_zero_boundary, first_point_near_zero,
            reversed_wpa_of_minus_vpa
 end
 
@@ -2320,7 +2345,6 @@ end
     begin_r_region()
 
     newton_max_its = 100
-    reversed_pdf = vpa.scratch
 
     function get_residual_and_coefficients_for_bc(a1, a1prime, a2, a2prime, b1, b1prime,
                                                   c1, c1prime, c2, c2prime, d1, d1prime,
@@ -2365,14 +2389,28 @@ end
             # potential).
 
             vpa_unnorm, u_over_vt, vcut, minus_vcut_ind, sigma, sigma_ind, sigma_fraction,
+                element_with_zero, element_with_zero_boundary, last_point_near_zero,
                 reversed_wpa_of_minus_vpa = get_cutoff_params_lower(upar, vthe, phi,
                                                                     me_over_mi, vpa, ir)
 
             # interpolate the pdf onto this grid
-            #@views interpolate_to_grid_1d!(interpolated_pdf, wpa_values, pdf[:,1,1,ir], vpa, vpa_spectral)
-            @views interpolate_to_grid_1d!(reversed_pdf, reversed_wpa_of_minus_vpa, pdf[:,1,1,ir], vpa, vpa_spectral) # Could make this more efficient by only interpolating to the points needed below, by taking an appropriate view of wpa_of_minus_vpa. Also, in the element containing vpa=0, this interpolation depends on the values that will be replaced by the reflected, interpolated values, which is not ideal (maybe this element should be treated specially first?).
-            reverse!(reversed_pdf)
-            pdf[sigma_ind:end,1,1,ir] .= reversed_pdf[sigma_ind:end]
+            # 'near zero' means in the range where
+            # abs(v_∥)≤abs(lower boundary of element including v_∥=0)
+            # 'far from zero' means larger values of v_∥.
+
+            # Interpolate to the 'near zero' points
+            @views interpolate_symmetric!(pdf[sigma_ind:last_point_near_zero,1,1,ir],
+                                          vpa_unnorm[sigma_ind:last_point_near_zero],
+                                          pdf[element_with_zero_boundary:sigma_ind-1,1,1,ir],
+                                          vpa_unnorm[element_with_zero_boundary:sigma_ind-1])
+
+            # Interpolate to the 'far from zero' points
+            reversed_pdf_far_from_zero = vpa.scratch[last_point_near_zero+1:end]
+            @views interpolate_to_grid_1d!(reversed_pdf_far_from_zero,
+                                           reversed_wpa_of_minus_vpa[1:vpa.n-last_point_near_zero],
+                                           pdf[:,1,1,ir], vpa, vpa_spectral)
+            reverse!(reversed_pdf_far_from_zero)
+            pdf[last_point_near_zero+1:end,1,1,ir] .= reversed_pdf_far_from_zero
 
             # Per-grid-point contributions to moment integrals
             # Note that we need to include the normalisation factor of 1/sqrt(pi) that
@@ -2606,14 +2644,28 @@ end
             # potential).
 
             vpa_unnorm, u_over_vt, vcut, plus_vcut_ind, sigma, sigma_ind, sigma_fraction,
+                element_with_zero, element_with_zero_boundary, first_point_near_zero,
                 reversed_wpa_of_minus_vpa = get_cutoff_params_upper(upar, vthe, phi,
                                                                     me_over_mi, vpa, ir)
 
             # interpolate the pdf onto this grid
-            #@views interpolate_to_grid_1d!(interpolated_pdf, wpa_values, pdf[:,1,1,ir], vpa, vpa_spectral)
-            @views interpolate_to_grid_1d!(reversed_pdf, reversed_wpa_of_minus_vpa, pdf[:,1,end,ir], vpa, vpa_spectral) # Could make this more efficient by only interpolating to the points needed below, by taking an appropriate view of wpa_of_minus_vpa. Also, in the element containing vpa=0, this interpolation depends on the values that will be replaced by the reflected, interpolated values, which is not ideal (maybe this element should be treated specially first?).
+            # 'near zero' means in the range where
+            # abs(v_∥)≤abs(upper boundary of element including v_∥=0)
+            # 'far from zero' means more negative values of v_∥.
+
+            # Interpolate to the 'near zero' points
+            @views interpolate_symmetric!(pdf[first_point_near_zero:sigma_ind,1,end,ir],
+                                          vpa_unnorm[first_point_near_zero:sigma_ind],
+                                          pdf[sigma_ind+1:element_with_zero_boundary,1,end,ir],
+                                          vpa_unnorm[sigma_ind+1:element_with_zero_boundary])
+
+            # Interpolate to the 'far from zero' points
+            reversed_pdf = vpa.scratch[1:first_point_near_zero-1]
+            @views interpolate_to_grid_1d!(reversed_pdf,
+                                           reversed_wpa_of_minus_vpa[vpa.n-first_point_near_zero+2:end],
+                                           pdf[:,1,end,ir], vpa, vpa_spectral)
             reverse!(reversed_pdf)
-            pdf[1:sigma_ind,1,end,ir] .= reversed_pdf[1:sigma_ind]
+            pdf[1:first_point_near_zero-1,1,end,ir] .= reversed_pdf[1:first_point_near_zero-1]
 
             # Per-grid-point contributions to moment integrals
             # Note that we need to include the normalisation factor of 1/sqrt(pi) that
