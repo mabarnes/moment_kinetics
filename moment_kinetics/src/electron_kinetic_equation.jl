@@ -2378,19 +2378,36 @@ end
                 vcut_fraction = (-vcut - vpa_unnorm[minus_vcut_ind-1]) / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1])
 
                 function get_for_one_moment(integral_pieces)
-                    # Integral contribution from the cell containing vcut
-                    integral_vcut_cell = (0.5 * integral_pieces[minus_vcut_ind-1] + 0.5 * integral_pieces[minus_vcut_ind])
+                    # Integral contributions from the cell containing vcut.
+                    # Define these as follows to be consistent with the way the cutoff is
+                    # applied around plus_vcut_ind below.
+                    # Note that `integral_vcut_cell_part1` and `integral_vcut_cell_part2`
+                    # include all the contributions from the grid points
+                    # `minus_vcut_ind-1` and `minus_vcut_ind`, not just those from
+                    # 'inside' the grid cell.
+                    if vcut_fraction < 0.5
+                        integral_vcut_cell_part2 = integral_pieces[minus_vcut_ind-1] * (0.5 - vcut_fraction) +
+                                                   integral_pieces[minus_vcut_ind]
+                        integral_vcut_cell_part1 = integral_pieces[minus_vcut_ind-1] * (0.5 + vcut_fraction)
 
-                    part1 = sum(integral_pieces[1:minus_vcut_ind-2])
-                    part1 += 0.5 * integral_pieces[minus_vcut_ind-1] + vcut_fraction * integral_vcut_cell
-                    # part1prime is d(part1)/d(vcut)
-                    part1prime = -integral_vcut_cell / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1])
+                        # part1prime is d(part1)/d(vcut)
+                        part1prime = -integral_pieces[minus_vcut_ind-1] / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1])
+                    else
+                        integral_vcut_cell_part2 = integral_pieces[minus_vcut_ind] * (1.5 - vcut_fraction)
+                        integral_vcut_cell_part1 = integral_pieces[minus_vcut_ind-1] +
+                                                   integral_pieces[minus_vcut_ind] * (vcut_fraction - 0.5)
+
+                        # part1prime is d(part1)/d(vcut)
+                        part1prime = -integral_pieces[minus_vcut_ind] / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1])
+                    end
+
+                    part1 = sum(integral_pieces[1:minus_vcut_ind-2]) + integral_vcut_cell_part1
 
                     # Integral contribution from the cell containing sigma
                     integral_sigma_cell = (0.5 * integral_pieces[sigma_ind-1] + 0.5 * integral_pieces[sigma_ind])
 
                     part2 = sum(integral_pieces[minus_vcut_ind+1:sigma_ind-2])
-                    part2 += (1.0 - vcut_fraction) * integral_vcut_cell + 0.5 * integral_pieces[minus_vcut_ind] + 0.5 * integral_pieces[sigma_ind-1] + sigma_fraction * integral_sigma_cell
+                    part2 += integral_vcut_cell_part2 + 0.5 * integral_pieces[sigma_ind-1] + sigma_fraction * integral_sigma_cell
                     # part2prime is d(part2)/d(vcut)
                     part2prime = -part1prime
 
@@ -2597,22 +2614,38 @@ end
             function get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
                 # vcut_fraction is the fraction of the distance between plus_vcut_ind and
                 # plus_vcut_ind+1 where vcut is.
-                vcut_fraction = (vcut - vpa_unnorm[plus_vcut_ind+1]) / (vpa_unnorm[plus_vcut_ind] - vpa_unnorm[plus_vcut_ind+1])
+                vcut_fraction = (vcut - vpa_unnorm[plus_vcut_ind]) / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind])
 
                 function get_for_one_moment(integral_pieces)
                     # Integral contribution from the cell containing vcut
-                    integral_vcut_cell = (0.5 * integral_pieces[plus_vcut_ind] + 0.5 * integral_pieces[plus_vcut_ind+1])
+                    # Define these as follows to be consistent with the way the cutoff is
+                    # applied around plus_vcut_ind below.
+                    # Note that `integral_vcut_cell_part1` and `integral_vcut_cell_part2`
+                    # include all the contributions from the grid points `plus_vcut_ind`
+                    # and `plus_vcut_ind+1`, not just those from 'inside' the grid cell.
+                    if vcut_fraction > 0.5
+                        integral_vcut_cell_part2 = integral_pieces[plus_vcut_ind] +
+                                                   integral_pieces[plus_vcut_ind+1] * (vcut_fraction - 0.5)
+                        integral_vcut_cell_part1 = integral_pieces[plus_vcut_ind+1] * (1.5 - vcut_fraction)
 
-                    part1 = sum(integral_pieces[plus_vcut_ind+2:end])
-                    part1 += 0.5 * integral_pieces[plus_vcut_ind+1] + vcut_fraction * integral_vcut_cell
-                    # part1prime is d(part1)/d(vcut)
-                    part1prime = integral_vcut_cell / (vpa_unnorm[plus_vcut_ind] - vpa_unnorm[plus_vcut_ind+1])
+                        # part1prime is d(part1)/d(vcut)
+                        part1prime = -integral_pieces[plus_vcut_ind+1] / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind])
+                    else
+                        integral_vcut_cell_part2 = integral_pieces[plus_vcut_ind] * (0.5 + vcut_fraction)
+                        integral_vcut_cell_part1 = integral_pieces[plus_vcut_ind] * (0.5 - vcut_fraction) +
+                                                   integral_pieces[plus_vcut_ind+1]
+
+                        # part1prime is d(part1)/d(vcut)
+                        part1prime = -integral_pieces[plus_vcut_ind] / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind])
+                    end
+
+                    part1 = sum(integral_pieces[plus_vcut_ind+2:end]) + integral_vcut_cell_part1
 
                     # Integral contribution from the cell containing sigma
                     integral_sigma_cell = (0.5 * integral_pieces[sigma_ind] + 0.5 * integral_pieces[sigma_ind+1])
 
                     part2 = sum(integral_pieces[sigma_ind+2:plus_vcut_ind-1])
-                    part2 += (1.0 - vcut_fraction) * integral_vcut_cell + 0.5 * integral_pieces[plus_vcut_ind] + 0.5 * integral_pieces[sigma_ind+1] + sigma_fraction * integral_sigma_cell
+                    part2 += integral_vcut_cell_part2 + 0.5 * integral_pieces[sigma_ind+1] + sigma_fraction * integral_sigma_cell
                     # part2prime is d(part2)/d(vcut)
                     part2prime = -part1prime
 
