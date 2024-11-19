@@ -2518,7 +2518,9 @@ end
             c3 = get_part3_for_one_moment_lower(energy_integral_pieces)
             d3 = get_part3_for_one_moment_lower(cubic_integral_pieces)
 
-            correction0_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,1,ir] * vpa.wgts / sqrt(pi) * vpa_unnorm^2 / vthe[1,ir]^2 / (1.0 + vpa_unnorm^2 / vthe[1,ir]^2)
+            # Use scale factor to adjust how sharp the cutoff near vpa_unnorm=0 is.
+            sharpness = 4.0
+            correction0_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,1,ir] * vpa.wgts / sqrt(pi) * sharpness * vpa_unnorm^2 / vthe[1,ir]^2 / (1.0 + sharpness * vpa_unnorm^2 / vthe[1,ir]^2)
             for ivpa ∈ 1:sigma_ind
                 # We only add the corrections to 'part3', so zero them out for negative v_∥.
                 # I think this is only actually significant for `sigma_ind-1` and
@@ -2568,7 +2570,7 @@ end
                                     + B * v_over_vth
                                     + C * v_over_vth^2
                                     + D * v_over_vth^3) *
-                                   v_over_vth^2 / (1.0 + v_over_vth^2) *
+                                   sharpness * v_over_vth^2 / (1.0 + sharpness * v_over_vth^2) *
                                    pdf[ivpa,1,1,ir]
             end
         end
@@ -2754,7 +2756,9 @@ end
             c3 = get_part3_for_one_moment_upper(energy_integral_pieces)
             d3 = get_part3_for_one_moment_upper(cubic_integral_pieces)
 
-            correction0_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,end,ir] * vpa.wgts / sqrt(pi) * vpa_unnorm^2 / vthe[end,ir]^2 / (1.0 + vpa_unnorm^2 / vthe[end,ir]^2)
+            # Use scale factor to adjust how sharp the cutoff near vpa_unnorm=0 is.
+            sharpness = 4.0
+            correction0_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,end,ir] * vpa.wgts / sqrt(pi) * sharpness * vpa_unnorm^2 / vthe[end,ir]^2 / (1.0 + sharpness * vpa_unnorm^2 / vthe[end,ir]^2)
             for ivpa ∈ sigma_ind:vpa.n
                 # We only add the corrections to 'part3', so zero them out for positive v_∥.
                 # I think this is only actually significant for `sigma_ind` and
@@ -2804,7 +2808,7 @@ end
                                     + B * v_over_vth
                                     + C * v_over_vth^2
                                     + D * v_over_vth^3) *
-                                   v_over_vth^2 / (1.0 + v_over_vth^2) *
+                                   sharpness * v_over_vth^2 / (1.0 + sharpness * v_over_vth^2) *
                                    pdf[ivpa,1,end,ir]
             end
         end
