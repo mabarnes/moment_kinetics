@@ -2137,10 +2137,13 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, z, vp
 end
 
 function get_cutoff_params_lower(upar, vthe, phi, me_over_mi, vpa, ir)
-    # Delete the upar contribution here if ignoring the 'upar shift'
-    vpa_unnorm = @. vpa.scratch2 = vthe[1,ir] * vpa.grid + upar[1,ir]
-
     u_over_vt = upar[1,ir] / vthe[1,ir]
+
+    # sigma is the location we use for w_∥(v_∥=0) - set to 0 to ignore the 'upar
+    # shift'
+    sigma = -u_over_vt
+
+    vpa_unnorm = @. vpa.scratch2 = vthe[1,ir] * (vpa.grid - sigma)
 
     # Initial guess for cut-off velocity is result from previous RK stage (which
     # might be the previous timestep if this is the first stage). Recalculate this
@@ -2156,10 +2159,6 @@ function get_cutoff_params_lower(upar, vthe, phi, me_over_mi, vpa, ir)
         error("In lower-z electron bc, failed to find vpa=-vcut point, minus_vcut_ind=$minus_vcut_ind")
     end
 
-    # sigma is the location we use for w_∥(v_∥=0) - set to 0 to ignore the 'upar
-    # shift'
-    sigma = -u_over_vt
-
     # sigma is between sigma_ind-1 and sigma_ind
     sigma_ind = searchsortedfirst(vpa_unnorm, 0.0)
     if sigma_ind < 2
@@ -2171,7 +2170,7 @@ function get_cutoff_params_lower(upar, vthe, phi, me_over_mi, vpa, ir)
 
     # sigma_fraction is the fraction of the distance between sigma_ind-1 and
     # sigma_ind where sigma is.
-    sigma_fraction = (sigma - vpa_unnorm[sigma_ind-1]) / (vpa_unnorm[sigma_ind] - vpa_unnorm[sigma_ind-1])
+    sigma_fraction = -vpa_unnorm[sigma_ind-1] / (vpa_unnorm[sigma_ind] - vpa_unnorm[sigma_ind-1])
 
     # Want to construct the w-grid corresponding to -vpa.
     #   wpa(vpa) = (vpa - upar)/vth
@@ -2193,10 +2192,14 @@ function get_cutoff_params_lower(upar, vthe, phi, me_over_mi, vpa, ir)
 end
 
 function get_cutoff_params_upper(upar, vthe, phi, me_over_mi, vpa, ir)
-    # Delete the upar contribution here if ignoring the 'upar shift'
-    vpa_unnorm = @. vpa.scratch2 = vthe[end,ir] * vpa.grid + upar[end,ir]
-
     u_over_vt = upar[end,ir] / vthe[end,ir]
+
+    # sigma is the location we use for w_∥(v_∥=0) - set to 0 to ignore the 'upar
+    # shift'
+    sigma = -u_over_vt
+
+    # Delete the upar contribution here if ignoring the 'upar shift'
+    vpa_unnorm = @. vpa.scratch2 = vthe[end,ir] * (vpa.grid - sigma)
 
     # Initial guess for cut-off velocity is result from previous RK stage (which
     # might be the previous timestep if this is the first stage). Recalculate this
@@ -2212,10 +2215,6 @@ function get_cutoff_params_upper(upar, vthe, phi, me_over_mi, vpa, ir)
         error("In upper-z electron bc, failed to find vpa=vcut point, plus_vcut_ind=$plus_vcut_ind")
     end
 
-    # sigma is the location we use for w_∥(v_∥=0) - set to 0 to ignore the 'upar
-    # shift'
-    sigma = -u_over_vt
-
     # sigma is between sigma_ind and sigma_ind+1
     sigma_ind = searchsortedlast(vpa_unnorm, 0.0)
     if sigma_ind < 1
@@ -2227,7 +2226,7 @@ function get_cutoff_params_upper(upar, vthe, phi, me_over_mi, vpa, ir)
 
     # sigma_fraction is the fraction of the distance between sigma_ind+1 and
     # sigma_ind where sigma is.
-    sigma_fraction = (sigma - vpa_unnorm[sigma_ind+1]) / (vpa_unnorm[sigma_ind] - vpa_unnorm[sigma_ind+1])
+    sigma_fraction = -vpa_unnorm[sigma_ind+1] / (vpa_unnorm[sigma_ind] - vpa_unnorm[sigma_ind+1])
 
     # Want to construct the w-grid corresponding to -vpa.
     #   wpa(vpa) = (vpa - upar)/vth
