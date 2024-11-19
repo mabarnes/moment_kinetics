@@ -2482,37 +2482,39 @@ end
             C = 0.0
             # Always do at least one update of vcut
             epsilon, epsilonprime, A, C, a2, b2, c2, d2 = get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
-            while true
-                # Newton iteration update. Note that primes denote derivatives with
-                # respect to vcut
-                delta_v = - epsilon / epsilonprime
+            if bc_constraints
+                while true
+                    # Newton iteration update. Note that primes denote derivatives with
+                    # respect to vcut
+                    delta_v = - epsilon / epsilonprime
 
-                if vcut > vthe[1,ir] && epsilonprime < 0.0
-                    # epsilon should be increasing with vcut at epsilon=0, so if
-                    # epsilonprime is negative, the solution is actually at a lower vcut -
-                    # at larger vcut, epsilon will just tend to 0 but never reach it.
-                    delta_v = -0.1 * vthe[1,ir]
+                    if vcut > vthe[1,ir] && epsilonprime < 0.0
+                        # epsilon should be increasing with vcut at epsilon=0, so if
+                        # epsilonprime is negative, the solution is actually at a lower vcut -
+                        # at larger vcut, epsilon will just tend to 0 but never reach it.
+                        delta_v = -0.1 * vthe[1,ir]
+                    end
+
+                    # Prevent the step size from getting too big, to make Newton iteration
+                    # more robust.
+                    delta_v = min(delta_v, 0.1 * vthe[1,ir])
+                    delta_v = max(delta_v, -0.1 * vthe[1,ir])
+
+                    vcut = vcut + delta_v
+                    minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
+
+                    epsilon, epsilonprime, A, C, a2, b2, c2, d2 = get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
+
+                    if abs(epsilon) < newton_tol
+                        break
+                    end
+
+                    if counter ≥ newton_max_its
+                        error("Newton iteration for electron lower-z boundary failed to "
+                              * "converge after $counter iterations")
+                    end
+                    counter += 1
                 end
-
-                # Prevent the step size from getting too big, to make Newton iteration
-                # more robust.
-                delta_v = min(delta_v, 0.1 * vthe[1,ir])
-                delta_v = max(delta_v, -0.1 * vthe[1,ir])
-
-                vcut = vcut + delta_v
-                minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
-
-                epsilon, epsilonprime, A, C, a2, b2, c2, d2 = get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
-
-                if abs(epsilon) < newton_tol
-                    break
-                end
-
-                if counter ≥ newton_max_its
-                    error("Newton iteration for electron lower-z boundary failed to "
-                          * "converge after $counter iterations")
-                end
-                counter += 1
             end
 
             # Adjust pdf so that after reflecting and cutting off tail, it will obey the
@@ -2734,37 +2736,39 @@ end
             counter = 1
             # Always do at least one update of vcut
             epsilon, epsilonprime, A, C, a2, b2, c2, d2 = get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
-            while true
-                # Newton iteration update. Note that primes denote derivatives with
-                # respect to vcut
-                delta_v = - epsilon / epsilonprime
+            if bc_constraints
+                while true
+                    # Newton iteration update. Note that primes denote derivatives with
+                    # respect to vcut
+                    delta_v = - epsilon / epsilonprime
 
-                if vcut > vthe[1,ir] && epsilonprime > 0.0
-                    # epsilon should be decreasing with vcut at epsilon=0, so if
-                    # epsilonprime is positive, the solution is actually at a lower vcut -
-                    # at larger vcut, epsilon will just tend to 0 but never reach it.
-                    delta_v = -0.1 * vthe[1,ir]
+                    if vcut > vthe[1,ir] && epsilonprime > 0.0
+                        # epsilon should be decreasing with vcut at epsilon=0, so if
+                        # epsilonprime is positive, the solution is actually at a lower vcut -
+                        # at larger vcut, epsilon will just tend to 0 but never reach it.
+                        delta_v = -0.1 * vthe[1,ir]
+                    end
+
+                    # Prevent the step size from getting too big, to make Newton iteration
+                    # more robust.
+                    delta_v = min(delta_v, 0.1 * vthe[end,ir])
+                    delta_v = max(delta_v, -0.1 * vthe[end,ir])
+
+                    vcut = vcut + delta_v
+                    plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
+
+                    epsilon, epsilonprime, A, C, a2, b2, c2, d2 = get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
+
+                    if abs(epsilon) < newton_tol
+                        break
+                    end
+
+                    if counter ≥ newton_max_its
+                        error("Newton iteration for electron upper-z boundary failed to "
+                              * "converge after $counter iterations")
+                    end
+                    counter += 1
                 end
-
-                # Prevent the step size from getting too big, to make Newton iteration
-                # more robust.
-                delta_v = min(delta_v, 0.1 * vthe[end,ir])
-                delta_v = max(delta_v, -0.1 * vthe[end,ir])
-
-                vcut = vcut + delta_v
-                plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
-
-                epsilon, epsilonprime, A, C, a2, b2, c2, d2 = get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
-
-                if abs(epsilon) < newton_tol
-                    break
-                end
-
-                if counter ≥ newton_max_its
-                    error("Newton iteration for electron upper-z boundary failed to "
-                          * "converge after $counter iterations")
-                end
-                counter += 1
             end
 
             # Adjust pdf so that after reflecting and cutting off tail, it will obey the
