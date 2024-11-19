@@ -3552,7 +3552,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
     return nothing
 end
 
-function test_electron_wall_bc(test_input; rtol=(epsilon)^2)
+function test_electron_wall_bc(test_input; atol=(5.0*epsilon)^2)
     test_input = deepcopy(test_input)
     test_input["output"]["run_name"] *= "_electron_wall_bc"
     println("    - electron_wall_bc")
@@ -3563,6 +3563,12 @@ function test_electron_wall_bc(test_input; rtol=(epsilon)^2)
     test_input["z"]["nelement"] = 1
     test_input["z"]["ngrid"] = 2
     test_input["z"]["bc"] = "wall"
+
+    # Interpolation done during the boundary condition needs to be reasonably accurate for
+    # the simplified form (without constraints) that is done in the 'Jacobian matrix' to
+    # match the full version, so increase vpa resolution.
+    test_input["vpa"]["nelement"] = 256
+    test_input["vz"]["nelement"] = 256
 
     @testset "electron_wall_bc" begin
         # Suppress console output while running
@@ -3820,15 +3826,12 @@ function test_electron_wall_bc(test_input; rtol=(epsilon)^2)
                 @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
                                            zeros(p_size); atol=1.0e-15)
 
-                # Divide out the z-average of the magnitude of perturbed_residual from the
-                # difference, so that different orders of magnitude at different w_∥ are all
-                # tested sensibly, but occasional small values of the residual do not make the
-                # test fail.
-                # Since we have already normalised, pass `rtol` to `atol` for the comparison.
-                norm_factor = generate_norm_factor(perturbed_residual)
-                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                           rtol=0.0, atol=rtol)
+                # Use an absolute tolerance for this test because if we used a norm_factor
+                # like the other tests, it would be zero to machine precision at some
+                # points.
+                @test elementwise_isapprox(perturbed_residual,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n);
+                                           rtol=0.0, atol=atol)
             end
         end
 
