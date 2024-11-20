@@ -1400,7 +1400,7 @@ global_rank[] == 0 && println("recalculating precon")
 
             # Do a backward-Euler update of the electron pdf, and (if evove_ppar=true) the
             # electron parallel pressure.
-            function residual_func!(this_residual, new_variables)
+            function residual_func!(this_residual, new_variables; krylov=false)
                 electron_ppar_residual, f_electron_residual = this_residual
                 electron_ppar_newvar, f_electron_newvar = new_variables
 
@@ -1424,7 +1424,8 @@ global_rank[] == 0 && println("recalculating precon")
                            moments.electron.upar[:,ir], z, vperp, vpa, vperp_spectral,
                            vpa_spectral, vpa_advect, moments,
                            num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                           composition.me_over_mi; bc_constraints=false)
+                           composition.me_over_mi; bc_constraints=false,
+                           update_vcut=!krylov)
 
                 if evolve_ppar
                     # Calculate heat flux and derivatives using new_variables
@@ -1852,7 +1853,7 @@ to allow the outer r-loop to be parallelised.
 
     newton_success = false
     for ir ∈ 1:r.n
-        function residual_func!(residual, new_variables; debug=false)
+        function residual_func!(residual, new_variables; debug=false, krylov=false)
             electron_ppar_residual, f_electron_residual = residual
             electron_ppar_new, f_electron_new = new_variables
 
@@ -2297,7 +2298,9 @@ end
 @timeit global_timer enforce_boundary_condition_on_electron_pdf!(
                          pdf, phi, vthe, upar, z, vperp, vpa, vperp_spectral,
                          vpa_spectral, vpa_adv, moments, vpa_diffusion, me_over_mi;
-                         bc_constraints=true) = begin
+                         bc_constraints=true, update_vcut=true) = begin
+
+    @boundscheck bc_constraints && !update_vcut && error("update_vcut is not used when bc_constraints=true, but update_vcut has non-default value")
 
     newton_tol = 1.0e-13
 
@@ -2524,6 +2527,23 @@ end
                               * "converge after $counter iterations")
                     end
                     counter += 1
+                end
+            elseif update_vcut
+                # When bc_constraints=false, no constraints are applied in
+                # get_integrals_and_derivatives_lowerz(), so updating vcut is usually just
+                # solving a linear equation, not doing a Newton iteration. The exception
+                # is if minus_vcut_ind changes, in which case we have to re-do the update.
+                while true
+                    vcut = vcut - epsilon / epsilonprime
+                    minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
+
+                    vcut_fraction = get_minus_vcut_fraction(vcut, minus_vcut_ind, vpa_unnorm)
+
+                    if 0.0 ≤ vcut_fraction ≤ 1.0
+                        break
+                    end
+
+                    epsilon, epsilonprime, _, _, _, _, _, _ = get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
                 end
             end
 
@@ -2778,6 +2798,23 @@ end
                               * "converge after $counter iterations")
                     end
                     counter += 1
+                end
+            elseif update_vcut
+                # When bc_constraints=false, no constraints are applied in
+                # get_integrals_and_derivatives_upperz(), so updating vcut is usually just
+                # solving a linear equation, not doing a Newton iteration. The exception
+                # is if minus_vcut_ind changes, in which case we have to re-do the update.
+                while true
+                    vcut = vcut - epsilon / epsilonprime
+                    plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
+
+                    vcut_fraction = get_plus_vcut_fraction(vcut, plus_vcut_ind, vpa_unnorm)
+
+                    if 0.0 ≤ vcut_fraction ≤ 1.0
+                        break
+                    end
+
+                    epsilon, epsilonprime, _, _, _, _, _, _ = get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
                 end
             end
 

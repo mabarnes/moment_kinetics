@@ -691,7 +691,7 @@ end
         # `residual` is zero, electron_ppar is the result of a backward-Euler timestep:
         #   (f_new - f_old) / dt = RHS(f_new)
         # ⇒ (f_new - f_old)/dt - RHS(f_new) = 0
-        function residual_func!(residual, electron_ppar)
+        function residual_func!(residual, electron_ppar; krylov=false)
             begin_z_region()
             @loop_z iz begin
                 residual[iz] = ppar_in[iz]

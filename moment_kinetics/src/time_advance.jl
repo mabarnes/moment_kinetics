@@ -3783,7 +3783,7 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
     # `residual` is zero, f_new is the result of a backward-Euler timestep:
     #   (f_new - f_old) / dt = RHS(f_new)
     # ⇒ f_new - f_old - dt*RHS(f_new) = 0
-    function residual_func!(residual, f_new)
+    function residual_func!(residual, f_new; krylov=false)
         begin_s_r_z_vperp_vpa_region()
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
             residual[ivpa,ivperp,iz,ir,is] = f_old[ivpa,ivperp,iz,ir,is]

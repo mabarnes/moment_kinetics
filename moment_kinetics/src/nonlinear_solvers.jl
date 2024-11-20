@@ -1252,7 +1252,7 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
         end
 
         parallel_map(solver_type, (x,v) -> x + Jv_scale_factor * v, v, x, v)
-        residual_func!(rhs_delta, v)
+        residual_func!(rhs_delta, v; krylov=true)
         parallel_map(solver_type, (rhs_delta, residual0) -> (rhs_delta - residual0) * inv_Jv_scale_factor,
                      v, rhs_delta, residual0)
         left_preconditioner(v)
