@@ -2284,6 +2284,16 @@ function get_cutoff_params_upper(upar, vthe, phi, me_over_mi, vpa, ir)
            reversed_wpa_of_minus_vpa
 end
 
+function get_minus_vcut_fraction(vcut, minus_vcut_ind, vpa_unnorm)
+    return (-vcut - vpa_unnorm[minus_vcut_ind-1]) /
+           (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1])
+end
+
+function get_plus_vcut_fraction(vcut, plus_vcut_ind, vpa_unnorm)
+    return (vcut - vpa_unnorm[plus_vcut_ind]) /
+           (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind])
+end
+
 @timeit global_timer enforce_boundary_condition_on_electron_pdf!(
                          pdf, phi, vthe, upar, z, vperp, vpa, vperp_spectral,
                          vpa_spectral, vpa_adv, moments, vpa_diffusion, me_over_mi;
@@ -2425,7 +2435,7 @@ end
             function get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
                 # vcut_fraction is the fraction of the distance between minus_vcut_ind-1 and
                 # minus_vcut_ind where -vcut is.
-                vcut_fraction = (-vcut - vpa_unnorm[minus_vcut_ind-1]) / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1])
+                vcut_fraction = get_minus_vcut_fraction(vcut, minus_vcut_ind, vpa_unnorm)
 
                 function get_for_one_moment(integral_pieces)
                     # Integral contributions from the cell containing vcut.
@@ -2525,7 +2535,7 @@ end
             pdf[plus_vcut_ind+2:end,1,1,ir] .= 0.0
             # vcut_fraction is the fraction of the distance between plus_vcut_ind and
             # plus_vcut_ind+1 where vcut is.
-            vcut_fraction = (vcut - vpa_unnorm[plus_vcut_ind]) / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind])
+            vcut_fraction = get_plus_vcut_fraction(vcut, plus_vcut_ind, vpa_unnorm)
             if vcut_fraction > 0.5
                 pdf[plus_vcut_ind+1,1,1,ir] *= vcut_fraction - 0.5
             else
@@ -2682,7 +2692,7 @@ end
             function get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
                 # vcut_fraction is the fraction of the distance between plus_vcut_ind and
                 # plus_vcut_ind+1 where vcut is.
-                vcut_fraction = (vcut - vpa_unnorm[plus_vcut_ind]) / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind])
+                vcut_fraction = get_plus_vcut_fraction(vcut, plus_vcut_ind, vpa_unnorm)
 
                 function get_for_one_moment(integral_pieces)
                     # Integral contribution from the cell containing vcut
@@ -2777,14 +2787,14 @@ end
 
             minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
             pdf[1:minus_vcut_ind-2,1,end,ir] .= 0.0
-            # vcut_fraction is the fraction of the distance between minus_vcut_ind and
-            # minus_vcut_ind-1 where -vcut is.
-            vcut_fraction = (-vcut - vpa_unnorm[minus_vcut_ind]) / (vpa_unnorm[minus_vcut_ind-1] - vpa_unnorm[minus_vcut_ind])
-            if vcut_fraction > 0.5
-                pdf[minus_vcut_ind-1,1,end,ir] *= vcut_fraction - 0.5
+            # vcut_fraction is the fraction of the distance between minus_vcut_ind-1 and
+            # minus_vcut_ind where -vcut is.
+            vcut_fraction = get_minus_vcut_fraction(vcut, minus_vcut_ind, vpa_unnorm)
+            if vcut_fraction < 0.5
+                pdf[minus_vcut_ind-1,1,end,ir] *= 0.5 - vcut_fraction
             else
                 pdf[minus_vcut_ind-1,1,end,ir] = 0.0
-                pdf[minus_vcut_ind,1,end,ir] *= vcut_fraction + 0.5
+                pdf[minus_vcut_ind,1,end,ir] *= 1.5 - vcut_fraction
             end
 
             # update the electrostatic potential at the boundary to be the value corresponding to the updated cutoff velocity
