@@ -2152,6 +2152,12 @@ function get_cutoff_params_lower(upar, vthe, phi, me_over_mi, vpa, ir)
 
     # -vcut is between minus_vcut_ind-1 and minus_vcut_ind
     minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
+    if vcut == 0.0
+        # Force a non-zero initial guess, as zero makes no sense - that would mean all
+        # electrons are absorbed, i.e. there is no sheath.
+        minus_vcut_ind -= 1
+        vcut = -vpa_unnorm[minus_vcut_ind]
+    end
     if minus_vcut_ind < 2
         error("In lower-z electron bc, failed to find vpa=-vcut point, minus_vcut_ind=$minus_vcut_ind")
     end
@@ -2208,6 +2214,12 @@ function get_cutoff_params_upper(upar, vthe, phi, me_over_mi, vpa, ir)
 
     # vcut is between plus_vcut_ind and plus_vcut_ind+1
     plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
+    if vcut == 0.0
+        # Force a non-zero initial guess, as zero makes no sense - that would mean all
+        # electrons are absorbed, i.e. there is no sheath.
+        plus_vcut_ind += 1
+        vcut = vpa_unnorm[plus_vcut_ind]
+    end
     if plus_vcut_ind < 1
         error("In upper-z electron bc, failed to find vpa=vcut point, plus_vcut_ind=$plus_vcut_ind")
     end
