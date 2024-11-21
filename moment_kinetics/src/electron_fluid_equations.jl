@@ -878,7 +878,7 @@ function calculate_electron_qpar_from_pdf_no_r!(qpar, ppar, vth, pdf, vpa, ir)
     begin_z_region()
     ivperp = 1
     @loop_z iz begin
-        @views qpar[iz] = 2*ppar[iz]*vth[iz]*integrate_over_vspace(pdf[:, ivperp, iz], vpa.grid.^3, vpa.wgts)
+        @views qpar[iz] = 2*ppar[iz]*vth[iz]*integrate_over_vspace(pdf[:, ivperp, iz], vpa.grid, 3, vpa.wgts)
     end
 end
 

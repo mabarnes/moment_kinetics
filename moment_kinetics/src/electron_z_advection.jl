@@ -23,6 +23,9 @@ calculate the z-advection term for the electron kinetic equation = wpa * vthe * 
                          scratch_dummy, dt, ir) = begin
     begin_vperp_vpa_region()
 
+    adv_fac = advect[1].adv_fac
+    speed = advect[1].speed
+
     # create a pointer to a scratch_dummy array to store the z-derivative of the electron pdf
     dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
     d2pdf_dz2 = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
@@ -32,11 +35,11 @@ calculate the z-advection term for the electron kinetic equation = wpa * vthe * 
     # update adv_fac -- note that there is no factor of dt here because
     # in some cases the electron kinetic equation is solved as a steady-state equation iteratively
     @loop_vperp_vpa ivperp ivpa begin
-        @views advect[1].adv_fac[:,ivpa,ivperp,ir] = -advect[1].speed[:,ivpa,ivperp,ir]
+        @views @. adv_fac[:,ivpa,ivperp,ir] = -speed[:,ivpa,ivperp,ir]
     end
     #calculate the upwind derivative
     @views derivative_z_pdf_vpavperpz!(
-               dpdf_dz, pdf_in, advect[1].adv_fac[:,:,:,ir],
+               dpdf_dz, pdf_in, adv_fac[:,:,:,ir],
                scratch_dummy.buffer_vpavperpr_1[:,:,ir],
                scratch_dummy.buffer_vpavperpr_2[:,:,ir],
                scratch_dummy.buffer_vpavperpr_3[:,:,ir],
@@ -49,8 +52,8 @@ calculate the z-advection term for the electron kinetic equation = wpa * vthe * 
     # calculate the advection term
     begin_z_vperp_vpa_region()
     @loop_z_vperp_vpa iz ivperp ivpa begin
-        pdf_out[ivpa,ivperp,iz] += dt * advect[1].adv_fac[iz,ivpa,ivperp,ir] * dpdf_dz[ivpa,ivperp,iz]
-        #pdf_out[ivpa,ivperp,iz] += dt * advect[1].adv_fac[iz,ivpa,ivperp,ir] * dpdf_dz[ivpa,ivperp,iz] + 0.0001*d2pdf_dz2[ivpa,ivperp,iz]
+        pdf_out[ivpa,ivperp,iz] += dt * adv_fac[iz,ivpa,ivperp,ir] * dpdf_dz[ivpa,ivperp,iz]
+        #pdf_out[ivpa,ivperp,iz] += dt * adv_fac[iz,ivpa,ivperp,ir] * dpdf_dz[ivpa,ivperp,iz] + 0.0001*d2pdf_dz2[ivpa,ivperp,iz]
     end
     return nothing
 end
@@ -60,9 +63,10 @@ calculate the electron advection speed in the z-direction at each grid point
 """
 function update_electron_speed_z!(advect, upar, vth, vpa, ir)
     # the electron advection speed in z is v_par = w_par * v_the
+    speed = advect.speed
     @loop_vperp_vpa ivperp ivpa begin
         #@. @views advect.speed[:,ivpa,ivperp,ir] = vpa[ivpa] * vth
-        @. @views advect.speed[:,ivpa,ivperp,ir] = vpa[ivpa] * vth + upar
+        @. speed[:,ivpa,ivperp,ir] = vpa[ivpa] * vth + upar
     end
     return nothing
 end

@@ -22,6 +22,9 @@ calculate the wpa-advection term for the electron kinetic equation
                          ir) = begin
     begin_z_vperp_region()
 
+    adv_fac = advect[1].adv_fac
+    speed = advect[1].speed
+
     # create a reference to a scratch_dummy array to store the wpa-derivative of the electron pdf
     dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
     #d2pdf_dvpa2 = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
@@ -31,7 +34,7 @@ calculate the wpa-advection term for the electron kinetic equation
                                       electron_source_settings, ir)
     # update adv_fac
     @loop_z_vperp iz ivperp begin
-        @views @. advect[1].adv_fac[:,ivperp,iz,ir] = -advect[1].speed[:,ivperp,iz,ir]
+        @views @. adv_fac[:,ivperp,iz,ir] = -speed[:,ivperp,iz,ir]
     end
     #calculate the upwind derivative of the electron pdf w.r.t. wpa
     @loop_z_vperp iz ivperp begin
@@ -43,7 +46,7 @@ calculate the wpa-advection term for the electron kinetic equation
     #end
     # calculate the advection term
     @loop_z_vperp iz ivperp begin
-        @. pdf_out[:,ivperp,iz] += dt * advect[1].adv_fac[:,ivperp,iz,ir] * dpdf_dvpa[:,ivperp,iz]
+        @views @. pdf_out[:,ivperp,iz] += dt * adv_fac[:,ivperp,iz,ir] * dpdf_dvpa[:,ivperp,iz]
         #@. pdf_out[:,ivperp,iz] -= advect[1].adv_fac[:,ivperp,iz,ir] * dpdf_dvpa[:,ivperp,iz] + 0.0001*d2pdf_dvpa2[:,ivperp,iz]
     end
     return nothing
@@ -58,10 +61,11 @@ function update_electron_speed_vpa!(advect, density, upar, ppar, moments, vpa,
     dppar_dz = @view moments.electron.dppar_dz[:,ir]
     dqpar_dz = @view moments.electron.dqpar_dz[:,ir]
     dvth_dz = @view moments.electron.dvth_dz[:,ir]
+    speed = advect.speed
     # calculate the advection speed in wpa
     @loop_z_vperp_vpa iz ivperp ivpa begin
-        advect.speed[ivpa,ivperp,iz,ir] = ((vth[iz] * dppar_dz[iz] + vpa[ivpa] * dqpar_dz[iz])
-                                           / (2 * ppar[iz]) - vpa[ivpa]^2 * dvth_dz[iz])
+        speed[ivpa,ivperp,iz,ir] = ((vth[iz] * dppar_dz[iz] + vpa[ivpa] * dqpar_dz[iz])
+                                    / (2 * ppar[iz]) - vpa[ivpa]^2 * dvth_dz[iz])
     end
 
     for index ∈ eachindex(electron_source_settings)
@@ -77,7 +81,7 @@ function update_electron_speed_vpa!(advect, density, upar, ppar, moments, vpa,
                         ppar[iz] +
                     0.5 * source_density_amplitude[iz] / density[iz]
                 @loop_vperp_vpa ivperp ivpa begin
-                    advect.speed[ivpa,ivperp,iz,ir] += term1 + vpa[ivpa] * term2_over_vpa
+                    speed[ivpa,ivperp,iz,ir] += term1 + vpa[ivpa] * term2_over_vpa
                 end
             end
         end
