@@ -1509,7 +1509,7 @@ global_rank[] == 0 && println("recalculating precon")
                                                       vperp, vperp_spectral, vperp_adv,
                                                       vperp_diffusion, ir)
                 end
-                if z.bc ∈ ("constant",) && (z.irank == 0 || z.irank == z.nrank - 1)
+                if z.bc ∈ ("wall", "constant",) && (z.irank == 0 || z.irank == z.nrank - 1)
                     # Boundary conditions on incoming part of distribution function. Note
                     # that as density, upar, ppar do not change in this implicit step,
                     # f_electron_newvar, f_old, and residual should all be zero at exactly
