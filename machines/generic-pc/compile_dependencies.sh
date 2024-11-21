@@ -77,10 +77,10 @@ else
 fi
 
 if [[ $BUILDHDF5 == "y" ]]; then
-  HDF5=hdf5-1.14.3
+  HDF5=hdf5-1.14.5
   # Download and extract the source
-  wget -O ${HDF5}.tar.bz2 https://support.hdfgroup.org/ftp/HDF5/releases/hdf5-1.14/hdf5-1.14.3/src/hdf5-1.14.3.tar.bz2
-  tar xjf ${HDF5}.tar.bz2
+  wget -O ${HDF5}.tar.gz https://support.hdfgroup.org/releases/hdf5/v1_14/v1_14_5/downloads/hdf5-1.14.5.tar.gz
+  tar xzf ${HDF5}.tar.gz
 
   cd $HDF5
 
