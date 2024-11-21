@@ -404,8 +404,8 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                                                  moments.electron.dens, composition)
             end
 
-            apply_electron_bc_and_constraints!(scratch[istage+1], phi, moments, z, vperp,
-                                               vpa, vperp_spectral, vpa_spectral,
+            apply_electron_bc_and_constraints!(scratch[istage+1], phi, moments, r, z,
+                                               vperp, vpa, vperp_spectral, vpa_spectral,
                                                vpa_advect, num_diss_params, composition)
 
             latest_pdf = scratch[istage+1].pdf_electron
@@ -1424,7 +1424,7 @@ global_rank[] == 0 && println("recalculating precon")
                            moments.electron.upar[:,ir], z, vperp, vpa, vperp_spectral,
                            vpa_spectral, vpa_advect, moments,
                            num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                           composition.me_over_mi; bc_constraints=false,
+                           composition.me_over_mi, ir; bc_constraints=false,
                            update_vcut=!krylov)
 
                 if evolve_ppar
@@ -2068,7 +2068,7 @@ function speedup_hack!(fvec_out, fvec_in, z_speedup_fac, z, vpa; evolve_ppar=fal
     return nothing
 end
 
-function apply_electron_bc_and_constraints!(this_scratch, phi, moments, z, vperp, vpa,
+function apply_electron_bc_and_constraints!(this_scratch, phi, moments, r, z, vperp, vpa,
                                             vperp_spectral, vpa_spectral, vpa_advect,
                                             num_diss_params, composition)
     latest_pdf = this_scratch.pdf_electron
@@ -2078,13 +2078,15 @@ function apply_electron_bc_and_constraints!(this_scratch, phi, moments, z, vperp
         latest_pdf[ivpa,ivperp,iz,ir] = max(latest_pdf[ivpa,ivperp,iz,ir], 0.0)
     end
 
-    # enforce the boundary condition(s) on the electron pdf
-    enforce_boundary_condition_on_electron_pdf!(latest_pdf, phi, moments.electron.vth,
-                                                moments.electron.upar, z, vperp, vpa,
-                                                vperp_spectral, vpa_spectral, vpa_advect,
-                                                moments,
-                                                num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                                                composition.me_over_mi)
+    for ir ∈ 1:r.n
+        # enforce the boundary condition(s) on the electron pdf
+        @views enforce_boundary_condition_on_electron_pdf!(
+                   latest_pdf[:,:,:,ir], phi[:,ir], moments.electron.vth[:,ir],
+                   moments.electron.upar[:,ir], z, vperp, vpa, vperp_spectral,
+                   vpa_spectral, vpa_advect, moments,
+                   num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
+                   composition.me_over_mi, ir)
+    end
 
     begin_r_z_region()
     A = moments.electron.constraints_A_coefficient
@@ -2118,7 +2120,7 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, z, vp
                f_electron, phi, moments.electron.vth[:,ir], moments.electron.upar[:,ir],
                z, vperp, vpa, vperp_spectral, vpa_spectral, vpa_advect, moments,
                num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-               composition.me_over_mi)
+               composition.me_over_mi, ir)
 
     begin_z_region()
     A = moments.electron.constraints_A_coefficient
@@ -2297,7 +2299,7 @@ end
 
 @timeit global_timer enforce_boundary_condition_on_electron_pdf!(
                          pdf, phi, vthe, upar, z, vperp, vpa, vperp_spectral,
-                         vpa_spectral, vpa_adv, moments, vpa_diffusion, me_over_mi;
+                         vpa_spectral, vpa_adv, moments, vpa_diffusion, me_over_mi, ir;
                          bc_constraints=true, update_vcut=true) = begin
 
     @boundscheck bc_constraints && !update_vcut && error("update_vcut is not used when bc_constraints=true, but update_vcut has non-default value")
@@ -2306,18 +2308,18 @@ end
 
     # Enforce velocity-space boundary conditions
     if vpa.n > 1
-        begin_r_z_vperp_region()
-        @loop_r_z_vperp ir iz ivperp begin
+        begin_z_vperp_region()
+        @loop_z_vperp iz ivperp begin
             # enforce the vpa BC
             # use that adv.speed independent of vpa
-            @views enforce_v_boundary_condition_local!(pdf[:,ivperp,iz,ir], vpa.bc,
+            @views enforce_v_boundary_condition_local!(pdf[:,ivperp,iz], vpa.bc,
                                                        vpa_adv[1].speed[:,ivperp,iz,ir],
                                                        vpa_diffusion, vpa, vpa_spectral)
         end
     end
     if vperp.n > 1
-        begin_r_z_vpa_region()
-        enforce_vperp_boundary_condition!(pdf, vperp.bc, vperp, vperp_spectral)
+        begin_z_vpa_region()
+        enforce_vperp_boundary_condition!(pdf, vperp.bc, vperp, vperp_spectral, ir)
     end
 
     if z.bc == "periodic"
@@ -2326,21 +2328,25 @@ end
     elseif z.bc == "constant"
         begin_r_vperp_vpa_region()
         density_offset = 1.0
-        vwidth = 1.0/sqrt(composition.me_over_mi)
+        vwidth = 1.0/sqrt(me_over_mi)
         dens = moments.electron.dens
         if z.irank == 0
-            speed = z_adv[1].speed
             @loop_r_vperp_vpa ir ivperp ivpa begin
-                if speed[1,ivpa,ivperp,ir] > 0.0
-                    pdf[ivpa,ivperp,1,ir,is] = density_offset / dens[1,ir] * vthe[1,ir] * exp(-(speed[1,ivpa,ivperp,ir]^2 + vperp.grid[ivperp]^2)/vwidth^2)
+                u = moments.electron.upar[1,ir]
+                vthe = moments.electron.vth[1,ir]
+                speed = vpa.grid[ivpa] * vthe + u
+                if speed > 0.0
+                    pdf[ivpa,ivperp,1,ir] = density_offset / dens[1,ir] * vthe[1,ir] * exp(-(speed^2 + vperp.grid[ivperp]^2)/vwidth^2)
                 end
             end
         end
         if z.irank == z.nrank - 1
-            speed = z_adv[is].speed
             @loop_r_vperp_vpa ir ivperp ivpa begin
-                if speed[end,ivpa,ivperp,ir] > 0.0
-                    pdf[ivpa,ivperp,end,ir,is] = density_offset / dens[end,ir] * vthe[end,ir] * exp(-(speed[end,ivpa,ivperp,ir]^2 + vperp.grid[ivperp]^2)/vwidth^2)
+                u = moments.electron.upar[end,ir]
+                vthe = moments.electron.vth[end,ir]
+                speed = vpa.grid[ivpa] * vthe + u
+                if speed > 0.0
+                    pdf[ivpa,ivperp,end,ir] = density_offset / dens[end,ir] * vthe[end,ir] * exp(-(speed^2 + vperp.grid[ivperp]^2)/vwidth^2)
                 end
             end
         end
@@ -2429,16 +2435,16 @@ end
             # Note that we need to include the normalisation factor of 1/sqrt(pi) that
             # would be factored in by integrate_over_vspace(). This will need to
             # change/adapt when we support 2V as well as 1V.
-            density_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,1,ir] * vpa.wgts / sqrt(pi)
-            flow_integral_pieces = @. vpa.scratch4 = density_integral_pieces * vpa_unnorm / vthe[1,ir]
-            energy_integral_pieces = @. vpa.scratch5 = flow_integral_pieces * vpa_unnorm / vthe[1,ir]
-            cubic_integral_pieces = @. vpa.scratch6 = energy_integral_pieces * vpa_unnorm / vthe[1,ir]
-            quartic_integral_pieces = @. vpa.scratch7 = cubic_integral_pieces * vpa_unnorm / vthe[1,ir]
+            density_integral_pieces_lowerz = @views @. vpa.scratch3 = pdf[:,1,1,ir] * vpa.wgts / sqrt(pi)
+            flow_integral_pieces_lowerz = @. vpa.scratch4 = density_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
+            energy_integral_pieces_lowerz = @. vpa.scratch5 = flow_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
+            cubic_integral_pieces_lowerz = @. vpa.scratch6 = energy_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
+            quartic_integral_pieces_lowerz = @. vpa.scratch7 = cubic_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
 
             function get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
                 # vcut_fraction is the fraction of the distance between minus_vcut_ind-1 and
                 # minus_vcut_ind where -vcut is.
-                vcut_fraction = get_minus_vcut_fraction(vcut, minus_vcut_ind, vpa_unnorm)
+                local vcut_fraction = get_minus_vcut_fraction(vcut, minus_vcut_ind, vpa_unnorm)
 
                 function get_for_one_moment(integral_pieces)
                     # Integral contributions from the cell containing vcut.
@@ -2476,18 +2482,18 @@ end
 
                     return part1, part1prime, part2, part2prime
                 end
-                a1, a1prime, a2, a2prime = get_for_one_moment(density_integral_pieces)
-                b1, b1prime, b2, _ = get_for_one_moment(flow_integral_pieces)
-                c1, c1prime, c2, c2prime = get_for_one_moment(energy_integral_pieces)
-                d1, d1prime, d2, _ = get_for_one_moment(cubic_integral_pieces)
-                e1, e1prime, e2, e2prime = get_for_one_moment(quartic_integral_pieces)
+                this_a1, this_a1prime, this_a2, this_a2prime = get_for_one_moment(density_integral_pieces_lowerz)
+                this_b1, this_b1prime, this_b2, _ = get_for_one_moment(flow_integral_pieces_lowerz)
+                this_c1, this_c1prime, this_c2, this_c2prime = get_for_one_moment(energy_integral_pieces_lowerz)
+                this_d1, this_d1prime, this_d2, _ = get_for_one_moment(cubic_integral_pieces_lowerz)
+                this_e1, this_e1prime, this_e2, this_e2prime = get_for_one_moment(quartic_integral_pieces_lowerz)
 
-                return get_residual_and_coefficients_for_bc(a1, a1prime, a2, a2prime, b1,
-                                                            b1prime, c1, c1prime, c2,
-                                                            c2prime, d1, d1prime, e1,
-                                                            e1prime, e2, e2prime,
-                                                            u_over_vt)...,
-                       a2, b2, c2, d2
+                return get_residual_and_coefficients_for_bc(
+                           this_a1, this_a1prime, this_a2, this_a2prime, this_b1,
+                           this_b1prime, this_c1, this_c1prime, this_c2, this_c2prime,
+                           this_d1, this_d1prime, this_e1, this_e1prime, this_e2,
+                           this_e2prime, u_over_vt)...,
+                       this_a2, this_b2, this_c2, this_d2
             end
 
             counter = 1
@@ -2577,11 +2583,11 @@ end
             # interpolation.
 
             # Need to recalculate these with the updated distribution function
-            density_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,1,ir] * vpa.wgts / sqrt(pi)
-            flow_integral_pieces = @. vpa.scratch4 = density_integral_pieces * vpa_unnorm / vthe[1,ir]
-            energy_integral_pieces = @. vpa.scratch5 = flow_integral_pieces * vpa_unnorm / vthe[1,ir]
-            cubic_integral_pieces = @. vpa.scratch6 = energy_integral_pieces * vpa_unnorm / vthe[1,ir]
-            quartic_integral_pieces = @. vpa.scratch7 = cubic_integral_pieces * vpa_unnorm / vthe[1,ir]
+            @views @. density_integral_pieces_lowerz = pdf[:,1,1,ir] * vpa.wgts / sqrt(pi)
+            @. flow_integral_pieces_lowerz = density_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
+            @. energy_integral_pieces_lowerz = flow_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
+            @. cubic_integral_pieces_lowerz = energy_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
+            @. quartic_integral_pieces_lowerz = cubic_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
 
             # Update the part2 integrals since we've applied the A and C factors
             _, _, _, _, a2, b2, c2, d2 = get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
@@ -2595,10 +2601,10 @@ end
 
                 return part3
             end
-            a3 = get_part3_for_one_moment_lower(density_integral_pieces)
-            b3 = get_part3_for_one_moment_lower(flow_integral_pieces)
-            c3 = get_part3_for_one_moment_lower(energy_integral_pieces)
-            d3 = get_part3_for_one_moment_lower(cubic_integral_pieces)
+            a3 = get_part3_for_one_moment_lower(density_integral_pieces_lowerz)
+            b3 = get_part3_for_one_moment_lower(flow_integral_pieces_lowerz)
+            c3 = get_part3_for_one_moment_lower(energy_integral_pieces_lowerz)
+            d3 = get_part3_for_one_moment_lower(cubic_integral_pieces_lowerz)
 
             # Use scale factor to adjust how sharp the cutoff near vpa_unnorm=0 is.
             sharpness = 4.0
@@ -2703,16 +2709,16 @@ end
             # Note that we need to include the normalisation factor of 1/sqrt(pi) that
             # would be factored in by integrate_over_vspace(). This will need to
             # change/adapt when we support 2V as well as 1V.
-            density_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,end,ir] * vpa.wgts / sqrt(pi)
-            flow_integral_pieces = @. vpa.scratch4 = density_integral_pieces * vpa_unnorm / vthe[end,ir]
-            energy_integral_pieces = @. vpa.scratch5 = flow_integral_pieces * vpa_unnorm / vthe[end,ir]
-            cubic_integral_pieces = @. vpa.scratch6 = energy_integral_pieces * vpa_unnorm / vthe[end,ir]
-            quartic_integral_pieces = @. vpa.scratch7 = cubic_integral_pieces * vpa_unnorm / vthe[end,ir]
+            density_integral_pieces_upperz = @views @. vpa.scratch3 = pdf[:,1,end,ir] * vpa.wgts / sqrt(pi)
+            flow_integral_pieces_upperz = @. vpa.scratch4 = density_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
+            energy_integral_pieces_upperz = @. vpa.scratch5 = flow_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
+            cubic_integral_pieces_upperz = @. vpa.scratch6 = energy_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
+            quartic_integral_pieces_upperz = @. vpa.scratch7 = cubic_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
 
             function get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
                 # vcut_fraction is the fraction of the distance between plus_vcut_ind and
                 # plus_vcut_ind+1 where vcut is.
-                vcut_fraction = get_plus_vcut_fraction(vcut, plus_vcut_ind, vpa_unnorm)
+                local vcut_fraction = get_plus_vcut_fraction(vcut, plus_vcut_ind, vpa_unnorm)
 
                 function get_for_one_moment(integral_pieces)
                     # Integral contribution from the cell containing vcut
@@ -2749,18 +2755,18 @@ end
 
                     return part1, part1prime, part2, part2prime
                 end
-                a1, a1prime, a2, a2prime = get_for_one_moment(density_integral_pieces)
-                b1, b1prime, b2, _ = get_for_one_moment(flow_integral_pieces)
-                c1, c1prime, c2, c2prime = get_for_one_moment(energy_integral_pieces)
-                d1, d1prime, d2, _ = get_for_one_moment(cubic_integral_pieces)
-                e1, e1prime, e2, e2prime = get_for_one_moment(quartic_integral_pieces)
+                this_a1, this_a1prime, this_a2, this_a2prime = get_for_one_moment(density_integral_pieces_upperz)
+                this_b1, this_b1prime, this_b2, _ = get_for_one_moment(flow_integral_pieces_upperz)
+                this_c1, this_c1prime, this_c2, this_c2prime = get_for_one_moment(energy_integral_pieces_upperz)
+                this_d1, this_d1prime, this_d2, _ = get_for_one_moment(cubic_integral_pieces_upperz)
+                this_e1, this_e1prime, this_e2, this_e2prime = get_for_one_moment(quartic_integral_pieces_upperz)
 
-                return get_residual_and_coefficients_for_bc(a1, a1prime, a2, a2prime, b1,
-                                                            b1prime, c1, c1prime, c2,
-                                                            c2prime, d1, d1prime, e1,
-                                                            e1prime, e2, e2prime,
-                                                            u_over_vt)...,
-                       a2, b2, c2, d2
+                return get_residual_and_coefficients_for_bc(
+                           this_a1, this_a1prime, this_a2, this_a2prime, this_b1,
+                           this_b1prime, this_c1, this_c1prime, this_c2, this_c2prime,
+                           this_d1, this_d1prime, this_e1, this_e1prime, this_e2,
+                           this_e2prime, u_over_vt)...,
+                       this_a2, this_b2, this_c2, this_d2
             end
 
             counter = 1
@@ -2848,11 +2854,11 @@ end
             # interpolation.
 
             # Need to recalculate these with the updated distribution function
-            density_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,end,ir] * vpa.wgts / sqrt(pi)
-            flow_integral_pieces = @. vpa.scratch4 = density_integral_pieces * vpa_unnorm / vthe[end,ir]
-            energy_integral_pieces = @. vpa.scratch5 = flow_integral_pieces * vpa_unnorm / vthe[end,ir]
-            cubic_integral_pieces = @. vpa.scratch6 = energy_integral_pieces * vpa_unnorm / vthe[end,ir]
-            quartic_integral_pieces = @. vpa.scratch7 = cubic_integral_pieces * vpa_unnorm / vthe[end,ir]
+            @views @. density_integral_pieces_upperz = pdf[:,1,end,ir] * vpa.wgts / sqrt(pi)
+            @. flow_integral_pieces_upperz = density_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
+            @. energy_integral_pieces_upperz = flow_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
+            @. cubic_integral_pieces_upperz = energy_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
+            @. quartic_integral_pieces_upperz = cubic_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
 
             # Update the part2 integrals since we've applied the A and C factors
             _, _, _, _, a2, b2, c2, d2 = get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
@@ -2866,10 +2872,10 @@ end
 
                 return part3
             end
-            a3 = get_part3_for_one_moment_upper(density_integral_pieces)
-            b3 = get_part3_for_one_moment_upper(flow_integral_pieces)
-            c3 = get_part3_for_one_moment_upper(energy_integral_pieces)
-            d3 = get_part3_for_one_moment_upper(cubic_integral_pieces)
+            a3 = get_part3_for_one_moment_upper(density_integral_pieces_upperz)
+            b3 = get_part3_for_one_moment_upper(flow_integral_pieces_upperz)
+            c3 = get_part3_for_one_moment_upper(energy_integral_pieces_upperz)
+            d3 = get_part3_for_one_moment_upper(cubic_integral_pieces_upperz)
 
             # Use scale factor to adjust how sharp the cutoff near vpa_unnorm=0 is.
             sharpness = 4.0
@@ -3008,8 +3014,8 @@ appropriate.
         update_electron_vth_temperature!(moments, scratch[2].electron_ppar,
                                          moments.electron.dens, composition)
     end
-    apply_electron_bc_and_constraints!(scratch[t_params.n_rk_stages+1], phi, moments, z,
-                                       vperp, vpa, vperp_spectral, vpa_spectral,
+    apply_electron_bc_and_constraints!(scratch[t_params.n_rk_stages+1], phi, moments, r,
+                                       z, vperp, vpa, vperp_spectral, vpa_spectral,
                                        vpa_advect, num_diss_params, composition)
     if evolve_ppar
         # Reset vth in the `moments` struct to the result consistent with full-accuracy RK
