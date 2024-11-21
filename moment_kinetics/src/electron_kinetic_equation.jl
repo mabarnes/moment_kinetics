@@ -1029,10 +1029,6 @@ global_rank[] == 0 && println("recalculating precon")
                     qpar = @view moments.electron.qpar[:,ir]
 
                     # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
-                    buffer_1 = @view scratch_dummy.buffer_rs_1[ir,1]
-                    buffer_2 = @view scratch_dummy.buffer_rs_2[ir,1]
-                    buffer_3 = @view scratch_dummy.buffer_rs_3[ir,1]
-                    buffer_4 = @view scratch_dummy.buffer_rs_4[ir,1]
                     third_moment = scratch_dummy.buffer_z_1
                     dthird_moment_dz = scratch_dummy.buffer_z_2
                     begin_z_region()
@@ -1525,22 +1521,20 @@ global_rank[] == 0 && println("recalculating precon")
                     v_unnorm = vpa.scratch
                     zero = 1.0e-14
                     if z.irank == 0
-                        iz = 1
-                        v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[iz,ir],
-                                                    moments.electron.upar[iz,ir], true, true)
+                        v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[1,ir],
+                                                    moments.electron.upar[1,ir], true, true)
                         @loop_vperp_vpa ivperp ivpa begin
                             if v_unnorm[ivpa] > -zero
-                                f_electron_residual[ivpa,ivperp,iz] = 0.0
+                                f_electron_residual[ivpa,ivperp,1] = 0.0
                             end
                         end
                     end
                     if z.irank == z.nrank - 1
-                        iz = z.n
-                        v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[iz,ir],
-                                                    moments.electron.upar[iz,ir], true, true)
+                        v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[end,ir],
+                                                    moments.electron.upar[end,ir], true, true)
                         @loop_vperp_vpa ivperp ivpa begin
                             if v_unnorm[ivpa] < zero
-                                f_electron_residual[ivpa,ivperp,iz] = 0.0
+                                f_electron_residual[ivpa,ivperp,end] = 0.0
                             end
                         end
                     end
@@ -1630,15 +1624,18 @@ global_rank[] == 0 && println("recalculating precon")
                 nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
 
                 # Swap old_scratch and new_scratch so that the next step restarts from the
-                # same state
-                scratch[1] = new_scratch
-                scratch[t_params.n_rk_stages+1] = old_scratch
-                old_scratch = scratch[1]
-                new_scratch = scratch[t_params.n_rk_stages+1]
-                f_electron_old = @view old_scratch.pdf_electron[:,:,:,ir]
-                f_electron_new = @view new_scratch.pdf_electron[:,:,:,ir]
-                electron_ppar_old = @view old_scratch.electron_ppar[:,ir]
-                electron_ppar_new = @view new_scratch.electron_ppar[:,ir]
+                # same state. Copy values over here rather than just swapping references
+                # to arrays, because f_electron_old and electron_ppar_old are captured by
+                # residual_func!() above, so any change in the things they refer to will
+                # cause type instability in residual_func!().
+                begin_z_vperp_vpa_region()
+                @loop_z_vperp_vpa iz ivperp ivpa begin
+                    f_electron_new[ivpa,ivperp,iz] = f_electron_old[ivpa,ivperp,iz]
+                end
+                begin_z_region()
+                @loop_z iz begin
+                    electron_ppar_new[iz] = electron_ppar_old[iz]
+                end
             end
 
             apply_electron_bc_and_constraints_no_r!(f_electron_new, phi, moments, z,
