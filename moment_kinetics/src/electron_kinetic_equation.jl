@@ -2317,7 +2317,7 @@ end
     end
     if vperp.n > 1
         begin_r_z_vpa_region()
-        @views enforce_vperp_boundary_condition!(pdf, vperp.bc, vperp, vperp_spectral)
+        enforce_vperp_boundary_condition!(pdf, vperp.bc, vperp, vperp_spectral)
     end
 
     if z.bc == "periodic"
@@ -2418,7 +2418,7 @@ end
                                           vpa_unnorm[element_with_zero_boundary:sigma_ind-1])
 
             # Interpolate to the 'far from zero' points
-            reversed_pdf_far_from_zero = vpa.scratch[last_point_near_zero+1:end]
+            reversed_pdf_far_from_zero = @view vpa.scratch[last_point_near_zero+1:end]
             @views interpolate_to_grid_1d!(reversed_pdf_far_from_zero,
                                            reversed_wpa_of_minus_vpa[1:vpa.n-last_point_near_zero],
                                            pdf[:,1,1,ir], vpa, vpa_spectral)
@@ -2430,10 +2430,10 @@ end
             # would be factored in by integrate_over_vspace(). This will need to
             # change/adapt when we support 2V as well as 1V.
             density_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,1,ir] * vpa.wgts / sqrt(pi)
-            flow_integral_pieces = @views @. vpa.scratch4 = density_integral_pieces * vpa_unnorm / vthe[1,ir]
-            energy_integral_pieces = @views @. vpa.scratch5 = flow_integral_pieces * vpa_unnorm / vthe[1,ir]
-            cubic_integral_pieces = @views @. vpa.scratch6 = energy_integral_pieces * vpa_unnorm / vthe[1,ir]
-            quartic_integral_pieces = @views @. vpa.scratch7 = cubic_integral_pieces * vpa_unnorm / vthe[1,ir]
+            flow_integral_pieces = @. vpa.scratch4 = density_integral_pieces * vpa_unnorm / vthe[1,ir]
+            energy_integral_pieces = @. vpa.scratch5 = flow_integral_pieces * vpa_unnorm / vthe[1,ir]
+            cubic_integral_pieces = @. vpa.scratch6 = energy_integral_pieces * vpa_unnorm / vthe[1,ir]
+            quartic_integral_pieces = @. vpa.scratch7 = cubic_integral_pieces * vpa_unnorm / vthe[1,ir]
 
             function get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
                 # vcut_fraction is the fraction of the distance between minus_vcut_ind-1 and
@@ -2464,12 +2464,12 @@ end
                         part1prime = -integral_pieces[minus_vcut_ind] / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1])
                     end
 
-                    part1 = sum(integral_pieces[1:minus_vcut_ind-2]) + integral_vcut_cell_part1
+                    part1 = sum(@view integral_pieces[1:minus_vcut_ind-2]) + integral_vcut_cell_part1
 
                     # Integral contribution from the cell containing sigma
                     integral_sigma_cell = (0.5 * integral_pieces[sigma_ind-1] + 0.5 * integral_pieces[sigma_ind])
 
-                    part2 = sum(integral_pieces[minus_vcut_ind+1:sigma_ind-2])
+                    part2 = sum(@view integral_pieces[minus_vcut_ind+1:sigma_ind-2])
                     part2 += integral_vcut_cell_part2 + 0.5 * integral_pieces[sigma_ind-1] + sigma_fraction * integral_sigma_cell
                     # part2prime is d(part2)/d(vcut)
                     part2prime = -part1prime
@@ -2578,10 +2578,10 @@ end
 
             # Need to recalculate these with the updated distribution function
             density_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,1,ir] * vpa.wgts / sqrt(pi)
-            flow_integral_pieces = @views @. vpa.scratch4 = density_integral_pieces * vpa_unnorm / vthe[1,ir]
-            energy_integral_pieces = @views @. vpa.scratch5 = flow_integral_pieces * vpa_unnorm / vthe[1,ir]
-            cubic_integral_pieces = @views @. vpa.scratch6 = energy_integral_pieces * vpa_unnorm / vthe[1,ir]
-            quartic_integral_pieces = @views @. vpa.scratch7 = cubic_integral_pieces * vpa_unnorm / vthe[1,ir]
+            flow_integral_pieces = @. vpa.scratch4 = density_integral_pieces * vpa_unnorm / vthe[1,ir]
+            energy_integral_pieces = @. vpa.scratch5 = flow_integral_pieces * vpa_unnorm / vthe[1,ir]
+            cubic_integral_pieces = @. vpa.scratch6 = energy_integral_pieces * vpa_unnorm / vthe[1,ir]
+            quartic_integral_pieces = @. vpa.scratch7 = cubic_integral_pieces * vpa_unnorm / vthe[1,ir]
 
             # Update the part2 integrals since we've applied the A and C factors
             _, _, _, _, a2, b2, c2, d2 = get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
@@ -2590,7 +2590,7 @@ end
                 # Integral contribution from the cell containing sigma
                 integral_sigma_cell = (0.5 * integral_pieces[sigma_ind-1] + 0.5 * integral_pieces[sigma_ind])
 
-                @views part3 = sum(integral_pieces[sigma_ind+1:plus_vcut_ind+1])
+                part3 = sum(@view integral_pieces[sigma_ind+1:plus_vcut_ind+1])
                 part3 += 0.5 * integral_pieces[sigma_ind] + (1.0 - sigma_fraction) * integral_sigma_cell
 
                 return part3
@@ -2616,12 +2616,12 @@ end
                 # v_∥^2/vth^2/(1+v_∥^2/vth^2)≈v_∥^2/vth^2≈0.
                 correction0_integral_pieces[ivpa] = 0.0
             end
-            correction1_integral_pieces = @views @. vpa.scratch4 = correction0_integral_pieces * vpa_unnorm / vthe[1,ir]
-            correction2_integral_pieces = @views @. vpa.scratch5 = correction1_integral_pieces * vpa_unnorm / vthe[1,ir]
-            correction3_integral_pieces = @views @. vpa.scratch6 = correction2_integral_pieces * vpa_unnorm / vthe[1,ir]
-            correction4_integral_pieces = @views @. vpa.scratch7 = correction3_integral_pieces * vpa_unnorm / vthe[1,ir]
-            correction5_integral_pieces = @views @. vpa.scratch8 = correction4_integral_pieces * vpa_unnorm / vthe[1,ir]
-            correction6_integral_pieces = @views @. vpa.scratch9 = correction5_integral_pieces * vpa_unnorm / vthe[1,ir]
+            correction1_integral_pieces = @. vpa.scratch4 = correction0_integral_pieces * vpa_unnorm / vthe[1,ir]
+            correction2_integral_pieces = @. vpa.scratch5 = correction1_integral_pieces * vpa_unnorm / vthe[1,ir]
+            correction3_integral_pieces = @. vpa.scratch6 = correction2_integral_pieces * vpa_unnorm / vthe[1,ir]
+            correction4_integral_pieces = @. vpa.scratch7 = correction3_integral_pieces * vpa_unnorm / vthe[1,ir]
+            correction5_integral_pieces = @. vpa.scratch8 = correction4_integral_pieces * vpa_unnorm / vthe[1,ir]
+            correction6_integral_pieces = @. vpa.scratch9 = correction5_integral_pieces * vpa_unnorm / vthe[1,ir]
 
             alpha = get_part3_for_one_moment_lower(correction0_integral_pieces)
             beta = get_part3_for_one_moment_lower(correction1_integral_pieces)
@@ -2692,22 +2692,22 @@ end
                                           vpa_unnorm[sigma_ind+1:element_with_zero_boundary])
 
             # Interpolate to the 'far from zero' points
-            reversed_pdf = vpa.scratch[1:first_point_near_zero-1]
+            reversed_pdf = @view vpa.scratch[1:first_point_near_zero-1]
             @views interpolate_to_grid_1d!(reversed_pdf,
                                            reversed_wpa_of_minus_vpa[vpa.n-first_point_near_zero+2:end],
                                            pdf[:,1,end,ir], vpa, vpa_spectral)
             reverse!(reversed_pdf)
-            pdf[1:first_point_near_zero-1,1,end,ir] .= reversed_pdf[1:first_point_near_zero-1]
+            pdf[1:first_point_near_zero-1,1,end,ir] .= reversed_pdf
 
             # Per-grid-point contributions to moment integrals
             # Note that we need to include the normalisation factor of 1/sqrt(pi) that
             # would be factored in by integrate_over_vspace(). This will need to
             # change/adapt when we support 2V as well as 1V.
             density_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,end,ir] * vpa.wgts / sqrt(pi)
-            flow_integral_pieces = @views @. vpa.scratch4 = density_integral_pieces * vpa_unnorm / vthe[end,ir]
-            energy_integral_pieces = @views @. vpa.scratch5 = flow_integral_pieces * vpa_unnorm / vthe[end,ir]
-            cubic_integral_pieces = @views @. vpa.scratch6 = energy_integral_pieces * vpa_unnorm / vthe[end,ir]
-            quartic_integral_pieces = @views @. vpa.scratch7 = cubic_integral_pieces * vpa_unnorm / vthe[end,ir]
+            flow_integral_pieces = @. vpa.scratch4 = density_integral_pieces * vpa_unnorm / vthe[end,ir]
+            energy_integral_pieces = @. vpa.scratch5 = flow_integral_pieces * vpa_unnorm / vthe[end,ir]
+            cubic_integral_pieces = @. vpa.scratch6 = energy_integral_pieces * vpa_unnorm / vthe[end,ir]
+            quartic_integral_pieces = @. vpa.scratch7 = cubic_integral_pieces * vpa_unnorm / vthe[end,ir]
 
             function get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
                 # vcut_fraction is the fraction of the distance between plus_vcut_ind and
@@ -2737,12 +2737,12 @@ end
                         part1prime = -integral_pieces[plus_vcut_ind] / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind])
                     end
 
-                    part1 = sum(integral_pieces[plus_vcut_ind+2:end]) + integral_vcut_cell_part1
+                    part1 = sum(@view integral_pieces[plus_vcut_ind+2:end]) + integral_vcut_cell_part1
 
                     # Integral contribution from the cell containing sigma
                     integral_sigma_cell = (0.5 * integral_pieces[sigma_ind] + 0.5 * integral_pieces[sigma_ind+1])
 
-                    part2 = sum(integral_pieces[sigma_ind+2:plus_vcut_ind-1])
+                    part2 = sum(@view integral_pieces[sigma_ind+2:plus_vcut_ind-1])
                     part2 += integral_vcut_cell_part2 + 0.5 * integral_pieces[sigma_ind+1] + sigma_fraction * integral_sigma_cell
                     # part2prime is d(part2)/d(vcut)
                     part2prime = -part1prime
@@ -2849,10 +2849,10 @@ end
 
             # Need to recalculate these with the updated distribution function
             density_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,end,ir] * vpa.wgts / sqrt(pi)
-            flow_integral_pieces = @views @. vpa.scratch4 = density_integral_pieces * vpa_unnorm / vthe[end,ir]
-            energy_integral_pieces = @views @. vpa.scratch5 = flow_integral_pieces * vpa_unnorm / vthe[end,ir]
-            cubic_integral_pieces = @views @. vpa.scratch6 = energy_integral_pieces * vpa_unnorm / vthe[end,ir]
-            quartic_integral_pieces = @views @. vpa.scratch7 = cubic_integral_pieces * vpa_unnorm / vthe[end,ir]
+            flow_integral_pieces = @. vpa.scratch4 = density_integral_pieces * vpa_unnorm / vthe[end,ir]
+            energy_integral_pieces = @. vpa.scratch5 = flow_integral_pieces * vpa_unnorm / vthe[end,ir]
+            cubic_integral_pieces = @. vpa.scratch6 = energy_integral_pieces * vpa_unnorm / vthe[end,ir]
+            quartic_integral_pieces = @. vpa.scratch7 = cubic_integral_pieces * vpa_unnorm / vthe[end,ir]
 
             # Update the part2 integrals since we've applied the A and C factors
             _, _, _, _, a2, b2, c2, d2 = get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
@@ -2861,7 +2861,7 @@ end
                 # Integral contribution from the cell containing sigma
                 integral_sigma_cell = (0.5 * integral_pieces[sigma_ind] + 0.5 * integral_pieces[sigma_ind+1])
 
-                @views part3 = sum(integral_pieces[minus_vcut_ind-1:sigma_ind-1])
+                part3 = sum(@view integral_pieces[minus_vcut_ind-1:sigma_ind-1])
                 part3 += 0.5 * integral_pieces[sigma_ind] + (1.0 - sigma_fraction) * integral_sigma_cell
 
                 return part3
@@ -2887,12 +2887,12 @@ end
                 # v_∥^2/vth^2/(1+v_∥^2/vth^2)≈v_∥^2/vth^2≈0.
                 correction0_integral_pieces[ivpa] = 0.0
             end
-            correction1_integral_pieces = @views @. vpa.scratch4 = correction0_integral_pieces * vpa_unnorm / vthe[end,ir]
-            correction2_integral_pieces = @views @. vpa.scratch5 = correction1_integral_pieces * vpa_unnorm / vthe[end,ir]
-            correction3_integral_pieces = @views @. vpa.scratch6 = correction2_integral_pieces * vpa_unnorm / vthe[end,ir]
-            correction4_integral_pieces = @views @. vpa.scratch7 = correction3_integral_pieces * vpa_unnorm / vthe[end,ir]
-            correction5_integral_pieces = @views @. vpa.scratch8 = correction4_integral_pieces * vpa_unnorm / vthe[end,ir]
-            correction6_integral_pieces = @views @. vpa.scratch9 = correction5_integral_pieces * vpa_unnorm / vthe[end,ir]
+            correction1_integral_pieces = @. vpa.scratch4 = correction0_integral_pieces * vpa_unnorm / vthe[end,ir]
+            correction2_integral_pieces = @. vpa.scratch5 = correction1_integral_pieces * vpa_unnorm / vthe[end,ir]
+            correction3_integral_pieces = @. vpa.scratch6 = correction2_integral_pieces * vpa_unnorm / vthe[end,ir]
+            correction4_integral_pieces = @. vpa.scratch7 = correction3_integral_pieces * vpa_unnorm / vthe[end,ir]
+            correction5_integral_pieces = @. vpa.scratch8 = correction4_integral_pieces * vpa_unnorm / vthe[end,ir]
+            correction6_integral_pieces = @. vpa.scratch9 = correction5_integral_pieces * vpa_unnorm / vthe[end,ir]
 
             alpha = get_part3_for_one_moment_upper(correction0_integral_pieces)
             beta = get_part3_for_one_moment_upper(correction1_integral_pieces)
