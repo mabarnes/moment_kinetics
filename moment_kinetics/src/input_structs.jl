@@ -33,7 +33,7 @@ using TOML
 an option but known at compile time when a `time_info` struct is passed as a function
 argument.
 """
-struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero}
+struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero, Telectronprecon}
     n_variables::mk_int
     nstep::mk_int
     end_time::mk_float
@@ -81,6 +81,7 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     implicit_ion_advance::Bool
     implicit_vpa_advection::Bool
     implicit_electron_ppar::Bool
+    electron_preconditioner_type::Telectronprecon
     constraint_forcing_rate::mk_float
     decrease_dt_iteration_threshold::mk_int
     increase_dt_iteration_threshold::mk_int

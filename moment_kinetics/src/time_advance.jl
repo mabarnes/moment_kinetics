@@ -409,6 +409,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
     else
         error_sum_zero = 0.0
     end
+
     if electron === nothing
         # Setting up time_info for electrons.
         # Store io_input as the debug_io variable so we can use it to open the debug
@@ -422,18 +423,50 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         else
             debug_io = nothing
         end
+
+        implicit_electron_ppar = false
+        electron_preconditioner_type = nothing
         decrease_dt_iteration_threshold = t_input["decrease_dt_iteration_threshold"]
         increase_dt_iteration_threshold = t_input["increase_dt_iteration_threshold"]
         cap_factor_ion_dt = mk_float(t_input["cap_factor_ion_dt"])
         electron_t_params = nothing
     elseif electron === false
         debug_io = nothing
+        implicit_electron_ppar = false
+        electron_preconditioner_type = nothing
         decrease_dt_iteration_threshold = -1
         increase_dt_iteration_threshold = typemax(mk_int)
         cap_factor_ion_dt = Inf
         electron_t_params = nothing
     else
         debug_io = nothing
+
+        implicit_electron_ppar = (t_input["implicit_electron_ppar"] !== false)
+        if implicit_electron_ppar
+            if t_input["implicit_electron_ppar"] === true
+                if block_size[] == 1
+                    # No need to parallelise, so un-split LU solver should be most efficient.
+                    electron_preconditioner_type = Val(:electron_lu)
+                else
+                    # Want to parallelise preconditioner, so use ADI method.
+                    electron_preconditioner_type = Val(:electron_adi)
+                end
+            else
+                electron_precon_types = Dict("lu" => :electron_lu, "adi" => :electron_adi)
+                if t_input["implicit_electron_ppar"] ∈ keys(electron_precon_types)
+                    electron_preconditioner_type = Val(electron_precon_types[t_input["implicit_electron_ppar"]])
+                else
+                    precon_keys = collect(keys(electron_precon_types))
+                    error("Unrecognised option implicit_electron_ppar="
+                          * "\"$(t_input["implicit_electron_ppar"])\"  which should be "
+                          * "either false/true or a string giving the type of "
+                          * "preconditioner to use - one of $precon_keys.")
+                end
+            end
+        else
+            electron_preconditioner_type = Val(:none)
+        end
+
         decrease_dt_iteration_threshold = -1
         increase_dt_iteration_threshold = typemax(mk_int)
         cap_factor_ion_dt = Inf
@@ -458,7 +491,8 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      electron !== nothing && t_input["implicit_electron_advance"],
                      electron !== nothing && t_input["implicit_ion_advance"],
                      electron !== nothing && t_input["implicit_vpa_advection"],
-                     electron !== nothing && t_input["implicit_electron_ppar"],
+                     electron !== nothing && implicit_electron_ppar,
+                     electron_preconditioner_type,
                      mk_float(t_input["constraint_forcing_rate"]),
                      decrease_dt_iteration_threshold, increase_dt_iteration_threshold,
                      mk_float(cap_factor_ion_dt), t_input["write_after_fixed_step_count"],
@@ -667,13 +701,6 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                                                     input_dict, (z=z,);
                                                                     default_rtol=t_params.rtol / 10.0,
                                                                     default_atol=t_params.atol / 10.0)
-    if block_size[] == 1
-        # No need to parallelise, so un-split LU solver should be most efficient.
-        electron_preconditioner_type = Val(:electron_lu)
-    else
-        # Want to parallelise preconditioner, so use ADI method.
-        electron_preconditioner_type = Val(:electron_adi)
-    end
     nl_solver_electron_advance_params =
         setup_nonlinear_solve(t_params.implicit_electron_advance || composition.electron_physics ∈ (kinetic_electrons, kinetic_electrons_with_temperature_equation),
                               input_dict,
@@ -682,7 +709,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                               default_rtol=t_params.rtol / 10.0,
                               default_atol=t_params.atol / 10.0,
                               electron_ppar_pdf_solve=true,
-                              preconditioner_type=electron_preconditioner_type)
+                              preconditioner_type=t_params.electron_preconditioner_type)
     nl_solver_ion_advance_params =
         setup_nonlinear_solve(t_params.implicit_ion_advance, input_dict,
                               (s=composition.n_ion_species, r=r, z=z, vperp=vperp,
