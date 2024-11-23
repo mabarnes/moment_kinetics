@@ -3116,9 +3116,7 @@ end
                                 || (istage == n_rk_stages && t_params.implicit_coefficient_is_zero[1])
                                 || t_params.implicit_coefficient_is_zero[istage+1])
         update_electrons = (t_params.rk_coefs_implicit === nothing
-                            || !(t_params.implicit_electron_advance || t_params.implicit_electron_ppar)
-                            || (istage < n_rk_stages && t_params.implicit_coefficient_is_zero[istage+1])
-                            || (istage == n_rk_stages && t_params.implicit_coefficient_is_zero[1]))
+                            || !(t_params.implicit_electron_advance || t_params.implicit_electron_ppar))
         diagnostic_moments = diagnostic_checks && istage == n_rk_stages
         success = apply_all_bcs_constraints_update_moments!(
             scratch[istage+1], pdf, moments, fields, boundary_distributions,
