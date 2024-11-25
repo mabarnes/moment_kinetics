@@ -45,10 +45,15 @@ coord : coordinate
 spectral : discretization_info
     struct containing information for discretization, whose type determines which method
     is used.
+derivative : Val(n)
+    The value of `n` the integer in the `Val{n}` indicates the order of the derivative to
+    be calculated of the interpolating function (only a few values of `n` are supported).
+    Defaults to Val(0), which means just calculating the interpolating function itself.
 """
 function interpolate_to_grid_1d! end
 
-function interpolate_to_grid_1d!(result, newgrid, f, coord, spectral)
+function interpolate_to_grid_1d!(result, newgrid, f, coord, spectral,
+                                 derivative::Val=Val(0))
     # define local variable nelement for convenience
     nelement = coord.nelement_local
 
@@ -83,10 +88,21 @@ function interpolate_to_grid_1d!(result, newgrid, f, coord, spectral)
     end
 
     # check to see if any of the newgrid points are to the left of the first grid point
-    for j ∈ 1:kstart[1]-1
-        # if the new grid location is outside the bounds of the original grid,
-        # extrapolate f with Gaussian-like decay beyond the domain
-        result[j] = f[1] * exp(-(coord.grid[1] - newgrid[j])^2)
+    if isa(derivative, Val{0})
+        for j ∈ 1:kstart[1]-1
+            # if the new grid location is outside the bounds of the original grid,
+            # extrapolate f with Gaussian-like decay beyond the domain
+            result[j] = f[1] * exp(-(coord.grid[1] - newgrid[j])^2)
+        end
+    elseif isa(derivative, Val{1})
+        for j ∈ 1:kstart[1]-1
+            # if the new grid location is outside the bounds of the original grid,
+            # extrapolate f with Gaussian-like decay beyond the domain, then take
+            # derivative.
+            result[j] = 2.0 * (coord.grid[1] - newgrid[j]) * f[1] * exp(-(coord.grid[1] - newgrid[j])^2)
+        end
+    else
+        error("Unrecognised derivative=$derivative")
     end
     @inbounds for j ∈ 1:nelement
         # Search from kstart[j] to try to speed up the sort, but means result of
@@ -101,7 +117,7 @@ function interpolate_to_grid_1d!(result, newgrid, f, coord, spectral)
         kmax = kstart[2] - 1
         @views single_element_interpolate!(result[kmin:kmax], newgrid[kmin:kmax],
                                            f[imin:imax], imin, imax, 1, coord,
-                                           first_element_spectral)
+                                           first_element_spectral, derivative)
     end
     @inbounds for j ∈ 2:nelement
         kmin = kstart[j]
@@ -111,12 +127,20 @@ function interpolate_to_grid_1d!(result, newgrid, f, coord, spectral)
             imax = coord.imax[j]
             @views single_element_interpolate!(result[kmin:kmax], newgrid[kmin:kmax],
                                                f[imin:imax], imin, imax, j, coord,
-                                               spectral.lobatto)
+                                               spectral.lobatto, derivative)
         end
     end
 
-    for k ∈ kstart[nelement+1]:n_new
-        result[k] = f[end] * exp(-(newgrid[k] - coord.grid[end])^2)
+    if isa(derivative, Val{0})
+        for k ∈ kstart[nelement+1]:n_new
+            result[k] = f[end] * exp(-(newgrid[k] - coord.grid[end])^2)
+        end
+    elseif isa(derivative, Val{1})
+        for k ∈ kstart[nelement+1]:n_new
+            result[k] = -2.0 * (newgrid[k] - coord.grid[end]) * f[end] * exp(-(newgrid[k] - coord.grid[end])^2)
+        end
+    else
+        error("Unrecognised derivative=$derivative")
     end
 
     return nothing
@@ -212,7 +236,8 @@ function fill_1d_interpolation_matrix!(matrix, newgrid, coord, spectral)
 end
 
 function interpolate_to_grid_1d!(result, new_grid, f, coord,
-                                 spectral::null_spatial_dimension_info)
+                                 spectral::null_spatial_dimension_info,
+                                 derivative::Val{0})
     # There is only one point in the 'old grid' represented by coord (as indicated by the
     # type of the `spectral` argument), and we are interpolating in a spatial dimension.
     # Assume that the variable should be taken to be constant in this dimension to
@@ -223,7 +248,8 @@ function interpolate_to_grid_1d!(result, new_grid, f, coord,
 end
 
 function interpolate_to_grid_1d!(result, new_grid, f, coord,
-                                 spectral::null_velocity_dimension_info)
+                                 spectral::null_velocity_dimension_info,
+                                 derivative::Val{0})
     # There is only one point in the 'old grid' represented by coord (as indicated by the
     # type of the `spectral` argument), and we are interpolating in a velocity space
     # dimension. Assume that the profile 'should be' a Maxwellian over the new grid, with
@@ -249,6 +275,10 @@ coord : coordinate
 spectral : Bool or chebyshev_info
     struct containing information for discretization, whose type determines which method
     is used.
+derivative : Val(n)
+    The value of `n` the integer in the `Val{n}` indicates the order of the derivative to
+    be calculated of the interpolating function (only a few values of `n` are supported).
+    Defaults to Val(0), which means just calculating the interpolating function itself.
 
 Returns
 -------
@@ -366,14 +396,19 @@ function interpolate_to_grid_vpa(newgrid, f::AbstractVector{mk_float}, vpa, spec
 end
 
 """
-    interpolate_symmetric!(result, newgrid, f, oldgrid)
+    interpolate_symmetric!(result, newgrid, f, oldgrid, derivative=Val(0))
 
 Interpolate f from oldgrid to newgrid, imposing that `f(x)` is symmetric around `x=0`, so
 the interpolation is done by fitting a polynomial in `x^2` to the values of `f` given on
 `oldgrid`, and evaluating on `newgrid`. Since interpolation is done in a polynomial of
 `x^2`, the signs of the points on `newgrid` and `oldgrid` do not matter, and are ignored.
+
+`Val(n)` can be passed as `derivative` to calculate the derivative of order `n` of the
+interpolating function (only a few values of `n` are supported).
 """
-function interpolate_symmetric!(result, newgrid, f, oldgrid)
+function interpolate_symmetric! end
+
+function interpolate_symmetric!(result, newgrid, f, oldgrid, derivative::Val{0}=Val(0))
     nnew = length(newgrid)
     nold = length(oldgrid)
 
@@ -397,6 +432,44 @@ function interpolate_symmetric!(result, newgrid, f, oldgrid)
             this_f = f[j]
             for i ∈ 1:nnew
                 result[i] += this_f * prod((newgrid[i]^2 - oldgrid[k]^2) for k ∈ 1:nold if k ≠ j) * one_over_denominator
+            end
+        end
+    end
+
+    return nothing
+end
+
+function interpolate_symmetric!(result, newgrid, f, oldgrid, derivative::Val{1})
+    nnew = length(newgrid)
+    nold = length(oldgrid)
+
+    if nnew == 0
+        return nothing
+    end
+
+    # Check all points in newgrid are covered by oldgrid (i.e. between zero and the
+    # maximum of oldgrid)
+    @boundscheck maximum(abs.(newgrid)) ≤ maximum(abs.(oldgrid)) || error("newgrid bigger ($(maximum(abs.(newgrid)))) than oldgrid ($(maximum(abs.(oldgrid)))).")
+    @boundscheck size(result) == size(newgrid) || error("Size of result ($(size(result))) is not the same as size of newgrid ($(size(newgrid))).")
+    @boundscheck size(f) == size(oldgrid) || error("Size of f ($(size(f))) is not the same as size of oldgrid ($(size(oldgrid))).")
+
+    if nold == 1
+        # Interpolating 'polynomial' is just a constant
+        result .= 0.0
+    else
+        result .= 0.0
+        for j ∈ 1:nold
+            one_over_denominator = 1.0 / prod((oldgrid[j]^2 - oldgrid[k]^2) for k ∈ 1:nold if k ≠ j)
+            this_f = f[j]
+            for i ∈ 1:nnew
+                temp = 0.0
+                for k ∈ 1:nold
+                    if k == j
+                        continue
+                    end
+                    temp += prod((newgrid[i]^2 - oldgrid[l]^2) for l ∈ 1:nold if l ∉ (j,k))
+                end
+                result[i] += this_f * temp * 2.0 * newgrid[i] * one_over_denominator
             end
         end
     end
