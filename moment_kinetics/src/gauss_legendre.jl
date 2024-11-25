@@ -31,7 +31,7 @@ using ..array_allocation: allocate_float
 import ..calculus: elementwise_derivative!, mass_matrix_solve!
 import ..interpolation: single_element_interpolate!,
                         fill_single_element_interpolation_matrix!
-using ..lagrange_polynomials: lagrange_poly_optimised
+using ..lagrange_polynomials: lagrange_poly_optimised, lagrange_poly_derivative_optimised
 using ..moment_kinetics_structs: weak_discretization_info
 
 
@@ -352,7 +352,8 @@ function elementwise_derivative!(coord, ff, adv_fac, spectral::gausslegendre_inf
 end
 
 function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, coord,
-                                     gausslegendre::gausslegendre_base_info)
+                                     gausslegendre::gausslegendre_base_info,
+                                     derivative::Val{0})
     n_new = length(newgrid)
 
     i = 1
@@ -368,6 +369,31 @@ function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, c
         this_f = f[i]
         for j ∈ 1:n_new
             result[j] += this_f * lagrange_poly_optimised(other_nodes, one_over_denominator, newgrid[j])
+        end
+    end
+
+    return nothing
+end
+
+# Evaluate first derivative of the interpolating function
+function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, coord,
+                                     gausslegendre::gausslegendre_base_info,
+                                     derivative::Val{1})
+    n_new = length(newgrid)
+
+    i = 1
+    other_nodes = @view coord.other_nodes[:,i,ielement]
+    one_over_denominator = coord.one_over_denominator[i,ielement]
+    this_f = f[i]
+    for j ∈ 1:n_new
+        result[j] = this_f * lagrange_poly_derivative_optimised(other_nodes, one_over_denominator, newgrid[j])
+    end
+    for i ∈ 2:coord.ngrid
+        other_nodes = @view coord.other_nodes[:,i,ielement]
+        one_over_denominator = coord.one_over_denominator[i,ielement]
+        this_f = f[i]
+        for j ∈ 1:n_new
+            result[j] += this_f * lagrange_poly_derivative_optimised(other_nodes, one_over_denominator, newgrid[j])
         end
     end
 

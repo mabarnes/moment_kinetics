@@ -21,9 +21,16 @@ coord : coordinate
 not_spectral : finite_difference_info
     A finite_difference_info argument here indicates that the coordinate is not
     spectral-element discretized, i.e. it is on a uniform ('finite difference') grid.
+derivative : Val(n)
+    The value of `n` the integer in the `Val{n}` indicates the order of the derivative to
+    be calculated of the interpolating function (only a few values of `n` are supported).
+    Defaults to Val(0), which means just calculating the interpolating function itself.
 """
+function interpolate_to_grid_1d! end
+
 function interpolate_to_grid_1d!(result, new_grid, f, coord,
-                                 not_spectral::finite_difference_info)
+                                 not_spectral::finite_difference_info,
+                                 derivative::Val{0}=Val(0))
     x = coord.grid
     n_new = length(new_grid)
 
@@ -101,5 +108,10 @@ function interpolate_to_grid_1d!(result, new_grid, f, coord,
     return nothing
 end
 
+function interpolate_to_grid_1d!(result, new_grid, f, coord,
+                                 not_spectral::finite_difference_info,
+                                 derivative::Val{1})
+    error("First derivative interpolation not implemented for finite-difference yet.")
+end
 
 end # hermite_spline_interpolation
