@@ -3761,13 +3761,15 @@ function test_electron_wall_bc(test_input; atol=(5.0*epsilon)^2)
                                    (dens[iz] * composition.me_over_mi)))
             end
 
+before = copy(this_f)
             # enforce the boundary condition(s) on the electron pdf
             @views enforce_boundary_condition_on_electron_pdf!(
                        this_f, phi, moments.electron.vth[:,ir],
                        moments.electron.upar[:,ir], z, vperp, vpa, vperp_spectral,
                        vpa_spectral, vpa_advect, moments,
                        num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                       composition.me_over_mi; bc_constraints=false)
+                       composition.me_over_mi, ir; bc_constraints=false,
+                       update_vcut=false)
 
             # electron_kinetic_equation_euler_update!() just adds dt*d(g_e)/dt to the
             # electron_pdf member of the first argument, so if we set the electron_pdf member
