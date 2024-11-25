@@ -57,6 +57,7 @@ using moment_kinetics.moment_constraints: electron_implicit_constraint_forcing!,
                                           add_electron_implicit_constraint_forcing_to_z_only_Jacobian!,
                                           add_electron_implicit_constraint_forcing_to_v_only_Jacobian!,
                                           hard_force_moment_constraints!
+using moment_kinetics.timer_utils: reset_mk_timers!
 using moment_kinetics.type_definitions: mk_float
 using moment_kinetics.velocity_moments: calculate_electron_moment_derivatives_no_r!,
                                         integrate_over_vspace
@@ -210,6 +211,9 @@ test_input = OptionsDict("output" => OptionsDict("run_name" => "jacobian_matrix"
                         )
 
 function get_mk_state(test_input)
+    # Reset timers in case there was a previous run which did not clean them up.
+    reset_mk_timers!()
+
     mk_state = nothing
     quietoutput() do
         mk_state = setup_moment_kinetics(test_input; skip_electron_solve=true)
@@ -3620,8 +3624,6 @@ function test_electron_wall_bc(test_input; atol=(5.0*epsilon)^2)
         f = @view pdf.electron.norm[:,:,:,ir]
         begin_serial_region()
         @serial_region begin
-            @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
-
             # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
             # means f must have a non-Maxwellian part that varies in z.
             f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
@@ -3636,6 +3638,8 @@ function test_electron_wall_bc(test_input; atol=(5.0*epsilon)^2)
         # at the z-boundaries
         begin_serial_region()
         @serial_region begin
+            @. delta_p = p_amplitude
+
             delta_f .= f_amplitude .*
                        reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
                        f
@@ -3678,9 +3682,9 @@ function test_electron_wall_bc(test_input; atol=(5.0*epsilon)^2)
         end
 
         add_wall_boundary_condition_to_Jacobian!(
-            jacobian_matrix, phi, vth, upar, z, vperp, vpa, vperp_spectral, vpa_spectral,
-            vpa_advect, moments, num_diss_params.electron.vpa_dissipation_coefficient, me,
-            ir)
+            jacobian_matrix, phi, f, ppar, vth, upar, z, vperp, vpa, vperp_spectral,
+            vpa_spectral, vpa_advect, moments,
+            num_diss_params.electron.vpa_dissipation_coefficient, me, ir)
 
 #        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
 #        # variables (vth, etc.).
@@ -3764,8 +3768,7 @@ function test_electron_wall_bc(test_input; atol=(5.0*epsilon)^2)
 before = copy(this_f)
             # enforce the boundary condition(s) on the electron pdf
             @views enforce_boundary_condition_on_electron_pdf!(
-                       this_f, phi, moments.electron.vth[:,ir],
-                       moments.electron.upar[:,ir], z, vperp, vpa, vperp_spectral,
+                       this_f, phi, vth, upar, z, vperp, vpa, vperp_spectral,
                        vpa_spectral, vpa_advect, moments,
                        num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
                        composition.me_over_mi, ir; bc_constraints=false,
@@ -3837,7 +3840,29 @@ before = copy(this_f)
             end
         end
 
+        @testset "δp only" begin
+            residual_func!(original_residual, f, ppar)
+            residual_func!(perturbed_residual, copy(f), ppar.+delta_p)
 
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                delta_state[pdf_size+1:end] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           zeros(p_size); atol=1.0e-15)
+
+                # Use an absolute tolerance for this test because if we used a norm_factor
+                # like the other tests, it would be zero to machine precision at some
+                # points.
+                @test elementwise_isapprox(perturbed_residual,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n);
+                                           rtol=0.0, atol=atol)
+            end
+        end
 #        @testset "δp only" begin
 #            residual_func!(original_residual, f, ppar)
 #            residual_func!(perturbed_residual, f, ppar .+ delta_p)

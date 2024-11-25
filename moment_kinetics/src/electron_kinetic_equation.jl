@@ -2936,17 +2936,20 @@ end
 end
 
 """
-    add_wall_boundary_condition_to_Jacobian!(jacobian, phi, vthe, upar, z, vperp, vpa,
-                                             vperp_spectral, vpa_spectral, vpa_adv,
-                                             moments, vpa_diffusion, me_over_mi, ir)
+    add_wall_boundary_condition_to_Jacobian!(jacobian, phi, pdf, ppar, vthe, upar, z,
+                                             vperp, vpa, vperp_spectral, vpa_spectral,
+                                             vpa_adv, moments, vpa_diffusion, me_over_mi,
+                                             ir)
 """
 @timeit global_timer add_wall_boundary_condition_to_Jacobian!(
-                         jacobian, phi, vthe, upar, z, vperp, vpa, vperp_spectral,
-                         vpa_spectral, vpa_adv, moments, vpa_diffusion, me_over_mi,
-                         ir) = begin
+                         jacobian, phi, pdf, ppar, vthe, upar, z, vperp, vpa,
+                         vperp_spectral, vpa_spectral, vpa_adv, moments, vpa_diffusion,
+                         me_over_mi, ir) = begin
     if z.bc != "wall"
         return nothing
     end
+
+    pdf_size = z.n * vperp.n * vpa.n
 
     if z.irank == 0
         begin_vperp_region()
@@ -2962,6 +2965,7 @@ end
 
             jac_range = (ivperp-1)*vpa.n+1 : ivperp*vpa.n
             jacobian_zbegin = @view jacobian[jac_range,jac_range]
+            jacobian_zbegin_ppar = @view jacobian[jac_range,pdf_size+1]
 
             vpa_unnorm, u_over_vt, vcut, minus_vcut_ind, sigma, sigma_ind, sigma_fraction,
                 element_with_zero, element_with_zero_boundary, last_point_near_zero,
@@ -2971,7 +2975,7 @@ end
             plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
             # vcut_fraction is the fraction of the distance between plus_vcut_ind and
             # plus_vcut_ind+1 where vcut is.
-            vcut_fraction = (vcut - vpa_unnorm[plus_vcut_ind]) / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind])
+            vcut_fraction = get_plus_vcut_fraction(vcut, plus_vcut_ind, vpa_unnorm)
             if vcut_fraction > 0.5
                 last_nonzero_ind = plus_vcut_ind + 1
             else
@@ -2995,12 +2999,68 @@ end
             else
                 jacobian_zbegin[last_nonzero_ind,:] .*= vcut_fraction + 0.5
             end
+
+            # Fill in elements giving response to changes in electron_ppar
+            # A change to ppar results in a shift in the location of w_∥(v_∥=0).
+            # The interpolated values of g_e(w_∥) that are filled by the boundary
+            # condition are (dropping _∥ subscripts for the remaining comments in this
+            # if-clause)
+            #   g(w|v>0) = g(2*u/vth - w)
+            # So
+            #   δg(w|v>0) = dg/dw(2*u/vth - w) * (-2*u/vth^2) * δvth
+            #             = dg/dw(2*u/vth - w) * (-2*u/vth^2) * δ(sqrt(2*ppar/n)
+            #             = dg/dw(2*u/vth - w) * (-2*u/vth^2) * δppar * vth / (2*ppar)
+            #             = -u/vth/ppar * dg/dw(2*u/vth - w) * δppar
+
+            dpdfdw_near_zero = @view vpa.scratch[sigma_ind:last_point_near_zero]
+            @views interpolate_symmetric!(dpdfdw_near_zero,
+                                          vpa_unnorm[sigma_ind:last_point_near_zero],
+                                          pdf[element_with_zero_boundary:sigma_ind-1,1,1,ir],
+                                          vpa_unnorm[element_with_zero_boundary:sigma_ind-1],
+                                          Val(1))
+            @. jacobian_zbegin_ppar[sigma_ind:last_point_near_zero] =
+                   -upar[1] / vthe[1] / ppar[1] * dpdfdw_near_zero
+
+            reversed_dpdfdw_far_from_zero = @view vpa.scratch[last_point_near_zero+1:last_nonzero_ind]
+            @views interpolate_to_grid_1d!(reversed_dpdfdw_far_from_zero,
+                                           reversed_wpa_of_minus_vpa[vpa.n-last_nonzero_ind+1:vpa.n-last_point_near_zero],
+                                           pdf[:,1,1,ir], vpa, vpa_spectral, Val(1))
+            reverse!(reversed_dpdfdw_far_from_zero)
+            # Note that because we calculated the derivative of the interpolating
+            # function, and then reversed the results, we need to multiply the derivative
+            # by -1.
+            @. jacobian_zbegin_ppar[last_point_near_zero+1:last_nonzero_ind] =
+                   upar[1] / vthe[1] / ppar[1] * reversed_dpdfdw_far_from_zero
+
+            # The change in electron_ppar also changes the position of
+            #     wcut = (vcut - upar)/vthe
+            # as vcut does not change (within the Krylov iteration where this
+            # preconditioner matrix is used), but vthe does because of the change in
+            # electron_ppar. We actually use vcut_fraction calculated from vpa_unnorm, so
+            # it is most convenient to consider:
+            #     v = vthe * w + upar
+            #     δv = δvthe * w
+            #        = δvthe * (v - upar)/vthe
+            #        = δppar * vthe / (2*ppar) * (v - upar)/vthe
+            #        = δppar * (v - upar) / 2 / ppar
+            # with vl and vu the values of v at the grid points below and above vcut
+            #     vcut_fraction = (vcut - vl) / (vu - vl)
+            #     δvcut_fraction = -(vcut - vl) / (vu - vl)^2 * (δvu - δvl) - δvl / (vu - vl)
+            #     δvcut_fraction = [-(vcut - vl) / (vu - vl)^2 * (vu - vl) - (vl - upar) / (vu - vl)] * δppar / 2 / ppar
+            #     δvcut_fraction = [-(vcut - vl) / (vu - vl) - (vl - upar) / (vu - vl)] * δppar / 2 / ppar
+            #     δvcut_fraction = -(vcut - upar) / (vu - vl) / 2 / ppar * δppar
+            interpolated_pdf_at_last_nonzero_ind = @view vpa.scratch[1:1]
+            @views interpolate_to_grid_1d!(interpolated_pdf_at_last_nonzero_ind,
+                                           vpa_unnorm[last_nonzero_ind:last_nonzero_ind],
+                                           pdf[:,1,1,ir], vpa, vpa_spectral)
+
+            delta_vcut_fraction_over_delta_ppar = -(vcut - upar[1]) / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind]) / 2.0 / ppar[1]
+            jacobian_zbegin_ppar[last_nonzero_ind] += interpolated_pdf_at_last_nonzero_ind[] * delta_vcut_fraction_over_delta_ppar
         end
     end
 
     if z.irank == z.nrank - 1
         begin_vperp_region()
-        pdf_size = z.n * vperp.n * vpa.n
         @loop_vperp ivperp begin
             # Skip vperp boundary points.
             if vperp.n > 1 && ivperp == vperp.n
@@ -3013,6 +3073,7 @@ end
 
             jac_range = pdf_size-vperp.n*vpa.n+(ivperp-1)*vpa.n+1 : pdf_size-vperp.n*vpa.n+ivperp*vpa.n
             jacobian_zend = @view jacobian[jac_range,jac_range]
+            jacobian_zend_ppar = @view jacobian[jac_range,pdf_size+z.n]
 
             vpa_unnorm, u_over_vt, vcut, plus_vcut_ind, sigma, sigma_ind, sigma_fraction,
                 element_with_zero, element_with_zero_boundary, first_point_near_zero,
@@ -3020,11 +3081,11 @@ end
                                                                     me_over_mi, vpa, ir)
 
             minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
-            # vcut_fraction is the fraction of the distance between minus_vcut_ind and
-            # minus_vcut_ind-1 where -vcut is.
-            vcut_fraction = (-vcut - vpa_unnorm[minus_vcut_ind]) / (vpa_unnorm[minus_vcut_ind-1] - vpa_unnorm[minus_vcut_ind])
+            # vcut_fraction is the fraction of the distance between minus_vcut_ind-1 and
+            # minus_vcut_ind where -vcut is.
+            vcut_fraction = get_minus_vcut_fraction(vcut, minus_vcut_ind, vpa_unnorm)
 
-            if vcut_fraction > 0.5
+            if vcut_fraction < 0.5
                 first_nonzero_ind = minus_vcut_ind - 1
             else
                 first_nonzero_ind = minus_vcut_ind
@@ -3042,11 +3103,68 @@ end
                        reversed_wpa_of_minus_vpa[vpa.n-first_point_near_zero+2:vpa.n-first_nonzero_ind+1],
                        vpa, vpa_spectral)
 
-            if vcut_fraction > 0.5
-                jacobian_zend[first_nonzero_ind,:] .*= vcut_fraction - 0.5
+            if vcut_fraction < 0.5
+                jacobian_zend[first_nonzero_ind,:] .*= 0.5 - vcut_fraction
             else
-                jacobian_zend[first_nonzero_ind,:] .*= vcut_fraction + 0.5
+                jacobian_zend[first_nonzero_ind,:] .*= 1.5 - vcut_fraction
             end
+
+            # Fill in elements giving response to changes in electron_ppar
+            # A change to ppar results in a shift in the location of w_∥(v_∥=0).
+            # The interpolated values of g_e(w_∥) that are filled by the boundary
+            # condition are (dropping _∥ subscripts for the remaining comments in this
+            # if-clause)
+            #   g(w|v<0) = g(2*u/vth - w)
+            # So
+            #   δg(w|v<0) = dg/dw(2*u/vth - w) * (-2*u/vth^2) * δvth
+            #             = dg/dw(2*u/vth - w) * (-2*u/vth^2) * δ(sqrt(2*ppar/n)
+            #             = dg/dw(2*u/vth - w) * (-2*u/vth^2) * δppar * vth / (2*ppar)
+            #             = -u/vth/ppar * dg/dw(2*u/vth - w) * δppar
+
+            dpdfdw_near_zero = @view vpa.scratch[first_point_near_zero:sigma_ind]
+            @views interpolate_symmetric!(dpdfdw_near_zero,
+                                          vpa_unnorm[first_point_near_zero:sigma_ind],
+                                          pdf[sigma_ind+1:element_with_zero_boundary,1,end,ir],
+                                          vpa_unnorm[sigma_ind+1:element_with_zero_boundary],
+                                          Val(1))
+            @. jacobian_zend_ppar[first_point_near_zero:sigma_ind] =
+                   -upar[end] / vthe[end] / ppar[end] * dpdfdw_near_zero
+
+            reversed_dpdfdw_far_from_zero = @view vpa.scratch[first_nonzero_ind:first_point_near_zero-1]
+            @views interpolate_to_grid_1d!(reversed_dpdfdw_far_from_zero,
+                                           reversed_wpa_of_minus_vpa[vpa.n-first_point_near_zero+2:vpa.n-first_nonzero_ind+1],
+                                           pdf[:,1,end,ir], vpa, vpa_spectral, Val(1))
+            reverse!(reversed_dpdfdw_far_from_zero)
+            # Note that because we calculated the derivative of the interpolating
+            # function, and then reversed the results, we need to multiply the derivative
+            # by -1.
+            @. jacobian_zend_ppar[first_nonzero_ind:first_point_near_zero-1] =
+                   upar[end] / vthe[end] / ppar[end] * reversed_dpdfdw_far_from_zero
+
+            # The change in electron_ppar also changes the position of
+            #     wcut = (vcut - upar)/vthe
+            # as vcut does not change (within the Krylov iteration where this
+            # preconditioner matrix is used), but vthe does because of the change in
+            # electron_ppar. We actually use vcut_fraction calculated from vpa_unnorm, so
+            # it is most convenient to consider:
+            #     v = vthe * w + upar
+            #     δv = δvthe * w
+            #        = δvthe * (v - upar)/vthe
+            #        = δppar * vthe / (2*ppar) * (v - upar)/vthe
+            #        = δppar * (v - upar) / 2 / ppar
+            # with vl and vu the values of v at the grid points below and above vcut
+            #     vcut_fraction = (vcut - vl) / (vu - vl)
+            #     δvcut_fraction = -(vcut - vl) / (vu - vl)^2 * (δvu - δvl) - δvl / (vu - vl)
+            #     δvcut_fraction = [-(vcut - vl) / (vu - vl)^2 * (vu - vl) - (vl - upar) / (vu - vl)] * δppar / 2 / ppar
+            #     δvcut_fraction = [-(vcut - vl) / (vu - vl) - (vl - upar) / (vu - vl)] * δppar / 2 / ppar
+            #     δvcut_fraction = -(vcut - upar) / (vu - vl) / 2 / ppar * δppar
+            interpolated_pdf_at_first_nonzero_ind = @view vpa.scratch[1:1]
+            @views interpolate_to_grid_1d!(interpolated_pdf_at_first_nonzero_ind,
+                                           vpa_unnorm[first_nonzero_ind:first_nonzero_ind],
+                                           pdf[:,1,1,ir], vpa, vpa_spectral)
+
+            delta_vcut_fraction_over_delta_ppar = -(vcut - upar[end]) / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1]) / 2.0 / ppar[1]
+            jacobian_zend_ppar[first_nonzero_ind] += interpolated_pdf_at_first_nonzero_ind[] * delta_vcut_fraction_over_delta_ppar
         end
     end
 end
