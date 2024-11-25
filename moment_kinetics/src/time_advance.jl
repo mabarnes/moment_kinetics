@@ -429,6 +429,8 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         decrease_dt_iteration_threshold = t_input["decrease_dt_iteration_threshold"]
         increase_dt_iteration_threshold = t_input["increase_dt_iteration_threshold"]
         cap_factor_ion_dt = mk_float(t_input["cap_factor_ion_dt"])
+        max_pseudotimesteps = t_input["max_pseudotimesteps"]
+        max_pseudotime = t_input["max_pseudotime"]
         electron_t_params = nothing
     elseif electron === false
         debug_io = nothing
@@ -437,6 +439,8 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         decrease_dt_iteration_threshold = -1
         increase_dt_iteration_threshold = typemax(mk_int)
         cap_factor_ion_dt = Inf
+        max_pseudotimesteps = -1
+        max_pseudotime = Inf
         electron_t_params = nothing
     else
         debug_io = nothing
@@ -470,6 +474,8 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         decrease_dt_iteration_threshold = -1
         increase_dt_iteration_threshold = typemax(mk_int)
         cap_factor_ion_dt = Inf
+        max_pseudotimesteps = -1
+        max_pseudotime = Inf
         electron_t_params = electron
     end
     return time_info(n_variables, t_input["nstep"], end_time, t, dt, previous_dt,
@@ -495,7 +501,8 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      electron_preconditioner_type,
                      mk_float(t_input["constraint_forcing_rate"]),
                      decrease_dt_iteration_threshold, increase_dt_iteration_threshold,
-                     mk_float(cap_factor_ion_dt), t_input["write_after_fixed_step_count"],
+                     mk_float(cap_factor_ion_dt), mk_int(max_pseudotimesteps),
+                     mk_float(max_pseudotime), t_input["write_after_fixed_step_count"],
                      error_sum_zero, t_input["split_operators"],
                      t_input["steady_state_residual"],
                      mk_float(t_input["converged_residual_value"]),
@@ -2962,8 +2969,13 @@ end
 
     n_rk_stages = t_params.n_rk_stages
 
-    max_electron_pdf_iterations = 1000
-    max_electron_sim_time = 1.0e-3
+    if t_params.electron !== nothing
+        max_electron_pdf_iterations = t_params.electron.max_pseudotimesteps
+        max_electron_sim_time = t_params.electron.max_pseudotime
+    else
+        max_electron_pdf_iterations = nothing
+        max_electron_sim_time = nothing
+    end
 
     first_scratch = scratch[1]
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
@@ -3556,8 +3568,8 @@ end
                                              t_params.electron, t_params.dt[],
                                              nl_solver_params.electron_advance)
     elseif t_params.implicit_electron_ppar
-        max_electron_pdf_iterations = 1000
-        max_electron_sim_time = 1.0e-3
+        max_electron_pdf_iterations = t_params.electron.max_pseudotimesteps
+        max_electron_sim_time = t_params.electron.max_pseudotime
         electron_success = update_electron_pdf!(scratch_electron, pdf.electron.norm,
                                                 moments, fields.phi, r, z, vperp, vpa,
                                                 z_spectral, vperp_spectral, vpa_spectral,

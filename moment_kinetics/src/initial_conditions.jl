@@ -668,7 +668,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
         ##max_electron_pdf_iterations = 10000
         #max_electron_sim_time = nothing
         max_electron_pdf_iterations = nothing
-        max_electron_sim_time = 2.0
+        max_electron_sim_time = max(2.0, t_params.electron.max_pseudotime)
         if t_params.electron.debug_io !== nothing
             io_electron = setup_electron_io(t_params.electron.debug_io[1], vpa, vperp, z,
                                             r, composition, collisions,

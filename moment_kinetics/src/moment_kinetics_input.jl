@@ -210,6 +210,8 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         decrease_dt_iteration_threshold=100,
         increase_dt_iteration_threshold=20,
         cap_factor_ion_dt=10.0,
+        max_pseudotimesteps=1000,
+        max_pseudotime=1.0e-2,
         no_restart=false,
         debug_io=false,
        )
