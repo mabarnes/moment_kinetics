@@ -123,6 +123,9 @@ function run_moment_kinetics(input_dict::OptionsDict; restart=false, restart_tim
         check_so_newer_than_code()
     end
 
+    # Reset timers in case there was a previous run which did not clean them up.
+    reset_mk_timers!()
+
     mk_state = nothing
     try
         @timeit global_timer "moment_kinetics" begin
