@@ -3012,19 +3012,22 @@ end
             #             = dg/dw(2*u/vth - w) * (-2*u/vth^2) * δppar * vth / (2*ppar)
             #             = -u/vth/ppar * dg/dw(2*u/vth - w) * δppar
 
-            dpdfdw_near_zero = @view vpa.scratch[sigma_ind:last_point_near_zero]
-            @views interpolate_symmetric!(dpdfdw_near_zero,
+            dpdfdv_near_zero = @view vpa.scratch[sigma_ind:last_point_near_zero]
+            @views interpolate_symmetric!(dpdfdv_near_zero,
                                           vpa_unnorm[sigma_ind:last_point_near_zero],
-                                          pdf[element_with_zero_boundary:sigma_ind-1,1,1,ir],
+                                          pdf[element_with_zero_boundary:sigma_ind-1,ivperp,1,ir],
                                           vpa_unnorm[element_with_zero_boundary:sigma_ind-1],
                                           Val(1))
+            # The above call to interpolate_symmetric calculates dg/dv rather than dg/dw,
+            # so need to multiply by an extra factor of vthe.
+            #   δg(w|v>0) = -u/ppar * dg/dv(2*u/vth - w) * δppar
             @. jacobian_zbegin_ppar[sigma_ind:last_point_near_zero] =
-                   -upar[1] / vthe[1] / ppar[1] * dpdfdw_near_zero
+                   -upar[1] / ppar[1] * dpdfdv_near_zero
 
             reversed_dpdfdw_far_from_zero = @view vpa.scratch[last_point_near_zero+1:last_nonzero_ind]
             @views interpolate_to_grid_1d!(reversed_dpdfdw_far_from_zero,
                                            reversed_wpa_of_minus_vpa[vpa.n-last_nonzero_ind+1:vpa.n-last_point_near_zero],
-                                           pdf[:,1,1,ir], vpa, vpa_spectral, Val(1))
+                                           pdf[:,ivperp,1,ir], vpa, vpa_spectral, Val(1))
             reverse!(reversed_dpdfdw_far_from_zero)
             # Note that because we calculated the derivative of the interpolating
             # function, and then reversed the results, we need to multiply the derivative
@@ -3050,9 +3053,10 @@ end
             #     δvcut_fraction = [-(vcut - vl) / (vu - vl) - (vl - upar) / (vu - vl)] * δppar / 2 / ppar
             #     δvcut_fraction = -(vcut - upar) / (vu - vl) / 2 / ppar * δppar
             interpolated_pdf_at_last_nonzero_ind = @view vpa.scratch[1:1]
+            reversed_last_nonzero_ind = vpa.n-last_nonzero_ind+1
             @views interpolate_to_grid_1d!(interpolated_pdf_at_last_nonzero_ind,
-                                           vpa_unnorm[last_nonzero_ind:last_nonzero_ind],
-                                           pdf[:,1,1,ir], vpa, vpa_spectral)
+                                           reversed_wpa_of_minus_vpa[reversed_last_nonzero_ind:reversed_last_nonzero_ind],
+                                           pdf[:,ivperp,1,ir], vpa, vpa_spectral)
 
             delta_vcut_fraction_over_delta_ppar = -(vcut - upar[1]) / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind]) / 2.0 / ppar[1]
             jacobian_zbegin_ppar[last_nonzero_ind] += interpolated_pdf_at_last_nonzero_ind[] * delta_vcut_fraction_over_delta_ppar
@@ -3121,19 +3125,22 @@ end
             #             = dg/dw(2*u/vth - w) * (-2*u/vth^2) * δppar * vth / (2*ppar)
             #             = -u/vth/ppar * dg/dw(2*u/vth - w) * δppar
 
-            dpdfdw_near_zero = @view vpa.scratch[first_point_near_zero:sigma_ind]
-            @views interpolate_symmetric!(dpdfdw_near_zero,
+            dpdfdv_near_zero = @view vpa.scratch[first_point_near_zero:sigma_ind]
+            @views interpolate_symmetric!(dpdfdv_near_zero,
                                           vpa_unnorm[first_point_near_zero:sigma_ind],
-                                          pdf[sigma_ind+1:element_with_zero_boundary,1,end,ir],
+                                          pdf[sigma_ind+1:element_with_zero_boundary,ivperp,end,ir],
                                           vpa_unnorm[sigma_ind+1:element_with_zero_boundary],
                                           Val(1))
+            # The above call to interpolate_symmetric calculates dg/dv rather than dg/dw,
+            # so need to multiply by an extra factor of vthe.
+            #   δg(w|v<0) = -u/ppar * dg/dv(2*u/vth - w) * δppar
             @. jacobian_zend_ppar[first_point_near_zero:sigma_ind] =
-                   -upar[end] / vthe[end] / ppar[end] * dpdfdw_near_zero
+                   -upar[end] / ppar[end] * dpdfdv_near_zero
 
             reversed_dpdfdw_far_from_zero = @view vpa.scratch[first_nonzero_ind:first_point_near_zero-1]
             @views interpolate_to_grid_1d!(reversed_dpdfdw_far_from_zero,
                                            reversed_wpa_of_minus_vpa[vpa.n-first_point_near_zero+2:vpa.n-first_nonzero_ind+1],
-                                           pdf[:,1,end,ir], vpa, vpa_spectral, Val(1))
+                                           pdf[:,ivperp,end,ir], vpa, vpa_spectral, Val(1))
             reverse!(reversed_dpdfdw_far_from_zero)
             # Note that because we calculated the derivative of the interpolating
             # function, and then reversed the results, we need to multiply the derivative
@@ -3142,7 +3149,7 @@ end
                    upar[end] / vthe[end] / ppar[end] * reversed_dpdfdw_far_from_zero
 
             # The change in electron_ppar also changes the position of
-            #     wcut = (vcut - upar)/vthe
+            #     wcut = (-vcut - upar)/vthe
             # as vcut does not change (within the Krylov iteration where this
             # preconditioner matrix is used), but vthe does because of the change in
             # electron_ppar. We actually use vcut_fraction calculated from vpa_unnorm, so
@@ -3153,18 +3160,22 @@ end
             #        = δppar * vthe / (2*ppar) * (v - upar)/vthe
             #        = δppar * (v - upar) / 2 / ppar
             # with vl and vu the values of v at the grid points below and above vcut
-            #     vcut_fraction = (vcut - vl) / (vu - vl)
-            #     δvcut_fraction = -(vcut - vl) / (vu - vl)^2 * (δvu - δvl) - δvl / (vu - vl)
-            #     δvcut_fraction = [-(vcut - vl) / (vu - vl)^2 * (vu - vl) - (vl - upar) / (vu - vl)] * δppar / 2 / ppar
-            #     δvcut_fraction = [-(vcut - vl) / (vu - vl) - (vl - upar) / (vu - vl)] * δppar / 2 / ppar
-            #     δvcut_fraction = -(vcut - upar) / (vu - vl) / 2 / ppar * δppar
+            #     vcut_fraction = (-vcut - vl) / (vu - vl)
+            #     δvcut_fraction = -(-vcut - vl) / (vu - vl)^2 * (δvu - δvl) - δvl / (vu - vl)
+            #     δvcut_fraction = [-(-vcut - vl) / (vu - vl)^2 * (vu - vl) - (vl - upar) / (vu - vl)] * δppar / 2 / ppar
+            #     δvcut_fraction = [-(-vcut - vl) / (vu - vl) - (vl - upar) / (vu - vl)] * δppar / 2 / ppar
+            #     δvcut_fraction = -(-vcut - upar) / (vu - vl) / 2 / ppar * δppar
+            #     δvcut_fraction = (vcut + upar) / (vu - vl) / 2 / ppar * δppar
             interpolated_pdf_at_first_nonzero_ind = @view vpa.scratch[1:1]
+            reversed_first_nonzero_ind = vpa.n-first_nonzero_ind+1
             @views interpolate_to_grid_1d!(interpolated_pdf_at_first_nonzero_ind,
-                                           vpa_unnorm[first_nonzero_ind:first_nonzero_ind],
-                                           pdf[:,1,1,ir], vpa, vpa_spectral)
+                                           reversed_wpa_of_minus_vpa[reversed_first_nonzero_ind:reversed_first_nonzero_ind],
+                                           pdf[:,ivperp,end,ir], vpa, vpa_spectral)
 
-            delta_vcut_fraction_over_delta_ppar = -(vcut - upar[end]) / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1]) / 2.0 / ppar[1]
-            jacobian_zend_ppar[first_nonzero_ind] += interpolated_pdf_at_first_nonzero_ind[] * delta_vcut_fraction_over_delta_ppar
+            delta_vcut_fraction_over_delta_ppar = (vcut + upar[end]) / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1]) / 2.0 / ppar[end]
+            # Note that pdf[first_nonzero_ind,ivperp,end,ir] depends on -vcut_fraction, so
+            # need a -'ve sign in the following line.
+            jacobian_zend_ppar[first_nonzero_ind] += -interpolated_pdf_at_first_nonzero_ind[] * delta_vcut_fraction_over_delta_ppar
         end
     end
 end
