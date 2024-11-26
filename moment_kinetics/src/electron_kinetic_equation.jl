@@ -936,6 +936,11 @@ global_rank[] == 0 && println("recalculating precon")
                 @timeit_debug global_timer lu_precon!(x) = begin
                     precon_ppar, precon_f = x
 
+                    # Zero out the boundary points in the input to the preconditioner so
+                    # that the preconditioner matrix can have 1's on the diagonal to make
+                    # sure it is not singular.
+                    zero_z_boundary_condition_points(precon_f, z, vpa, moments, ir)
+
                     precon_lu, _, this_input_buffer, this_output_buffer =
                         nl_solver_params.preconditioners[ir]
 
@@ -1234,6 +1239,11 @@ global_rank[] == 0 && println("recalculating precon")
                 @timeit_debug global_timer adi_precon!(x) = begin
                     precon_ppar, precon_f = x
 
+                    # Zero out the boundary points in the input to the preconditioner so
+                    # that the preconditioner matrix can have 1's on the diagonal to make
+                    # sure it is not singular.
+                    zero_z_boundary_condition_points(precon_f, z, vpa, moments, ir)
+
                     adi_info = nl_solver_params.preconditioners[ir]
                     precon_iterations = nl_solver_params.precon_iterations
                     this_input_buffer = adi_info.input_buffer
@@ -1509,36 +1519,7 @@ global_rank[] == 0 && println("recalculating precon")
                                                       vperp, vperp_spectral, vperp_adv,
                                                       vperp_diffusion, ir)
                 end
-                if z.bc ∈ ("wall", "constant",) && (z.irank == 0 || z.irank == z.nrank - 1)
-                    # Boundary conditions on incoming part of distribution function. Note
-                    # that as density, upar, ppar do not change in this implicit step,
-                    # f_electron_newvar, f_old, and residual should all be zero at exactly
-                    # the same set of grid points, so it is reasonable to zero-out
-                    # `residual` to impose the boundary condition. We impose this after
-                    # subtracting f_old in case rounding errors, etc. mean that at some
-                    # point f_old had a different boundary condition cut-off index.
-                    begin_vperp_vpa_region()
-                    v_unnorm = vpa.scratch
-                    zero = 1.0e-14
-                    if z.irank == 0
-                        v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[1,ir],
-                                                    moments.electron.upar[1,ir], true, true)
-                        @loop_vperp_vpa ivperp ivpa begin
-                            if v_unnorm[ivpa] > -zero
-                                f_electron_residual[ivpa,ivperp,1] = 0.0
-                            end
-                        end
-                    end
-                    if z.irank == z.nrank - 1
-                        v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[end,ir],
-                                                    moments.electron.upar[end,ir], true, true)
-                        @loop_vperp_vpa ivperp ivpa begin
-                            if v_unnorm[ivpa] < zero
-                                f_electron_residual[ivpa,ivperp,end] = 0.0
-                            end
-                        end
-                    end
-                end
+                zero_z_boundary_condition_points(f_electron_residual, z, vpa, moments, ir)
 
                 return nothing
             end
@@ -1927,47 +1908,7 @@ to allow the outer r-loop to be parallelised.
                 enforce_vperp_boundary_condition!(f_electron_residual, vperp.bc, vperp, vperp_spectral,
                                                   vperp_adv, vperp_diffusion)
             end
-            if z.bc ∈ ("wall", "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
-                # Boundary conditions on incoming part of distribution function. Note that
-                # as density, upar, ppar do not change in this implicit step, f_new,
-                # f_old, and residual should all be zero at exactly the same set of grid
-                # points, so it is reasonable to zero-out `residual` to impose the
-                # boundary condition. We impose this after subtracting f_old in case
-                # rounding errors, etc. mean that at some point f_old had a different
-                # boundary condition cut-off index.
-                begin_vperp_vpa_region()
-                v_unnorm = vpa.scratch
-                zero = 1.0e-14
-                if z.irank == 0
-                    iz = 1
-                    v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[iz,ir],
-                                                fvec_in.electron_upar[iz,ir], true, true)
-                    @loop_vperp_vpa ivperp ivpa begin
-                        if v_unnorm[ivpa] > -zero
-                            f_electron_residual[ivpa,ivperp,iz,ir] = 0.0
-                        end
-                    end
-                end
-                if z.irank == z.nrank - 1
-                    iz = z.n
-                    v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[iz,ir],
-                                                fvec_in.electron_upar[iz,ir], true, true)
-                    @loop_vperp_vpa ivperp ivpa begin
-                        if v_unnorm[ivpa] < zero
-                            f_electron_residual[ivpa,ivperp,iz,ir] = 0.0
-                        end
-                    end
-                end
-            end
-            begin_z_region()
-            @loop_z iz begin
-                @views moment_constraints_on_residual!(f_electron_residual[:,:,iz],
-                                                       f_electron_new[:,:,iz],
-                                                       (evolve_density=true,
-                                                        evolve_upar=true,
-                                                        evolve_ppar=true),
-                                                       vpa)
-            end
+            zero_z_boundary_condition_points(f_electron_residual, z, vpa, moments, ir)
             return nothing
         end
 
@@ -2932,6 +2873,42 @@ end
         end
     end
 
+    return nothing
+end
+
+# In several places it is useful to zero out (in residuals, etc.) the points that would be
+# set by the z boundary condition.
+function zero_z_boundary_condition_points(residual, z, vpa, moments, ir)
+    if z.bc ∈ ("wall", "constant",) && (z.irank == 0 || z.irank == z.nrank - 1)
+        # Boundary conditions on incoming part of distribution function. Note
+        # that as density, upar, ppar do not change in this implicit step,
+        # f_electron_newvar, f_old, and residual should all be zero at exactly
+        # the same set of grid points, so it is reasonable to zero-out
+        # `residual` to impose the boundary condition. We impose this after
+        # subtracting f_old in case rounding errors, etc. mean that at some
+        # point f_old had a different boundary condition cut-off index.
+        begin_vperp_vpa_region()
+        v_unnorm = vpa.scratch
+        zero = 1.0e-14
+        if z.irank == 0
+            v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[1,ir],
+                                        moments.electron.upar[1,ir], true, true)
+            @loop_vperp_vpa ivperp ivpa begin
+                if v_unnorm[ivpa] > -zero
+                    residual[ivpa,ivperp,1] = 0.0
+                end
+            end
+        end
+        if z.irank == z.nrank - 1
+            v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[end,ir],
+                                        moments.electron.upar[end,ir], true, true)
+            @loop_vperp_vpa ivperp ivpa begin
+                if v_unnorm[ivpa] < zero
+                    residual[ivpa,ivperp,end] = 0.0
+                end
+            end
+        end
+    end
     return nothing
 end
 
