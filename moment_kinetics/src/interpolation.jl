@@ -163,8 +163,6 @@ function fill_1d_interpolation_matrix!(matrix, newgrid, coord, spectral)
     # define local variable nelement for convenience
     nelement = coord.nelement_local
 
-    matrix .= 0.0
-
     n_new = size(newgrid)[1]
     # Find which points belong to which element.
     # istart[j] contains the index of the first point in newgrid that is within element

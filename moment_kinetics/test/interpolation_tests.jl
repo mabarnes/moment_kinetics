@@ -74,6 +74,7 @@ function runtests()
                 if discretization == "gausslegendre_pseudospectral"
                     @testset "matrix" begin
                         interp_matrix = allocate_float(length(test_grid), z.n)
+                        interp_matrix .= 0.0
                         fill_1d_interpolation_matrix!(interp_matrix, test_grid, z, spectral)
 
                         @test isapprox(interp_matrix * f, expected, rtol=rtol, atol=1.e-14)
@@ -149,6 +150,7 @@ function runtests()
                 @testset "matrix" begin
                     interp_matrix = allocate_float(nx - first_positive_ind + 1,
                                                    first_positive_ind - 1)
+                    interp_matrix .= 0.0
                     fill_interpolate_symmetric_matrix!(interp_matrix,
                                                        x[first_positive_ind:end],
                                                        x[1:first_positive_ind-1])
@@ -188,6 +190,7 @@ function runtests()
                 @testset "matrix" begin
                     interp_matrix = allocate_float(first_positive_ind - 1,
                                                    nx - first_positive_ind + 1)
+                    interp_matrix .= 0.0
                     fill_interpolate_symmetric_matrix!(interp_matrix,
                                                        x[1:first_positive_ind-1],
                                                        x[first_positive_ind:end])
