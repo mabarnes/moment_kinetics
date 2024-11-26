@@ -3117,12 +3117,16 @@ function test_ion_dt_forcing_of_electron_ppar(test_input; rtol=(1.5e1*epsilon)^2
     return nothing
 end
 
-function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
-    test_input = deepcopy(test_input)
-    test_input["output"]["run_name"] *= "_electron_kinetic_equation"
-    println("    - electron_kinetic_equation")
+function test_electron_kinetic_equation(test_input; expected_rtol=(5.0e2*epsilon)^2)
 
-    @testset "electron_kinetic_equation" begin
+    # Looser rtol for "wall" bc because integral corrections not accounted for in wall bc
+    # Jacobian (yet?).
+    @testset "electron_kinetic_equation bc=$bc" for (bc, rtol) ∈ (("constant", expected_rtol), ("wall", 2.0e-4))
+        println("    - electron_kinetic_equation $bc")
+        test_input = deepcopy(test_input)
+        test_input["output"]["run_name"] *= "_electron_kinetic_equation_$bc"
+        test_input["z"]["bc"] = bc
+
         # Suppress console output while running
         pdf, scratch, scratch_implicit, scratch_electron, t_params, vz, vr, vzeta, vpa,
             vperp, gyrophase, z, r, moments, fields, spectral_objects, advection_structs,
@@ -3290,9 +3294,9 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             # Add 'explicit' contribution
             # Use jacobian_matrix as a temporary buffer here.
             fill_electron_kinetic_equation_Jacobian!(
-                jacobian_matrix, f, ppar, moments, collisions, composition, z, vperp, vpa,
-                z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
-                scratch_dummy, external_source_settings, num_diss_params,
+                jacobian_matrix, f, ppar, moments, fields.phi, collisions, composition, z,
+                vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
+                vpa_advect, scratch_dummy, external_source_settings, num_diss_params,
                 t_params.electron, ion_dt, ir, true, :explicit_v)
             begin_serial_region()
             @serial_region begin
@@ -3300,10 +3304,10 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             end
 
             fill_electron_kinetic_equation_Jacobian!(
-                jacobian_matrix, f, ppar, moments, collisions, composition, z, vperp, vpa,
-                z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-                external_source_settings, num_diss_params, t_params.electron, ion_dt, ir,
-                true)
+                jacobian_matrix, f, ppar, moments, fields.phi, collisions, composition, z,
+                vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
+                vpa_advect, scratch_dummy, external_source_settings, num_diss_params,
+                t_params.electron, ion_dt, ir, true)
 
             begin_serial_region()
             @serial_region begin
@@ -3349,9 +3353,9 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             # Add 'explicit' contribution
             # Use jacobian_matrix as a temporary buffer here.
             fill_electron_kinetic_equation_Jacobian!(
-                jacobian_matrix, f, ppar, moments, collisions, composition, z, vperp, vpa,
-                z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
-                scratch_dummy, external_source_settings, num_diss_params,
+                jacobian_matrix, f, ppar, moments, fields.phi, collisions, composition, z,
+                vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
+                vpa_advect, scratch_dummy, external_source_settings, num_diss_params,
                 t_params.electron, ion_dt, ir, true, :explicit_z)
 
             begin_serial_region()
@@ -3360,10 +3364,10 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             end
 
             fill_electron_kinetic_equation_Jacobian!(
-                jacobian_matrix, f, ppar, moments, collisions, composition, z, vperp, vpa,
-                z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-                external_source_settings, num_diss_params, t_params.electron, ion_dt, ir,
-                true)
+                jacobian_matrix, f, ppar, moments, fields.phi, collisions, composition, z,
+                vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
+                vpa_advect, scratch_dummy, external_source_settings, num_diss_params,
+                t_params.electron, ion_dt, ir, true)
 
             begin_serial_region()
             @serial_region begin
@@ -3440,9 +3444,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                                                   vperp, vperp_spectral, vperp_adv,
                                                   vperp_diffusion, ir)
             end
-            if z.bc == "wall"
-                error("z_bc = \"wall\" not supported here yet.")
-            elseif (z.bc == "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
+            if (z.bc == "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
                 # Boundary conditions on incoming part of distribution function. Note
                 # that as density, upar, ppar do not change in this implicit step,
                 # f_electron_newvar, f_old, and residual should all be zero at exactly

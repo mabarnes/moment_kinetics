@@ -895,7 +895,7 @@ global_rank[] == 0 && println("recalculating precon")
                         nl_solver_params.preconditioners[ir]
 
                     fill_electron_kinetic_equation_Jacobian!(
-                        precon_matrix, f_electron_new, electron_ppar_new, moments,
+                        precon_matrix, f_electron_new, electron_ppar_new, moments, phi,
                         collisions, composition, z, vperp, vpa, z_spectral,
                         vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                         external_source_settings, num_diss_params, t_params, ion_dt,
@@ -1097,10 +1097,10 @@ global_rank[] == 0 && println("recalculating precon")
                         # guess is zero,
                         fill_electron_kinetic_equation_Jacobian!(
                             explicit_J, f_electron_new, electron_ppar_new, moments,
-                            collisions, composition, z, vperp, vpa, z_spectral,
-                            vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-                            external_source_settings, num_diss_params, t_params, ion_dt, ir,
-                            evolve_ppar, :explicit_z, false)
+                            phi, collisions, composition, z, vperp, vpa, z_spectral,
+                            vperp_spectral, vpa_spectral, z_advect, vpa_advect,
+                            scratch_dummy, external_source_settings, num_diss_params,
+                            t_params, ion_dt, ir, evolve_ppar, :explicit_z, false)
                     end
                     begin_z_region()
                     @loop_z iz begin
@@ -1150,7 +1150,7 @@ global_rank[] == 0 && println("recalculating precon")
                     # Get sparse matrix for explicit, right-hand-side part of the
                     # solve.
                     fill_electron_kinetic_equation_Jacobian!(
-                        explicit_J, f_electron_new, electron_ppar_new, moments,
+                        explicit_J, f_electron_new, electron_ppar_new, moments, phi,
                         collisions, composition, z, vperp, vpa, z_spectral,
                         vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                         external_source_settings, num_diss_params, t_params, ion_dt, ir,
@@ -3608,11 +3608,12 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
 `evolve_ppar=true`) the electron energy equation.
 """
 @timeit global_timer fill_electron_kinetic_equation_Jacobian!(
-                         jacobian_matrix, f, ppar, moments, collisions, composition, z,
-                         vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
-                         vpa_advect, scratch_dummy, external_source_settings,
-                         num_diss_params, t_params, ion_dt, ir, evolve_ppar,
-                         include=:all, include_qpar_integral_terms=true) = begin
+                         jacobian_matrix, f, ppar, moments, phi_global, collisions,
+                         composition, z, vperp, vpa, z_spectral, vperp_spectral,
+                         vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                         external_source_settings, num_diss_params, t_params, ion_dt, ir,
+                         evolve_ppar, include=:all,
+                         include_qpar_integral_terms=true) = begin
     dt = t_params.dt[]
 
     buffer_1 = @view scratch_dummy.buffer_rs_1[ir,1]
@@ -3630,6 +3631,7 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
     dppar_dz = @view moments.electron.dppar_dz[:,ir]
     dvth_dz = @view moments.electron.dvth_dz[:,ir]
     dqpar_dz = @view moments.electron.dqpar_dz[:,ir]
+    phi = @view phi_global[:,ir]
 
     upar_ion = @view moments.ion.upar[:,ir,1]
 
@@ -3751,6 +3753,10 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
         add_ion_dt_forcing_of_electron_ppar_to_Jacobian!(
             jacobian_matrix, z, dt, ion_dt, ir, include; ppar_offset=pdf_size)
     end
+    add_wall_boundary_condition_to_Jacobian!(
+        jacobian_matrix, phi, f, ppar, vth, upar, z, vperp, vpa, vperp_spectral,
+        vpa_spectral, vpa_advect, moments,
+        num_diss_params.electron.vpa_dissipation_coefficient, me, ir)
 
     return nothing
 end
