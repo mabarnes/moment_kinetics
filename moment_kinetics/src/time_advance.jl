@@ -355,7 +355,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
 
     end_time = mk_float(code_time + t_input["dt"] * t_input["nstep"])
     epsilon = 1.e-11
-    if adaptive || t_input["write_after_fixed_step_count"]
+    if adaptive && !t_input["write_after_fixed_step_count"]
         if t_input["nwrite"] == 0
             moments_output_times = [end_time]
         else
@@ -483,11 +483,12 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      step_to_moments_output, step_to_dfns_output, write_moments_output,
                      write_dfns_output, Ref(0), Ref(0), Ref{mk_float}(0.0), Ref(0),
                      Ref(0), Ref(0), mk_int[], mk_int[], t_input["nwrite"],
-                     t_input["nwrite_dfns"], moments_output_times, dfns_output_times,
-                     t_input["type"], rk_coefs, rk_coefs_implicit,
-                     implicit_coefficient_is_zero, n_rk_stages, rk_order, adaptive,
-                     low_storage, mk_float(t_input["rtol"]), mk_float(t_input["atol"]),
-                     mk_float(t_input["atol_upar"]),
+                     t_input["nwrite_dfns"],
+                     electron !== nothing && t_input["exact_output_times"],
+                     moments_output_times, dfns_output_times, t_input["type"], rk_coefs,
+                     rk_coefs_implicit, implicit_coefficient_is_zero, n_rk_stages,
+                     rk_order, adaptive, low_storage, mk_float(t_input["rtol"]),
+                     mk_float(t_input["atol"]), mk_float(t_input["atol_upar"]),
                      mk_float(t_input["step_update_prefactor"]),
                      mk_float(t_input["max_increase_factor"]),
                      mk_float(t_input["max_increase_factor_near_last_fail"]),
@@ -1878,9 +1879,21 @@ function  time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_para
             end
             if write_moments
                 t_params.moments_output_counter[] += 1
+                if !t_params.exact_output_times
+                    while (t_params.moments_output_counter[] ≤ length(t_params.moments_output_times)
+                           && t_params.moments_output_times[t_params.moments_output_counter[]] ≤ t_params.t[])
+                        t_params.moments_output_counter[] += 1
+                    end
+                end
             end
             if write_dfns
                 t_params.dfns_output_counter[] += 1
+                if !t_params.exact_output_times
+                    while (t_params.dfns_output_counter[] ≤ length(t_params.dfns_output_times)
+                           && t_params.dfns_output_times[t_params.dfns_output_counter[]] ≤ t_params.t[])
+                        t_params.dfns_output_counter[] += 1
+                    end
+                end
             end
 
             if write_moments || write_dfns || finish_now
