@@ -1622,10 +1622,56 @@ global_rank[] == 0 && println("recalculating precon")
                 end
             end
 
+            new_lowerz_vcut_inds = r.scratch_shared_int
+            new_upperz_vcut_inds = r.scratch_shared_int2
             apply_electron_bc_and_constraints_no_r!(f_electron_new, phi, moments, z,
                                                     vperp, vpa, vperp_spectral,
                                                     vpa_spectral, vpa_advect,
-                                                    num_diss_params, composition, ir)
+                                                    num_diss_params, composition, ir;
+                                                    lowerz_vcut_inds=new_lowerz_vcut_inds,
+                                                    upperz_vcut_inds=new_upperz_vcut_inds)
+            # Check if either vcut_ind has changed - if either has, recalculate the
+            # preconditioner because the response at the grid point before the cutoff is
+            # sharp, so the preconditioner could be significantly wrong when it was
+            # calculated using the wrong vcut_ind.
+            lower_vcut_changed = @view z.scratch_shared_int[1:1]
+            upper_vcut_changed = @view z.scratch_shared_int[2:2]
+            @serial_region begin
+                if z.irank == 0
+                    precon_lowerz_vcut_inds = nl_solver_params.precon_lowerz_vcut_inds
+                    if all(new_lowerz_vcut_inds .== precon_lowerz_vcut_inds)
+                        lower_vcut_changed[] = 0
+                    else
+                        lower_vcut_changed[] = 1
+                        precon_lowerz_vcut_inds .= new_lowerz_vcut_inds
+                    end
+                end
+                MPI.Bcast!(lower_vcut_changed, comm_inter_block[]; root=0)
+                #req1 = MPI.Ibcast!(lower_vcut_changed, comm_inter_block[]; root=0)
+
+                if z.irank == z.nrank - 1
+                    precon_upperz_vcut_inds = nl_solver_params.precon_upperz_vcut_inds
+                    if all(new_upperz_vcut_inds .== precon_upperz_vcut_inds)
+                        upper_vcut_changed[] = 0
+                    else
+                        upper_vcut_changed[] = 1
+                        precon_upperz_vcut_inds .= new_upperz_vcut_inds
+                    end
+                end
+                MPI.Bcast!(upper_vcut_changed, comm_inter_block[]; root=n_blocks[]-1)
+                #req2 = MPI.Ibcast!(upper_vcut_changed, comm_inter_block[]; root=n_blocks[]-1)
+
+                # Eventually can use Ibcast!() to make the two broadcasts run
+                # simultaneously, but need the function to be merged into MPI.jl (see
+                # https://github.com/JuliaParallel/MPI.jl/pull/882).
+                #MPI.Waitall([req1, req2])
+            end
+            _block_synchronize()
+            if lower_vcut_changed[] == 1 || upper_vcut_changed[] == 1
+                # One or both of the indices changed for some `ir`, so force the
+                # preconditioner to be recalculated next time.
+                nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
+            end
 
             if !evolve_ppar
                 # update the electron heat flux
@@ -2011,7 +2057,9 @@ end
 
 function apply_electron_bc_and_constraints!(this_scratch, phi, moments, r, z, vperp, vpa,
                                             vperp_spectral, vpa_spectral, vpa_advect,
-                                            num_diss_params, composition)
+                                            num_diss_params, composition;
+                                            lowerz_vcut_inds=nothing,
+                                            upperz_vcut_inds=nothing)
     latest_pdf = this_scratch.pdf_electron
 
     begin_r_z_vperp_vpa_region()
@@ -2026,7 +2074,8 @@ function apply_electron_bc_and_constraints!(this_scratch, phi, moments, r, z, vp
                    moments.electron.upar[:,ir], z, vperp, vpa, vperp_spectral,
                    vpa_spectral, vpa_advect, moments,
                    num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                   composition.me_over_mi, ir)
+                   composition.me_over_mi, ir; lowerz_vcut_inds=lowerz_vcut_inds,
+                   upperz_vcut_inds=upperz_vcut_inds)
     end
 
     begin_r_z_region()
@@ -2050,7 +2099,8 @@ end
 function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, z, vperp,
                                                  vpa, vperp_spectral, vpa_spectral,
                                                  vpa_advect, num_diss_params, composition,
-                                                 ir)
+                                                 ir; lowerz_vcut_inds=nothing,
+                                                 upperz_vcut_inds=nothing)
     begin_z_vperp_vpa_region()
     @loop_z_vperp_vpa iz ivperp ivpa begin
         f_electron[ivpa,ivperp,iz] = max(f_electron[ivpa,ivperp,iz], 0.0)
@@ -2061,7 +2111,8 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, z, vp
                f_electron, phi, moments.electron.vth[:,ir], moments.electron.upar[:,ir],
                z, vperp, vpa, vperp_spectral, vpa_spectral, vpa_advect, moments,
                num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-               composition.me_over_mi, ir)
+               composition.me_over_mi, ir; lowerz_vcut_inds=lowerz_vcut_inds,
+               upperz_vcut_inds=upperz_vcut_inds)
 
     begin_z_region()
     A = moments.electron.constraints_A_coefficient
@@ -2544,7 +2595,8 @@ end
 @timeit global_timer enforce_boundary_condition_on_electron_pdf!(
                          pdf, phi, vthe, upar, z, vperp, vpa, vperp_spectral,
                          vpa_spectral, vpa_adv, moments, vpa_diffusion, me_over_mi, ir;
-                         bc_constraints=true, update_vcut=true) = begin
+                         bc_constraints=true, update_vcut=true, lowerz_vcut_inds=nothing,
+                         upperz_vcut_inds=nothing) = begin
 
     @boundscheck bc_constraints && !update_vcut && error("update_vcut is not used when bc_constraints=true, but update_vcut has non-default value")
 
@@ -2744,8 +2796,14 @@ end
             # plus_vcut_ind+1 where vcut is.
             vcut_fraction = get_plus_vcut_fraction(vcut, plus_vcut_ind, vpa_unnorm)
             if vcut_fraction > 0.5
+                if lowerz_vcut_inds !== nothing
+                    lowerz_vcut_inds[ir] = plus_vcut_ind+1
+                end
                 pdf[plus_vcut_ind+1,1,1] *= vcut_fraction - 0.5
             else
+                if lowerz_vcut_inds !== nothing
+                    lowerz_vcut_inds[ir] = plus_vcut_ind
+                end
                 pdf[plus_vcut_ind+1,1,1] = 0.0
                 pdf[plus_vcut_ind,1,1] *= vcut_fraction + 0.5
             end
@@ -2934,8 +2992,14 @@ end
             # minus_vcut_ind where -vcut is.
             vcut_fraction = get_minus_vcut_fraction(vcut, minus_vcut_ind, vpa_unnorm)
             if vcut_fraction < 0.5
+                if upperz_vcut_inds !== nothing
+                    upperz_vcut_inds[ir] = minus_vcut_ind-1
+                end
                 pdf[minus_vcut_ind-1,1,end] *= 0.5 - vcut_fraction
             else
+                if upperz_vcut_inds !== nothing
+                    upperz_vcut_inds[ir] = minus_vcut_ind
+                end
                 pdf[minus_vcut_ind-1,1,end] = 0.0
                 pdf[minus_vcut_ind,1,end] *= 1.5 - vcut_fraction
             end
