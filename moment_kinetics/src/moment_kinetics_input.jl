@@ -146,6 +146,7 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         CFL_prefactor=-1.0,
         nwrite=1,
         nwrite_dfns=-1,
+        exact_output_times=false,
         type="SSPRK4",
         split_operators=false,
         steady_state_residual=false,
