@@ -2358,7 +2358,7 @@ end
     # the electrostatic potential at the boundary, which determines the critical speed, is unknown a priori;
     # use the constraint that the first moment of the normalised pdf be zero to choose the potential.
 
-    begin_r_region()
+    begin_serial_region()
 
     newton_max_its = 100
 
@@ -2395,11 +2395,12 @@ end
         return epsilon, epsilonprime, A, C
     end
 
-    if z.irank == 0
-        if z.bc != "wall"
-            error("Options other than wall, constant or z-periodic bc not implemented yet for electrons")
-        end
-        @loop_r ir begin
+    @serial_region begin
+        if z.irank == 0
+            if z.bc != "wall"
+                error("Options other than wall, constant or z-periodic bc not implemented yet for electrons")
+            end
+
             # Impose sheath-edge boundary condition, while also imposing moment
             # constraints and determining the cut-off velocity (and therefore the sheath
             # potential).
@@ -2659,21 +2660,20 @@ end
                                    pdf[ivpa,1,1,ir]
             end
         end
-    end
 
-    # next enforce the boundary condition at z_max.
-    # this involves forcing the pdf to be zero for electrons travelling faster than the max speed
-    # they could attain by accelerating in the electric field between the wall and the simulation boundary;
-    # for electrons with negative velocities less than this critical value, they must have the same
-    # pdf as electrons with positive velocities of the same magnitude.
-    # the electrostatic potential at the boundary, which determines the critical speed, is unknown a priori;
-    # use the constraint that the first moment of the normalised pdf be zero to choose the potential.
-    
-    if z.irank == z.nrank - 1
-        if z.bc != "wall"
-            error("Options other than wall or z-periodic bc not implemented yet for electrons")
-        end
-        @loop_r ir begin
+        # next enforce the boundary condition at z_max.
+        # this involves forcing the pdf to be zero for electrons travelling faster than the max speed
+        # they could attain by accelerating in the electric field between the wall and the simulation boundary;
+        # for electrons with negative velocities less than this critical value, they must have the same
+        # pdf as electrons with positive velocities of the same magnitude.
+        # the electrostatic potential at the boundary, which determines the critical speed, is unknown a priori;
+        # use the constraint that the first moment of the normalised pdf be zero to choose the potential.
+        
+        if z.irank == z.nrank - 1
+            if z.bc != "wall"
+                error("Options other than wall or z-periodic bc not implemented yet for electrons")
+            end
+
             # Impose sheath-edge boundary condition, while also imposing moment
             # constraints and determining the cut-off velocity (and therefore the sheath
             # potential).
