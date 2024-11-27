@@ -1408,7 +1408,7 @@ global_rank[] == 0 && println("recalculating precon")
                     @loop_z iz begin
                         # update the electron thermal speed using the updated electron
                         # parallel pressure
-                        this_vth[iz,ir] = sqrt(abs(2.0 * electron_ppar_newvar[iz,ir] /
+                        this_vth[iz,ir] = sqrt(abs(2.0 * electron_ppar_newvar[iz] /
                                                    (this_dens[iz,ir] *
                                                     composition.me_over_mi)))
                     end
@@ -2328,22 +2328,22 @@ end
         vwidth = 1.0/sqrt(me_over_mi)
         dens = moments.electron.dens
         if z.irank == 0
-            @loop_r_vperp_vpa ir ivperp ivpa begin
-                u = moments.electron.upar[1,ir]
-                vthe = moments.electron.vth[1,ir]
+            @loop_vperp_vpa ivperp ivpa begin
+                u = moments.electron.upar[1]
+                vthe = moments.electron.vth[1]
                 speed = vpa.grid[ivpa] * vthe + u
                 if speed > 0.0
-                    pdf[ivpa,ivperp,1,ir] = density_offset / dens[1,ir] * vthe[1,ir] * exp(-(speed^2 + vperp.grid[ivperp]^2)/vwidth^2)
+                    pdf[ivpa,ivperp,1] = density_offset / dens[1] * vthe[1] * exp(-(speed^2 + vperp.grid[ivperp]^2)/vwidth^2)
                 end
             end
         end
         if z.irank == z.nrank - 1
-            @loop_r_vperp_vpa ir ivperp ivpa begin
-                u = moments.electron.upar[end,ir]
-                vthe = moments.electron.vth[end,ir]
+            @loop_vperp_vpa ivperp ivpa begin
+                u = moments.electron.upar[end]
+                vthe = moments.electron.vth[end]
                 speed = vpa.grid[ivpa] * vthe + u
                 if speed > 0.0
-                    pdf[ivpa,ivperp,end,ir] = density_offset / dens[end,ir] * vthe[end,ir] * exp(-(speed^2 + vperp.grid[ivperp]^2)/vwidth^2)
+                    pdf[ivpa,ivperp,end] = density_offset / dens[end] * vthe[end] * exp(-(speed^2 + vperp.grid[ivperp]^2)/vwidth^2)
                 end
             end
         end
@@ -2358,7 +2358,7 @@ end
     # the electrostatic potential at the boundary, which determines the critical speed, is unknown a priori;
     # use the constraint that the first moment of the normalised pdf be zero to choose the potential.
 
-    begin_r_region()
+    begin_serial_region()
 
     newton_max_its = 100
 
@@ -2395,11 +2395,12 @@ end
         return epsilon, epsilonprime, A, C
     end
 
-    if z.irank == 0
-        if z.bc != "wall"
-            error("Options other than wall, constant or z-periodic bc not implemented yet for electrons")
-        end
-        @loop_r ir begin
+    @serial_region begin
+        if z.irank == 0
+            if z.bc != "wall"
+                error("Options other than wall, constant or z-periodic bc not implemented yet for electrons")
+            end
+
             # Impose sheath-edge boundary condition, while also imposing moment
             # constraints and determining the cut-off velocity (and therefore the sheath
             # potential).
@@ -2415,28 +2416,28 @@ end
             # 'far from zero' means larger values of v_∥.
 
             # Interpolate to the 'near zero' points
-            @views interpolate_symmetric!(pdf[sigma_ind:last_point_near_zero,1,1,ir],
+            @views interpolate_symmetric!(pdf[sigma_ind:last_point_near_zero,1,1],
                                           vpa_unnorm[sigma_ind:last_point_near_zero],
-                                          pdf[element_with_zero_boundary:sigma_ind-1,1,1,ir],
+                                          pdf[element_with_zero_boundary:sigma_ind-1,1,1],
                                           vpa_unnorm[element_with_zero_boundary:sigma_ind-1])
 
             # Interpolate to the 'far from zero' points
             reversed_pdf_far_from_zero = @view vpa.scratch[last_point_near_zero+1:end]
             @views interpolate_to_grid_1d!(reversed_pdf_far_from_zero,
                                            reversed_wpa_of_minus_vpa[1:vpa.n-last_point_near_zero],
-                                           pdf[:,1,1,ir], vpa, vpa_spectral)
+                                           pdf[:,1,1], vpa, vpa_spectral)
             reverse!(reversed_pdf_far_from_zero)
-            pdf[last_point_near_zero+1:end,1,1,ir] .= reversed_pdf_far_from_zero
+            pdf[last_point_near_zero+1:end,1,1] .= reversed_pdf_far_from_zero
 
             # Per-grid-point contributions to moment integrals
             # Note that we need to include the normalisation factor of 1/sqrt(pi) that
             # would be factored in by integrate_over_vspace(). This will need to
             # change/adapt when we support 2V as well as 1V.
-            density_integral_pieces_lowerz = @views @. vpa.scratch3 = pdf[:,1,1,ir] * vpa.wgts / sqrt(pi)
-            flow_integral_pieces_lowerz = @. vpa.scratch4 = density_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
-            energy_integral_pieces_lowerz = @. vpa.scratch5 = flow_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
-            cubic_integral_pieces_lowerz = @. vpa.scratch6 = energy_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
-            quartic_integral_pieces_lowerz = @. vpa.scratch7 = cubic_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
+            density_integral_pieces_lowerz = @views @. vpa.scratch3 = pdf[:,1,1] * vpa.wgts / sqrt(pi)
+            flow_integral_pieces_lowerz = @. vpa.scratch4 = density_integral_pieces_lowerz * vpa_unnorm / vthe[1]
+            energy_integral_pieces_lowerz = @. vpa.scratch5 = flow_integral_pieces_lowerz * vpa_unnorm / vthe[1]
+            cubic_integral_pieces_lowerz = @. vpa.scratch6 = energy_integral_pieces_lowerz * vpa_unnorm / vthe[1]
+            quartic_integral_pieces_lowerz = @. vpa.scratch7 = cubic_integral_pieces_lowerz * vpa_unnorm / vthe[1]
 
             function get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
                 # vcut_fraction is the fraction of the distance between minus_vcut_ind-1 and
@@ -2504,17 +2505,17 @@ end
                     # respect to vcut
                     delta_v = - epsilon / epsilonprime
 
-                    if vcut > vthe[1,ir] && epsilonprime < 0.0
+                    if vcut > vthe[1] && epsilonprime < 0.0
                         # epsilon should be increasing with vcut at epsilon=0, so if
                         # epsilonprime is negative, the solution is actually at a lower vcut -
                         # at larger vcut, epsilon will just tend to 0 but never reach it.
-                        delta_v = -0.1 * vthe[1,ir]
+                        delta_v = -0.1 * vthe[1]
                     end
 
                     # Prevent the step size from getting too big, to make Newton iteration
                     # more robust.
-                    delta_v = min(delta_v, 0.1 * vthe[1,ir])
-                    delta_v = max(delta_v, -0.1 * vthe[1,ir])
+                    delta_v = min(delta_v, 0.1 * vthe[1])
+                    delta_v = max(delta_v, -0.1 * vthe[1])
 
                     vcut = vcut + delta_v
                     minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
@@ -2552,22 +2553,22 @@ end
 
             # Adjust pdf so that after reflecting and cutting off tail, it will obey the
             # constraints.
-            @. pdf[:,1,1,ir] *= A + C * vpa_unnorm^2 / vthe[1,ir]^2
+            @. pdf[:,1,1] *= A + C * vpa_unnorm^2 / vthe[1]^2
 
             plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
-            pdf[plus_vcut_ind+2:end,1,1,ir] .= 0.0
+            pdf[plus_vcut_ind+2:end,1,1] .= 0.0
             # vcut_fraction is the fraction of the distance between plus_vcut_ind and
             # plus_vcut_ind+1 where vcut is.
             vcut_fraction = get_plus_vcut_fraction(vcut, plus_vcut_ind, vpa_unnorm)
             if vcut_fraction > 0.5
-                pdf[plus_vcut_ind+1,1,1,ir] *= vcut_fraction - 0.5
+                pdf[plus_vcut_ind+1,1,1] *= vcut_fraction - 0.5
             else
-                pdf[plus_vcut_ind+1,1,1,ir] = 0.0
-                pdf[plus_vcut_ind,1,1,ir] *= vcut_fraction + 0.5
+                pdf[plus_vcut_ind+1,1,1] = 0.0
+                pdf[plus_vcut_ind,1,1] *= vcut_fraction + 0.5
             end
 
             # update the electrostatic potential at the boundary to be the value corresponding to the updated cutoff velocity
-            phi[1,ir] = me_over_mi * vcut^2
+            phi[1] = me_over_mi * vcut^2
 
             moments.electron.constraints_A_coefficient[1,ir] = A
             moments.electron.constraints_B_coefficient[1,ir] = 0.0
@@ -2580,11 +2581,11 @@ end
             # interpolation.
 
             # Need to recalculate these with the updated distribution function
-            @views @. density_integral_pieces_lowerz = pdf[:,1,1,ir] * vpa.wgts / sqrt(pi)
-            @. flow_integral_pieces_lowerz = density_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
-            @. energy_integral_pieces_lowerz = flow_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
-            @. cubic_integral_pieces_lowerz = energy_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
-            @. quartic_integral_pieces_lowerz = cubic_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
+            @views @. density_integral_pieces_lowerz = pdf[:,1,1] * vpa.wgts / sqrt(pi)
+            @. flow_integral_pieces_lowerz = density_integral_pieces_lowerz * vpa_unnorm / vthe[1]
+            @. energy_integral_pieces_lowerz = flow_integral_pieces_lowerz * vpa_unnorm / vthe[1]
+            @. cubic_integral_pieces_lowerz = energy_integral_pieces_lowerz * vpa_unnorm / vthe[1]
+            @. quartic_integral_pieces_lowerz = cubic_integral_pieces_lowerz * vpa_unnorm / vthe[1]
 
             # Update the part2 integrals since we've applied the A and C factors
             _, _, _, _, a2, b2, c2, d2 = get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
@@ -2605,7 +2606,7 @@ end
 
             # Use scale factor to adjust how sharp the cutoff near vpa_unnorm=0 is.
             sharpness = 4.0
-            correction0_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,1,ir] * vpa.wgts / sqrt(pi) * sharpness * vpa_unnorm^2 / vthe[1,ir]^2 / (1.0 + sharpness * vpa_unnorm^2 / vthe[1,ir]^2)
+            correction0_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,1] * vpa.wgts / sqrt(pi) * sharpness * vpa_unnorm^2 / vthe[1]^2 / (1.0 + sharpness * vpa_unnorm^2 / vthe[1]^2)
             for ivpa ∈ 1:sigma_ind
                 # We only add the corrections to 'part3', so zero them out for negative v_∥.
                 # I think this is only actually significant for `sigma_ind-1` and
@@ -2619,12 +2620,12 @@ end
                 # v_∥^2/vth^2/(1+v_∥^2/vth^2)≈v_∥^2/vth^2≈0.
                 correction0_integral_pieces[ivpa] = 0.0
             end
-            correction1_integral_pieces = @. vpa.scratch4 = correction0_integral_pieces * vpa_unnorm / vthe[1,ir]
-            correction2_integral_pieces = @. vpa.scratch5 = correction1_integral_pieces * vpa_unnorm / vthe[1,ir]
-            correction3_integral_pieces = @. vpa.scratch6 = correction2_integral_pieces * vpa_unnorm / vthe[1,ir]
-            correction4_integral_pieces = @. vpa.scratch7 = correction3_integral_pieces * vpa_unnorm / vthe[1,ir]
-            correction5_integral_pieces = @. vpa.scratch8 = correction4_integral_pieces * vpa_unnorm / vthe[1,ir]
-            correction6_integral_pieces = @. vpa.scratch9 = correction5_integral_pieces * vpa_unnorm / vthe[1,ir]
+            correction1_integral_pieces = @. vpa.scratch4 = correction0_integral_pieces * vpa_unnorm / vthe[1]
+            correction2_integral_pieces = @. vpa.scratch5 = correction1_integral_pieces * vpa_unnorm / vthe[1]
+            correction3_integral_pieces = @. vpa.scratch6 = correction2_integral_pieces * vpa_unnorm / vthe[1]
+            correction4_integral_pieces = @. vpa.scratch7 = correction3_integral_pieces * vpa_unnorm / vthe[1]
+            correction5_integral_pieces = @. vpa.scratch8 = correction4_integral_pieces * vpa_unnorm / vthe[1]
+            correction6_integral_pieces = @. vpa.scratch9 = correction5_integral_pieces * vpa_unnorm / vthe[1]
 
             alpha = get_part3_for_one_moment_lower(correction0_integral_pieces)
             beta = get_part3_for_one_moment_lower(correction1_integral_pieces)
@@ -2649,31 +2650,30 @@ end
                        ] \ [a2-a3, -b2-b3, c2-c3, -d2-d3]
             A, B, C, D = solution
             for ivpa ∈ sigma_ind+1:plus_vcut_ind+1
-                v_over_vth = vpa_unnorm[ivpa]/vthe[1,ir]
-                pdf[ivpa,1,1,ir] = pdf[ivpa,1,1,ir] +
+                v_over_vth = vpa_unnorm[ivpa]/vthe[1]
+                pdf[ivpa,1,1] = pdf[ivpa,1,1] +
                                    (A
                                     + B * v_over_vth
                                     + C * v_over_vth^2
                                     + D * v_over_vth^3) *
                                    sharpness * v_over_vth^2 / (1.0 + sharpness * v_over_vth^2) *
-                                   pdf[ivpa,1,1,ir]
+                                   pdf[ivpa,1,1]
             end
         end
-    end
 
-    # next enforce the boundary condition at z_max.
-    # this involves forcing the pdf to be zero for electrons travelling faster than the max speed
-    # they could attain by accelerating in the electric field between the wall and the simulation boundary;
-    # for electrons with negative velocities less than this critical value, they must have the same
-    # pdf as electrons with positive velocities of the same magnitude.
-    # the electrostatic potential at the boundary, which determines the critical speed, is unknown a priori;
-    # use the constraint that the first moment of the normalised pdf be zero to choose the potential.
-    
-    if z.irank == z.nrank - 1
-        if z.bc != "wall"
-            error("Options other than wall or z-periodic bc not implemented yet for electrons")
-        end
-        @loop_r ir begin
+        # next enforce the boundary condition at z_max.
+        # this involves forcing the pdf to be zero for electrons travelling faster than the max speed
+        # they could attain by accelerating in the electric field between the wall and the simulation boundary;
+        # for electrons with negative velocities less than this critical value, they must have the same
+        # pdf as electrons with positive velocities of the same magnitude.
+        # the electrostatic potential at the boundary, which determines the critical speed, is unknown a priori;
+        # use the constraint that the first moment of the normalised pdf be zero to choose the potential.
+        
+        if z.irank == z.nrank - 1
+            if z.bc != "wall"
+                error("Options other than wall or z-periodic bc not implemented yet for electrons")
+            end
+
             # Impose sheath-edge boundary condition, while also imposing moment
             # constraints and determining the cut-off velocity (and therefore the sheath
             # potential).
@@ -2689,28 +2689,28 @@ end
             # 'far from zero' means more negative values of v_∥.
 
             # Interpolate to the 'near zero' points
-            @views interpolate_symmetric!(pdf[first_point_near_zero:sigma_ind,1,end,ir],
+            @views interpolate_symmetric!(pdf[first_point_near_zero:sigma_ind,1,end],
                                           vpa_unnorm[first_point_near_zero:sigma_ind],
-                                          pdf[sigma_ind+1:element_with_zero_boundary,1,end,ir],
+                                          pdf[sigma_ind+1:element_with_zero_boundary,1,end],
                                           vpa_unnorm[sigma_ind+1:element_with_zero_boundary])
 
             # Interpolate to the 'far from zero' points
             reversed_pdf = @view vpa.scratch[1:first_point_near_zero-1]
             @views interpolate_to_grid_1d!(reversed_pdf,
                                            reversed_wpa_of_minus_vpa[vpa.n-first_point_near_zero+2:end],
-                                           pdf[:,1,end,ir], vpa, vpa_spectral)
+                                           pdf[:,1,end], vpa, vpa_spectral)
             reverse!(reversed_pdf)
-            pdf[1:first_point_near_zero-1,1,end,ir] .= reversed_pdf
+            pdf[1:first_point_near_zero-1,1,end] .= reversed_pdf
 
             # Per-grid-point contributions to moment integrals
             # Note that we need to include the normalisation factor of 1/sqrt(pi) that
             # would be factored in by integrate_over_vspace(). This will need to
             # change/adapt when we support 2V as well as 1V.
-            density_integral_pieces_upperz = @views @. vpa.scratch3 = pdf[:,1,end,ir] * vpa.wgts / sqrt(pi)
-            flow_integral_pieces_upperz = @. vpa.scratch4 = density_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
-            energy_integral_pieces_upperz = @. vpa.scratch5 = flow_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
-            cubic_integral_pieces_upperz = @. vpa.scratch6 = energy_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
-            quartic_integral_pieces_upperz = @. vpa.scratch7 = cubic_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
+            density_integral_pieces_upperz = @views @. vpa.scratch3 = pdf[:,1,end] * vpa.wgts / sqrt(pi)
+            flow_integral_pieces_upperz = @. vpa.scratch4 = density_integral_pieces_upperz * vpa_unnorm / vthe[end]
+            energy_integral_pieces_upperz = @. vpa.scratch5 = flow_integral_pieces_upperz * vpa_unnorm / vthe[end]
+            cubic_integral_pieces_upperz = @. vpa.scratch6 = energy_integral_pieces_upperz * vpa_unnorm / vthe[end]
+            quartic_integral_pieces_upperz = @. vpa.scratch7 = cubic_integral_pieces_upperz * vpa_unnorm / vthe[end]
 
             function get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
                 # vcut_fraction is the fraction of the distance between plus_vcut_ind and
@@ -2775,17 +2775,17 @@ end
                     # respect to vcut
                     delta_v = - epsilon / epsilonprime
 
-                    if vcut > vthe[1,ir] && epsilonprime > 0.0
+                    if vcut > vthe[1] && epsilonprime > 0.0
                         # epsilon should be decreasing with vcut at epsilon=0, so if
                         # epsilonprime is positive, the solution is actually at a lower vcut -
                         # at larger vcut, epsilon will just tend to 0 but never reach it.
-                        delta_v = -0.1 * vthe[1,ir]
+                        delta_v = -0.1 * vthe[1]
                     end
 
                     # Prevent the step size from getting too big, to make Newton iteration
                     # more robust.
-                    delta_v = min(delta_v, 0.1 * vthe[end,ir])
-                    delta_v = max(delta_v, -0.1 * vthe[end,ir])
+                    delta_v = min(delta_v, 0.1 * vthe[end])
+                    delta_v = max(delta_v, -0.1 * vthe[end])
 
                     vcut = vcut + delta_v
                     plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
@@ -2823,22 +2823,22 @@ end
 
             # Adjust pdf so that after reflecting and cutting off tail, it will obey the
             # constraints.
-            @. pdf[:,1,end,ir] *= A + C * vpa_unnorm^2 / vthe[end,ir]^2
+            @. pdf[:,1,end] *= A + C * vpa_unnorm^2 / vthe[end]^2
 
             minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
-            pdf[1:minus_vcut_ind-2,1,end,ir] .= 0.0
+            pdf[1:minus_vcut_ind-2,1,end] .= 0.0
             # vcut_fraction is the fraction of the distance between minus_vcut_ind-1 and
             # minus_vcut_ind where -vcut is.
             vcut_fraction = get_minus_vcut_fraction(vcut, minus_vcut_ind, vpa_unnorm)
             if vcut_fraction < 0.5
-                pdf[minus_vcut_ind-1,1,end,ir] *= 0.5 - vcut_fraction
+                pdf[minus_vcut_ind-1,1,end] *= 0.5 - vcut_fraction
             else
-                pdf[minus_vcut_ind-1,1,end,ir] = 0.0
-                pdf[minus_vcut_ind,1,end,ir] *= 1.5 - vcut_fraction
+                pdf[minus_vcut_ind-1,1,end] = 0.0
+                pdf[minus_vcut_ind,1,end] *= 1.5 - vcut_fraction
             end
 
             # update the electrostatic potential at the boundary to be the value corresponding to the updated cutoff velocity
-            phi[end,ir] = me_over_mi * vcut^2
+            phi[end] = me_over_mi * vcut^2
 
             moments.electron.constraints_A_coefficient[end,ir] = A
             moments.electron.constraints_B_coefficient[end,ir] = 0.0
@@ -2851,11 +2851,11 @@ end
             # interpolation.
 
             # Need to recalculate these with the updated distribution function
-            @views @. density_integral_pieces_upperz = pdf[:,1,end,ir] * vpa.wgts / sqrt(pi)
-            @. flow_integral_pieces_upperz = density_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
-            @. energy_integral_pieces_upperz = flow_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
-            @. cubic_integral_pieces_upperz = energy_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
-            @. quartic_integral_pieces_upperz = cubic_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
+            @views @. density_integral_pieces_upperz = pdf[:,1,end] * vpa.wgts / sqrt(pi)
+            @. flow_integral_pieces_upperz = density_integral_pieces_upperz * vpa_unnorm / vthe[end]
+            @. energy_integral_pieces_upperz = flow_integral_pieces_upperz * vpa_unnorm / vthe[end]
+            @. cubic_integral_pieces_upperz = energy_integral_pieces_upperz * vpa_unnorm / vthe[end]
+            @. quartic_integral_pieces_upperz = cubic_integral_pieces_upperz * vpa_unnorm / vthe[end]
 
             # Update the part2 integrals since we've applied the A and C factors
             _, _, _, _, a2, b2, c2, d2 = get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
@@ -2876,7 +2876,7 @@ end
 
             # Use scale factor to adjust how sharp the cutoff near vpa_unnorm=0 is.
             sharpness = 4.0
-            correction0_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,end,ir] * vpa.wgts / sqrt(pi) * sharpness * vpa_unnorm^2 / vthe[end,ir]^2 / (1.0 + sharpness * vpa_unnorm^2 / vthe[end,ir]^2)
+            correction0_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,end] * vpa.wgts / sqrt(pi) * sharpness * vpa_unnorm^2 / vthe[end]^2 / (1.0 + sharpness * vpa_unnorm^2 / vthe[end]^2)
             for ivpa ∈ sigma_ind:vpa.n
                 # We only add the corrections to 'part3', so zero them out for positive v_∥.
                 # I think this is only actually significant for `sigma_ind` and
@@ -2890,12 +2890,12 @@ end
                 # v_∥^2/vth^2/(1+v_∥^2/vth^2)≈v_∥^2/vth^2≈0.
                 correction0_integral_pieces[ivpa] = 0.0
             end
-            correction1_integral_pieces = @. vpa.scratch4 = correction0_integral_pieces * vpa_unnorm / vthe[end,ir]
-            correction2_integral_pieces = @. vpa.scratch5 = correction1_integral_pieces * vpa_unnorm / vthe[end,ir]
-            correction3_integral_pieces = @. vpa.scratch6 = correction2_integral_pieces * vpa_unnorm / vthe[end,ir]
-            correction4_integral_pieces = @. vpa.scratch7 = correction3_integral_pieces * vpa_unnorm / vthe[end,ir]
-            correction5_integral_pieces = @. vpa.scratch8 = correction4_integral_pieces * vpa_unnorm / vthe[end,ir]
-            correction6_integral_pieces = @. vpa.scratch9 = correction5_integral_pieces * vpa_unnorm / vthe[end,ir]
+            correction1_integral_pieces = @. vpa.scratch4 = correction0_integral_pieces * vpa_unnorm / vthe[end]
+            correction2_integral_pieces = @. vpa.scratch5 = correction1_integral_pieces * vpa_unnorm / vthe[end]
+            correction3_integral_pieces = @. vpa.scratch6 = correction2_integral_pieces * vpa_unnorm / vthe[end]
+            correction4_integral_pieces = @. vpa.scratch7 = correction3_integral_pieces * vpa_unnorm / vthe[end]
+            correction5_integral_pieces = @. vpa.scratch8 = correction4_integral_pieces * vpa_unnorm / vthe[end]
+            correction6_integral_pieces = @. vpa.scratch9 = correction5_integral_pieces * vpa_unnorm / vthe[end]
 
             alpha = get_part3_for_one_moment_upper(correction0_integral_pieces)
             beta = get_part3_for_one_moment_upper(correction1_integral_pieces)
@@ -2920,14 +2920,14 @@ end
                        ] \ [a2-a3, -b2-b3, c2-c3, -d2-d3]
             A, B, C, D = solution
             for ivpa ∈ minus_vcut_ind-1:sigma_ind-1
-                v_over_vth = vpa_unnorm[ivpa]/vthe[end,ir]
-                pdf[ivpa,1,end,ir] = pdf[ivpa,1,end,ir] +
+                v_over_vth = vpa_unnorm[ivpa]/vthe[end]
+                pdf[ivpa,1,end] = pdf[ivpa,1,end] +
                                    (A
                                     + B * v_over_vth
                                     + C * v_over_vth^2
                                     + D * v_over_vth^3) *
                                    sharpness * v_over_vth^2 / (1.0 + sharpness * v_over_vth^2) *
-                                   pdf[ivpa,1,end,ir]
+                                   pdf[ivpa,1,end]
             end
         end
     end
