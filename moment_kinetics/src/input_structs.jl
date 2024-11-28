@@ -57,7 +57,6 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     limit_caused_by::Vector{mk_int}
     nwrite_moments::mk_int
     nwrite_dfns::mk_int
-    exact_output_times::Bool
     moments_output_times::Vector{mk_float}
     dfns_output_times::Vector{mk_float}
     type::String
@@ -66,6 +65,7 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     implicit_coefficient_is_zero::Timpzero
     n_rk_stages::mk_int
     rk_order::mk_int
+    exact_output_times::Bool
     adaptive::Bool
     low_storage::Bool
     rtol::mk_float
