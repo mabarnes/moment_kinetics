@@ -69,6 +69,8 @@ using ..velocity_moments: integrate_over_vspace, calculate_electron_moment_deriv
 # Only needed so we can reference it in a docstring
 import ..runge_kutta
 
+const integral_correction_sharpness = 4.0
+
 """
 update_electron_pdf is a function that uses the electron kinetic equation 
 to solve for the updated electron pdf
@@ -2286,6 +2288,309 @@ function get_plus_vcut_fraction(vcut, plus_vcut_ind, vpa_unnorm)
            (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind])
 end
 
+function fill_integral_pieces!(
+        pdf_part, vthe, vpa, vpa_unnorm, density_integral_pieces, flow_integral_pieces,
+        energy_integral_pieces, cubic_integral_pieces, quartic_integral_pieces)
+
+    @. density_integral_pieces = pdf_part * vpa.wgts / sqrt(pi)
+    @. flow_integral_pieces = density_integral_pieces * vpa_unnorm / vthe
+    @. energy_integral_pieces = flow_integral_pieces * vpa_unnorm / vthe
+    @. cubic_integral_pieces = energy_integral_pieces * vpa_unnorm / vthe
+    @. quartic_integral_pieces = cubic_integral_pieces * vpa_unnorm / vthe
+end
+
+function get_residual_and_coefficients_for_bc(a1, a1prime, a2, a2prime, b1, b1prime,
+                                              c1, c1prime, c2, c2prime, d1, d1prime,
+                                              e1, e1prime, e2, e2prime, u_over_vt,
+                                              bc_constraints)
+    if bc_constraints
+        alpha = a1 + 2.0 * a2
+        alphaprime = a1prime + 2.0 * a2prime
+        beta = c1 + 2.0 * c2
+        betaprime = c1prime + 2.0 * c2prime
+        gamma = u_over_vt^2 * alpha - 2.0 * u_over_vt * b1 + beta
+        gammaprime = u_over_vt^2 * alphaprime - 2.0 * u_over_vt * b1prime + betaprime
+        delta = u_over_vt^2 * beta - 2.0 * u_over_vt * d1 + e1 + 2.0 * e2
+        deltaprime = u_over_vt^2 * betaprime - 2.0 * u_over_vt * d1prime + e1prime + 2.0 * e2prime
+
+        A = (0.5 * beta - delta) / (beta * gamma - alpha * delta)
+        Aprime = (0.5 * betaprime - deltaprime
+                  - (0.5 * beta - delta) * (gamma * betaprime + beta * gammaprime - delta * alphaprime - alpha * deltaprime)
+                  / (beta * gamma - alpha * delta)
+                 ) / (beta * gamma - alpha * delta)
+        C = (1.0 - alpha * A) / beta
+        Cprime = -(A * alphaprime + alpha * Aprime) / beta - (1.0 - alpha * A) * betaprime / beta^2
+    else
+        A = 1.0
+        Aprime = 0.0
+        C = 0.0
+        Cprime = 0.0
+    end
+
+    epsilon = A * b1 + C * d1 - u_over_vt
+    epsilonprime = b1 * Aprime + A * b1prime + d1 * Cprime + C * d1prime
+
+    return epsilon, epsilonprime, A, C
+end
+
+function get_integrals_and_derivatives_lowerz(
+             vcut, minus_vcut_ind, sigma_ind, sigma_fraction, vpa_unnorm, u_over_vt,
+             density_integral_pieces_lowerz, flow_integral_pieces_lowerz,
+             energy_integral_pieces_lowerz, cubic_integral_pieces_lowerz,
+             quartic_integral_pieces_lowerz, bc_constraints)
+    # vcut_fraction is the fraction of the distance between minus_vcut_ind-1 and
+    # minus_vcut_ind where -vcut is.
+    vcut_fraction = get_minus_vcut_fraction(vcut, minus_vcut_ind, vpa_unnorm)
+
+    function get_for_one_moment(integral_pieces)
+        # Integral contributions from the cell containing vcut.
+        # Define these as follows to be consistent with the way the cutoff is
+        # applied around plus_vcut_ind below.
+        # Note that `integral_vcut_cell_part1` and `integral_vcut_cell_part2`
+        # include all the contributions from the grid points
+        # `minus_vcut_ind-1` and `minus_vcut_ind`, not just those from
+        # 'inside' the grid cell.
+        if vcut_fraction < 0.5
+            integral_vcut_cell_part2 = integral_pieces[minus_vcut_ind-1] * (0.5 - vcut_fraction) +
+                                       integral_pieces[minus_vcut_ind]
+            integral_vcut_cell_part1 = integral_pieces[minus_vcut_ind-1] * (0.5 + vcut_fraction)
+
+            # part1prime is d(part1)/d(vcut)
+            part1prime = -integral_pieces[minus_vcut_ind-1] / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1])
+        else
+            integral_vcut_cell_part2 = integral_pieces[minus_vcut_ind] * (1.5 - vcut_fraction)
+            integral_vcut_cell_part1 = integral_pieces[minus_vcut_ind-1] +
+                                       integral_pieces[minus_vcut_ind] * (vcut_fraction - 0.5)
+
+            # part1prime is d(part1)/d(vcut)
+            part1prime = -integral_pieces[minus_vcut_ind] / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1])
+        end
+
+        part1 = sum(@view integral_pieces[1:minus_vcut_ind-2]) + integral_vcut_cell_part1
+
+        # Integral contribution from the cell containing sigma
+        integral_sigma_cell = (0.5 * integral_pieces[sigma_ind-1] + 0.5 * integral_pieces[sigma_ind])
+
+        part2 = sum(@view integral_pieces[minus_vcut_ind+1:sigma_ind-2])
+        part2 += integral_vcut_cell_part2 + 0.5 * integral_pieces[sigma_ind-1] + sigma_fraction * integral_sigma_cell
+        # part2prime is d(part2)/d(vcut)
+        part2prime = -part1prime
+
+        return part1, part1prime, part2, part2prime
+    end
+    this_a1, this_a1prime, this_a2, this_a2prime = get_for_one_moment(density_integral_pieces_lowerz)
+    this_b1, this_b1prime, this_b2, _ = get_for_one_moment(flow_integral_pieces_lowerz)
+    this_c1, this_c1prime, this_c2, this_c2prime = get_for_one_moment(energy_integral_pieces_lowerz)
+    this_d1, this_d1prime, this_d2, _ = get_for_one_moment(cubic_integral_pieces_lowerz)
+    this_e1, this_e1prime, this_e2, this_e2prime = get_for_one_moment(quartic_integral_pieces_lowerz)
+
+    return get_residual_and_coefficients_for_bc(
+               this_a1, this_a1prime, this_a2, this_a2prime, this_b1,
+               this_b1prime, this_c1, this_c1prime, this_c2, this_c2prime,
+               this_d1, this_d1prime, this_e1, this_e1prime, this_e2,
+               this_e2prime, u_over_vt, bc_constraints)...,
+           this_a2, this_b2, this_c2, this_d2
+end
+
+function get_lowerz_integral_correction_components(
+             pdf, vthe, vpa, vpa_unnorm, u_over_vt, sigma_ind, sigma_fraction,
+             vcut, minus_vcut_ind, plus_vcut_ind, ir, bc_constraints)
+
+    # Need to recalculate integral pieces with the updated distribution function
+    density_integral_pieces_lowerz = vpa.scratch3
+    flow_integral_pieces_lowerz = vpa.scratch4
+    energy_integral_pieces_lowerz = vpa.scratch5
+    cubic_integral_pieces_lowerz = vpa.scratch6
+    quartic_integral_pieces_lowerz = vpa.scratch7
+    fill_integral_pieces!(
+        @view(pdf[:,1,1,ir]), vthe[1,ir], vpa, vpa_unnorm, density_integral_pieces_lowerz,
+        flow_integral_pieces_lowerz, energy_integral_pieces_lowerz,
+        cubic_integral_pieces_lowerz, quartic_integral_pieces_lowerz)
+
+    # Update the part2 integrals since we've applied the A and C factors
+    _, _, _, _, a2, b2, c2, d2 =
+        get_integrals_and_derivatives_lowerz(
+            vcut, minus_vcut_ind, sigma_ind, sigma_fraction, vpa_unnorm, u_over_vt,
+            density_integral_pieces_lowerz, flow_integral_pieces_lowerz,
+            energy_integral_pieces_lowerz, cubic_integral_pieces_lowerz,
+            quartic_integral_pieces_lowerz, bc_constraints)
+
+    function get_part3_for_one_moment_lower(integral_pieces)
+        # Integral contribution from the cell containing sigma
+        integral_sigma_cell = (0.5 * integral_pieces[sigma_ind-1] + 0.5 * integral_pieces[sigma_ind])
+
+        part3 = sum(@view integral_pieces[sigma_ind+1:plus_vcut_ind+1])
+        part3 += 0.5 * integral_pieces[sigma_ind] + (1.0 - sigma_fraction) * integral_sigma_cell
+
+        return part3
+    end
+    a3 = get_part3_for_one_moment_lower(density_integral_pieces_lowerz)
+    b3 = get_part3_for_one_moment_lower(flow_integral_pieces_lowerz)
+    c3 = get_part3_for_one_moment_lower(energy_integral_pieces_lowerz)
+    d3 = get_part3_for_one_moment_lower(cubic_integral_pieces_lowerz)
+
+    # Use scale factor to adjust how sharp the cutoff near vpa_unnorm=0 is.
+    correction0_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,1,ir] * vpa.wgts / sqrt(pi) * integral_correction_sharpness * vpa_unnorm^2 / vthe[1,ir]^2 / (1.0 + integral_correction_sharpness * vpa_unnorm^2 / vthe[1,ir]^2)
+    for ivpa ∈ 1:sigma_ind
+        # We only add the corrections to 'part3', so zero them out for negative v_∥.
+        # I think this is only actually significant for `sigma_ind-1` and
+        # `sigma_ind`. Even though `sigma_ind` is part of the distribution
+        # function that we are correcting, for v_∥>0, it affects the integral in
+        # the 'sigma_cell' between `sigma_ind-1` and `sigma_ind`, which would
+        # affect the numerically calculated integrals for f(v_∥<0), so if we
+        # 'corrected' its value, those integrals would change and the constraints
+        # would not be exactly satisfied. The difference should be small, as the
+        # correction at that point is multiplied by
+        # v_∥^2/vth^2/(1+v_∥^2/vth^2)≈v_∥^2/vth^2≈0.
+        correction0_integral_pieces[ivpa] = 0.0
+    end
+    correction1_integral_pieces = @. vpa.scratch4 = correction0_integral_pieces * vpa_unnorm / vthe[1,ir]
+    correction2_integral_pieces = @. vpa.scratch5 = correction1_integral_pieces * vpa_unnorm / vthe[1,ir]
+    correction3_integral_pieces = @. vpa.scratch6 = correction2_integral_pieces * vpa_unnorm / vthe[1,ir]
+    correction4_integral_pieces = @. vpa.scratch7 = correction3_integral_pieces * vpa_unnorm / vthe[1,ir]
+    correction5_integral_pieces = @. vpa.scratch8 = correction4_integral_pieces * vpa_unnorm / vthe[1,ir]
+    correction6_integral_pieces = @. vpa.scratch9 = correction5_integral_pieces * vpa_unnorm / vthe[1,ir]
+
+    alpha = get_part3_for_one_moment_lower(correction0_integral_pieces)
+    beta = get_part3_for_one_moment_lower(correction1_integral_pieces)
+    gamma = get_part3_for_one_moment_lower(correction2_integral_pieces)
+    delta = get_part3_for_one_moment_lower(correction3_integral_pieces)
+    epsilon = get_part3_for_one_moment_lower(correction4_integral_pieces)
+    zeta = get_part3_for_one_moment_lower(correction5_integral_pieces)
+    eta = get_part3_for_one_moment_lower(correction6_integral_pieces)
+
+    return a2, b2, c2, d2, a3, b3, c3, d3, alpha, beta, gamma, delta, epsilon, zeta, eta
+end
+
+function get_integrals_and_derivatives_upperz(
+             vcut, plus_vcut_ind, sigma_ind, sigma_fraction, vpa_unnorm, u_over_vt,
+             density_integral_pieces_upperz, flow_integral_pieces_upperz,
+             energy_integral_pieces_upperz, cubic_integral_pieces_upperz,
+             quartic_integral_pieces_upperz, bc_constraints)
+    # vcut_fraction is the fraction of the distance between plus_vcut_ind and
+    # plus_vcut_ind+1 where vcut is.
+    vcut_fraction = get_plus_vcut_fraction(vcut, plus_vcut_ind, vpa_unnorm)
+
+    function get_for_one_moment(integral_pieces)
+        # Integral contribution from the cell containing vcut
+        # Define these as follows to be consistent with the way the cutoff is
+        # applied around plus_vcut_ind below.
+        # Note that `integral_vcut_cell_part1` and `integral_vcut_cell_part2`
+        # include all the contributions from the grid points `plus_vcut_ind`
+        # and `plus_vcut_ind+1`, not just those from 'inside' the grid cell.
+        if vcut_fraction > 0.5
+            integral_vcut_cell_part2 = integral_pieces[plus_vcut_ind] +
+                                       integral_pieces[plus_vcut_ind+1] * (vcut_fraction - 0.5)
+            integral_vcut_cell_part1 = integral_pieces[plus_vcut_ind+1] * (1.5 - vcut_fraction)
+
+            # part1prime is d(part1)/d(vcut)
+            part1prime = -integral_pieces[plus_vcut_ind+1] / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind])
+        else
+            integral_vcut_cell_part2 = integral_pieces[plus_vcut_ind] * (0.5 + vcut_fraction)
+            integral_vcut_cell_part1 = integral_pieces[plus_vcut_ind] * (0.5 - vcut_fraction) +
+                                       integral_pieces[plus_vcut_ind+1]
+
+            # part1prime is d(part1)/d(vcut)
+            part1prime = -integral_pieces[plus_vcut_ind] / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind])
+        end
+
+        part1 = sum(@view integral_pieces[plus_vcut_ind+2:end]) + integral_vcut_cell_part1
+
+        # Integral contribution from the cell containing sigma
+        integral_sigma_cell = (0.5 * integral_pieces[sigma_ind] + 0.5 * integral_pieces[sigma_ind+1])
+
+        part2 = sum(@view integral_pieces[sigma_ind+2:plus_vcut_ind-1])
+        part2 += integral_vcut_cell_part2 + 0.5 * integral_pieces[sigma_ind+1] + sigma_fraction * integral_sigma_cell
+        # part2prime is d(part2)/d(vcut)
+        part2prime = -part1prime
+
+        return part1, part1prime, part2, part2prime
+    end
+    this_a1, this_a1prime, this_a2, this_a2prime = get_for_one_moment(density_integral_pieces_upperz)
+    this_b1, this_b1prime, this_b2, _ = get_for_one_moment(flow_integral_pieces_upperz)
+    this_c1, this_c1prime, this_c2, this_c2prime = get_for_one_moment(energy_integral_pieces_upperz)
+    this_d1, this_d1prime, this_d2, _ = get_for_one_moment(cubic_integral_pieces_upperz)
+    this_e1, this_e1prime, this_e2, this_e2prime = get_for_one_moment(quartic_integral_pieces_upperz)
+
+    return get_residual_and_coefficients_for_bc(
+               this_a1, this_a1prime, this_a2, this_a2prime, this_b1,
+               this_b1prime, this_c1, this_c1prime, this_c2, this_c2prime,
+               this_d1, this_d1prime, this_e1, this_e1prime, this_e2,
+               this_e2prime, u_over_vt, bc_constraints)...,
+           this_a2, this_b2, this_c2, this_d2
+end
+
+function get_upperz_integral_correction_components(
+             pdf, vthe, vpa, vpa_unnorm, u_over_vt, sigma_ind, sigma_fraction,
+             vcut, minus_vcut_ind, plus_vcut_ind, ir, bc_constraints)
+
+    # Need to recalculate integral pieces with the updated distribution function
+    density_integral_pieces_upperz = vpa.scratch3
+    flow_integral_pieces_upperz = vpa.scratch4
+    energy_integral_pieces_upperz = vpa.scratch5
+    cubic_integral_pieces_upperz = vpa.scratch6
+    quartic_integral_pieces_upperz = vpa.scratch7
+    fill_integral_pieces!(
+        @view(pdf[:,1,end,ir]), vthe[end,ir], vpa, vpa_unnorm,
+        density_integral_pieces_upperz, flow_integral_pieces_upperz,
+        energy_integral_pieces_upperz, cubic_integral_pieces_upperz,
+        quartic_integral_pieces_upperz)
+
+    # Update the part2 integrals since we've applied the A and C factors
+    _, _, _, _, a2, b2, c2, d2 =
+        get_integrals_and_derivatives_upperz(
+            vcut, plus_vcut_ind, sigma_ind, sigma_fraction, vpa_unnorm, u_over_vt,
+            density_integral_pieces_upperz, flow_integral_pieces_upperz,
+            energy_integral_pieces_upperz, cubic_integral_pieces_upperz,
+            quartic_integral_pieces_upperz, bc_constraints)
+
+    function get_part3_for_one_moment_upper(integral_pieces)
+        # Integral contribution from the cell containing sigma
+        integral_sigma_cell = (0.5 * integral_pieces[sigma_ind] + 0.5 * integral_pieces[sigma_ind+1])
+
+        part3 = sum(@view integral_pieces[minus_vcut_ind-1:sigma_ind-1])
+        part3 += 0.5 * integral_pieces[sigma_ind] + (1.0 - sigma_fraction) * integral_sigma_cell
+
+        return part3
+    end
+    a3 = get_part3_for_one_moment_upper(density_integral_pieces_upperz)
+    b3 = get_part3_for_one_moment_upper(flow_integral_pieces_upperz)
+    c3 = get_part3_for_one_moment_upper(energy_integral_pieces_upperz)
+    d3 = get_part3_for_one_moment_upper(cubic_integral_pieces_upperz)
+
+    # Use scale factor to adjust how sharp the cutoff near vpa_unnorm=0 is.
+    correction0_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,end,ir] * vpa.wgts / sqrt(pi) * integral_correction_sharpness * vpa_unnorm^2 / vthe[end,ir]^2 / (1.0 + integral_correction_sharpness * vpa_unnorm^2 / vthe[end,ir]^2)
+    for ivpa ∈ sigma_ind:vpa.n
+        # We only add the corrections to 'part3', so zero them out for positive v_∥.
+        # I think this is only actually significant for `sigma_ind` and
+        # `sigma_ind+1`. Even though `sigma_ind` is part of the distribution
+        # function that we are correcting, for v_∥<0, it affects the integral in
+        # the 'sigma_cell' between `sigma_ind` and `sigma_ind+1`, which would
+        # affect the numerically calculated integrals for f(v_∥>0), so if we
+        # 'corrected' its value, those integrals would change and the constraints
+        # would not be exactly satisfied. The difference should be small, as the
+        # correction at that point is multiplied by
+        # v_∥^2/vth^2/(1+v_∥^2/vth^2)≈v_∥^2/vth^2≈0.
+        correction0_integral_pieces[ivpa] = 0.0
+    end
+    correction1_integral_pieces = @. vpa.scratch4 = correction0_integral_pieces * vpa_unnorm / vthe[end,ir]
+    correction2_integral_pieces = @. vpa.scratch5 = correction1_integral_pieces * vpa_unnorm / vthe[end,ir]
+    correction3_integral_pieces = @. vpa.scratch6 = correction2_integral_pieces * vpa_unnorm / vthe[end,ir]
+    correction4_integral_pieces = @. vpa.scratch7 = correction3_integral_pieces * vpa_unnorm / vthe[end,ir]
+    correction5_integral_pieces = @. vpa.scratch8 = correction4_integral_pieces * vpa_unnorm / vthe[end,ir]
+    correction6_integral_pieces = @. vpa.scratch9 = correction5_integral_pieces * vpa_unnorm / vthe[end,ir]
+
+    alpha = get_part3_for_one_moment_upper(correction0_integral_pieces)
+    beta = get_part3_for_one_moment_upper(correction1_integral_pieces)
+    gamma = get_part3_for_one_moment_upper(correction2_integral_pieces)
+    delta = get_part3_for_one_moment_upper(correction3_integral_pieces)
+    epsilon = get_part3_for_one_moment_upper(correction4_integral_pieces)
+    zeta = get_part3_for_one_moment_upper(correction5_integral_pieces)
+    eta = get_part3_for_one_moment_upper(correction6_integral_pieces)
+
+    return a2, b2, c2, d2, a3, b3, c3, d3, alpha, beta, gamma, delta, epsilon, zeta, eta
+end
+
 @timeit global_timer enforce_boundary_condition_on_electron_pdf!(
                          pdf, phi, vthe, upar, z, vperp, vpa, vperp_spectral,
                          vpa_spectral, vpa_adv, moments, vpa_diffusion, me_over_mi, ir;
@@ -2355,39 +2660,6 @@ end
 
     newton_max_its = 100
 
-    function get_residual_and_coefficients_for_bc(a1, a1prime, a2, a2prime, b1, b1prime,
-                                                  c1, c1prime, c2, c2prime, d1, d1prime,
-                                                  e1, e1prime, e2, e2prime, u_over_vt)
-        if bc_constraints
-            alpha = a1 + 2.0 * a2
-            alphaprime = a1prime + 2.0 * a2prime
-            beta = c1 + 2.0 * c2
-            betaprime = c1prime + 2.0 * c2prime
-            gamma = u_over_vt^2 * alpha - 2.0 * u_over_vt * b1 + beta
-            gammaprime = u_over_vt^2 * alphaprime - 2.0 * u_over_vt * b1prime + betaprime
-            delta = u_over_vt^2 * beta - 2.0 * u_over_vt * d1 + e1 + 2.0 * e2
-            deltaprime = u_over_vt^2 * betaprime - 2.0 * u_over_vt * d1prime + e1prime + 2.0 * e2prime
-
-            A = (0.5 * beta - delta) / (beta * gamma - alpha * delta)
-            Aprime = (0.5 * betaprime - deltaprime
-                      - (0.5 * beta - delta) * (gamma * betaprime + beta * gammaprime - delta * alphaprime - alpha * deltaprime)
-                      / (beta * gamma - alpha * delta)
-                     ) / (beta * gamma - alpha * delta)
-            C = (1.0 - alpha * A) / beta
-            Cprime = -(A * alphaprime + alpha * Aprime) / beta - (1.0 - alpha * A) * betaprime / beta^2
-        else
-            A = 1.0
-            Aprime = 0.0
-            C = 0.0
-            Cprime = 0.0
-        end
-
-        epsilon = A * b1 + C * d1 - u_over_vt
-        epsilonprime = b1 * Aprime + A * b1prime + d1 * Cprime + C * d1prime
-
-        return epsilon, epsilonprime, A, C
-    end
-
     @serial_region begin
         if z.irank == 0
             if z.bc != "wall"
@@ -2426,72 +2698,28 @@ end
             # Note that we need to include the normalisation factor of 1/sqrt(pi) that
             # would be factored in by integrate_over_vspace(). This will need to
             # change/adapt when we support 2V as well as 1V.
-            density_integral_pieces_lowerz = @views @. vpa.scratch3 = pdf[:,1,1,ir] * vpa.wgts / sqrt(pi)
-            flow_integral_pieces_lowerz = @. vpa.scratch4 = density_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
-            energy_integral_pieces_lowerz = @. vpa.scratch5 = flow_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
-            cubic_integral_pieces_lowerz = @. vpa.scratch6 = energy_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
-            quartic_integral_pieces_lowerz = @. vpa.scratch7 = cubic_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
-
-            function get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
-                # vcut_fraction is the fraction of the distance between minus_vcut_ind-1 and
-                # minus_vcut_ind where -vcut is.
-                local vcut_fraction = get_minus_vcut_fraction(vcut, minus_vcut_ind, vpa_unnorm)
-
-                function get_for_one_moment(integral_pieces)
-                    # Integral contributions from the cell containing vcut.
-                    # Define these as follows to be consistent with the way the cutoff is
-                    # applied around plus_vcut_ind below.
-                    # Note that `integral_vcut_cell_part1` and `integral_vcut_cell_part2`
-                    # include all the contributions from the grid points
-                    # `minus_vcut_ind-1` and `minus_vcut_ind`, not just those from
-                    # 'inside' the grid cell.
-                    if vcut_fraction < 0.5
-                        integral_vcut_cell_part2 = integral_pieces[minus_vcut_ind-1] * (0.5 - vcut_fraction) +
-                                                   integral_pieces[minus_vcut_ind]
-                        integral_vcut_cell_part1 = integral_pieces[minus_vcut_ind-1] * (0.5 + vcut_fraction)
-
-                        # part1prime is d(part1)/d(vcut)
-                        part1prime = -integral_pieces[minus_vcut_ind-1] / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1])
-                    else
-                        integral_vcut_cell_part2 = integral_pieces[minus_vcut_ind] * (1.5 - vcut_fraction)
-                        integral_vcut_cell_part1 = integral_pieces[minus_vcut_ind-1] +
-                                                   integral_pieces[minus_vcut_ind] * (vcut_fraction - 0.5)
-
-                        # part1prime is d(part1)/d(vcut)
-                        part1prime = -integral_pieces[minus_vcut_ind] / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1])
-                    end
-
-                    part1 = sum(@view integral_pieces[1:minus_vcut_ind-2]) + integral_vcut_cell_part1
-
-                    # Integral contribution from the cell containing sigma
-                    integral_sigma_cell = (0.5 * integral_pieces[sigma_ind-1] + 0.5 * integral_pieces[sigma_ind])
-
-                    part2 = sum(@view integral_pieces[minus_vcut_ind+1:sigma_ind-2])
-                    part2 += integral_vcut_cell_part2 + 0.5 * integral_pieces[sigma_ind-1] + sigma_fraction * integral_sigma_cell
-                    # part2prime is d(part2)/d(vcut)
-                    part2prime = -part1prime
-
-                    return part1, part1prime, part2, part2prime
-                end
-                this_a1, this_a1prime, this_a2, this_a2prime = get_for_one_moment(density_integral_pieces_lowerz)
-                this_b1, this_b1prime, this_b2, _ = get_for_one_moment(flow_integral_pieces_lowerz)
-                this_c1, this_c1prime, this_c2, this_c2prime = get_for_one_moment(energy_integral_pieces_lowerz)
-                this_d1, this_d1prime, this_d2, _ = get_for_one_moment(cubic_integral_pieces_lowerz)
-                this_e1, this_e1prime, this_e2, this_e2prime = get_for_one_moment(quartic_integral_pieces_lowerz)
-
-                return get_residual_and_coefficients_for_bc(
-                           this_a1, this_a1prime, this_a2, this_a2prime, this_b1,
-                           this_b1prime, this_c1, this_c1prime, this_c2, this_c2prime,
-                           this_d1, this_d1prime, this_e1, this_e1prime, this_e2,
-                           this_e2prime, u_over_vt)...,
-                       this_a2, this_b2, this_c2, this_d2
-            end
+            density_integral_pieces_lowerz = vpa.scratch3
+            flow_integral_pieces_lowerz = vpa.scratch4
+            energy_integral_pieces_lowerz = vpa.scratch5
+            cubic_integral_pieces_lowerz = vpa.scratch6
+            quartic_integral_pieces_lowerz = vpa.scratch7
+            fill_integral_pieces!(
+                @view(pdf[:,1,1,ir]), vthe[1,ir], vpa, vpa_unnorm,
+                density_integral_pieces_lowerz, flow_integral_pieces_lowerz,
+                energy_integral_pieces_lowerz, cubic_integral_pieces_lowerz,
+                quartic_integral_pieces_lowerz)
 
             counter = 1
             A = 1.0
             C = 0.0
             # Always do at least one update of vcut
-            epsilon, epsilonprime, A, C, a2, b2, c2, d2 = get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
+            epsilon, epsilonprime, A, C, a2, b2, c2, d2 =
+                get_integrals_and_derivatives_lowerz(
+                    vcut, minus_vcut_ind, sigma_ind, sigma_fraction, vpa_unnorm,
+                    u_over_vt, density_integral_pieces_lowerz,
+                    flow_integral_pieces_lowerz, energy_integral_pieces_lowerz,
+                    cubic_integral_pieces_lowerz, quartic_integral_pieces_lowerz,
+                    bc_constraints)
             if bc_constraints
                 while true
                     # Newton iteration update. Note that primes denote derivatives with
@@ -2513,7 +2741,13 @@ end
                     vcut = vcut + delta_v
                     minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
 
-                    epsilon, epsilonprime, A, C, a2, b2, c2, d2 = get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
+                    epsilon, epsilonprime, A, C, a2, b2, c2, d2 =
+                        get_integrals_and_derivatives_lowerz(
+                            vcut, minus_vcut_ind, sigma_ind, sigma_fraction, vpa_unnorm,
+                            u_over_vt, density_integral_pieces_lowerz,
+                            flow_integral_pieces_lowerz, energy_integral_pieces_lowerz,
+                            cubic_integral_pieces_lowerz, quartic_integral_pieces_lowerz,
+                            bc_constraints)
 
                     if abs(epsilon) < newton_tol
                         break
@@ -2540,7 +2774,13 @@ end
                         break
                     end
 
-                    epsilon, epsilonprime, _, _, _, _, _, _ = get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
+                    epsilon, epsilonprime, _, _, _, _, _, _ =
+                        get_integrals_and_derivatives_lowerz(
+                            vcut, minus_vcut_ind, sigma_ind, sigma_fraction, vpa_unnorm,
+                            u_over_vt, density_integral_pieces_lowerz,
+                            flow_integral_pieces_lowerz, energy_integral_pieces_lowerz,
+                            cubic_integral_pieces_lowerz, quartic_integral_pieces_lowerz,
+                            bc_constraints)
                 end
             end
 
@@ -2579,60 +2819,10 @@ end
             # boundary condition, but would not be numerically true because of the
             # interpolation.
 
-            # Need to recalculate these with the updated distribution function
-            @views @. density_integral_pieces_lowerz = pdf[:,1,1,ir] * vpa.wgts / sqrt(pi)
-            @. flow_integral_pieces_lowerz = density_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
-            @. energy_integral_pieces_lowerz = flow_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
-            @. cubic_integral_pieces_lowerz = energy_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
-            @. quartic_integral_pieces_lowerz = cubic_integral_pieces_lowerz * vpa_unnorm / vthe[1,ir]
-
-            # Update the part2 integrals since we've applied the A and C factors
-            _, _, _, _, a2, b2, c2, d2 = get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
-
-            function get_part3_for_one_moment_lower(integral_pieces)
-                # Integral contribution from the cell containing sigma
-                integral_sigma_cell = (0.5 * integral_pieces[sigma_ind-1] + 0.5 * integral_pieces[sigma_ind])
-
-                part3 = sum(@view integral_pieces[sigma_ind+1:plus_vcut_ind+1])
-                part3 += 0.5 * integral_pieces[sigma_ind] + (1.0 - sigma_fraction) * integral_sigma_cell
-
-                return part3
-            end
-            a3 = get_part3_for_one_moment_lower(density_integral_pieces_lowerz)
-            b3 = get_part3_for_one_moment_lower(flow_integral_pieces_lowerz)
-            c3 = get_part3_for_one_moment_lower(energy_integral_pieces_lowerz)
-            d3 = get_part3_for_one_moment_lower(cubic_integral_pieces_lowerz)
-
-            # Use scale factor to adjust how sharp the cutoff near vpa_unnorm=0 is.
-            sharpness = 4.0
-            correction0_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,1,ir] * vpa.wgts / sqrt(pi) * sharpness * vpa_unnorm^2 / vthe[1,ir]^2 / (1.0 + sharpness * vpa_unnorm^2 / vthe[1,ir]^2)
-            for ivpa ∈ 1:sigma_ind
-                # We only add the corrections to 'part3', so zero them out for negative v_∥.
-                # I think this is only actually significant for `sigma_ind-1` and
-                # `sigma_ind`. Even though `sigma_ind` is part of the distribution
-                # function that we are correcting, for v_∥>0, it affects the integral in
-                # the 'sigma_cell' between `sigma_ind-1` and `sigma_ind`, which would
-                # affect the numerically calculated integrals for f(v_∥<0), so if we
-                # 'corrected' its value, those integrals would change and the constraints
-                # would not be exactly satisfied. The difference should be small, as the
-                # correction at that point is multiplied by
-                # v_∥^2/vth^2/(1+v_∥^2/vth^2)≈v_∥^2/vth^2≈0.
-                correction0_integral_pieces[ivpa] = 0.0
-            end
-            correction1_integral_pieces = @. vpa.scratch4 = correction0_integral_pieces * vpa_unnorm / vthe[1,ir]
-            correction2_integral_pieces = @. vpa.scratch5 = correction1_integral_pieces * vpa_unnorm / vthe[1,ir]
-            correction3_integral_pieces = @. vpa.scratch6 = correction2_integral_pieces * vpa_unnorm / vthe[1,ir]
-            correction4_integral_pieces = @. vpa.scratch7 = correction3_integral_pieces * vpa_unnorm / vthe[1,ir]
-            correction5_integral_pieces = @. vpa.scratch8 = correction4_integral_pieces * vpa_unnorm / vthe[1,ir]
-            correction6_integral_pieces = @. vpa.scratch9 = correction5_integral_pieces * vpa_unnorm / vthe[1,ir]
-
-            alpha = get_part3_for_one_moment_lower(correction0_integral_pieces)
-            beta = get_part3_for_one_moment_lower(correction1_integral_pieces)
-            gamma = get_part3_for_one_moment_lower(correction2_integral_pieces)
-            delta = get_part3_for_one_moment_lower(correction3_integral_pieces)
-            epsilon = get_part3_for_one_moment_lower(correction4_integral_pieces)
-            zeta = get_part3_for_one_moment_lower(correction5_integral_pieces)
-            eta = get_part3_for_one_moment_lower(correction6_integral_pieces)
+            a2, b2, c2, d2, a3, b3, c3, d3, alpha, beta, gamma, delta, epsilon, zeta, eta =
+                get_lowerz_integral_correction_components(
+                    pdf, vthe, vpa, vpa_unnorm, u_over_vt, sigma_ind, sigma_fraction,
+                    vcut, minus_vcut_ind, plus_vcut_ind, ir, bc_constraints)
 
             # Update the v_∥>0 part of f to correct the moments as
             # f(0<v_∥<vcut) = (1 + (A + B*v/vth + C*v^2/vth^2 + D*v^3/vth^3) * v^2/vth^2 / (1 + v^2/vth^2)) * fhat(0<v_∥<vcut)
@@ -2655,7 +2845,7 @@ end
                                     + B * v_over_vth
                                     + C * v_over_vth^2
                                     + D * v_over_vth^3) *
-                                   sharpness * v_over_vth^2 / (1.0 + sharpness * v_over_vth^2) *
+                                   integral_correction_sharpness * v_over_vth^2 / (1.0 + integral_correction_sharpness * v_over_vth^2) *
                                    pdf[ivpa,1,1,ir]
             end
         end
@@ -2705,69 +2895,25 @@ end
             # Note that we need to include the normalisation factor of 1/sqrt(pi) that
             # would be factored in by integrate_over_vspace(). This will need to
             # change/adapt when we support 2V as well as 1V.
-            density_integral_pieces_upperz = @views @. vpa.scratch3 = pdf[:,1,end,ir] * vpa.wgts / sqrt(pi)
-            flow_integral_pieces_upperz = @. vpa.scratch4 = density_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
-            energy_integral_pieces_upperz = @. vpa.scratch5 = flow_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
-            cubic_integral_pieces_upperz = @. vpa.scratch6 = energy_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
-            quartic_integral_pieces_upperz = @. vpa.scratch7 = cubic_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
-
-            function get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
-                # vcut_fraction is the fraction of the distance between plus_vcut_ind and
-                # plus_vcut_ind+1 where vcut is.
-                local vcut_fraction = get_plus_vcut_fraction(vcut, plus_vcut_ind, vpa_unnorm)
-
-                function get_for_one_moment(integral_pieces)
-                    # Integral contribution from the cell containing vcut
-                    # Define these as follows to be consistent with the way the cutoff is
-                    # applied around plus_vcut_ind below.
-                    # Note that `integral_vcut_cell_part1` and `integral_vcut_cell_part2`
-                    # include all the contributions from the grid points `plus_vcut_ind`
-                    # and `plus_vcut_ind+1`, not just those from 'inside' the grid cell.
-                    if vcut_fraction > 0.5
-                        integral_vcut_cell_part2 = integral_pieces[plus_vcut_ind] +
-                                                   integral_pieces[plus_vcut_ind+1] * (vcut_fraction - 0.5)
-                        integral_vcut_cell_part1 = integral_pieces[plus_vcut_ind+1] * (1.5 - vcut_fraction)
-
-                        # part1prime is d(part1)/d(vcut)
-                        part1prime = -integral_pieces[plus_vcut_ind+1] / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind])
-                    else
-                        integral_vcut_cell_part2 = integral_pieces[plus_vcut_ind] * (0.5 + vcut_fraction)
-                        integral_vcut_cell_part1 = integral_pieces[plus_vcut_ind] * (0.5 - vcut_fraction) +
-                                                   integral_pieces[plus_vcut_ind+1]
-
-                        # part1prime is d(part1)/d(vcut)
-                        part1prime = -integral_pieces[plus_vcut_ind] / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind])
-                    end
-
-                    part1 = sum(@view integral_pieces[plus_vcut_ind+2:end]) + integral_vcut_cell_part1
-
-                    # Integral contribution from the cell containing sigma
-                    integral_sigma_cell = (0.5 * integral_pieces[sigma_ind] + 0.5 * integral_pieces[sigma_ind+1])
-
-                    part2 = sum(@view integral_pieces[sigma_ind+2:plus_vcut_ind-1])
-                    part2 += integral_vcut_cell_part2 + 0.5 * integral_pieces[sigma_ind+1] + sigma_fraction * integral_sigma_cell
-                    # part2prime is d(part2)/d(vcut)
-                    part2prime = -part1prime
-
-                    return part1, part1prime, part2, part2prime
-                end
-                this_a1, this_a1prime, this_a2, this_a2prime = get_for_one_moment(density_integral_pieces_upperz)
-                this_b1, this_b1prime, this_b2, _ = get_for_one_moment(flow_integral_pieces_upperz)
-                this_c1, this_c1prime, this_c2, this_c2prime = get_for_one_moment(energy_integral_pieces_upperz)
-                this_d1, this_d1prime, this_d2, _ = get_for_one_moment(cubic_integral_pieces_upperz)
-                this_e1, this_e1prime, this_e2, this_e2prime = get_for_one_moment(quartic_integral_pieces_upperz)
-
-                return get_residual_and_coefficients_for_bc(
-                           this_a1, this_a1prime, this_a2, this_a2prime, this_b1,
-                           this_b1prime, this_c1, this_c1prime, this_c2, this_c2prime,
-                           this_d1, this_d1prime, this_e1, this_e1prime, this_e2,
-                           this_e2prime, u_over_vt)...,
-                       this_a2, this_b2, this_c2, this_d2
-            end
+            density_integral_pieces_upperz = vpa.scratch3
+            flow_integral_pieces_upperz = vpa.scratch4
+            energy_integral_pieces_upperz = vpa.scratch5
+            cubic_integral_pieces_upperz = vpa.scratch6
+            quartic_integral_pieces_upperz = vpa.scratch7
+            fill_integral_pieces!(
+                @view(pdf[:,1,end,ir]), vthe[end,ir], vpa, vpa_unnorm,
+                density_integral_pieces_upperz, flow_integral_pieces_upperz,
+                energy_integral_pieces_upperz, cubic_integral_pieces_upperz,
+                quartic_integral_pieces_upperz)
 
             counter = 1
             # Always do at least one update of vcut
-            epsilon, epsilonprime, A, C, a2, b2, c2, d2 = get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
+            epsilon, epsilonprime, A, C, a2, b2, c2, d2 =
+                get_integrals_and_derivatives_upperz(
+                    vcut, plus_vcut_ind, sigma_ind, sigma_fraction, vpa_unnorm, u_over_vt,
+                    density_integral_pieces_upperz, flow_integral_pieces_upperz,
+                    energy_integral_pieces_upperz, cubic_integral_pieces_upperz,
+                    quartic_integral_pieces_upperz, bc_constraints)
             if bc_constraints
                 while true
                     # Newton iteration update. Note that primes denote derivatives with
@@ -2789,7 +2935,13 @@ end
                     vcut = vcut + delta_v
                     plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
 
-                    epsilon, epsilonprime, A, C, a2, b2, c2, d2 = get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
+                    epsilon, epsilonprime, A, C, a2, b2, c2, d2 =
+                        get_integrals_and_derivatives_upperz(
+                            vcut, plus_vcut_ind, sigma_ind, sigma_fraction, vpa_unnorm,
+                            u_over_vt, density_integral_pieces_upperz,
+                            flow_integral_pieces_upperz, energy_integral_pieces_upperz,
+                            cubic_integral_pieces_upperz, quartic_integral_pieces_upperz,
+                            bc_constraints)
 
                     if abs(epsilon) < newton_tol
                         break
@@ -2816,7 +2968,13 @@ end
                         break
                     end
 
-                    epsilon, epsilonprime, _, _, _, _, _, _ = get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
+                    epsilon, epsilonprime, _, _, _, _, _, _ =
+                        get_integrals_and_derivatives_upperz(
+                            vcut, plus_vcut_ind, sigma_ind, sigma_fraction, vpa_unnorm,
+                            u_over_vt, density_integral_pieces_upperz,
+                            flow_integral_pieces_upperz, energy_integral_pieces_upperz,
+                            cubic_integral_pieces_upperz, quartic_integral_pieces_upperz,
+                            bc_constraints)
                 end
             end
 
@@ -2855,60 +3013,10 @@ end
             # boundary condition, but would not be numerically true because of the
             # interpolation.
 
-            # Need to recalculate these with the updated distribution function
-            @views @. density_integral_pieces_upperz = pdf[:,1,end,ir] * vpa.wgts / sqrt(pi)
-            @. flow_integral_pieces_upperz = density_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
-            @. energy_integral_pieces_upperz = flow_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
-            @. cubic_integral_pieces_upperz = energy_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
-            @. quartic_integral_pieces_upperz = cubic_integral_pieces_upperz * vpa_unnorm / vthe[end,ir]
-
-            # Update the part2 integrals since we've applied the A and C factors
-            _, _, _, _, a2, b2, c2, d2 = get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
-
-            function get_part3_for_one_moment_upper(integral_pieces)
-                # Integral contribution from the cell containing sigma
-                integral_sigma_cell = (0.5 * integral_pieces[sigma_ind] + 0.5 * integral_pieces[sigma_ind+1])
-
-                part3 = sum(@view integral_pieces[minus_vcut_ind-1:sigma_ind-1])
-                part3 += 0.5 * integral_pieces[sigma_ind] + (1.0 - sigma_fraction) * integral_sigma_cell
-
-                return part3
-            end
-            a3 = get_part3_for_one_moment_upper(density_integral_pieces_upperz)
-            b3 = get_part3_for_one_moment_upper(flow_integral_pieces_upperz)
-            c3 = get_part3_for_one_moment_upper(energy_integral_pieces_upperz)
-            d3 = get_part3_for_one_moment_upper(cubic_integral_pieces_upperz)
-
-            # Use scale factor to adjust how sharp the cutoff near vpa_unnorm=0 is.
-            sharpness = 4.0
-            correction0_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,end,ir] * vpa.wgts / sqrt(pi) * sharpness * vpa_unnorm^2 / vthe[end,ir]^2 / (1.0 + sharpness * vpa_unnorm^2 / vthe[end,ir]^2)
-            for ivpa ∈ sigma_ind:vpa.n
-                # We only add the corrections to 'part3', so zero them out for positive v_∥.
-                # I think this is only actually significant for `sigma_ind` and
-                # `sigma_ind+1`. Even though `sigma_ind` is part of the distribution
-                # function that we are correcting, for v_∥<0, it affects the integral in
-                # the 'sigma_cell' between `sigma_ind` and `sigma_ind+1`, which would
-                # affect the numerically calculated integrals for f(v_∥>0), so if we
-                # 'corrected' its value, those integrals would change and the constraints
-                # would not be exactly satisfied. The difference should be small, as the
-                # correction at that point is multiplied by
-                # v_∥^2/vth^2/(1+v_∥^2/vth^2)≈v_∥^2/vth^2≈0.
-                correction0_integral_pieces[ivpa] = 0.0
-            end
-            correction1_integral_pieces = @. vpa.scratch4 = correction0_integral_pieces * vpa_unnorm / vthe[end,ir]
-            correction2_integral_pieces = @. vpa.scratch5 = correction1_integral_pieces * vpa_unnorm / vthe[end,ir]
-            correction3_integral_pieces = @. vpa.scratch6 = correction2_integral_pieces * vpa_unnorm / vthe[end,ir]
-            correction4_integral_pieces = @. vpa.scratch7 = correction3_integral_pieces * vpa_unnorm / vthe[end,ir]
-            correction5_integral_pieces = @. vpa.scratch8 = correction4_integral_pieces * vpa_unnorm / vthe[end,ir]
-            correction6_integral_pieces = @. vpa.scratch9 = correction5_integral_pieces * vpa_unnorm / vthe[end,ir]
-
-            alpha = get_part3_for_one_moment_upper(correction0_integral_pieces)
-            beta = get_part3_for_one_moment_upper(correction1_integral_pieces)
-            gamma = get_part3_for_one_moment_upper(correction2_integral_pieces)
-            delta = get_part3_for_one_moment_upper(correction3_integral_pieces)
-            epsilon = get_part3_for_one_moment_upper(correction4_integral_pieces)
-            zeta = get_part3_for_one_moment_upper(correction5_integral_pieces)
-            eta = get_part3_for_one_moment_upper(correction6_integral_pieces)
+            a2, b2, c2, d2, a3, b3, c3, d3, alpha, beta, gamma, delta, epsilon, zeta, eta =
+                get_upperz_integral_correction_components(
+                    pdf, vthe, vpa, vpa_unnorm, u_over_vt, sigma_ind, sigma_fraction,
+                    vcut, minus_vcut_ind, plus_vcut_ind, ir, bc_constraints)
 
             # Update the v_∥>0 part of f to correct the moments as
             # f(0<v_∥<vcut) = (1 + (A + B*v/vth + C*v^2/vth^2 + D*v^3/vth^3) * v^2/vth^2 / (1 + v^2/vth^2)) * fhat(0<v_∥<vcut)
@@ -2927,12 +3035,12 @@ end
             for ivpa ∈ minus_vcut_ind-1:sigma_ind-1
                 v_over_vth = vpa_unnorm[ivpa]/vthe[end,ir]
                 pdf[ivpa,1,end,ir] = pdf[ivpa,1,end,ir] +
-                                   (A
-                                    + B * v_over_vth
-                                    + C * v_over_vth^2
-                                    + D * v_over_vth^3) *
-                                   sharpness * v_over_vth^2 / (1.0 + sharpness * v_over_vth^2) *
-                                   pdf[ivpa,1,end,ir]
+                                     (A
+                                      + B * v_over_vth
+                                      + C * v_over_vth^2
+                                      + D * v_over_vth^3) *
+                                     integral_correction_sharpness * v_over_vth^2 / (1.0 + integral_correction_sharpness * v_over_vth^2) *
+                                     pdf[ivpa,1,end,ir]
             end
         end
     end
