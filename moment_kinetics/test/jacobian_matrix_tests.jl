@@ -34,7 +34,8 @@ using moment_kinetics.electron_kinetic_equation: add_contribution_from_pdf_term!
                                                  fill_electron_kinetic_equation_v_only_Jacobian!,
                                                  fill_electron_kinetic_equation_z_only_Jacobian_f!,
                                                  fill_electron_kinetic_equation_z_only_Jacobian_ppar!,
-                                                 add_wall_boundary_condition_to_Jacobian!
+                                                 add_wall_boundary_condition_to_Jacobian!,
+                                                 zero_z_boundary_condition_points
 using moment_kinetics.electron_vpa_advection: electron_vpa_advection!,
                                               update_electron_speed_vpa!,
                                               add_electron_vpa_advection_to_Jacobian!,
@@ -3122,7 +3123,7 @@ function test_electron_kinetic_equation(test_input; expected_rtol=(5.0e2*epsilon
 
     # Looser rtol for "wall" bc because integral corrections not accounted for in wall bc
     # Jacobian (yet?).
-    @testset "electron_kinetic_equation bc=$bc" for (bc, rtol) ∈ (("constant", expected_rtol), ("wall", 2.0e-4))
+    @testset "electron_kinetic_equation bc=$bc" for (bc, rtol) ∈ (("constant", expected_rtol), ("wall", expected_rtol))
         println("    - electron_kinetic_equation $bc")
         this_test_input = deepcopy(test_input)
         this_test_input["output"]["run_name"] *= "_electron_kinetic_equation_$bc"
@@ -3633,6 +3634,12 @@ function test_electron_wall_bc(test_input; atol=(7.0*epsilon)^2)
         end
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
+        # enforce the boundary condition(s) on the electron pdf
+        @views enforce_boundary_condition_on_electron_pdf!(
+                   f, phi, vth, upar, z, vperp, vpa, vperp_spectral, vpa_spectral,
+                   vpa_advect, moments,
+                   num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
+                   composition.me_over_mi, ir; bc_constraints=false, update_vcut=false)
         delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
@@ -3846,8 +3853,6 @@ function test_electron_wall_bc(test_input; atol=(7.0*epsilon)^2)
         @testset "δp only" begin
             residual_func!(original_residual, copy(f), copy(ppar))
             residual_func!(perturbed_residual, copy(f), ppar.+delta_p)
-#newf = copy(f)
-#residual_func!(perturbed_residual, newf, ppar.+delta_p)
 
             begin_serial_region()
             @serial_region begin
@@ -3869,7 +3874,7 @@ function test_electron_wall_bc(test_input; atol=(7.0*epsilon)^2)
                 # preconditioner.
                 @test elementwise_isapprox(perturbed_residual,
                                            reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n);
-                                           rtol=3.0e-2, atol=atol)
+                                           rtol=0.0, atol=atol)
             end
         end
 
@@ -3894,7 +3899,7 @@ function test_electron_wall_bc(test_input; atol=(7.0*epsilon)^2)
                 # points.
                 @test elementwise_isapprox(perturbed_residual,
                                            reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n);
-                                           rtol=1.0e-1, atol=atol)
+                                           rtol=0.0, atol=atol)
             end
         end
 
