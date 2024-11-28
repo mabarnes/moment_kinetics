@@ -1,7 +1,7 @@
 """
-module for including functions used 
+Module for including functions used 
 in testing the implementation of the 
-the Full-F Fokker-Planck Collision Operator
+the full-F Fokker-Planck collision operator.
 """
 module fokker_planck_test
 
@@ -27,9 +27,18 @@ using ..velocity_moments: get_density
 # of the Rosenbluth potentials for a shifted Maxwellian
 # or provide an estimate for collisional coefficients 
 
-# G (defined by Del^4 G = -(8/sqrt(pi))*F 
-# with F = cref^3 pi^(3/2) F_Maxwellian / nref 
-# the normalised Maxwellian
+"""
+Function computing G, defined by 
+```math 
+\\nabla^4 G = -\\frac{8}{\\sqrt{\\pi}} F 
+```
+with 
+```math
+F = c_{\\rm ref}^3 \\pi^{3/2} F_{\\rm Maxwellian} / n_{\\rm ref} 
+```
+the normalised Maxwellian. 
+See Plasma Confinement, R. D. Hazeltine & J. D. Meiss, 2003, Dover Publications, pg 184, Chpt 5.2, Eqn (5.49).
+"""
 function G_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
     # speed variable
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
@@ -43,9 +52,18 @@ function G_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
     return G*dens*vth
 end
 
-# H (defined by Del^2 H = -(4/sqrt(pi))*F 
-# with F = cref^3 pi^(3/2) F_Maxwellian / nref 
-# the normalised Maxwellian
+"""
+Function computing H, defined by 
+```math 
+\\nabla^2 H = -\\frac{4}{\\sqrt{\\pi}} F 
+```
+with 
+```math
+F = c_{\\rm ref}^3 \\pi^{3/2} F_{\\rm Maxwellian} / n_{\\rm ref} 
+```
+the normalised Maxwellian. 
+See Plasma Confinement, R. D. Hazeltine & J. D. Meiss, 2003, Dover Publications, pg 184, Chpt 5.2, Eqn (5.49).
+"""
 function H_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
     # speed variable
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
@@ -85,13 +103,27 @@ function dHdeta(eta::mk_float)
     return dHdeta_fac
 end
 
-# functions of vpa & vperp 
+"""
+Function computing the normalised speed variable 
+```math
+\\eta = \\frac{\\sqrt{(v_\\| - u_\\|)^2 + v_\\perp^2}}{v_{\\rm th}}
+```
+with \$v_{\\rm th} = \\sqrt{2 p / n m}\$ the thermal speed, and \$p\$ the pressure,
+ \$n\$ the density and \$m\$ the mass.
+"""
 function eta_func(upar::mk_float,vth::mk_float,
              vpa,vperp,ivpa,ivperp)
     speed = sqrt( (vpa.grid[ivpa] - upar)^2 + vperp.grid[ivperp]^2)/vth
     return speed
 end
 
+"""
+Function computing 
+```math 
+\\frac{\\partial^2 G }{ \\partial v_\\|^2}
+```
+ for Maxwellian input. See `G_Maxwellian()`.
+"""
 function d2Gdvpa2_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                             vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
@@ -100,6 +132,13 @@ function d2Gdvpa2_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
     return d2Gdvpa2_fac
 end
 
+"""
+Function computing
+```math
+\\frac{\\partial^2 G}{\\partial v_\\perp \\partial v_\\|}
+```
+for Maxwellian input. See `G_Maxwellian()`.
+"""
 function d2Gdvperpdvpa_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                             vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
@@ -108,6 +147,13 @@ function d2Gdvperpdvpa_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
     return d2Gdvperpdvpa_fac
 end
 
+"""
+Function computing
+```math
+\\frac{\\partial^2 G}{\\partial v_\\perp^2}
+```
+for Maxwellian input. See `G_Maxwellian()`.
+"""
 function d2Gdvperp2_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                             vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
@@ -116,6 +162,13 @@ function d2Gdvperp2_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
     return d2Gdvperp2_fac
 end
 
+"""
+Function computing
+```math
+\\frac{\\partial G}{\\partial v_\\perp}
+```
+for Maxwellian input. See `G_Maxwellian()`.
+"""
 function dGdvperp_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                             vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
@@ -123,6 +176,13 @@ function dGdvperp_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
     return fac 
 end
 
+"""
+Function computing
+```math
+\\frac{\\partial H}{\\partial v_\\perp}
+```
+for Maxwellian input. See `H_Maxwellian()`.
+"""
 function dHdvperp_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                             vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
@@ -130,6 +190,13 @@ function dHdvperp_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
     return fac 
 end
 
+"""
+Function computing
+```math
+\\frac{\\partial H}{\\partial v_\\|}
+```
+for Maxwellian input. See `H_Maxwellian()`.
+"""
 function dHdvpa_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                             vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
@@ -137,6 +204,9 @@ function dHdvpa_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
     return fac 
 end
 
+"""
+Function computing \$ F_{\\rm Maxwellian} \$.
+"""
 function F_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                         vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
@@ -144,6 +214,13 @@ function F_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
     return fac
 end
 
+"""
+Function computing 
+```math
+\\frac{\\partial F}{\\partial v_\\|}
+```
+for \$ F = F_{\\rm Maxwellian}\$.
+"""
 function dFdvpa_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                         vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
@@ -151,6 +228,13 @@ function dFdvpa_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
     return fac
 end
 
+"""
+Function computing
+```math
+\\frac{\\partial F}{\\partial v_\\perp}
+```
+for \$ F = F_{\\rm Maxwellian}\$.
+"""
 function dFdvperp_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                         vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
@@ -158,6 +242,13 @@ function dFdvperp_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
     return fac
 end
 
+"""
+Function computing
+```math
+\\frac{\\partial^2 F}{\\partial v_\\perp \\partial v_\\|}
+```
+for \$ F = F_{\\rm Maxwellian}\$.
+"""
 function d2Fdvperpdvpa_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                         vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
@@ -165,6 +256,13 @@ function d2Fdvperpdvpa_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
     return fac
 end
 
+"""
+Function computing
+```math
+\\frac{\\partial^2 F}{\\partial v_\\|^2}
+```
+for \$ F = F_{\\rm Maxwellian}\$.
+"""
 function d2Fdvpa2_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                         vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
@@ -172,6 +270,13 @@ function d2Fdvpa2_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
     return fac
 end
 
+"""
+Function computing
+```math
+\\frac{\\partial^2 F}{\\partial v_\\perp^2}.
+```
+for \$ F = F_{\\rm Maxwellian}\$.
+"""
 function d2Fdvperp2_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                         vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
@@ -179,6 +284,10 @@ function d2Fdvperp2_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
     return fac
 end
 
+"""
+Calculates the fully expanded form of the collision operator \$C_{s s^\\prime}[F_s,F_{s^\\prime}]\$ given Maxwellian input \$F_s\$ and \$F_{s^\\prime}\$.
+The input Maxwellians are specified through their moments.
+"""
 function Cssp_Maxwellian_inputs(denss::mk_float,upars::mk_float,vths::mk_float,ms::mk_float,
                                 denssp::mk_float,uparsp::mk_float,vthsp::mk_float,msp::mk_float,
                                 nussp::mk_float,vpa,vperp,ivpa,ivperp)
@@ -210,6 +319,10 @@ function Cssp_Maxwellian_inputs(denss::mk_float,upars::mk_float,vths::mk_float,m
     return Cssp_Maxwellian
 end
 
+"""
+Calculates the collisional flux \$\\Gamma_\\|\$ given Maxwellian input \$F_s\$ and \$F_{s^\\prime}\$.
+The input Maxwellians are specified through their moments.
+"""
 function Cflux_vpa_Maxwellian_inputs(ms::mk_float,denss::mk_float,upars::mk_float,vths::mk_float,
                                      msp::mk_float,denssp::mk_float,uparsp::mk_float,vthsp::mk_float,
                                      vpa,vperp,ivpa,ivperp)
@@ -224,6 +337,10 @@ function Cflux_vpa_Maxwellian_inputs(ms::mk_float,denss::mk_float,upars::mk_floa
     return Cflux
 end
 
+"""
+Calculates the collisional flux \$\\Gamma_\\perp\$ given Maxwellian input \$F_s\$ and \$F_{s^\\prime}\$.
+The input Maxwellians are specified through their moments.
+"""
 function Cflux_vperp_Maxwellian_inputs(ms::mk_float,denss::mk_float,upars::mk_float,vths::mk_float,
                                      msp::mk_float,denssp::mk_float,uparsp::mk_float,vthsp::mk_float,
                                      vpa,vperp,ivpa,ivperp)
@@ -240,7 +357,8 @@ end
 
 """
 Function calculating the fully expanded form of the collision operator
-taking floats as arguments. This function is designed to be used at the 
+taking as arguments the derivatives of \$F_s\$, \$G_{s^\\prime}\$ and \$H_{s^\\prime}\$.
+This function is designed to be used at the 
 lowest level of a coordinate loop, with derivatives and integrals
 all previously calculated.
 """
@@ -259,7 +377,7 @@ end
 
 
 """
-calculates the collisional fluxes given input F_s and G_sp, H_sp
+Calculates the collisional fluxes given input \$F_s\$ and \$G_{s^\\prime}\$, \$H_{s^\\prime}\$.
 """
 function calculate_collisional_fluxes(F,dFdvpa,dFdvperp,
                             d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,dHdvpa,dHdvperp,
@@ -273,10 +391,11 @@ function calculate_collisional_fluxes(F,dFdvpa,dFdvperp,
 end
 
 
-"""
-Below are functions which are used for storing and printing data from the tests 
-"""
+# Below are functions which are used for storing and printing data from the tests 
 
+"""
+Function to print the maximum error \${\\rm MAX}(|f_{\\rm numerical}-f_{\\rm exact}|)\$.
+"""
 function print_test_data(func_exact,func_num,func_err,func_name)
     @. func_err = abs(func_num - func_exact)
     max_err = maximum(func_err)
@@ -284,6 +403,13 @@ function print_test_data(func_exact,func_num,func_err,func_name)
     return max_err
 end
 
+"""
+Function to print the maximum error \${\\rm MAX}(|f_{\\rm numerical}-f_{\\rm exact}|)\$ and the
+\$L_2\$ norm of the error 
+```math
+\\sqrt{\\int (f - f_{\\rm exact})^2 v_\\perp d v_\\perp d v_\\|/\\int v_\\perp d v_\\perp d v_\\|}.
+```
+"""
 function print_test_data(func_exact,func_num,func_err,func_name,vpa,vperp,dummy;print_to_screen=true)
     @. func_err = abs(func_num - func_exact)
     max_err = maximum(func_err)
@@ -340,6 +466,9 @@ function allocate_error_data()
         moments)
 end
 
+"""
+Utility function that saves error data to a HDF5 file for later use.
+"""
 function save_fkpl_error_data(outdir,ncore,ngrid,nelement_list,
     max_C_err, max_H_err, max_G_err, max_dHdvpa_err, max_dHdvperp_err,
     max_d2Gdvperp2_err, max_d2Gdvpa2_err, max_d2Gdvperpdvpa_err, max_dGdvperp_err, 
@@ -384,6 +513,9 @@ function save_fkpl_error_data(outdir,ncore,ngrid,nelement_list,
     return nothing
 end
 
+"""
+Utility function that saves error data to a HDF5 file for later use.
+"""
 function save_fkpl_integration_error_data(outdir,ncore,ngrid,nelement_list,
     max_dfsdvpa_err, max_dfsdvperp_err, max_d2fsdvperpdvpa_err,
     max_H_err, max_G_err, max_dHdvpa_err, max_dHdvperp_err,

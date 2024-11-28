@@ -1,9 +1,9 @@
 """
-module for functions used 
+Module for functions used 
 in calculating the integrals and doing 
 the numerical differentiation for 
 the implementation of the 
-the Full-F Fokker-Planck Collision Operator [`moment_kinetics.fokker_planck`](@ref).
+the full-F Fokker-Planck collision operator [`moment_kinetics.fokker_planck`](@ref).
 
 Parallelisation of the collision operator uses a special 'anyv' region type, see
 [Collision operator and `anyv` region](@ref).
@@ -25,7 +25,6 @@ export calculate_rosenbluth_potentials_via_elliptic_solve!
 
 # testing
 export calculate_rosenbluth_potential_boundary_data_exact!
-export enforce_zero_bc!
 export allocate_rosenbluth_potential_boundary_data
 export calculate_rosenbluth_potential_boundary_data_exact!
 export test_rosenbluth_potential_boundary_data
@@ -71,10 +70,11 @@ function print_vector(vector,name::String,m::mk_int)
 end
 
 """
-a struct of dummy arrays and precalculated coefficients
-for the strong-form Fokker-Planck collision operator 
+Struct of dummy arrays and precalculated coefficients
+for the Fokker-Planck collision operator when the
+Rosenbluth potentials are computed everywhere in `(vpa,vperp)`
+by direct integration. Used for testing.
 """
-
 struct fokkerplanck_arrays_direct_integration_struct
     G0_weights::MPISharedArray{mk_float,4}
     G1_weights::MPISharedArray{mk_float,4}
@@ -103,8 +103,8 @@ struct fokkerplanck_arrays_direct_integration_struct
 end
 
 """
-a struct to contain the integration weights for the boundary points
-in the (vpa,vperp) domain
+Struct to contain the integration weights for the boundary points
+in the `(vpa,vperp)` domain.
 """
 struct boundary_integration_weights_struct
     lower_vpa_boundary::MPISharedArray{mk_float,3}
@@ -113,8 +113,8 @@ struct boundary_integration_weights_struct
 end
 
 """
-a struct used for calculating the integration weights for the 
-boundary of the velocity space domain in (vpa,vperp) coordinates
+Struct used for storing the integration weights for the 
+boundary of the velocity space domain in `(vpa,vperp)` coordinates.
 """
 struct fokkerplanck_boundary_data_arrays_struct
     G0_weights::boundary_integration_weights_struct
@@ -128,12 +128,20 @@ struct fokkerplanck_boundary_data_arrays_struct
     dfdvperp::MPISharedArray{mk_float,2}    
 end
 
+"""
+Struct to store the `(vpa,vperp)` boundary data for an
+individual Rosenbluth potential.
+"""
 struct vpa_vperp_boundary_data
     lower_boundary_vpa::MPISharedArray{mk_float,1}
     upper_boundary_vpa::MPISharedArray{mk_float,1}
     upper_boundary_vperp::MPISharedArray{mk_float,1}
 end
 
+"""
+Struct to store the boundary data for all of the
+Rosenbluth potentials required for the calculation.
+"""
 struct rosenbluth_potential_boundary_data
     H_data::vpa_vperp_boundary_data
     dHdvpa_data::vpa_vperp_boundary_data
@@ -145,6 +153,15 @@ struct rosenbluth_potential_boundary_data
     d2Gdvpa2_data::vpa_vperp_boundary_data
 end
 
+"""
+Struct to store the elemental nonlinear stiffness matrices used
+to express the finite-element weak form of the collision
+operator. The arrays are indexed so that the contraction
+in the assembly step is carried out over the fastest
+accessed indices, i.e., for `YY0perp[i,j,k,iel]`, we contract
+over `i` and `j` to give data for the field position index `k`,
+all for the 1D element indexed by `iel`.
+"""
 struct YY_collision_operator_arrays
     # let phi_j(vperp) be the jth Lagrange basis function, 
     # and phi'_j(vperp) the first derivative of the Lagrange basis function
@@ -168,8 +185,8 @@ struct YY_collision_operator_arrays
 end
 
 """
-a struct of dummy arrays and precalculated coefficients
-for the weak-form Fokker-Planck collision operator 
+Struct of dummy arrays and precalculated coefficients
+for the finite-element weak-form Fokker-Planck collision operator.
 """
 struct fokkerplanck_weakform_arrays_struct{M <: AbstractSparseArray{mk_float,mk_int,N} where N}
     # boundary weights (Green's function) data
@@ -220,6 +237,9 @@ struct fokkerplanck_weakform_arrays_struct{M <: AbstractSparseArray{mk_float,mk_
     dFdvperp::MPISharedArray{mk_float,2}
 end
 
+"""
+Function to allocate a `boundary_integration_weights_struct`.
+"""
 function allocate_boundary_integration_weight(vpa,vperp)
     nvpa = vpa.n
     nvperp = vperp.n
@@ -230,6 +250,9 @@ function allocate_boundary_integration_weight(vpa,vperp)
             upper_vpa_boundary, upper_vperp_boundary)
 end
 
+"""
+Function to allocate at `fokkerplanck_boundary_data_arrays_struct`.
+"""
 function allocate_boundary_integration_weights(vpa,vperp)
     G0_weights = allocate_boundary_integration_weight(vpa,vperp)
     G1_weights = allocate_boundary_integration_weight(vpa,vperp)
@@ -260,7 +283,8 @@ end
 
 
 """
-function that precomputes the required integration weights
+Function that precomputes the required integration weights in the whole of
+`(vpa,vperp)` for the direct integration method of computing the Rosenbluth potentials.
 """
 function init_Rosenbluth_potential_integration_weights!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,vperp,vpa;print_to_screen=true)
     
@@ -314,9 +338,9 @@ function init_Rosenbluth_potential_integration_weights!(G0_weights,G1_weights,H0
 end
 
 """
-function for getting the basic quadratures used for the 
+Function for getting the basic quadratures used for the 
 numerical integration of the Lagrange polynomials and the 
-Green's function.
+integration kernals.
 """
 function setup_basic_quadratures(vpa,vperp;print_to_screen=true)
     @serial_region begin
@@ -341,8 +365,7 @@ end
 
 
 """
-function for getting the indices used to choose the integration
-quadrature 
+Function for getting the indices used to choose the integration quadrature.
 """
 function get_element_limit_indices(ivpa,ivperp,vpa,vperp)
     nelement_vpa, ngrid_vpa = vpa.nelement_local, vpa.ngrid
@@ -359,9 +382,11 @@ function get_element_limit_indices(ivpa,ivperp,vpa,vperp)
     return igrid_vpa, ielement_vpa, ielement_vpa_low, ielement_vpa_hi, 
             igrid_vperp, ielement_vperp, ielement_vperp_low, ielement_vperp_hi
 end
+
 """
-function that precomputes the required integration weights
-only along the velocity space boundaries
+Function that precomputes the required integration weights only along the velocity space boundaries.
+Used as the default option as part of the strategy to compute the Rosenbluth potentials
+at the boundaries with direct integration and in the rest of `(vpa,vperp)` by solving elliptic PDEs.
 """
 function init_Rosenbluth_potential_boundary_integration_weights!(G0_weights,
       G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,vpa,vperp;print_to_screen=true)
@@ -508,12 +533,14 @@ function get_nodes(coord,iel)
     return nodes
 end
 
-# Function to get the local integration grid and quadrature weights
-# to integrate a 1D element in the 2D representation of the 
-# velocity space distribution functions. This function assumes that
-# there is a divergence at the point coord_val, and splits the grid 
-# and integration weights appropriately, using Gauss-Laguerre points
-# near the divergence and Gauss-Legendre points away from the divergence. 
+"""
+Function to get the local integration grid and quadrature weights
+to integrate a 1D element in the 2D representation of the 
+velocity space distribution functions. This function assumes that
+there is a divergence at the point `coord_val`, and splits the grid 
+and integration weights appropriately, using Gauss-Laguerre points
+near the divergence and Gauss-Legendre points away from the divergence. 
+"""
 function get_scaled_x_w_with_divergences!(x_scaled, w_scaled, x_legendre, w_legendre, x_laguerre, w_laguerre, node_min, node_max, nodes, igrid_coord, coord_val)
     #println("nodes ",nodes)
     zero = 1.0e-10 
@@ -604,9 +631,12 @@ function get_scaled_x_w_with_divergences!(x_scaled, w_scaled, x_legendre, w_lege
     #println("w_scaled",w_scaled)
     return nquad_coord
 end
-# Function to get the local grid and integration weights assuming 
-# no divergences of the function on the 1D element. Gauss-Legendre
-# quadrature is used for the entire element.
+
+"""
+Function to get the local grid and integration weights assuming 
+no divergences of the function on the 1D element. Gauss-Legendre
+quadrature is used for the entire element.
+"""
 function get_scaled_x_w_no_divergences!(x_scaled, w_scaled, x_legendre, w_legendre, node_min, node_max)
     @. x_scaled = 0.0
     @. w_scaled = 0.0
@@ -621,30 +651,46 @@ function get_scaled_x_w_no_divergences!(x_scaled, w_scaled, x_legendre, w_legend
     return nquad
 end
 
-# function returns 1 if igrid = 1 or 0 if 1 < igrid <= ngrid
+"""
+Function returns `1` if `igrid = 1` or `0` if `1 < igrid <= ngrid`.
+"""
 function ng_low(igrid,ngrid)
     return floor(mk_int, (ngrid - igrid)/(ngrid - 1))
 end
-# function returns 1 if igrid = ngrid or 0 if 1 =< igrid < ngrid
+
+"""
+Function returns `1` if `igrid = ngrid` or `0` if `1 =< igrid < ngrid`.
+"""
 function ng_hi(igrid,ngrid)
     return floor(mk_int, igrid/ngrid)
 end
-# function returns 1 for nelement >= ielement > 1, 0 for ielement =1 
+
+"""
+Function returns `1` for `nelement >= ielement > 1`, `0` for `ielement = 1`.
+"""
 function nel_low(ielement,nelement)
     return floor(mk_int, (ielement - 2 + nelement)/nelement)
 end
-# function returns 1 for nelement > ielement >= 1, 0 for ielement =nelement 
+
+"""
+Function returns `1` for `nelement > ielement >= 1`, `0` for `ielement = nelement`.
+"""
 function nel_hi(ielement,nelement)
     return 1- floor(mk_int, ielement/nelement)
 end
 
-# base level function for computing the Green's function weights
-# note the definitions of ellipe & ellipk
-# `https://specialfunctions.juliamath.org/stable/functions_list/#SpecialFunctions.ellipe`
-# `https://specialfunctions.juliamath.org/stable/functions_list/#SpecialFunctions.ellipk`
-# `ellipe(m) = \int^{\pi/2}\_0 \sqrt{ 1 - m \sin^2(\theta)} d \theta`
-# `ellipe(k) = \int^{\pi/2}\_0 \frac{1}{\sqrt{ 1 - m \sin^2(\theta)}} d \theta`
-
+"""
+Base level function for computing the integration kernals for the Rosenbluth potential integration.
+Note the definitions of `ellipe(m)` (\$E(m)\$) and `ellipk(m)` (\$K(m)\$).
+`https://specialfunctions.juliamath.org/stable/functions_list/#SpecialFunctions.ellipe`
+`https://specialfunctions.juliamath.org/stable/functions_list/#SpecialFunctions.ellipk`
+```math
+E(m) = \\int^{\\pi/2}_0 \\sqrt{ 1 - m \\sin^2(\\theta)} d \\theta
+```
+```math
+K(m) = \\int^{\\pi/2}_0 \\frac{1}{\\sqrt{ 1 - m \\sin^2(\\theta)}} d \\theta
+```
+"""
 function local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                             nquad_vpa,ielement_vpa,vpa, # info about primed vpa grids
                             nquad_vperp,ielement_vperp,vperp, # info about primed vperp grids
@@ -733,6 +779,13 @@ function local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,
     return nothing
 end
 
+"""
+Function for computing the quadratures and carrying out the loop over the 
+primed `vpa` coordinate in doing the numerical integration. Splits the integrand
+into three pieces -- two which use Gauss-Legendre quadrature assuming no divergences
+in the integrand, and one which assumes a logarithmic divergence and uses a
+Gauss-Laguerre quadrature with an (exponential) change of variables to mitigate this divergence.
+"""
 function loop_over_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                             vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vperp grids
                             vperp,ielement_vperpp, # info about primed vperp grids
@@ -784,6 +837,11 @@ function loop_over_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weights,H2_
     return nothing
 end
 
+"""
+Function for computing the quadratures and carrying out the loop over the 
+primed `vpa` coordinate in doing the numerical integration. 
+Uses a Gauss-Legendre quadrature assuming no divergences in the integrand.
+"""
 function loop_over_vpa_elements_no_divergences!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                             vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vperp grids
                             nquad_vperp,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
@@ -805,6 +863,15 @@ function loop_over_vpa_elements_no_divergences!(G0_weights,G1_weights,H0_weights
     return nothing
 end
 
+"""
+Function for computing the quadratures and carrying out the loop over the 
+primed `vperp` coordinate in doing the numerical integration. Splits the integrand
+into three pieces -- two which use Gauss-Legendre quadrature assuming no divergences
+in the integrand, and one which assumes a logarithmic divergence and uses a
+Gauss-Laguerre quadrature with an (exponential) change of variables to mitigate this divergence.
+This function calls `loop_over_vpa_elements_no_divergences!()` and `loop_over_vpa_elements!()`
+to carry out the primed `vpa` loop within the primed `vperp` loop.
+"""
 function loop_over_vperp_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                 vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                 vperp,ielement_vperp_low,ielement_vperp_hi, # info about primed vperp grids
@@ -854,12 +921,14 @@ function loop_over_vperp_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weigh
     return nothing
 end
 
-# The function loop_over_vperp_vpa_elements_no_divergences!() was for debugging.
-# By changing the source where loop_over_vperp_vpa_elements!() is called to
-# instead call this function we can verify that the Gauss-Legendre quadrature
-# is adequate for integrating a divergence-free integrand. This function should be 
-# kept until the problems with the pure integration method of computing the
-# Rosenbluth potentials are understood.
+"""
+The function `loop_over_vperp_vpa_elements_no_divergences!()` was used for debugging.
+By changing the source where `loop_over_vperp_vpa_elements!()` is called to
+instead call this function we can verify that the Gauss-Legendre quadrature
+is adequate for integrating a divergence-free integrand. This function should be 
+kept until we understand the problems preventing machine-precision accurary in the pure integration method of computing the
+Rosenbluth potentials.
+"""
 function loop_over_vperp_vpa_elements_no_divergences!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                 vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                 vperp,ielement_vperp_low,ielement_vperp_hi, # info about primed vperp grids
@@ -926,9 +995,11 @@ function ivpa_func(ic::mk_int,nvpa::mk_int)
     return ivpa
 end
 
-# function that returns the sparse matrix index
-# used to directly construct the nonzero entries
-# of a 2D assembled sparse matrix
+"""
+Function that returns the sparse matrix index
+used to directly construct the nonzero entries
+of a 2D assembled sparse matrix.
+"""
 function icsc_func(ivpa_local::mk_int,ivpap_local::mk_int,
                    ielement_vpa::mk_int,
                    ngrid_vpa::mk_int,nelement_vpa::mk_int,
@@ -946,6 +1017,9 @@ function icsc_func(ivpa_local::mk_int,ivpap_local::mk_int,
     return icsc
 end
 
+"""
+Struct to contain data needed to create a sparse matrix.
+"""
 struct sparse_matrix_constructor
     # the Ith row
     II::Array{mk_float,1}
@@ -955,6 +1029,9 @@ struct sparse_matrix_constructor
     SS::Array{mk_float,1}
 end
 
+"""
+Function to allocate an instance of `sparse_matrix_constructor`.
+"""
 function allocate_sparse_matrix_constructor(nsparse::mk_int)
     II = Array{mk_int,1}(undef,nsparse)
     @. II = 0
@@ -965,12 +1042,20 @@ function allocate_sparse_matrix_constructor(nsparse::mk_int)
     return sparse_matrix_constructor(II,JJ,SS)
 end
 
+"""
+Function to assign data to an instance of `sparse_matrix_constructor`.
+"""
 function assign_constructor_data!(data::sparse_matrix_constructor,icsc::mk_int,ii::mk_int,jj::mk_int,ss::mk_float)
     data.II[icsc] = ii
     data.JJ[icsc] = jj
     data.SS[icsc] = ss
     return nothing
 end
+
+"""
+Function to assemble data in an instance of `sparse_matrix_constructor`. Instead of
+writing `data.SS[icsc] = ss`, as in `assign_constructor_data!()` we write `data.SS[icsc] += ss`.
+"""
 function assemble_constructor_data!(data::sparse_matrix_constructor,icsc::mk_int,ii::mk_int,jj::mk_int,ss::mk_float)
     data.II[icsc] = ii
     data.JJ[icsc] = jj
@@ -978,10 +1063,17 @@ function assemble_constructor_data!(data::sparse_matrix_constructor,icsc::mk_int
     return nothing
 end
 
+"""
+Wrapper function to create a sparse matrix with an instance of `sparse_matrix_constructor`
+and `sparse()`.
+"""
 function create_sparse_matrix(data::sparse_matrix_constructor)
     return sparse(data.II,data.JJ,data.SS)
 end
 
+"""
+Function to allocate an instance of `vpa_vperp_boundary_data`.
+"""
 function allocate_boundary_data(vpa,vperp)
     # The following velocity-space-sized buffer arrays are used to evaluate the
     # collision operator for a single species at a single spatial point. They are
@@ -997,7 +1089,10 @@ function allocate_boundary_data(vpa,vperp)
             upper_boundary_vpa,upper_boundary_vperp)
 end
 
-
+"""
+Function to assign precomputed (exact) data to an instance
+of `vpa_vperp_boundary_data`. Used in testing.
+"""
 function assign_exact_boundary_data!(func_data::vpa_vperp_boundary_data,
                                         func_exact,vpa,vperp)
     begin_anyv_region()
@@ -1014,7 +1109,10 @@ function assign_exact_boundary_data!(func_data::vpa_vperp_boundary_data,
     end
     return nothing
 end
-    
+
+"""
+Function to allocate an instance of `rosenbluth_potential_boundary_data`.
+"""    
 function allocate_rosenbluth_potential_boundary_data(vpa,vperp)
     H_data = allocate_boundary_data(vpa,vperp)
     dHdvpa_data = allocate_boundary_data(vpa,vperp)
@@ -1029,6 +1127,10 @@ function allocate_rosenbluth_potential_boundary_data(vpa,vperp)
         d2Gdvperpdvpa_data,d2Gdvpa2_data)
 end
 
+"""
+Function to assign data to an instance of `rosenbluth_potential_boundary_data`, in place,
+without allocation. Used in testing.
+"""
 function calculate_rosenbluth_potential_boundary_data_exact!(rpbd::rosenbluth_potential_boundary_data,
   H_exact,dHdvpa_exact,dHdvperp_exact,G_exact,dGdvperp_exact,
   d2Gdvperp2_exact,d2Gdvperpdvpa_exact,d2Gdvpa2_exact,
@@ -1044,7 +1146,13 @@ function calculate_rosenbluth_potential_boundary_data_exact!(rpbd::rosenbluth_po
     return nothing
 end
 
-
+"""
+Function to carry out the direct integration of a formal definition of one
+of the Rosenbluth potentials, on the boundaries of the `(vpa,vperp)` domain, 
+using the precomputed integration weights with dimension 4.
+The result is stored in an instance of `vpa_vperp_boundary_data`.
+Used in testing.
+"""
 function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
                                   weight::MPISharedArray{mk_float,4},func_input,vpa,vperp)
     nvpa = vpa.n
@@ -1073,6 +1181,12 @@ function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
     return nothing
 end
 
+"""
+Function to carry out the direct integration of a formal definition of one
+of the Rosenbluth potentials, on the boundaries of the `(vpa,vperp)` domain, 
+using the precomputed integration weights with dimension 3.
+The result is stored in an instance of `vpa_vperp_boundary_data`.
+"""
 function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
                                   weight::boundary_integration_weights_struct,
                                   func_input,vpa,vperp)
@@ -1103,6 +1217,11 @@ function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
     return nothing
 end
 
+"""
+Function to call direct integration function `calculate_boundary_data!()` and 
+assign data to an instance of `rosenbluth_potential_boundary_data`, in place,
+without allocation.
+"""
 function calculate_rosenbluth_potential_boundary_data!(rpbd::rosenbluth_potential_boundary_data,
     fkpl::Union{fokkerplanck_arrays_direct_integration_struct,fokkerplanck_boundary_data_arrays_struct},pdf,vpa,vperp,vpa_spectral,vperp_spectral;
     calculate_GG=false,calculate_dGdvperp=false)
@@ -1140,6 +1259,11 @@ function calculate_rosenbluth_potential_boundary_data!(rpbd::rosenbluth_potentia
     return nothing
 end
 
+"""
+Function to compare two instances of `rosenbluth_potential_boundary_data` --
+one assumed to contain exact results, and the other numerically computed results -- and compute
+the maximum value of the error. Calls `test_boundary_data()`.
+"""
 function test_rosenbluth_potential_boundary_data(rpbd::rosenbluth_potential_boundary_data,
     rpbd_exact::rosenbluth_potential_boundary_data,vpa,vperp;print_to_screen=true)
     
@@ -1158,6 +1282,10 @@ function test_rosenbluth_potential_boundary_data(rpbd::rosenbluth_potential_boun
     return max_H_err, max_dHdvpa_err, max_dHdvperp_err, max_G_err, max_dGdvperp_err, max_d2Gdvperp2_err, max_d2Gdvperpdvpa_err, max_d2Gdvpa2_err
 end
 
+"""
+Function to compute the maximum error \${\\rm MAX}|f_{\\rm numerical}-f_{\\rm exact}|\$ for
+instances of `vpa_vperp_boundary_data`.
+"""
 function test_boundary_data(func,func_exact,func_name,vpa,vperp,buffer_vpa,buffer_vperp_1,buffer_vperp_2,print_to_screen)
     nvpa = vpa.n
     nvperp = vperp.n
@@ -1197,6 +1325,10 @@ function get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_lo
     return ic_global
 end
 
+"""
+Unused function. Sets `f(vpa,vperp)` to zero at the boundaries
+in `(vpa,vperp)`.
+"""
 function enforce_zero_bc!(fvpavperp,vpa,vperp;impose_BC_at_zero_vperp=false)
     # lower vpa boundary
     @loop_vperp ivperp begin
@@ -1221,6 +1353,11 @@ function enforce_zero_bc!(fvpavperp,vpa,vperp;impose_BC_at_zero_vperp=false)
     end
 end
 
+"""
+Sets `f(vpa,vperp)` to a specied value `f_bc` at the boundaries
+in `(vpa,vperp)`. `f_bc` is a 2D array of `(vpa,vperp)` where
+only boundary data is used. Used for testing.
+"""
 function enforce_dirichlet_bc!(fvpavperp,vpa,vperp,f_bc;dirichlet_vperp_lower_boundary=false)
     # lower vpa boundary
     for ivperp ∈ 1:vperp.n
@@ -1245,6 +1382,10 @@ function enforce_dirichlet_bc!(fvpavperp,vpa,vperp,f_bc;dirichlet_vperp_lower_bo
     end
 end
 
+"""
+Sets `f(vpa,vperp)` to a specied value `f_bc` at the boundaries
+in `(vpa,vperp)`. `f_bc` is an instance of `vpa_vperp_boundary_data`.
+"""
 function enforce_dirichlet_bc!(fvpavperp,vpa,vperp,f_bc::vpa_vperp_boundary_data)
     # lower vpa boundary
     for ivperp ∈ 1:vperp.n
@@ -1263,6 +1404,16 @@ function enforce_dirichlet_bc!(fvpavperp,vpa,vperp,f_bc::vpa_vperp_boundary_data
     return nothing
 end
 
+"""
+Function to contruct the global sparse matrices used to solve
+the elliptic PDEs for the Rosenbluth potentials. Uses a dense matrix
+construction method. The matrices are 2D in the compound index `ic` 
+which indexes the velocity space labelled by `ivpa,ivperp`.
+Dirichlet boundary conditions are imposed in the appropriate stiffness
+matrices by setting the boundary row to be the Kronecker delta 
+(0 except where `ivpa = ivpap` and `ivperp = ivperpp`). 
+Used for testing.
+"""
 function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spectral;print_to_screen=true)
     nc_global = vpa.n*vperp.n
     # Assemble a 2D mass matrix in the global compound coordinate
@@ -1486,6 +1637,16 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
            PPpar2D_sparse, MMparMNperp2D_sparse
 end
 
+"""
+Function to contruct the global sparse matrices used to solve
+the elliptic PDEs for the Rosenbluth potentials. Uses a sparse matrix
+construction method. The matrices are 2D in the compound index `ic` 
+which indexes the velocity space labelled by `ivpa,ivperp`.
+Dirichlet boundary conditions are imposed in the appropriate stiffness
+matrices by setting the boundary row to be the Kronecker delta 
+(0 except where `ivpa = ivpap` and `ivperp = ivperpp`).
+See also `assemble_matrix_operators_dirichlet_bc()`.
+"""
 function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vperp_spectral;print_to_screen=true)
     # Assemble a 2D mass matrix in the global compound coordinate
     nc_global = vpa.n*vperp.n
@@ -1725,6 +1886,11 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
            PPpar2D_sparse, MMparMNperp2D_sparse
 end
 
+"""
+Function to allocated an instance of `YY_collision_operator_arrays`.
+Calls `get_QQ_local!()` from `gauss_legendre`. Definitions of these
+nonlinear stiffness matrices can be found in the docs for `get_QQ_local!()`.
+"""
 function calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
     YY0perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
     YY1perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
@@ -1752,6 +1918,12 @@ function calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
                                         YY0par,YY1par,YY2par,YY3par)
 end
 
+"""
+Function to assemble the RHS of the kinetic equation due to the collision operator,
+in weak form. Once the array `rhsvpavperp` contains the assembled weak-form collision operator,
+a mass matrix solve still must be carried out to find the time derivative of the distribution function
+due to collisions. This function uses a purely serial algorithm for testing purposes.
+"""
 function assemble_explicit_collision_operator_rhs_serial!(rhsvpavperp,pdfs,d2Gspdvpa2,d2Gspdvperpdvpa,
     d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp,
     vpa,vperp,YY_arrays::YY_collision_operator_arrays)
@@ -1812,6 +1984,14 @@ function assemble_explicit_collision_operator_rhs_serial!(rhsvpavperp,pdfs,d2Gsp
     return nothing
 end
 
+"""
+Function to assemble the RHS of the kinetic equation due to the collision operator,
+in weak form. Once the array `rhsvpavperp` contains the assembled weak-form collision operator,
+a mass matrix solve still must be carried out to find the time derivative of the distribution function
+due to collisions. This function uses a purely parallel algorithm and may be tested by comparing to 
+`assemble_explicit_collision_operator_rhs_serial!()`. The inner-most loop of the function is 
+in `assemble_explicit_collision_operator_rhs_parallel_inner_loop()`.
+"""
 function assemble_explicit_collision_operator_rhs_parallel!(rhsvpavperp,pdfs,d2Gspdvpa2,d2Gspdvperpdvpa,
     d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp,
     vpa,vperp,YY_arrays::YY_collision_operator_arrays)
@@ -1859,6 +2039,9 @@ function assemble_explicit_collision_operator_rhs_parallel!(rhsvpavperp,pdfs,d2G
     return nothing
 end
 
+"""
+The inner-most loop of the parallel collision operator assembly. Called in `assemble_explicit_collision_operator_rhs_parallel!()`.
+"""
 function assemble_explicit_collision_operator_rhs_parallel_inner_loop(
         nussp, ms, msp, YY0perp, YY0par, YY1perp, YY1par, YY2perp, YY2par, YY3perp,
         YY3par, pdfs, d2Gspdvpa2, d2Gspdvperpdvpa, d2Gspdvperp2, dHspdvpa, dHspdvperp,
@@ -1898,6 +2081,12 @@ function assemble_explicit_collision_operator_rhs_parallel_inner_loop(
     return result
 end
 
+"""
+Function to assemble the RHS of the kinetic equation due to the collision operator,
+in weak form, when the distribution function appearing the derivatives is known analytically.
+The inner-most loop of the function is 
+in `assemble_explicit_collision_operator_rhs_parallel_analytical_inputs_inner_loop()`.
+"""
 function assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!(rhsvpavperp,pdfs,dpdfsdvpa,dpdfsdvperp,d2Gspdvpa2,d2Gspdvperpdvpa,
     d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp,
     vpa,vperp,YY_arrays::YY_collision_operator_arrays)
@@ -1945,6 +2134,9 @@ function assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!(rh
     return nothing
 end
 
+"""
+The inner-most loop of `assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!()`.
+"""
 # Separate function for inner loop, possible optimization??
 function assemble_explicit_collision_operator_rhs_parallel_analytical_inputs_inner_loop(
         nussp, ms, msp, pdfs, dpdfsdvpa, dpdfsdvperp, d2Gspdvperp2,
@@ -1987,18 +2179,20 @@ function assemble_explicit_collision_operator_rhs_parallel_analytical_inputs_inn
     return result
 end
 
+"""
+Elliptic solve function. 
 
-# Elliptic solve function. 
-# field: the solution
-# source: the source function on the RHS
-# boundary data: the known values of field at infinity
-# lu_object_lhs: the object for the differential operator that defines field
-# matrix_rhs: the weak matrix acting on the source vector
-# vpa, vperp: coordinate structs
-#
-# Note: all variants of `elliptic_solve!()` run only in serial. They do not handle
-# shared-memory parallelism themselves. The calling site must ensure that
-# `elliptic_solve!()` is only called by one process in a shared-memory block.
+    field: the solution
+    source: the source function on the RHS
+    boundary data: the known values of field at infinity
+    lu_object_lhs: the object for the differential operator that defines field
+    matrix_rhs: the weak matrix acting on the source vector
+    vpa, vperp: coordinate structs
+
+Note: all variants of `elliptic_solve!()` run only in serial. They do not handle
+shared-memory parallelism themselves. The calling site must ensure that
+`elliptic_solve!()` is only called by one process in a shared-memory block.
+"""
 function elliptic_solve!(field,source,boundary_data::vpa_vperp_boundary_data,
             lu_object_lhs,matrix_rhs,rhsvpavperp,vpa,vperp)
     # assemble the rhs of the weak system
@@ -2042,14 +2236,16 @@ function elliptic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_bounda
     return nothing
 end
 
-# Same as elliptic_solve!() above but no Dirichlet boundary conditions are imposed,
-# because the function is only used where the lu_object_lhs is derived from a mass matrix.
-# The source is made of two different terms with different weak matrices
-# because of the form of the only algebraic equation that we consider.
-#
-# Note: `algebraic_solve!()` run only in serial. They do not handle shared-memory
-# parallelism themselves. The calling site must ensure that `algebraic_solve!()` is only
-# called by one process in a shared-memory block.
+"""
+Same as `elliptic_solve!()` above but no Dirichlet boundary conditions are imposed,
+because the function is only used where the `lu_object_lhs` is derived from a mass matrix.
+The source is made of two different terms with different weak matrices
+because of the form of the only algebraic equation that we consider.
+
+Note: `algebraic_solve!()` run only in serial. They do not handle shared-memory
+parallelism themselves. The calling site must ensure that `algebraic_solve!()` is only
+called by one process in a shared-memory block.
+"""
 function algebraic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_boundary_data,
             lu_object_lhs,matrix_rhs_1,matrix_rhs_2,rhs,vpa,vperp)
     
@@ -2073,6 +2269,15 @@ function algebraic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_bound
     return nothing
 end
 
+"""
+Function to solve the appropriate elliptic PDEs to find the
+Rosenbluth potentials. First, we calculate the Rosenbluth potentials
+at the boundary with the direct integration method. Then, we use this
+data to solve the elliptic PDEs with the boundary data providing an
+accurate Dirichlet boundary condition on the maximum `vpa` and `vperp`
+of the domain. We use the sparse LU decomposition from the LinearAlgebra package
+to solve the PDE matrix equations.
+"""
 function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvperp,
              d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,ffsp_in,
              vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays::fokkerplanck_weakform_arrays_struct;
@@ -2199,7 +2404,8 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
 end
 
 """
-function to calculate Rosenbluth potentials by direct integration
+Function to calculate Rosenbluth potentials in the entire
+domain of `(vpa,vperp)` by direct integration.
 """
 
 function calculate_rosenbluth_potentials_via_direct_integration!(GG,HH,dHdvpa,dHdvperp,
@@ -2277,8 +2483,9 @@ function calculate_rosenbluth_integrals!(GG,d2Gspdvpa2,dGspdvperp,d2Gspdvperpdvp
 end
 
 """
-function to enforce boundary conditions on the collision operator
-result to be consistent with the boundary conditions imposed on the the pdf
+Function to enforce boundary conditions on the collision operator
+result to be consistent with the boundary conditions imposed on the
+distribution function.
 """
 function enforce_vpavperp_BCs!(pdf,vpa,vperp,vpa_spectral,vperp_spectral)
     nvpa = vpa.n
@@ -2314,20 +2521,19 @@ function enforce_vpavperp_BCs!(pdf,vpa,vperp,vpa_spectral,vperp_spectral)
 end
 
 """
-function to interpolate f(vpa,vperp) from one 
+Function to interpolate `f(vpa,vperp)` from one 
 velocity grid to another, assuming that both 
-grids are represented by vpa, vperp in normalised units,
+grids are represented by `(vpa,vperp)` in normalised units,
 but have different normalisation factors 
-defining the meaning of these grids in physical units.
+defining the meaning of these grids in physical units. E.g.,
 
-E.g. vpai, vperpi = ci * vpa, ci * vperp
+     vpai, vperpi = ci * vpa, ci * vperp
      vpae, vperpe = ce * vpa, ce * vperp
      
-with ci = sqrt(Ti/mi), ce = sqrt(Te/mi)
+with `ci = sqrt(Ti/mi)`, `ce = sqrt(Te/mi)`
 
-scalefac = ci / ce is the ratio of the
-two reference speeds
-
+`scalefac = ci / ce` is the ratio of the
+two reference speeds.
 """
 function interpolate_2D_vspace!(pdf_out,pdf_in,vpa,vperp,scalefac)
     
@@ -2403,7 +2609,7 @@ end
 #end
 
 """
-function to find the element in which x sits
+Function to find the element in which x sits.
 """
 function ielement_loopup(x,coord)
     xebs = coord.element_boundaries
