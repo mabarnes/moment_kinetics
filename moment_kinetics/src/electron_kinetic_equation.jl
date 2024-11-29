@@ -3233,15 +3233,15 @@ end
             #   vth = sqrt(2*p/n)
             #   δvth = vth / (2 * p) * δp
             #
-            #   sigma = u / vth
-            #   δsigma = - u / vth^2 δvth
-            #          = - u / (2 * vth * p) * δp
+            #   sigma = -u / vth
+            #   δsigma = u / vth^2 δvth
+            #          = u / (2 * vth * p) * δp
             #
             # We could write sigma_fraction as
             #   sigma_fraction = (sigma - vpa[sigma_ind-1]) / (vpa[sigma_ind] - vpa[sigma_ind-1])
             # so that
             #   δsigma_fraction = δsigma / (vpa[sigma_ind] - vpa[sigma_ind-1])
-            #                   = - u / (2 * vth * p) / (vpa[sigma_ind] - vpa[sigma_ind-1]) * δp
+            #                   = u / (2 * vth * p) / (vpa[sigma_ind] - vpa[sigma_ind-1]) * δp
             #
             #   minus_vcut_fraction = ((-vcut - u)/vth - vpa[minus_vcut_ind-1]) / (vpa[minus_vcut_ind] - vpa[minus_vcut_ind-1])
             #   δminus_vcut_fraction = (vcut + u) / vth^2 / (vpa[minus_vcut_ind] - vpa[minus_vcut_ind-1]) * δvth
@@ -3275,7 +3275,7 @@ end
                 upper_cutoff_factor = plus_vcut_fraction + 0.5
             end
 
-            dsigma_dp = - upar[1] / (2.0 * vthe[1] * ppar[1])
+            dsigma_dp = upar[1] / (2.0 * vthe[1] * ppar[1])
 
             dsigma_fraction_dp = dsigma_dp / (vpa_grid[sigma_ind] - vpa_grid[sigma_ind-1])
 
@@ -3481,15 +3481,15 @@ end
             #   vth = sqrt(2*p/n)
             #   δvth = vth / (2 * p) * δp
             #
-            #   sigma = u / vth
-            #   δsigma = - u / vth^2 δvth
-            #          = - u / (2 * vth * p) * δp
+            #   sigma = -u / vth
+            #   δsigma = u / vth^2 δvth
+            #          = u / (2 * vth * p) * δp
             #
             # We could write sigma_fraction as
             #   sigma_fraction = (sigma - vpa[sigma_ind-1]) / (vpa[sigma_ind] - vpa[sigma_ind-1])
             # so that
             #   δsigma_fraction = δsigma / (vpa[sigma_ind] - vpa[sigma_ind-1])
-            #                   = - u / (2 * vth * p) / (vpa[sigma_ind] - vpa[sigma_ind-1]) * δp
+            #                   = u / (2 * vth * p) / (vpa[sigma_ind] - vpa[sigma_ind-1]) * δp
             #
             #   minus_vcut_fraction = ((-vcut - u)/vth - vpa[minus_vcut_ind-1]) / (vpa[minus_vcut_ind] - vpa[minus_vcut_ind-1])
             #   δminus_vcut_fraction = (vcut + u) / vth^2 / (vpa[minus_vcut_ind] - vpa[minus_vcut_ind-1]) * δvth
@@ -3524,7 +3524,7 @@ end
                 lower_cutoff_factor = 1.5 - minus_vcut_fraction
             end
 
-            dsigma_dp = - upar[end] / (2.0 * vthe[end] * ppar[end])
+            dsigma_dp = upar[end] / (2.0 * vthe[end] * ppar[end])
 
             dsigma_fraction_dp = dsigma_dp / (vpa_grid[sigma_ind] - vpa_grid[sigma_ind-1])
 
