@@ -2592,9 +2592,9 @@ function get_upperz_integral_correction_components(
     eta = get_part3_for_one_moment_upper(correction6_integral_pieces)
 
     return a2, b2, c2, d2, a3, b3, c3, d3, alpha, beta, gamma, delta, epsilon, zeta, eta,
-           density_integral_pieces_lowerz, flow_integral_pieces_lowerz,
-           energy_integral_pieces_lowerz, cubic_integral_pieces_lowerz,
-           quartic_integral_pieces_lowerz
+           density_integral_pieces_upperz, flow_integral_pieces_upperz,
+           energy_integral_pieces_upperz, cubic_integral_pieces_upperz,
+           quartic_integral_pieces_upperz
 end
 
 @timeit global_timer enforce_boundary_condition_on_electron_pdf!(
@@ -3233,10 +3233,10 @@ end
             # some cancellations.
 
             # The integral constraints should already be satisfied at this point by `pdf`.
-            @boundscheck isapprox(a2, a3; rtol=1.0e-14) || error("In preconditioner setup a2($a2)≠a3($a3), but constraints should be obeyed already by `pdf`.")
-            @boundscheck isapprox(b2, -b3; rtol=1.0e-14) || error("In preconditioner setup b2($b2)≠-b3($b3), but constraints should be obeyed already by `pdf`.")
-            @boundscheck isapprox(c2, c3; rtol=1.0e-14) || error("In preconditioner setup c2($c2)≠c3($c3), but constraints should be obeyed already by `pdf`.")
-            @boundscheck isapprox(d2, -d3; rtol=1.0e-14) || error("In preconditioner setup d2($d2)≠-d3($d3), but constraints should be obeyed already by `pdf`.")
+            @boundscheck isapprox(a2, a3; rtol=1.0e-12) || error("In preconditioner setup lower-z boundary a2($a2)≠a3($a3), but constraints should be obeyed already by `pdf`.")
+            @boundscheck isapprox(b2, -b3; rtol=1.0e-12) || error("In preconditioner setup lower-z boundary b2($b2)≠-b3($b3), but constraints should be obeyed already by `pdf`.")
+            @boundscheck isapprox(c2, c3; rtol=1.0e-12) || error("In preconditioner setup lower-z boundary c2($c2)≠c3($c3), but constraints should be obeyed already by `pdf`.")
+            @boundscheck isapprox(d2, -d3; rtol=1.0e-12) || error("In preconditioner setup lower-z boundary d2($d2)≠-d3($d3), but constraints should be obeyed already by `pdf`.")
 
             # Need to calculate the variation of various intermediate quantities with
             # δp.
@@ -3276,26 +3276,74 @@ end
                 upper_cutoff_ind = plus_vcut_ind
                 upper_cutoff_factor = plus_vcut_fraction + 0.5
             end
-            density_integral_sigma_cell = 0.5 * (density_integral_pieces[sigma_ind-1] +
-                                                 density_integral_pieces[sigma_ind])
 
             dsigma_dp = - upar[1] / (2.0 * vthe[1] * ppar[1])
 
-            dsigma_fraction_dp = d_sigma_dp / (vpa_grid[sigma_ind] - vpa_grid[sigma_ind-1])
+            dsigma_fraction_dp = dsigma_dp / (vpa_grid[sigma_ind] - vpa_grid[sigma_ind-1])
 
             dminus_vcut_fraction_dp = (vcut + upar[1]) / (2.0 * vthe[1] * ppar[1]) / (vpa_grid[minus_vcut_ind] - vpa_grid[minus_vcut_ind-1])
 
             dplus_vcut_fraction_dp = -(vcut - upar[1]) / (2.0 * vthe[1] * ppar[1]) / (vpa_grid[plus_vcut_ind+1] - vpa_grid[plus_vcut_ind])
 
+
+            density_integral_sigma_cell = 0.5 * (density_integral_pieces_lowerz[sigma_ind-1] +
+                                                 density_integral_pieces_lowerz[sigma_ind])
             da2_minus_a3_dp = (
                 # Contribution from integral limits at sigma
                 2.0 * density_integral_sigma_cell * dsigma_fraction_dp
                 # Contribution from integral limits at ±wcut
-                - density_integral_pieces[lower_cutoff_ind] * dminus_vcut_fraction_dp
-                + density_integral_pieces[upper_cutoff_ind] / upper_cutoff_factor * dplus_vcut_fraction_dp
+                - density_integral_pieces_lowerz[lower_cutoff_ind] * dminus_vcut_fraction_dp
+                - density_integral_pieces_lowerz[upper_cutoff_ind] / upper_cutoff_factor * dplus_vcut_fraction_dp
                 # No contribution from w-integral for a2 or a3 as integrand does not
                 # depend on ppar.
                )
+
+            dminus_b2_minus_b3_dp = (
+                # Contribution from integral limits at sigma cancel exactly
+                # Contribution from integral limits at ±wcut
+                + flow_integral_pieces_lowerz[lower_cutoff_ind] * dminus_vcut_fraction_dp
+                - flow_integral_pieces_lowerz[upper_cutoff_ind] / upper_cutoff_factor * dplus_vcut_fraction_dp
+                # Contribution from w-integral due to variation of integrand with ppar.
+                + (a2 + a3) * dsigma_dp
+               )
+
+            energy_integral_sigma_cell = 0.5 * (energy_integral_pieces_lowerz[sigma_ind-1] +
+                                                energy_integral_pieces_lowerz[sigma_ind])
+            dc2_minus_c3_dp = (
+                # Contribution from integral limits at sigma
+                2.0 * energy_integral_sigma_cell * dsigma_fraction_dp
+                # Contribution from integral limits at ±wcut
+                - energy_integral_pieces_lowerz[lower_cutoff_ind] * dminus_vcut_fraction_dp
+                - energy_integral_pieces_lowerz[upper_cutoff_ind] / upper_cutoff_factor * dplus_vcut_fraction_dp
+                # Contribution from w-integral due to variation of integrand with ppar.
+                + 2.0 * (-b2 + b3) * dsigma_dp
+               )
+
+            dminus_d2_minus_d3_dp = (
+                # Contribution from integral limits at sigma cancel exactly
+                # Contribution from integral limits at ±wcut
+                + cubic_integral_pieces_lowerz[lower_cutoff_ind] * dminus_vcut_fraction_dp
+                - cubic_integral_pieces_lowerz[upper_cutoff_ind] / upper_cutoff_factor * dplus_vcut_fraction_dp
+                # Contribution from w-integral due to variation of integrand with ppar.
+                + (3.0*c2 + 3.0*sigma*b2 + sigma^2*a2 + 3.0*c3 + 3.0*sigma*b3 + sigma^2*a3) * dsigma_dp
+               )
+
+            solution = [alpha beta    gamma   delta   ;
+                        beta  gamma   delta   epsilon ;
+                        gamma delta   epsilon zeta    ;
+                        delta epsilon zeta    eta
+                       ] \ [da2_minus_a3_dp, dminus_b2_minus_b3_dp, dc2_minus_c3_dp, dminus_d2_minus_d3_dp]
+            dA_dp, dB_dp, dC_dp, dD_dp = solution
+
+            output_range = sigma_ind+1:upper_cutoff_ind
+            v_over_vth = @views @. vpa.scratch2[output_range] = vpa_unnorm[output_range] / vthe[1,ir]
+            @views @. jacobian_zbegin_ppar[output_range] +=
+                          (dA_dp
+                           + dB_dp * v_over_vth
+                           + dC_dp * v_over_vth^2
+                           + dD_dp * v_over_vth^3) *
+                          integral_correction_sharpness * v_over_vth^2 / (1.0 + integral_correction_sharpness * v_over_vth^2) *
+                          pdf[output_range]
         end
     end
 
@@ -3321,11 +3369,11 @@ end
                                                                     me_over_mi, vpa, ir)
 
             minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
-            # vcut_fraction is the fraction of the distance between minus_vcut_ind-1 and
+            # minus_vcut_fraction is the fraction of the distance between minus_vcut_ind-1 and
             # minus_vcut_ind where -vcut is.
-            vcut_fraction = get_minus_vcut_fraction(vcut, minus_vcut_ind, vpa_unnorm)
+            minus_vcut_fraction = get_minus_vcut_fraction(vcut, minus_vcut_ind, vpa_unnorm)
 
-            if vcut_fraction < 0.5
+            if minus_vcut_fraction < 0.5
                 first_nonzero_ind = minus_vcut_ind - 1
             else
                 first_nonzero_ind = minus_vcut_ind
@@ -3343,10 +3391,10 @@ end
                        reversed_wpa_of_minus_vpa[vpa.n-first_point_near_zero+2:vpa.n-first_nonzero_ind+1],
                        vpa, vpa_spectral)
 
-            if vcut_fraction < 0.5
-                jacobian_zend[first_nonzero_ind,:] .*= 0.5 - vcut_fraction
+            if minus_vcut_fraction < 0.5
+                jacobian_zend[first_nonzero_ind,:] .*= 0.5 - minus_vcut_fraction
             else
-                jacobian_zend[first_nonzero_ind,:] .*= 1.5 - vcut_fraction
+                jacobian_zend[first_nonzero_ind,:] .*= 1.5 - minus_vcut_fraction
             end
 
             # Fill in elements giving response to changes in electron_ppar
@@ -3388,32 +3436,160 @@ end
             #     wcut = (-vcut - upar)/vthe
             # as vcut does not change (within the Krylov iteration where this
             # preconditioner matrix is used), but vthe does because of the change in
-            # electron_ppar. We actually use vcut_fraction calculated from vpa_unnorm, so
-            # it is most convenient to consider:
+            # electron_ppar. We actually use minus_vcut_fraction calculated from
+            # vpa_unnorm, so it is most convenient to consider:
             #     v = vthe * w + upar
             #     δv = δvthe * w
             #        = δvthe * (v - upar)/vthe
             #        = δppar * vthe / (2*ppar) * (v - upar)/vthe
             #        = δppar * (v - upar) / 2 / ppar
             # with vl and vu the values of v at the grid points below and above vcut
-            #     vcut_fraction = (-vcut - vl) / (vu - vl)
-            #     δvcut_fraction = -(-vcut - vl) / (vu - vl)^2 * (δvu - δvl) - δvl / (vu - vl)
-            #     δvcut_fraction = [-(-vcut - vl) / (vu - vl)^2 * (vu - vl) - (vl - upar) / (vu - vl)] * δppar / 2 / ppar
-            #     δvcut_fraction = [-(-vcut - vl) / (vu - vl) - (vl - upar) / (vu - vl)] * δppar / 2 / ppar
-            #     δvcut_fraction = -(-vcut - upar) / (vu - vl) / 2 / ppar * δppar
-            #     δvcut_fraction = (vcut + upar) / (vu - vl) / 2 / ppar * δppar
+            #     minus_vcut_fraction = (-vcut - vl) / (vu - vl)
+            #     δminus_vcut_fraction = -(-vcut - vl) / (vu - vl)^2 * (δvu - δvl) - δvl / (vu - vl)
+            #     δminus_vcut_fraction = [-(-vcut - vl) / (vu - vl)^2 * (vu - vl) - (vl - upar) / (vu - vl)] * δppar / 2 / ppar
+            #     δminus_vcut_fraction = [-(-vcut - vl) / (vu - vl) - (vl - upar) / (vu - vl)] * δppar / 2 / ppar
+            #     δminus_vcut_fraction = -(-vcut - upar) / (vu - vl) / 2 / ppar * δppar
+            #     δminus_vcut_fraction = (vcut + upar) / (vu - vl) / 2 / ppar * δppar
             interpolated_pdf_at_first_nonzero_ind = @view vpa.scratch[1:1]
             reversed_first_nonzero_ind = vpa.n-first_nonzero_ind+1
             @views interpolate_to_grid_1d!(interpolated_pdf_at_first_nonzero_ind,
                                            reversed_wpa_of_minus_vpa[reversed_first_nonzero_ind:reversed_first_nonzero_ind],
                                            pdf[:,ivperp,end,ir], vpa, vpa_spectral)
 
-            delta_vcut_fraction_over_delta_ppar = (vcut + upar[end]) / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1]) / 2.0 / ppar[end]
-            # Note that pdf[first_nonzero_ind,ivperp,end,ir] depends on -vcut_fraction, so
+            delta_minus_vcut_fraction_over_delta_ppar = (vcut + upar[end]) / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1]) / 2.0 / ppar[end]
+            # Note that pdf[first_nonzero_ind,ivperp,end,ir] depends on -minus_vcut_fraction, so
             # need a -'ve sign in the following line.
-            jacobian_zend_ppar[first_nonzero_ind] += -interpolated_pdf_at_first_nonzero_ind[] * delta_vcut_fraction_over_delta_ppar
+            jacobian_zend_ppar[first_nonzero_ind] += -interpolated_pdf_at_first_nonzero_ind[] * delta_minus_vcut_fraction_over_delta_ppar
+
+            a2, b2, c2, d2, a3, b3, c3, d3, alpha, beta, gamma, delta, epsilon, zeta, eta,
+                density_integral_pieces_upperz, flow_integral_pieces_upperz,
+                energy_integral_pieces_upperz, cubic_integral_pieces_upperz,
+                quartic_integral_pieces_upperz =
+                    get_upperz_integral_correction_components(
+                        pdf, vthe, vpa, vpa_unnorm, u_over_vt, sigma_ind, sigma_fraction,
+                        vcut, minus_vcut_ind, plus_vcut_ind, ir, false)
+
+            # Calculate the changes in the integrals a2, b2, c2, d2, a3, b3, c3, and d3 in
+            # response to changes in electron_ppar. The changes are calculated for the
+            # combinations (a2-a3), (-b2-b3), (c2-c3), and (-d2-d3) to take advantage of
+            # some cancellations.
+
+            # The integral constraints should already be satisfied at this point by `pdf`.
+            @boundscheck isapprox(a2, a3; rtol=1.0e-12) || error("In preconditioner setup upper-z boundary a2($a2)≠a3($a3), but constraints should be obeyed already by `pdf`.")
+            @boundscheck isapprox(b2, -b3; rtol=1.0e-12) || error("In preconditioner setup upper-z boundary a2($a2)≠a3($a3), b2($b2)≠-b3($b3), but constraints should be obeyed already by `pdf`.")
+            @boundscheck isapprox(c2, c3; rtol=1.0e-12) || error("In preconditioner setup upper-z boundary a2($a2)≠a3($a3), c2($c2)≠c3($c3), but constraints should be obeyed already by `pdf`.")
+            @boundscheck isapprox(d2, -d3; rtol=1.0e-12) || error("In preconditioner setup upper-z boundary a2($a2)≠a3($a3), d2($d2)≠-d3($d3), but constraints should be obeyed already by `pdf`.")
+
+            # Need to calculate the variation of various intermediate quantities with
+            # δp.
+            #
+            #   vth = sqrt(2*p/n)
+            #   δvth = vth / (2 * p) * δp
+            #
+            #   sigma = u / vth
+            #   δsigma = - u / vth^2 δvth
+            #          = - u / (2 * vth * p) * δp
+            #
+            # We could write sigma_fraction as
+            #   sigma_fraction = (sigma - vpa[sigma_ind-1]) / (vpa[sigma_ind] - vpa[sigma_ind-1])
+            # so that
+            #   δsigma_fraction = δsigma / (vpa[sigma_ind] - vpa[sigma_ind-1])
+            #                   = - u / (2 * vth * p) / (vpa[sigma_ind] - vpa[sigma_ind-1]) * δp
+            #
+            #   minus_vcut_fraction = ((-vcut - u)/vth - vpa[minus_vcut_ind-1]) / (vpa[minus_vcut_ind] - vpa[minus_vcut_ind-1])
+            #   δminus_vcut_fraction = (vcut + u) / vth^2 / (vpa[minus_vcut_ind] - vpa[minus_vcut_ind-1]) * δvth
+            #                        = (vcut + u) / (2 * vth * p) / (vpa[minus_vcut_ind] - vpa[minus_vcut_ind-1]) * δp
+            #
+            #   plus_vcut_fraction = ((vcut - u)/vth - vpa[plus_vcut_ind-1]) / (vpa[plus_vcut_ind+1] - vpa[plus_vcut_ind])
+            #   δplus_vcut_fraction = -(vcut - u) / vth^2 / (vpa[plus_vcut_ind+1] - vpa[plus_vcut_ind]) * δvth
+            #                       = -(vcut - u) / (2 * vth * p) / (vpa[plus_vcut_ind+1] - vpa[plus_vcut_ind]) * δp
+
+            vpa_grid = vpa.grid
+            plus_vcut_fraction = get_plus_vcut_fraction(vcut, plus_vcut_ind, vpa_unnorm)
+            if plus_vcut_fraction > 0.5
+                upper_cutoff_ind = plus_vcut_ind+1
+            else
+                upper_cutoff_ind = plus_vcut_ind
+            end
+            if minus_vcut_fraction < 0.5
+                lower_cutoff_ind = minus_vcut_ind-1
+                lower_cutoff_factor = 0.5 - minus_vcut_fraction
+            else
+                lower_cutoff_ind = minus_vcut_ind
+                lower_cutoff_factor = 1.5 - minus_vcut_fraction
+            end
+
+            dsigma_dp = - upar[end] / (2.0 * vthe[end] * ppar[end])
+
+            dsigma_fraction_dp = dsigma_dp / (vpa_grid[sigma_ind] - vpa_grid[sigma_ind-1])
+
+            dminus_vcut_fraction_dp = (vcut + upar[end]) / (2.0 * vthe[end] * ppar[end]) / (vpa_grid[minus_vcut_ind] - vpa_grid[minus_vcut_ind-1])
+
+            dplus_vcut_fraction_dp = -(vcut - upar[end]) / (2.0 * vthe[end] * ppar[end]) / (vpa_grid[plus_vcut_ind+1] - vpa_grid[plus_vcut_ind])
+
+
+            density_integral_sigma_cell = 0.5 * (density_integral_pieces_upperz[sigma_ind-1] +
+                                                 density_integral_pieces_upperz[sigma_ind])
+            da2_minus_a3_dp = (
+                # Contribution from integral limits at sigma
+                2.0 * density_integral_sigma_cell * dsigma_fraction_dp
+                # Contribution from integral limits at ±wcut
+                + density_integral_pieces_upperz[upper_cutoff_ind] * dplus_vcut_fraction_dp
+                + density_integral_pieces_upperz[lower_cutoff_ind] / lower_cutoff_factor * dminus_vcut_fraction_dp
+                # No contribution from w-integral for a2 or a3 as integrand does not
+                # depend on ppar.
+               )
+
+            dminus_b2_minus_b3_dp = (
+                # Contribution from integral limits at sigma cancel exactly
+                # Contribution from integral limits at ±wcut
+                - flow_integral_pieces_upperz[upper_cutoff_ind] * dplus_vcut_fraction_dp
+                + flow_integral_pieces_upperz[lower_cutoff_ind] / lower_cutoff_factor * dminus_vcut_fraction_dp
+                # Contribution from w-integral due to variation of integrand with ppar.
+                + (a2 + a3) * dsigma_dp
+               )
+
+            energy_integral_sigma_cell = 0.5 * (energy_integral_pieces_upperz[sigma_ind-1] +
+                                                energy_integral_pieces_upperz[sigma_ind])
+            dc2_minus_c3_dp = (
+                # Contribution from integral limits at sigma
+                2.0 * energy_integral_sigma_cell * dsigma_fraction_dp
+                # Contribution from integral limits at ±wcut
+                + energy_integral_pieces_upperz[upper_cutoff_ind] * dplus_vcut_fraction_dp
+                + energy_integral_pieces_upperz[lower_cutoff_ind] / lower_cutoff_factor * dminus_vcut_fraction_dp
+                # Contribution from w-integral due to variation of integrand with ppar.
+                + 2.0 * (-b2 + b3) * dsigma_dp
+               )
+
+            dminus_d2_minus_d3_dp = (
+                # Contribution from integral limits at sigma cancel exactly
+                # Contribution from integral limits at ±wcut
+                - cubic_integral_pieces_upperz[upper_cutoff_ind] * dplus_vcut_fraction_dp
+                + cubic_integral_pieces_upperz[lower_cutoff_ind] / lower_cutoff_factor * dminus_vcut_fraction_dp
+                # Contribution from w-integral due to variation of integrand with ppar.
+                + (3.0*c2 + 3.0*sigma*b2 + sigma^2*a2 + 3.0*c3 + 3.0*sigma*b3 + sigma^2*a3) * dsigma_dp
+               )
+
+            solution = [alpha beta    gamma   delta   ;
+                        beta  gamma   delta   epsilon ;
+                        gamma delta   epsilon zeta    ;
+                        delta epsilon zeta    eta
+                       ] \ [da2_minus_a3_dp, dminus_b2_minus_b3_dp, dc2_minus_c3_dp, dminus_d2_minus_d3_dp]
+            dA_dp, dB_dp, dC_dp, dD_dp = solution
+
+            output_range = lower_cutoff_ind:sigma_ind-1
+            v_over_vth = @views @. vpa.scratch2[output_range] = vpa_unnorm[output_range] / vthe[end,ir]
+            @views @. jacobian_zend_ppar[output_range] +=
+                          (dA_dp
+                           + dB_dp * v_over_vth
+                           + dC_dp * v_over_vth^2
+                           + dD_dp * v_over_vth^3) *
+                          integral_correction_sharpness * v_over_vth^2 / (1.0 + integral_correction_sharpness * v_over_vth^2) *
+                          pdf[output_range]
         end
     end
+
+    return nothing
 end
 
 """
