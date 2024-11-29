@@ -2459,10 +2459,7 @@ function get_lowerz_integral_correction_components(
     zeta = get_part3_for_one_moment_lower(correction5_integral_pieces)
     eta = get_part3_for_one_moment_lower(correction6_integral_pieces)
 
-    return a2, b2, c2, d2, a3, b3, c3, d3, alpha, beta, gamma, delta, epsilon, zeta, eta,
-           density_integral_pieces_lowerz, flow_integral_pieces_lowerz,
-           energy_integral_pieces_lowerz, cubic_integral_pieces_lowerz,
-           quartic_integral_pieces_lowerz
+    return a2, b2, c2, d2, a3, b3, c3, d3, alpha, beta, gamma, delta, epsilon, zeta, eta
 end
 
 function get_integrals_and_derivatives_upperz(
@@ -2591,10 +2588,7 @@ function get_upperz_integral_correction_components(
     zeta = get_part3_for_one_moment_upper(correction5_integral_pieces)
     eta = get_part3_for_one_moment_upper(correction6_integral_pieces)
 
-    return a2, b2, c2, d2, a3, b3, c3, d3, alpha, beta, gamma, delta, epsilon, zeta, eta,
-           density_integral_pieces_upperz, flow_integral_pieces_upperz,
-           energy_integral_pieces_upperz, cubic_integral_pieces_upperz,
-           quartic_integral_pieces_upperz
+    return a2, b2, c2, d2, a3, b3, c3, d3, alpha, beta, gamma, delta, epsilon, zeta, eta
 end
 
 @timeit global_timer enforce_boundary_condition_on_electron_pdf!(
@@ -2825,8 +2819,7 @@ end
             # boundary condition, but would not be numerically true because of the
             # interpolation.
 
-            a2, b2, c2, d2, a3, b3, c3, d3, alpha, beta, gamma, delta, epsilon, zeta, eta,
-                _, _, _, _, _ =
+            a2, b2, c2, d2, a3, b3, c3, d3, alpha, beta, gamma, delta, epsilon, zeta, eta =
                     get_lowerz_integral_correction_components(
                         pdf, vthe, vpa, vpa_unnorm, u_over_vt, sigma_ind, sigma_fraction,
                         vcut, minus_vcut_ind, plus_vcut_ind, ir, bc_constraints)
@@ -3020,8 +3013,7 @@ end
             # boundary condition, but would not be numerically true because of the
             # interpolation.
 
-            a2, b2, c2, d2, a3, b3, c3, d3, alpha, beta, gamma, delta, epsilon, zeta, eta,
-                _, _, _, _, _ =
+            a2, b2, c2, d2, a3, b3, c3, d3, alpha, beta, gamma, delta, epsilon, zeta, eta =
                     get_upperz_integral_correction_components(
                         pdf, vthe, vpa, vpa_unnorm, u_over_vt, sigma_ind, sigma_fraction,
                         vcut, minus_vcut_ind, plus_vcut_ind, ir, bc_constraints)
@@ -3219,10 +3211,7 @@ end
 #println("jac before ", jacobian_zbegin_ppar[last_nonzero_ind], " ; pdf ", interpolated_pdf_at_last_nonzero_ind[], " ; fcut ", dplus_vcut_fraction_dp)
             jacobian_zbegin_ppar[last_nonzero_ind] += interpolated_pdf_at_last_nonzero_ind[] * dplus_vcut_fraction_dp
 
-            a2, b2, c2, d2, a3, b3, c3, d3, alpha, beta, gamma, delta, epsilon, zeta, eta,
-                density_integral_pieces_lowerz, flow_integral_pieces_lowerz,
-                energy_integral_pieces_lowerz, cubic_integral_pieces_lowerz,
-                quartic_integral_pieces_lowerz =
+            a2, b2, c2, d2, a3, b3, c3, d3, alpha, beta, gamma, delta, epsilon, zeta, eta =
                     get_lowerz_integral_correction_components(
                         pdf, vthe, vpa, vpa_unnorm, u_over_vt, sigma_ind, sigma_fraction,
                         vcut, minus_vcut_ind, plus_vcut_ind, ir, false)
@@ -3262,6 +3251,15 @@ end
             #   δplus_vcut_fraction = -(vcut - u) / vth^2 / (vpa[plus_vcut_ind+1] - vpa[plus_vcut_ind]) * δvth
             #                       = -(vcut - u) / (2 * vth * p) / (vpa[plus_vcut_ind+1] - vpa[plus_vcut_ind]) * δp
 
+            density_integral_pieces_lowerz = vpa.scratch3
+            flow_integral_pieces_lowerz = vpa.scratch4
+            energy_integral_pieces_lowerz = vpa.scratch5
+            cubic_integral_pieces_lowerz = vpa.scratch6
+            quartic_integral_pieces_lowerz = vpa.scratch7
+            fill_integral_pieces!(
+                @view(pdf[:,1,1,ir]), vthe[1,ir], vpa, vpa_unnorm, density_integral_pieces_lowerz,
+                flow_integral_pieces_lowerz, energy_integral_pieces_lowerz,
+                cubic_integral_pieces_lowerz, quartic_integral_pieces_lowerz)
             vpa_grid = vpa.grid
             minus_vcut_fraction = get_minus_vcut_fraction(vcut, minus_vcut_ind, vpa_unnorm)
             if minus_vcut_fraction < 0.5
@@ -3461,10 +3459,7 @@ end
             # need a -'ve sign in the following line.
             jacobian_zend_ppar[first_nonzero_ind] += -interpolated_pdf_at_first_nonzero_ind[] * delta_minus_vcut_fraction_over_delta_ppar
 
-            a2, b2, c2, d2, a3, b3, c3, d3, alpha, beta, gamma, delta, epsilon, zeta, eta,
-                density_integral_pieces_upperz, flow_integral_pieces_upperz,
-                energy_integral_pieces_upperz, cubic_integral_pieces_upperz,
-                quartic_integral_pieces_upperz =
+            a2, b2, c2, d2, a3, b3, c3, d3, alpha, beta, gamma, delta, epsilon, zeta, eta =
                     get_upperz_integral_correction_components(
                         pdf, vthe, vpa, vpa_unnorm, u_over_vt, sigma_ind, sigma_fraction,
                         vcut, minus_vcut_ind, plus_vcut_ind, ir, false)
@@ -3504,6 +3499,16 @@ end
             #   δplus_vcut_fraction = -(vcut - u) / vth^2 / (vpa[plus_vcut_ind+1] - vpa[plus_vcut_ind]) * δvth
             #                       = -(vcut - u) / (2 * vth * p) / (vpa[plus_vcut_ind+1] - vpa[plus_vcut_ind]) * δp
 
+            density_integral_pieces_upperz = vpa.scratch3
+            flow_integral_pieces_upperz = vpa.scratch4
+            energy_integral_pieces_upperz = vpa.scratch5
+            cubic_integral_pieces_upperz = vpa.scratch6
+            quartic_integral_pieces_upperz = vpa.scratch7
+            fill_integral_pieces!(
+                @view(pdf[:,1,end,ir]), vthe[end,ir], vpa, vpa_unnorm,
+                density_integral_pieces_upperz, flow_integral_pieces_upperz,
+                energy_integral_pieces_upperz, cubic_integral_pieces_upperz,
+                quartic_integral_pieces_upperz)
             vpa_grid = vpa.grid
             plus_vcut_fraction = get_plus_vcut_fraction(vcut, plus_vcut_ind, vpa_unnorm)
             if plus_vcut_fraction > 0.5
