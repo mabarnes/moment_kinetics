@@ -3537,7 +3537,7 @@ end
                                                  density_integral_pieces_upperz[sigma_ind])
             da2_minus_a3_dp = (
                 # Contribution from integral limits at sigma
-                2.0 * density_integral_sigma_cell * dsigma_fraction_dp
+                -2.0 * density_integral_sigma_cell * dsigma_fraction_dp
                 # Contribution from integral limits at ±wcut
                 + density_integral_pieces_upperz[upper_cutoff_ind] * dplus_vcut_fraction_dp
                 + density_integral_pieces_upperz[lower_cutoff_ind] / lower_cutoff_factor * dminus_vcut_fraction_dp
@@ -3558,7 +3558,7 @@ end
                                                 energy_integral_pieces_upperz[sigma_ind])
             dc2_minus_c3_dp = (
                 # Contribution from integral limits at sigma
-                2.0 * energy_integral_sigma_cell * dsigma_fraction_dp
+                -2.0 * energy_integral_sigma_cell * dsigma_fraction_dp
                 # Contribution from integral limits at ±wcut
                 + energy_integral_pieces_upperz[upper_cutoff_ind] * dplus_vcut_fraction_dp
                 + energy_integral_pieces_upperz[lower_cutoff_ind] / lower_cutoff_factor * dminus_vcut_fraction_dp
