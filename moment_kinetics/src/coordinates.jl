@@ -95,6 +95,8 @@ struct coordinate{T <: AbstractVector{mk_float},Tbparams}
     scratch8::Array{mk_float,1}
     # scratch9 is an array used for intermediate calculations requiring n entries
     scratch9::Array{mk_float,1}
+    # scratch10 is an array used for intermediate calculations requiring n entries
+    scratch10::Array{mk_float,1}
     # scratch_int_nelement_plus_1 is an integer array used for intermediate calculations
     # requiring nelement+1 entries
     scratch_int_nelement_plus_1::Array{mk_int,1}
@@ -393,9 +395,9 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         coord_input.cheb_option, coord_input.bc, coord_input.boundary_parameters, wgts,
         uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
         copy(scratch), copy(scratch), copy(scratch), copy(scratch), copy(scratch),
-        copy(scratch), scratch_int_nelement_plus_1, scratch_shared, scratch_shared2,
-        scratch_shared3, scratch_2d, copy(scratch_2d), advection, send_buffer,
-        receive_buffer, comm, local_io_range, global_io_range, element_scale,
+        copy(scratch), copy(scratch), scratch_int_nelement_plus_1, scratch_shared,
+        scratch_shared2, scratch_shared3, scratch_2d, copy(scratch_2d), advection,
+        send_buffer, receive_buffer, comm, local_io_range, global_io_range, element_scale,
         element_shift, coord_input.element_spacing_option, element_boundaries,
         radau_first_element, other_nodes, one_over_denominator)
 
