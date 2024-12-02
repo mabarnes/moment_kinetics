@@ -3228,7 +3228,6 @@ end
                                            pdf[:,ivperp,1], vpa, vpa_spectral)
 
             dplus_vcut_fraction_dp = -(vcut - upar[1]) / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind]) / 2.0 / ppar[1]
-#println("jac before ", jacobian_zbegin_ppar[last_nonzero_ind], " ; pdf ", interpolated_pdf_at_last_nonzero_ind[], " ; fcut ", dplus_vcut_fraction_dp)
             jacobian_zbegin_ppar[last_nonzero_ind] += interpolated_pdf_at_last_nonzero_ind[] * dplus_vcut_fraction_dp
 
             # Calculate some numerical integrals of dpdfdw that we will need later
