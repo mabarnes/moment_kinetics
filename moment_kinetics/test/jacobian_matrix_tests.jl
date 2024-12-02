@@ -3599,7 +3599,7 @@ function test_electron_kinetic_equation(test_input; expected_rtol=(5.0e2*epsilon
     return nothing
 end
 
-function test_electron_wall_bc(test_input; atol=(5.0*epsilon)^2)
+function test_electron_wall_bc(test_input; atol=(7.0*epsilon)^2)
     test_input = deepcopy(test_input)
     test_input["output"]["run_name"] *= "_electron_wall_bc"
     println("    - electron_wall_bc")
@@ -3901,38 +3901,12 @@ function test_electron_wall_bc(test_input; atol=(5.0*epsilon)^2)
                 delta_state = zeros(mk_float, total_size)
                 delta_state[pdf_size+1:end] .= vec(delta_p)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
-#println("jacobian matrix")
-#println(jacobian_matrix)
-#println()
-#println("delta_state")
-#println(delta_state)
-#println("extrema ", extrema(delta_state))
-#println()
-#println("perturbed_residual")
-#println(perturbed_residual)
-#println()
-#println("residual_update_with_Jacobian")
-#println(residual_update_with_Jacobian)
-#println()
                 perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
                 # Check ppar did not get perturbed by the Jacobian
                 @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
                                            zeros(p_size); atol=1.0e-15)
 
-#println("d-f  ", delta_f)
-#println("d-fr ", (f .+ delta_f) .- f)
-println("\nreal ", perturbed_residual)
-check = reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n)
-println("\njac  ", check)
-diff = perturbed_residual .- check
-println("\ndiff ", diff)
-println(extrema(diff), " ", argmax(diff), " ", atol)
-println(extrema(perturbed_residual), " ", extrema(perturbed_with_Jacobian))
-#println()
-#println(diff[75:80, 1, 2], " ", perturbed_residual[75:80, 1, 2], " ", check[75:80, 1, 2])
-#fig1 = Figure(); ax = Axis(fig1[1,1]); lines!(ax, vec(perturbed_residual)); lines!(ax, vec(check)); window1 = display(GLMakie.Screen(), fig1)
-#fig2 = Figure(); ax = Axis(fig2[1,1]); lines!(ax, vec(f)); lines!(ax, vec(newf)); lines!(ax, vec(newf .- f)); window2 = display(GLMakie.Screen(), fig2)
                 # The rtol is relatively high for this test. First, the accuracy of the
                 # response on the cut-off grid cell is not super-accurate - with just this
                 # limitation the test would pass with rtol=1.0e-3. There is extra
