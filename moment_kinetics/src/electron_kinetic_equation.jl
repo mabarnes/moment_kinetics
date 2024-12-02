@@ -2626,22 +2626,22 @@ end
         vwidth = 1.0/sqrt(me_over_mi)
         dens = moments.electron.dens
         if z.irank == 0
-            @loop_r_vperp_vpa ir ivperp ivpa begin
-                u = moments.electron.upar[1,ir]
-                vthe = moments.electron.vth[1,ir]
+            @loop_vperp_vpa ivperp ivpa begin
+                u = moments.electron.upar[1]
+                vthe = moments.electron.vth[1]
                 speed = vpa.grid[ivpa] * vthe + u
                 if speed > 0.0
-                    pdf[ivpa,ivperp,1,ir] = density_offset / dens[1,ir] * vthe[1,ir] * exp(-(speed^2 + vperp.grid[ivperp]^2)/vwidth^2)
+                    pdf[ivpa,ivperp,1] = density_offset / dens[1] * vthe[1] * exp(-(speed^2 + vperp.grid[ivperp]^2)/vwidth^2)
                 end
             end
         end
         if z.irank == z.nrank - 1
-            @loop_r_vperp_vpa ir ivperp ivpa begin
-                u = moments.electron.upar[end,ir]
-                vthe = moments.electron.vth[end,ir]
+            @loop_vperp_vpa ivperp ivpa begin
+                u = moments.electron.upar[end]
+                vthe = moments.electron.vth[end]
                 speed = vpa.grid[ivpa] * vthe + u
                 if speed > 0.0
-                    pdf[ivpa,ivperp,end,ir] = density_offset / dens[end,ir] * vthe[end,ir] * exp(-(speed^2 + vperp.grid[ivperp]^2)/vwidth^2)
+                    pdf[ivpa,ivperp,end] = density_offset / dens[end] * vthe[end] * exp(-(speed^2 + vperp.grid[ivperp]^2)/vwidth^2)
                 end
             end
         end
@@ -2681,18 +2681,18 @@ end
             # 'far from zero' means larger values of v_∥.
 
             # Interpolate to the 'near zero' points
-            @views interpolate_symmetric!(pdf[sigma_ind:last_point_near_zero,1,1,ir],
+            @views interpolate_symmetric!(pdf[sigma_ind:last_point_near_zero,1,1],
                                           vpa_unnorm[sigma_ind:last_point_near_zero],
-                                          pdf[element_with_zero_boundary:sigma_ind-1,1,1,ir],
+                                          pdf[element_with_zero_boundary:sigma_ind-1,1,1],
                                           vpa_unnorm[element_with_zero_boundary:sigma_ind-1])
 
             # Interpolate to the 'far from zero' points
             reversed_pdf_far_from_zero = @view vpa.scratch[last_point_near_zero+1:end]
             @views interpolate_to_grid_1d!(reversed_pdf_far_from_zero,
                                            reversed_wpa_of_minus_vpa[1:vpa.n-last_point_near_zero],
-                                           pdf[:,1,1,ir], vpa, vpa_spectral)
+                                           pdf[:,1,1], vpa, vpa_spectral)
             reverse!(reversed_pdf_far_from_zero)
-            pdf[last_point_near_zero+1:end,1,1,ir] .= reversed_pdf_far_from_zero
+            pdf[last_point_near_zero+1:end,1,1] .= reversed_pdf_far_from_zero
 
             # Per-grid-point contributions to moment integrals
             # Note that we need to include the normalisation factor of 1/sqrt(π) that
@@ -2704,7 +2704,7 @@ end
             cubic_integral_pieces_lowerz = vpa.scratch6
             quartic_integral_pieces_lowerz = vpa.scratch7
             fill_integral_pieces!(
-                @view(pdf[:,1,1,ir]), vthe[1,ir], vpa, vpa_unnorm,
+                @view(pdf[:,1,1]), vthe[1], vpa, vpa_unnorm,
                 density_integral_pieces_lowerz, flow_integral_pieces_lowerz,
                 energy_integral_pieces_lowerz, cubic_integral_pieces_lowerz,
                 quartic_integral_pieces_lowerz)
@@ -2726,17 +2726,17 @@ end
                     # respect to vcut
                     delta_v = - epsilon / epsilonprime
 
-                    if vcut > vthe[1,ir] && epsilonprime < 0.0
+                    if vcut > vthe[1] && epsilonprime < 0.0
                         # epsilon should be increasing with vcut at epsilon=0, so if
                         # epsilonprime is negative, the solution is actually at a lower vcut -
                         # at larger vcut, epsilon will just tend to 0 but never reach it.
-                        delta_v = -0.1 * vthe[1,ir]
+                        delta_v = -0.1 * vthe[1]
                     end
 
                     # Prevent the step size from getting too big, to make Newton iteration
                     # more robust.
-                    delta_v = min(delta_v, 0.1 * vthe[1,ir])
-                    delta_v = max(delta_v, -0.1 * vthe[1,ir])
+                    delta_v = min(delta_v, 0.1 * vthe[1])
+                    delta_v = max(delta_v, -0.1 * vthe[1])
 
                     vcut = vcut + delta_v
                     minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
@@ -2786,10 +2786,10 @@ end
 
             # Adjust pdf so that after reflecting and cutting off tail, it will obey the
             # constraints.
-            @. pdf[:,1,1,ir] *= A + C * vpa_unnorm^2 / vthe[1,ir]^2
+            @. pdf[:,1,1] *= A + C * vpa_unnorm^2 / vthe[1]^2
 
             plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
-            pdf[plus_vcut_ind+2:end,1,1,ir] .= 0.0
+            pdf[plus_vcut_ind+2:end,1,1] .= 0.0
             # vcut_fraction is the fraction of the distance between plus_vcut_ind and
             # plus_vcut_ind+1 where vcut is.
             vcut_fraction = get_plus_vcut_fraction(vcut, plus_vcut_ind, vpa_unnorm)
@@ -2797,17 +2797,17 @@ end
                 if lowerz_vcut_inds !== nothing
                     lowerz_vcut_inds[ir] = plus_vcut_ind+1
                 end
-                pdf[plus_vcut_ind+1,1,1,ir] *= vcut_fraction - 0.5
+                pdf[plus_vcut_ind+1,1,1] *= vcut_fraction - 0.5
             else
                 if lowerz_vcut_inds !== nothing
                     lowerz_vcut_inds[ir] = plus_vcut_ind
                 end
-                pdf[plus_vcut_ind+1,1,1,ir] = 0.0
-                pdf[plus_vcut_ind,1,1,ir] *= vcut_fraction + 0.5
+                pdf[plus_vcut_ind+1,1,1] = 0.0
+                pdf[plus_vcut_ind,1,1] *= vcut_fraction + 0.5
             end
 
             # update the electrostatic potential at the boundary to be the value corresponding to the updated cutoff velocity
-            phi[1,ir] = me_over_mi * vcut^2
+            phi[1] = me_over_mi * vcut^2
 
             moments.electron.constraints_A_coefficient[1,ir] = A
             moments.electron.constraints_B_coefficient[1,ir] = 0.0
@@ -2821,7 +2821,7 @@ end
 
             a2, b2, c2, d2, a3, b3, c3, d3, alpha, beta, gamma, delta, epsilon, zeta, eta =
                 get_lowerz_integral_correction_components(
-                    @view(pdf[:,1,1,ir]), vthe[1,ir], vpa, vpa_unnorm, u_over_vt,
+                    @view(pdf[:,1,1]), vthe[1], vpa, vpa_unnorm, u_over_vt,
                     sigma_ind, sigma_fraction, vcut, minus_vcut_ind, plus_vcut_ind,
                     bc_constraints)
 
@@ -2840,14 +2840,14 @@ end
                        ] \ [a2-a3, -b2-b3, c2-c3, -d2-d3]
             A, B, C, D = solution
             for ivpa ∈ sigma_ind+1:plus_vcut_ind+1
-                v_over_vth = vpa_unnorm[ivpa]/vthe[1,ir]
-                pdf[ivpa,1,1,ir] = pdf[ivpa,1,1,ir] +
+                v_over_vth = vpa_unnorm[ivpa]/vthe[1]
+                pdf[ivpa,1,1] = pdf[ivpa,1,1] +
                                    (A
                                     + B * v_over_vth
                                     + C * v_over_vth^2
                                     + D * v_over_vth^3) *
                                    integral_correction_sharpness * v_over_vth^2 / (1.0 + integral_correction_sharpness * v_over_vth^2) *
-                                   pdf[ivpa,1,1,ir]
+                                   pdf[ivpa,1,1]
             end
         end
 
@@ -2879,18 +2879,18 @@ end
             # 'far from zero' means more negative values of v_∥.
 
             # Interpolate to the 'near zero' points
-            @views interpolate_symmetric!(pdf[first_point_near_zero:sigma_ind,1,end,ir],
+            @views interpolate_symmetric!(pdf[first_point_near_zero:sigma_ind,1,end],
                                           vpa_unnorm[first_point_near_zero:sigma_ind],
-                                          pdf[sigma_ind+1:element_with_zero_boundary,1,end,ir],
+                                          pdf[sigma_ind+1:element_with_zero_boundary,1,end],
                                           vpa_unnorm[sigma_ind+1:element_with_zero_boundary])
 
             # Interpolate to the 'far from zero' points
             reversed_pdf = @view vpa.scratch[1:first_point_near_zero-1]
             @views interpolate_to_grid_1d!(reversed_pdf,
                                            reversed_wpa_of_minus_vpa[vpa.n-first_point_near_zero+2:end],
-                                           pdf[:,1,end,ir], vpa, vpa_spectral)
+                                           pdf[:,1,end], vpa, vpa_spectral)
             reverse!(reversed_pdf)
-            pdf[1:first_point_near_zero-1,1,end,ir] .= reversed_pdf
+            pdf[1:first_point_near_zero-1,1,end] .= reversed_pdf
 
             # Per-grid-point contributions to moment integrals
             # Note that we need to include the normalisation factor of 1/sqrt(π) that
@@ -2902,7 +2902,7 @@ end
             cubic_integral_pieces_upperz = vpa.scratch6
             quartic_integral_pieces_upperz = vpa.scratch7
             fill_integral_pieces!(
-                @view(pdf[:,1,end,ir]), vthe[end,ir], vpa, vpa_unnorm,
+                @view(pdf[:,1,end]), vthe[end], vpa, vpa_unnorm,
                 density_integral_pieces_upperz, flow_integral_pieces_upperz,
                 energy_integral_pieces_upperz, cubic_integral_pieces_upperz,
                 quartic_integral_pieces_upperz)
@@ -2921,17 +2921,17 @@ end
                     # respect to vcut
                     delta_v = - epsilon / epsilonprime
 
-                    if vcut > vthe[1,ir] && epsilonprime > 0.0
+                    if vcut > vthe[1] && epsilonprime > 0.0
                         # epsilon should be decreasing with vcut at epsilon=0, so if
                         # epsilonprime is positive, the solution is actually at a lower vcut -
                         # at larger vcut, epsilon will just tend to 0 but never reach it.
-                        delta_v = -0.1 * vthe[1,ir]
+                        delta_v = -0.1 * vthe[1]
                     end
 
                     # Prevent the step size from getting too big, to make Newton iteration
                     # more robust.
-                    delta_v = min(delta_v, 0.1 * vthe[end,ir])
-                    delta_v = max(delta_v, -0.1 * vthe[end,ir])
+                    delta_v = min(delta_v, 0.1 * vthe[end])
+                    delta_v = max(delta_v, -0.1 * vthe[end])
 
                     vcut = vcut + delta_v
                     plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
@@ -2981,10 +2981,10 @@ end
 
             # Adjust pdf so that after reflecting and cutting off tail, it will obey the
             # constraints.
-            @. pdf[:,1,end,ir] *= A + C * vpa_unnorm^2 / vthe[end,ir]^2
+            @. pdf[:,1,end] *= A + C * vpa_unnorm^2 / vthe[end]^2
 
             minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
-            pdf[1:minus_vcut_ind-2,1,end,ir] .= 0.0
+            pdf[1:minus_vcut_ind-2,1,end] .= 0.0
             # vcut_fraction is the fraction of the distance between minus_vcut_ind-1 and
             # minus_vcut_ind where -vcut is.
             vcut_fraction = get_minus_vcut_fraction(vcut, minus_vcut_ind, vpa_unnorm)
@@ -2992,17 +2992,17 @@ end
                 if upperz_vcut_inds !== nothing
                     upperz_vcut_inds[ir] = minus_vcut_ind-1
                 end
-                pdf[minus_vcut_ind-1,1,end,ir] *= 0.5 - vcut_fraction
+                pdf[minus_vcut_ind-1,1,end] *= 0.5 - vcut_fraction
             else
                 if upperz_vcut_inds !== nothing
                     upperz_vcut_inds[ir] = minus_vcut_ind
                 end
-                pdf[minus_vcut_ind-1,1,end,ir] = 0.0
-                pdf[minus_vcut_ind,1,end,ir] *= 1.5 - vcut_fraction
+                pdf[minus_vcut_ind-1,1,end] = 0.0
+                pdf[minus_vcut_ind,1,end] *= 1.5 - vcut_fraction
             end
 
             # update the electrostatic potential at the boundary to be the value corresponding to the updated cutoff velocity
-            phi[end,ir] = me_over_mi * vcut^2
+            phi[end] = me_over_mi * vcut^2
 
             moments.electron.constraints_A_coefficient[end,ir] = A
             moments.electron.constraints_B_coefficient[end,ir] = 0.0
@@ -3016,7 +3016,7 @@ end
 
             a2, b2, c2, d2, a3, b3, c3, d3, alpha, beta, gamma, delta, epsilon, zeta, eta =
                 get_upperz_integral_correction_components(
-                    @view(pdf[:,1,end,ir]), vthe[end,ir], vpa, vpa_unnorm, u_over_vt,
+                    @view(pdf[:,1,end]), vthe[end], vpa, vpa_unnorm, u_over_vt,
                     sigma_ind, sigma_fraction, vcut, minus_vcut_ind, plus_vcut_ind,
                     bc_constraints)
 
@@ -3035,14 +3035,14 @@ end
                        ] \ [a2-a3, -b2-b3, c2-c3, -d2-d3]
             A, B, C, D = solution
             for ivpa ∈ minus_vcut_ind-1:sigma_ind-1
-                v_over_vth = vpa_unnorm[ivpa]/vthe[end,ir]
-                pdf[ivpa,1,end,ir] = pdf[ivpa,1,end,ir] +
-                                     (A
-                                      + B * v_over_vth
-                                      + C * v_over_vth^2
-                                      + D * v_over_vth^3) *
-                                     integral_correction_sharpness * v_over_vth^2 / (1.0 + integral_correction_sharpness * v_over_vth^2) *
-                                     pdf[ivpa,1,end,ir]
+                v_over_vth = vpa_unnorm[ivpa]/vthe[end]
+                pdf[ivpa,1,end] = pdf[ivpa,1,end] +
+                                  (A
+                                   + B * v_over_vth
+                                   + C * v_over_vth^2
+                                   + D * v_over_vth^3) *
+                                  integral_correction_sharpness * v_over_vth^2 / (1.0 + integral_correction_sharpness * v_over_vth^2) *
+                                  pdf[ivpa,1,end]
             end
         end
     end
