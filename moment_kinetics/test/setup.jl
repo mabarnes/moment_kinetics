@@ -69,7 +69,7 @@ Intended to be used as a context manager, so call like::
 function quietoutput(body)
     oldstd = stdout
     try
-        redirect_stdout(open("/dev/null", "w"))
+        #redirect_stdout(open("/dev/null", "w"))
 
         # execute body code
         body()
