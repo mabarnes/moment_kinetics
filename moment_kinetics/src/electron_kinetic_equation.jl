@@ -3162,6 +3162,12 @@ end
             #             = dg/dw(2*u/vth - w) * (-2*u/vth^2) * δ(sqrt(2*ppar/n)
             #             = dg/dw(2*u/vth - w) * (-2*u/vth^2) * δppar * vth / (2*ppar)
             #             = -u/vth/ppar * dg/dw(2*u/vth - w) * δppar
+            #
+            # As jacobian_zbegin_ppar only depends on variations of a single value
+            # `ppar[1]`, it might be more maintainable and computationally cheaper to
+            # calculate jacobian_zbegin_ppar with a finite difference method (applying the
+            # boundary condition function with a perturbed pressure `ppar[1] + ϵ` for some
+            # small ϵ) rather than calculating it using the method below.
 
             dpdfdv_near_zero = @view vpa.scratch[sigma_ind:last_point_near_zero]
             @views interpolate_symmetric!(dpdfdv_near_zero,
@@ -3243,6 +3249,21 @@ end
             dc3_dp = get_part3_for_one_moment_lower(vpa.scratch)
             @. vpa.scratch *= vpa_unnorm / vthe[1]
             dd3_dp = get_part3_for_one_moment_lower(vpa.scratch)
+            @. vpa.scratch = jacobian_zbegin_ppar * vpa.wgts / sqrt(π) * integral_correction_sharpness * vpa_unnorm^2 / vthe[1]^2 / (1.0 + integral_correction_sharpness * vpa_unnorm^2 / vthe[1]^2)
+            vpa.scratch[sigma_ind-1:sigma_ind] .= 0.0
+            dalpha_dp_interp = get_part3_for_one_moment_lower(vpa.scratch)
+            @. vpa.scratch *= vpa_unnorm / vthe[1]
+            dbeta_dp_interp = get_part3_for_one_moment_lower(vpa.scratch)
+            @. vpa.scratch *= vpa_unnorm / vthe[1]
+            dgamma_dp_interp = get_part3_for_one_moment_lower(vpa.scratch)
+            @. vpa.scratch *= vpa_unnorm / vthe[1]
+            ddelta_dp_interp = get_part3_for_one_moment_lower(vpa.scratch)
+            @. vpa.scratch *= vpa_unnorm / vthe[1]
+            depsilon_dp_interp = get_part3_for_one_moment_lower(vpa.scratch)
+            @. vpa.scratch *= vpa_unnorm / vthe[1]
+            dzeta_dp_interp = get_part3_for_one_moment_lower(vpa.scratch)
+            @. vpa.scratch *= vpa_unnorm / vthe[1]
+            deta_dp_interp = get_part3_for_one_moment_lower(vpa.scratch)
 
             pdf_lowerz = vpa.scratch10
             @views @. pdf_lowerz[1:sigma_ind-1] = pdf[1:sigma_ind-1,ivperp,1]
@@ -3398,9 +3419,9 @@ end
 
             dminus_d2_minus_d3_dp = (
                 # Contribution from integral limits at sigma cancel exactly
-                # Contribution from integral limits at wcut+ and -wcut-
+                # Contribution from integral limits at -wcut-. The contribution from wcut+
+                # is included in dd3_dp
                 + cubic_integral_pieces_lowerz[lower_cutoff_ind] * dminus_vcut_fraction_dp
-                - cubic_integral_pieces_lowerz[upper_cutoff_ind] / upper_cutoff_factor * dplus_vcut_fraction_dp
                 # Contribution from w-integral due to variation of integrand with ppar.
                 + 3.0 * (c2 + c3) * dsigma_dp
                 # Change in d3 integral due to different interpolated ̂g values
@@ -3419,11 +3440,12 @@ end
             integral_type2 = sum(@view(correction0_integral_type2_pieces[sigma_ind+1:upper_cutoff_ind]))
             dalpha_dp = (
                 # The grid points either side of sigma are zero-ed out for these
-                # corrections, so this boundary does not contribute
-                # Contribution from integral limit at wcut+
-                -correction0_integral_pieces[upper_cutoff_ind] / upper_cutoff_factor * dplus_vcut_fraction_dp
+                # corrections, so this boundary does not contribute.
+                # Contribution from integral limit at wcut+ is included in dalpha_dp_interp
                 # Contribution from w-integral due to variation of integrand with ppar.
                 + (-2.0 * integralminus1 + integral_type2) * dsigma_dp
+                # Change in alpha integral due to different interpolated ̂g values
+                + dalpha_dp_interp
                )
 
             correction1_integral_pieces = @. vpa.scratch5 = correction0_integral_pieces * vpa_unnorm / vthe[1]
@@ -3431,11 +3453,12 @@ end
             integral_type2 = sum(@view(correction1_integral_type2_pieces[sigma_ind+1:upper_cutoff_ind]))
             dbeta_dp = (
                 # The grid points either side of sigma are zero-ed out for these
-                # corrections, so this boundary does not contribute
-                # Contribution from integral limit at wcut+
-                -correction1_integral_pieces[upper_cutoff_ind] / upper_cutoff_factor * dplus_vcut_fraction_dp
+                # corrections, so this boundary does not contribute.
+                # Contribution from integral limit at wcut+ is included in dbeta_dp_interp
                 # Contribution from w-integral due to variation of integrand with ppar.
                 + (-2.0 * alpha + integral_type2) * dsigma_dp
+                # Change in beta integral due to different interpolated ̂g values
+                + dbeta_dp_interp
                )
 
             # Here we overwrite the buffers that were used for correction1_integral_pieces
@@ -3446,11 +3469,12 @@ end
             integral_type2 = sum(@view(correction2_integral_type2_pieces[sigma_ind+1:upper_cutoff_ind]))
             dgamma_dp = (
                 # The grid points either side of sigma are zero-ed out for these
-                # corrections, so this boundary does not contribute
-                # Contribution from integral limit at wcut+
-                -correction2_integral_pieces[upper_cutoff_ind] / upper_cutoff_factor * dplus_vcut_fraction_dp
+                # corrections, so this boundary does not contribute.
+                # Contribution from integral limit at wcut+ is included in dgamma_dp_interp
                 # Contribution from w-integral due to variation of integrand with ppar.
                 + (-2.0 * beta + integral_type2) * dsigma_dp
+                # Change in gamma integral due to different interpolated ̂g values
+                + dgamma_dp_interp
                )
 
             # Here we overwrite the buffers that were used for correction2_integral_pieces
@@ -3461,11 +3485,12 @@ end
             integral_type2 = sum(@view(correction3_integral_type2_pieces[sigma_ind+1:upper_cutoff_ind]))
             ddelta_dp = (
                 # The grid points either side of sigma are zero-ed out for these
-                # corrections, so this boundary does not contribute
-                # Contribution from integral limit at wcut+
-                -correction3_integral_pieces[upper_cutoff_ind] / upper_cutoff_factor * dplus_vcut_fraction_dp
+                # corrections, so this boundary does not contribute.
+                # Contribution from integral limit at wcut+ is included in ddelta_dp_interp
                 # Contribution from w-integral due to variation of integrand with ppar.
                 + (-2.0 * gamma + integral_type2) * dsigma_dp
+                # Change in delta integral due to different interpolated ̂g values
+                + ddelta_dp_interp
                )
 
             # Here we overwrite the buffers that were used for correction3_integral_pieces
@@ -3476,11 +3501,12 @@ end
             integral_type2 = sum(@view(correction4_integral_type2_pieces[sigma_ind+1:upper_cutoff_ind]))
             depsilon_dp = (
                 # The grid points either side of sigma are zero-ed out for these
-                # corrections, so this boundary does not contribute
-                # Contribution from integral limit at wcut+
-                -correction4_integral_pieces[upper_cutoff_ind] / upper_cutoff_factor * dplus_vcut_fraction_dp
+                # corrections, so this boundary does not contribute.
+                # Contribution from integral limit at wcut+ is included in depsilon_dp_interp
                 # Contribution from w-integral due to variation of integrand with ppar.
                 + (-2.0 * delta + integral_type2) * dsigma_dp
+                # Change in epsilon integral due to different interpolated ̂g values
+                + depsilon_dp_interp
                )
 
             # Here we overwrite the buffers that were used for correction4_integral_pieces
@@ -3491,11 +3517,12 @@ end
             integral_type2 = sum(@view(correction5_integral_type2_pieces[sigma_ind+1:upper_cutoff_ind]))
             dzeta_dp = (
                 # The grid points either side of sigma are zero-ed out for these
-                # corrections, so this boundary does not contribute
-                # Contribution from integral limit at wcut+
-                -correction5_integral_pieces[upper_cutoff_ind] / upper_cutoff_factor * dplus_vcut_fraction_dp
+                # corrections, so this boundary does not contribute.
+                # Contribution from integral limit at wcut+ is included in dzeta_dp_interp
                 # Contribution from w-integral due to variation of integrand with ppar.
                 + (-2.0 * epsilon + integral_type2) * dsigma_dp
+                # Change in zeta integral due to different interpolated ̂g values
+                + dzeta_dp_interp
                )
 
             # Here we overwrite the buffers that were used for correction4_integral_pieces
@@ -3616,6 +3643,12 @@ end
             #             = dg/dw(2*u/vth - w) * (-2*u/vth^2) * δ(sqrt(2*ppar/n)
             #             = dg/dw(2*u/vth - w) * (-2*u/vth^2) * δppar * vth / (2*ppar)
             #             = -u/vth/ppar * dg/dw(2*u/vth - w) * δppar
+            #
+            # As jacobian_zend_ppar only depends on variations of a single value
+            # `ppar[1]`, it might be more maintainable and computationally cheaper to
+            # calculate jacobian_zend_ppar with a finite difference method (applying the
+            # boundary condition function with a perturbed pressure `ppar[1] + ϵ` for some
+            # small ϵ) rather than calculating it using the method below.
 
             dpdfdv_near_zero = @view vpa.scratch[first_point_near_zero:sigma_ind]
             @views interpolate_symmetric!(dpdfdv_near_zero,
