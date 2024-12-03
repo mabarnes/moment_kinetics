@@ -2126,19 +2126,19 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, z, vp
     end
 end
 
-function get_cutoff_params_lower(upar, vthe, phi, me_over_mi, vpa, ir)
-    u_over_vt = upar[1,ir] / vthe[1,ir]
+function get_cutoff_params_lower(upar, vthe, phi, me_over_mi, vpa)
+    u_over_vt = upar / vthe
 
     # sigma is the location we use for w_∥(v_∥=0) - set to 0 to ignore the 'upar
     # shift'
     sigma = -u_over_vt
 
-    vpa_unnorm = @. vpa.scratch2 = vthe[1,ir] * (vpa.grid - sigma)
+    vpa_unnorm = @. vpa.scratch2 = vthe * (vpa.grid - sigma)
 
     # Initial guess for cut-off velocity is result from previous RK stage (which
     # might be the previous timestep if this is the first stage). Recalculate this
     # value from phi.
-    vcut = sqrt(phi[1,ir] / me_over_mi)
+    vcut = sqrt(phi / me_over_mi)
 
     # -vcut is between minus_vcut_ind-1 and minus_vcut_ind
     minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
@@ -2200,20 +2200,20 @@ function get_cutoff_params_lower(upar, vthe, phi, me_over_mi, vpa, ir)
            reversed_wpa_of_minus_vpa
 end
 
-function get_cutoff_params_upper(upar, vthe, phi, me_over_mi, vpa, ir)
-    u_over_vt = upar[end,ir] / vthe[end,ir]
+function get_cutoff_params_upper(upar, vthe, phi, me_over_mi, vpa)
+    u_over_vt = upar / vthe
 
     # sigma is the location we use for w_∥(v_∥=0) - set to 0 to ignore the 'upar
     # shift'
     sigma = -u_over_vt
 
     # Delete the upar contribution here if ignoring the 'upar shift'
-    vpa_unnorm = @. vpa.scratch2 = vthe[end,ir] * (vpa.grid - sigma)
+    vpa_unnorm = @. vpa.scratch2 = vthe * (vpa.grid - sigma)
 
     # Initial guess for cut-off velocity is result from previous RK stage (which
     # might be the previous timestep if this is the first stage). Recalculate this
     # value from phi.
-    vcut = sqrt(phi[end,ir] / me_over_mi)
+    vcut = sqrt(phi / me_over_mi)
 
     # vcut is between plus_vcut_ind and plus_vcut_ind+1
     plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
@@ -2667,8 +2667,9 @@ end
 
             vpa_unnorm, u_over_vt, vcut, minus_vcut_ind, sigma, sigma_ind, sigma_fraction,
                 element_with_zero, element_with_zero_boundary, last_point_near_zero,
-                reversed_wpa_of_minus_vpa = get_cutoff_params_lower(upar, vthe, phi,
-                                                                    me_over_mi, vpa, ir)
+                reversed_wpa_of_minus_vpa =
+                    get_cutoff_params_lower(upar[1,ir], vthe[1,ir], phi[1,ir], me_over_mi,
+                                            vpa)
 
             # interpolate the pdf onto this grid
             # 'near zero' means in the range where
@@ -2865,8 +2866,9 @@ end
 
             vpa_unnorm, u_over_vt, vcut, plus_vcut_ind, sigma, sigma_ind, sigma_fraction,
                 element_with_zero, element_with_zero_boundary, first_point_near_zero,
-                reversed_wpa_of_minus_vpa = get_cutoff_params_upper(upar, vthe, phi,
-                                                                    me_over_mi, vpa, ir)
+                reversed_wpa_of_minus_vpa =
+                    get_cutoff_params_upper(upar[end,ir], vthe[end,ir], phi[end,ir],
+                                            me_over_mi, vpa)
 
             # interpolate the pdf onto this grid
             # 'near zero' means in the range where
@@ -3095,14 +3097,42 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
 @timeit global_timer add_wall_boundary_condition_to_Jacobian!(
                          jacobian, phi, pdf, ppar, vthe, upar, z, vperp, vpa,
                          vperp_spectral, vpa_spectral, vpa_adv, moments, vpa_diffusion,
-                         me_over_mi, ir; pdf_offset=0, ppar_offset=0) = begin
+                         me_over_mi, ir, include, iz=nothing;
+                         pdf_offset=0, ppar_offset=0) = begin
     if z.bc != "wall"
+        return nothing
+    end
+
+    if include ∈ (:all, :explicit_v)
+        include_lower = (z.irank == 0)
+        include_upper = (z.irank == z.nrank - 1)
+        zend = z.n
+        phi_lower = phi[1]
+        phi_upper = phi[end]
+        pdf_lower = @view pdf[:,:,1]
+        pdf_upper = @view pdf[:,:,end]
+        ppar_lower = ppar[1]
+        ppar_upper = ppar[end]
+        vthe_lower = vthe[1]
+        vthe_upper = vthe[end]
+        upar_lower = upar[1]
+        upar_upper = upar[end]
+    elseif include === :implicit_v
+        include_lower = (z.irank == 0) && iz == 1
+        include_upper = (z.irank == z.nrank - 1) && iz == z.n
+        zend = 1
+        phi_lower = phi_upper = phi
+        pdf_lower = pdf_upper = @view pdf[:,:]
+        ppar_lower = ppar_upper = ppar
+        vthe_lower = vthe_upper = vthe
+        upar_lower = upar_upper = upar
+    else
         return nothing
     end
 
     pdf_size = z.n * vperp.n * vpa.n
 
-    if z.irank == 0
+    if include_lower
         begin_vperp_region()
         @loop_vperp ivperp begin
             # Skip velocity space boundary points.
@@ -3120,8 +3150,9 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
 
             vpa_unnorm, u_over_vt, vcut, minus_vcut_ind, sigma, sigma_ind, sigma_fraction,
                 element_with_zero, element_with_zero_boundary, last_point_near_zero,
-                reversed_wpa_of_minus_vpa = get_cutoff_params_lower(upar, vthe, phi,
-                                                                    me_over_mi, vpa, ir)
+                reversed_wpa_of_minus_vpa =
+                    get_cutoff_params_lower(upar_lower, vthe_lower, phi_lower, me_over_mi,
+                                            vpa)
 
             plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
             # plus_vcut_fraction is the fraction of the distance between plus_vcut_ind and
@@ -3179,25 +3210,25 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             dpdfdv_near_zero = @view vpa.scratch[sigma_ind:last_point_near_zero]
             @views interpolate_symmetric!(dpdfdv_near_zero,
                                           vpa_unnorm[sigma_ind:last_point_near_zero],
-                                          pdf[element_with_zero_boundary:sigma_ind-1,ivperp,1],
+                                          pdf_lower[element_with_zero_boundary:sigma_ind-1,ivperp],
                                           vpa_unnorm[element_with_zero_boundary:sigma_ind-1],
                                           Val(1))
             # The above call to interpolate_symmetric calculates dg/dv rather than dg/dw,
             # so need to multiply by an extra factor of vthe.
             #   δg(w|v>0) = -u/ppar * dg/dv(2*u/vth - w) * δppar
             @. jacobian_zbegin_ppar[sigma_ind:last_point_near_zero] -=
-                   -upar[1] / ppar[1] * dpdfdv_near_zero
+                   -upar_lower / ppar_lower * dpdfdv_near_zero
 
             dpdfdw_far_from_zero = @view vpa.scratch[last_point_near_zero+1:last_nonzero_ind]
             @views interpolate_to_grid_1d!(dpdfdw_far_from_zero,
                                            reversed_wpa_of_minus_vpa[vpa.n-last_nonzero_ind+1:vpa.n-last_point_near_zero],
-                                           pdf[:,ivperp,1], vpa, vpa_spectral, Val(1))
+                                           pdf_lower[:,ivperp], vpa, vpa_spectral, Val(1))
             reverse!(dpdfdw_far_from_zero)
             # Note that because we calculated the derivative of the interpolating
             # function, and then reversed the results, we need to multiply the derivative
             # by -1.
             @. jacobian_zbegin_ppar[last_point_near_zero+1:last_nonzero_ind] -=
-                   upar[1] / vthe[1] / ppar[1] * dpdfdw_far_from_zero
+                   upar_lower / vthe_lower / ppar_lower * dpdfdw_far_from_zero
 
             # Whatever the variation due to interpolation is at the last nonzero grid
             # point, it will be reduced by the cutoff.
@@ -3228,9 +3259,9 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             reversed_last_nonzero_ind = vpa.n-last_nonzero_ind+1
             @views interpolate_to_grid_1d!(interpolated_pdf_at_last_nonzero_ind,
                                            reversed_wpa_of_minus_vpa[reversed_last_nonzero_ind:reversed_last_nonzero_ind],
-                                           pdf[:,ivperp,1], vpa, vpa_spectral)
+                                           pdf_lower[:,ivperp], vpa, vpa_spectral)
 
-            dplus_vcut_fraction_dp = -(vcut - upar[1]) / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind]) / 2.0 / ppar[1]
+            dplus_vcut_fraction_dp = -(vcut - upar_lower) / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind]) / 2.0 / ppar_lower
             jacobian_zbegin_ppar[last_nonzero_ind] -= interpolated_pdf_at_last_nonzero_ind[] * dplus_vcut_fraction_dp
 
             # Calculate some numerical integrals of dpdfdw that we will need later
@@ -3249,30 +3280,30 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             # Note that jacobian_zbegin_ppar already contains `2.0*dsigma_dp`.
             @. vpa.scratch = -jacobian_zbegin_ppar * vpa.wgts / sqrt(π)
             da3_dp = get_part3_for_one_moment_lower(vpa.scratch)
-            @. vpa.scratch *= vpa_unnorm / vthe[1]
+            @. vpa.scratch *= vpa_unnorm / vthe_lower
             db3_dp = get_part3_for_one_moment_lower(vpa.scratch)
-            @. vpa.scratch *= vpa_unnorm / vthe[1]
+            @. vpa.scratch *= vpa_unnorm / vthe_lower
             dc3_dp = get_part3_for_one_moment_lower(vpa.scratch)
-            @. vpa.scratch *= vpa_unnorm / vthe[1]
+            @. vpa.scratch *= vpa_unnorm / vthe_lower
             dd3_dp = get_part3_for_one_moment_lower(vpa.scratch)
-            @. vpa.scratch = -jacobian_zbegin_ppar * vpa.wgts / sqrt(π) * integral_correction_sharpness * vpa_unnorm^2 / vthe[1]^2 / (1.0 + integral_correction_sharpness * vpa_unnorm^2 / vthe[1]^2)
+            @. vpa.scratch = -jacobian_zbegin_ppar * vpa.wgts / sqrt(π) * integral_correction_sharpness * vpa_unnorm^2 / vthe_lower^2 / (1.0 + integral_correction_sharpness * vpa_unnorm^2 / vthe_lower^2)
             vpa.scratch[sigma_ind-1:sigma_ind] .= 0.0
             dalpha_dp_interp = get_part3_for_one_moment_lower(vpa.scratch)
-            @. vpa.scratch *= vpa_unnorm / vthe[1]
+            @. vpa.scratch *= vpa_unnorm / vthe_lower
             dbeta_dp_interp = get_part3_for_one_moment_lower(vpa.scratch)
-            @. vpa.scratch *= vpa_unnorm / vthe[1]
+            @. vpa.scratch *= vpa_unnorm / vthe_lower
             dgamma_dp_interp = get_part3_for_one_moment_lower(vpa.scratch)
-            @. vpa.scratch *= vpa_unnorm / vthe[1]
+            @. vpa.scratch *= vpa_unnorm / vthe_lower
             ddelta_dp_interp = get_part3_for_one_moment_lower(vpa.scratch)
-            @. vpa.scratch *= vpa_unnorm / vthe[1]
+            @. vpa.scratch *= vpa_unnorm / vthe_lower
             depsilon_dp_interp = get_part3_for_one_moment_lower(vpa.scratch)
-            @. vpa.scratch *= vpa_unnorm / vthe[1]
+            @. vpa.scratch *= vpa_unnorm / vthe_lower
             dzeta_dp_interp = get_part3_for_one_moment_lower(vpa.scratch)
-            @. vpa.scratch *= vpa_unnorm / vthe[1]
+            @. vpa.scratch *= vpa_unnorm / vthe_lower
             deta_dp_interp = get_part3_for_one_moment_lower(vpa.scratch)
 
             pdf_lowerz = vpa.scratch10
-            @views @. pdf_lowerz[1:sigma_ind-1] = pdf[1:sigma_ind-1,ivperp,1]
+            @views @. pdf_lowerz[1:sigma_ind-1] = pdf_lower[1:sigma_ind-1,ivperp]
 
             # interpolate the pdf_lowerz onto this grid
             # 'near zero' means in the range where
@@ -3310,12 +3341,12 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
 
             a2, b2, c2, d2, a3, b3, c3, d3, alpha, beta, gamma, delta, epsilon, zeta, eta =
                 get_lowerz_integral_correction_components(
-                    pdf_lowerz, vthe[1], vpa, vpa_unnorm, u_over_vt, sigma_ind,
+                    pdf_lowerz, vthe_lower, vpa, vpa_unnorm, u_over_vt, sigma_ind,
                     sigma_fraction, vcut, minus_vcut_ind, plus_vcut_ind, false)
 
             output_range = sigma_ind+1:upper_cutoff_ind
 
-            v_over_vth = @views @. vpa.scratch[output_range] = vpa_unnorm[output_range] / vthe[1]
+            v_over_vth = @views @. vpa.scratch[output_range] = vpa_unnorm[output_range] / vthe_lower
 
             correction_matrix = [alpha beta    gamma   delta   ;
                                  beta  gamma   delta   epsilon ;
@@ -3372,18 +3403,18 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             cubic_integral_pieces_lowerz = vpa.scratch6
             quartic_integral_pieces_lowerz = vpa.scratch7
             fill_integral_pieces!(
-                pdf_lowerz, vthe[1], vpa, vpa_unnorm, density_integral_pieces_lowerz,
+                pdf_lowerz, vthe_lower, vpa, vpa_unnorm, density_integral_pieces_lowerz,
                 flow_integral_pieces_lowerz, energy_integral_pieces_lowerz,
                 cubic_integral_pieces_lowerz, quartic_integral_pieces_lowerz)
             vpa_grid = vpa.grid
 
-            dsigma_dp = upar[1] / (2.0 * vthe[1] * ppar[1])
+            dsigma_dp = upar_lower / (2.0 * vthe_lower * ppar_lower)
 
             dsigma_fraction_dp = dsigma_dp / (vpa_grid[sigma_ind] - vpa_grid[sigma_ind-1])
 
-            dminus_vcut_fraction_dp = (vcut + upar[1]) / (2.0 * vthe[1] * ppar[1]) / (vpa_grid[minus_vcut_ind] - vpa_grid[minus_vcut_ind-1])
+            dminus_vcut_fraction_dp = (vcut + upar_lower) / (2.0 * vthe_lower * ppar_lower) / (vpa_grid[minus_vcut_ind] - vpa_grid[minus_vcut_ind-1])
 
-            dplus_vcut_fraction_dp = -(vcut - upar[1]) / (2.0 * vthe[1] * ppar[1]) / (vpa_grid[plus_vcut_ind+1] - vpa_grid[plus_vcut_ind])
+            dplus_vcut_fraction_dp = -(vcut - upar_lower) / (2.0 * vthe_lower * ppar_lower) / (vpa_grid[plus_vcut_ind+1] - vpa_grid[plus_vcut_ind])
 
             density_integral_sigma_cell = 0.5 * (density_integral_pieces_lowerz[sigma_ind-1] +
                                                  density_integral_pieces_lowerz[sigma_ind])
@@ -3435,15 +3466,15 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
                 - dd3_dp
                )
 
-            correction0_integral_pieces = @. vpa.scratch3 = pdf_lowerz * vpa.wgts / sqrt(π) * integral_correction_sharpness * vpa_unnorm^2 / vthe[1]^2 / (1.0 + integral_correction_sharpness * vpa_unnorm^2 / vthe[1]^2)
+            correction0_integral_pieces = @. vpa.scratch3 = pdf_lowerz * vpa.wgts / sqrt(π) * integral_correction_sharpness * vpa_unnorm^2 / vthe_lower^2 / (1.0 + integral_correction_sharpness * vpa_unnorm^2 / vthe_lower^2)
             for ivpa ∈ 1:sigma_ind
                 correction0_integral_pieces[ivpa] = 0.0
             end
 
-            correctionminus1_integral_pieces = @. vpa.scratch4 = correction0_integral_pieces / vpa_unnorm * vthe[1]
+            correctionminus1_integral_pieces = @. vpa.scratch4 = correction0_integral_pieces / vpa_unnorm * vthe_lower
             integralminus1 = sum(@view(correctionminus1_integral_pieces[sigma_ind+1:upper_cutoff_ind]))
 
-            correction0_integral_type2_pieces = @. vpa.scratch4 = pdf_lowerz * vpa.wgts / sqrt(π) * 2.0 * integral_correction_sharpness^2 * vpa_unnorm^3 / vthe[1]^3 / (1.0 + integral_correction_sharpness * vpa_unnorm^2 / vthe[1]^2)^2
+            correction0_integral_type2_pieces = @. vpa.scratch4 = pdf_lowerz * vpa.wgts / sqrt(π) * 2.0 * integral_correction_sharpness^2 * vpa_unnorm^3 / vthe_lower^3 / (1.0 + integral_correction_sharpness * vpa_unnorm^2 / vthe_lower^2)^2
             integral_type2 = sum(@view(correction0_integral_type2_pieces[sigma_ind+1:upper_cutoff_ind]))
             dalpha_dp = (
                 # The grid points either side of sigma are zero-ed out for these
@@ -3455,8 +3486,8 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
                 + dalpha_dp_interp
                )
 
-            correction1_integral_pieces = @. vpa.scratch5 = correction0_integral_pieces * vpa_unnorm / vthe[1]
-            correction1_integral_type2_pieces = @. vpa.scratch6 = correction0_integral_type2_pieces * vpa_unnorm / vthe[1]
+            correction1_integral_pieces = @. vpa.scratch5 = correction0_integral_pieces * vpa_unnorm / vthe_lower
+            correction1_integral_type2_pieces = @. vpa.scratch6 = correction0_integral_type2_pieces * vpa_unnorm / vthe_lower
             integral_type2 = sum(@view(correction1_integral_type2_pieces[sigma_ind+1:upper_cutoff_ind]))
             dbeta_dp = (
                 # The grid points either side of sigma are zero-ed out for these
@@ -3471,8 +3502,8 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             # Here we overwrite the buffers that were used for correction1_integral_pieces
             # and correction1_integral_type2_pieces, but this is OK as we never need those
             # arrays again.
-            correction2_integral_pieces = @. vpa.scratch5 = correction1_integral_pieces * vpa_unnorm / vthe[1]
-            correction2_integral_type2_pieces = @. vpa.scratch6 = correction1_integral_type2_pieces * vpa_unnorm / vthe[1]
+            correction2_integral_pieces = @. vpa.scratch5 = correction1_integral_pieces * vpa_unnorm / vthe_lower
+            correction2_integral_type2_pieces = @. vpa.scratch6 = correction1_integral_type2_pieces * vpa_unnorm / vthe_lower
             integral_type2 = sum(@view(correction2_integral_type2_pieces[sigma_ind+1:upper_cutoff_ind]))
             dgamma_dp = (
                 # The grid points either side of sigma are zero-ed out for these
@@ -3487,8 +3518,8 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             # Here we overwrite the buffers that were used for correction2_integral_pieces
             # and correction2_integral_type2_pieces, but this is OK as we never need those
             # arrays again.
-            correction3_integral_pieces = @. vpa.scratch5 = correction2_integral_pieces * vpa_unnorm / vthe[1]
-            correction3_integral_type2_pieces = @. vpa.scratch6 = correction2_integral_type2_pieces * vpa_unnorm / vthe[1]
+            correction3_integral_pieces = @. vpa.scratch5 = correction2_integral_pieces * vpa_unnorm / vthe_lower
+            correction3_integral_type2_pieces = @. vpa.scratch6 = correction2_integral_type2_pieces * vpa_unnorm / vthe_lower
             integral_type2 = sum(@view(correction3_integral_type2_pieces[sigma_ind+1:upper_cutoff_ind]))
             ddelta_dp = (
                 # The grid points either side of sigma are zero-ed out for these
@@ -3503,8 +3534,8 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             # Here we overwrite the buffers that were used for correction3_integral_pieces
             # and correction3_integral_type2_pieces, but this is OK as we never need those
             # arrays again.
-            correction4_integral_pieces = @. vpa.scratch5 = correction3_integral_pieces * vpa_unnorm / vthe[1]
-            correction4_integral_type2_pieces = @. vpa.scratch6 = correction3_integral_type2_pieces * vpa_unnorm / vthe[1]
+            correction4_integral_pieces = @. vpa.scratch5 = correction3_integral_pieces * vpa_unnorm / vthe_lower
+            correction4_integral_type2_pieces = @. vpa.scratch6 = correction3_integral_type2_pieces * vpa_unnorm / vthe_lower
             integral_type2 = sum(@view(correction4_integral_type2_pieces[sigma_ind+1:upper_cutoff_ind]))
             depsilon_dp = (
                 # The grid points either side of sigma are zero-ed out for these
@@ -3519,8 +3550,8 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             # Here we overwrite the buffers that were used for correction4_integral_pieces
             # and correction4_integral_type2_pieces, but this is OK as we never need those
             # arrays again.
-            correction5_integral_pieces = @. vpa.scratch5 = correction4_integral_pieces * vpa_unnorm / vthe[1]
-            correction5_integral_type2_pieces = @. vpa.scratch6 = correction4_integral_type2_pieces * vpa_unnorm / vthe[1]
+            correction5_integral_pieces = @. vpa.scratch5 = correction4_integral_pieces * vpa_unnorm / vthe_lower
+            correction5_integral_type2_pieces = @. vpa.scratch6 = correction4_integral_type2_pieces * vpa_unnorm / vthe_lower
             integral_type2 = sum(@view(correction5_integral_type2_pieces[sigma_ind+1:upper_cutoff_ind]))
             dzeta_dp = (
                 # The grid points either side of sigma are zero-ed out for these
@@ -3535,8 +3566,8 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             # Here we overwrite the buffers that were used for correction4_integral_pieces
             # and correction4_integral_type2_pieces, but this is OK as we never need those
             # arrays again.
-            correction6_integral_pieces = @. vpa.scratch5 = correction5_integral_pieces * vpa_unnorm / vthe[1]
-            correction6_integral_type2_pieces = @. vpa.scratch6 = correction5_integral_type2_pieces * vpa_unnorm / vthe[1]
+            correction6_integral_pieces = @. vpa.scratch5 = correction5_integral_pieces * vpa_unnorm / vthe_lower
+            correction6_integral_type2_pieces = @. vpa.scratch6 = correction5_integral_type2_pieces * vpa_unnorm / vthe_lower
             integral_type2 = sum(@view(correction6_integral_type2_pieces[sigma_ind+1:upper_cutoff_ind]))
             deta_dp = (
                 # The grid points either side of sigma are zero-ed out for these
@@ -3588,7 +3619,7 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
         end
     end
 
-    if z.irank == z.nrank - 1
+    if include_upper
         begin_vperp_region()
         @loop_vperp ivperp begin
             # Skip vperp boundary points.
@@ -3600,14 +3631,15 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             # Ignore constraints, as these are non-linear and also should be small
             # corrections which should not matter much for a preconditioner.
 
-            jac_range = pdf_offset+pdf_size-vperp.n*vpa.n+(ivperp-1)*vpa.n+1 : pdf_offset+pdf_size-vperp.n*vpa.n+ivperp*vpa.n
+            jac_range = pdf_offset+(zend-1)*vperp.n*vpa.n+(ivperp-1)*vpa.n+1 : pdf_offset+(zend-1)*vperp.n*vpa.n+ivperp*vpa.n
             jacobian_zend = @view jacobian[jac_range,jac_range]
-            jacobian_zend_ppar = @view jacobian[jac_range,ppar_offset+z.n]
+            jacobian_zend_ppar = @view jacobian[jac_range,ppar_offset+zend]
 
             vpa_unnorm, u_over_vt, vcut, plus_vcut_ind, sigma, sigma_ind, sigma_fraction,
                 element_with_zero, element_with_zero_boundary, first_point_near_zero,
-                reversed_wpa_of_minus_vpa = get_cutoff_params_upper(upar, vthe, phi,
-                                                                    me_over_mi, vpa, ir)
+                reversed_wpa_of_minus_vpa =
+                    get_cutoff_params_upper(upar_upper, vthe_upper, phi_upper, me_over_mi,
+                                            vpa)
 
             minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
             # minus_vcut_fraction is the fraction of the distance between minus_vcut_ind-1 and
@@ -3654,37 +3686,37 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             #             = -u/vth/ppar * dg/dw(2*u/vth - w) * δppar
             #
             # As jacobian_zend_ppar only depends on variations of a single value
-            # `ppar[1]`, it might be more maintainable and computationally cheaper to
+            # `ppar[end]` it might be more maintainable and computationally cheaper to
             # calculate jacobian_zend_ppar with a finite difference method (applying the
-            # boundary condition function with a perturbed pressure `ppar[1] + ϵ` for some
-            # small ϵ) rather than calculating it using the method below. If we used the
-            # finite difference approach, we would have to be careful that the ϵ step does
-            # not change the cutoff index (otherwise we would pick up non-smooth changes)
-            # - one possibility might to be to switch to `-ϵ` instead of `+ϵ` if this
-            # happens.
+            # boundary condition function with a perturbed pressure `ppar[end] + ϵ` for
+            # some small ϵ) rather than calculating it using the method below. If we used
+            # the finite difference approach, we would have to be careful that the ϵ step
+            # does not change the cutoff index (otherwise we would pick up non-smooth
+            # changes) - one possibility might to be to switch to `-ϵ` instead of `+ϵ` if
+            # this happens.
 
             dpdfdv_near_zero = @view vpa.scratch[first_point_near_zero:sigma_ind]
             @views interpolate_symmetric!(dpdfdv_near_zero,
                                           vpa_unnorm[first_point_near_zero:sigma_ind],
-                                          pdf[sigma_ind+1:element_with_zero_boundary,ivperp,end],
+                                          pdf_upper[sigma_ind+1:element_with_zero_boundary,ivperp],
                                           vpa_unnorm[sigma_ind+1:element_with_zero_boundary],
                                           Val(1))
             # The above call to interpolate_symmetric calculates dg/dv rather than dg/dw,
             # so need to multiply by an extra factor of vthe.
             #   δg(w|v<0) = -u/ppar * dg/dv(2*u/vth - w) * δppar
             @. jacobian_zend_ppar[first_point_near_zero:sigma_ind] -=
-                   -upar[end] / ppar[end] * dpdfdv_near_zero
+                   -upar_upper / ppar_upper * dpdfdv_near_zero
 
             dpdfdw_far_from_zero = @view vpa.scratch[first_nonzero_ind:first_point_near_zero-1]
             @views interpolate_to_grid_1d!(dpdfdw_far_from_zero,
                                            reversed_wpa_of_minus_vpa[vpa.n-first_point_near_zero+2:vpa.n-first_nonzero_ind+1],
-                                           pdf[:,ivperp,end], vpa, vpa_spectral, Val(1))
+                                           pdf_upper[:,ivperp], vpa, vpa_spectral, Val(1))
             reverse!(dpdfdw_far_from_zero)
             # Note that because we calculated the derivative of the interpolating
             # function, and then reversed the results, we need to multiply the derivative
             # by -1.
             @. jacobian_zend_ppar[first_nonzero_ind:first_point_near_zero-1] -=
-                   upar[end] / vthe[end] / ppar[end] * dpdfdw_far_from_zero
+                   upar_upper / vthe_upper / ppar_upper * dpdfdw_far_from_zero
 
             # Whatever the variation due to interpolation is at the last nonzero grid
             # point, it will be reduced by the cutoff.
@@ -3716,10 +3748,10 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             reversed_first_nonzero_ind = vpa.n-first_nonzero_ind+1
             @views interpolate_to_grid_1d!(interpolated_pdf_at_first_nonzero_ind,
                                            reversed_wpa_of_minus_vpa[reversed_first_nonzero_ind:reversed_first_nonzero_ind],
-                                           pdf[:,ivperp,end], vpa, vpa_spectral)
+                                           pdf_upper[:,ivperp], vpa, vpa_spectral)
 
-            dminus_vcut_fraction_dp = (vcut + upar[end]) / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1]) / 2.0 / ppar[end]
-            # Note that pdf[first_nonzero_ind,ivperp,end] depends on -minus_vcut_fraction, so
+            dminus_vcut_fraction_dp = (vcut + upar_upper) / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1]) / 2.0 / ppar_upper
+            # Note that pdf_upper[first_nonzero_ind,ivperp] depends on -minus_vcut_fraction, so
             # need a -'ve sign in the following line.
             jacobian_zend_ppar[first_nonzero_ind] -= -interpolated_pdf_at_first_nonzero_ind[] * dminus_vcut_fraction_dp
 
@@ -3739,30 +3771,30 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             # that jacobian_zend_ppar already contains `2.0*dsigma_dp`.
             @. vpa.scratch = -jacobian_zend_ppar * vpa.wgts / sqrt(π)
             da3_dp = get_part3_for_one_moment_upper(vpa.scratch)
-            @. vpa.scratch *= vpa_unnorm / vthe[end]
+            @. vpa.scratch *= vpa_unnorm / vthe_upper
             db3_dp = get_part3_for_one_moment_upper(vpa.scratch)
-            @. vpa.scratch *= vpa_unnorm / vthe[end]
+            @. vpa.scratch *= vpa_unnorm / vthe_upper
             dc3_dp = get_part3_for_one_moment_upper(vpa.scratch)
-            @. vpa.scratch *= vpa_unnorm / vthe[end]
+            @. vpa.scratch *= vpa_unnorm / vthe_upper
             dd3_dp = get_part3_for_one_moment_upper(vpa.scratch)
-            @. vpa.scratch = -jacobian_zend_ppar * vpa.wgts / sqrt(π) * integral_correction_sharpness * vpa_unnorm^2 / vthe[end]^2 / (1.0 + integral_correction_sharpness * vpa_unnorm^2 / vthe[end]^2)
+            @. vpa.scratch = -jacobian_zend_ppar * vpa.wgts / sqrt(π) * integral_correction_sharpness * vpa_unnorm^2 / vthe_upper / (1.0 + integral_correction_sharpness * vpa_unnorm^2 / vthe_upper^2)
             vpa.scratch[sigma_ind:sigma_ind+1] .= 0.0
             dalpha_dp_interp = get_part3_for_one_moment_upper(vpa.scratch)
-            @. vpa.scratch *= vpa_unnorm / vthe[end]
+            @. vpa.scratch *= vpa_unnorm / vthe_upper
             dbeta_dp_interp = get_part3_for_one_moment_upper(vpa.scratch)
-            @. vpa.scratch *= vpa_unnorm / vthe[end]
+            @. vpa.scratch *= vpa_unnorm / vthe_upper
             dgamma_dp_interp = get_part3_for_one_moment_upper(vpa.scratch)
-            @. vpa.scratch *= vpa_unnorm / vthe[end]
+            @. vpa.scratch *= vpa_unnorm / vthe_upper
             ddelta_dp_interp = get_part3_for_one_moment_upper(vpa.scratch)
-            @. vpa.scratch *= vpa_unnorm / vthe[end]
+            @. vpa.scratch *= vpa_unnorm / vthe_upper
             depsilon_dp_interp = get_part3_for_one_moment_upper(vpa.scratch)
-            @. vpa.scratch *= vpa_unnorm / vthe[end]
+            @. vpa.scratch *= vpa_unnorm / vthe_upper
             dzeta_dp_interp = get_part3_for_one_moment_upper(vpa.scratch)
-            @. vpa.scratch *= vpa_unnorm / vthe[end]
+            @. vpa.scratch *= vpa_unnorm / vthe_upper
             deta_dp_interp = get_part3_for_one_moment_upper(vpa.scratch)
 
             pdf_upperz = vpa.scratch10
-            @views @. pdf_upperz[sigma_ind:end] = pdf[sigma_ind:end,ivperp,end]
+            @views @. pdf_upperz[sigma_ind:end] = pdf_upper[sigma_ind:end,ivperp]
 
             # interpolate the pdf_upperz onto this grid
             # 'near zero' means in the range where
@@ -3800,12 +3832,12 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
 
             a2, b2, c2, d2, a3, b3, c3, d3, alpha, beta, gamma, delta, epsilon, zeta, eta =
                 get_upperz_integral_correction_components(
-                    pdf_upperz, vthe[end], vpa, vpa_unnorm, u_over_vt,
+                    pdf_upperz, vthe_upper, vpa, vpa_unnorm, u_over_vt,
                     sigma_ind, sigma_fraction, vcut, minus_vcut_ind, plus_vcut_ind, false)
 
             output_range = lower_cutoff_ind:sigma_ind
 
-            v_over_vth = @views @. vpa.scratch[output_range] = vpa_unnorm[output_range] / vthe[end]
+            v_over_vth = @views @. vpa.scratch[output_range] = vpa_unnorm[output_range] / vthe_upper
 
             correction_matrix = [alpha beta    gamma   delta   ;
                                  beta  gamma   delta   epsilon ;
@@ -3863,18 +3895,18 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             cubic_integral_pieces_upperz = vpa.scratch6
             quartic_integral_pieces_upperz = vpa.scratch7
             fill_integral_pieces!(
-                pdf_upperz, vthe[end], vpa, vpa_unnorm, density_integral_pieces_upperz,
+                pdf_upperz, vthe_upper, vpa, vpa_unnorm, density_integral_pieces_upperz,
                 flow_integral_pieces_upperz, energy_integral_pieces_upperz,
                 cubic_integral_pieces_upperz, quartic_integral_pieces_upperz)
             vpa_grid = vpa.grid
 
-            dsigma_dp = upar[end] / (2.0 * vthe[end] * ppar[end])
+            dsigma_dp = upar_upper / (2.0 * vthe_upper * ppar_upper)
 
             dsigma_fraction_dp = dsigma_dp / (vpa_grid[sigma_ind+1] - vpa_grid[sigma_ind])
 
-            dminus_vcut_fraction_dp = (vcut + upar[end]) / (2.0 * vthe[end] * ppar[end]) / (vpa_grid[minus_vcut_ind] - vpa_grid[minus_vcut_ind-1])
+            dminus_vcut_fraction_dp = (vcut + upar_upper) / (2.0 * vthe_upper * ppar_upper) / (vpa_grid[minus_vcut_ind] - vpa_grid[minus_vcut_ind-1])
 
-            dplus_vcut_fraction_dp = -(vcut - upar[end]) / (2.0 * vthe[end] * ppar[end]) / (vpa_grid[plus_vcut_ind+1] - vpa_grid[plus_vcut_ind])
+            dplus_vcut_fraction_dp = -(vcut - upar_upper) / (2.0 * vthe_upper * ppar_upper) / (vpa_grid[plus_vcut_ind+1] - vpa_grid[plus_vcut_ind])
 
 
             density_integral_sigma_cell = 0.5 * (density_integral_pieces_upperz[sigma_ind] +
@@ -3927,15 +3959,15 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
                 - dd3_dp
                )
 
-            correction0_integral_pieces = @. vpa.scratch3 = pdf_upperz * vpa.wgts / sqrt(π) * integral_correction_sharpness * vpa_unnorm^2 / vthe[end]^2 / (1.0 + integral_correction_sharpness * vpa_unnorm^2 / vthe[end]^2)
+            correction0_integral_pieces = @. vpa.scratch3 = pdf_upperz * vpa.wgts / sqrt(π) * integral_correction_sharpness * vpa_unnorm^2 / vthe_upper^2 / (1.0 + integral_correction_sharpness * vpa_unnorm^2 / vthe_upper^2)
             for ivpa ∈ sigma_ind:vpa.n
                 correction0_integral_pieces[ivpa] = 0.0
             end
 
-            correctionminus1_integral_pieces = @. vpa.scratch4 = correction0_integral_pieces / vpa_unnorm * vthe[end]
+            correctionminus1_integral_pieces = @. vpa.scratch4 = correction0_integral_pieces / vpa_unnorm * vthe_upper
             integralminus1 = sum(@view(correctionminus1_integral_pieces[lower_cutoff_ind:sigma_ind-1]))
 
-            correction0_integral_type2_pieces = @. vpa.scratch4 = pdf_upperz * vpa.wgts / sqrt(π) * 2.0 * integral_correction_sharpness^2 * vpa_unnorm^3 / vthe[end]^3 / (1.0 + integral_correction_sharpness * vpa_unnorm^2 / vthe[end]^2)^2
+            correction0_integral_type2_pieces = @. vpa.scratch4 = pdf_upperz * vpa.wgts / sqrt(π) * 2.0 * integral_correction_sharpness^2 * vpa_unnorm^3 / vthe_upper^3 / (1.0 + integral_correction_sharpness * vpa_unnorm^2 / vthe_upper^2)^2
             integral_type2 = sum(@view(correction0_integral_type2_pieces[lower_cutoff_ind:sigma_ind-1]))
             dalpha_dp = (
                 # The grid points either side of sigma are zero-ed out for these
@@ -3947,8 +3979,8 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
                 + dalpha_dp_interp
                )
 
-            correction1_integral_pieces = @. vpa.scratch5 = correction0_integral_pieces * vpa_unnorm / vthe[end]
-            correction1_integral_type2_pieces = @. vpa.scratch6 = correction0_integral_type2_pieces * vpa_unnorm / vthe[end]
+            correction1_integral_pieces = @. vpa.scratch5 = correction0_integral_pieces * vpa_unnorm / vthe_upper
+            correction1_integral_type2_pieces = @. vpa.scratch6 = correction0_integral_type2_pieces * vpa_unnorm / vthe_upper
             integral_type2 = sum(@view(correction1_integral_type2_pieces[lower_cutoff_ind:sigma_ind-1]))
             dbeta_dp = (
                 # The grid points either side of sigma are zero-ed out for these
@@ -3963,8 +3995,8 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             # Here we overwrite the buffers that were used for correction1_integral_pieces
             # and correction1_integral_type2_pieces, but this is OK as we never need those
             # arrays again.
-            correction2_integral_pieces = @. vpa.scratch5 = correction1_integral_pieces * vpa_unnorm / vthe[end]
-            correction2_integral_type2_pieces = @. vpa.scratch6 = correction1_integral_type2_pieces * vpa_unnorm / vthe[end]
+            correction2_integral_pieces = @. vpa.scratch5 = correction1_integral_pieces * vpa_unnorm / vthe_upper
+            correction2_integral_type2_pieces = @. vpa.scratch6 = correction1_integral_type2_pieces * vpa_unnorm / vthe_upper
             integral_type2 = sum(@view(correction2_integral_type2_pieces[lower_cutoff_ind:sigma_ind-1]))
             dgamma_dp = (
                 # The grid points either side of sigma are zero-ed out for these
@@ -3979,8 +4011,8 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             # Here we overwrite the buffers that were used for correction2_integral_pieces
             # and correction2_integral_type2_pieces, but this is OK as we never need those
             # arrays again.
-            correction3_integral_pieces = @. vpa.scratch5 = correction2_integral_pieces * vpa_unnorm / vthe[end]
-            correction3_integral_type2_pieces = @. vpa.scratch6 = correction2_integral_type2_pieces * vpa_unnorm / vthe[end]
+            correction3_integral_pieces = @. vpa.scratch5 = correction2_integral_pieces * vpa_unnorm / vthe_upper
+            correction3_integral_type2_pieces = @. vpa.scratch6 = correction2_integral_type2_pieces * vpa_unnorm / vthe_upper
             integral_type2 = sum(@view(correction3_integral_type2_pieces[lower_cutoff_ind:sigma_ind-1]))
             ddelta_dp = (
                 # The grid points either side of sigma are zero-ed out for these
@@ -3995,8 +4027,8 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             # Here we overwrite the buffers that were used for correction3_integral_pieces
             # and correction3_integral_type2_pieces, but this is OK as we never need those
             # arrays again.
-            correction4_integral_pieces = @. vpa.scratch5 = correction3_integral_pieces * vpa_unnorm / vthe[end]
-            correction4_integral_type2_pieces = @. vpa.scratch6 = correction3_integral_type2_pieces * vpa_unnorm / vthe[end]
+            correction4_integral_pieces = @. vpa.scratch5 = correction3_integral_pieces * vpa_unnorm / vthe_upper
+            correction4_integral_type2_pieces = @. vpa.scratch6 = correction3_integral_type2_pieces * vpa_unnorm / vthe_upper
             integral_type2 = sum(@view(correction4_integral_type2_pieces[lower_cutoff_ind:sigma_ind-1]))
             depsilon_dp = (
                 # The grid points either side of sigma are zero-ed out for these
@@ -4011,8 +4043,8 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             # Here we overwrite the buffers that were used for correction4_integral_pieces
             # and correction4_integral_type2_pieces, but this is OK as we never need those
             # arrays again.
-            correction5_integral_pieces = @. vpa.scratch5 = correction4_integral_pieces * vpa_unnorm / vthe[end]
-            correction5_integral_type2_pieces = @. vpa.scratch6 = correction4_integral_type2_pieces * vpa_unnorm / vthe[end]
+            correction5_integral_pieces = @. vpa.scratch5 = correction4_integral_pieces * vpa_unnorm / vthe_upper
+            correction5_integral_type2_pieces = @. vpa.scratch6 = correction4_integral_type2_pieces * vpa_unnorm / vthe_upper
             integral_type2 = sum(@view(correction5_integral_type2_pieces[lower_cutoff_ind:sigma_ind-1]))
             dzeta_dp = (
                 # The grid points either side of sigma are zero-ed out for these
@@ -4027,8 +4059,8 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             # Here we overwrite the buffers that were used for correction4_integral_pieces
             # and correction4_integral_type2_pieces, but this is OK as we never need those
             # arrays again.
-            correction6_integral_pieces = @. vpa.scratch5 = correction5_integral_pieces * vpa_unnorm / vthe[end]
-            correction6_integral_type2_pieces = @. vpa.scratch6 = correction5_integral_type2_pieces * vpa_unnorm / vthe[end]
+            correction6_integral_pieces = @. vpa.scratch5 = correction5_integral_pieces * vpa_unnorm / vthe_upper
+            correction6_integral_type2_pieces = @. vpa.scratch6 = correction5_integral_type2_pieces * vpa_unnorm / vthe_upper
             integral_type2 = sum(@view(correction6_integral_type2_pieces[lower_cutoff_ind:sigma_ind-1]))
             deta_dp = (
                 # The grid points either side of sigma are zero-ed out for these
@@ -4051,7 +4083,7 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
                                               )
 
             output_range = lower_cutoff_ind:sigma_ind-1
-            v_over_vth = @views @. vpa.scratch[output_range] = vpa_unnorm[output_range] / vthe[end]
+            v_over_vth = @views @. vpa.scratch[output_range] = vpa_unnorm[output_range] / vthe_upper
             @views @. jacobian_zend_ppar[output_range] -=
                           (dA_dp
                            + dB_dp * v_over_vth
@@ -4662,7 +4694,7 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
         add_wall_boundary_condition_to_Jacobian!(
             jacobian_matrix, phi, f, ppar, vth, upar, z, vperp, vpa, vperp_spectral,
             vpa_spectral, vpa_advect, moments,
-            num_diss_params.electron.vpa_dissipation_coefficient, me, ir;
+            num_diss_params.electron.vpa_dissipation_coefficient, me, ir, include;
             ppar_offset=pdf_size)
     end
 
@@ -4705,7 +4737,6 @@ energy equation.
 
     upar_ion = moments.ion.upar[iz,ir,1]
 
-    pdf_size = z.n * vperp.n * vpa.n
     v_size = vperp.n * vpa.n
 
     # Initialise jacobian_matrix to the identity
@@ -4747,6 +4778,14 @@ energy equation.
     if ion_dt !== nothing
         add_ion_dt_forcing_of_electron_ppar_to_v_only_Jacobian!(
             jacobian_matrix, z, dt, ion_dt, ir, iz)
+    end
+
+    if t_params.include_wall_bc_in_preconditioner
+        add_wall_boundary_condition_to_Jacobian!(
+            jacobian_matrix, phi, f, ppar, vth, upar, z, vperp, vpa, vperp_spectral,
+            vpa_spectral, vpa_advect, moments,
+            num_diss_params.electron.vpa_dissipation_coefficient, me, ir, :implicit_v, iz;
+            ppar_offset=v_size)
     end
 
     return nothing
