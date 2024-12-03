@@ -431,6 +431,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         cap_factor_ion_dt = mk_float(t_input["cap_factor_ion_dt"])
         max_pseudotimesteps = t_input["max_pseudotimesteps"]
         max_pseudotime = t_input["max_pseudotime"]
+        include_wall_bc_in_preconditioner = t_input["include_wall_bc_in_preconditioner"]
         electron_t_params = nothing
     elseif electron === false
         debug_io = nothing
@@ -441,6 +442,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         cap_factor_ion_dt = Inf
         max_pseudotimesteps = -1
         max_pseudotime = Inf
+        include_wall_bc_in_preconditioner = false
         electron_t_params = nothing
     else
         debug_io = nothing
@@ -476,6 +478,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         cap_factor_ion_dt = Inf
         max_pseudotimesteps = -1
         max_pseudotime = Inf
+        include_wall_bc_in_preconditioner = false
         electron_t_params = electron
     end
     return time_info(n_variables, t_input["nstep"], end_time, t, dt, previous_dt,
@@ -503,9 +506,9 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      mk_float(t_input["constraint_forcing_rate"]),
                      decrease_dt_iteration_threshold, increase_dt_iteration_threshold,
                      mk_float(cap_factor_ion_dt), mk_int(max_pseudotimesteps),
-                     mk_float(max_pseudotime), t_input["write_after_fixed_step_count"],
-                     error_sum_zero, t_input["split_operators"],
-                     t_input["steady_state_residual"],
+                     mk_float(max_pseudotime), include_wall_bc_in_preconditioner,
+                     t_input["write_after_fixed_step_count"], error_sum_zero,
+                     t_input["split_operators"], t_input["steady_state_residual"],
                      mk_float(t_input["converged_residual_value"]),
                      manufactured_solns_input.use_for_advance, t_input["stopfile_name"],
                      debug_io, electron_t_params)

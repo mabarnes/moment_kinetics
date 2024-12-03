@@ -4658,10 +4658,12 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
         add_ion_dt_forcing_of_electron_ppar_to_Jacobian!(
             jacobian_matrix, z, dt, ion_dt, ir, include; ppar_offset=pdf_size)
     end
-    add_wall_boundary_condition_to_Jacobian!(
-        jacobian_matrix, phi, f, ppar, vth, upar, z, vperp, vpa, vperp_spectral,
-        vpa_spectral, vpa_advect, moments,
-        num_diss_params.electron.vpa_dissipation_coefficient, me, ir)
+    if t_params.include_wall_bc_in_preconditioner
+        add_wall_boundary_condition_to_Jacobian!(
+            jacobian_matrix, phi, f, ppar, vth, upar, z, vperp, vpa, vperp_spectral,
+            vpa_spectral, vpa_advect, moments,
+            num_diss_params.electron.vpa_dissipation_coefficient, me, ir)
+    end
 
     return nothing
 end
