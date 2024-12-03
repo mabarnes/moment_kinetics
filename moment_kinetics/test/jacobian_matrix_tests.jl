@@ -10,6 +10,7 @@ using moment_kinetics.array_allocation: allocate_shared_float
 using moment_kinetics.boundary_conditions: enforce_v_boundary_condition_local!,
                                            enforce_vperp_boundary_condition!
 using moment_kinetics.calculus: derivative!
+using moment_kinetics.communication
 using moment_kinetics.derivatives: derivative_z!, derivative_z_pdf_vpavperpz!
 using moment_kinetics.electron_fluid_equations: calculate_electron_qpar_from_pdf_no_r!,
                                                 electron_energy_equation_no_r!,
@@ -3534,6 +3535,11 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
 end
 
 function runtests()
+    if Sys.isapple() && "CI" ∈ keys(ENV) && global_size[] > 1
+        # These tests are too slow in the parallel tests job on macOS, so skip in that
+        # case.
+        return nothing
+    end
     # Create a temporary directory for test output
     test_output_directory = get_MPI_tempdir()
     test_input["output"]["base_directory"] = test_output_directory
