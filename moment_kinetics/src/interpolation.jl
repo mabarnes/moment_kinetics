@@ -454,6 +454,10 @@ function interpolate_symmetric!(result, newgrid, f, oldgrid, derivative::Val{1})
     if nold == 1
         # Interpolating 'polynomial' is just a constant
         result .= 0.0
+    elseif nold == 2
+        # Interpolating polynomial is linear, so result is a constant
+        # df/dx = f[1] / (oldgrid[1] - oldgrid[2]) + f[2] / (oldgrid[2] - oldgrid[1])
+        return (f[1] - f[2]) / (oldgrid[1] - oldgrid[2])
     else
         result .= 0.0
         for j ∈ 1:nold
