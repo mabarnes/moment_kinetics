@@ -3734,78 +3734,73 @@ function test_electron_wall_bc(test_input; atol=(7.0*epsilon)^2)
         add_wall_boundary_condition_to_Jacobian!(
             jacobian_matrix, phi, f, ppar, vth, upar, z, vperp, vpa, vperp_spectral,
             vpa_spectral, vpa_advect, moments,
-            num_diss_params.electron.vpa_dissipation_coefficient, me, ir;
+            num_diss_params.electron.vpa_dissipation_coefficient, me, ir, :all;
             ppar_offset=pdf_size)
 
-#        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
-#        # variables (vth, etc.).
-#
-#        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
-#
-#        @testset "ADI Jacobians - implicit z" begin
-#            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-#            begin_serial_region()
-#            @serial_region begin
-#                jacobian_matrix_ADI_check .= 0.0
-#                for row ∈ 1:total_size
-#                    # Initialise identity matrix
-#                    jacobian_matrix_ADI_check[row,row] = 1.0
-#                end
-#            end
-#
-#            # There is no 'implicit z' contribution for vpa advection
-#
-#            # Add 'explicit' contribution
-#            add_electron_vpa_advection_to_Jacobian!(
-#                jacobian_matrix_ADI_check, f, dens, upar, ppar, vth, third_moment,
-#                dpdf_dvpa, ddens_dz, dppar_dz, dthird_moment_dz, moments, me, z, vperp,
-#                vpa, z_spectral, vpa_spectral, vpa_advect, z_speed, scratch_dummy,
-#                external_source_settings, dt, ir, :explicit_v; ppar_offset=pdf_size)
-#
-#            begin_serial_region()
-#            @serial_region begin
-#                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
-#            end
-#        end
-#
-#        @testset "ADI Jacobians - implicit v" begin
-#            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-#            begin_serial_region()
-#            @serial_region begin
-#                jacobian_matrix_ADI_check .= 0.0
-#                for row ∈ 1:total_size
-#                    # Initialise identity matrix
-#                    jacobian_matrix_ADI_check[row,row] = 1.0
-#                end
-#            end
-#
-#            v_size = vperp.n * vpa.n
-#
-#            # Add 'implicit' contribution
-#            begin_z_region()
-#            @loop_z iz begin
-#                this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
-#                push!(this_slice, iz + pdf_size)
-#                @views add_electron_vpa_advection_to_v_only_Jacobian!(
-#                    jacobian_matrix_ADI_check[this_slice,this_slice], f[:,:,iz], dens[iz],
-#                    upar[iz], ppar[iz], vth[iz], third_moment[iz], dpdf_dvpa[:,:,iz],
-#                    ddens_dz[iz], dppar_dz[iz], dthird_moment_dz[iz], moments, me, z,
-#                    vperp, vpa, z_spectral, vpa_spectral, vpa_advect, z_speed,
-#                    scratch_dummy, external_source_settings, dt, ir, iz)
-#            end
-#
-#            # Add 'explicit' contribution
-#            add_electron_vpa_advection_to_Jacobian!(
-#                jacobian_matrix_ADI_check, f, dens, upar, ppar, vth, third_moment,
-#                dpdf_dvpa, ddens_dz, dppar_dz, dthird_moment_dz, moments, me, z, vperp,
-#                vpa, z_spectral, vpa_spectral, vpa_advect, z_speed, scratch_dummy,
-#                external_source_settings, dt, ir, :explicit_z; ppar_offset=pdf_size)
-#
-#            begin_serial_region()
-#            @serial_region begin
-#                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
-#            end
-#        end
+        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+        # variables (vth, etc.).
+
+        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+
+        @testset "ADI Jacobians - implicit z" begin
+            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+            begin_serial_region()
+            @serial_region begin
+                jacobian_matrix_ADI_check .= 0.0
+                for row ∈ 1:total_size
+                    # Initialise identity matrix
+                    jacobian_matrix_ADI_check[row,row] = 1.0
+                end
+            end
+
+            # There is no 'implicit z' contribution for wall bc
+
+            # Add 'explicit' contribution
+            add_wall_boundary_condition_to_Jacobian!(
+                jacobian_matrix, phi, f, ppar, vth, upar, z, vperp, vpa, vperp_spectral,
+                vpa_spectral, vpa_advect, moments,
+                num_diss_params.electron.vpa_dissipation_coefficient, me, ir, :explicit_v;
+                ppar_offset=pdf_size)
+
+            begin_serial_region()
+            @serial_region begin
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
+            end
+        end
+
+        @testset "ADI Jacobians - implicit v" begin
+            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+            begin_serial_region()
+            @serial_region begin
+                jacobian_matrix_ADI_check .= 0.0
+                for row ∈ 1:total_size
+                    # Initialise identity matrix
+                    jacobian_matrix_ADI_check[row,row] = 1.0
+                end
+            end
+
+            v_size = vperp.n * vpa.n
+
+            # Add 'implicit' contribution
+            begin_z_region()
+            @loop_z iz begin
+                this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
+                push!(this_slice, iz + pdf_size)
+                @views add_wall_boundary_condition_to_Jacobian!(
+                    jacobian_matrix_ADI_check[this_slice,this_slice], phi[iz], f[:,:,iz],
+                    ppar[iz], vth[iz], upar[iz], z, vperp, vpa, vperp_spectral,
+                    vpa_spectral, vpa_advect, moments,
+                    num_diss_params.electron.vpa_dissipation_coefficient, me, ir,
+                    :implicit_v, iz; ppar_offset=v_size)
+            end
+
+            # There is no 'explicit vpa' contribution for wall bc
+
+            begin_serial_region()
+            @serial_region begin
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
+            end
+        end
 
         function residual_func!(residual, this_f, this_p)
             begin_z_region()
