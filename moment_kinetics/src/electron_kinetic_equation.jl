@@ -1621,8 +1621,8 @@ global_rank[] == 0 && println("recalculating precon")
                 end
             end
 
-            new_lowerz_vcut_inds = r.scratch_shared
-            new_upperz_vcut_inds = r.scratch_shared2
+            new_lowerz_vcut_inds = r.scratch_shared_int
+            new_upperz_vcut_inds = r.scratch_shared_int2
             apply_electron_bc_and_constraints_no_r!(f_electron_new, phi, moments, z,
                                                     vperp, vpa, vperp_spectral,
                                                     vpa_spectral, vpa_advect,
@@ -1633,8 +1633,8 @@ global_rank[] == 0 && println("recalculating precon")
             # preconditioner because the response at the grid point before the cutoff is
             # sharp, so the preconditioner could be significantly wrong when it was
             # calculated using the wrong vcut_ind.
-            lower_vcut_changed = @view z.scratch_shared[1:1]
-            upper_vcut_changed = @view z.scratch_shared[2:2]
+            lower_vcut_changed = @view z.scratch_shared_int[1:1]
+            upper_vcut_changed = @view z.scratch_shared_int[2:2]
             @serial_region begin
                 if z.irank == 0
                     precon_lowerz_vcut_inds = nl_solver_params.precon_lowerz_vcut_inds
