@@ -3968,6 +3968,7 @@ function runtests()
         test_electron_implicit_constraint_forcing(test_input)
         test_electron_energy_equation(test_input)
         test_ion_dt_forcing_of_electron_ppar(test_input)
+        test_electron_wall_bc(test_input)
         test_electron_kinetic_equation(test_input)
     end
 
