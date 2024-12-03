@@ -64,6 +64,7 @@ using moment_kinetics.type_definitions: mk_float
 using moment_kinetics.velocity_moments: calculate_electron_moment_derivatives_no_r!,
                                         integrate_over_vspace
 
+using LinearAlgebra
 using StatsBase
 
 # Small parameter used to create perturbations to test Jacobian against
@@ -3446,36 +3447,7 @@ function test_electron_kinetic_equation(test_input; expected_rtol=(5.0e2*epsilon
                                                   vperp, vperp_spectral, vperp_adv,
                                                   vperp_diffusion, ir)
             end
-            if (z.bc == "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
-                # Boundary conditions on incoming part of distribution function. Note
-                # that as density, upar, ppar do not change in this implicit step,
-                # f_electron_newvar, f_old, and residual should all be zero at exactly
-                # the same set of grid points, so it is reasonable to zero-out
-                # `residual` to impose the boundary condition. We impose this after
-                # subtracting f_old in case rounding errors, etc. mean that at some
-                # point f_old had a different boundary condition cut-off index.
-                begin_vperp_vpa_region()
-                v_unnorm = vpa.scratch
-                zero = 1.0e-14
-                if z.irank == 0
-                    iz = 1
-                    v_unnorm .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], true, true)
-                    @loop_vperp_vpa ivperp ivpa begin
-                        if v_unnorm[ivpa] > -zero
-                            residual_f[ivpa,ivperp,iz] = 0.0
-                        end
-                    end
-                end
-                if z.irank == z.nrank - 1
-                    iz = z.n
-                    v_unnorm .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], true, true)
-                    @loop_vperp_vpa ivperp ivpa begin
-                        if v_unnorm[ivpa] < zero
-                            residual_f[ivpa,ivperp,iz] = 0.0
-                        end
-                    end
-                end
-            end
+            zero_z_boundary_condition_points(residual_f, z, vpa, moments, ir)
             return nothing
         end
 
@@ -3483,15 +3455,30 @@ function test_electron_kinetic_equation(test_input; expected_rtol=(5.0e2*epsilon
         original_residual_p = allocate_shared_float(size(ppar)...)
         perturbed_residual_f = allocate_shared_float(size(f)...)
         perturbed_residual_p = allocate_shared_float(size(ppar)...)
+        f_plus_delta_f = allocate_shared_float(size(f)...)
+        f_with_delta_p = allocate_shared_float(size(f)...)
+        begin_z_vperp_vpa_region()
+        @loop_z_vperp_vpa iz ivperp ivpa begin
+            f_plus_delta_f[ivpa,ivperp,iz] = f[ivpa,ivperp,iz] + delta_f[ivpa,ivperp,iz]
+            f_with_delta_p[ivpa,ivperp,iz] = f[ivpa,ivperp,iz]
+        end
+        p_plus_delta_p = allocate_shared_float(size(ppar)...)
+        begin_z_region()
+        @loop_z iz begin
+            p_plus_delta_p[iz] = ppar[iz] + delta_p[iz]
+        end
 
         @testset "δf only" begin
             residual_func!(original_residual_f, original_residual_p, f, ppar)
-            residual_func!(perturbed_residual_f, perturbed_residual_p, f.+delta_f, ppar)
+            residual_func!(perturbed_residual_f, perturbed_residual_p, f_plus_delta_f, ppar)
 
             begin_serial_region()
             @serial_region begin
                 delta_state = zeros(mk_float, total_size)
-                delta_state[1:pdf_size] .= vec(delta_f)
+                # Take this difference rather than using delta_f directly because we need
+                # the effect of the boundary condition having been applied to
+                # f_plus_delta_f.
+                delta_state[1:pdf_size] .= vec(f_plus_delta_f .- f)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
                 perturbed_with_Jacobian_f = vec(original_residual_f) .+ residual_update_with_Jacobian[1:pdf_size]
                 perturbed_with_Jacobian_p = vec(original_residual_p) .+ residual_update_with_Jacobian[pdf_size+1:end]
@@ -3509,11 +3496,15 @@ function test_electron_kinetic_equation(test_input; expected_rtol=(5.0e2*epsilon
 
         @testset "δp only" begin
             residual_func!(original_residual_f, original_residual_p, f, ppar)
-            residual_func!(perturbed_residual_f, perturbed_residual_p, f, ppar.+delta_p)
+            residual_func!(perturbed_residual_f, perturbed_residual_p, f_with_delta_p, p_plus_delta_p)
 
             begin_serial_region()
             @serial_region begin
                 delta_state = zeros(mk_float, total_size)
+                # Take this difference rather than using delta_f directly because we need
+                # the effect of the boundary condition having been applied to
+                # f_with_delta_p.
+                delta_state[1:pdf_size] .= vec(f_with_delta_p .- f)
                 delta_state[pdf_size+1:end] .= vec(delta_p)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
                 perturbed_with_Jacobian_f = vec(original_residual_f) .+ residual_update_with_Jacobian[1:pdf_size]
@@ -3532,12 +3523,15 @@ function test_electron_kinetic_equation(test_input; expected_rtol=(5.0e2*epsilon
 
         @testset "δf and δp" begin
             residual_func!(original_residual_f, original_residual_p, f, ppar)
-            residual_func!(perturbed_residual_f, perturbed_residual_p, f.+delta_f, ppar.+delta_p)
+            residual_func!(perturbed_residual_f, perturbed_residual_p, f_plus_delta_f, p_plus_delta_p)
 
             begin_serial_region()
             @serial_region begin
                 delta_state = zeros(mk_float, total_size)
-                delta_state[1:pdf_size] .= vec(delta_f)
+                # Take this difference rather than using delta_f directly because we need
+                # the effect of the boundary condition having been applied to
+                # f_plus_delta_f.
+                delta_state[1:pdf_size] .= vec(f_plus_delta_f .- f)
                 delta_state[pdf_size+1:end] .= vec(delta_p)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
                 perturbed_with_Jacobian_f = vec(original_residual_f) .+ residual_update_with_Jacobian[1:pdf_size]
@@ -3679,15 +3673,18 @@ function test_electron_wall_bc(test_input; atol=(7.0*epsilon)^2)
         end
         begin_z_vperp_vpa_region()
         @loop_z_vperp_vpa iz ivperp ivpa begin
-            if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
-                continue
-            end
-
             # Rows corresponding to pdf_electron
             row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa
 
-            # Initialise identity matrix in rows corresponding to points that are
-            # not set by the boundary condition.
+            # Initialise identity matrix.
+            jacobian_matrix[row,row] = 1.0
+        end
+        begin_z_region()
+        @loop_z iz begin
+            # Rows corresponding to electron_ppar
+            row = pdf_size + iz
+
+            # Initialise identity matrix.
             jacobian_matrix[row,row] = 1.0
         end
 
@@ -3816,7 +3813,9 @@ function test_electron_wall_bc(test_input; atol=(7.0*epsilon)^2)
                                                   vperp, vperp_spectral, vperp_adv,
                                                   vperp_diffusion, ir)
             end
-            if z.bc != "wall"
+            if z.bc == "wall"
+                zero_z_boundary_condition_points(residual, z, vpa, moments, ir)
+            else
                 error("Testing wall bc but z_bc != \"wall\".")
             end
 
@@ -3825,21 +3824,74 @@ function test_electron_wall_bc(test_input; atol=(7.0*epsilon)^2)
 
         original_residual = allocate_shared_float(size(f)...)
         perturbed_residual = allocate_shared_float(size(f)...)
+        f_plus_delta_f = allocate_shared_float(size(f)...)
+        f_with_delta_p = allocate_shared_float(size(f)...)
+        begin_z_vperp_vpa_region()
+        @loop_z_vperp_vpa iz ivperp ivpa begin
+            f_plus_delta_f[ivpa,ivperp,iz] = f[ivpa,ivperp,iz] + delta_f[ivpa,ivperp,iz]
+            f_with_delta_p[ivpa,ivperp,iz] = f[ivpa,ivperp,iz]
+        end
+        p_plus_delta_p = allocate_shared_float(size(ppar)...)
+        begin_z_region()
+        @loop_z iz begin
+            p_plus_delta_p[iz] = ppar[iz] + delta_p[iz]
+        end
 
         @testset "δf only" begin
-            residual_func!(original_residual, copy(f), copy(ppar))
-            residual_func!(perturbed_residual, f.+delta_f, copy(ppar))
+            residual_func!(original_residual, f, ppar)
+            residual_func!(perturbed_residual, f_plus_delta_f, ppar)
 
             begin_serial_region()
             @serial_region begin
                 delta_state = zeros(mk_float, total_size)
-                delta_state[1:pdf_size] .= vec(delta_f)
+                # Take this difference rather than using delta_f directly because we need
+                # the effect of the boundary condition having been applied to
+                # f_plus_delta_f.
+                delta_state[1:pdf_size] .= vec(f_plus_delta_f .- f)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
                 perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
                 # Check ppar did not get perturbed by the Jacobian
                 @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
                                            zeros(p_size); atol=1.0e-15)
+
+                # Check that something happened, to make sure that for example the
+                # residual function and Jacobian don't both just zero out the boundary
+                # points.
+                @test norm(vec(perturbed_residual) .- perturbed_with_Jacobian) > 1.0e-12
+
+                # If the boundary condition is correctly implemented in the Jacobian, then
+                # if f+delta_f obeys the boundary condition, then J*delta_state should
+                # give zeros in the boundary points.
+                @test elementwise_isapprox(perturbed_residual,
+                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n);
+                                           rtol=0.0, atol=atol)
+            end
+        end
+
+        @testset "δp only" begin
+            residual_func!(original_residual, f, ppar)
+            residual_func!(perturbed_residual, f_with_delta_p, p_plus_delta_p)
+
+            begin_serial_region()
+            @serial_region begin
+                delta_state = zeros(mk_float, total_size)
+                # Take this difference rather than using delta_f directly because we need
+                # the effect of the boundary condition having been applied to
+                # f_with_delta_p.
+                delta_state[1:pdf_size] .= vec(f_with_delta_p .- f)
+                delta_state[pdf_size+1:end] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_matrix * delta_state
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+
+                # Check ppar did not get perturbed by the Jacobian
+                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                                           vec(delta_p); atol=1.0e-15)
+
+                # Check that something happened, to make sure that for example the
+                # residual function and Jacobian don't both just zero out the boundary
+                # points.
+                @test norm(vec(perturbed_residual) .- perturbed_with_Jacobian) > 1.0e-12
 
                 # Use an absolute tolerance for this test because if we used a norm_factor
                 # like the other tests, it would be zero to machine precision at some
@@ -3850,49 +3902,29 @@ function test_electron_wall_bc(test_input; atol=(7.0*epsilon)^2)
             end
         end
 
-        @testset "δp only" begin
-            residual_func!(original_residual, copy(f), copy(ppar))
-            residual_func!(perturbed_residual, copy(f), ppar.+delta_p)
-
-            begin_serial_region()
-            @serial_region begin
-                delta_state = zeros(mk_float, total_size)
-                delta_state[pdf_size+1:end] .= vec(delta_p)
-                residual_update_with_Jacobian = jacobian_matrix * delta_state
-                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
-
-                # Check ppar did not get perturbed by the Jacobian
-                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                           zeros(p_size); atol=1.0e-15)
-
-                # The rtol is relatively high for this test. First, the accuracy of the
-                # response on the cut-off grid cell is not super-accurate - with just this
-                # limitation the test would pass with rtol=1.0e-3. There is extra
-                # inaccuracy due to the integral corrections applied as part of the
-                # boundary condition, that are not accounted for in the preconditioner -
-                # hopefully an accuracy of a few percent is good enough for a
-                # preconditioner.
-                @test elementwise_isapprox(perturbed_residual,
-                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n);
-                                           rtol=0.0, atol=atol)
-            end
-        end
-
         @testset "δf and δp" begin
-            residual_func!(original_residual, copy(f), copy(ppar))
-            residual_func!(perturbed_residual, f.+delta_f, ppar.+delta_p)
+            residual_func!(original_residual, f, ppar)
+            residual_func!(perturbed_residual, f_plus_delta_f, p_plus_delta_p)
 
             begin_serial_region()
             @serial_region begin
                 delta_state = zeros(mk_float, total_size)
-                delta_state[1:pdf_size] .= vec(delta_f)
+                # Take this difference rather than using delta_f directly because we need
+                # the effect of the boundary condition having been applied to
+                # f_plus_delta_f.
+                delta_state[1:pdf_size] .= vec(f_plus_delta_f .- f)
                 delta_state[pdf_size+1:end] .= vec(delta_p)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
                 perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
 
                 # Check ppar did not get perturbed by the Jacobian
                 @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                           zeros(p_size); atol=1.0e-15)
+                                           vec(delta_p); atol=1.0e-15)
+
+                # Check that something happened, to make sure that for example the
+                # residual function and Jacobian don't both just zero out the boundary
+                # points.
+                @test norm(vec(perturbed_residual) .- perturbed_with_Jacobian) > 1.0e-12
 
                 # Use an absolute tolerance for this test because if we used a norm_factor
                 # like the other tests, it would be zero to machine precision at some
