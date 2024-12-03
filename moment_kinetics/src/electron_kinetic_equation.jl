@@ -3095,7 +3095,7 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
 @timeit global_timer add_wall_boundary_condition_to_Jacobian!(
                          jacobian, phi, pdf, ppar, vthe, upar, z, vperp, vpa,
                          vperp_spectral, vpa_spectral, vpa_adv, moments, vpa_diffusion,
-                         me_over_mi, ir) = begin
+                         me_over_mi, ir; pdf_offset=0, ppar_offset=0) = begin
     if z.bc != "wall"
         return nothing
     end
@@ -3114,9 +3114,9 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             # Ignore constraints, as these are non-linear and also should be small
             # corrections which should not matter much for a preconditioner.
 
-            jac_range = (ivperp-1)*vpa.n+1 : ivperp*vpa.n
+            jac_range = pdf_offset+(ivperp-1)*vpa.n+1 : pdf_offset+ivperp*vpa.n
             jacobian_zbegin = @view jacobian[jac_range,jac_range]
-            jacobian_zbegin_ppar = @view jacobian[jac_range,pdf_size+1]
+            jacobian_zbegin_ppar = @view jacobian[jac_range,ppar_offset+1]
 
             vpa_unnorm, u_over_vt, vcut, minus_vcut_ind, sigma, sigma_ind, sigma_fraction,
                 element_with_zero, element_with_zero_boundary, last_point_near_zero,
@@ -3600,9 +3600,9 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             # Ignore constraints, as these are non-linear and also should be small
             # corrections which should not matter much for a preconditioner.
 
-            jac_range = pdf_size-vperp.n*vpa.n+(ivperp-1)*vpa.n+1 : pdf_size-vperp.n*vpa.n+ivperp*vpa.n
+            jac_range = pdf_offset+pdf_size-vperp.n*vpa.n+(ivperp-1)*vpa.n+1 : pdf_offset+pdf_size-vperp.n*vpa.n+ivperp*vpa.n
             jacobian_zend = @view jacobian[jac_range,jac_range]
-            jacobian_zend_ppar = @view jacobian[jac_range,pdf_size+z.n]
+            jacobian_zend_ppar = @view jacobian[jac_range,ppar_offset+z.n]
 
             vpa_unnorm, u_over_vt, vcut, plus_vcut_ind, sigma, sigma_ind, sigma_fraction,
                 element_with_zero, element_with_zero_boundary, first_point_near_zero,
@@ -4662,7 +4662,8 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
         add_wall_boundary_condition_to_Jacobian!(
             jacobian_matrix, phi, f, ppar, vth, upar, z, vperp, vpa, vperp_spectral,
             vpa_spectral, vpa_advect, moments,
-            num_diss_params.electron.vpa_dissipation_coefficient, me, ir)
+            num_diss_params.electron.vpa_dissipation_coefficient, me, ir;
+            ppar_offset=pdf_size)
     end
 
     return nothing

@@ -3734,7 +3734,8 @@ function test_electron_wall_bc(test_input; atol=(7.0*epsilon)^2)
         add_wall_boundary_condition_to_Jacobian!(
             jacobian_matrix, phi, f, ppar, vth, upar, z, vperp, vpa, vperp_spectral,
             vpa_spectral, vpa_advect, moments,
-            num_diss_params.electron.vpa_dissipation_coefficient, me, ir)
+            num_diss_params.electron.vpa_dissipation_coefficient, me, ir;
+            ppar_offset=pdf_size)
 
 #        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
 #        # variables (vth, etc.).
