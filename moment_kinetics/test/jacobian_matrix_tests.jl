@@ -189,6 +189,7 @@ test_input = OptionsDict("output" => OptionsDict("run_name" => "jacobian_matrix"
                                                                 "initialization_residual_value" => 2.5,
                                                                 "converged_residual_value" => 1.0e-2,
                                                                 "constraint_forcing_rate" => 2.321,
+                                                                "include_wall_bc_in_preconditioner" => true,
                                                                ),
                          "nonlinear_solver" => OptionsDict("nonlinear_max_iterations" => 100,
                                                            "rtol" => 1.0e-5,
