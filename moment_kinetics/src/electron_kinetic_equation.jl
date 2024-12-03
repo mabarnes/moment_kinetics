@@ -1112,7 +1112,7 @@ global_rank[] == 0 && println("recalculating precon")
                             A, f_electron_new[:,:,iz], electron_ppar_new[iz],
                             dpdf_dz[:,:,iz], dpdf_dvpa[:,:,iz], z_speed, moments,
                             zeroth_moment[iz], first_moment[iz], second_moment[iz],
-                            third_moment[iz], dthird_moment_dz[iz], collisions,
+                            third_moment[iz], dthird_moment_dz[iz], phi[iz], collisions,
                             composition, z, vperp, vpa, z_spectral, vperp_spectral,
                             vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                             external_source_settings, num_diss_params, t_params, ion_dt,
@@ -4702,14 +4702,12 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
 end
 
 """
-    fill_electron_kinetic_equation_v_only_Jacobian!(jacobian_matrix, f, ppar, moments,
-                                                    collisions, composition, z, vperp,
-                                                    vpa, z_spectral, vperp_specral,
-                                                    vpa_spectral, z_advect, vpa_advect,
-                                                    scratch_dummy,
-                                                    external_source_settings,
-                                                    num_diss_params, t_params, ion_dt, ir,
-                                                    iz, evolve_ppar, include=:all)
+    fill_electron_kinetic_equation_v_only_Jacobian!()
+        jacobian_matrix, f, ppar, dpdf_dz, dpdf_dvpa, z_speed, moments, zeroth_moment,
+        first_moment, second_moment, third_moment, dthird_moment_dz, phi, collisions,
+        composition, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
+        vpa_advect, scratch_dummy, external_source_settings, num_diss_params, t_params,
+        ion_dt, ir, iz, evolve_ppar)
 
 Fill a pre-allocated matrix with the Jacobian matrix for a velocity-space solve part of
 the ADI method for electron kinetic equation and (if `evolve_ppar=true`) the electron
@@ -4718,7 +4716,7 @@ energy equation.
 @timeit global_timer fill_electron_kinetic_equation_v_only_Jacobian!(
                          jacobian_matrix, f, ppar, dpdf_dz, dpdf_dvpa, z_speed, moments,
                          zeroth_moment, first_moment, second_moment, third_moment,
-                         dthird_moment_dz, collisions, composition, z, vperp, vpa,
+                         dthird_moment_dz, phi, collisions, composition, z, vperp, vpa,
                          z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
                          scratch_dummy, external_source_settings, num_diss_params,
                          t_params, ion_dt, ir, iz, evolve_ppar) = begin
