@@ -3091,6 +3091,11 @@ end
                                              vperp, vpa, vperp_spectral, vpa_spectral,
                                              vpa_adv, moments, vpa_diffusion, me_over_mi,
                                              ir)
+
+All the contributions that we add in this function have to be added with a -'ve sign so
+that they combine with the 1 on the diagonal of the preconditioner matrix to make rows
+corresponding to the boundary points which define constraint equations imposing the
+boundary condition on those entries of δg (when the right-hand-side is set to zero).
 """
 @timeit global_timer add_wall_boundary_condition_to_Jacobian!(
                          jacobian, phi, pdf, ppar, vthe, upar, z, vperp, vpa,
@@ -3145,10 +3150,13 @@ end
                        reversed_wpa_of_minus_vpa[vpa.n-last_nonzero_ind+1:vpa.n-last_point_near_zero],
                        vpa, vpa_spectral)
 
+            # Reverse the sign of the elements we just filled
+            jacobian_zbegin[sigma_ind:last_nonzero_ind,1:sigma_ind-1] .*= -1.0
+
             if plus_vcut_fraction > 0.5
-                jacobian_zbegin[last_nonzero_ind,:] .*= plus_vcut_fraction - 0.5
+                jacobian_zbegin[last_nonzero_ind,1:sigma_ind-1] .*= plus_vcut_fraction - 0.5
             else
-                jacobian_zbegin[last_nonzero_ind,:] .*= plus_vcut_fraction + 0.5
+                jacobian_zbegin[last_nonzero_ind,1:sigma_ind-1] .*= plus_vcut_fraction + 0.5
             end
 
             # Fill in elements giving response to changes in electron_ppar
@@ -3182,7 +3190,7 @@ end
             # The above call to interpolate_symmetric calculates dg/dv rather than dg/dw,
             # so need to multiply by an extra factor of vthe.
             #   δg(w|v>0) = -u/ppar * dg/dv(2*u/vth - w) * δppar
-            @. jacobian_zbegin_ppar[sigma_ind:last_point_near_zero] =
+            @. jacobian_zbegin_ppar[sigma_ind:last_point_near_zero] -=
                    -upar[1] / ppar[1] * dpdfdv_near_zero
 
             dpdfdw_far_from_zero = @view vpa.scratch[last_point_near_zero+1:last_nonzero_ind]
@@ -3193,7 +3201,7 @@ end
             # Note that because we calculated the derivative of the interpolating
             # function, and then reversed the results, we need to multiply the derivative
             # by -1.
-            @. jacobian_zbegin_ppar[last_point_near_zero+1:last_nonzero_ind] =
+            @. jacobian_zbegin_ppar[last_point_near_zero+1:last_nonzero_ind] -=
                    upar[1] / vthe[1] / ppar[1] * dpdfdw_far_from_zero
 
             # Whatever the variation due to interpolation is at the last nonzero grid
@@ -3228,7 +3236,7 @@ end
                                            pdf[:,ivperp,1], vpa, vpa_spectral)
 
             dplus_vcut_fraction_dp = -(vcut - upar[1]) / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind]) / 2.0 / ppar[1]
-            jacobian_zbegin_ppar[last_nonzero_ind] += interpolated_pdf_at_last_nonzero_ind[] * dplus_vcut_fraction_dp
+            jacobian_zbegin_ppar[last_nonzero_ind] -= interpolated_pdf_at_last_nonzero_ind[] * dplus_vcut_fraction_dp
 
             # Calculate some numerical integrals of dpdfdw that we will need later
             function get_part3_for_one_moment_lower(integral_pieces)
@@ -3244,7 +3252,7 @@ end
             # needed to get the new distribution function due to a change δp, which we can
             # now use to calculate the response of various integrals to the same change.
             # Note that jacobian_zbegin_ppar already contains `2.0*dsigma_dp`.
-            @. vpa.scratch = jacobian_zbegin_ppar * vpa.wgts / sqrt(π)
+            @. vpa.scratch = -jacobian_zbegin_ppar * vpa.wgts / sqrt(π)
             da3_dp = get_part3_for_one_moment_lower(vpa.scratch)
             @. vpa.scratch *= vpa_unnorm / vthe[1]
             db3_dp = get_part3_for_one_moment_lower(vpa.scratch)
@@ -3252,7 +3260,7 @@ end
             dc3_dp = get_part3_for_one_moment_lower(vpa.scratch)
             @. vpa.scratch *= vpa_unnorm / vthe[1]
             dd3_dp = get_part3_for_one_moment_lower(vpa.scratch)
-            @. vpa.scratch = jacobian_zbegin_ppar * vpa.wgts / sqrt(π) * integral_correction_sharpness * vpa_unnorm^2 / vthe[1]^2 / (1.0 + integral_correction_sharpness * vpa_unnorm^2 / vthe[1]^2)
+            @. vpa.scratch = -jacobian_zbegin_ppar * vpa.wgts / sqrt(π) * integral_correction_sharpness * vpa_unnorm^2 / vthe[1]^2 / (1.0 + integral_correction_sharpness * vpa_unnorm^2 / vthe[1]^2)
             vpa.scratch[sigma_ind-1:sigma_ind] .= 0.0
             dalpha_dp_interp = get_part3_for_one_moment_lower(vpa.scratch)
             @. vpa.scratch *= vpa_unnorm / vthe[1]
@@ -3555,7 +3563,7 @@ end
                                                * [A, B, C, D]
                                             )
 
-            @views @. jacobian_zbegin_ppar[output_range] +=
+            @views @. jacobian_zbegin_ppar[output_range] -=
                           (dA_dp
                            + dB_dp * v_over_vth
                            + dC_dp * v_over_vth^2
@@ -3567,7 +3575,7 @@ end
             # These contributions seem to make almost no difference, and could probably be
             # skipped.
             dv_over_vth_dp = -dsigma_dp
-            @views @. jacobian_zbegin_ppar[output_range] += (
+            @views @. jacobian_zbegin_ppar[output_range] -= (
                           (B * dv_over_vth_dp
                            + 2.0 * C * v_over_vth * dv_over_vth_dp
                            + 3.0 * D * v_over_vth^2 * dv_over_vth_dp) *
@@ -3629,10 +3637,13 @@ end
                        reversed_wpa_of_minus_vpa[vpa.n-first_point_near_zero+2:vpa.n-first_nonzero_ind+1],
                        vpa, vpa_spectral)
 
+            # Reverse the sign of the elements we just filled
+            jacobian_zend[first_nonzero_ind:sigma_ind,sigma_ind+1:end] .*= -1.0
+
             if minus_vcut_fraction < 0.5
-                jacobian_zend[first_nonzero_ind,:] .*= 0.5 - minus_vcut_fraction
+                jacobian_zend[first_nonzero_ind,sigma_ind+1:end] .*= 0.5 - minus_vcut_fraction
             else
-                jacobian_zend[first_nonzero_ind,:] .*= 1.5 - minus_vcut_fraction
+                jacobian_zend[first_nonzero_ind,sigma_ind+1:end] .*= 1.5 - minus_vcut_fraction
             end
 
             # Fill in elements giving response to changes in electron_ppar
@@ -3666,7 +3677,7 @@ end
             # The above call to interpolate_symmetric calculates dg/dv rather than dg/dw,
             # so need to multiply by an extra factor of vthe.
             #   δg(w|v<0) = -u/ppar * dg/dv(2*u/vth - w) * δppar
-            @. jacobian_zend_ppar[first_point_near_zero:sigma_ind] =
+            @. jacobian_zend_ppar[first_point_near_zero:sigma_ind] -=
                    -upar[end] / ppar[end] * dpdfdv_near_zero
 
             dpdfdw_far_from_zero = @view vpa.scratch[first_nonzero_ind:first_point_near_zero-1]
@@ -3677,7 +3688,7 @@ end
             # Note that because we calculated the derivative of the interpolating
             # function, and then reversed the results, we need to multiply the derivative
             # by -1.
-            @. jacobian_zend_ppar[first_nonzero_ind:first_point_near_zero-1] =
+            @. jacobian_zend_ppar[first_nonzero_ind:first_point_near_zero-1] -=
                    upar[end] / vthe[end] / ppar[end] * dpdfdw_far_from_zero
 
             # Whatever the variation due to interpolation is at the last nonzero grid
@@ -3715,7 +3726,7 @@ end
             dminus_vcut_fraction_dp = (vcut + upar[end]) / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1]) / 2.0 / ppar[end]
             # Note that pdf[first_nonzero_ind,ivperp,end] depends on -minus_vcut_fraction, so
             # need a -'ve sign in the following line.
-            jacobian_zend_ppar[first_nonzero_ind] += -interpolated_pdf_at_first_nonzero_ind[] * dminus_vcut_fraction_dp
+            jacobian_zend_ppar[first_nonzero_ind] -= -interpolated_pdf_at_first_nonzero_ind[] * dminus_vcut_fraction_dp
 
             # Calculate some numerical integrals of dpdfdw that we will need later
             function get_part3_for_one_moment_upper(integral_pieces)
@@ -3731,7 +3742,7 @@ end
             # to get the new distribution function due to a change δp, which we can now
             # use to calculate the response of various integrals to the same change.  Note
             # that jacobian_zend_ppar already contains `2.0*dsigma_dp`.
-            @. vpa.scratch = jacobian_zend_ppar * vpa.wgts / sqrt(π)
+            @. vpa.scratch = -jacobian_zend_ppar * vpa.wgts / sqrt(π)
             da3_dp = get_part3_for_one_moment_upper(vpa.scratch)
             @. vpa.scratch *= vpa_unnorm / vthe[end]
             db3_dp = get_part3_for_one_moment_upper(vpa.scratch)
@@ -3739,7 +3750,7 @@ end
             dc3_dp = get_part3_for_one_moment_upper(vpa.scratch)
             @. vpa.scratch *= vpa_unnorm / vthe[end]
             dd3_dp = get_part3_for_one_moment_upper(vpa.scratch)
-            @. vpa.scratch = jacobian_zend_ppar * vpa.wgts / sqrt(π) * integral_correction_sharpness * vpa_unnorm^2 / vthe[1]^2 / (1.0 + integral_correction_sharpness * vpa_unnorm^2 / vthe[end]^2)
+            @. vpa.scratch = -jacobian_zend_ppar * vpa.wgts / sqrt(π) * integral_correction_sharpness * vpa_unnorm^2 / vthe[1]^2 / (1.0 + integral_correction_sharpness * vpa_unnorm^2 / vthe[end]^2)
             vpa.scratch[sigma_ind:sigma_ind+1] .= 0.0
             dalpha_dp_interp = get_part3_for_one_moment_upper(vpa.scratch)
             @. vpa.scratch *= vpa_unnorm / vthe[end]
@@ -4046,7 +4057,7 @@ end
 
             output_range = lower_cutoff_ind:sigma_ind-1
             v_over_vth = @views @. vpa.scratch[output_range] = vpa_unnorm[output_range] / vthe[end]
-            @views @. jacobian_zend_ppar[output_range] +=
+            @views @. jacobian_zend_ppar[output_range] -=
                           (dA_dp
                            + dB_dp * v_over_vth
                            + dC_dp * v_over_vth^2
@@ -4058,7 +4069,7 @@ end
             # These contributions seem to make almost no difference, and could probably be
             # skipped.
             dv_over_vth_dp = -dsigma_dp
-            @views @. jacobian_zend_ppar[output_range] += (
+            @views @. jacobian_zend_ppar[output_range] -= (
                           (B * dv_over_vth_dp
                            + 2.0 * C * v_over_vth * dv_over_vth_dp
                            + 3.0 * D * v_over_vth^2 * dv_over_vth_dp) *
