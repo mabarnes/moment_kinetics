@@ -3745,21 +3745,31 @@ function test_electron_wall_bc(test_input; atol=(7.0*epsilon)^2)
 
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            begin_serial_region()
-            @serial_region begin
-                jacobian_matrix_ADI_check .= 0.0
-                for row ∈ 1:total_size
-                    # Initialise identity matrix
-                    jacobian_matrix_ADI_check[row,row] = 1.0
-                end
+            begin_z_vperp_vpa_region()
+            @loop_z_vperp_vpa iz ivperp ivpa begin
+                # Rows corresponding to pdf_electron
+                row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa
+
+                # Initialise identity matrix.
+                jacobian_matrix_ADI_check[row,:] .= 0.0
+                jacobian_matrix_ADI_check[row,row] = 1.0
+            end
+            begin_z_region()
+            @loop_z iz begin
+                # Rows corresponding to electron_ppar
+                row = pdf_size + iz
+
+                # Initialise identity matrix.
+                jacobian_matrix_ADI_check[row,:] .= 0.0
+                jacobian_matrix_ADI_check[row,row] = 1.0
             end
 
             # There is no 'implicit z' contribution for wall bc
 
             # Add 'explicit' contribution
             add_wall_boundary_condition_to_Jacobian!(
-                jacobian_matrix, phi, f, ppar, vth, upar, z, vperp, vpa, vperp_spectral,
-                vpa_spectral, vpa_advect, moments,
+                jacobian_matrix_ADI_check, phi, f, ppar, vth, upar, z, vperp, vpa,
+                vperp_spectral, vpa_spectral, vpa_advect, moments,
                 num_diss_params.electron.vpa_dissipation_coefficient, me, ir, :explicit_v;
                 ppar_offset=pdf_size)
 
@@ -3771,13 +3781,23 @@ function test_electron_wall_bc(test_input; atol=(7.0*epsilon)^2)
 
         @testset "ADI Jacobians - implicit v" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            begin_serial_region()
-            @serial_region begin
-                jacobian_matrix_ADI_check .= 0.0
-                for row ∈ 1:total_size
-                    # Initialise identity matrix
-                    jacobian_matrix_ADI_check[row,row] = 1.0
-                end
+            begin_z_vperp_vpa_region()
+            @loop_z_vperp_vpa iz ivperp ivpa begin
+                # Rows corresponding to pdf_electron
+                row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa
+
+                # Initialise identity matrix.
+                jacobian_matrix_ADI_check[row,:] .= 0.0
+                jacobian_matrix_ADI_check[row,row] = 1.0
+            end
+            begin_z_region()
+            @loop_z iz begin
+                # Rows corresponding to electron_ppar
+                row = pdf_size + iz
+
+                # Initialise identity matrix.
+                jacobian_matrix_ADI_check[row,:] .= 0.0
+                jacobian_matrix_ADI_check[row,row] = 1.0
             end
 
             v_size = vperp.n * vpa.n
