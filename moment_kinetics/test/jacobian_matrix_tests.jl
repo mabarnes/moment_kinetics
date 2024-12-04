@@ -3922,7 +3922,6 @@ function test_electron_wall_bc(test_input; atol=(7.0*epsilon)^2)
                 # If the boundary condition is correctly implemented in the Jacobian, then
                 # if f+delta_f obeys the boundary condition, then J*delta_state should
                 # give zeros in the boundary points.
-                println("delta f resid ", extrema(perturbed_residual.-reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n)))
                 @test elementwise_isapprox(perturbed_residual,
                                            reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n);
                                            rtol=0.0, atol=atol)
