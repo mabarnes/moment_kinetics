@@ -304,10 +304,6 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
                        f
         end
 
-        # Zero out the boundary points in delta_f so that the preconditioner matrix can
-        # have 1's on the diagonal to make sure it is not singular.
-        zero_z_boundary_condition_points(delta_f, z, vpa, moments, ir)
-
         pdf_size = length(f)
         p_size = length(ppar)
         total_size = pdf_size + p_size
@@ -654,10 +650,6 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
                        reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
                        f
         end
-
-        # Zero out the boundary points in delta_f so that the preconditioner matrix can
-        # have 1's on the diagonal to make sure it is not singular.
-        zero_z_boundary_condition_points(delta_f, z, vpa, moments, ir)
 
         pdf_size = length(f)
         p_size = length(ppar)
@@ -1015,10 +1007,6 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
                        f
         end
 
-        # Zero out the boundary points in delta_f so that the preconditioner matrix can
-        # have 1's on the diagonal to make sure it is not singular.
-        zero_z_boundary_condition_points(delta_f, z, vpa, moments, ir)
-
         pdf_size = length(f)
         p_size = length(ppar)
         total_size = pdf_size + p_size
@@ -1337,10 +1325,6 @@ function test_electron_dissipation_term(test_input; rtol=(3.0e0*epsilon)^2)
                        f
         end
 
-        # Zero out the boundary points in delta_f so that the preconditioner matrix can
-        # have 1's on the diagonal to make sure it is not singular.
-        zero_z_boundary_condition_points(delta_f, z, vpa, moments, ir)
-
         pdf_size = length(f)
         p_size = length(ppar)
         total_size = pdf_size + p_size
@@ -1643,10 +1627,6 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
                        reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
                        f
         end
-
-        # Zero out the boundary points in delta_f so that the preconditioner matrix can
-        # have 1's on the diagonal to make sure it is not singular.
-        zero_z_boundary_condition_points(delta_f, z, vpa, moments, ir)
 
         pdf_size = length(f)
         p_size = length(ppar)
@@ -1977,10 +1957,6 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
                        reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
                        f
         end
-
-        # Zero out the boundary points in delta_f so that the preconditioner matrix can
-        # have 1's on the diagonal to make sure it is not singular.
-        zero_z_boundary_condition_points(delta_f, z, vpa, moments, ir)
 
         pdf_size = length(f)
         p_size = length(ppar)
@@ -2315,10 +2291,6 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(1.5e0*epsil
                        reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
                        f
         end
-
-        # Zero out the boundary points in delta_f so that the preconditioner matrix can
-        # have 1's on the diagonal to make sure it is not singular.
-        zero_z_boundary_condition_points(delta_f, z, vpa, moments, ir)
 
         pdf_size = length(f)
         p_size = length(ppar)
@@ -2665,10 +2637,6 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
                        f
         end
 
-        # Zero out the boundary points in delta_f so that the preconditioner matrix can
-        # have 1's on the diagonal to make sure it is not singular.
-        zero_z_boundary_condition_points(delta_f, z, vpa, moments, ir)
-
         pdf_size = length(f)
         p_size = length(ppar)
         total_size = pdf_size + p_size
@@ -2939,10 +2907,6 @@ function test_ion_dt_forcing_of_electron_ppar(test_input; rtol=(1.5e1*epsilon)^2
                        f
         end
 
-        # Zero out the boundary points in delta_f so that the preconditioner matrix can
-        # have 1's on the diagonal to make sure it is not singular.
-        zero_z_boundary_condition_points(delta_f, z, vpa, moments, ir)
-
         pdf_size = length(f)
         p_size = length(ppar)
         total_size = pdf_size + p_size
@@ -3209,10 +3173,6 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                        reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
                        f
         end
-
-        # Zero out the boundary points in delta_f so that the preconditioner matrix can
-        # have 1's on the diagonal to make sure it is not singular.
-        zero_z_boundary_condition_points(delta_f, z, vpa, moments, ir)
 
         pdf_size = length(f)
         p_size = length(ppar)
@@ -3688,10 +3648,6 @@ function test_electron_wall_bc(test_input; atol=(7.0*epsilon)^2)
                        reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
                        f
         end
-
-        # Zero out the boundary points in delta_f so that the preconditioner matrix can
-        # have 1's on the diagonal to make sure it is not singular.
-        zero_z_boundary_condition_points(delta_f, z, vpa, moments, ir)
 
         pdf_size = length(f)
         p_size = length(ppar)
