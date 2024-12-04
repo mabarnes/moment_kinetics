@@ -3745,7 +3745,7 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             dc3_dp = get_part3_for_one_moment_upper(vpa.scratch)
             @. vpa.scratch *= vpa_unnorm / vthe[end]
             dd3_dp = get_part3_for_one_moment_upper(vpa.scratch)
-            @. vpa.scratch = -jacobian_zend_ppar * vpa.wgts / sqrt(π) * integral_correction_sharpness * vpa_unnorm^2 / vthe[1]^2 / (1.0 + integral_correction_sharpness * vpa_unnorm^2 / vthe[end]^2)
+            @. vpa.scratch = -jacobian_zend_ppar * vpa.wgts / sqrt(π) * integral_correction_sharpness * vpa_unnorm^2 / vthe[end]^2 / (1.0 + integral_correction_sharpness * vpa_unnorm^2 / vthe[end]^2)
             vpa.scratch[sigma_ind:sigma_ind+1] .= 0.0
             dalpha_dp_interp = get_part3_for_one_moment_upper(vpa.scratch)
             @. vpa.scratch *= vpa_unnorm / vthe[end]
