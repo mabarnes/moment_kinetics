@@ -3387,10 +3387,10 @@ function test_electron_kinetic_equation(test_input; expected_rtol=(5.0e2*epsilon
                     jacobian_matrix_ADI_check[this_slice,this_slice], f[:,:,iz], ppar[iz],
                     dpdf_dz[:,:,iz], dpdf_dvpa[:,:,iz], z_speed, moments,
                     zeroth_moment[iz], first_moment[iz], second_moment[iz],
-                    third_moment[iz], dthird_moment_dz[iz], collisions, composition, z,
-                    vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
-                    vpa_advect, scratch_dummy, external_source_settings, num_diss_params,
-                    t_params.electron, ion_dt, ir, iz, true)
+                    third_moment[iz], dthird_moment_dz[iz], fields.phi[iz,ir], collisions,
+                    composition, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral,
+                    z_advect, vpa_advect, scratch_dummy, external_source_settings,
+                    num_diss_params, t_params.electron, ion_dt, ir, iz, true)
             end
 
             # Add 'explicit' contribution
