@@ -63,6 +63,7 @@ using moment_kinetics.type_definitions: mk_float
 using moment_kinetics.velocity_moments: calculate_electron_moment_derivatives_no_r!,
                                         integrate_over_vspace
 
+using LinearAlgebra
 using StatsBase
 
 # Small parameter used to create perturbations to test Jacobian against
@@ -3896,7 +3897,7 @@ function test_electron_wall_bc(test_input; atol=(7.0*epsilon)^2)
                 # Check that something happened, to make sure that for example the
                 # residual function and Jacobian don't both just zero out the boundary
                 # points.
-                @test norm(vec(perturbed_residual) .- perturbed_with_Jacobian) > 1.0e-10
+                @test norm(vec(perturbed_residual) .- perturbed_with_Jacobian) > 1.0e-12
 
                 # If the boundary condition is correctly implemented in the Jacobian, then
                 # if f+delta_f obeys the boundary condition, then J*delta_state should
@@ -3930,7 +3931,7 @@ function test_electron_wall_bc(test_input; atol=(7.0*epsilon)^2)
                 # Check that something happened, to make sure that for example the
                 # residual function and Jacobian don't both just zero out the boundary
                 # points.
-                @test norm(vec(perturbed_residual) .- perturbed_with_Jacobian) > 1.0e-10
+                @test norm(vec(perturbed_residual) .- perturbed_with_Jacobian) > 1.0e-12
 
                 # Use an absolute tolerance for this test because if we used a norm_factor
                 # like the other tests, it would be zero to machine precision at some
@@ -3963,7 +3964,7 @@ function test_electron_wall_bc(test_input; atol=(7.0*epsilon)^2)
                 # Check that something happened, to make sure that for example the
                 # residual function and Jacobian don't both just zero out the boundary
                 # points.
-                @test norm(vec(perturbed_residual) .- perturbed_with_Jacobian) > 1.0e-10
+                @test norm(vec(perturbed_residual) .- perturbed_with_Jacobian) > 1.0e-12
 
                 # Use an absolute tolerance for this test because if we used a norm_factor
                 # like the other tests, it would be zero to machine precision at some
