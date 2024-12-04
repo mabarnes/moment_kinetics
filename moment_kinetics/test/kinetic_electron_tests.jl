@@ -92,7 +92,14 @@ boltzmann_input = OptionsDict(
    )
 
 # Test use distributed-memory when possible
-boltzmann_input["z"]["nelement_local"] = boltzmann_input["z"]["nelement"] ÷ gcd(boltzmann_input["z"]["nelement"], global_size[])
+if global_size[] % 2 == 0
+    # Divide by 2 so that we use shared memory when running in parallel, and so test the
+    # ADI preconditioner.
+    procs_to_divide_by = global_size[] ÷ 2
+else
+    procs_to_divide_by = global_size[]
+end
+boltzmann_input["z"]["nelement_local"] = boltzmann_input["z"]["nelement"] ÷ gcd(boltzmann_input["z"]["nelement"], procs_to_divide_by)
 
 kinetic_input = deepcopy(boltzmann_input)
 kinetic_input["output"]["run_name"] = "kinetic_electron_test"
