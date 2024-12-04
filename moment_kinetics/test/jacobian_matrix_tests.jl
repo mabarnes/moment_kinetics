@@ -3156,11 +3156,11 @@ function test_ion_dt_forcing_of_electron_ppar(test_input; rtol=(1.5e1*epsilon)^2
     return nothing
 end
 
-function test_electron_kinetic_equation(test_input; expected_rtol=(5.0e2*epsilon)^2)
+function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
 
     # Looser rtol for "wall" bc because integral corrections not accounted for in wall bc
     # Jacobian (yet?).
-    @testset "electron_kinetic_equation bc=$bc" for (bc, rtol) ∈ (("constant", expected_rtol), ("wall", expected_rtol))
+    @testset "electron_kinetic_equation bc=$bc" for (bc, adi_tol) ∈ (("constant", 1.0e-15), ("wall", 1.0e-13))
         println("    - electron_kinetic_equation $bc")
         test_input = deepcopy(test_input)
         test_input["output"]["run_name"] *= "_electron_kinetic_equation_$bc"
@@ -3359,7 +3359,7 @@ function test_electron_kinetic_equation(test_input; expected_rtol=(5.0e2*epsilon
                 # Jacobian matrix functions without being too messed up by floating-point
                 # rounding errors. The result is that some entries in the Jacobian matrix
                 # here are O(1.0e5), so it is important to use `rtol` here.
-                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=1.0e-15, atol=1.0e-15)
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=adi_tol, atol=1.0e-15)
             end
         end
 
@@ -3419,7 +3419,7 @@ function test_electron_kinetic_equation(test_input; expected_rtol=(5.0e2*epsilon
                 # Jacobian matrix functions without being too messed up by floating-point
                 # rounding errors. The result is that some entries in the Jacobian matrix
                 # here are O(1.0e5), so it is important to use `rtol` here.
-                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=1.0e-13, atol=1.0e-13)
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=10.0*adi_tol, atol=1.0e-13)
             end
         end
 
