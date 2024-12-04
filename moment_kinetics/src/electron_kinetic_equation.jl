@@ -3122,15 +3122,13 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
         include_upper = (z.irank == z.nrank - 1) && iz == z.n
         zend = 1
         phi_lower = phi_upper = phi
-        pdf_lower = pdf_upper = @view pdf[:,:]
+        pdf_lower = pdf_upper = pdf
         ppar_lower = ppar_upper = ppar
         vthe_lower = vthe_upper = vthe
         upar_lower = upar_upper = upar
     else
         return nothing
     end
-
-    pdf_size = z.n * vperp.n * vpa.n
 
     if include_lower
         begin_vperp_region()
