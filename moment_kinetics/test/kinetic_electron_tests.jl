@@ -153,130 +153,148 @@ function run_test()
         run_moment_kinetics(this_boltzmann_input)
     end
 
-    for (this_kinetic_input, label, tol) ∈ ((deepcopy(kinetic_input), "", 1.0e-6),
-                                             (deepcopy(kinetic_input_adaptive_timestep), "adaptive timestep", 1.0e-4))
-        # Provide some progress info
-        println("    - testing kinetic electrons $label")
+    if ("nelement_local" ∈ keys(kinetic_input["z"])
+        && kinetic_input["z"]["nelement"] ÷ kinetic_input["z"]["nelement_local"] < global_size[]
+       )
+        # Using shared-memory parallelism, so should be using ADI preconditioner
+        adi_precon_iterations_values = (1,2)
+    else
+        adi_precon_iterations_values = -1
+    end
 
+    for (this_kinetic_input, label, tol) ∈ ((deepcopy(kinetic_input), "", 1.0e-6),
+                                             (deepcopy(kinetic_input_adaptive_timestep), ", adaptive timestep", 1.0e-4))
         this_kinetic_input["output"]["base_directory"] = test_output_directory
 
-        # Suppress console output while running.
-        quietoutput() do
-            restart_from_directory = joinpath(this_boltzmann_input["output"]["base_directory"], this_boltzmann_input["output"]["run_name"])
-            restart_from_file_pattern = this_boltzmann_input["output"]["run_name"] * ".dfns*.h5"
-            restart_from_file = glob(restart_from_file_pattern, restart_from_directory)[1]
-
-            # run kinetic electron simulation
-            run_moment_kinetics(this_kinetic_input; restart=restart_from_file)
-        end
-
-        if global_rank[] == 0
-            # Load and analyse output
-            #########################
-
-            path = joinpath(realpath(this_kinetic_input["output"]["base_directory"]), this_kinetic_input["output"]["run_name"])
-
-            # open the output file(s)
-            run_info = get_run_info_no_setup(path, dfns=true)
-
-            # load fields data
-            Ez = postproc_load_variable(run_info, "Ez")[:,1,:]
-            vthe = postproc_load_variable(run_info, "electron_thermal_speed")[:,1,:]
-            electron_advance_linear_iterations = postproc_load_variable(run_info, "electron_advance_linear_iterations")[end]
-
-            close_run_info(run_info)
-
-            # Regression test
-            # Benchmark data generated in serial on Linux with the LU preconditioner
-            expected_Ez = [-0.5990683230706185 -1.1053138725180998;
-                           -0.4944296396481284 -0.9819332128466166;
-                           -0.30889032954504736 -0.6745656961983237;
-                           -0.2064830747303776 -0.4459531272930669;
-                           -0.21232457328748663 -0.4253218487528007;
-                           -0.18233875912042674 -0.3596054334022437;
-                           -0.16711429522309232 -0.3021381799340685;
-                           -0.16920776495088916 -0.2784335484692499;
-                           -0.1629417555658927 -0.2612551389558109;
-                           -0.16619150334079993 -0.2574841927015592;
-                           -0.15918194883360942 -0.23740132549636406;
-                           -0.14034706409006803 -0.20534503972256973;
-                           -0.12602184032280567 -0.1827098539044343;
-                           -0.10928716440800472 -0.1582133200686042;
-                           -0.07053969674257217 -0.10145491369831482;
-                           -0.0249577746169536 -0.03585934915825971;
-                           -2.8327303308330514e-15 3.742211718942586e-14;
-                           0.024957774616960776 0.03585934915827381;
-                           0.07053969674257636 0.10145491369829167;
-                           0.10928716440799909 0.15821332006862954;
-                           0.1260218403227975 0.18270985390445083;
-                           0.1403470640900294 0.20534503972250218;
-                           0.1591819488336015 0.23740132549634094;
-                           0.16619150334082114 0.2574841927015898;
-                           0.16294175556587748 0.261255138955811;
-                           0.16920776495090983 0.2784335484692798;
-                           0.1671142952230893 0.3021381799340713;
-                           0.1823387591204167 0.3596054334022252;
-                           0.21232457328753865 0.4253218487528467;
-                           0.20648307473037922 0.44595312729305947;
-                           0.3088903295450278 0.6745656961983009;
-                           0.4944296396481271 0.9819332128466268;
-                           0.5990683230705801 1.1053138725180645]
-            expected_vthe = [22.654024448490784 22.494016350356883;
-                             23.744503682730446 23.61361063067715;
-                             25.26061134578617 25.173128418725682;
-                             26.177253875120066 26.122412383901523;
-                             26.510545637302872 26.47158368991228;
-                             26.798827552847246 26.77429043464489;
-                             27.202535498354287 27.2038739551587;
-                             27.506373594650846 27.529813468465488;
-                             27.631027625644876 27.664719606410365;
-                             27.750902611036295 27.793759280909274;
-                             27.935780521313532 27.992775960575692;
-                             28.089380398280714 28.157198480516957;
-                             28.15152314377127 28.223553488629253;
-                             28.211115085781678 28.2870195116558;
-                             28.28856778918977 28.369130039283018;
-                             28.330972960680672 28.41411592647979;
-                             28.33351348538364 28.416680586218863;
-                             28.330972960680675 28.41411592647976;
-                             28.288567789189763 28.369130039283064;
-                             28.211115085781678 28.287019511655785;
-                             28.15152314377127 28.223553488629236;
-                             28.089380398280724 28.157198480516957;
-                             27.93578052131354 27.992775960575713;
-                             27.750902611036295 27.79375928090935;
-                             27.63102762564488 27.664719606410383;
-                             27.506373594650853 27.529813468465495;
-                             27.202535498354287 27.2038739551587;
-                             26.79882755284725 26.774290434644872;
-                             26.510545637302886 26.471583689912283;
-                             26.177253875120083 26.122412383901523;
-                             25.26061134578619 25.173128418725696;
-                             23.744503682730446 23.613610630677236;
-                             22.65402444849082 22.494016350356937]
-
-            if expected_Ez == nothing
-                # Error: no expected input provided
-                println("data tested would be: Ez=", Ez)
-                @test false
+        for adi_precon_iterations ∈ adi_precon_iterations_values
+            if adi_precon_iterations < 0
+                # Provide some progress info
+                println("    - testing kinetic electrons $label")
             else
-                @test elementwise_isapprox(Ez, expected_Ez, rtol=0.0, atol=2.0*tol)
-            end
-            if expected_vthe == nothing
-                # Error: no expected input provided
-                println("data tested would be: vthe=", vthe)
-                @test false
-            else
-                @test elementwise_isapprox(vthe, expected_vthe, rtol=tol, atol=0.0)
+                this_kinetic_input["nonlinear_solver"]["adi_precon_iterations"] = adi_precon_iterations
+
+                # Provide some progress info
+                println("    - testing kinetic electrons $adi_precon_iterations ADI iterations$label")
             end
 
-            # Iteration counts are fairly inconsistent, but it's good to check that they at
-            # least don't unexpectedly increase by an order of magnitude.
-            # Expected iteration count is from a serial run on Linux.
-            expected_electron_advance_linear_iterations = 48716
-            @test electron_advance_linear_iterations < 2 * expected_electron_advance_linear_iterations
-            if !(electron_advance_linear_iterations < 2 * expected_electron_advance_linear_iterations)
-                println("electron_advance_linear_iterations=$electron_advance_linear_iterations was greater than twice the expected $expected_electron_advance_linear_iterations.")
+            # Suppress console output while running.
+            quietoutput() do
+                restart_from_directory = joinpath(this_boltzmann_input["output"]["base_directory"], this_boltzmann_input["output"]["run_name"])
+                restart_from_file_pattern = this_boltzmann_input["output"]["run_name"] * ".dfns*.h5"
+                restart_from_file = glob(restart_from_file_pattern, restart_from_directory)[1]
+
+                # run kinetic electron simulation
+                run_moment_kinetics(this_kinetic_input; restart=restart_from_file)
+            end
+
+            if global_rank[] == 0
+                # Load and analyse output
+                #########################
+
+                path = joinpath(realpath(this_kinetic_input["output"]["base_directory"]), this_kinetic_input["output"]["run_name"])
+
+                # open the output file(s)
+                run_info = get_run_info_no_setup(path, dfns=true)
+
+                # load fields data
+                Ez = postproc_load_variable(run_info, "Ez")[:,1,:]
+                vthe = postproc_load_variable(run_info, "electron_thermal_speed")[:,1,:]
+                electron_advance_linear_iterations = postproc_load_variable(run_info, "electron_advance_linear_iterations")[end]
+
+                close_run_info(run_info)
+
+                # Regression test
+                # Benchmark data generated in serial on Linux with the LU preconditioner
+                expected_Ez = [-0.5990683230706185 -1.1053138725180998;
+                               -0.4944296396481284 -0.9819332128466166;
+                               -0.30889032954504736 -0.6745656961983237;
+                               -0.2064830747303776 -0.4459531272930669;
+                               -0.21232457328748663 -0.4253218487528007;
+                               -0.18233875912042674 -0.3596054334022437;
+                               -0.16711429522309232 -0.3021381799340685;
+                               -0.16920776495088916 -0.2784335484692499;
+                               -0.1629417555658927 -0.2612551389558109;
+                               -0.16619150334079993 -0.2574841927015592;
+                               -0.15918194883360942 -0.23740132549636406;
+                               -0.14034706409006803 -0.20534503972256973;
+                               -0.12602184032280567 -0.1827098539044343;
+                               -0.10928716440800472 -0.1582133200686042;
+                               -0.07053969674257217 -0.10145491369831482;
+                               -0.0249577746169536 -0.03585934915825971;
+                               -2.8327303308330514e-15 3.742211718942586e-14;
+                               0.024957774616960776 0.03585934915827381;
+                               0.07053969674257636 0.10145491369829167;
+                               0.10928716440799909 0.15821332006862954;
+                               0.1260218403227975 0.18270985390445083;
+                               0.1403470640900294 0.20534503972250218;
+                               0.1591819488336015 0.23740132549634094;
+                               0.16619150334082114 0.2574841927015898;
+                               0.16294175556587748 0.261255138955811;
+                               0.16920776495090983 0.2784335484692798;
+                               0.1671142952230893 0.3021381799340713;
+                               0.1823387591204167 0.3596054334022252;
+                               0.21232457328753865 0.4253218487528467;
+                               0.20648307473037922 0.44595312729305947;
+                               0.3088903295450278 0.6745656961983009;
+                               0.4944296396481271 0.9819332128466268;
+                               0.5990683230705801 1.1053138725180645]
+                expected_vthe = [22.654024448490784 22.494016350356883;
+                                 23.744503682730446 23.61361063067715;
+                                 25.26061134578617 25.173128418725682;
+                                 26.177253875120066 26.122412383901523;
+                                 26.510545637302872 26.47158368991228;
+                                 26.798827552847246 26.77429043464489;
+                                 27.202535498354287 27.2038739551587;
+                                 27.506373594650846 27.529813468465488;
+                                 27.631027625644876 27.664719606410365;
+                                 27.750902611036295 27.793759280909274;
+                                 27.935780521313532 27.992775960575692;
+                                 28.089380398280714 28.157198480516957;
+                                 28.15152314377127 28.223553488629253;
+                                 28.211115085781678 28.2870195116558;
+                                 28.28856778918977 28.369130039283018;
+                                 28.330972960680672 28.41411592647979;
+                                 28.33351348538364 28.416680586218863;
+                                 28.330972960680675 28.41411592647976;
+                                 28.288567789189763 28.369130039283064;
+                                 28.211115085781678 28.287019511655785;
+                                 28.15152314377127 28.223553488629236;
+                                 28.089380398280724 28.157198480516957;
+                                 27.93578052131354 27.992775960575713;
+                                 27.750902611036295 27.79375928090935;
+                                 27.63102762564488 27.664719606410383;
+                                 27.506373594650853 27.529813468465495;
+                                 27.202535498354287 27.2038739551587;
+                                 26.79882755284725 26.774290434644872;
+                                 26.510545637302886 26.471583689912283;
+                                 26.177253875120083 26.122412383901523;
+                                 25.26061134578619 25.173128418725696;
+                                 23.744503682730446 23.613610630677236;
+                                 22.65402444849082 22.494016350356937]
+
+                if expected_Ez == nothing
+                    # Error: no expected input provided
+                    println("data tested would be: Ez=", Ez)
+                    @test false
+                else
+                    @test elementwise_isapprox(Ez, expected_Ez, rtol=0.0, atol=2.0*tol)
+                end
+                if expected_vthe == nothing
+                    # Error: no expected input provided
+                    println("data tested would be: vthe=", vthe)
+                    @test false
+                else
+                    @test elementwise_isapprox(vthe, expected_vthe, rtol=tol, atol=0.0)
+                end
+
+                # Iteration counts are fairly inconsistent, but it's good to check that they at
+                # least don't unexpectedly increase by an order of magnitude.
+                # Expected iteration count is from a serial run on Linux.
+                expected_electron_advance_linear_iterations = 48716
+                @test electron_advance_linear_iterations < 2 * expected_electron_advance_linear_iterations
+                if !(electron_advance_linear_iterations < 2 * expected_electron_advance_linear_iterations)
+                    println("electron_advance_linear_iterations=$electron_advance_linear_iterations was greater than twice the expected $expected_electron_advance_linear_iterations.")
+                end
             end
         end
     end
