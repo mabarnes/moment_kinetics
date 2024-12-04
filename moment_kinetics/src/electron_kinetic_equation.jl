@@ -1247,6 +1247,50 @@ global_rank[] == 0 && println("recalculating precon")
                     v_size = vperp.n * vpa.n
                     pdf_size = z.n * v_size
 
+                    # Use these views to communicate block-boundary points
+                    output_buffer_pdf_view = reshape(@view(this_output_buffer[1:pdf_size]), size(precon_f))
+                    output_buffer_ppar_view = @view(this_output_buffer[pdf_size+1:end])
+                    f_lower_endpoints = @view scratch_dummy.buffer_vpavperpr_1[:,:,ir]
+                    f_upper_endpoints = @view scratch_dummy.buffer_vpavperpr_2[:,:,ir]
+                    receive_buffer1 = @view scratch_dummy.buffer_vpavperpr_3[:,:,ir]
+                    receive_buffer2 = @view scratch_dummy.buffer_vpavperpr_4[:,:,ir]
+
+                    function adi_communicate_boundary_points()
+                        # Ensure values of precon_f and precon_ppar are consistent across
+                        # distributed-MPI block boundaries. For precon_f take the upwind
+                        # value, and for precon_ppar take the average.
+                        begin_vperp_vpa_region()
+                        @loop_vperp_vpa ivperp ivpa begin
+                            f_lower_endpoints[ivpa,ivperp] = output_buffer_pdf_view[ivpa,ivperp,1]
+                            f_upper_endpoints[ivpa,ivperp] = output_buffer_pdf_view[ivpa,ivperp,end]
+                        end
+                        # We upwind the z-derivatives in `electron_z_advection!()`, so would
+                        # expect that upwinding the results here in z would make sense.
+                        # However, upwinding here makes convergence much slower (~10x),
+                        # compared to picking the values from one side or other of the block
+                        # boundary, or taking the average of the values on either side.
+                        # Neither direction is special, so taking the average seems most
+                        # sensible (although in an intial test it does not seem to converge
+                        # faster than just picking one or the other).
+                        # Maybe this could indicate that it is more important to have a fully
+                        # self-consistent Jacobian inversion for the
+                        # `electron_vpa_advection()` part rather than taking half(ish) of the
+                        # values from one block and the other half(ish) from the other.
+                        reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(
+                            output_buffer_pdf_view, f_lower_endpoints, f_upper_endpoints, receive_buffer1,
+                            receive_buffer2, z)
+
+                        begin_serial_region()
+                        @serial_region begin
+                            buffer_1[] = output_buffer_ppar_view[1]
+                            buffer_2[] = output_buffer_ppar_view[end]
+                        end
+                        reconcile_element_boundaries_MPI!(
+                            output_buffer_ppar_view, buffer_1, buffer_2, buffer_3, buffer_4, z)
+
+                        return nothing
+                    end
+
                     begin_z_vperp_vpa_region()
                     @loop_z_vperp_vpa iz ivperp ivpa begin
                         row = (iz - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
@@ -1327,12 +1371,15 @@ global_rank[] == 0 && println("recalculating precon")
                     first_adi_v_solve!()
                     fill_intermediate_buffer!()
                     adi_z_solve!()
+                    adi_communicate_boundary_points()
+
                     for n ∈ 1:n_extra_iterations
                         precon_iterations[] += 1
                         fill_intermediate_buffer!()
                         adi_v_solve!()
                         fill_intermediate_buffer!()
                         adi_z_solve!()
+                        adi_communicate_boundary_points()
                     end
 
                     # Unpack preconditioner solution
@@ -1346,42 +1393,6 @@ global_rank[] == 0 && println("recalculating precon")
                         row = pdf_size + iz
                         precon_ppar[iz] = this_output_buffer[row]
                     end
-
-                    # Ensure values of precon_f and precon_ppar are consistent across
-                    # distributed-MPI block boundaries. For precon_f take the upwind
-                    # value, and for precon_ppar take the average.
-                    f_lower_endpoints = @view scratch_dummy.buffer_vpavperpr_1[:,:,ir]
-                    f_upper_endpoints = @view scratch_dummy.buffer_vpavperpr_2[:,:,ir]
-                    receive_buffer1 = @view scratch_dummy.buffer_vpavperpr_3[:,:,ir]
-                    receive_buffer2 = @view scratch_dummy.buffer_vpavperpr_4[:,:,ir]
-                    begin_vperp_vpa_region()
-                    @loop_vperp_vpa ivperp ivpa begin
-                        f_lower_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,1]
-                        f_upper_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,end]
-                    end
-                    # We upwind the z-derivatives in `electron_z_advection!()`, so would
-                    # expect that upwinding the results here in z would make sense.
-                    # However, upwinding here makes convergence much slower (~10x),
-                    # compared to picking the values from one side or other of the block
-                    # boundary, or taking the average of the values on either side.
-                    # Neither direction is special, so taking the average seems most
-                    # sensible (although in an intial test it does not seem to converge
-                    # faster than just picking one or the other).
-                    # Maybe this could indicate that it is more important to have a fully
-                    # self-consistent Jacobian inversion for the
-                    # `electron_vpa_advection()` part rather than taking half(ish) of the
-                    # values from one block and the other half(ish) from the other.
-                    reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(
-                        precon_f, f_lower_endpoints, f_upper_endpoints, receive_buffer1,
-                        receive_buffer2, z)
-
-                    begin_serial_region()
-                    @serial_region begin
-                        buffer_1[] = precon_ppar[1]
-                        buffer_2[] = precon_ppar[end]
-                    end
-                    reconcile_element_boundaries_MPI!(
-                        precon_ppar, buffer_1, buffer_2, buffer_3, buffer_4, z)
 
                     return nothing
                 end
