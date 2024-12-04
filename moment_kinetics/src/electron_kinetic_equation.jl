@@ -1236,11 +1236,6 @@ global_rank[] == 0 && println("recalculating precon")
                 @timeit_debug global_timer adi_precon!(x) = begin
                     precon_ppar, precon_f = x
 
-                    # Zero out the boundary points in the input to the preconditioner so
-                    # that the preconditioner matrix can have 1's on the diagonal to make
-                    # sure it is not singular.
-                    zero_z_boundary_condition_points(precon_f, z, vpa, moments, ir)
-
                     adi_info = nl_solver_params.preconditioners[ir]
                     precon_iterations = nl_solver_params.precon_iterations
                     this_input_buffer = adi_info.input_buffer
