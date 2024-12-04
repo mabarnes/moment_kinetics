@@ -3265,7 +3265,12 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             # Calculate some numerical integrals of dpdfdw that we will need later
             function get_part3_for_one_moment_lower(integral_pieces)
                 # Integral contribution from the cell containing sigma
-                integral_sigma_cell = (0.5 * integral_pieces[sigma_ind-1] + 0.5 * integral_pieces[sigma_ind])
+                # The contribution from integral_pieces[sigma_ind-1] should be dropped,
+                # because that point is on the input grid, and this correction is due to
+                # the changes in interpolated values on the output grid due to δp_e∥. The
+                # value of g_e at sigma_ind-1 isn't interpolated so does not change in
+                # this way.
+                integral_sigma_cell = 0.5 * integral_pieces[sigma_ind]
 
                 part3 = sum(@view integral_pieces[sigma_ind+1:plus_vcut_ind+1])
                 part3 += 0.5 * integral_pieces[sigma_ind] + (1.0 - sigma_fraction) * integral_sigma_cell
@@ -3756,7 +3761,12 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             # Calculate some numerical integrals of dpdfdw that we will need later
             function get_part3_for_one_moment_upper(integral_pieces)
                 # Integral contribution from the cell containing sigma
-                integral_sigma_cell = (0.5 * integral_pieces[sigma_ind] + 0.5 * integral_pieces[sigma_ind+1])
+                # The contribution from integral_pieces[sigma_ind+1] should be dropped,
+                # because that point is on the input grid, and this correction is due to
+                # the changes in interpolated values on the output grid due to δp_e∥. The
+                # value of g_e at sigma_ind+1 isn't interpolated so does not change in
+                # this way.
+                integral_sigma_cell = 0.5 * integral_pieces[sigma_ind]
 
                 part3 = sum(@view integral_pieces[minus_vcut_ind-1:sigma_ind-1])
                 part3 += 0.5 * integral_pieces[sigma_ind] + (1.0 - sigma_fraction) * integral_sigma_cell
