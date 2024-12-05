@@ -231,6 +231,9 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
             output_buffer = allocate_shared_float(pdf_plus_ppar_size)
             error_buffer = allocate_shared_float(pdf_plus_ppar_size)
 
+            precon_adv_fac_lower = allocate_shared_float(nvpa,nvperp)
+            precon_adv_fac_upper = allocate_shared_float(nvpa,nvperp)
+
             chunk_size = (pdf_plus_ppar_size + block_size[] - 1) ÷ block_size[]
             # Set up so root process has fewest points, as root may have other work to do.
             global_index_subrange = max(1, pdf_plus_ppar_size - (block_size[] - block_rank[]) * chunk_size + 1):(pdf_plus_ppar_size - (block_size[] - block_rank[] - 1) * chunk_size)
@@ -256,7 +259,9 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                     input_buffer=input_buffer, intermediate_buffer=intermediate_buffer,
                     output_buffer=output_buffer,
                     global_index_subrange=global_index_subrange,
-                    n_extra_iterations=n_extra_iterations)
+                    n_extra_iterations=n_extra_iterations,
+                    precon_adv_fac_lower=precon_adv_fac_lower,
+                    precon_adv_fac_upper=precon_adv_fac_upper)
         end
 
         preconditioners = fill(get_adi_precon_buffers(), reverse(outer_coord_sizes))

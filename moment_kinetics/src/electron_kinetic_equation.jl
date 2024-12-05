@@ -1043,10 +1043,14 @@ global_rank[] == 0 && println("recalculating precon")
                     z_speed = @view z_advect[1].speed[:,:,:,ir]
 
                     dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
+                    precon_adv_fac_lower = adi_info.precon_adv_fac_lower
+                    precon_adv_fac_upper = adi_info.precon_adv_fac_upper
                     begin_vperp_vpa_region()
                     update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
                     @loop_vperp_vpa ivperp ivpa begin
                         @views z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_speed[:,ivpa,ivperp]
+                        precon_adv_fac_lower[ivpa,ivperp] = z_advect[1].adv_fac[1,ivpa,ivperp,ir]
+                        precon_adv_fac_upper[ivpa,ivperp] = z_advect[1].adv_fac[end,ivpa,ivperp,ir]
                     end
                     #calculate the upwind derivative
                     @views derivative_z_pdf_vpavperpz!(dpdf_dz, f_electron_new,
@@ -1254,6 +1258,8 @@ global_rank[] == 0 && println("recalculating precon")
                     f_upper_endpoints = @view scratch_dummy.buffer_vpavperpr_2[:,:,ir]
                     receive_buffer1 = @view scratch_dummy.buffer_vpavperpr_3[:,:,ir]
                     receive_buffer2 = @view scratch_dummy.buffer_vpavperpr_4[:,:,ir]
+                    precon_adv_fac_lower = adi_info.precon_adv_fac_lower
+                    precon_adv_fac_upper = adi_info.precon_adv_fac_upper
 
                     function adi_communicate_boundary_points()
                         # Ensure values of precon_f and precon_ppar are consistent across
@@ -1264,21 +1270,17 @@ global_rank[] == 0 && println("recalculating precon")
                             f_lower_endpoints[ivpa,ivperp] = output_buffer_pdf_view[ivpa,ivperp,1]
                             f_upper_endpoints[ivpa,ivperp] = output_buffer_pdf_view[ivpa,ivperp,end]
                         end
-                        # We upwind the z-derivatives in `electron_z_advection!()`, so would
-                        # expect that upwinding the results here in z would make sense.
-                        # However, upwinding here makes convergence much slower (~10x),
-                        # compared to picking the values from one side or other of the block
-                        # boundary, or taking the average of the values on either side.
-                        # Neither direction is special, so taking the average seems most
-                        # sensible (although in an intial test it does not seem to converge
-                        # faster than just picking one or the other).
-                        # Maybe this could indicate that it is more important to have a fully
-                        # self-consistent Jacobian inversion for the
-                        # `electron_vpa_advection()` part rather than taking half(ish) of the
-                        # values from one block and the other half(ish) from the other.
+                        # We upwind the z-derivatives in `electron_z_advection!()`, so it
+                        # makes sense to upwind the results in z. This upwinding does not
+                        # work for the LU preconditioner due to the jump at v_∥=0
+                        # introduced by taking inconsistent solutions from the blocks on
+                        # either side of the boundary. In this ADI solver, we can mitigate
+                        # this problem by doing an extra adi_v_solve!()_that should be
+                        # able to smooth out any jump.
                         reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(
-                            output_buffer_pdf_view, f_lower_endpoints, f_upper_endpoints, receive_buffer1,
-                            receive_buffer2, z)
+                            output_buffer_pdf_view, precon_adv_fac_lower,
+                            precon_adv_fac_upper, f_lower_endpoints, f_upper_endpoints,
+                            receive_buffer1, receive_buffer2, z)
 
                         begin_serial_region()
                         @serial_region begin
@@ -1381,6 +1383,11 @@ global_rank[] == 0 && println("recalculating precon")
                         adi_z_solve!()
                         adi_communicate_boundary_points()
                     end
+
+                    # An extra v-solve is done in order to smooth out any jump at v_∥=0
+                    # introduced by the upwinded communication done in
+                    # `adi_communicate_boundary_points!()`.
+                    adi_v_solve!()
 
                     # Unpack preconditioner solution
                     begin_z_vperp_vpa_region()
