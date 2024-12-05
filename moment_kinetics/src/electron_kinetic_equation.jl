@@ -889,7 +889,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                 end
 
                 if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
-global_rank[] == 0 && println("recalculating precon")
+#global_rank[] == 0 && println("recalculating precon")
                     nl_solver_params.solves_since_precon_update[] = 0
                     nl_solver_params.precon_dt[] = t_params.dt[]
 
@@ -1019,7 +1019,7 @@ global_rank[] == 0 && println("recalculating precon")
                 end
 
                 if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
-global_rank[] == 0 && println("recalculating precon")
+#global_rank[] == 0 && println("recalculating precon")
                     nl_solver_params.solves_since_precon_update[] = 0
                     nl_solver_params.precon_dt[] = t_params.dt[]
 

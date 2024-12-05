@@ -24,7 +24,7 @@ To control the debug timers in `moment_kinetics` we define this function once, i
 
 To activate debug timers, edit this function so that it returns `true`.
 """
-timeit_debug_enabled() = false
+timeit_debug_enabled() = true
 
 """
 Global object used to collect timings of various parts of the code

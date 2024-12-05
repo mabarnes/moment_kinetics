@@ -3033,6 +3033,7 @@ end
     # success is set to false if an iteration failed to converge in an implicit solve
     success = ""
     for istage ∈ 1:n_rk_stages
+global_rank[] == 0 && println("ion step $istep.$istage, t=", t_params.t[], " dt=", t_params.dt[], " electron_dt=", t_params.electron === nothing ? nothing : t_params.electron.dt[])
         if t_params.rk_coefs_implicit !== nothing
             update_solution_vector!(scratch_implicit[istage], scratch[istage], moments,
                                     composition, vpa, vperp, z, r)
