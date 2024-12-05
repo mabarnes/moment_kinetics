@@ -3123,6 +3123,7 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
         vthe_upper = vthe[end]
         upar_lower = upar[1]
         upar_upper = upar[end]
+        shared_mem_parallel = true
     elseif include === :implicit_v
         include_lower = (z.irank == 0) && iz == 1
         include_upper = (z.irank == z.nrank - 1) && iz == z.n
@@ -3132,12 +3133,16 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
         ppar_lower = ppar_upper = ppar
         vthe_lower = vthe_upper = vthe
         upar_lower = upar_upper = upar
+
+        # When using :implicit_v, this function is called inside a loop that is already
+        # parallelised over z, so we cannot change the parallel region type.
+        shared_mem_parallel = false
     else
         return nothing
     end
 
     if include_lower
-        begin_vperp_region()
+        shared_mem_parallel && begin_vperp_region()
         @loop_vperp ivperp begin
             # Skip velocity space boundary points.
             if vperp.n > 1 && ivperp == vperp.n
@@ -3629,7 +3634,7 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
     end
 
     if include_upper
-        begin_vperp_region()
+        shared_mem_parallel && begin_vperp_region()
         @loop_vperp ivperp begin
             # Skip vperp boundary points.
             if vperp.n > 1 && ivperp == vperp.n
