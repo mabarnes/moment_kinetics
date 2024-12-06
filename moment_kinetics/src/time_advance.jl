@@ -425,6 +425,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         end
 
         implicit_electron_ppar = false
+        implicit_electron_advance = false
         electron_preconditioner_type = nothing
         decrease_dt_iteration_threshold = t_input["decrease_dt_iteration_threshold"]
         increase_dt_iteration_threshold = t_input["increase_dt_iteration_threshold"]
@@ -436,6 +437,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
     elseif electron === false
         debug_io = nothing
         implicit_electron_ppar = false
+        implicit_electron_advance = false
         electron_preconditioner_type = nothing
         decrease_dt_iteration_threshold = -1
         increase_dt_iteration_threshold = typemax(mk_int)
@@ -448,6 +450,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         debug_io = nothing
 
         implicit_electron_ppar = (t_input["implicit_electron_ppar"] !== false)
+        implicit_electron_advance = (t_input["implicit_electron_advance"] !== false)
         if implicit_electron_ppar
             if t_input["implicit_electron_ppar"] === true
                 if block_size[] == 1
@@ -469,6 +472,12 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                           * "preconditioner to use - one of $precon_keys.")
                 end
             end
+        elseif implicit_electron_advance
+            if t_input["implicit_electron_advance"] !== true
+                error("No options other than `true` supported yet for "
+                      * "implicit_electron_advance.")
+            end
+            electron_preconditioner_type = Val(:electron_lu)
         else
             electron_preconditioner_type = Val(:none)
         end
@@ -498,11 +507,10 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      mk_float(t_input["last_fail_proximity_factor"]),
                      mk_float(t_input["minimum_dt"]), mk_float(t_input["maximum_dt"]),
                      electron !== nothing && t_input["implicit_braginskii_conduction"],
-                     electron !== nothing && t_input["implicit_electron_advance"],
+                     implicit_electron_advance,
                      electron !== nothing && t_input["implicit_ion_advance"],
                      electron !== nothing && t_input["implicit_vpa_advection"],
-                     electron !== nothing && implicit_electron_ppar,
-                     electron_preconditioner_type,
+                     implicit_electron_ppar, electron_preconditioner_type,
                      mk_float(t_input["constraint_forcing_rate"]),
                      decrease_dt_iteration_threshold, increase_dt_iteration_threshold,
                      mk_float(cap_factor_ion_dt), mk_int(max_pseudotimesteps),
@@ -3578,15 +3586,20 @@ end
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
     if t_params.implicit_electron_advance
-        success = implicit_electron_advance!(fvec_out, fvec_in, pdf, scratch_electron,
-                                             moments, fields, collisions, composition,
-                                             geometry, external_source_settings,
-                                             num_diss_params, r, z, vperp, vpa,
-                                             r_spectral, z_spectral, vperp_spectral,
-                                             vpa_spectral, electron_z_advect,
-                                             electron_vpa_advect, gyroavs, scratch_dummy,
-                                             t_params.electron, t_params.dt[],
-                                             nl_solver_params.electron_advance)
+        electron_success = implicit_electron_advance!(fvec_out, fvec_in, pdf,
+                                                      scratch_electron, moments, fields,
+                                                      collisions, composition, geometry,
+                                                      external_source_settings,
+                                                      num_diss_params, r, z, vperp, vpa,
+                                                      r_spectral, z_spectral,
+                                                      vperp_spectral, vpa_spectral,
+                                                      electron_z_advect,
+                                                      electron_vpa_advect, gyroavs,
+                                                      scratch_dummy, t_params.electron,
+                                                      dt,
+                                                      nl_solver_params.electron_advance)
+
+        success = (electron_success == "")
     elseif t_params.implicit_electron_ppar
         max_electron_pdf_iterations = t_params.electron.max_pseudotimesteps
         max_electron_sim_time = t_params.electron.max_pseudotime
