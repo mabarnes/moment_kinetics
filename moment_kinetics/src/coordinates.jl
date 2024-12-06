@@ -381,9 +381,9 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     end
 
     coord = coordinate(coord_input.name, n_global, n_local, coord_input.ngrid,
-        coord_input.nelement, coord_input.nelement_local, nrank, irank, coord_input.L,
-        grid, cell_width, igrid, ielement, imin, imax, igrid_full,
-        coord_input.discretization, coord_input.finite_difference_option,
+        coord_input.nelement, coord_input.nelement_local, nrank, irank,
+        mk_float(coord_input.L), grid, cell_width, igrid, ielement, imin, imax,
+        igrid_full, coord_input.discretization, coord_input.finite_difference_option,
         coord_input.cheb_option, coord_input.bc, coord_input.boundary_parameters, wgts,
         uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
         copy(scratch), copy(scratch), copy(scratch), copy(scratch), copy(scratch),

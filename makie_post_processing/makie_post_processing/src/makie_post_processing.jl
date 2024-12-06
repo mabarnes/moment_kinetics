@@ -8079,8 +8079,10 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                     for p ∈ nl_prefixes
                         nonlinear_iterations = get_variable(ri, "$(p)_nonlinear_iterations_per_solve")
                         linear_iterations = get_variable(ri, "$(p)_linear_iterations_per_nonlinear_iteration")
+                        precon_iterations = get_variable(ri, "$(p)_precon_iterations_per_linear_iteration")
                         plot_1d(time, nonlinear_iterations, label=prefix * " " * p * " NL per solve", ax=ax)
                         plot_1d(time, linear_iterations, label=prefix * " " * p * " L per NL", ax=ax)
+                        plot_1d(time, precon_iterations, label=prefix * " " * p * " P per L", ax=ax)
                     end
                 end
             end

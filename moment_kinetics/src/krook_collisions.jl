@@ -432,10 +432,11 @@ end
 
 function add_electron_krook_collisions_to_Jacobian!(jacobian_matrix, f, dens, upar, ppar,
                                                     vth, upar_ion, collisions, z, vperp,
-                                                    vpa, z_speed, dt, ir; f_offset=0,
-                                                    ppar_offset)
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2)
-    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n
+                                                    vpa, z_speed, dt, ir, include=:all;
+                                                    f_offset=0, ppar_offset)
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
+    @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
     if collisions.krook.nuee0 ≤ 0.0 && collisions.krook.nuei0 ≤ 0.0
         return nothing
@@ -457,25 +458,98 @@ function add_electron_krook_collisions_to_Jacobian!(jacobian_matrix, f, dens, up
         # Contribution from electron_krook_collisions!()
         nu_ee = get_collision_frequency_ee(collisions, dens[iz], vth[iz])
         nu_ei = get_collision_frequency_ei(collisions, dens[iz], vth[iz])
+        if include === :all
+            jacobian_matrix[row,row] += dt * (nu_ee + nu_ei)
+        end
+
+        if include ∈ (:all, :explicit_v)
+            fM_i = exp(-(vpa.grid[ivpa] + (upar_ion[iz] - upar[iz])/vth[iz])^2 - vperp.grid[ivperp]^2)
+            #   d(f_M(u_i)[irowz])/d(ppar[icolz])
+            #       = -2*(vpa.grid+(upar_ion-upar)/vth)*(upar_ion-upar)*(-1/2/vth/ppar)*f_M(u_i) * delta(irow,icolz)
+            #       = (vpa.grid+(upar_ion-upar)/vth)*(upar_ion-upar)/vth/ppar*f_M(u_i) * delta(irow,icolz)
+            jacobian_matrix[row,ppar_offset+iz] +=
+                -dt * nu_ei * (vpa.grid[ivpa]+(upar_ion[iz]-upar[iz])/vth[iz])*(upar_ion[iz]-upar[iz])/vth[iz]/ppar[iz]*fM_i
+
+            if using_reference_parameters
+                # Both collision frequencies are proportional to n/vth^3=n^(5/2)*(me/2/p)^3/2,
+                # so
+                #   d(nu[irowz])/d(ppar[icolz]) = -3/2*nu/ppar * delta(irowz,icolz)
+                #   d(-(vpa.grid+(upar_ion-upar)/vth)^2[irowz])/d(ppar[icoliz]
+                #       = -(vpa.grid+(upar_ion-upar)/vth)*(upar_ion-upar)/vth/ppar * delta(irow,icolz)
+                jacobian_matrix[row,ppar_offset+iz] +=
+                    -dt * 1.5 / ppar[iz] *
+                          (nu_ee * (f[ivpa,ivperp,iz] - exp(-vpa.grid[ivpa]^2 - vperp.grid[ivperp]^2))
+                           + nu_ei * (f[ivpa,ivperp,iz] - fM_i))
+            end
+        end
+    end
+
+    return nothing
+end
+
+function add_electron_krook_collisions_to_z_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, upar_ion, collisions, z, vperp, vpa,
+        z_speed, dt, ir, ivperp, ivpa)
+
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
+
+    if collisions.krook.nuee0 ≤ 0.0 && collisions.krook.nuei0 ≤ 0.0
+        return nothing
+    end
+
+    @loop_z iz begin
+        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
+            continue
+        end
+
+        # Rows corresponding to pdf_electron
+        row = iz
+
+        # Contribution from electron_krook_collisions!()
+        nu_ee = get_collision_frequency_ee(collisions, dens[iz], vth[iz])
+        nu_ei = get_collision_frequency_ei(collisions, dens[iz], vth[iz])
+        jacobian_matrix[row,row] += dt * (nu_ee + nu_ei)
+    end
+
+    return nothing
+end
+
+function add_electron_krook_collisions_to_v_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, upar_ion, collisions, z, vperp, vpa,
+        z_speed, dt, ir, iz)
+
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
+
+    if collisions.krook.nuee0 ≤ 0.0 && collisions.krook.nuei0 ≤ 0.0
+        return nothing
+    end
+
+    using_reference_parameters = (collisions.krook.frequency_option == "reference_parameters")
+
+    @loop_vperp_vpa ivperp ivpa begin
+        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
+            continue
+        end
+
+        # Rows corresponding to pdf_electron
+        row = (ivperp - 1) * vpa.n + ivpa
+
+        # Contribution from electron_krook_collisions!()
+        nu_ee = get_collision_frequency_ee(collisions, dens, vth)
+        nu_ei = get_collision_frequency_ei(collisions, dens, vth)
         jacobian_matrix[row,row] += dt * (nu_ee + nu_ei)
 
-        fM_i = exp(-(vpa.grid[ivpa] + (upar_ion[iz] - upar[iz])/vth[iz])^2 - vperp.grid[ivperp]^2)
-        #   d(f_M(u_i)[irowz])/d(ppar[icolz])
-        #       = -2*(vpa.grid+(upar_ion-upar)/vth)*(upar_ion-upar)*(-1/2/vth/ppar)*f_M(u_i) * delta(irow,icolz)
-        #       = (vpa.grid+(upar_ion-upar)/vth)*(upar_ion-upar)/vth/ppar*f_M(u_i) * delta(irow,icolz)
-        jacobian_matrix[row,ppar_offset+iz] +=
-            -dt * nu_ei * (vpa.grid[ivpa]+(upar_ion[iz]-upar[iz])/vth[iz])*(upar_ion[iz]-upar[iz])/vth[iz]/ppar[iz]*fM_i
+        fM_i = exp(-(vpa.grid[ivpa] + (upar_ion - upar)/vth)^2 - vperp.grid[ivperp]^2)
+        jacobian_matrix[row,end] +=
+            -dt * nu_ei * (vpa.grid[ivpa]+(upar_ion-upar)/vth)*(upar_ion-upar)/vth/ppar*fM_i
 
         if using_reference_parameters
-            # Both collision frequencies are proportional to n/vth^3=n^(5/2)*(me/2/p)^3/2,
-            # so
-            #   d(nu[irowz])/d(ppar[icolz]) = -3/2*nu/ppar * delta(irowz,icolz)
-            #   d(-(vpa.grid+(upar_ion-upar)/vth)^2[irowz])/d(ppar[icoliz]
-            #       = -(vpa.grid+(upar_ion-upar)/vth)*(upar_ion-upar)/vth/ppar * delta(irow,icolz)
-            jacobian_matrix[row,ppar_offset+iz] +=
-                -dt * 1.5 / ppar[iz] *
-                      (nu_ee * (f[ivpa,ivperp,iz] - exp(-vpa.grid[ivpa]^2 - vperp.grid[ivperp]^2))
-                       + nu_ei * (f[ivpa,ivperp,iz] - fM_i))
+            jacobian_matrix[row,end] +=
+                -dt * 1.5 / ppar *
+                      (nu_ee * (f[ivpa,ivperp] - exp(-vpa.grid[ivpa]^2 - vperp.grid[ivperp]^2))
+                       + nu_ei * (f[ivpa,ivperp] - fM_i))
         end
     end
 
