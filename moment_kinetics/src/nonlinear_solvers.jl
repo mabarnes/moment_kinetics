@@ -393,17 +393,21 @@ is not necessary to have a very tight `linear_rtol` for the GMRES solve.
 @timeit global_timer newton_solve!(
                          x, residual_func!, residual, delta_x, rhs_delta, v, w,
                          nl_solver_params; left_preconditioner=nothing,
-                         right_preconditioner=nothing, coords) = begin
+                         right_preconditioner=nothing, recalculate_preconditioner=nothing,
+                         coords) = begin
     # This wrapper function constructs the `solver_type` from coords, so that the body of
     # the inner `newton_solve!()` can be fully type-stable
     solver_type = Val(Symbol((c for c ∈ keys(coords))...))
     return newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
                          nl_solver_params, solver_type; left_preconditioner=left_preconditioner,
-                         right_preconditioner=right_preconditioner, coords=coords)
+                         right_preconditioner=right_preconditioner,
+                         recalculate_preconditioner=recalculate_preconditioner,
+                         coords=coords)
 end
 function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
                        nl_solver_params, solver_type::Val; left_preconditioner=nothing,
-                       right_preconditioner=nothing, coords)
+                       right_preconditioner=nothing, recalculate_preconditioner=nothing,
+                       coords)
 
     rtol = nl_solver_params.rtol
     atol = nl_solver_params.atol
@@ -511,6 +515,12 @@ old_precon_iterations = nl_solver_params.precon_iterations[]
         end
         parallel_map(solver_type, (w) -> w, x, w)
         previous_residual_norm = residual_norm
+
+        if recalculate_preconditioner !== nothing && counter % nl_solver_params.preconditioner_update_interval == 0
+            # Have taken a large number of Newton iterations already - convergence must be
+            # slow, so try updating the preconditioner.
+            recalculate_preconditioner()
+        end
 
         #println("Newton residual ", residual_norm, " ", linear_its, " $rtol $atol")
 

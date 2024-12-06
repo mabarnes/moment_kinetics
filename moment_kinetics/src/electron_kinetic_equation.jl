@@ -1880,16 +1880,12 @@ to allow the outer r-loop to be parallelised.
 
     newton_success = false
     for ir ∈ 1:r.n
-        if nl_solver_params.preconditioner_type === Val(:electron_lu)
+        f_electron = @view pdf_electron_out[:,:,:,ir]
+        ppar = @view electron_ppar_out[:,ir]
+        phi = @view fields.phi[:,ir]
 
-            if ion_dt > 1.5 * nl_solver_params.precon_dt[] ||
-                    ion_dt < 2.0/3.0 * nl_solver_params.precon_dt[]
-
-                # dt has changed significantly, so update the preconditioner
-                nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
-            end
-
-            if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
+        function recalculate_preconditioner!()
+            if nl_solver_params.preconditioner_type === Val(:electron_lu)
 global_rank[] == 0 && println("recalculating precon")
                 nl_solver_params.solves_since_precon_update[] = 0
                 nl_solver_params.precon_dt[] = ion_dt
@@ -1932,6 +1928,21 @@ global_rank[] == 0 && println("recalculating precon")
                     nl_solver_params.preconditioners[ir] =
                         (orig_lu, precon_matrix, input_buffer, output_buffer)
                 end
+
+                return nothing
+            end
+        end
+
+        if nl_solver_params.preconditioner_type === Val(:electron_lu)
+            if ion_dt > 1.5 * nl_solver_params.precon_dt[] ||
+                    ion_dt < 2.0/3.0 * nl_solver_params.precon_dt[]
+
+                # dt has changed significantly, so update the preconditioner
+                nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
+            end
+
+            if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
+                recalculate_preconditioner!()
             end
 
             @timeit_debug global_timer lu_precon!(x) = begin
