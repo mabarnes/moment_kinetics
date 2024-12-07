@@ -162,6 +162,7 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         maximum_dt=Inf,
         implicit_braginskii_conduction=true,
         implicit_electron_advance=false,
+        implicit_electron_time_evolving=false,
         implicit_ion_advance=false,
         implicit_vpa_advection=false,
         implicit_electron_ppar=true,
