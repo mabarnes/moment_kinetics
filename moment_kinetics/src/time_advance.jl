@@ -3101,7 +3101,7 @@ end
                 # which is used as input to the explicit part of the IMEX time step.
                 old_scratch = scratch_implicit[istage]
                 update_electrons = !(t_params.implicit_electron_advance || t_params.implicit_electron_ppar)
-                success = apply_all_bcs_constraints_update_moments!(
+                bcs_constraints_success = apply_all_bcs_constraints_update_moments!(
                     scratch_implicit[istage], pdf, moments, fields,
                     boundary_distributions, scratch_electron, vz, vr, vzeta, vpa, vperp,
                     z, r, spectral_objects, advect_objects, composition, collisions,
@@ -3109,6 +3109,9 @@ end
                     t_params, nl_solver_params, advance, scratch_dummy, false,
                     max_electron_pdf_iterations, max_electron_sim_time;
                     update_electrons=update_electrons)
+                if bcs_constraints_success != ""
+                    success = bcs_constrains_success
+                end
                 if success != ""
                     # Break out of the istage loop, as passing `success != ""` to the
                     # adaptive timestep update function will signal a failed timestep, so
@@ -3148,7 +3151,7 @@ end
         update_electrons = (t_params.rk_coefs_implicit === nothing
                             || !(t_params.implicit_electron_advance || t_params.implicit_electron_ppar))
         diagnostic_moments = diagnostic_checks && istage == n_rk_stages
-        success = apply_all_bcs_constraints_update_moments!(
+        bcs_constraints_success = apply_all_bcs_constraints_update_moments!(
             scratch[istage+1], pdf, moments, fields, boundary_distributions,
             scratch_electron, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
             advect_objects, composition, collisions, geometry, gyroavs,
@@ -3156,6 +3159,9 @@ end
             advance, scratch_dummy, diagnostic_moments, max_electron_pdf_iterations,
             max_electron_sim_time; pdf_bc_constraints=apply_bc_constraints,
             update_electrons=update_electrons)
+        if bcs_constraints_success != ""
+            success = bcs_constrains_success
+        end
         if success != ""
             # Break out of the istage loop, as passing `success != ""` to the
             # adaptive timestep update function will signal a failed timestep, so
@@ -3585,6 +3591,7 @@ end
     electron_z_advect, electron_vpa_advect = advect_objects.electron_z_advect, advect_objects.electron_vpa_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
+    success = true
     if t_params.implicit_electron_advance
         electron_success = implicit_electron_advance!(fvec_out, fvec_in, pdf,
                                                       scratch_electron, moments, fields,
@@ -3599,7 +3606,7 @@ end
                                                       dt,
                                                       nl_solver_params.electron_advance)
 
-        success = (electron_success == "")
+        success = success && (electron_success == "")
     elseif t_params.implicit_electron_ppar
         max_electron_pdf_iterations = t_params.electron.max_pseudotimesteps
         max_electron_sim_time = t_params.electron.max_pseudotime
@@ -3623,7 +3630,7 @@ end
             fvec_out_electron_ppar[iz,ir] = moments_electron_ppar[iz,ir]
         end
 
-        success = (electron_success == "")
+        success = success && (electron_success == "")
 
     elseif advance.electron_conduction
         success = implicit_braginskii_conduction!(fvec_out, fvec_in, moments, z, r, dt,
@@ -3633,23 +3640,26 @@ end
     end
 
     if nl_solver_params.ion_advance !== nothing
-        success = implicit_ion_advance!(fvec_out, fvec_in, pdf, fields, moments,
-                                        advect_objects, vz, vr, vzeta, vpa, vperp,
-                                        gyrophase, z, r, t_params.t[], dt,
-                                        spectral_objects, composition, collisions,
-                                        geometry, scratch_dummy, manufactured_source_list,
-                                        external_source_settings, num_diss_params,
-                                        gyroavs, nl_solver_params.ion_advance, advance,
-                                        fp_arrays, istage)
+        ion_success = implicit_ion_advance!(fvec_out, fvec_in, pdf, fields, moments,
+                                            advect_objects, vz, vr, vzeta, vpa, vperp,
+                                            gyrophase, z, r, t_params.t[], dt,
+                                            spectral_objects, composition, collisions,
+                                            geometry, scratch_dummy,
+                                            manufactured_source_list,
+                                            external_source_settings, num_diss_params,
+                                            gyroavs, nl_solver_params.ion_advance,
+                                            advance, fp_arrays, istage)
+        success = success && ion_success
     elseif advance.vpa_advection
-        success = implicit_vpa_advection!(fvec_out.pdf, fvec_in, fields, moments,
-                                          z_advect, vpa_advect, vpa, vperp, z, r, dt,
-                                          t_params.t[], r_spectral, z_spectral,
-                                          vpa_spectral, composition, collisions,
-                                          external_source_settings.ion, geometry,
-                                          nl_solver_params.vpa_advection,
-                                          advance.vpa_diffusion, num_diss_params, gyroavs,
-                                          scratch_dummy)
+        ion_success = implicit_vpa_advection!(fvec_out.pdf, fvec_in, fields, moments,
+                                              z_advect, vpa_advect, vpa, vperp, z, r, dt,
+                                              t_params.t[], r_spectral, z_spectral,
+                                              vpa_spectral, composition, collisions,
+                                              external_source_settings.ion, geometry,
+                                              nl_solver_params.vpa_advection,
+                                              advance.vpa_diffusion, num_diss_params,
+                                              gyroavs, scratch_dummy)
+        success = success && ion_success
     end
 
     return success
